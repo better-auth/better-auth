@@ -1655,3 +1655,264 @@ describe("oidc-jwt", async () => {
 		expect(decoded.alg).toBe(expected);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
+ */
+describe("oidc-provider refresh_token grant client authentication", () => {
+	const REFRESH_TOKEN = "pw9m-test-refresh-token";
+	const CLIENT_ID = "pw9m-confidential-test-client";
+	const CLIENT_SECRET = "pw9m-secret-only-the-client-knows";
+
+	async function seedConfidentialClientAndToken(
+		db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+		userId: string,
+	) {
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				type: "web",
+				name: "Confidential Test Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: "stale-access-token-not-used",
+				refreshToken: REFRESH_TOKEN,
+				accessTokenExpiresAt: new Date(Date.now() - 60 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: CLIENT_ID,
+				userId,
+				scopes: "openid profile email offline_access",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+	}
+
+	it("should reject refresh_token grant on confidential client without client_secret", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+
+	it("should reject refresh_token grant on confidential client with wrong client_secret", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+					client_secret: "wrong-secret",
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+
+	it("should accept refresh_token grant when client_secret comes via Authorization: Basic", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(200);
+		expect(body?.access_token).toBeDefined();
+		expect(body?.refresh_token).toBeDefined();
+	});
+
+	it("should accept refresh_token grant when Authorization: Basic and matching client_id is in body", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(200);
+		expect(body?.access_token).toBeDefined();
+	});
+
+	it("should reject refresh_token grant when body client_id does not match Authorization: Basic", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: "different-client-id",
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+	});
+
+	it("should reject refresh_token grant when the confidential client is disabled", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+		await db.update<{ disabled: boolean }>({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: CLIENT_ID }],
+			update: { disabled: true },
+		});
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+					client_secret: CLIENT_SECRET,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+});
