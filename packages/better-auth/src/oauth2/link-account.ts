@@ -52,8 +52,13 @@ export async function handleOAuthUserInfo(
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
 				c.context.trustedProviders.includes(account.providerId);
+			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
+			// the gate unconditional.
+			const requireLocalEmailVerified =
+				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
 				accountLinking?.enabled === false ||
 				accountLinking?.disableImplicitLinking === true
 			) {
@@ -87,6 +92,10 @@ export async function handleOAuthUserInfo(
 				};
 			}
 
+			// Reachable only when `requireLocalEmailVerified: false` lets the link
+			// proceed for an unverified local row. The IdP's verified email is
+			// promoted to the local row so subsequent flows treat it as verified.
+			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&

@@ -83,16 +83,13 @@ describe("Admin plugin", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -1858,16 +1855,13 @@ describe("edge cases: userId validation", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},

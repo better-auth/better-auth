@@ -29,6 +29,15 @@ describe("oauth2", async () => {
 	});
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 		plugins: [
 			genericOAuth({
 				config: [

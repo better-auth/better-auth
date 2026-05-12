@@ -1022,6 +1022,25 @@ export type BetterAuthOptions = {
 					 */
 					disableImplicitLinking?: boolean;
 					/**
+					 * Require the existing local user row to have
+					 * `emailVerified: true` before implicit account linking
+					 * uses the IdP's `email_verified` claim as ownership
+					 * proof. Defaults to `true` so an attacker who
+					 * pre-registers an unverified account at a victim's
+					 * email cannot have the victim's OAuth identity linked
+					 * into the attacker-owned row on first sign-in. Set to
+					 * `false` for backward compatibility on apps whose
+					 * users sign up via OAuth without verifying their email
+					 * locally; understand the takeover risk before doing
+					 * so.
+					 *
+					 * @default true
+					 *
+					 * @deprecated The option will be removed on the next
+					 * minor; the gate will become unconditional.
+					 */
+					requireLocalEmailVerified?: boolean;
+					/**
 					 * List of trusted providers. Can be a static array or a function
 					 * that returns providers dynamically. The function is called
 					 * during context init (with `request` undefined) and again
