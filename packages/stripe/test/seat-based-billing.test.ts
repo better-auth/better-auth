@@ -1271,7 +1271,6 @@ describe("seat-based billing", () => {
 			stripeMock,
 		}) => {
 			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
-			const _now = Math.floor(Date.now() / 1000);
 			const mockEvent = createSubscriptionEvent(
 				"customer.subscription.created",
 				{
@@ -1376,7 +1375,6 @@ describe("seat-based billing", () => {
 			stripeMock,
 		}) => {
 			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
-			const _now = Math.floor(Date.now() / 1000);
 			const webhookMock = vi.fn();
 
 			const webhookOptions: StripeOptions = {

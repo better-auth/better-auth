@@ -14,8 +14,6 @@ const testUser = {
 describe("referenceMiddleware", () => {
 	describe("referenceMiddleware - user subscription", () => {
 		test("should pass when no explicit referenceId is provided", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
@@ -47,8 +45,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should pass when referenceId equals user id", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
@@ -87,8 +83,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should reject when authorizeReference is not defined but other referenceId is provided", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
@@ -130,8 +124,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should reject another user's referenceId when authorizeReference returns false", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
@@ -182,7 +174,6 @@ describe("referenceMiddleware", () => {
 
 		test("should allow another user's referenceId when authorizeReference returns true", async ({
 			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
@@ -270,8 +261,6 @@ describe("referenceMiddleware", () => {
 
 	describe("referenceMiddleware - organization subscription", () => {
 		test("should reject when authorizeReference is not defined", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
@@ -310,8 +299,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should reject when no referenceId or activeOrganizationId", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
@@ -357,8 +344,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should reject when authorizeReference returns false", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
@@ -405,8 +390,6 @@ describe("referenceMiddleware", () => {
 		});
 
 		test("should pass when authorizeReference returns true", async ({
-			stripeMock,
-			memory,
 			stripeOptions,
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
