@@ -206,18 +206,20 @@ pollForToken();
 
 The user authorization flow requires two steps:
 
-1. **Code Verification**: Check if the entered user code is valid
-2. **Authorization**: User must be authenticated to approve/deny the device
+1. **Code Verification**: Validate the user code via `GET /device`. The verification request claims the pending device code for the calling session.
+2. **Authorization**: The session that claimed the code can approve or deny it.
 
 <Callout type="warn">
-  Users must be authenticated before they can approve or deny device authorization requests. If not authenticated, redirect them to the login page with a return URL.
+  Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to that session. Only the same session can later approve or deny. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
 </Callout>
 
 Create a page where users can enter their code:
 
 ```tsx title="app/device/page.tsx"
 export default function DeviceAuthorizationPage() {
-  const [userCode, setUserCode] = useState("");
+  const { data: session } = authClient.useSession();
+  const searchParams = useSearchParams();
+  const [userCode, setUserCode] = useState(searchParams.get("user_code") || "");
   const [error, setError] = useState(null);
   
   const handleSubmit = async (e) => {
@@ -226,6 +228,13 @@ export default function DeviceAuthorizationPage() {
     try {
       // Format the code: remove dashes and convert to uppercase
       const formattedCode = userCode.trim().replace(/-/g, "").toUpperCase();
+      const approvalPath = `/device/approve?user_code=${encodeURIComponent(formattedCode)}`;
+
+      if (!session?.user) {
+        const verificationPath = `/device?user_code=${encodeURIComponent(formattedCode)}`;
+        window.location.href = `/login?redirect=${encodeURIComponent(verificationPath)}`;
+        return;
+      }
 
       // Check if the code is valid using GET /device endpoint
       const response = await authClient.device({
@@ -234,7 +243,7 @@ export default function DeviceAuthorizationPage() {
       
       if (response.data) {
         // Redirect to approval page
-        window.location.href = `/device/approve?user_code=${formattedCode}`;
+        window.location.href = approvalPath;
       }
     } catch (err) {
       setError("Invalid or expired code");
@@ -327,7 +336,8 @@ export default function DeviceApprovalPage() {
 
   if (!user) {
     // Redirect to login if not authenticated
-    window.location.href = `/login?redirect=/device/approve?user_code=${userCode}`;
+    const verificationPath = `/device?user_code=${encodeURIComponent(userCode || "")}`;
+    window.location.href = `/login?redirect=${encodeURIComponent(verificationPath)}`;
     return null;
   }
   
@@ -545,7 +555,7 @@ authenticateCLI().catch((err) => {
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS Only**: Always use HTTPS in production for device authorization
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
-6. **Authentication Required**: Users must be authenticated before they can approve or deny device requests
+6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
 
 ## Options
 
