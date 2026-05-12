@@ -856,6 +856,17 @@ describe("base context creation", () => {
 			});
 			expect(res.oauthConfig.skipStateCookieCheck).toBe(true);
 		});
+
+		it("should default storeStateStrategy to 'database' when only secondaryStorage is configured", async () => {
+			const res = await initBase({
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+			});
+			expect(res.oauthConfig.storeStateStrategy).toBe("database");
+		});
 	});
 
 	describe("app name", () => {

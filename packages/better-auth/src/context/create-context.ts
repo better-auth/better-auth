@@ -95,7 +95,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	getDatabaseType: (database: Options["database"]) => string,
 ): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
-	if (!options.database) {
+	if (!options.database && !options.secondaryStorage) {
 		options = defu(options, {
 			session: {
 				cookieCache: {
@@ -263,7 +263,7 @@ Most of the features of Better Auth will not work correctly.`,
 		oauthConfig: {
 			storeStateStrategy:
 				options.account?.storeStateStrategy ||
-				(options.database ? "database" : "cookie"),
+				(options.database || options.secondaryStorage ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
