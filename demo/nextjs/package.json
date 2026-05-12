@@ -2,7 +2,7 @@
   "name": "@better-auth/nextjs-demo",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.0.9",
+  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
