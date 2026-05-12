@@ -102,12 +102,13 @@
     "./instrumentation": {
       "dev-source": "./src/instrumentation/index.ts",
       "types": "./dist/instrumentation/index.d.mts",
+      "workerd": "./dist/instrumentation/pure.index.mjs",
+      "edge": "./dist/instrumentation/pure.index.mjs",
+      "browser": "./dist/instrumentation/pure.index.mjs",
       "node": "./dist/instrumentation/index.mjs",
       "deno": "./dist/instrumentation/index.mjs",
       "bun": "./dist/instrumentation/index.mjs",
-      "edge": "./dist/instrumentation/pure.index.mjs",
-      "workerd": "./dist/instrumentation/pure.index.mjs",
-      "browser": "./dist/instrumentation/pure.index.mjs",
+      "import": "./dist/instrumentation/index.mjs",
       "default": "./dist/instrumentation/index.mjs"
     }
   },
