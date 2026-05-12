@@ -1,3 +1,4 @@
+import type { User } from "better-auth";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { assert, describe, expect, vi } from "vitest";
@@ -5,6 +6,7 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import {
+	createPrice,
 	createSubscription,
 	createSubscriptionEvent,
 	createSubscriptionItem,
@@ -68,9 +70,9 @@ describe("stripe webhook", () => {
 				object: "list",
 				data: [
 					createSubscriptionItem({
-						price: {
+						price: createPrice({
 							id: TEST_PRICES.starter,
-						} as Stripe.Price,
+						}),
 					}),
 				],
 				has_more: false,
@@ -195,9 +197,9 @@ describe("stripe webhook", () => {
 				object: "list",
 				data: [
 					createSubscriptionItem({
-						price: {
+						price: createPrice({
 							id: TEST_PRICES.starter,
-						} as Stripe.Price,
+						}),
 					}),
 				],
 				has_more: false,
@@ -464,9 +466,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -564,9 +564,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -672,9 +670,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -764,9 +760,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -862,9 +856,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -966,7 +958,9 @@ describe("stripe webhook", () => {
 		expect(incompleteSubscription.stripeSubscriptionId).toBeUndefined();
 
 		// Get user with stripeCustomerId
-		const user = await testCtx.adapter.findOne<any>({
+		const user = await testCtx.adapter.findOne<
+			User & { stripeCustomerId?: string }
+		>({
 			model: "user",
 			where: [{ field: "id", value: userId }],
 		});
@@ -1000,9 +994,7 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
-			mockEvent,
-		);
+		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1085,9 +1077,9 @@ describe("stripe webhook", () => {
 				object: "list",
 				data: [
 					createSubscriptionItem({
-						price: {
+						price: createPrice({
 							id: TEST_PRICES.starter,
-						} as Stripe.Price,
+						}),
 					}),
 				],
 				has_more: false,
@@ -1168,9 +1160,9 @@ describe("stripe webhook", () => {
 					object: "list",
 					data: [
 						createSubscriptionItem({
-							price: {
+							price: createPrice({
 								id: TEST_PRICES.starter,
-							} as Stripe.Price,
+							}),
 						}),
 					],
 					has_more: false,
@@ -1216,9 +1208,9 @@ describe("stripe webhook", () => {
 					object: "list",
 					data: [
 						createSubscriptionItem({
-							price: {
+							price: createPrice({
 								id: TEST_PRICES.starter,
-							} as Stripe.Price,
+							}),
 						}),
 					],
 					has_more: false,
@@ -1252,9 +1244,9 @@ describe("stripe webhook", () => {
 					object: "list",
 					data: [
 						createSubscriptionItem({
-							price: {
+							price: createPrice({
 								id: TEST_PRICES.starter,
-							} as Stripe.Price,
+							}),
 						}),
 					],
 					has_more: false,
@@ -1331,9 +1323,9 @@ describe("stripe webhook", () => {
 					object: "list",
 					data: [
 						createSubscriptionItem({
-							price: {
+							price: createPrice({
 								id: TEST_PRICES.starter,
-							} as Stripe.Price,
+							}),
 							quantity: 5, // Updated from 1 to 5
 						}),
 					],
@@ -1884,9 +1876,9 @@ describe("stripe webhook", () => {
 						object: "list",
 						data: [
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: TEST_PRICES.starter,
-								} as Stripe.Price,
+								}),
 							}),
 						],
 						has_more: false,
@@ -2039,9 +2031,9 @@ describe("stripe webhook", () => {
 						object: "list",
 						data: [
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: TEST_PRICES.starter,
-								} as Stripe.Price,
+								}),
 							}),
 						],
 						has_more: false,

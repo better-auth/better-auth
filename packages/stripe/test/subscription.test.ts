@@ -4,7 +4,11 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
-import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
+import {
+	createPrice,
+	createSubscriptionEvent,
+	createSubscriptionItem,
+} from "./_factories";
 import { TEST_PRICES, test } from "./_fixtures";
 
 describe("stripe subscription", () => {
@@ -1855,9 +1859,9 @@ describe("stripe subscription", () => {
 						data: [
 							createSubscriptionItem({
 								id: "si_test_item",
-								price: {
+								price: createPrice({
 									id: TEST_PRICES.starter,
-								} as Stripe.Price,
+								}),
 								current_period_start: now,
 								current_period_end: periodEnd,
 							}),

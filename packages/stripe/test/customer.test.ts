@@ -2,6 +2,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import type { User } from "better-auth";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
+import type Stripe from "stripe";
 import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
@@ -797,9 +798,14 @@ describe("stripe customer", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/7959
 	 */
 	describe("Search API fallback for unsupported regions", () => {
-		function mockStripeList(data: any[] = []) {
-			const p = Promise.resolve({ data, has_more: false });
-			(p as any)[Symbol.asyncIterator] = async function* () {
+		function mockStripeList(data: Partial<Stripe.Customer>[] = []) {
+			const p = Promise.resolve({ data, has_more: false }) as Promise<{
+				data: Partial<Stripe.Customer>[];
+				has_more: boolean;
+			}> & {
+				[Symbol.asyncIterator]: () => AsyncGenerator<Partial<Stripe.Customer>>;
+			};
+			p[Symbol.asyncIterator] = async function* () {
 				yield* data;
 			};
 			return p;

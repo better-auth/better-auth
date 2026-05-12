@@ -15,6 +15,8 @@ export const TEST_LOOKUP_KEYS = {
 	premium: "lookup_key_234",
 } as const;
 
+export type StripeMock = ReturnType<typeof createStripeMock>;
+
 export function createStripeMock(
 	overrides: {
 		customerId?: string;

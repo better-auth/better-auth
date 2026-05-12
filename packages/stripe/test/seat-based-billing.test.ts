@@ -6,7 +6,12 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
-import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
+import {
+	createPrice,
+	createSubscriptionEvent,
+	createSubscriptionItem,
+} from "./_factories";
+import type { StripeMock } from "./_fixtures";
 import { test as baseTest, createStripeMock } from "./_fixtures";
 
 const test = baseTest.extend<{
@@ -32,9 +37,9 @@ const test = baseTest.extend<{
 	},
 });
 
-const buildSeatPlanOptions = (mock: Stripe) =>
+const buildSeatPlanOptions = (mock: StripeMock) =>
 	({
-		stripeClient: mock,
+		stripeClient: mock as unknown as Stripe,
 		stripeWebhookSecret: "test_secret",
 		createCustomerOnSignUp: false,
 		organization: { enabled: true as const },
@@ -61,7 +66,7 @@ describe("seat-based billing", () => {
 		test("should create checkout with both base plan and seat line items", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const { client, sessionSetter } = await getTestInstance(
 				{ plugins: [organization(), stripe(seatOptions)] },
 				{
@@ -120,7 +125,7 @@ describe("seat-based billing", () => {
 		test("should use actual member count as seat quantity", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{ plugins: [organization(), stripe(seatOptions)] },
 				{
@@ -416,7 +421,7 @@ describe("seat-based billing", () => {
 		test("should swap seat item when upgrading to a plan with different seat pricing", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					plugins: [organization(), stripe(seatOptions)],
@@ -532,7 +537,7 @@ describe("seat-based billing", () => {
 		test("should use custom prorationBehavior from plan config", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const customProrationOptions: StripeOptions = {
 				...seatOptions,
 				subscription: {
@@ -650,7 +655,7 @@ describe("seat-based billing", () => {
 		test("should skip seat item swap when seat pricing is unchanged", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const sameSeatOptions: StripeOptions = {
 				...seatOptions,
 				subscription: {
@@ -894,7 +899,7 @@ describe("seat-based billing", () => {
 		test("should sync seat quantity when a member accepts an invitation", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			stripeMock.subscriptions.retrieve.mockResolvedValue({
 				id: "sub_seat_sync",
 				status: "active",
@@ -1027,7 +1032,7 @@ describe("seat-based billing", () => {
 		test("should sync seat quantity when a member is removed", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			stripeMock.subscriptions.retrieve.mockResolvedValue({
 				id: "sub_seat_remove",
 				status: "active",
@@ -1141,7 +1146,7 @@ describe("seat-based billing", () => {
 		test("should use custom prorationBehavior on member removal", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			stripeMock.subscriptions.retrieve.mockResolvedValue({
 				id: "sub_seat_remove_proration",
 				status: "active",
@@ -1270,7 +1275,7 @@ describe("seat-based billing", () => {
 		test("should persist seat count on subscription creation", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const mockEvent = createSubscriptionEvent(
 				"customer.subscription.created",
 				{
@@ -1280,16 +1285,16 @@ describe("seat-based billing", () => {
 						object: "list",
 						data: [
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: "price_team_base",
 									lookup_key: null,
-								} as Stripe.Price,
+								}),
 							}),
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: "price_team_seat",
 									lookup_key: null,
-								} as Stripe.Price,
+								}),
 								quantity: 5,
 							}),
 						],
@@ -1374,7 +1379,7 @@ describe("seat-based billing", () => {
 		test("should update seat count on subscription update", async ({
 			stripeMock,
 		}) => {
-			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
+			const seatOptions = buildSeatPlanOptions(stripeMock);
 			const webhookMock = vi.fn();
 
 			const webhookOptions: StripeOptions = {
@@ -1414,16 +1419,16 @@ describe("seat-based billing", () => {
 						object: "list",
 						data: [
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: "price_team_base",
 									lookup_key: null,
-								} as Stripe.Price,
+								}),
 							}),
 							createSubscriptionItem({
-								price: {
+								price: createPrice({
 									id: "price_team_seat",
 									lookup_key: null,
-								} as Stripe.Price,
+								}),
 								quantity: 8,
 							}),
 						],

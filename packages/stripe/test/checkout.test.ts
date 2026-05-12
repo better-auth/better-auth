@@ -4,6 +4,7 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import type { StripeMock } from "./_fixtures";
 import {
 	TEST_LOOKUP_KEYS,
 	TEST_PRICES,
@@ -19,8 +20,8 @@ const testUser = {
 
 describe("stripe checkout", () => {
 	describe("line item replacement on plan change", () => {
-		const buildLineItemOptions = (mock: Stripe): StripeOptions => ({
-			stripeClient: mock,
+		const buildLineItemOptions = (mock: StripeMock): StripeOptions => ({
+			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -55,9 +56,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildLineItemOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildLineItemOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -171,9 +170,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildLineItemOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildLineItemOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -285,8 +282,8 @@ describe("stripe checkout", () => {
 		});
 	});
 	describe("line item add/remove on asymmetric plan change", () => {
-		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
-			stripeClient: mock,
+		const buildAsymmetricOptions = (mock: StripeMock): StripeOptions => ({
+			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -318,9 +315,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildAsymmetricOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -424,9 +419,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildAsymmetricOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -527,8 +520,8 @@ describe("stripe checkout", () => {
 		});
 	});
 	describe("duplicate line item prevention", () => {
-		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
-			stripeClient: mock,
+		const buildAsymmetricOptions = (mock: StripeMock): StripeOptions => ({
+			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -560,9 +553,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildAsymmetricOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -657,9 +648,7 @@ describe("stripe checkout", () => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [
-						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
-					],
+					plugins: [stripe(buildAsymmetricOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -860,7 +849,7 @@ describe("stripe checkout", () => {
 			});
 
 			// Mock checkout session to return correct subscriptionId
-			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+			stripeForTest.checkout.sessions.retrieve.mockResolvedValue({
 				id: testCheckoutSessionId,
 				metadata: {
 					userId: userRes.user.id,
@@ -1049,7 +1038,7 @@ describe("stripe checkout", () => {
 				},
 			});
 
-			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+			stripeForTest.checkout.sessions.retrieve.mockResolvedValue({
 				id: testCheckoutSessionId,
 				metadata: {
 					userId: userRes.user.id,
@@ -1735,8 +1724,8 @@ describe("stripe checkout", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9130
 	 */
 	describe("getCheckoutSessionParams subscription_data merge", () => {
-		const buildTrialOptions = (mock: Stripe): StripeOptions => ({
-			stripeClient: mock,
+		const buildTrialOptions = (mock: StripeMock): StripeOptions => ({
+			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -1771,7 +1760,7 @@ describe("stripe checkout", () => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(buildTrialOptions(stripeMock as unknown as Stripe))],
+					plugins: [stripe(buildTrialOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,
@@ -2180,7 +2169,7 @@ describe("stripe checkout", () => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(buildTrialOptions(stripeMock as unknown as Stripe))],
+					plugins: [stripe(buildTrialOptions(stripeMock))],
 				},
 				{
 					disableTestUser: true,

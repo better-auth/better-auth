@@ -15,6 +15,39 @@ import type Stripe from "stripe";
 
 const SECONDS_30D = 30 * 24 * 60 * 60;
 
+export function createPrice(
+	overrides: Partial<Stripe.Price> = {},
+): Stripe.Price {
+	return {
+		id: "price_mock",
+		object: "price",
+		active: true,
+		billing_scheme: "per_unit",
+		created: Math.floor(Date.now() / 1000),
+		currency: "usd",
+		livemode: false,
+		lookup_key: null,
+		metadata: {},
+		nickname: null,
+		product: "prod_mock",
+		recurring: {
+			aggregate_usage: null,
+			interval: "month",
+			interval_count: 1,
+			meter: null,
+			trial_period_days: null,
+			usage_type: "licensed",
+		},
+		tax_behavior: "unspecified",
+		tiers_mode: null,
+		transform_quantity: null,
+		type: "recurring",
+		unit_amount: 1000,
+		unit_amount_decimal: "1000",
+		...overrides,
+	} as Stripe.Price;
+}
+
 export function createSubscriptionItem(
 	overrides: Partial<Stripe.SubscriptionItem> = {},
 ): Stripe.SubscriptionItem {
@@ -26,11 +59,7 @@ export function createSubscriptionItem(
 		current_period_start: now,
 		current_period_end: now + SECONDS_30D,
 		quantity: 1,
-		price: {
-			id: "price_mock",
-			object: "price",
-			recurring: { interval: "month", usage_type: "licensed" },
-		} as Stripe.Price,
+		price: createPrice(),
 		billing_thresholds: null,
 		created: now,
 		discounts: [],
@@ -99,13 +128,8 @@ function createEventBase<T extends Stripe.Event.Type>(
 	};
 }
 
-type SubscriptionEventType =
-	| "customer.subscription.created"
-	| "customer.subscription.updated"
-	| "customer.subscription.deleted";
-
 export function createSubscriptionEvent(
-	type: SubscriptionEventType,
+	type: Extract<Stripe.Event.Type, `customer.subscription.${string}`>,
 	subscriptionOverrides: Partial<Stripe.Subscription> = {},
 ): Stripe.Event {
 	return {
