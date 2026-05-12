@@ -448,7 +448,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
-	 * Atomically claim a single row matching the where clause: delete it and
+	 * Atomically consume a single row matching the where clause: delete it and
 	 * return the deleted row, or return `null` if no row matched.
 	 * Implementations MUST NOT delete any additional rows that also match a
 	 * non-unique predicate.
@@ -551,7 +551,7 @@ export interface CustomAdapter {
 		where: CleanedWhere[];
 	}) => Promise<number>;
 	/**
-	 * Optional native atomic single-row claim. When omitted, the adapter
+	 * Optional native atomic single-row consume. When omitted, the adapter
 	 * factory falls back to `transaction(findMany + deleteMany)`.
 	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
 	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the

@@ -122,7 +122,7 @@ describe("createAdapterFactory consumeOne fallback", () => {
 		expect(result?.identifier).toBe("stored-token:output");
 	});
 
-	it("returns null when the delete loses the claim race", async () => {
+	it("returns null when the delete loses the consume race", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
 				findMany: async <T>() =>
