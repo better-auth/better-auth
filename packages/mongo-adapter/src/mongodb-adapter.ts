@@ -630,7 +630,7 @@ export const mongodbAdapter = (
 						.deleteMany(clause, { session });
 					return res.deletedCount;
 				},
-				async claimOne({ model, where }) {
+				async consumeOne({ model, where }) {
 					const clause = convertWhereClause({ where, model });
 					const doc = await db.collection(model).findOneAndDelete(clause, {
 						session,

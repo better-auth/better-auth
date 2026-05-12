@@ -416,25 +416,25 @@ export function getWithHooks(
 	}
 
 	/**
-	 * Wraps an atomic claim operation in the plugin `delete.before` and
-	 * `delete.after` hook lifecycle. The caller supplies a `claimFn` that
+	 * Wraps an atomic consume operation in the plugin `delete.before` and
+	 * `delete.after` hook lifecycle. The caller supplies a `consumeFn` that
 	 * performs the actual single-row delete-and-return (typically the
-	 * adapter's `claimOne`). The first concurrent caller wins, subsequent
+	 * adapter's `consumeOne`). The first concurrent caller wins, subsequent
 	 * racers resolve to `null` without firing `delete.after` hooks.
 	 *
 	 * `preSnapshot` lets the caller hand in a row it already fetched so
 	 * `delete.before` hooks don't trigger a second read. Without it, the
 	 * helper falls back to a best-effort `findMany` against `hookWhere`.
-	 * The snapshot only feeds `delete.before`; the `claimFn` return value
+	 * The snapshot only feeds `delete.before`; the `consumeFn` return value
 	 * is the race gate.
 	 *
-	 * Returning `false` from a `delete.before` hook aborts the claim and
-	 * the helper resolves to `null` (no `claimFn` call, no after hooks).
+	 * Returning `false` from a `delete.before` hook aborts the consume and
+	 * the helper resolves to `null` (no `consumeFn` call, no after hooks).
 	 */
 	async function consumeOneWithHooks<T extends Record<string, any>>(
 		model: BaseModelNames,
 		hookWhere: Where[],
-		claimFn: () => Promise<T | null>,
+		consumeFn: () => Promise<T | null>,
 		preSnapshot?: T | null,
 	): Promise<T | null> {
 		const context = await getCurrentAuthContext().catch(() => null);
@@ -476,8 +476,8 @@ export function getWithHooks(
 			}
 		}
 
-		const claimed = await claimFn();
-		if (!claimed) return null;
+		const consumed = await consumeFn();
+		if (!consumed) return null;
 
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.delete?.after;
@@ -492,13 +492,13 @@ export function getWithHooks(
 						},
 						() =>
 							// @ts-expect-error context type mismatch
-							toRun(claimed as any, context),
+							toRun(consumed as any, context),
 					);
 				});
 			}
 		}
 
-		return claimed;
+		return consumed;
 	}
 
 	return {

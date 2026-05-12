@@ -133,7 +133,10 @@ export const createAdapterFactory =
 							!config.debugLogs.deleteMany
 						) {
 							return;
-						} else if (method === "claimOne" && !config.debugLogs.claimOne) {
+						} else if (
+							method === "consumeOne" &&
+							!config.debugLogs.consumeOne
+						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
 							return;
@@ -487,7 +490,7 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
-				| "claimOne"
+				| "consumeOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -1315,7 +1318,7 @@ export const createAdapterFactory =
 				);
 				return res;
 			},
-			claimOne: async <T>({
+			consumeOne: async <T>({
 				model: unsafeModel,
 				where: unsafeWhere,
 			}: {
@@ -1328,42 +1331,42 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
-					action: "claimOne",
+					action: "consumeOne",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
-					{ method: "claimOne" },
+					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
-					`${formatMethod("claimOne")} ${formatAction("ClaimOne")}:`,
+					`${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`,
 					{ model, where },
 				);
 
 				let res: T | null;
 				let resultNeedsOutputTransform = true;
-				if (adapterInstance.claimOne) {
+				if (adapterInstance.consumeOne) {
 					res = await withSpan(
-						`db claimOne ${model}`,
+						`db consumeOne ${model}`,
 						{
-							[ATTR_DB_OPERATION_NAME]: "claimOne",
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
-						() => adapterInstance.claimOne!<T>({ model, where }),
+						() => adapterInstance.consumeOne!<T>({ model, where }),
 					);
 				} else {
-					// TODO(claim-one-required): adapters without native `claimOne`
+					// TODO(consume-one-required): adapters without native `consumeOne`
 					// fall back to `transaction(findMany + deleteMany)`. Race-safe on
 					// engines with real transaction isolation; race window narrows
 					// (does not close) on adapters that fall through to sequential
-					// execution. Remove this branch when claimOne becomes required.
-					// FIXME(claim-one-nested-transaction): custom adapters without a
-					// native claimOne have no portable signal for "already inside a
+					// execution. Remove this branch when consumeOne becomes required.
+					// FIXME(consume-one-nested-transaction): custom adapters without a
+					// native consumeOne have no portable signal for "already inside a
 					// transaction". First-party adapters mark transaction-scoped
 					// adapters as as-is; make that capability explicit in the next
 					// breaking adapter contract.
 					res = await withSpan(
-						`db claimOne ${model}`,
+						`db consumeOne ${model}`,
 						{
-							[ATTR_DB_OPERATION_NAME]: "claimOne",
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						() =>
@@ -1395,9 +1398,9 @@ export const createAdapterFactory =
 				}
 
 				debugLog(
-					{ method: "claimOne" },
+					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
-					`${formatMethod("claimOne")} ${formatAction("DB Result")}:`,
+					`${formatMethod("consumeOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
 				let transformed: any = res;
@@ -1414,9 +1417,9 @@ export const createAdapterFactory =
 					);
 				}
 				debugLog(
-					{ method: "claimOne" },
+					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
-					`${formatMethod("claimOne")} ${formatAction("Parsed Result")}:`,
+					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed as T | null;

@@ -214,7 +214,7 @@ describe("prisma-adapter", () => {
 		});
 	});
 
-	it("claimOne rechecks non-unique predicates before deleting", async () => {
+	it("consumeOne rechecks non-unique predicates before deleting", async () => {
 		const target = {
 			id: "verification-id",
 			identifier: "magic-link-token",
@@ -234,7 +234,7 @@ describe("prisma-adapter", () => {
 			},
 		});
 
-		const result = await adapter.claimOne({
+		const result = await adapter.consumeOne({
 			model: "verification",
 			where: [{ field: "identifier", value: "magic-link-token" }],
 		});
@@ -251,7 +251,7 @@ describe("prisma-adapter", () => {
 		});
 	});
 
-	it("claimOne does not open a nested transaction from a transaction adapter", async () => {
+	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
 		const target = {
 			id: "verification-id",
 			identifier: "magic-link-token",
@@ -274,7 +274,7 @@ describe("prisma-adapter", () => {
 		)({} as BetterAuthOptions);
 
 		await adapter.transaction(async (trx) => {
-			await trx.claimOne({
+			await trx.consumeOne({
 				model: "verification",
 				where: [{ field: "identifier", value: "magic-link-token" }],
 			});

@@ -618,7 +618,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async claimOne({ model, where }) {
+				async consumeOne({ model, where }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -630,7 +630,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// otherwise we fall back to find-then-deleteMany inside a
 					// transaction. deleteMany rechecks the original predicate with the
 					// selected id so we do not delete a row that stopped matching.
-					// FIXME(claim-one-prisma-locking): Prisma has no portable
+					// FIXME(consume-one-prisma-locking): Prisma has no portable
 					// row-locking API for findFirst. Add provider-specific locking
 					// when a breaking adapter contract can expose it cleanly.
 					const hasIdField = where?.some((w) => w.field === "id");

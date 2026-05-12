@@ -386,7 +386,7 @@ export const memoryAdapter = (
 					});
 					return count;
 				},
-				claimOne: async ({ model, where }) => {
+				consumeOne: async ({ model, where }) => {
 					const table = db[model]!;
 					const matches = convertWhereClause(where, model);
 					const target = matches[0];

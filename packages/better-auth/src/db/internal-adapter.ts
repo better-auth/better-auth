@@ -1315,23 +1315,23 @@ export const createInternalAdapter = (
 
 						// FIXME(consume-identifier-atomic): add an adapter primitive that
 						// deletes all rows for an identifier and returns the latest row in
-						// one operation. Until then, claim the latest row as the race gate
+						// one operation. Until then, consume the latest row as the race gate
 						// and invalidate stale rows inside the same transaction/local lock.
 						const hookWhere = [{ field: "id", value: latest.id }];
 						return consumeOneWithHooks<Verification>(
 							"verification",
 							hookWhere,
 							async () => {
-								const claimed = await txAdapter.claimOne<Verification>({
+								const consumed = await txAdapter.consumeOne<Verification>({
 									model: "verification",
 									where: hookWhere,
 								});
-								if (!claimed) return null;
+								if (!consumed) return null;
 								await txAdapter.deleteMany({
 									model: "verification",
 									where,
 								});
-								return claimed;
+								return consumed;
 							},
 							latest,
 						);

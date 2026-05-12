@@ -1093,7 +1093,7 @@ describe("--adapter flag support (mock adapter)", () => {
 			deleteMany: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
-			claimOne: async () => {
+			consumeOne: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
 			transaction: async (callback) => {
@@ -1335,7 +1335,7 @@ describe("--dialect flag support", () => {
 			deleteMany: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
-			claimOne: async () => {
+			consumeOne: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
 			transaction: async (callback) => {
