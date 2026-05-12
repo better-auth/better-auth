@@ -15,6 +15,9 @@ catalogs:
     better-call:
       specifier: 1.3.5
       version: 1.3.5
+    kysely:
+      specifier: ^0.28.17
+      version: 0.28.17
     tsdown:
       specifier: 0.21.1
       version: 0.21.1
@@ -468,7 +471,7 @@ importers:
         specifier: ^4.3.1
         version: 4.3.1
       kysely:
-        specifier: ^0.28.17
+        specifier: 'catalog:'
         version: 0.28.17
     devDependencies:
       '@types/better-sqlite3':
@@ -657,7 +660,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/better-auth
       kysely:
-        specifier: ^0.28.17
+        specifier: 'catalog:'
         version: 0.28.17
       kysely-postgres-js:
         specifier: ^3.0.0
@@ -715,7 +718,7 @@ importers:
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.12.18
-        version: 0.12.18(@cloudflare/workers-types@4.20260226.1)(@vitest/runner@4.1.6)(@vitest/snapshot@4.1.6)(vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)))
+        version: 0.12.18(@cloudflare/workers-types@4.20260226.1)(@vitest/runner@4.1.6)(@vitest/snapshot@4.1.6)(vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5(vitest@4.1.5))(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)))
       '@cloudflare/workers-types':
         specifier: ^4.20260226.1
         version: 4.20260226.1
@@ -885,7 +888,7 @@ importers:
         specifier: ^6.1.3
         version: 6.1.3
       kysely:
-        specifier: ^0.28.17
+        specifier: 'catalog:'
         version: 0.28.17
       mongodb:
         specifier: ^6.0.0 || ^7.0.0
@@ -1116,7 +1119,7 @@ importers:
         specifier: ^6.1.3
         version: 6.1.3
       kysely:
-        specifier: ^0.28.17
+        specifier: 'catalog:'
         version: 0.28.17
       nanostores:
         specifier: ^1.1.1
@@ -1241,7 +1244,7 @@ importers:
         specifier: ^4.20250121.0
         version: 4.20260226.1
       kysely:
-        specifier: ^0.28.17
+        specifier: 'catalog:'
         version: 0.28.17
       tsdown:
         specifier: 'catalog:'
@@ -16480,14 +16483,14 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260305.0
 
-  '@cloudflare/vitest-pool-workers@0.12.18(@cloudflare/workers-types@4.20260226.1)(@vitest/runner@4.1.6)(@vitest/snapshot@4.1.6)(vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)))':
+  '@cloudflare/vitest-pool-workers@0.12.18(@cloudflare/workers-types@4.20260226.1)(@vitest/runner@4.1.6)(@vitest/snapshot@4.1.6)(vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5(vitest@4.1.5))(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)))':
     dependencies:
       '@vitest/runner': 4.1.6
       '@vitest/snapshot': 4.1.6
       cjs-module-lexer: 1.4.3
       esbuild: 0.27.3
       miniflare: 4.20260305.0
-      vitest: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5(vitest@4.1.5))(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
       wrangler: 4.69.0(@cloudflare/workers-types@4.20260226.1)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
@@ -21768,7 +21771,7 @@ snapshots:
       magicast: 0.5.2
       obug: 2.1.1
       tinyrainbow: 3.1.0
-      vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.3.2)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.3.2)(typescript@5.9.3))(vite@7.3.2(@types/node@25.3.2)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -21862,7 +21865,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.3.2)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.3.2)(typescript@5.9.3))(vite@7.3.2(@types/node@25.3.2)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vitest/utils@4.1.5':
     dependencies:
@@ -31178,7 +31181,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)):
+  vitest@4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5(vitest@4.1.5))(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.6
       '@vitest/mocker': 4.1.6(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
