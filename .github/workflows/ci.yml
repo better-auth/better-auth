@@ -168,14 +168,24 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
       - name: Start Docker Containers
         run: docker compose up -d --wait --wait-timeout 60
 
       - name: Test
         run: pnpm coverage
 
+      - name: Docker Compose Diagnostics
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color mssql
+
       - name: Stop Docker Containers
-        run: docker compose down
+        if: always()
+        run: docker compose down --volumes --remove-orphans
 
   ci:
     runs-on: ubuntu-latest
