@@ -324,6 +324,7 @@ Configure social login providers.
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	socialProviders: {
+		requireEmailVerification: true,
 		google: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
@@ -338,6 +339,7 @@ export const auth = betterAuth({
 })
 ```
 
+* `requireEmailVerification`: Require emails returned by social providers to be verified before a session can be created. When unset, social sign-in follows `emailAndPassword.requireEmailVerification` (optional)
 * `clientId`: OAuth client ID from the provider
 * `clientSecret`: OAuth client secret from the provider
 * `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)

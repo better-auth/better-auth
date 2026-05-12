@@ -49,6 +49,49 @@ await auth.api.signInSocial({
 });
 ```
 
+### Require Verified Emails
+
+To require verified provider emails before creating OAuth sessions, set
+`requireEmailVerification` on `socialProviders`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    requireEmailVerification: true,
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  },
+});
+```
+
+When this is enabled, Better Auth still creates or links the user and account,
+but it does not create a session if the provider reports the email as
+unverified. OAuth callbacks redirect with `error=email_not_verified`, and
+ID token sign-in returns `EMAIL_NOT_VERIFIED`.
+
+If `socialProviders.requireEmailVerification` is not set, OAuth sign-in follows
+`emailAndPassword.requireEmailVerification`. Set
+`socialProviders.requireEmailVerification` to `false` if you want to require
+email verification for email and password sign-in without requiring it for
+social sign-in.
+
+If `emailVerification.sendVerificationEmail` is configured, Better Auth sends a
+verification email to new unverified OAuth users when this requirement is
+enabled, unless `emailVerification.sendOnSignUp` is set to `false`. For existing
+unverified users, set `emailVerification.sendOnSignIn` to `true` to send a new
+verification email on sign-in attempts.
+
+<Callout type="info">
+  Some providers do not expose a trustworthy email verification signal and are
+  treated as unverified. See
+  [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email)
+  for provider-specific notes.
+</Callout>
+
 ### Link account
 
 To link an account to a social provider, you can use the `linkAccount` function with the `authClient` or `auth.api` for server-side usage.
