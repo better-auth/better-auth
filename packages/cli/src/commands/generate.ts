@@ -61,7 +61,7 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 		deleteMany: async () => {
 			throw new Error("Mock adapter methods should not be called");
 		},
-		claimOne: async () => {
+		consumeOne: async () => {
 			throw new Error("Mock adapter methods should not be called");
 		},
 		transaction: async (callback) => {

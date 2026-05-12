@@ -663,7 +663,7 @@ export const kyselyAdapter = (
 						? Number.MAX_SAFE_INTEGER
 						: Number(res);
 				},
-				async claimOne({ model, where }) {
+				async consumeOne({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
 					const applyWhere = (query: any) => {
 						if (and) {

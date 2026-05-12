@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "kysely": "^0.28.17"
+    "kysely": "catalog:"
   },
   "peerDependenciesMeta": {
     "kysely": {
@@ -61,7 +61,7 @@
     "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "kysely": "^0.28.17",
+    "kysely": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
