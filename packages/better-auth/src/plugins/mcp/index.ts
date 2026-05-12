@@ -83,7 +83,7 @@ export const getMCPProviderMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: ["RS256"],
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -124,7 +124,7 @@ export const getMCPProtectedResourceMetadata = (
 			"offline_access",
 		],
 		bearer_methods_supported: ["header"],
-		resource_signing_alg_values_supported: ["RS256", "none"],
+		resource_signing_alg_values_supported: ["RS256"],
 	};
 };
 
@@ -175,7 +175,7 @@ export const mcp = (options: MCPOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
-		allowPlainCodeChallengeMethod: true,
+		allowPlainCodeChallengeMethod: false,
 		...options.oidcConfig,
 		loginPage: options.loginPage,
 		scopes: [
@@ -664,18 +664,20 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 
-					const challenge =
-						value.codeChallengeMethod === "plain"
-							? code_verifier
-							: await createHash("SHA-256", "base64urlnopad").digest(
-									code_verifier,
-								);
+					if (value.codeChallenge) {
+						const challenge =
+							value.codeChallengeMethod === "plain"
+								? code_verifier
+								: await createHash("SHA-256", "base64urlnopad").digest(
+										code_verifier,
+									);
 
-					if (challenge !== value.codeChallenge) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code verification failed",
-							error: "invalid_request",
-						});
+						if (challenge !== value.codeChallenge) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "code verification failed",
+								error: "invalid_request",
+							});
+						}
 					}
 
 					const requestedScopes = value.scope;

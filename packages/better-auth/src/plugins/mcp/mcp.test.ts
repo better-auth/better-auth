@@ -441,7 +441,7 @@ describe("mcp", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256", "none"],
+			id_token_signing_alg_values_supported: ["RS256"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -475,7 +475,7 @@ describe("mcp", async () => {
 			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
-			resource_signing_alg_values_supported: ["RS256", "none"],
+			resource_signing_alg_values_supported: ["RS256"],
 		});
 	});
 
@@ -1175,5 +1175,41 @@ describe("mcp refresh_token grant client authentication", () => {
 		expect(response.status).toBe(401);
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+ */
+describe("mcp discovery metadata (security)", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [mcp({ loginPage: "/login" })],
+	});
+
+	it("/.well-known/oauth-authorization-server must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-authorization-server",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			id_token_signing_alg_values_supported: string[];
+		};
+		expect(body.id_token_signing_alg_values_supported).not.toContain("none");
+	});
+
+	it("/.well-known/oauth-protected-resource must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-protected-resource",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			resource_signing_alg_values_supported: string[];
+		};
+		expect(body.resource_signing_alg_values_supported).not.toContain("none");
 	});
 });
