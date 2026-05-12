@@ -3,7 +3,7 @@ import { logger } from "@better-auth/core/env";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
-import { decodeRefreshToken } from "./token";
+import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -159,19 +159,7 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await ctx.context.adapter.deleteMany({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "clientId",
-					value: clientId,
-				},
-				{
-					field: "userId",
-					value: refreshToken.userId,
-				},
-			],
-		});
+		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
@@ -182,26 +170,37 @@ async function revokeRefreshToken(
 	}
 
 	const iat = Math.floor(Date.now() / 1000);
-	await Promise.allSettled([
-		// Removes all access tokens associated with the refresh token
-		ctx.context.adapter.deleteMany({
-			model: "oauthAccessToken",
-			where: [{ field: "refreshId", value: refreshToken.id }],
-		}),
-		// Update the refresh token
-		ctx.context.adapter.update({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "id",
-					value: refreshToken.id,
-				},
-			],
-			update: {
-				revoked: new Date(iat * 1000),
+	// Atomic compare-and-swap. If a concurrent rotation already revoked
+	// (and re-minted) this row, fail closed and tear down the whole family
+	// so the rotation's offspring cannot be used either.
+	const won = await ctx.context.adapter.update<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{
+				field: "id",
+				value: refreshToken.id,
 			},
-		}),
-	]);
+			{
+				field: "revoked",
+				operator: "eq",
+				value: null,
+			},
+		],
+		update: {
+			revoked: new Date(iat * 1000),
+		},
+	});
+	if (!won) {
+		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		throw new APIError("BAD_REQUEST", {
+			error_description: "refresh token revoked",
+			error: "invalid_request",
+		});
+	}
+	await ctx.context.adapter.deleteMany({
+		model: "oauthAccessToken",
+		where: [{ field: "refreshId", value: refreshToken.id }],
+	});
 }
 
 /**

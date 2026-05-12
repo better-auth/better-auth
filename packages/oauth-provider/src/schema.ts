@@ -146,6 +146,7 @@ export const schema = {
 			token: {
 				type: "string",
 				required: true,
+				unique: true,
 			},
 			clientId: {
 				type: "string",

@@ -267,6 +267,56 @@ async function createOpaqueAccessToken(
 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
 }
 
+/**
+ * Tear down the entire refresh-token family for a (client, user) pair, plus
+ * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
+ * Access tokens are deleted first so the parent rows' foreign-key children
+ * do not block the refresh-row delete.
+ *
+ * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
+ * with respect to each other. Between them, a concurrent rotation in a
+ * different worker can `create` a fresh refresh row (and, immediately after,
+ * an access-token row referencing it) for the same (client, user) pair,
+ * leaving the family partially rebuilt and the new refresh row orphaned of
+ * any deletion. Closing this window requires the same transactional adapter
+ * contract tracked under FIXME(strict-family-invalidation) in
+ * `createRefreshToken`.
+ *
+ * @internal
+ */
+export async function invalidateRefreshFamily(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+) {
+	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+	});
+	if (refreshTokens.length) {
+		await ctx.context.adapter.deleteMany({
+			model: "oauthAccessToken",
+			where: [
+				{
+					field: "refreshId",
+					operator: "in",
+					value: refreshTokens.map((r) => r.id),
+				},
+			],
+		});
+	}
+	await ctx.context.adapter.deleteMany({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+	});
+}
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -284,39 +334,78 @@ async function createRefreshToken(
 		? await opts.generateRefreshToken()
 		: generateRandomString(32, "A-Z", "a-z");
 	const sessionId = payload?.sid as string | undefined;
-	// Mark old refresh as stale
-	if (originalRefresh?.id) {
-		await ctx.context.adapter.update({
+	const storedToken = await storeToken(
+		opts.storeTokens,
+		token,
+		"refresh_token",
+	);
+	const newRow = {
+		token: storedToken,
+		clientId: client.clientId,
+		sessionId,
+		userId: user.id,
+		referenceId,
+		authTime,
+		scopes,
+		createdAt: new Date(iat * 1000),
+		expiresAt: new Date(exp * 1000),
+	};
+
+	// Initial issuance (no rotation): single insert.
+	if (!originalRefresh?.id) {
+		const refreshToken = await ctx.context.adapter.create<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
 			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "id",
-					value: originalRefresh.id,
-				},
-			],
-			update: {
-				revoked: new Date(iat * 1000),
-			},
+			data: newRow,
+		});
+		return {
+			id: refreshToken.id,
+			token: await encodeRefreshToken(opts, token, sessionId),
+		};
+	}
+
+	// Rotation: atomic compare-and-swap on the parent row. Concurrent
+	// rotations against the same parent both observe `revoked === null` on
+	// the read in `handleRefreshTokenGrant`, but only one wins this update.
+	// The loser fails closed with `invalid_grant`; the parent row is now
+	// revoked, so any subsequent replay of the original refresh token
+	// triggers the existing family-invalidation guard in
+	// `handleRefreshTokenGrant`.
+	//
+	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
+	// immediate family invalidation on detected concurrent redemption.
+	// Doing that here requires wrapping the entire mint chain
+	// (CAS + create-refresh + create-access) in a real database
+	// transaction so the race-loser's family delete cannot interleave
+	// with the winner's still-in-flight inserts. Tracked for a follow-up
+	// minor once the adapter contract exposes opt-in transactional
+	// rotation.
+	const won = await ctx.context.adapter.update<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "id", value: originalRefresh.id },
+			{ field: "revoked", operator: "eq", value: null },
+		],
+		update: {
+			revoked: new Date(iat * 1000),
+		},
+	});
+
+	if (!won) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
 		});
 	}
 
-	// Issue new refresh token
 	const refreshToken = await ctx.context.adapter.create<
 		OAuthRefreshToken<Scope[]> & { id: string }
 	>({
 		model: "oauthRefreshToken",
-		data: {
-			token: await storeToken(opts.storeTokens, token, "refresh_token"),
-			clientId: client.clientId,
-			sessionId,
-			userId: user.id,
-			referenceId,
-			authTime,
-			scopes,
-			createdAt: new Date(iat * 1000),
-			expiresAt: new Date(exp * 1000),
-		},
+		data: newRow,
 	});
+
 	return {
 		id: refreshToken.id,
 		token: await encodeRefreshToken(opts, token, sessionId),
@@ -976,21 +1065,9 @@ async function handleRefreshTokenGrant(
 			error: "invalid_grant",
 		});
 	}
-	// Replay revoke (delete all tokens for that user-client)
+	// Replay revoke (RFC 9700 §4.14: tear down the family)
 	if (refreshToken.revoked) {
-		await ctx.context.adapter.deleteMany({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "clientId",
-					value: client_id,
-				},
-				{
-					field: "userId",
-					value: refreshToken.userId,
-				},
-			],
-		});
+		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
