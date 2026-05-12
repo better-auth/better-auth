@@ -354,7 +354,10 @@ export const auth = betterAuth({
 * `verifyIdToken`: Custom function to verify the ID token (optional)
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
-* `authorizationEndpoint`: Custom authorization endpoint URL (optional)
+* `authorizationEndpoint`: Custom authorization endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
+* `tokenEndpoint`: Custom token endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
+* `userInfoEndpoint`: Custom user info endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
+* `jwksEndpoint`: Custom JWKS endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
 
 ## `plugins`
 

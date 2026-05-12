@@ -104,7 +104,8 @@ export const google = (options: GoogleOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://oauth2.googleapis.com/token",
+				tokenEndpoint:
+					options.tokenEndpoint ?? "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -117,7 +118,8 @@ export const google = (options: GoogleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://oauth2.googleapis.com/token",
+						tokenEndpoint:
+							options.tokenEndpoint ?? "https://oauth2.googleapis.com/token",
 					});
 				},
 		async verifyIdToken(token, nonce) {
@@ -135,7 +137,7 @@ export const google = (options: GoogleOptions) => {
 				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
 				if (!kid || !jwtAlg) return false;
 
-				const publicKey = await getGooglePublicKey(kid);
+				const publicKey = await getGooglePublicKey(kid, options.jwksEndpoint);
 				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 					algorithms: [jwtAlg],
 					issuer: ["https://accounts.google.com", "accounts.google.com"],
@@ -177,7 +179,10 @@ export const google = (options: GoogleOptions) => {
 	} satisfies OAuthProvider<GoogleProfile>;
 };
 
-export const getGooglePublicKey = async (kid: string) => {
+export const getGooglePublicKey = async (
+	kid: string,
+	jwksEndpoint?: string,
+) => {
 	const { data } = await betterFetch<{
 		keys: Array<{
 			kid: string;
@@ -187,7 +192,7 @@ export const getGooglePublicKey = async (kid: string) => {
 			n: string;
 			e: string;
 		}>;
-	}>("https://www.googleapis.com/oauth2/v3/certs");
+	}>(jwksEndpoint ?? "https://www.googleapis.com/oauth2/v3/certs");
 
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {

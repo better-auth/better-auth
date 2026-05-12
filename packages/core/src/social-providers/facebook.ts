@@ -40,6 +40,8 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 }
 
 export const facebook = (options: FacebookOptions) => {
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://graph.facebook.com/me";
 	return {
 		id: "facebook",
 		name: "Facebook",
@@ -75,7 +77,9 @@ export const facebook = (options: FacebookOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
+				tokenEndpoint:
+					options.tokenEndpoint ??
+					"https://graph.facebook.com/v24.0/oauth/access_token",
 			});
 		},
 		async verifyIdToken(token, nonce) {
@@ -96,7 +100,8 @@ export const facebook = (options: FacebookOptions) => {
 						createRemoteJWKSet(
 							// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
 							new URL(
-								"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+								options.jwksEndpoint ??
+									"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
 							),
 						),
 						{
@@ -130,6 +135,7 @@ export const facebook = (options: FacebookOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint:
+							options.tokenEndpoint ??
 							"https://graph.facebook.com/v24.0/oauth/access_token",
 					});
 				},
@@ -185,8 +191,10 @@ export const facebook = (options: FacebookOptions) => {
 				"picture",
 				...(options?.fields || []),
 			];
+			const userInfoUrl = new URL(userInfoEndpoint);
+			userInfoUrl.searchParams.set("fields", fields.join(","));
 			const { data: profile, error } = await betterFetch<FacebookProfile>(
-				"https://graph.facebook.com/me?fields=" + fields.join(","),
+				userInfoUrl.toString(),
 				{
 					auth: {
 						type: "Bearer",
