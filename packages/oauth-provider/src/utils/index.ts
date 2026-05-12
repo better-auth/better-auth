@@ -379,13 +379,15 @@ export function basicToClientCredentials(authorization: string) {
 	if (authorization.startsWith("Basic ")) {
 		const encoded = authorization.replace("Basic ", "");
 		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
+		const separatorIndex = decoded.indexOf(":");
+		if (separatorIndex === -1) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			});
 		}
-		const [id, secret] = decoded.split(":", 2);
+		const id = decoded.slice(0, separatorIndex);
+		const secret = decoded.slice(separatorIndex + 1);
 		if (!id || !secret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
