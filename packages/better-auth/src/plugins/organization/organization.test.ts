@@ -106,6 +106,17 @@ describe("organization", async () => {
 						before: async (data, ctx) => {},
 					},
 				},
+				// Pre-verify every user created in this suite so invitation
+				// acceptance tests focus on role/membership logic rather than
+				// email-ownership; the dedicated emailVerified gate is exercised
+				// in `routes/crud-invites.test.ts`.
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
 			},
 		});
 
@@ -1453,6 +1464,15 @@ describe("invitation expiration and filtering", async () => {
 				async sendInvitationEmail() {},
 			}),
 		],
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 	});
 
 	const client = createAuthClient({
@@ -2535,6 +2555,15 @@ describe("Additional Fields", async () => {
 		plugins: [organization(orgOptions), nextCookies()],
 		logger: {
 			level: "error",
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
 		},
 	});
 

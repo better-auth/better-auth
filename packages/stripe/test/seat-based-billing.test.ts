@@ -975,7 +975,11 @@ describe("seat-based billing", () => {
 
 			const newMember = await ctx.adapter.create({
 				model: "user",
-				data: { email: "new-member@test.com", name: "New Member" },
+				data: {
+					email: "new-member@test.com",
+					name: "New Member",
+					emailVerified: true,
+				},
 			});
 			await ctx.adapter.create({
 				model: "account",

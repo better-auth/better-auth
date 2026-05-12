@@ -23,6 +23,15 @@ describe("team", async () => {
 		logger: {
 			level: "error",
 		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -418,6 +427,15 @@ describe("team", async () => {
 			logger: {
 				level: "error",
 			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -517,6 +535,15 @@ describe("setActiveTeam org scoping", async () => {
 		],
 		logger: {
 			level: "error",
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
 		},
 	});
 
@@ -772,6 +799,15 @@ describe("multi team support", async () => {
 			],
 			logger: {
 				level: "error",
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
 			},
 		},
 		{
