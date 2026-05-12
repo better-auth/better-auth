@@ -64,7 +64,7 @@
     "framer-motion": "^12.34.3",
     "geist": "^1.7.0",
     "input-otp": "^1.4.2",
-    "kysely": "^0.28.14",
+    "kysely": "^0.28.17",
     "lucide-react": "^0.575.0",
     "mcp-handler": "^1.1.0",
     "mysql2": "^3.18.2",

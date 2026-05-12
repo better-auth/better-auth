@@ -219,6 +219,19 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					}
 
 					try {
+						await ctx.context.internalAdapter.deleteSessions(session.user.id);
+					} catch (error) {
+						ctx.context.logger.error(
+							"Failed to delete anonymous user sessions",
+							error,
+						);
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS,
+						);
+					}
+
+					try {
 						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					} catch (error) {
 						ctx.context.logger.error("Failed to delete anonymous user", error);
@@ -323,7 +336,18 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						) {
 							return;
 						}
-						await ctx.context.internalAdapter.deleteUser(session.user.id);
+						try {
+							await ctx.context.internalAdapter.deleteSessions(session.user.id);
+							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						} catch (error) {
+							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`
+							// to remove the partial-state window where sessions are deleted but
+							// the user row remains.
+							ctx.context.logger.error(
+								"Failed to clean up anonymous user during post-link cleanup",
+								{ anonymousUserId: session.user.id, error },
+							);
+						}
 					}),
 				},
 			],
