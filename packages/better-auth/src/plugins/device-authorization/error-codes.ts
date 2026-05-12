@@ -8,6 +8,8 @@ export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 	ACCESS_DENIED: "Access denied",
 	INVALID_USER_CODE: "Invalid user code",
 	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
+	DEVICE_CODE_NOT_CLAIMED:
+		"Device code has not been claimed by a verifying session; call `GET /device` with the `user_code` while signed in before approving or denying",
 	POLLING_TOO_FREQUENTLY: "Polling too frequently",
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
