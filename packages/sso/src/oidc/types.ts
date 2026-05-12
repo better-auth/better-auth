@@ -101,10 +101,12 @@ export type DiscoveryErrorCode =
 	| "discovery_not_found"
 	/** Discovery endpoint returned invalid JSON */
 	| "discovery_invalid_json"
-	/** Discovery URL is invalid or malformed */
+	/** OIDC endpoint URL (discovery or per-endpoint: authorization, token, userinfo, jwks) is invalid, malformed, or uses a non-`http(s)` scheme */
 	| "discovery_invalid_url"
-	/** Discovery URL is not trusted by the trusted origins configuration */
+	/** OIDC endpoint URL is not trusted by the trusted origins configuration */
 	| "discovery_untrusted_origin"
+	/** OIDC endpoint URL (discovery or per-endpoint) points to a host that is not publicly routable (loopback, RFC 1918, link-local, cloud metadata FQDN, etc.) */
+	| "discovery_private_host"
 	/** Discovery document issuer doesn't match configured issuer */
 	| "issuer_mismatch"
 	/** Discovery document is missing required fields */

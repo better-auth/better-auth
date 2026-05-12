@@ -1527,4 +1527,313 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-5rr4-8452-hf4v
+	 */
+	describe("skipDiscovery SSRF protection (registerSSOProvider)", () => {
+		it("should reject registration when tokenEndpoint points to a non-publicly-routable host", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-token.com",
+						providerId: "ssrf-token-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "http://169.254.169.254/latest/meta-data/",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when userInfoEndpoint points to a cloud metadata host", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-userinfo.com",
+						providerId: "ssrf-userinfo-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: `${server.issuer.url}/token`,
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+							userInfoEndpoint:
+								"http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when jwksEndpoint points to a loopback port not in trustedOrigins", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-jwks.com",
+						providerId: "ssrf-jwks-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: `${server.issuer.url}/token`,
+							jwksEndpoint: "http://localhost:6379/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when an endpoint is not a valid URL", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-invalid.com",
+						providerId: "ssrf-invalid-url",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "not-a-url",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: "VALIDATION_ERROR",
+				},
+			});
+		});
+
+		it("should reject registration when an endpoint uses a non-http(s) protocol", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-protocol.com",
+						providerId: "ssrf-bad-protocol",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "file:///etc/passwd",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_invalid_url",
+				},
+			});
+		});
+
+		it("should accept registration when endpoints match a trustedOrigins entry", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-trusted.com",
+					providerId: "ssrf-trusted-endpoints",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+						userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					},
+				},
+				headers,
+			});
+
+			expect(provider.providerId).toBe("ssrf-trusted-endpoints");
+		});
+
+		it("should reject registration when oidcConfig endpoints point to a private host even without skipDiscovery", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-override.com",
+						providerId: "ssrf-override-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							tokenEndpoint: "http://169.254.169.254/token",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-5rr4-8452-hf4v
+	 */
+	describe("OIDC endpoint SSRF protection (updateSSOProvider)", () => {
+		it("should reject update when oidcConfig contains a link-local endpoint", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-target.com",
+					providerId: "ssrf-update-target",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: provider.providerId,
+						oidcConfig: {
+							userInfoEndpoint:
+								"http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject update when oidcConfig contains an invalid URL", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-invalid.com",
+					providerId: "ssrf-update-invalid",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: provider.providerId,
+						oidcConfig: {
+							tokenEndpoint: "not-a-url",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: "VALIDATION_ERROR",
+				},
+			});
+		});
+
+		it("should accept update when oidcConfig endpoints are trusted", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-trusted.com",
+					providerId: "ssrf-update-trusted",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: provider.providerId,
+					oidcConfig: {
+						userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					},
+				},
+				headers,
+			});
+
+			expect(updated.providerId).toBe("ssrf-update-trusted");
+		});
+	});
 });
