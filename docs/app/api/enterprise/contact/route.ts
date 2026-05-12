@@ -1,6 +1,25 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { getClientIP } from "@/lib/ai-chat/rate-limit";
 import { contactSchema, isFreeEmail } from "@/lib/enterprise-contact";
+
+let _ratelimit: Ratelimit | null = null;
+function getRatelimit(): Ratelimit {
+	if (!_ratelimit) {
+		const redis = new Redis({
+			url: process.env.UPSTASH_REDIS_REST_URL!,
+			token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+		});
+		_ratelimit = new Ratelimit({
+			redis,
+			limiter: Ratelimit.slidingWindow(5, "1 h"),
+			prefix: "enterprise-contact",
+		});
+	}
+	return _ratelimit;
+}
 
 function escapeHtml(text: string): string {
 	const map: Record<string, string> = {
@@ -29,6 +48,16 @@ export async function POST(request: Request) {
 				: {};
 		if (typeof raw._hp === "string" && raw._hp) {
 			return NextResponse.json({});
+		}
+
+		if (process.env.NODE_ENV === "production") {
+			const { success } = await getRatelimit().limit(getClientIP(request));
+			if (!success) {
+				return NextResponse.json(
+					{ message: "Too many requests. Please try again later." },
+					{ status: 429 },
+				);
+			}
 		}
 
 		const parsed = contactSchema.safeParse(body);
