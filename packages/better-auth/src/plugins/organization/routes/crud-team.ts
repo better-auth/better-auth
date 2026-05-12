@@ -817,7 +817,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const adapter = getOrgAdapter<O>(ctx.context, ctx.context.orgOptions);
+			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const teams = await adapter.listTeamsByUser({
 				userId: session.user.id,
 			});
