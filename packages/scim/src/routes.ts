@@ -84,6 +84,10 @@ function resolveRequiredRoles(
 	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
 }
 
+// TODO(scim-provider-ownership-default-on): flip default to `true` on next so
+// new non-org SCIM tokens are owner-locked by default. Coupled with the
+// `scimProvider.userId` schema column. Tracks the SCIM provider-ownership
+// advisory.
 function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
 	return opts.providerOwnership?.enabled ?? false;
 }
@@ -233,6 +237,36 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			if (providerId.includes(":")) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Provider id contains forbidden characters",
+				});
+			}
+
+			// A SCIM token authenticates as the row whose providerId matches the
+			// claim in the bearer token. If a caller mints a token whose
+			// providerId collides with a built-in account.providerId
+			// (`credential`, `email-otp`, `magic-link`, `phone-number`,
+			// `anonymous`, `siwe`, or any configured social provider key), the
+			// resulting token can be used to act against accounts that were
+			// never SCIM-provisioned, which would be a privilege escalation.
+			// Reject the collision at issuance.
+			//
+			// We read social provider keys from `options.socialProviders` (raw
+			// config) rather than `context.socialProviders` (resolved list) so
+			// that providers configured with `enabled: false` are still
+			// rejected: their account rows can persist in the DB from a prior
+			// enabled state.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				"email-otp",
+				"magic-link",
+				"phone-number",
+				"anonymous",
+				"siwe",
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
+			]);
+			if (reservedProviderIds.has(providerId)) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"Provider id collides with a built-in account provider and cannot be used for SCIM",
 				});
 			}
 
