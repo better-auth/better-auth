@@ -8,8 +8,3 @@ rules:
       # Intentional: reads .changeset/*.md content via GitHub API only.
       # No checkout of fork code. No code execution.
       - auto-retarget.yml
-  cache-poisoning:
-    ignore:
-      # False positive: neither setup-node call has caching enabled (no `cache:` param).
-      # The workflow only triggers on tag push, with no shared cache surface.
-      - release.yml
