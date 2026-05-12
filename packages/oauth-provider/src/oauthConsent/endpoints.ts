@@ -123,9 +123,9 @@ export async function updateConsentEndpoint(
 	}
 
 	const client = await getClient(ctx, opts, consent.clientId);
-	if (!consent) {
+	if (!client) {
 		throw new APIError("NOT_FOUND", {
-			error_description: "no consent",
+			error_description: "client not found",
 			error: "not_found",
 		});
 	}
