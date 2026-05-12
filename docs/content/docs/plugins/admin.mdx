@@ -70,6 +70,14 @@ The Admin plugin provides a set of administrative functions for user management 
 
 Before performing any admin operations, the user must be authenticated with an admin account. An admin is any user assigned the `admin` role or any user whose ID is included in the `adminUserIds` option.
 
+To create the first admin user, run the CLI after adding the Admin plugin and applying the schema:
+
+```package-install title="Terminal"
+npx auth@latest create-admin --email admin@example.com --name "Admin" --role admin
+```
+
+If users already exist, the CLI asks for confirmation before creating another admin. Use `--force` or `--yes` to skip that prompt. The CLI marks the admin email as verified by default; pass `--no-email-verified` to disable that.
+
 ### Create User
 
 Allows an admin to create a new user.
