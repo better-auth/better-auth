@@ -1262,9 +1262,17 @@ export const createInternalAdapter = (
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
 				const parseCachedVerification = (raw: unknown) => {
 					if (!raw) return null;
-					return safeJSONParse<Verification>(
-						typeof raw === "string" ? raw : String(raw),
-					);
+					// Secondary storage wrappers can return either a JSON string
+					// (the default codec) or a pre-parsed object (some Redis client
+					// integrations do this). Accept both shapes; only call
+					// safeJSONParse when we actually have a string.
+					if (typeof raw === "string") {
+						return safeJSONParse<Verification>(raw);
+					}
+					if (typeof raw === "object") {
+						return raw as Verification;
+					}
+					return null;
 				};
 				const consumeCacheKey = async (key: string) => {
 					if (secondaryStorage.getAndDelete) {
