@@ -5,13 +5,11 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
-
-// Cookie size constants based on browser limits
-const ALLOWED_COOKIE_SIZE = 4096;
-// Estimated size of an empty cookie with all attributes
-// (name, path, domain, secure, httpOnly, sameSite, expires/maxAge)
-const ESTIMATED_EMPTY_COOKIE_SIZE = 200;
-const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
+import {
+	ALLOWED_COOKIE_SIZE,
+	estimateEmptyCookieSize,
+	getMaxCookieValueSize,
+} from "./cookie-utils";
 
 interface Cookie {
 	name: string;
@@ -96,9 +94,11 @@ function chunkCookie(
 	chunks: Chunks,
 	logger: InternalLogger,
 ): Cookie[] {
-	const chunkCount = Math.ceil(cookie.value.length / CHUNK_SIZE);
+	const options = cookie.attributes;
+	const chunkSize = getMaxCookieValueSize(`${cookie.name}.999`, options);
+	const chunkCount = Math.ceil(cookie.value.length / chunkSize);
 
-	if (chunkCount === 1) {
+	if (chunkCount <= 1) {
 		chunks[cookie.name] = cookie.value;
 		return [cookie];
 	}
@@ -106,18 +106,20 @@ function chunkCookie(
 	const cookies: Cookie[] = [];
 	for (let i = 0; i < chunkCount; i++) {
 		const name = `${cookie.name}.${i}`;
-		const start = i * CHUNK_SIZE;
-		const value = cookie.value.substring(start, start + CHUNK_SIZE);
+		const start = i * chunkSize;
+		const value = cookie.value.substring(start, start + chunkSize);
 		cookies.push({ ...cookie, name, value });
 		chunks[name] = value;
 	}
 
 	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
 		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
-		emptyCookieSize: ESTIMATED_EMPTY_COOKIE_SIZE,
+		emptyCookieSize: estimateEmptyCookieSize(`${cookie.name}.0`, options),
 		valueSize: cookie.value.length,
 		chunkCount,
-		chunks: cookies.map((c) => c.value.length + ESTIMATED_EMPTY_COOKIE_SIZE),
+		chunks: cookies.map(
+			(c) => c.value.length + estimateEmptyCookieSize(c.name, options),
+		),
 	});
 
 	return cookies;
@@ -291,7 +293,7 @@ export async function setAccountCookie(
 		options.maxAge,
 	);
 
-	if (data.length > ALLOWED_COOKIE_SIZE) {
+	if (data.length > getMaxCookieValueSize(accountDataCookie.name, options)) {
 		const accountStore = createAccountStore(accountDataCookie.name, options, c);
 
 		const cookies = accountStore.chunk(data, options);
