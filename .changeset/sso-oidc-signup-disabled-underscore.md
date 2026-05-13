@@ -2,4 +2,4 @@
 "@better-auth/sso": patch
 ---
 
-Normalize the SSO OIDC `signup disabled` error to `signup_disabled` when redirecting after `disableImplicitSignUp` blocks an unknown user, matching the convention used by SAML, the core OAuth callback, and the generic OAuth plugin.
+OIDC sign-in blocked by `disableImplicitSignUp` now redirects with `?error=signup_disabled` instead of `?error=signup%20disabled`, so the error code is consistent with the rest of Better Auth.
