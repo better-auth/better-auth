@@ -118,6 +118,8 @@ When a user with 2FA enabled tries to sign in via email, username, or phone numb
 
 By default, 2FA sign-in enforcement applies to the credential-based sign-in endpoints: `/sign-in/email`, `/sign-in/username`, and `/sign-in/phone-number`. Non-credential sign-in methods such as email OTP, magic link, OAuth/social, passkey, anonymous, and similar passwordless flows are not gated by 2FA by default.
 
+If your app needs to require 2FA for those sign-in methods, add custom hook handling for those endpoints and redirect users into your 2FA verification flow before treating the sign-in as complete.
+
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
 ```tsx
@@ -509,7 +511,7 @@ export const twoFactorTableFields = [
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
-**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
+**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists. This option does not change which sign-in methods are challenged for 2FA.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
