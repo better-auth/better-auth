@@ -717,9 +717,10 @@ export const changeEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Change email is disabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED,
+			);
 		}
 
 		const newEmail = ctx.body.newEmail.toLowerCase();

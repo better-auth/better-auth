@@ -227,7 +227,7 @@ export const auth = betterAuth({
 
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
 
-Read more about databases [here](/docs/concepts/database).
+Read more about [databases](/docs/concepts/database).
 
 ## `secondaryStorage`
 
@@ -244,7 +244,7 @@ export const auth = betterAuth({
 })
 ```
 
-Read more about secondary storage [here](/docs/concepts/database#secondary-storage).
+Read more about [secondary storage](/docs/concepts/database#secondary-storage).
 
 ## `emailVerification`
 
@@ -474,6 +474,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeStateStrategy: "database", // Store OAuth state payload in verification storage
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
@@ -495,6 +496,15 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeStateStrategy`
+
+Controls where OAuth state data is stored during the authentication flow.
+
+* `"cookie"`: Store the state payload in an encrypted cookie. This keeps OAuth state stateless and avoids a database write during the start of the flow.
+* `"database"`: Store the state payload in the verification storage/table, set a signed state cookie when starting the flow, and validate the stored state against the signed cookie sent by the browser on the OAuth callback request.
+
+Defaults to `"database"` when a database is configured and `"cookie"` for database-less/stateless setups. If you only provide `secondaryStorage`, set this to `"database"` to store OAuth state there instead of in the cookie.
 
 ### `storeAccountCookie`
 
@@ -648,6 +658,26 @@ export const auth = betterAuth({
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 * OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+<h3 id="advanced-database"><code>database</code></h3>
+
+Set custom strategies for ID generation and findMany queries.
+
+* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
+* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	advanced: {
+		database: {
+			generateId: "uuid",
+			defaultFindManyLimit: 50,
+		},
+	},
+});
+```
 
 ### `backgroundTasks`
 

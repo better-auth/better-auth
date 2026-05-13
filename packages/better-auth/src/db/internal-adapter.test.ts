@@ -1493,4 +1493,223 @@ describe("internal adapter test", async () => {
 			expect(found!.expiresAt).toBeInstanceOf(Date);
 		});
 	});
+
+	describe("consumeVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns the row to the first caller and null to subsequent reads", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:single",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const first = await adapter.consumeVerificationValue("consume:single");
+			expect(first).not.toBeNull();
+			expect(first!.value).toBe("user-1");
+
+			const second = await adapter.consumeVerificationValue("consume:single");
+			expect(second).toBeNull();
+		});
+
+		it("yields exactly one winner under concurrent consume", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:race",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+			]);
+
+			const winners = results.filter((r) => r !== null);
+			expect(winners).toHaveLength(1);
+			expect(winners[0]!.value).toBe("user-2");
+		});
+
+		it("returns null for an unknown identifier", async () => {
+			const adapter = await makeAdapter();
+			const result = await adapter.consumeVerificationValue("consume:missing");
+			expect(result).toBeNull();
+		});
+
+		it("aborts the consume when a delete.before hook returns false", async () => {
+			const veto = vi.fn().mockReturnValue(false);
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							before: veto,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:veto",
+				value: "user-3",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:veto");
+			expect(result).toBeNull();
+			expect(veto).toHaveBeenCalledTimes(1);
+
+			const stillThere = await adapter.findVerificationValue("consume:veto");
+			expect(stillThere).not.toBeNull();
+		});
+
+		it("fires delete.after only for the winning racer", async () => {
+			const afterHook = vi.fn();
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							after: afterHook,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:after-once",
+				value: "user-4",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:after-once"),
+				adapter.consumeVerificationValue("consume:after-once"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(afterHook).toHaveBeenCalledTimes(1);
+		});
+
+		it("consumes via the original identifier when storeIdentifier is hashed", async () => {
+			const adapter = await makeAdapter({
+				verification: { storeIdentifier: "hashed" },
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:hashed",
+				value: "user-5",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:hashed");
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("user-5");
+
+			const replay = await adapter.consumeVerificationValue("consume:hashed");
+			expect(replay).toBeNull();
+		});
+
+		it("consumes the latest row and invalidates stale rows for the identifier", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const consumed = await adapter.consumeVerificationValue("consume:multi");
+			expect(consumed).not.toBeNull();
+			expect(consumed!.value).toBe("newer");
+
+			const leftover = await adapter.findVerificationValue("consume:multi");
+			expect(leftover).toBeNull();
+		});
+
+		it("uses secondary storage getAndDelete when verification values are storage-only", async () => {
+			const store = new Map<string, string>();
+			const getAndDelete = vi.fn((key: string) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			});
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					getAndDelete,
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary",
+				value: "secondary-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:secondary"),
+				adapter.consumeVerificationValue("consume:secondary"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(results.find((r) => r !== null)?.value).toBe("secondary-user");
+			expect(getAndDelete).toHaveBeenCalledWith(
+				"verification:consume:secondary",
+			);
+			expect(store.has("verification:consume:secondary")).toBe(false);
+		});
+
+		it("serializes the secondary storage compatibility fallback within one process", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					async get(key) {
+						await new Promise((resolve) => setTimeout(resolve, 5));
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary-fallback",
+				value: "fallback-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(results.find((r) => r !== null)?.value).toBe("fallback-user");
+			expect(store.has("verification:consume:secondary-fallback")).toBe(false);
+		});
+	});
 });

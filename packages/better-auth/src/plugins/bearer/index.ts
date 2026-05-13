@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
+import { setRequestCookie } from "../../cookies/cookie-utils";
 import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
@@ -105,14 +106,10 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						// Use headers.set() with "; " separator per RFC 6265.
-						// headers.append("cookie") joins with ", " in some runtimes
-						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
-						const existingCookie = headers.get("cookie");
-						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
-						headers.set(
-							"cookie",
-							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
+						setRequestCookie(
+							headers,
+							c.context.authCookies.sessionToken.name,
+							signedToken,
 						);
 						return {
 							context: {

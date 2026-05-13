@@ -17,7 +17,6 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
-import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import * as z from "zod";
@@ -29,12 +28,15 @@ import {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
 } from "../oidc";
 import { validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLAssertionExtract,
 	SAMLConfig,
@@ -50,6 +52,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
 /**
@@ -108,25 +111,18 @@ export const spMetadata = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const provider = await ctx.context.adapter.findOne<{
-				id: string;
-				samlConfig: string;
-			}>({
-				model: "ssoProvider",
-				where: [
-					{
-						field: "providerId",
-						value: ctx.query.providerId,
-					},
-				],
-			});
+			const provider = await findSAMLProvider(
+				ctx.query.providerId,
+				options,
+				ctx.context.adapter,
+			);
 			if (!provider) {
 				throw new APIError("NOT_FOUND", {
 					message: "No provider found for the given providerId",
 				});
 			}
 
-			const parsedSamlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig);
+			const parsedSamlConfig = provider.samlConfig;
 			if (!parsedSamlConfig) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid SAML configuration",
@@ -199,19 +195,19 @@ const ssoProviderBodySchema = z.object({
 				description: "The client secret",
 			}),
 			authorizationEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The authorization endpoint",
 				})
 				.optional(),
 			tokenEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The token endpoint",
 				})
 				.optional(),
 			userInfoEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The user info endpoint",
 				})
@@ -220,12 +216,12 @@ const ssoProviderBodySchema = z.object({
 				.enum(["client_secret_post", "client_secret_basic"])
 				.optional(),
 			jwksEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The JWKS endpoint",
 				})
 				.optional(),
-			discoveryEndpoint: z.string().optional(),
+			discoveryEndpoint: z.url().optional(),
 			skipDiscovery: z
 				.boolean()
 				.meta({
@@ -629,7 +625,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -642,9 +638,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
+					});
+				}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
 			}
@@ -666,6 +668,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "SSO provider with this providerId already exists",
 				});
+			}
+
+			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
 			}
 
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;

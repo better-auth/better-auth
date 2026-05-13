@@ -53,7 +53,7 @@ However, if you're starting a new project or facing challenges with your current
   <Step>
     ## Create Client Instance
 
-    This client instance includes a set of functions for interacting with the Better Auth server instance. For more information, see [here](/docs/concepts/client).
+    This client instance includes a set of functions for interacting with the Better Auth server instance. For more information, see the [client documentation](/docs/concepts/client).
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/react"
@@ -90,7 +90,7 @@ However, if you're starting a new project or facing challenges with your current
   <Step>
     ## Session Management
 
-    In this section, we'll look at how to manage sessions in Better Auth compared to Auth.js. For more information, see [here](/docs/concepts/session-management).
+    In this section, we'll look at how to manage sessions in Better Auth compared to Auth.js. For more information, see the [session management documentation](/docs/concepts/session-management).
 
     ### Client-side
 
@@ -330,6 +330,7 @@ However, if you're starting a new project or facing challenges with your current
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="User"
           fields={[
 {
 name: "id",
@@ -367,6 +368,7 @@ isOptional: true,
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="user"
           fields={[
 {
 name: "id",
@@ -416,6 +418,7 @@ description: "Timestamp of the last update to the user's information",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="Session"
           fields={[
 {
 name: "id",
@@ -446,6 +449,7 @@ description: "The time when the session expires",
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="session"
           fields={[
 {
 name: "id",
@@ -503,6 +507,7 @@ description: "Timestamp of when the session was updated",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="Account"
           fields={[
 {
 name: "id",
@@ -580,6 +585,7 @@ isOptional: true,
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="account"
           fields={[
 {
 name: "id",
@@ -668,6 +674,7 @@ description: "Timestamp of when the account was updated",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="VerificationToken"
           fields={[
 {
 name: "identifier",
@@ -692,6 +699,7 @@ description: "The time when the verification token expires",
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="verification"
           fields={[
 {
 name: "id",

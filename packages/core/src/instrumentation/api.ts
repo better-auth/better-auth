@@ -1,4 +1,6 @@
 import type { Span, Tracer } from "@opentelemetry/api";
+import type { OpenTelemetryAPI } from "./noop";
+import { noopOpenTelemetryAPI } from "./noop";
 
 type OpenTelemetryAPI = Pick<
 	typeof import("@opentelemetry/api"),

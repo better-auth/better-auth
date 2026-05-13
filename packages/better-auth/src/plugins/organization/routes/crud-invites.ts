@@ -1,3 +1,4 @@
+import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -68,6 +69,16 @@ const baseInvitationSchema = z.object({
 	]),
 });
 
+type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
+	dynamicAccessControl: { enabled: true };
+}
+	? LiteralString
+	: never;
+
+type OrganizationInvitationRole<O extends OrganizationOptions> =
+	| InferOrganizationRolesFromOption<O>
+	| DynamicOrganizationRole<O>;
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -96,8 +107,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The role to assign to the user
 						 */
 						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+							| OrganizationInvitationRole<O>
+							| OrganizationInvitationRole<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -289,7 +300,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 			});
-			if (alreadyInvited.length && !ctx.body.resend) {
+			if (
+				alreadyInvited.length &&
+				!ctx.body.resend &&
+				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
@@ -573,6 +588,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// TODO(#9124): `session.user.email` becomes nullable in v2 — this
+			// comparison and its mirrors in rejectInvitation, getInvitation, and
+			// listUserInvitations need null handling.
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -580,8 +598,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// Email-string equality is not ownership proof: a session whose user.email
+			// matches the invitation but has not been verified must not be treated as
+			// the invitation recipient. Gate is on by default; apps that intentionally
+			// allow unverified accept can opt out with `requireEmailVerificationOnInvitation: false`.
+			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -778,8 +801,9 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1042,6 +1066,16 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				);
 			}
+			// FIXME(next-minor): drop the option and make the gate unconditional.
+			if (
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				!session.user.emailVerified
+			) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
+			}
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -1220,6 +1254,21 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "User email cannot be passed for client side API calls.",
 				});
+			}
+
+			// When the caller has a session, require an ownership signal stronger
+			// than the email string before enumerating invitations targeted at it.
+			// Server-side SDK calls without a session are trusted and skip the gate.
+			// FIXME(next-minor): drop the option and make the gate unconditional.
+			if (
+				session &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				!session.user.emailVerified
+			) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
 			}
 
 			const userEmail = session?.user.email || ctx.query?.email;
