@@ -109,7 +109,7 @@ When 2FA is enabled:
 Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP in the [TOTP section](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
-  By default, Two Factor requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous) to enable and manage 2FA, set `allowPasswordless: true`. This option does not change which sign-in methods are challenged for 2FA.
+  By default, the two-factor plugin requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous) to enable and manage 2FA, set `allowPasswordless: true`. This option does not change which sign-in methods are challenged for 2FA.
 </Callout>
 
 ### Sign In with 2FA
