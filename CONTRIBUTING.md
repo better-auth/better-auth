@@ -1,79 +1,149 @@
 # Contributing to Better Auth
 
-Hi, we really appreciate your interest in contributing to Better Auth. This guide will help you get started. Your contributions make Better Auth even better for everyone. Before you begin, please take a moment to review the following guidelines.
+Thank you for your interest in contributing to Better Auth.  
+Your contributions help improve the project for everyone.
 
-By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+Before contributing, please read our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Repository Setup
+---
 
-1. Fork the repository and clone it locally:
+# Contribution Workflow
 
-   ```bash
-   git clone https://github.com/your-username/better-auth.git
-   cd better-auth
-   ```
+Most contributions follow this process:
 
-2. Install Node.js (LTS version recommended)
+```text
+1. Fork the repository
+2. Clone it locally
+3. Install dependencies
+4. Create a new branch
+5. Make your changes
+6. Add or update tests
+7. Run checks and type validation
+8. Create a changeset (if needed)
+9. Commit your changes
+10. Open a pull request
+```
 
-   > **Note**: This project is configured to use
-   > [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version,
-   > as such this is the simplest way to get you up and running.
+---
 
-   Once installed, use:
+# Repository Setup
 
-   ```bash
-   nvm install
-   nvm use
-   ```
+## 1. Fork and Clone the Repository
 
-   Alternatively, see
-   [Node.js installation](https://nodejs.org/en/download) for other supported
-   methods.
+Fork the repository on GitHub, then clone your fork locally:
 
-3. Install [pnpm](https://pnpm.io/)
+```bash
+git clone https://github.com/your-username/better-auth.git
+cd better-auth
+```
 
-   > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via
-   > [corepack](https://github.com/nodejs/corepack).
-   > Once installed, upon usage you’ll be prompted to install the correct pnpm
-   > version
+---
 
-   Alternatively, use `npm` to install it:
+## 2. Install Node.js
 
-   ```bash
-   npm install -g pnpm
-   ```
+This project recommends the latest LTS version of Node.js.
 
-4. Install project dependencies:
+We use [nvm](https://github.com/nvm-sh/nvm) to manage local Node.js versions.
 
-   ```bash
-   pnpm install
-   ```
+Once installed, run:
 
-5. Build the project:
+```bash
+nvm install
+nvm use
+```
 
-   ```bash
-   pnpm build
-   ```
+Alternatively, you can install Node.js manually from the official website.
 
-## Testing
+---
 
-Bug fixes and new features must include tests.
+## 3. Install pnpm
 
-Run the full test suite:
+This project uses [pnpm](https://pnpm.io/) for package management.
+
+Install it globally:
+
+```bash
+npm install -g pnpm
+```
+
+> [!NOTE]
+> This repository is configured to use Corepack, which can automatically install the correct pnpm version.
+
+---
+
+## 4. Install Dependencies
+
+Run:
+
+```bash
+pnpm install
+```
+
+This installs all required project dependencies.
+
+---
+
+## 5. Build the Project
+
+Before making changes, confirm the project builds successfully:
+
+```bash
+pnpm build
+```
+
+---
+
+# Development Workflow
+
+## Create a Branch
+
+Create a new branch before starting work:
+
+```bash
+git checkout -b fix/my-feature
+```
+
+Example branch names:
+
+```text
+fix/session-bug
+feat/google-provider
+docs/setup-guide
+```
+
+---
+
+# Testing
+
+All bug fixes and new features should include tests.
+
+---
+
+## Run All Tests
 
 ```bash
 pnpm test
 ```
 
-Or filter by file or directory:
+---
+
+## Run Specific Tests
+
+Example:
 
 ```bash
 pnpm vitest packages/better-auth/src/plugins/organization --run
 ```
 
-### Unit Tests
+This helps speed up development when working on a specific area.
 
-Use `getTestInstance()` from `better-auth/test` to set up test instances:
+---
+
+# Unit Tests
+
+Use `getTestInstance()` from `better-auth/test` when creating unit tests.
+
+Example:
 
 ```typescript
 import { getTestInstance } from "better-auth/test";
@@ -83,151 +153,353 @@ const { client, auth } = await getTestInstance({
 });
 ```
 
-### Database Adapter Tests
+This creates an isolated authentication test environment.
 
-Adapter tests require Docker containers. Start them before running adapter tests:
+---
 
-> **Note:** On macOS, the MSSQL container requires Rosetta emulation and at
-> least 2 GB of allocated memory.
+# Database Adapter Tests
+
+Some adapter tests require Docker containers.
+
+Start the containers before running adapter tests:
 
 ```bash
 docker compose up -d
 ```
 
-### E2E Tests
+> [!IMPORTANT]
+> On macOS, the MSSQL container requires:
+>
+> - Rosetta emulation
+> - At least 2 GB of allocated Docker memory
 
-End-to-end tests live in `e2e/` and are split into three suites: smoke, adapter,
-and integration.
+---
 
-### Regression Tests
+# End-to-End Tests
 
-When writing a test for a specific GitHub issue, add a `@see` comment:
+E2E tests are located in the `e2e/` directory.
+
+The project includes three E2E suites:
+
+- smoke
+- adapter
+- integration
+
+These tests validate real application behavior.
+
+---
+
+# Regression Tests
+
+When fixing a GitHub issue, include a regression test whenever possible.
+
+Use a `@see` comment to reference the original issue:
 
 ```typescript
 /**
  * @see https://github.com/better-auth/better-auth/issues/1234
  */
 it("should handle the previously broken behavior", async () => {
-  // ...
+  // test implementation
 });
 ```
 
-## Documentation
+This helps future contributors understand why the test exists.
 
-The documentation site lives in `docs/` and content is organized under `docs/content/docs/` by topic.
+---
 
-To run the docs locally:
+# Documentation
+
+Documentation files are located in:
+
+```text
+docs/content/docs/
+```
+
+Run the documentation site locally:
 
 ```bash
 pnpm -F docs dev
 ```
 
-When making changes to public APIs, please update the relevant documentation.
+> [!IMPORTANT]
+> If you change public APIs, update the related documentation as part of your PR.
 
-## Issue Guidelines
+---
 
-Before opening an issue, search existing issues to avoid duplicates.
-We provide templates to help you get started.
+# Issue Guidelines
 
-### Bug Reports
+Before opening a new issue:
 
-Use the [bug report template](https://github.com/better-auth/better-auth/issues/new?template=bug_report.yml).
-Provide a clear description of the bug with steps to reproduce and a minimal
-reproduction.
+- Search existing issues first
+- Avoid duplicate reports
+- Use the provided issue templates
 
-### Feature Requests
+---
 
-New features start with discussion. Open a [feature request](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) describing the problem, your proposed solution, and how it would benefit the project. This gives us room to align on scope and API shape before anyone writes code.
+## Bug Reports
 
-### Security Reports
+Use the bug report template when reporting issues.
 
-Do not open a public issue for security vulnerabilities.
-Email [security@better-auth.com](mailto:security@better-auth.com) instead.
-See [SECURITY.md](/SECURITY.md) for details.
+A good bug report should include:
 
-## Pull Request Guidelines
+- clear description
+- reproduction steps
+- expected behavior
+- actual behavior
+- minimal reproduction
+
+---
+
+## Feature Requests
+
+New features should begin with a discussion.
+
+Open a feature request describing:
+
+- the problem
+- your proposed solution
+- expected benefits
+- possible API design
+
+This helps maintainers review and align on the implementation before development begins.
+
+---
+
+## Security Reports
+
+Do not create public issues for security vulnerabilities.
+
+Instead, contact:
+
+```text
+security@better-auth.com
+```
+
+See [SECURITY.md](SECURITY.md) for more information.
+
+---
+
+# Pull Request Guidelines
 
 > [!NOTE]
-> For new features, please open an issue first to discuss before moving forward. We do not review large feature PRs opened without going through an issue first.
+> For large features, please open an issue first before starting development.
 
-### Code Formatting and Linting
+---
 
-[Lefthook](https://lefthook.dev/) runs linting, formatting, and spell checking
-in parallel on every commit. Additional checks like dependency linting (knip),
-type checking, and tests run in CI.
+## Before Opening a PR
 
-To skip a specific hook by command name, use `LEFTHOOK_EXCLUDE`:
+Make sure:
+
+- tests pass
+- type checking passes
+- documentation is updated
+- changes are properly scoped
+
+Run type checking:
+
+```bash
+pnpm typecheck
+```
+
+---
+
+# Formatting and Linting
+
+The project uses [Lefthook](https://lefthook.dev/) to run:
+
+- linting
+- formatting
+- spell checking
+
+These checks run automatically during commits.
+
+Skip a specific hook if necessary:
 
 ```bash
 LEFTHOOK_EXCLUDE=spell git commit -m "your message"
 ```
 
-Run `pnpm typecheck` and make sure it passes before opening your PR.
+---
 
-### Branch Targeting
+# Branch Targeting
 
-- **`main` is the stable track.** It ships bug fixes, security work, additive
-  improvements, and behavior changes that do not require user action. New
-  capabilities can land here too as long as they are well-tested, non-breaking,
-  and safe to adopt immediately.
-- **`next` is the beta track.** It ships new features, refactors, and breaking
-  changes, after a beta cycle that gives users a window to adapt.
+## `main`
 
-Automation moves PRs with `minor` or `major` changesets from `main` to `next`
-for you.
+The `main` branch is the stable release track.
 
-### Changesets
+Use it for:
 
-PRs that touch `packages/**` need a changeset before they can be merged. Run
-`pnpm changeset` when you're ready to submit, or update it during review if
-your changes evolve. The CLI walks you through picking the affected packages,
-a bump type, and a short user-facing description for the changelog. Commit
-the generated file with your PR.
+- bug fixes
+- security fixes
+- safe improvements
+- non-breaking changes
 
-Pick the bump type based on user impact:
+---
 
-- **`patch`** for bug fixes and additive changes existing users don't need to know about.
-- **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting)).
+## `next`
 
-A good description:
+The `next` branch is used for:
 
-- Write for end users reading the changelog, not for the PR reviewer.
-- Be clear and concise.
-- Explain what changed, not a commit-style prefix (e.g. `fix:`, `feat:`).
-- Describe the symptom users see, not the internal cause.
+- breaking changes
+- large refactors
+- experimental features
 
-If you're not sure whether your change needs one, a maintainer will handle
-it before merge.
+PRs with `minor` or `major` changesets are automatically moved to `next`.
 
-### Submitting a PR
+---
 
-1. Open a pull request against the **`main`** branch.
+# Changesets
 
-2. PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/)
-   format, with an optional scope for the affected package or feature:
+If your PR modifies anything inside `packages/**`, you will usually need a changeset.
 
-   ```
-   `feat(scope): description` or
-   `fix(scope): description` or
-   `perf: description` or
-   `docs: description` or
-   `chore: description` etc.
-   ```
+Generate one using:
 
-   - The subject must start with a lowercase letter.
-   - Use `docs` when changes are confined to `docs/`.
-   - Append `!` for breaking changes (e.g. `feat(scope)!: description`). These go through `next`, not `main`.
+```bash
+pnpm changeset
+```
 
-3. In your PR description:
-   - Clearly describe what you changed and why
-   - Reference related issues (e.g. "Closes #1234")
-   - List any potential breaking changes
-   - Add screenshots for UI changes
+A changeset:
 
-## AI Policy
+- updates package versions
+- generates changelog entries
+- describes user-facing changes
 
-We welcome AI-assisted contributions, whether code or issue reports, as long
-as they solve a real problem. Code must follow our coding standards and
-include appropriate tests and documentation. You should also review and
-understand what you're submitting well enough to discuss it. PRs and issues
-that do not meet these guidelines will be closed.
+Commit the generated changeset file with your PR.
+
+---
+
+## Choosing a Version Type
+
+### Patch
+
+Use for:
+
+- bug fixes
+- internal improvements
+- small safe changes
+
+### Minor
+
+Use for:
+
+- new features
+- changes users should know about
+
+### Major
+
+Use for:
+
+- breaking changes
+- incompatible API updates
+
+---
+
+# Commit Message Format
+
+Pull request titles must follow [Conventional Commits](https://www.conventionalcommits.org/).
+
+Examples:
+
+```text
+feat(auth): add GitHub OAuth provider
+fix(cli): resolve Windows build issue
+docs: improve installation instructions
+chore: update dependencies
+```
+
+Rules:
+
+- use lowercase subjects
+- keep titles concise
+- append `!` for breaking changes
+
+Example:
+
+```text
+feat(api)!: redesign session handling
+```
+
+---
+
+# Pull Request Description
+
+Your PR description should include:
+
+- what changed
+- why it changed
+- related issues
+- breaking changes
+- screenshots (for UI changes)
+
+Example:
+
+```text
+Closes #1234
+```
+
+---
+
+# AI Contribution Policy
+
+AI-assisted contributions are welcome.
+
+However:
+
+- contributors must understand the submitted code
+- code must follow project standards
+- tests are required
+- documentation may be required
+
+Low-quality or unreviewed AI-generated submissions may be rejected.
+
+---
+
+# Common Problems
+
+## `pnpm` Command Not Found
+
+Install pnpm globally:
+
+```bash
+npm install -g pnpm
+```
+
+---
+
+## Docker Tests Failing
+
+Make sure:
+
+- Docker Desktop is running
+- containers are started
+
+```bash
+docker compose up -d
+```
+
+---
+
+## Type Errors During Build
+
+Run:
+
+```bash
+pnpm typecheck
+```
+
+Fix all TypeScript errors before opening a PR.
+
+---
+
+# Final Checklist
+
+Before submitting your PR, confirm:
+
+- [ ] Project builds successfully
+- [ ] Tests pass
+- [ ] Type checking passes
+- [ ] Documentation is updated
+- [ ] Changeset added (if required)
+- [ ] PR title follows Conventional Commits
+- [ ] PR targets the correct branch
