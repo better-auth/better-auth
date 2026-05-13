@@ -1,21 +1,25 @@
 import { BetterAuthError } from "@better-auth/core/error";
-import type { Statements, Subset } from "./types";
+import type {
+	ExactRoleStatements,
+	Role,
+	RoleAuthorizeRequest,
+	RoleInput,
+	Statements,
+} from "./types";
 
 export type AuthorizeResponse =
 	| { success: false; error: string }
 	| { success: true; error?: never | undefined };
 
-export function role<TStatements extends Statements>(statements: TStatements) {
+export function role<
+	const TRoleStatements extends Statements,
+	TAuthorizeStatements extends Statements = TRoleStatements,
+>(
+	statements: TRoleStatements,
+): Role<ExactRoleStatements<TRoleStatements>, TAuthorizeStatements> {
 	return {
-		authorize<K extends keyof TStatements>(
-			request: {
-				[key in K]?:
-					| TStatements[key]
-					| {
-							actions: TStatements[key];
-							connector: "OR" | "AND";
-					  };
-			},
+		authorize(
+			request: RoleAuthorizeRequest<TAuthorizeStatements>,
 			connector: "OR" | "AND" = "AND",
 		): AuthorizeResponse {
 			let success = false;
@@ -80,8 +84,10 @@ export function createAccessControl<const TStatements extends Statements>(
 	s: TStatements,
 ) {
 	return {
-		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
-			return role<Subset<K, TStatements>>(statements);
+		newRole<const TRoleStatements extends Statements>(
+			statements: RoleInput<TStatements, TRoleStatements>,
+		) {
+			return role<TRoleStatements, TStatements>(statements);
 		},
 		statements: s,
 	};

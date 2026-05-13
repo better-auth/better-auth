@@ -39,9 +39,9 @@ export const captcha = (options: CaptchaOptions) =>
 				if (!pathname.startsWith("/")) pathname = "/" + pathname;
 
 				// we don't want to accidentally block email-otp endpoint.
-				const blockedPaths = ["/sign-in/email-otp"].reduce<string[]>(
+				const exemptPaths = ["/sign-in/email-otp"].reduce<string[]>(
 					(acc, curr) => {
-						// if custom endpoints includes a blocked path, we dont include the blocked path in the blocked paths array
+						// if custom endpoints include an exempt path, we don't include the exempt path in the exempt paths array
 						if (options.endpoints?.length && options.endpoints.includes(curr)) {
 							return acc;
 						}
@@ -51,7 +51,8 @@ export const captcha = (options: CaptchaOptions) =>
 				);
 				const match = endpoints.some((endpoint) => {
 					return (
-						pathname.includes(endpoint) && !blockedPaths.includes(endpoint)
+						pathname.includes(endpoint) &&
+						!exemptPaths.some((p) => pathname.includes(p))
 					);
 				});
 

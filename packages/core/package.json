@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.6.9",
+  "version": "1.6.11",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -102,12 +102,13 @@
     "./instrumentation": {
       "dev-source": "./src/instrumentation/index.ts",
       "types": "./dist/instrumentation/index.d.mts",
+      "workerd": "./dist/instrumentation/pure.index.mjs",
+      "edge": "./dist/instrumentation/pure.index.mjs",
+      "browser": "./dist/instrumentation/pure.index.mjs",
       "node": "./dist/instrumentation/index.mjs",
       "deno": "./dist/instrumentation/index.mjs",
       "bun": "./dist/instrumentation/index.mjs",
-      "edge": "./dist/instrumentation/pure.index.mjs",
-      "workerd": "./dist/instrumentation/pure.index.mjs",
-      "browser": "./dist/instrumentation/pure.index.mjs",
+      "import": "./dist/instrumentation/index.mjs",
       "default": "./dist/instrumentation/index.mjs"
     }
   },
@@ -168,7 +169,7 @@
     "better-call": "catalog:",
     "@cloudflare/workers-types": "^4.20250121.0",
     "jose": "^6.1.3",
-    "kysely": "^0.28.14",
+    "kysely": "catalog:",
     "nanostores": "^1.1.1",
     "tsdown": "catalog:"
   },
@@ -179,7 +180,7 @@
     "better-call": "catalog:",
     "@cloudflare/workers-types": ">=4",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
+    "kysely": "catalog:peer",
     "nanostores": "^1.0.1"
   },
   "peerDependenciesMeta": {

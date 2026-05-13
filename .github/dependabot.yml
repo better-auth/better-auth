@@ -1,0 +1,71 @@
+version: 2
+
+updates:
+  # github-actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps):"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # npm: root pnpm workspace
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps):"
+    versioning-strategy: increase
+    cooldown:
+      semver-major-days: 5
+    groups:
+      workspace-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "@biomejs/biome"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
+
+  # npm: demo apps
+  - package-ecosystem: npm
+    directories:
+      - "/demo/*"
+    schedule:
+      interval: weekly
+      day: sunday
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps):"
+    versioning-strategy: increase
+    cooldown:
+      semver-major-days: 5
+    groups:
+      demo-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/kysely-adapter",
-  "version": "1.6.9",
+  "version": "1.6.11",
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "kysely": "^0.28.14"
+    "kysely": "catalog:"
   },
   "peerDependenciesMeta": {
     "kysely": {
@@ -61,7 +61,7 @@
     "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "kysely": "^0.28.14",
+    "kysely": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
