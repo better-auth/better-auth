@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-feat(sso): add callback for handling validated SSO responses
+Add an SSO callback hook for handling validated provider responses before Better Auth creates a user session.

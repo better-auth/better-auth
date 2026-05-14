@@ -81,6 +81,10 @@ function getOIDCRedirectURI(
 	return `${baseURL}/sso/callback/${providerId}`;
 }
 
+function cloneCallbackResponse(response: Response): Response {
+	return new Response(response.body, response);
+}
+
 export {
 	type SAMLConditions,
 	type TimestampValidationOptions,
@@ -1653,7 +1657,7 @@ async function handleOIDCCallback(
 		request: ctx.request,
 	});
 	if (callbackResponse) {
-		return callbackResponse;
+		return cloneCallbackResponse(callbackResponse);
 	}
 	const isTrustedProvider =
 		"domainVerified" in provider &&
@@ -1894,7 +1898,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				options,
 			);
 			if (callbackResult instanceof Response) {
-				return callbackResult;
+				return cloneCallbackResponse(callbackResult);
 			}
 			throw ctx.redirect(callbackResult);
 		},
@@ -1949,7 +1953,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					options,
 				);
 				if (callbackResult instanceof Response) {
-					return callbackResult;
+					return cloneCallbackResponse(callbackResult);
 				}
 				throw ctx.redirect(callbackResult);
 			} catch (error) {

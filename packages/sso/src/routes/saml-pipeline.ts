@@ -25,6 +25,10 @@ import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
+function cloneCallbackResponse(response: Response): Response {
+	return new Response(response.body, response);
+}
+
 /**
  * Validates and returns a safe redirect URL.
  * - Prevents open redirect attacks by validating against trusted origins
@@ -438,7 +442,7 @@ export async function processSAMLResponse(
 		request: ctx.request,
 	});
 	if (callbackResponse) {
-		return callbackResponse;
+		return cloneCallbackResponse(callbackResponse);
 	}
 
 	const result = await handleOAuthUserInfo(ctx, {

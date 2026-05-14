@@ -314,7 +314,7 @@ describe("SSO", async () => {
 				protocol: "oidc",
 				userInfo: expect.objectContaining({
 					id: "oauth2",
-					email: "oauth2@test.com",
+					email: "test@localhost.com",
 				}),
 				provider: expect.objectContaining({
 					providerId: "callback-hook",
