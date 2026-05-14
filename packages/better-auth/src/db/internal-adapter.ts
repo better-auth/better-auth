@@ -1230,9 +1230,9 @@ export const createInternalAdapter = (
 		 * return value, because consuming one row invalidates the whole
 		 * identifier and stale rows cannot be replayed.
 		 *
-		 * Expiry is intentionally not checked here. Callers retain their
-		 * existing expiry handling so each call site can surface its own
-		 * error code (for example `token_expired` vs `invalid_grant`).
+		 * Rows past their `expiresAt` are treated as already invalid: the row
+		 * is still deleted (so it cannot be replayed later) but `null` is
+		 * returned. Callers do not need their own `expiresAt` gate.
 		 *
 		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
 		 * only when the configured storage implements `getAndDelete`; otherwise
