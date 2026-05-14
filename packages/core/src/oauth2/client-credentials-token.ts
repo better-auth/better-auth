@@ -1,25 +1,39 @@
-import { base64Url } from "@better-auth/utils/base64";
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionProvider } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export async function clientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
+	clientAssertionProvider,
 	resource,
 }: {
-	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
+	options: AwaitableFunction<ProviderOptions>;
 	scope?: string | undefined;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
+	tokenEndpoint?: string | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	let extraParams: Record<string, string> | undefined;
+	if (clientAssertionProvider) {
+		extraParams = await resolveAssertionParams({
+			clientAssertionProvider,
+		});
+	}
+
 	return createClientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
 		resource,
+		extraParams,
 	});
 }
 
@@ -31,11 +45,13 @@ export function createClientCredentialsTokenRequest({
 	scope,
 	authentication,
 	resource,
+	extraParams,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: ProviderOptions;
 	scope?: string | undefined;
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
+	extraParams?: Record<string, string> | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -54,20 +70,26 @@ export function createClientCredentialsTokenRequest({
 			}
 		}
 	}
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		const encodedCredentials = base64Url.encode(
-			`${primaryClientId}:${options.clientSecret}`,
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
+	const hasClientAssertion = !!extraParams?.client_assertion;
+	if (authentication === "basic" && !hasClientAssertion) {
+		const encodedCredentials = base64.encode(
+			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		body.set("client_secret", options.clientSecret);
+		if (!hasClientAssertion && options.clientSecret) {
+			body.set("client_secret", options.clientSecret);
+		}
+	}
+
+	if (extraParams) {
+		for (const [key, value] of Object.entries(extraParams)) {
+			if (!body.has(key)) body.append(key, value);
+		}
 	}
 
 	return {
@@ -81,18 +103,22 @@ export async function clientCredentialsToken({
 	tokenEndpoint,
 	scope,
 	authentication,
+	clientAssertionProvider,
 	resource,
 }: {
-	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
+	options: AwaitableFunction<ProviderOptions>;
 	tokenEndpoint: string;
 	scope: string;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
 	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
+		clientAssertionProvider,
+		tokenEndpoint,
 		resource,
 	});
 

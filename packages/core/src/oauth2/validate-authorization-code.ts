@@ -2,6 +2,8 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionProvider } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -11,6 +13,7 @@ export async function authorizationCodeRequest({
 	redirectURI,
 	options,
 	authentication,
+	clientAssertionProvider,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -22,11 +25,21 @@ export async function authorizationCodeRequest({
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
+	tokenEndpoint?: string | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	if (clientAssertionProvider) {
+		const assertionParams = await resolveAssertionParams({
+			clientAssertionProvider,
+		});
+		additionalParams = { ...additionalParams, ...assertionParams };
+	}
+
 	return createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
@@ -86,22 +99,18 @@ export function createAuthorizationCodeRequest({
 			}
 		}
 	}
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
+	const hasClientAssertion = !!additionalParams.client_assertion;
+	if (authentication === "basic" && !hasClientAssertion) {
 		const encodedCredentials = base64.encode(
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (!hasClientAssertion && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}
@@ -123,6 +132,7 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
+	clientAssertionProvider,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -135,6 +145,7 @@ export async function validateAuthorizationCode({
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -145,6 +156,8 @@ export async function validateAuthorizationCode({
 		redirectURI,
 		options,
 		authentication,
+		clientAssertionProvider,
+		tokenEndpoint,
 		deviceId,
 		headers,
 		additionalParams,

@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type {
+	ClientAssertionProvider,
+	OAuth2Tokens,
+	OAuth2UserInfo,
+} from "@better-auth/core/oauth2";
 
 export interface GenericOAuthOptions {
 	/**
@@ -53,6 +57,11 @@ export interface GenericOAuthConfig {
 	clientId: string;
 	/** OAuth client secret */
 	clientSecret?: string | undefined;
+	/**
+	 * Callback that returns a client assertion used to authenticate token endpoint requests.
+	 * The function is invoked for each token request and does not include built-in caching.
+	 */
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []

@@ -74,6 +74,7 @@ export function gumroad(options: GumroadOptions): GenericOAuthConfig {
 		tokenUrl: "https://api.gumroad.com/oauth/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		clientAssertionProvider: options.clientAssertionProvider,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

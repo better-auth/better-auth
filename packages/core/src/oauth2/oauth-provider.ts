@@ -1,4 +1,5 @@
 import type { Awaitable, LiteralString } from "../types";
+import type { ClientAssertionProvider } from "./client-assertion";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -105,6 +106,13 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * The client secret of your application
 	 */
 	clientSecret?: string | undefined;
+	/**
+	 * Returns a client assertion to authenticate token endpoint requests. This is an alternative to using client secrets if the IdP and environment support them.
+	 *
+	 * When set, requests include the returned value in the `client_assertion` parameter and have `client_assertion_type` set to the constant value `urn:ietf:params:oauth:client-assertion-type:jwt-bearer` (from RFC 7523).
+	 * These requests do not have a `client_secret` parameter.
+	 */
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	/**
 	 * The scopes you want to request from the provider
 	 */

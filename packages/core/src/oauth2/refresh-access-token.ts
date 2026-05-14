@@ -1,22 +1,35 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionProvider } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
+	clientAssertionProvider,
 	extraParams,
 	resource,
 }: {
 	refreshToken: string;
 	options: AwaitableFunction<Partial<ProviderOptions>>;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
+	tokenEndpoint?: string | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	if (clientAssertionProvider) {
+		const assertionParams = await resolveAssertionParams({
+			clientAssertionProvider,
+		});
+		extraParams = { ...extraParams, ...assertionParams };
+	}
+
 	return createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
@@ -50,12 +63,11 @@ export function createRefreshAccessTokenRequest({
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
+	const hasClientAssertion = !!extraParams?.client_assertion;
+	if (authentication === "basic" && !hasClientAssertion) {
 		if (primaryClientId) {
 			headers["authorization"] =
 				"Basic " +
@@ -65,11 +77,8 @@ export function createRefreshAccessTokenRequest({
 				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (!hasClientAssertion && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}
@@ -100,18 +109,22 @@ export async function refreshAccessToken({
 	options,
 	tokenEndpoint,
 	authentication,
+	clientAssertionProvider,
 	extraParams,
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
 	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	extraParams?: Record<string, string> | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = await createRefreshAccessTokenRequest({
+	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
+		clientAssertionProvider,
+		tokenEndpoint,
 		extraParams,
 	});
 

@@ -30,25 +30,20 @@ declare module "@better-auth/core" {
 
 /**
  * Base type for OAuth provider options.
- * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ * Extracts common fields from GenericOAuthConfig for provider helpers.
  */
-export type BaseOAuthProviderOptions = Omit<
-	Pick<
-		GenericOAuthConfig,
-		| "clientId"
-		| "clientSecret"
-		| "scopes"
-		| "redirectURI"
-		| "pkce"
-		| "disableImplicitSignUp"
-		| "disableSignUp"
-		| "overrideUserInfo"
-	>,
-	"clientSecret"
-> & {
-	/** OAuth client secret (required for provider options) */
-	clientSecret: string;
-};
+export type BaseOAuthProviderOptions = Pick<
+	GenericOAuthConfig,
+	| "clientId"
+	| "clientSecret"
+	| "clientAssertionProvider"
+	| "scopes"
+	| "redirectURI"
+	| "pkce"
+	| "disableImplicitSignUp"
+	| "disableSignUp"
+	| "overrideUserInfo"
+>;
 
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
@@ -167,6 +162,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
+							clientAssertionProvider: c.clientAssertionProvider,
 						});
 					},
 					async refreshAccessToken(
@@ -197,6 +193,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
+							clientAssertionProvider: c.clientAssertionProvider,
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
