@@ -16,6 +16,7 @@ import type {
 	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
+	SSOAuthenticatedUserInfo,
 	SSOOptions,
 	SSOProvider,
 } from "../types";
@@ -125,7 +126,7 @@ export async function processSAMLResponse(
 	ctx: any,
 	params: SAMLResponseParams,
 	options?: SSOOptions,
-): Promise<string> {
+): Promise<Response | string> {
 	const { providerId, currentCallbackPath } = params;
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 
@@ -411,13 +412,14 @@ export async function processSAMLResponse(
 			message: "Unable to extract user ID or email from SAML response",
 		});
 	}
+	const authenticatedUserInfo = userInfo as SSOAuthenticatedUserInfo;
 
 	// 15. Session creation
 	const isTrustedProvider: boolean =
 		ctx.context.trustedProviders.includes(providerId) ||
 		("domainVerified" in provider &&
 			!!(provider as { domainVerified?: boolean }).domainVerified &&
-			validateEmailDomain(userInfo.email as string, provider.domain));
+			validateEmailDomain(authenticatedUserInfo.email, provider.domain));
 
 	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
 	// fields. Currently callbackUrl serves both purposes, which means
@@ -428,16 +430,27 @@ export async function processSAMLResponse(
 		parsedSamlConfig.callbackUrl ||
 		ctx.context.baseURL;
 
+	const callbackResponse = await options?.onSSOAuthenticated?.({
+		protocol: "saml",
+		userInfo: authenticatedUserInfo,
+		provider,
+		callbackURL: callbackUrl,
+		request: ctx.request,
+	});
+	if (callbackResponse) {
+		return callbackResponse;
+	}
+
 	const result = await handleOAuthUserInfo(ctx, {
 		userInfo: {
-			email: userInfo.email as string,
-			name: (userInfo.name || userInfo.email) as string,
-			id: userInfo.id as string,
+			email: authenticatedUserInfo.email,
+			name: authenticatedUserInfo.name || authenticatedUserInfo.email,
+			id: authenticatedUserInfo.id,
 			emailVerified: Boolean(userInfo.emailVerified),
 		},
 		account: {
 			providerId,
-			accountId: userInfo.id as string,
+			accountId: authenticatedUserInfo.id,
 			accessToken: "",
 			refreshToken: "",
 		},
@@ -461,7 +474,7 @@ export async function processSAMLResponse(
 	) {
 		await options.provisionUser({
 			user: user as User & Record<string, any>,
-			userInfo,
+			userInfo: authenticatedUserInfo,
 			provider,
 		});
 	}
@@ -472,8 +485,8 @@ export async function processSAMLResponse(
 		profile: {
 			providerType: "saml",
 			providerId,
-			accountId: userInfo.id as string,
-			email: userInfo.email as string,
+			accountId: authenticatedUserInfo.id,
+			email: authenticatedUserInfo.email,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: attributes,
 		},

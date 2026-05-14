@@ -691,6 +691,44 @@ The `provisionUser` function receives:
 * **token**: OAuth2 tokens (for OIDC providers) - may be undefined for SAML
 * **provider**: The SSO provider configuration
 
+### Custom SSO Callback Responses
+
+Use `onSSOAuthenticated` when you need to handle a validated SSO callback before Better Auth creates or links a user and sets a session cookie. Returning a `Response` takes over the callback response.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            onSSOAuthenticated: async ({ userInfo, provider, callbackURL }) => {
+                await auditLog.create({
+                    action: "external_sso",
+                    providerId: provider.providerId,
+                    email: userInfo.email,
+                });
+
+                if (callbackURL.startsWith("/external/")) {
+                    return Response.redirect(
+                        new URL(callbackURL, "https://example.com").toString(),
+                    );
+                }
+            },
+        }),
+    ],
+});
+```
+
+The `onSSOAuthenticated` function receives:
+
+* **protocol**: The SSO protocol (`oidc` or `saml`)
+* **userInfo**: User information extracted from the SSO provider after protocol validation
+* **token**: OAuth2 tokens for OIDC providers
+* **provider**: The SSO provider configuration
+* **callbackURL**: The trusted callback URL Better Auth would redirect to after sign-in
+* **request**: The incoming callback request
+
 ### Organization Provisioning
 
 Organization provisioning automatically manages user memberships in organizations when SSO providers are linked to specific organizations. This is particularly useful for:
@@ -1535,6 +1573,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 ### Server
 
+**onSSOAuthenticated**: A function called after an SSO response is validated and user info is extracted, but before Better Auth creates or links a user and sets a session cookie. Return a `Response` to take over the callback response.
+
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
 **provisionUserOnEveryLogin**: If `true`, the `provisionUser` callback runs on every login, not just on registration. Defaults to `false`.
@@ -1548,6 +1588,10 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
 export const ssoOptionsType = {
+	onSSOAuthenticated: {
+		description: "A function called after an SSO response is validated and user info is extracted, but before Better Auth creates or links a user and sets a session cookie. Return a Response to take over the callback response.",
+		type: "function",
+	},
 	provisionUser: {
 		description: "A custom function to provision a user when they sign in with an SSO provider.",
 		type: "function",

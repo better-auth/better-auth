@@ -254,6 +254,76 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should allow handling an authenticated SSO callback before creating a session", async () => {
+		const onSSOAuthenticated = vi.fn(({ callbackURL, userInfo }) => {
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			redirectURL.searchParams.set("external", userInfo.id);
+			return Response.redirect(redirectURL.toString());
+		});
+		const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+			await getTestInstance({
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [sso({ onSSOAuthenticated }), organization()],
+			});
+		const authClient = createAuthClient({
+			plugins: [ssoClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "hook.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+				providerId: "callback-hook",
+			},
+			headers: adminHeaders,
+		});
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "callback-hook",
+			loginHint: "user@hook.com",
+			callbackURL: "/external-callback",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(
+			res.url,
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe(
+			"http://localhost:3000/external-callback?external=oauth2",
+		);
+		expect(onSSOAuthenticated).toHaveBeenCalledWith(
+			expect.objectContaining({
+				protocol: "oidc",
+				userInfo: expect.objectContaining({
+					id: "oauth2",
+					email: "oauth2@test.com",
+				}),
+				provider: expect.objectContaining({
+					providerId: "callback-hook",
+				}),
+				callbackURL: "/external-callback",
+			}),
+		);
+	});
+
 	it("should hydrate authorizationEndpoint via discovery when missing from stored config", async () => {
 		const { headers } = await signInWithTestUser();
 

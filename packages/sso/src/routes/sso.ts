@@ -41,6 +41,7 @@ import type {
 	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
+	SSOAuthenticatedUserInfo,
 	SSOOptions,
 	SSOProvider,
 } from "../types";
@@ -1541,14 +1542,7 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=token_response_not_found`,
 		);
 	}
-	let userInfo: {
-		id?: string;
-		email?: string;
-		name?: string;
-		image?: string;
-		emailVerified?: boolean;
-		[key: string]: any;
-	} | null = null;
+	let userInfo: Partial<SSOAuthenticatedUserInfo> | null = null;
 	const mapping = config.mapping || {};
 
 	if (config.userInfoEndpoint) {
@@ -1649,26 +1643,38 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=missing_user_info`,
 		);
 	}
+	const authenticatedUserInfo = userInfo as SSOAuthenticatedUserInfo;
+	const callbackResponse = await options?.onSSOAuthenticated?.({
+		protocol: "oidc",
+		userInfo: authenticatedUserInfo,
+		token: tokenResponse,
+		provider,
+		callbackURL,
+		request: ctx.request,
+	});
+	if (callbackResponse) {
+		return callbackResponse;
+	}
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
-		validateEmailDomain(userInfo.email, provider.domain);
+		validateEmailDomain(authenticatedUserInfo.email, provider.domain);
 
 	const linked = await handleOAuthUserInfo(ctx, {
 		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
+			email: authenticatedUserInfo.email,
+			name: authenticatedUserInfo.name || "",
+			id: authenticatedUserInfo.id,
+			image: authenticatedUserInfo.image,
 			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
+				? authenticatedUserInfo.emailVerified || false
 				: false,
 		},
 		account: {
 			idToken: tokenResponse.idToken,
 			accessToken: tokenResponse.accessToken,
 			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
+			accountId: authenticatedUserInfo.id,
 			providerId: provider.providerId,
 			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1690,7 +1696,7 @@ async function handleOIDCCallback(
 	) {
 		await options.provisionUser({
 			user,
-			userInfo,
+			userInfo: authenticatedUserInfo,
 			token: tokenResponse,
 			provider,
 		});
@@ -1701,10 +1707,10 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfo.id,
-			email: userInfo.email,
-			emailVerified: Boolean(userInfo.emailVerified),
-			rawAttributes: userInfo,
+			accountId: authenticatedUserInfo.id,
+			email: authenticatedUserInfo.email,
+			emailVerified: Boolean(authenticatedUserInfo.emailVerified),
+			rawAttributes: authenticatedUserInfo,
 		},
 		provider,
 		token: tokenResponse,
@@ -1877,7 +1883,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			const safeRedirectUrl = await processSAMLResponse(
+			const callbackResult = await processSAMLResponse(
 				ctx,
 				{
 					SAMLResponse: ctx.body.SAMLResponse,
@@ -1887,7 +1893,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				},
 				options,
 			);
-			throw ctx.redirect(safeRedirectUrl);
+			if (callbackResult instanceof Response) {
+				return callbackResult;
+			}
+			throw ctx.redirect(callbackResult);
 		},
 	);
 };
@@ -1929,7 +1938,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 
 			try {
-				const safeRedirectUrl = await processSAMLResponse(
+				const callbackResult = await processSAMLResponse(
 					ctx,
 					{
 						SAMLResponse: ctx.body.SAMLResponse,
@@ -1939,7 +1948,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					},
 					options,
 				);
-				throw ctx.redirect(safeRedirectUrl);
+				if (callbackResult instanceof Response) {
+					return callbackResult;
+				}
+				throw ctx.redirect(callbackResult);
 			} catch (error) {
 				// Re-throw redirects (they use throw for control flow)
 				if (

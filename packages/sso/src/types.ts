@@ -131,7 +131,51 @@ export type SSOProvider<O extends SSOOptions> =
 			} & BaseSSOProvider
 		: BaseSSOProvider;
 
+export type SSOAuthenticatedUserInfo = {
+	id: string;
+	email: string;
+	name?: string | undefined;
+	image?: string | undefined;
+	emailVerified?: boolean | undefined;
+	[key: string]: any;
+};
+
+export type SSOAuthenticatedContext = {
+	/**
+	 * The protocol used for the SSO callback.
+	 */
+	protocol: "oidc" | "saml";
+	/**
+	 * The user info extracted from the provider after protocol validation.
+	 */
+	userInfo: SSOAuthenticatedUserInfo;
+	/**
+	 * The OAuth2 tokens from the provider. Only present for OIDC callbacks.
+	 */
+	token?: OAuth2Tokens;
+	/**
+	 * The SSO provider.
+	 */
+	provider: SSOProvider<SSOOptions>;
+	/**
+	 * The trusted callback URL Better Auth would redirect to after sign-in.
+	 */
+	callbackURL: string;
+	/**
+	 * The incoming callback request.
+	 */
+	request?: Request;
+};
+
 export interface SSOOptions {
+	/**
+	 * Called after an SSO response is validated and user info is extracted, but
+	 * before Better Auth creates or links a user and sets a session cookie. Return
+	 * a Response to take over the callback response.
+	 */
+	onSSOAuthenticated?:
+		| ((data: SSOAuthenticatedContext) => Awaitable<Response | void>)
+		| undefined;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
