@@ -2,7 +2,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { applySetCookies, parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1925,30 +1925,8 @@ describe("two factor passwordless", async () => {
 
 	const applySetCookie = (headers: Headers, responseHeaders: Headers) => {
 		const setCookieHeader = responseHeaders.get("set-cookie");
-		if (!setCookieHeader) {
-			return headers;
-		}
-		const existing = headers.get("cookie");
-		const cookieMap = new Map<string, string>();
-		if (existing) {
-			existing.split("; ").forEach((pair) => {
-				const [name, ...rest] = pair.split("=");
-				if (!name) {
-					return;
-				}
-				cookieMap.set(name, rest.join("="));
-			});
-		}
-		const cookies = parseSetCookieHeader(setCookieHeader);
-		cookies.forEach((cookie, name) => {
-			cookieMap.set(name, cookie.value);
-		});
-		headers.set(
-			"cookie",
-			Array.from(cookieMap.entries())
-				.map(([name, value]) => `${name}=${value}`)
-				.join("; "),
-		);
+		if (!setCookieHeader) return headers;
+		applySetCookies(headers, [setCookieHeader]);
 		return headers;
 	};
 

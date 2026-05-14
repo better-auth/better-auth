@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	expireCookie,
+	getChunkedCookie,
 	getCookieCache,
 	getCookies,
 	getSessionCookie,
@@ -9,6 +10,7 @@ import {
 } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
+	applySetCookies,
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -1436,6 +1438,141 @@ describe("parse cookies", () => {
 		expect(parsedCookies.get("better-auth.session_data")).toBe(
 			"session-data.signature=",
 		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9465
+ */
+describe("Cookie header without whitespace after semicolon", () => {
+	it("parseCookies returns each pair when separator is `;` only", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature;better-auth.session_data=session-data.signature";
+
+		const parsed = parseCookies(cookieHeader);
+
+		expect(parsed.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsed.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
+
+	it("parseCookies tolerates mixed `;`, `; `, and `;\\t` separators", () => {
+		const cookieHeader = "a=1; b=2;c=3;\td=4";
+
+		const parsed = parseCookies(cookieHeader);
+
+		expect(parsed.get("a")).toBe("1");
+		expect(parsed.get("b")).toBe("2");
+		expect(parsed.get("c")).toBe("3");
+		expect(parsed.get("d")).toBe("4");
+	});
+
+	it("getSessionCookie finds the session cookie when separator is `;` only", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"preference=dark;better-auth.session_token=token-123",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		expect(getSessionCookie(request)).toBe("token-123");
+	});
+
+	it("getChunkedCookie reconstructs chunks across `;`-only separators", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_data.0=chunkA;better-auth.session_data.1=chunkB",
+		);
+		const ctx = {
+			getCookie: () => undefined,
+			headers,
+		} as unknown as Parameters<typeof getChunkedCookie>[0];
+
+		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBe(
+			"chunkAchunkB",
+		);
+	});
+});
+
+describe("parseCookies validation", () => {
+	it("returns empty map for empty header", () => {
+		expect(parseCookies("").size).toBe(0);
+	});
+
+	it("rejects names containing characters outside RFC 7230 token", () => {
+		const map = parseCookies("bad name=v1; ok=v2; bad,name=v3; bad:name=v4");
+		expect(map.has("bad name")).toBe(false);
+		expect(map.has("bad,name")).toBe(false);
+		expect(map.has("bad:name")).toBe(false);
+		expect(map.get("ok")).toBe("v2");
+	});
+
+	it("rejects values containing control chars, double-quote, or backslash", () => {
+		const map = parseCookies('a=ok; b=has\rcr; c=has"quote; d=has\\slash');
+		expect(map.get("a")).toBe("ok");
+		expect(map.has("b")).toBe(false);
+		expect(map.has("c")).toBe(false);
+		expect(map.has("d")).toBe(false);
+	});
+
+	it("accepts values with space and comma (real-world deviation)", () => {
+		const map = parseCookies("a=hello world; b=v1,v2");
+		expect(map.get("a")).toBe("hello world");
+		expect(map.get("b")).toBe("v1,v2");
+	});
+
+	it("splits on first `=` only, preserving subsequent `=` in value", () => {
+		const map = parseCookies("a=b=c=d");
+		expect(map.get("a")).toBe("b=c=d");
+	});
+
+	it("rejects entries with CR/LF in raw key or value (no trim escape)", () => {
+		const map = parseCookies("a=ok\r; b\r=1; c=v\nv; d=ok");
+		expect(map.has("a")).toBe(false);
+		expect(map.has("b")).toBe(false);
+		expect(map.has("c")).toBe(false);
+		expect(map.get("d")).toBe("ok");
+	});
+
+	it("strips double-quoted values per RFC 6265 §4.1.1", () => {
+		const map = parseCookies('a="hello"; b=plain; c="with space"');
+		expect(map.get("a")).toBe("hello");
+		expect(map.get("b")).toBe("plain");
+		expect(map.get("c")).toBe("with space");
+	});
+});
+
+describe("applySetCookies", () => {
+	it("merges into empty Cookie header", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ["a=1; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=1");
+	});
+
+	it("strips Set-Cookie attributes (only name=value lands)", () => {
+		const headers = new Headers();
+		applySetCookies(headers, [
+			"a=1; Path=/; HttpOnly; Secure; Max-Age=3600; SameSite=Lax",
+		]);
+		expect(headers.get("cookie")).toBe("a=1");
+	});
+
+	it("merges multiple Set-Cookie values", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ["a=1; Path=/", "b=2; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=1; b=2");
+	});
+
+	it("last-wins on duplicate cookie name (existing + new)", () => {
+		const headers = new Headers({ cookie: "a=old; b=keep" });
+		applySetCookies(headers, ["a=new; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=new; b=keep");
 	});
 });
 

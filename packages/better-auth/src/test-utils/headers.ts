@@ -1,3 +1,5 @@
+import { applySetCookies } from "../cookies/cookie-utils";
+
 /**
  * converts set cookie containing headers to
  * cookie containing headers
@@ -10,19 +12,8 @@ export function convertSetCookieToCookie(headers: Headers): Headers {
 		}
 	});
 
-	if (setCookieHeaders.length === 0) {
-		return headers;
-	}
+	if (setCookieHeaders.length === 0) return headers;
 
-	const existingCookies = headers.get("cookie") || "";
-	const cookies = existingCookies ? existingCookies.split("; ") : [];
-
-	setCookieHeaders.forEach((setCookie) => {
-		const cookiePair = setCookie.split(";")[0]!;
-		cookies.push(cookiePair.trim());
-	});
-
-	headers.set("cookie", cookies.join("; "));
-
+	applySetCookies(headers, setCookieHeaders);
 	return headers;
 }

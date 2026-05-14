@@ -174,6 +174,69 @@ export function toCookieOptions(
 }
 
 /**
+ * Cookie-name token char set per RFC 7230 §3.2.6.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6
+ */
+const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
+
+/**
+ * Cookie-value char set per RFC 6265 §4.1.1, plus space and comma.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+ * @see https://github.com/golang/go/issues/7243
+ */
+const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
+
+/**
+ * Trim leading/trailing OWS (space / horizontal tab) per RFC 7230 §3.2.3.
+ * Narrower than `String.prototype.trim()`, which strips CR/LF and other
+ * whitespace and would let CTLs escape `cookieValueRegex`.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.3
+ */
+function trimOWS(s: string): string {
+	let start = 0;
+	let end = s.length;
+	while (start < end) {
+		const c = s.charCodeAt(start);
+		if (c !== 0x20 && c !== 0x09) break;
+		start++;
+	}
+	while (end > start) {
+		const c = s.charCodeAt(end - 1);
+		if (c !== 0x20 && c !== 0x09) break;
+		end--;
+	}
+	return start === 0 && end === s.length ? s : s.slice(start, end);
+}
+
+/**
+ * Tolerates `;` separators without the SP that RFC 6265 §4.2.1 mandates,
+ * since proxies and runtimes commonly strip it. Silently drops entries
+ * whose name violates RFC 7230 token or whose value violates RFC 6265
+ * cookie-octet (plus space and comma). Strips optional surrounding
+ * double-quotes per RFC 6265 §4.1.1.
+ */
+export function parseCookies(cookie: string): Map<string, string> {
+	const cookieMap = new Map<string, string>();
+	if (cookie.length < 2) return cookieMap;
+	for (const chunk of cookie.split(";")) {
+		const eq = chunk.indexOf("=");
+		if (eq === -1) continue;
+		const key = trimOWS(chunk.slice(0, eq));
+		let val = trimOWS(chunk.slice(eq + 1));
+		if (val.length >= 2 && val[0] === '"' && val[val.length - 1] === '"') {
+			val = val.slice(1, -1);
+		}
+		if (cookieNameRegex.test(key) && cookieValueRegex.test(val)) {
+			cookieMap.set(key, val);
+		}
+	}
+	return cookieMap;
+}
+
+/**
  * Add or replace a cookie in the request `Cookie` header.
  *
  * Cookie pairs are joined with `; `, but `headers.append("cookie", ...)`
@@ -186,16 +249,33 @@ export function setRequestCookie(
 	name: string,
 	value: string,
 ): void {
-	const cookieMap = new Map<string, string>();
-	for (const pair of (headers.get("cookie") || "").split(";")) {
-		const trimmed = pair.trim();
-		const eq = trimmed.indexOf("=");
-		if (eq > 0) cookieMap.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
-	}
-
+	const cookieMap = parseCookies(headers.get("cookie") || "");
 	cookieMap.set(name, value);
-
 	headers.set(
+		"cookie",
+		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+	);
+}
+
+/**
+ * Merge `Set-Cookie` header values into the target's `Cookie` header.
+ * Mutates `target`.
+ *
+ * Name/value-level merge only. RFC 6265 §5 user-agent semantics
+ * (expiration, domain/path scoping, ordering) are out of scope. Suitable
+ * for single-request proxy, middleware, and test contexts.
+ */
+export function applySetCookies(
+	target: Headers,
+	setCookieValues: Iterable<string>,
+): void {
+	const cookieMap = parseCookies(target.get("cookie") || "");
+	for (const setCookie of setCookieValues) {
+		for (const [name, attr] of parseSetCookieHeader(setCookie)) {
+			cookieMap.set(name, attr.value);
+		}
+	}
+	target.set(
 		"cookie",
 		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
 	);
@@ -204,28 +284,7 @@ export function setRequestCookie(
 export function setCookieToHeader(headers: Headers) {
 	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
-		if (!setCookieHeader) {
-			return;
-		}
-
-		const cookieMap = new Map<string, string>();
-
-		const existingCookiesHeader = headers.get("cookie") || "";
-		existingCookiesHeader.split(";").forEach((cookie) => {
-			const [name, ...rest] = cookie!.trim().split("=");
-			if (name && rest.length > 0) {
-				cookieMap.set(name, rest.join("="));
-			}
-		});
-
-		const cookies = parseSetCookieHeader(setCookieHeader);
-		cookies.forEach((value, name) => {
-			cookieMap.set(name, value.value);
-		});
-
-		const updatedCookies = Array.from(cookieMap.entries())
-			.map(([name, value]) => `${name}=${value}`)
-			.join("; ");
-		headers.set("cookie", updatedCookies);
+		if (!setCookieHeader) return;
+		applySetCookies(headers, [setCookieHeader]);
 	};
 }
