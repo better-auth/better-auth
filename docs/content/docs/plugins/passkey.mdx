@@ -206,7 +206,7 @@ await authClient.signIn.passkey({
 });
 ```
 
-### Step-up authentication (re-auth without session)
+### Step-up authentication (re-auth without creating a session)
 
 Use `verifyPasskey` to verify a passkey assertion **without creating a session**. This is useful for step-up authentication on sensitive operations like money transfers, account changes, or resource deletion — where you need cryptographic proof of user presence but don't want orphaned sessions polluting your session table.
 
