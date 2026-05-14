@@ -168,6 +168,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Rebuild native bindings for matrix node
+        run: pnpm rebuild better-sqlite3
+
       - name: Start Docker Containers
         run: docker compose up -d --wait --wait-timeout 60
 
