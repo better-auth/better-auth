@@ -99,11 +99,11 @@ function createFieldSchema(field: BetterAuthRouteInputField): z.ZodType {
 	if (field.description) {
 		schema = schema.meta({ description: field.description });
 	}
-	if (field.defaultValue !== undefined) {
-		schema = schema.default(field.defaultValue as never);
-	}
 	if (field.required === false) {
 		schema = schema.optional();
+	}
+	if (field.defaultValue !== undefined) {
+		schema = schema.default(field.defaultValue as never);
 	}
 	return schema;
 }

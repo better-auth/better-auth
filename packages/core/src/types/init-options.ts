@@ -189,7 +189,8 @@ type StaticRouteInputDefault =
 	| string[]
 	| number[]
 	| Record<string, unknown>
-	| unknown[];
+	| unknown[]
+	| (() => unknown);
 
 type InferRouteInputFields<Fields> =
 	Fields extends Record<infer Key, BetterAuthRouteInputField>
