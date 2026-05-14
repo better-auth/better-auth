@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
+import { createPrivateKeyJwtClientAssertionProvider } from "better-auth/oauth2";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -16,7 +17,7 @@ import type { OAuthClient } from "./types/oauth";
  * across the entire stack.
  *
  * - Authorization server: oauthProvider plugin with a private_key_jwt client
- * - Relying party: genericOAuth plugin with authentication: "private_key_jwt"
+ * - Relying party: genericOAuth plugin with a private_key_jwt assertion provider
  * - Flow: RP → authorize → login → callback → token exchange (with JWT assertion) → session
  */
 describe("private_key_jwt e2e", async () => {
@@ -25,6 +26,7 @@ describe("private_key_jwt e2e", async () => {
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
 
 	// Generate RSA key pair
 	const keyPair = await generateKeyPair("RS256", { extractable: true });
@@ -133,17 +135,18 @@ describe("private_key_jwt e2e", async () => {
 						{
 							providerId,
 							clientId: oauthClient.client_id,
-							clientSecret: "unused", // required by type but not used for private_key_jwt
 							redirectURI: redirectUri,
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							authentication: "private_key_jwt",
-							clientAssertion: {
-								privateKeyJwk: privateJwk,
-								kid: "e2e-key-1",
-								algorithm: "RS256",
-							},
+							clientAssertionProvider:
+								createPrivateKeyJwtClientAssertionProvider({
+									clientId: oauthClient.client_id,
+									tokenEndpoint,
+									privateKeyJwk: privateJwk,
+									kid: "e2e-key-1",
+									algorithm: "RS256",
+								}),
 						},
 					],
 				}),
@@ -174,7 +177,7 @@ describe("private_key_jwt e2e", async () => {
 
 		// Step 2: Follow the authorize redirect → login page
 		let loginRedirectUri = "";
-		await authClient.$fetch(signInResult.url, {
+		await authClient.$fetch(signInResult.url!, {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -208,7 +211,7 @@ describe("private_key_jwt e2e", async () => {
 		// the authorization server's token endpoint, which verifies the JWT
 		// signature against the registered JWKS.
 		let callbackUrl = "";
-		await rpClient.$fetch(signInResponse.url, {
+		await rpClient.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers: rpHeaders,
 			onError(context) {
@@ -273,17 +276,18 @@ describe("private_key_jwt e2e", async () => {
 						{
 							providerId,
 							clientId: oauthJwksUriClient.client_id,
-							clientSecret: "unused",
 							redirectURI: redirectUri,
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							authentication: "private_key_jwt",
-							clientAssertion: {
-								privateKeyJwk: privateJwk,
-								kid: "e2e-key-1",
-								algorithm: "RS256",
-							},
+							clientAssertionProvider:
+								createPrivateKeyJwtClientAssertionProvider({
+									clientId: oauthJwksUriClient.client_id,
+									tokenEndpoint,
+									privateKeyJwk: privateJwk,
+									kid: "e2e-key-1",
+									algorithm: "RS256",
+								}),
 						},
 					],
 				}),
@@ -308,7 +312,7 @@ describe("private_key_jwt e2e", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(signInResult.url, {
+		await authClient.$fetch(signInResult.url!, {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -333,7 +337,7 @@ describe("private_key_jwt e2e", async () => {
 		expect(signInResponse.url).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await rpClient.$fetch(signInResponse.url, {
+		await rpClient.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers: rpHeaders,
 			onError(context) {

@@ -2218,6 +2218,124 @@ describe("oauth2", async () => {
 		expect(provider?.issuer).toBe(`http://localhost:${port}`);
 	});
 
+	describe("clientAssertionProvider", () => {
+		it("should send client_assertion instead of client_secret at the token endpoint", async () => {
+			const assertion = "test-client-assertion-jwt";
+			const clientAssertionProvider = vi.fn(async () => assertion);
+			let capturedBody: Record<string, unknown> | null = null;
+
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				capturedBody = { ...(req as any).body };
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientAssertionProvider,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			const res = await authClient.signIn.social({
+				provider: "test-assertion",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+			expect(clientAssertionProvider).toHaveBeenCalledOnce();
+			expect(capturedBody).not.toBeNull();
+			const body = capturedBody!;
+			expect(body.grant_type).toBe("authorization_code");
+			expect(body.client_id).toBe(clientId);
+			expect(body.client_secret).toBeUndefined();
+			expect(body.client_assertion_type).toBe(
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			);
+			expect(body.client_assertion).toBe(assertion);
+		});
+
+		it("should prefer clientAssertionProvider when both it and clientSecret are provided", async () => {
+			const assertion = "client-assertion";
+			const clientAssertionProvider = vi.fn(async () => assertion);
+			let capturedBody: Record<string, unknown> | null = null;
+
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				capturedBody = { ...(req as any).body };
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion-with-secret",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								clientAssertionProvider,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			const res = await authClient.signIn.social({
+				provider: "test-assertion-with-secret",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+
+			expect(clientAssertionProvider).toHaveBeenCalledOnce();
+			expect(capturedBody).not.toBeNull();
+			const body = capturedBody!;
+			expect(body.client_secret).toBeUndefined();
+			expect(body.client_assertion).toBe(assertion);
+			expect(body.client_assertion_type).toBe(
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			);
+		});
+	});
+
 	it("should use custom name when provided in config", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [

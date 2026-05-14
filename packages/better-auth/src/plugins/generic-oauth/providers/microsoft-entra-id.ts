@@ -92,6 +92,7 @@ export function microsoftEntraId(
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		clientAssertionProvider: options.clientAssertionProvider,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

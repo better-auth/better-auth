@@ -1,7 +1,7 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
-import type { ClientAssertionConfig } from "./client-assertion";
+import type { ClientAssertionProvider } from "./client-assertion";
 import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
@@ -9,35 +9,23 @@ export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
-	clientAssertion,
-	tokenEndpoint,
+	clientAssertionProvider,
 	extraParams,
 	resource,
 }: {
 	refreshToken: string;
 	options: AwaitableFunction<Partial<ProviderOptions>>;
-	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
-	clientAssertion?: ClientAssertionConfig | undefined;
-	/** Token endpoint URL. Used as the JWT `aud` claim when signing assertions. */
+	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	tokenEndpoint?: string | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
 
-	if (authentication === "private_key_jwt") {
-		if (!clientAssertion) {
-			throw new Error(
-				"private_key_jwt authentication requires a clientAssertion configuration",
-			);
-		}
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
+	if (clientAssertionProvider) {
 		const assertionParams = await resolveAssertionParams({
-			clientAssertion,
-			clientId: primaryClientId,
-			tokenEndpoint,
+			clientAssertionProvider,
 		});
 		extraParams = { ...extraParams, ...assertionParams };
 	}
@@ -63,7 +51,7 @@ export function createRefreshAccessTokenRequest({
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
-	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
@@ -78,7 +66,8 @@ export function createRefreshAccessTokenRequest({
 	const primaryClientId = Array.isArray(options.clientId)
 		? options.clientId[0]
 		: options.clientId;
-	if (authentication === "basic") {
+	const hasClientAssertion = !!extraParams?.client_assertion;
+	if (authentication === "basic" && !hasClientAssertion) {
 		if (primaryClientId) {
 			headers["authorization"] =
 				"Basic " +
@@ -89,7 +78,7 @@ export function createRefreshAccessTokenRequest({
 		}
 	} else {
 		body.set("client_id", primaryClientId);
-		if (authentication !== "private_key_jwt" && options.clientSecret) {
+		if (!hasClientAssertion && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}
@@ -120,21 +109,21 @@ export async function refreshAccessToken({
 	options,
 	tokenEndpoint,
 	authentication,
-	clientAssertion,
+	clientAssertionProvider,
 	extraParams,
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
-	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
-	clientAssertion?: ClientAssertionConfig | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	extraParams?: Record<string, string> | undefined;
 }): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
-		clientAssertion,
+		clientAssertionProvider,
 		tokenEndpoint,
 		extraParams,
 	});

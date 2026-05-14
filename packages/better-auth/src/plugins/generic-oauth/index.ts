@@ -16,16 +16,6 @@ import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
-function buildClientAssertion(
-	config: GenericOAuthConfig,
-	tokenEndpoint: string,
-) {
-	if (config.authentication !== "private_key_jwt" || !config.clientAssertion) {
-		return undefined;
-	}
-	return { ...config.clientAssertion, tokenEndpoint };
-}
-
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
@@ -39,25 +29,20 @@ declare module "@better-auth/core" {
 
 /**
  * Base type for OAuth provider options.
- * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ * Extracts common fields from GenericOAuthConfig for provider helpers.
  */
-export type BaseOAuthProviderOptions = Omit<
-	Pick<
-		GenericOAuthConfig,
-		| "clientId"
-		| "clientSecret"
-		| "scopes"
-		| "redirectURI"
-		| "pkce"
-		| "disableImplicitSignUp"
-		| "disableSignUp"
-		| "overrideUserInfo"
-	>,
-	"clientSecret"
-> & {
-	/** OAuth client secret (required for provider options) */
-	clientSecret: string;
-};
+export type BaseOAuthProviderOptions = Pick<
+	GenericOAuthConfig,
+	| "clientId"
+	| "clientSecret"
+	| "clientAssertionProvider"
+	| "scopes"
+	| "redirectURI"
+	| "pkce"
+	| "disableImplicitSignUp"
+	| "disableSignUp"
+	| "overrideUserInfo"
+>;
 
 interface DiscoveryDocument {
 	authorization_endpoint?: string;
@@ -216,13 +201,9 @@ export const genericOAuth = <const ID extends string>(
 					}
 				}
 
-				if (
-					!c.clientSecret &&
-					!c.clientAssertion &&
-					c.authentication !== "private_key_jwt"
-				) {
+				if (!c.clientSecret && !c.clientAssertionProvider) {
 					ctx.logger.warn(
-						`Provider "${c.providerId}": no clientSecret or clientAssertion configured. Token exchange will fail unless this is a public client.`,
+						`Provider "${c.providerId}": no clientSecret or clientAssertionProvider configured. Token exchange will fail unless this is a public client.`,
 					);
 				}
 
@@ -286,7 +267,7 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpoint: tokenUrl,
 							authentication: c.authentication,
 							additionalParams: c.tokenUrlParams,
-							clientAssertion: buildClientAssertion(c, tokenUrl),
+							clientAssertionProvider: c.clientAssertionProvider,
 						});
 					},
 					async getUserInfo(tokens) {
@@ -331,7 +312,7 @@ export const genericOAuth = <const ID extends string>(
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							clientAssertion: buildClientAssertion(c, tokenUrl),
+							clientAssertionProvider: c.clientAssertionProvider,
 							tokenEndpoint: tokenUrl,
 						});
 					},

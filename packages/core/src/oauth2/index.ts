@@ -1,10 +1,12 @@
 export type {
-	AssertionSigningAlgorithm,
-	ClientAssertionConfig,
+	ClientAssertionProvider,
+	PrivateKeyJwtClientAssertionProviderOptions,
+	PrivateKeyJwtSigningAlgorithm as AssertionSigningAlgorithm,
 } from "./client-assertion";
 export {
-	ASSERTION_SIGNING_ALGORITHMS,
 	CLIENT_ASSERTION_TYPE,
+	createPrivateKeyJwtClientAssertionProvider,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as ASSERTION_SIGNING_ALGORITHMS,
 	resolveAssertionParams,
 	signClientAssertion,
 } from "./client-assertion";

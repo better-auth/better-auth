@@ -1,6 +1,6 @@
 import type { User } from "@better-auth/core/db";
 import type {
-	ClientAssertionConfig,
+	ClientAssertionProvider,
 	OAuth2Tokens,
 	OAuth2UserInfo,
 } from "@better-auth/core/oauth2";
@@ -47,6 +47,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	clientId: string;
 	/** OAuth client secret */
 	clientSecret?: string | undefined;
+	/**
+	 * Callback that returns a client assertion used to authenticate token endpoint requests. The function is invoked for each token request, and does not include any built-in caching.
+	 */
+	clientAssertionProvider?: ClientAssertionProvider | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -150,12 +154,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Authentication method for token requests.
 	 * @default "post"
 	 */
-	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
-	/**
-	 * Client assertion config for `private_key_jwt` authentication.
-	 * Required when `authentication` is `"private_key_jwt"`.
-	 */
-	clientAssertion?: ClientAssertionConfig | undefined;
+	authentication?: ("basic" | "post") | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).

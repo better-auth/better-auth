@@ -6,9 +6,13 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
+import { createPrivateKeyJwtClientAssertionProvider } from "./client-assertion";
 import { clientCredentialsToken } from "./client-credentials-token";
 import { refreshAccessToken } from "./refresh-access-token";
-import { validateAuthorizationCode } from "./validate-authorization-code";
+import {
+	authorizationCodeRequest,
+	validateAuthorizationCode,
+} from "./validate-authorization-code";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
@@ -27,6 +31,16 @@ describe("private_key_jwt OAuth2 helpers", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
 	});
+
+	function privateKeyJwtProvider(kid: string) {
+		return createPrivateKeyJwtClientAssertionProvider({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: privateJwk,
+			kid,
+			algorithm: "RS256",
+		});
+	}
 
 	function expectAssertionRequest() {
 		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
@@ -70,12 +84,7 @@ describe("private_key_jwt OAuth2 helpers", () => {
 				clientId,
 			},
 			tokenEndpoint,
-			authentication: "private_key_jwt",
-			clientAssertion: {
-				privateKeyJwk: privateJwk,
-				kid: "auth-code-key",
-				algorithm: "RS256",
-			},
+			clientAssertionProvider: privateKeyJwtProvider("auth-code-key"),
 		});
 
 		expect(tokens.accessToken).toBe("access-token");
@@ -102,12 +111,7 @@ describe("private_key_jwt OAuth2 helpers", () => {
 				clientId,
 			},
 			tokenEndpoint,
-			authentication: "private_key_jwt",
-			clientAssertion: {
-				privateKeyJwk: privateJwk,
-				kid: "refresh-key",
-				algorithm: "RS256",
-			},
+			clientAssertionProvider: privateKeyJwtProvider("refresh-key"),
 		});
 
 		expect(tokens.accessToken).toBe("new-access-token");
@@ -133,17 +137,59 @@ describe("private_key_jwt OAuth2 helpers", () => {
 			},
 			tokenEndpoint,
 			scope: "openid profile",
-			authentication: "private_key_jwt",
-			clientAssertion: {
-				privateKeyJwk: privateJwk,
-				kid: "client-credentials-key",
-				algorithm: "RS256",
-			},
+			clientAssertionProvider: privateKeyJwtProvider("client-credentials-key"),
 		});
 
 		expect(tokens.accessToken).toBe("client-credentials-access-token");
 		const body = expectAssertionRequest();
 		expect(body.get("grant_type")).toBe("client_credentials");
 		expect(body.get("scope")).toBe("openid profile");
+	});
+
+	it("should send a custom client assertion provider result without a client secret", async () => {
+		const clientAssertionProvider = vi.fn(
+			async () => "custom-client-assertion",
+		);
+
+		const { body, headers } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: {
+				clientId,
+			},
+			authentication: "post",
+			clientAssertionProvider,
+		});
+
+		expect(clientAssertionProvider).toHaveBeenCalledOnce();
+		expect(body.get("client_id")).toBe(clientId);
+		expect(body.get("client_secret")).toBeNull();
+		expect(body.get("client_assertion_type")).toBe(
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		expect(body.get("client_assertion")).toBe("custom-client-assertion");
+		expect(headers.authorization).toBeUndefined();
+	});
+
+	it("should prefer clientAssertionProvider over clientSecret", async () => {
+		const clientAssertionProvider = vi.fn(async () => "client-assertion");
+
+		const { body } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: {
+				clientId,
+				clientSecret: "client-secret",
+			},
+			authentication: "post",
+			clientAssertionProvider,
+		});
+
+		expect(clientAssertionProvider).toHaveBeenCalledOnce();
+		expect(body.get("client_secret")).toBeNull();
+		expect(body.get("client_assertion_type")).toBe(
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		expect(body.get("client_assertion")).toBe("client-assertion");
 	});
 });

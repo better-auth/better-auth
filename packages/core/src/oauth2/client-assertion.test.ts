@@ -7,7 +7,10 @@ import {
 	jwtVerify,
 } from "jose";
 import { describe, expect, it } from "vitest";
-import { signClientAssertion } from "./client-assertion";
+import {
+	createPrivateKeyJwtClientAssertionProvider,
+	signClientAssertion,
+} from "./client-assertion";
 
 describe("signClientAssertion", () => {
 	const clientId = "test-client-id";
@@ -167,5 +170,30 @@ describe("signClientAssertion", () => {
 		).rejects.toThrow(
 			"private_key_jwt requires either privateKeyJwk or privateKeyPem",
 		);
+	});
+
+	it("creates a private_key_jwt client assertion provider", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = await exportJWK(privateKey);
+		const publicJwk = await exportJWK(publicKey);
+
+		const clientAssertionProvider = createPrivateKeyJwtClientAssertionProvider({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: privateJwk,
+			algorithm: "RS256",
+		});
+
+		const assertion = await clientAssertionProvider();
+		const jwks = createLocalJWKSet({ keys: [publicJwk] });
+		const { payload } = await jwtVerify(assertion, jwks, {
+			algorithms: ["RS256"],
+		});
+
+		expect(payload.iss).toBe(clientId);
+		expect(payload.sub).toBe(clientId);
+		expect(payload.aud).toBe(tokenEndpoint);
 	});
 });
