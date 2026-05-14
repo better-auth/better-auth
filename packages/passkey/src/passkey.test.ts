@@ -585,6 +585,115 @@ describe("passkey", async () => {
 		expect(response.user.id).toBe(user.id);
 		expect(response.user.email).toBe(user.email);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8071
+	 */
+	it("should verify passkey assertion without creating a session (step-up auth)", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const passkeyRecord = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockNameStepUp",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialIDStepUp",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const sessionsBefore = await context.adapter.findMany({
+			model: "session",
+		});
+		const sessionCountBefore = sessionsBefore.length;
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers: headers,
+				customFetchImpl,
+			},
+		});
+
+		const sessionBefore = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		let passkeyCookie = "";
+		await client.passkey.generateAuthenticateOptions({
+			fetchOptions: {
+				onResponse(context) {
+					const setCookie = context.response.headers.get("Set-Cookie");
+					if (setCookie) {
+						passkeyCookie = setCookie.split(";")[0] ?? "";
+					}
+				},
+			},
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
+
+		const response = await auth.api.verifyPasskeyAssertion({
+			headers,
+			body: {
+				response: {
+					id: "mockCredentialIDStepUp",
+					rawId: "mockRawId",
+					response: {
+						clientDataJSON: "mockClientDataJSON",
+						authenticatorData: "mockAuthenticatorData",
+						signature: "mockSignature",
+						userHandle: "mockUserHandle",
+					},
+					type: "public-key",
+					clientExtensionResults: {},
+				},
+			},
+		});
+
+		const sessionAfter = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(response.verified).toBe(true);
+		expect(response.userId).toBe(user.id);
+		expect(response.credentialId).toBe("mockCredentialIDStepUp");
+		expect((response as Record<string, unknown>).session).toBeUndefined();
+
+		const sessionsAfter = await context.adapter.findMany({
+			model: "session",
+		});
+
+		expect(sessionsAfter.length).toBe(sessionCountBefore);
+		expect(sessionBefore.data?.session.id).toBe(sessionAfter.data?.session.id);
+
+		const updatedPasskey = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "id", value: passkeyRecord.id }],
+		});
+		expect(updatedPasskey?.counter).toBe(1);
+	});
 });
 
 describe("passkey expirationTime per-request", () => {

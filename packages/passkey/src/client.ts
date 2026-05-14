@@ -280,6 +280,69 @@ export const getPasskeyActions = (
 		}
 	};
 
+	const verifyPasskey = async (
+		opts?: {
+			autoFill?: boolean;
+			extensions?: AuthenticationExtensionsClientInputs;
+			fetchOptions?: ClientFetchOption;
+		},
+		options?: ClientFetchOption | undefined,
+	) => {
+		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
+			"/passkey/generate-authenticate-options",
+			{
+				method: "GET",
+				throw: false,
+			},
+		);
+		if (!response.data) {
+			return response;
+		}
+		try {
+			const mergedExtensions =
+				response.data.extensions || opts?.extensions
+					? {
+							...(response.data.extensions || {}),
+							...(opts?.extensions || {}),
+						}
+					: undefined;
+			const res = await startAuthentication({
+				optionsJSON: {
+					...response.data,
+					extensions: mergedExtensions,
+				},
+				useBrowserAutofill: opts?.autoFill,
+			});
+			const { clientExtensionResults: _ce, ...responseBody } = res;
+			const verified = await $fetch<{
+				verified: boolean;
+				userId: string;
+				credentialId: string;
+			}>("/passkey/verify-assertion", {
+				body: {
+					response: responseBody,
+				},
+				...opts?.fetchOptions,
+				...options,
+				method: "POST",
+				throw: false,
+			});
+
+			return verified;
+		} catch (err) {
+			console.error(`[Better Auth] Error verifying passkey`, err);
+			return {
+				data: null,
+				error: {
+					code: "AUTH_CANCELLED",
+					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED.message,
+					status: 400,
+					statusText: "BAD_REQUEST",
+				},
+			};
+		}
+	};
+
 	return {
 		signIn: {
 			/**
@@ -292,6 +355,11 @@ export const getPasskeyActions = (
 			 * Add a passkey to the user account
 			 */
 			addPasskey: registerPasskey,
+			/**
+			 * Verify a passkey assertion without creating a session.
+			 * Useful for step-up authentication on sensitive operations.
+			 */
+			verifyPasskey: verifyPasskey,
 		},
 		/**
 		 * Inferred Internal Types
