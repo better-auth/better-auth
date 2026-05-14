@@ -109,12 +109,16 @@ When 2FA is enabled:
 Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP in the [TOTP section](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
-  By default, Two Factor requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous), set `allowPasswordless: true`.
+  By default, the two-factor plugin requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous) to enable and manage 2FA, set `allowPasswordless: true`. This option does not change which sign-in methods are challenged for 2FA.
 </Callout>
 
 ### Sign In with 2FA
 
-When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true` and `twoFactorMethods` — an array of the 2FA methods available for the user (e.g. `["totp"]`, `["totp", "otp"]`). Use `twoFactorMethods` to decide which verification UI to show.
+When a user with 2FA enabled tries to sign in via email, username, or phone number, the response object will contain `twoFactorRedirect` set to `true` and `twoFactorMethods` — an array of the 2FA methods available for the user (e.g. `["totp"]`, `["totp", "otp"]`). Use `twoFactorMethods` to decide which verification UI to show.
+
+By default, 2FA sign-in enforcement applies to the credential-based sign-in endpoints: `/sign-in/email`, `/sign-in/username`, and `/sign-in/phone-number`. Non-credential sign-in methods such as email OTP, magic link, OAuth/social, passkey, anonymous, and similar passwordless flows are not gated by 2FA by default.
+
+If your app needs to require 2FA for those sign-in methods, add custom hook handling for those endpoints and redirect users into your 2FA verification flow before treating the sign-in as complete.
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
@@ -507,7 +511,7 @@ export const twoFactorTableFields = [
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
-**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
+**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists. This option does not change which sign-in methods are challenged for 2FA.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
