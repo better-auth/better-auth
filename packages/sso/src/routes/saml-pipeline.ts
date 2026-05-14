@@ -438,7 +438,7 @@ export async function processSAMLResponse(
 		protocol: "saml",
 		userInfo: authenticatedUserInfo,
 		provider,
-		callbackURL: callbackUrl,
+		callbackURL: samlRedirectUrl,
 		request: ctx.request,
 	});
 	if (callbackResponse) {
