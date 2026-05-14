@@ -1,4 +1,7 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	InferRouteInputsFromOptions,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -413,7 +416,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						password: string;
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
-					},
+					} & InferRouteInputsFromOptions<O, "/sign-in/email">,
 					returned: {} as {
 						redirect: boolean;
 						token: string;

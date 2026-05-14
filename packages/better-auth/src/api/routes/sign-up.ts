@@ -1,4 +1,7 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	InferRouteInputsFromOptions,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
@@ -45,7 +48,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						image?: string | undefined;
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
-					} & AdditionalUserFieldsInput<O>,
+					} & AdditionalUserFieldsInput<O> &
+						InferRouteInputsFromOptions<O, "/sign-up/email">,
 					returned: {} as {
 						token: string | null;
 						user: User<O["user"], O["plugins"]>;

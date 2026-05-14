@@ -20,6 +20,7 @@ import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
+import { applyRouteInputs } from "./route-inputs";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -258,12 +259,15 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		getAccessToken,
 		accountInfo,
 	};
-	const endpoints = {
-		...baseEndpoints,
-		...pluginEndpoints,
-		ok,
-		error,
-	} as const;
+	const endpoints = applyRouteInputs(
+		{
+			...baseEndpoints,
+			...pluginEndpoints,
+			ok,
+			error,
+		} as const,
+		options,
+	);
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as unknown as OverrideMerge<typeof endpoints, PluginEndpoint>,

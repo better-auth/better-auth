@@ -13,6 +13,8 @@ import type { AuthMiddleware } from "../api";
 import type {
 	Account,
 	DBFieldAttribute,
+	DBFieldType,
+	InferDBValueType,
 	ModelNames,
 	RateLimit,
 	SecondaryStorage,
@@ -29,7 +31,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
+import type {
+	Awaitable,
+	LiteralString,
+	LiteralUnion,
+	UnionToIntersection,
+} from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
@@ -138,6 +145,87 @@ export type BetterAuthDBOptions<
 		[Key in Exclude<string, Keys | "id">]: DBFieldAttribute;
 	};
 };
+
+export type BetterAuthRouteInputField<Type extends DBFieldType = DBFieldType> =
+	Type extends DBFieldType
+		? {
+				/**
+				 * The primitive input type to validate for this route field.
+				 */
+				type: Type;
+				/**
+				 * Whether the field is required in the request body.
+				 *
+				 * @default true
+				 */
+				required?: boolean | undefined;
+				/**
+				 * Default value used when the request omits this field.
+				 */
+				defaultValue?:
+					| InferDBValueType<Type>
+					| (() => InferDBValueType<Type>)
+					| undefined;
+				/**
+				 * OpenAPI/metadata description for generated API references.
+				 */
+				description?: string | undefined;
+			}
+		: never;
+
+export type BetterAuthRouteInputs = Record<
+	string,
+	Record<string, BetterAuthRouteInputField>
+>;
+
+type InferRouteInputField<T extends BetterAuthRouteInputField> =
+	InferDBValueType<T["type"]>;
+
+type StaticRouteInputDefault =
+	| string
+	| number
+	| boolean
+	| Date
+	| string[]
+	| number[]
+	| Record<string, unknown>
+	| unknown[];
+
+type InferRouteInputFields<Fields> =
+	Fields extends Record<infer Key, BetterAuthRouteInputField>
+		? {
+				[key in Key as Fields[key]["required"] extends false
+					? never
+					: Fields[key]["defaultValue"] extends StaticRouteInputDefault
+						? never
+						: key]: InferRouteInputField<Fields[key]>;
+			} & {
+				[key in Key as Fields[key]["required"] extends false
+					? key
+					: Fields[key]["defaultValue"] extends StaticRouteInputDefault
+						? key
+						: never]?: InferRouteInputField<Fields[key]> | undefined | null;
+			}
+		: {};
+
+export type InferRouteInputsFromOptions<
+	Options extends {
+		routeInputs?: BetterAuthRouteInputs | undefined;
+		plugins?: BetterAuthPlugin[] | undefined;
+	},
+	Path extends string,
+> = (Options["routeInputs"] extends Record<Path, infer Fields>
+	? InferRouteInputFields<Fields>
+	: {}) &
+	UnionToIntersection<
+		Options["plugins"] extends Array<infer Plugin>
+			? Plugin extends {
+					routeInputs: Record<Path, infer Fields>;
+				}
+				? InferRouteInputFields<Fields>
+				: {}
+			: {}
+	>;
 
 export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
 	Omit<
@@ -771,6 +859,11 @@ export type BetterAuthOptions = {
 	 * List of Better Auth plugins
 	 */
 	plugins?: ([] | BetterAuthPlugin[]) | undefined;
+	/**
+	 * Additional request body inputs to validate for specific auth routes.
+	 * Route keys use Better Auth's internal path form, such as `/sign-in/email`.
+	 */
+	routeInputs?: BetterAuthRouteInputs | undefined;
 	/**
 	 * User configuration
 	 */

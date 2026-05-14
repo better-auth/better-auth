@@ -10,7 +10,7 @@ import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
+import type { BetterAuthOptions, BetterAuthRouteInputs } from "./init-options";
 
 type DeepPartial<T> = T extends Function
 	? T
@@ -64,6 +64,11 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 				middleware: Middleware;
 		  }[]
 		| undefined;
+	/**
+	 * Additional request body inputs to validate for specific auth routes.
+	 * Route keys use Better Auth's internal path form, such as `/sign-in/email`.
+	 */
+	routeInputs?: BetterAuthRouteInputs | undefined;
 	onRequest?:
 		| ((
 				request: Request,

@@ -114,6 +114,26 @@ async function resolveDynamicContext(
 	}
 }
 
+async function validateRouteInputs(
+	context: InternalContext,
+	endpoint: Endpoint,
+) {
+	const routeInputSchema = (endpoint.options?.metadata as any)
+		?.routeInputSchema;
+	if (!routeInputSchema?.safeParseAsync) return;
+	const result = await routeInputSchema.safeParseAsync(context.body ?? {});
+	if (!result.success) {
+		throw new APIError("BAD_REQUEST", {
+			code: "VALIDATION_ERROR",
+			message: result.error?.issues?.[0]?.message ?? "Validation Error",
+		});
+	}
+	context.body = {
+		...(context.body ?? {}),
+		...result.data,
+	};
+}
+
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
 	ctx: AuthContext | Promise<AuthContext>,
@@ -167,6 +187,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					},
 					async () =>
 						runWithEndpointContext(internalContext, async () => {
+							await validateRouteInputs(internalContext, endpoint);
 							const { beforeHooks, afterHooks } = getHooks(authContext);
 							const before = await runBeforeHooks(
 								internalContext,

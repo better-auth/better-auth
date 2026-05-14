@@ -21,8 +21,11 @@ export type {
 	BetterAuthRateLimitOptions,
 	BetterAuthRateLimitRule,
 	BetterAuthRateLimitStorage,
+	BetterAuthRouteInputField,
+	BetterAuthRouteInputs,
 	DynamicBaseURLConfig,
 	GenerateIdFn,
+	InferRouteInputsFromOptions,
 	StoreIdentifierOption,
 } from "./init-options";
 export type {
