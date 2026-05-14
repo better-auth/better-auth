@@ -651,13 +651,6 @@ async function checkVerificationValue(
 		});
 	}
 
-	if (!verification.expiresAt || verification.expiresAt < new Date()) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code expired",
-			error: "invalid_grant",
-		});
-	}
-
 	let rawValue: unknown;
 	try {
 		rawValue = JSON.parse(verification.value);
