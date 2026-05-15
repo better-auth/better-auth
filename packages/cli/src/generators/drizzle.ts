@@ -45,6 +45,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
@@ -324,7 +329,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			const relationKey = getModelName(referencedModel);
+			// Use singular form for many-to-one relation keys
+			const relationKey = getSingularModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 

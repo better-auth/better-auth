@@ -63,6 +63,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		usePlural: adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapterConfig?.usePlural,
@@ -301,7 +306,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		code += `\n${schema}\n`;
 	}
 
-	// Build schema object import for defineRelations
+	// Build schema object import for defineRelationsPart
 	const schemaObjectKeys: string[] = [];
 	for (const tableKey in tables) {
 		const modelName = getModelName(tableKey);
@@ -309,7 +314,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const schemaObject = `{ ${schemaObjectKeys.join(", ")} }`;
 
-	// Build relations map structure for v2 defineRelations
+	// Build relations map structure for v2 defineRelationsPart
 	type RelationDef = {
 		key: string;
 		type: "one" | "many";
@@ -345,10 +350,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const existingToSameModel = modelRelations.filter(
 				(r) => r.targetModel === targetModelName && r.type === "one",
 			);
+			// Use singular form for many-to-one relation keys
+			const singularName = getSingularModelName(referencedModel);
 			const relationKey =
 				existingToSameModel.length > 0
-					? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}${targetModelName}`
-					: targetModelName;
+					? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}${singularName.charAt(0).toUpperCase() + singularName.slice(1)}`
+					: singularName;
 
 			modelRelations.push({
 				key: relationKey,
@@ -446,7 +453,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		}
 	}
 
-	// Generate defineRelations call
+	// Generate defineRelationsPart call
 	let relationsString = "";
 	if (relationsMap.size > 0) {
 		const relationsEntries: string[] = [];
@@ -475,7 +482,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		}
 
 		if (relationsEntries.length > 0) {
-			relationsString = `\n\nexport const relations = defineRelations(${schemaObject}, (r) => ({\n${relationsEntries.join(",\n")}\n}));\n`;
+			relationsString = `\n\nexport const relations = defineRelationsPart(${schemaObject}, (r) => ({\n${relationsEntries.join(",\n")}\n}));\n`;
 		}
 	}
 
@@ -515,7 +522,7 @@ function generateImport({
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
-	const rootImports: string[] = ["defineRelations"];
+	const rootImports: string[] = ["defineRelationsPart"];
 	const coreImports: string[] = [];
 
 	let hasBigint = false;
