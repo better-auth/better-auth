@@ -22,9 +22,11 @@ export async function clientCredentialsTokenRequest({
 	options = typeof options === "function" ? await options() : options;
 
 	let extraParams: Record<string, string> | undefined;
-	if (clientAssertionProvider) {
+	const resolvedClientAssertionProvider =
+		clientAssertionProvider ?? options.clientAssertionProvider;
+	if (resolvedClientAssertionProvider) {
 		extraParams = await resolveAssertionParams({
-			clientAssertionProvider,
+			clientAssertionProvider: resolvedClientAssertionProvider,
 		});
 	}
 
