@@ -121,16 +121,16 @@ export async function updateConsentEndpoint(
 			error: "not_found",
 		});
 	}
-
-	const client = await getClient(ctx, opts, consent.clientId);
-	if (!consent) {
-		throw new APIError("NOT_FOUND", {
-			error_description: "no consent",
-			error: "not_found",
-		});
-	}
 	if (consent.userId !== session.user.id) {
 		throw new APIError("UNAUTHORIZED");
+	}
+
+	const client = await getClient(ctx, opts, consent.clientId);
+	if (!client) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "client not found",
+			error: "not_found",
+		});
 	}
 
 	const allowedScopes = client?.scopes ?? opts.scopes ?? [];
