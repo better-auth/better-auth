@@ -411,6 +411,18 @@ describe("cookie-utils setRequestCookie", () => {
 			"valid=1; locale=en; better-auth.session_token=abc",
 		);
 	});
+
+	it("skips values that would split the Cookie header on the wire", () => {
+		const headers = new Headers({ cookie: "locale=en" });
+		setRequestCookie(headers, "session", "foo;evil=bar");
+		expect(headers.get("cookie")).toBe("locale=en");
+	});
+
+	it("unquotes RFC 6265 quoted-string values before writing", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "token", '"abc"');
+		expect(headers.get("cookie")).toBe("token=abc");
+	});
 });
 
 describe("getSessionCookie", async () => {
@@ -1573,6 +1585,18 @@ describe("applySetCookies", () => {
 		const headers = new Headers({ cookie: "a=old; b=keep" });
 		applySetCookies(headers, ["a=new; Path=/"]);
 		expect(headers.get("cookie")).toBe("a=new; b=keep");
+	});
+
+	it("drops Set-Cookie entries whose decoded value would split when serialized", () => {
+		const headers = new Headers({ cookie: "session=safe" });
+		applySetCookies(headers, ["evil=foo%3Bsplit=hello; Path=/"]);
+		expect(headers.get("cookie")).toBe("session=safe");
+	});
+
+	it("unquotes RFC 6265 quoted-string values before serializing", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ['token="abc"; Path=/']);
+		expect(headers.get("cookie")).toBe("token=abc");
 	});
 });
 

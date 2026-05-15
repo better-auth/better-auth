@@ -1,4 +1,5 @@
 function tryDecode(str: string): string {
+	if (str.indexOf("%") === -1) return str;
 	try {
 		return decodeURIComponent(str);
 	} catch {
@@ -107,7 +108,7 @@ export function parseSetCookieHeader(
 			return;
 		}
 
-		const decodedValue = value.includes("%") ? tryDecode(value) : value;
+		const decodedValue = tryDecode(value);
 		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {
@@ -189,6 +190,21 @@ const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
 const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
 
 /**
+ * Strip RFC 6265 §4.1.1 surrounding quotes and validate the result against
+ * the cookie-octet character set. Returns `undefined` for values that cannot
+ * be safely serialized into a `Cookie` header.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+ */
+export function normalizeCookieValue(value: string): string | undefined {
+	const unquoted =
+		value.length >= 2 && value[0] === '"' && value[value.length - 1] === '"'
+			? value.slice(1, -1)
+			: value;
+	return cookieValueRegex.test(unquoted) ? unquoted : undefined;
+}
+
+/**
  * Trim leading/trailing OWS (space / horizontal tab) per RFC 7230 §3.2.3.
  * Narrower than `String.prototype.trim()`, which strips CR/LF and other
  * whitespace and would let CTLs escape `cookieValueRegex`.
@@ -225,11 +241,8 @@ export function parseCookies(cookie: string): Map<string, string> {
 		const eq = chunk.indexOf("=");
 		if (eq === -1) continue;
 		const key = trimOWS(chunk.slice(0, eq));
-		let val = trimOWS(chunk.slice(eq + 1));
-		if (val.length >= 2 && val[0] === '"' && val[val.length - 1] === '"') {
-			val = val.slice(1, -1);
-		}
-		if (cookieNameRegex.test(key) && cookieValueRegex.test(val)) {
+		const val = normalizeCookieValue(trimOWS(chunk.slice(eq + 1)));
+		if (val !== undefined && cookieNameRegex.test(key)) {
 			cookieMap.set(key, val);
 		}
 	}
@@ -250,7 +263,10 @@ export function setRequestCookie(
 	value: string,
 ): void {
 	const cookieMap = parseCookies(headers.get("cookie") || "");
-	cookieMap.set(name, value);
+	const val = normalizeCookieValue(value);
+	if (val !== undefined && cookieNameRegex.test(name)) {
+		cookieMap.set(name, val);
+	}
 	headers.set(
 		"cookie",
 		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
@@ -272,7 +288,10 @@ export function applySetCookies(
 	const cookieMap = parseCookies(target.get("cookie") || "");
 	for (const setCookie of setCookieValues) {
 		for (const [name, attr] of parseSetCookieHeader(setCookie)) {
-			cookieMap.set(name, attr.value);
+			const val = normalizeCookieValue(attr.value);
+			if (val !== undefined && cookieNameRegex.test(name)) {
+				cookieMap.set(name, val);
+			}
 		}
 	}
 	target.set(

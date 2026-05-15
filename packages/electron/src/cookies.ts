@@ -1,4 +1,7 @@
-import { parseSetCookieHeader } from "better-auth/cookies";
+import {
+	normalizeCookieValue,
+	parseSetCookieHeader,
+} from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
@@ -44,7 +47,9 @@ export function getCookie(cookie: string) {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
-		return `${acc}; ${key}=${value.value}`;
+		const val = normalizeCookieValue(value.value);
+		if (val === undefined) return acc;
+		return `${acc}; ${key}=${val}`;
 	}, "");
 	return toSend;
 }
