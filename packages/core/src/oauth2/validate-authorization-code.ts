@@ -33,9 +33,11 @@ export async function authorizationCodeRequest({
 }) {
 	options = typeof options === "function" ? await options() : options;
 
-	if (clientAssertionProvider) {
+	const resolvedClientAssertionProvider =
+		clientAssertionProvider ?? options.clientAssertionProvider;
+	if (resolvedClientAssertionProvider) {
 		const assertionParams = await resolveAssertionParams({
-			clientAssertionProvider,
+			clientAssertionProvider: resolvedClientAssertionProvider,
 		});
 		additionalParams = { ...additionalParams, ...assertionParams };
 	}
