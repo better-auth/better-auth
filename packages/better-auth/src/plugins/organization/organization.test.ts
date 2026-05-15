@@ -4011,7 +4011,7 @@ describe("delete cascade rollback", async () => {
 		expect(org).not.toBeNull();
 	});
 
-	it("rolls back deleteMember when an intermediate step throws", async () => {
+	it("rolls back removeMember when an intermediate step throws", async () => {
 		const db: Record<string, any[]> = {
 			users: [],
 			session: [],
