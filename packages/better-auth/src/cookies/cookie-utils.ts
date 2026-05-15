@@ -1,4 +1,5 @@
 function tryDecode(str: string): string {
+	if (str.indexOf("%") === -1) return str;
 	try {
 		return decodeURIComponent(str);
 	} catch {
@@ -107,7 +108,8 @@ export function parseSetCookieHeader(
 			return;
 		}
 
-		const decodedValue = value.includes("%") ? tryDecode(value) : value;
+		const decodedValue = tryDecode(value);
+		if (!cookieValueRegex.test(decodedValue)) return;
 		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {

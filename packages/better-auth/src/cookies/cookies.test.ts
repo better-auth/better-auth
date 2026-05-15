@@ -236,6 +236,20 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		expect(map.get("token")?.value).toBe("hello world=foo");
 	});
 
+	it("drops cookies whose decoded value contains a cookie or attribute delimiter", () => {
+		expect(
+			parseSetCookieHeader("token=hello%3Bevil; Path=/").has("token"),
+		).toBe(false);
+		expect(parseSetCookieHeader("token=foo%22bar; Path=/").has("token")).toBe(
+			false,
+		);
+	});
+
+	it("keeps cookies whose decoded value contains additional `=`", () => {
+		const map = parseSetCookieHeader("token=a=b=c; Path=/");
+		expect(map.get("token")?.value).toBe("a=b=c");
+	});
+
 	it("handles cookie with Expires followed by cookie without Expires", () => {
 		const map = parseSetCookieHeader(
 			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
