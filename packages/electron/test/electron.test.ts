@@ -2230,7 +2230,15 @@ describe("cookies getCookie", () => {
 		const stored = JSON.stringify({
 			"better-auth.session_token": { value: "abc", expires: null },
 		});
-		expect(getCookie(stored)).toBe("; better-auth.session_token=abc");
+		expect(getCookie(stored)).toBe("better-auth.session_token=abc");
+	});
+
+	it("joins multiple stored cookies with `; ` without a leading separator", () => {
+		const stored = JSON.stringify({
+			a: { value: "1", expires: null },
+			b: { value: "2", expires: null },
+		});
+		expect(getCookie(stored)).toBe("a=1; b=2");
 	});
 
 	it("skips stored entries whose value would split the Cookie header", () => {
@@ -2238,7 +2246,15 @@ describe("cookies getCookie", () => {
 			session: { value: "safe", expires: null },
 			evil: { value: "foo;bar=baz", expires: null },
 		});
-		expect(getCookie(stored)).toBe("; session=safe");
+		expect(getCookie(stored)).toBe("session=safe");
+	});
+
+	it("skips stored entries whose name violates the cookie-name token", () => {
+		const stored = JSON.stringify({
+			session: { value: "safe", expires: null },
+			"bad name": { value: "x", expires: null },
+		});
+		expect(getCookie(stored)).toBe("session=safe");
 	});
 
 	it("skips expired entries", () => {

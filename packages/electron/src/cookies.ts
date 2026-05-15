@@ -1,4 +1,5 @@
 import {
+	cookieNameRegex,
 	normalizeCookieValue,
 	parseSetCookieHeader,
 } from "better-auth/cookies";
@@ -43,15 +44,15 @@ export function getCookie(cookie: string) {
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
 	} catch (_e) {}
-	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
-		if (value.expires && new Date(value.expires) < new Date()) {
-			return acc;
-		}
+	const pairs: string[] = [];
+	for (const [key, value] of Object.entries(parsed)) {
+		if (value.expires && new Date(value.expires) < new Date()) continue;
+		if (!cookieNameRegex.test(key)) continue;
 		const val = normalizeCookieValue(value.value);
-		if (val === undefined) return acc;
-		return `${acc}; ${key}=${val}`;
-	}, "");
-	return toSend;
+		if (val === undefined) continue;
+		pairs.push(`${key}=${val}`);
+	}
+	return pairs.join("; ");
 }
 
 /**

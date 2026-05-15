@@ -179,7 +179,7 @@ export function toCookieOptions(
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6
  */
-const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
+export const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
 
 /**
  * Cookie-value char set per RFC 6265 §4.1.1, plus space and comma.
@@ -191,8 +191,9 @@ const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
 
 /**
  * Strip RFC 6265 §4.1.1 surrounding quotes and validate the result against
- * the cookie-octet character set. Returns `undefined` for values that cannot
- * be safely serialized into a `Cookie` header.
+ * `cookieValueRegex` (cookie-octet plus space and comma). Returns
+ * `undefined` for values that cannot be safely serialized into a `Cookie`
+ * header without splitting into additional cookies or attributes.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
  */
