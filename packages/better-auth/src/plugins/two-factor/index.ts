@@ -7,7 +7,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -266,7 +266,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: disableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					// Disabling 2FA is a sensitive operation; require a DB-backed
+					// session so a stale or replayed cookie-cache payload cannot
+					// authorize it (defense in depth against the duplicate
+					// Set-Cookie leak fixed in cookies/expireCookie).
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Disable two factor authentication",
