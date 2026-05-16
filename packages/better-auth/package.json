@@ -613,5 +613,8 @@
     "vitest": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
