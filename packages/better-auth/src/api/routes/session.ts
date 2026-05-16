@@ -278,14 +278,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								await getShouldSkipSessionRefresh();
 
 							if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
-								const cookieMaxAge =
-									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
-								const newExpiresAt = getDate(cookieMaxAge, "sec");
+								// Preserve the real session.expiresAt (e.g. 7 days from sign-in).
+								// `setCookieCache` derives its own JWE/cookie TTL from
+								// `authCookies.sessionData.attributes.maxAge`, so the cache
+								// lifetime is independent of `session.expiresAt`.
+								// @see https://github.com/better-auth/better-auth/issues/8770
 								const refreshedSession = {
-									session: {
-										...session.session,
-										expiresAt: newExpiresAt,
-									},
+									session: session.session,
 									user: session.user,
 									updatedAt: Date.now(),
 								};

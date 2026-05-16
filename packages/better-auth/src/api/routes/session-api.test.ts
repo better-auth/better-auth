@@ -1206,6 +1206,75 @@ describe("cookie cache refreshCache", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8770
+	 */
+	it("should preserve session.expiresAt across stateless refreshCache cycles", async () => {
+		const sessionExpiresIn = 60 * 60 * 24 * 7; // 7 days
+		const cookieCacheMaxAge = 300; // 5 minutes
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			session: {
+				expiresIn: sessionExpiresIn,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: cookieCacheMaxAge,
+					refreshCache: {
+						updateAge: 60,
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const originalExpiresAt = new Date(
+			firstSession.data!.session.expiresAt,
+		).getTime();
+		// The real session expiry should be roughly `now + sessionExpiresIn`,
+		// not capped at the much smaller `cookieCache.maxAge`.
+		expect(originalExpiresAt - Date.now()).toBeGreaterThan(
+			cookieCacheMaxAge * 1000 * 10,
+		);
+
+		vi.useFakeTimers();
+		// Cross the refresh threshold (300 - 60 = 240s) to force a stateless refresh.
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		const refreshedSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		// The refresh path must not overwrite `session.expiresAt` with
+		// `cookieCache.maxAge` — the public session expiry has to keep
+		// reflecting `sessionExpiresIn`, not the cache TTL.
+		const refreshedExpiresAt = new Date(
+			refreshedSession.data!.session.expiresAt,
+		).getTime();
+		expect(refreshedExpiresAt).toBe(originalExpiresAt);
+
+		vi.useRealTimers();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7994
 	 */
 	it("should extend session_token cookie expiry when refreshCache threshold is reached", async () => {
