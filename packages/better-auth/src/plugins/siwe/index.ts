@@ -73,7 +73,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 				const nonce = await options.getNonce();
 
 				// Store nonce with wallet address and chain ID context
-				await ctx.context.internalAdapter.createVerificationValue({
+				await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 					identifier: `siwe:${walletAddress}:${chainId}`,
 					value: nonce,
 					expiresAt: new Date(Date.now() + 15 * 60 * 1000),

@@ -397,6 +397,33 @@ describe("email-otp", async () => {
 		});
 		expect(verifyRes.error?.code).toBe("OTP_EXPIRED");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6354
+	 */
+	it("should handle sending OTP twice without consuming the first", async () => {
+		const firstRes = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(firstRes.data?.success).toBe(true);
+		const firstOtp = otp;
+
+		const secondRes = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		expect(secondRes.data?.success).toBe(true);
+		const secondOtp = otp;
+
+		expect(secondOtp).not.toBe(firstOtp);
+
+		const verifyRes = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: secondOtp,
+		});
+		expect(verifyRes.error).toBeNull();
+	});
 });
 
 describe("change email", async () => {

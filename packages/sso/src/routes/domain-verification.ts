@@ -112,7 +112,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			}
 
 			const domainVerificationToken = generateRandomString(24);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				identifier,
 				value: domainVerificationToken,
 				expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week

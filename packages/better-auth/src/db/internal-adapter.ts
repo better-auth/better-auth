@@ -110,7 +110,7 @@ export const createInternalAdapter = (
 		}
 	}
 
-	return {
+	const internalAdapter: InternalAdapter = {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
@@ -1128,6 +1128,26 @@ export const createInternalAdapter = (
 			);
 			return verification as Verification;
 		},
+		/**
+		 * Create a verification value, replacing any existing row with the
+		 * same identifier. If the initial create fails (e.g. unique constraint
+		 * violation), the existing row is deleted and the create is retried.
+		 *
+		 * Use this instead of {@link createVerificationValue} when the
+		 * identifier is deterministic (derived from an email, phone number,
+		 * wallet address, etc.) and a previous unconsumed row may still exist.
+		 */
+		createOrReplaceVerificationValue: async (
+			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
+				Partial<Verification>,
+		) => {
+			try {
+				return await internalAdapter.createVerificationValue(data);
+			} catch {
+				await internalAdapter.deleteVerificationByIdentifier(data.identifier);
+				return await internalAdapter.createVerificationValue(data);
+			}
+		},
 		findVerificationValue: async (identifier: string) => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1415,4 +1435,6 @@ export const createInternalAdapter = (
 		},
 		refreshUserSessions,
 	};
+
+	return internalAdapter;
 };

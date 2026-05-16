@@ -119,7 +119,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
 					const otp = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
+					await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 						value: otp,
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
@@ -275,7 +275,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			}
 
 			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${code}:0`,
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
@@ -732,7 +732,7 @@ export const requestPasswordResetPhoneNumber = (
 				],
 			});
 			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
