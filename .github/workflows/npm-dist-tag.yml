@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: 'Package name (e.g., better-auth, @better-auth/cli)'
+        description: 'Package name (e.g., better-auth, @better-auth/core)'
         required: true
         type: string
       version:
