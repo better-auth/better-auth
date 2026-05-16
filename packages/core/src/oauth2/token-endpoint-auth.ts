@@ -191,6 +191,12 @@ export async function applyTokenEndpointAuth({
 
 	if (auth.method === "none") {
 		assertNoClientSecret(auth.method, options, body);
+		if (grantType === "client_credentials") {
+			throw new Error(
+				"none token endpoint authentication cannot be used with client_credentials grant",
+			);
+		}
+		assertClientIdConfigured(auth.method, clientId);
 		setClientId(body, clientId);
 		return;
 	}

@@ -254,6 +254,33 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(headers.authorization).toBeUndefined();
 	});
 
+	it("rejects public-client token endpoint authentication without clientId", async () => {
+		await expect(
+			authorizationCodeRequest({
+				code: "auth-code",
+				redirectURI: "https://rp.example.com/callback",
+				options: {},
+				tokenEndpoint,
+				tokenEndpointAuth: { method: "none" },
+			}),
+		).rejects.toThrow("none token endpoint authentication requires clientId");
+	});
+
+	it("rejects public-client token endpoint authentication with client credentials", async () => {
+		await expect(
+			clientCredentialsToken({
+				options: {
+					clientId,
+				},
+				tokenEndpoint,
+				scope: "profile",
+				tokenEndpointAuth: { method: "none" },
+			}),
+		).rejects.toThrow(
+			"none token endpoint authentication cannot be used with client_credentials grant",
+		);
+	});
+
 	it("supports explicit client_secret_basic token endpoint authentication", async () => {
 		const clientSecret = "client-secret";
 
