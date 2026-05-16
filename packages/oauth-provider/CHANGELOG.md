@@ -41,7 +41,7 @@
   - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
   - `oauth2.link()` replaced by `linkSocial()`
   - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
-  - `genericOAuthClient()` deprecated (no longer needed)
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
   - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
   - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
   - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery

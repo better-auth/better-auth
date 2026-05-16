@@ -1,8 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	CLIENT_ASSERTION_TYPE,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
@@ -29,7 +28,7 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 		if (oldest !== undefined) jwksCache.delete(oldest);
 	}
 }
-const ALGORITHMS_LIST = [...ASSERTION_SIGNING_ALGORITHMS] as string[];
+const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 const pendingAssertionIds = new Set<string>();
 
 /**
@@ -251,12 +250,7 @@ export async function verifyClientAssertion(
 			error: "invalid_client",
 		});
 	}
-	if (
-		!header.alg ||
-		!ASSERTION_SIGNING_ALGORITHMS.includes(
-			header.alg as AssertionSigningAlgorithm,
-		)
-	) {
+	if (!header.alg || !ALGORITHMS_LIST.includes(header.alg)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported assertion signing algorithm: ${header.alg}`,
 			error: "invalid_client",

@@ -77,6 +77,7 @@ export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 		userInfoUrl: "https://slack.com/api/openid.connect.userInfo",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -10,6 +10,10 @@ import { refreshAccessToken } from "./refresh-access-token";
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 describe("refreshAccessToken", () => {
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
 	it("should set accessTokenExpiresAt when expires_in is returned", async () => {
 		const now = Date.now();
 		mockedBetterFetch.mockResolvedValueOnce({
@@ -86,5 +90,32 @@ describe("refreshAccessToken", () => {
 		});
 
 		expect(tokens.refreshTokenExpiresAt).toBeUndefined();
+	});
+
+	it("passes resource indicators through refresh token requests", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "new-access-token",
+				token_type: "Bearer",
+			},
+			error: null,
+		});
+
+		await refreshAccessToken({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			tokenEndpoint: "https://example.com/token",
+			resource: [
+				"https://api.example.com/resource-a",
+				"https://api.example.com/resource-b",
+			],
+		});
+
+		const [, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		const body = init?.body as URLSearchParams;
+		expect(body.getAll("resource")).toEqual([
+			"https://api.example.com/resource-a",
+			"https://api.example.com/resource-b",
+		]);
 	});
 });

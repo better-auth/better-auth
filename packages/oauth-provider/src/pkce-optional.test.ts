@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -254,7 +254,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			options: {
@@ -376,7 +376,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier,
@@ -474,7 +474,7 @@ describe("PKCE optional - consistency checks", async () => {
 		expect(code).toBeDefined();
 
 		// Try to exchange WITHOUT code_verifier (should fail)
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			// Intentionally omit codeVerifier
@@ -522,7 +522,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange WITH code_verifier (should fail)
 		const wrongCodeVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongCodeVerifier,
@@ -578,7 +578,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange with WRONG code_verifier
 		const wrongVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongVerifier,

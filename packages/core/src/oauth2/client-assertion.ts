@@ -1,8 +1,9 @@
 import type { JWTHeaderParameters } from "jose";
 import { importJWK, importPKCS8, SignJWT } from "jose";
+import type { Awaitable } from "../types";
 
 /** Asymmetric signing algorithms compatible with private_key_jwt (RFC 7523). */
-export const ASSERTION_SIGNING_ALGORITHMS = [
+export const PRIVATE_KEY_JWT_SIGNING_ALGORITHMS = [
 	"RS256",
 	"RS384",
 	"RS512",
@@ -15,15 +16,28 @@ export const ASSERTION_SIGNING_ALGORITHMS = [
 	"EdDSA",
 ] as const;
 
-export type AssertionSigningAlgorithm =
-	(typeof ASSERTION_SIGNING_ALGORITHMS)[number];
+export type PrivateKeyJwtSigningAlgorithm =
+	(typeof PRIVATE_KEY_JWT_SIGNING_ALGORITHMS)[number];
 
 export const CLIENT_ASSERTION_TYPE =
 	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
-export interface ClientAssertionConfig {
-	/** Pre-signed JWT assertion string. If provided, signing is skipped. */
-	assertion?: string;
+export type ClientAssertionGrantType =
+	| "authorization_code"
+	| "refresh_token"
+	| "client_credentials";
+
+export interface ClientAssertionContext {
+	clientId: string;
+	tokenEndpoint: string;
+	grantType: ClientAssertionGrantType;
+}
+
+export type ClientAssertionGetter = (
+	context: ClientAssertionContext,
+) => Awaitable<string>;
+
+export interface PrivateKeyJwtClientAssertionGetterOptions {
 	/** Private key in JWK format for signing. */
 	privateKeyJwk?: JsonWebKey;
 	/** Private key in PKCS#8 PEM format for signing. */
@@ -31,9 +45,7 @@ export interface ClientAssertionConfig {
 	/** Key ID to include in the JWT header. */
 	kid?: string;
 	/** Asymmetric signing algorithm. Symmetric algorithms (HS256) and "none" are not allowed. @default "RS256" */
-	algorithm?: AssertionSigningAlgorithm;
-	/** Token endpoint URL (used as the JWT `aud` claim). */
-	tokenEndpoint?: string;
+	algorithm?: PrivateKeyJwtSigningAlgorithm;
 	/** Assertion lifetime in seconds. @default 120 */
 	expiresIn?: number;
 }
@@ -41,10 +53,16 @@ export interface ClientAssertionConfig {
 /**
  * Signs an RFC 7523 client assertion JWT for `private_key_jwt` authentication.
  *
- * The JWT contains: iss=clientId, sub=clientId, aud=tokenEndpoint,
- * exp=now+120s, jti=unique, iat=now.
+ * The JWT contains these claims:
+ *
+ * - iss=clientId
+ * - sub=clientId
+ * - aud=tokenEndpoint
+ * - exp=now + 120s
+ * - jti=unique
+ * - iat=now
  */
-export async function signClientAssertion({
+export async function signPrivateKeyJwtClientAssertion({
 	clientId,
 	tokenEndpoint,
 	privateKeyJwk,
@@ -58,7 +76,7 @@ export async function signClientAssertion({
 	privateKeyJwk?: JsonWebKey;
 	privateKeyPem?: string;
 	kid?: string;
-	algorithm?: AssertionSigningAlgorithm;
+	algorithm?: PrivateKeyJwtSigningAlgorithm;
 	expiresIn?: number;
 }): Promise<string> {
 	// Fall back to JWK-embedded kid/alg when not explicitly provided (RFC 7517).
@@ -67,7 +85,7 @@ export async function signClientAssertion({
 	const resolvedKid = kid ?? (jwk?.kid as string | undefined);
 	const resolvedAlg =
 		algorithm ??
-		(privateKeyJwk?.alg as AssertionSigningAlgorithm | undefined) ??
+		(privateKeyJwk?.alg as PrivateKeyJwtSigningAlgorithm | undefined) ??
 		"RS256";
 
 	let key: Awaited<ReturnType<typeof importJWK>>;
@@ -85,7 +103,9 @@ export async function signClientAssertion({
 	const jti = crypto.randomUUID();
 
 	const header: JWTHeaderParameters = { alg: resolvedAlg, typ: "JWT" };
-	if (resolvedKid) header.kid = resolvedKid;
+	if (resolvedKid) {
+		header.kid = resolvedKid;
+	}
 
 	return new SignJWT({})
 		.setProtectedHeader(header)
@@ -99,36 +119,36 @@ export async function signClientAssertion({
 }
 
 /**
- * Resolves a ClientAssertionConfig into `client_assertion` + `client_assertion_type`
- * params for injection into a token request body.
+ * Creates a client assertion getter for `private_key_jwt` authentication.
+ *
+ * The returned function signs a fresh RFC 7523 JWT assertion for every token endpoint request.
  */
-export async function resolveAssertionParams({
-	clientAssertion,
-	clientId,
-	tokenEndpoint,
-}: {
-	clientAssertion: ClientAssertionConfig;
-	clientId: string;
-	tokenEndpoint?: string;
-}): Promise<Record<string, string>> {
-	let assertion = clientAssertion.assertion;
-	if (!assertion) {
-		const audEndpoint = tokenEndpoint ?? clientAssertion.tokenEndpoint;
-		if (!audEndpoint) {
-			throw new Error(
-				"private_key_jwt requires a tokenEndpoint for the JWT audience claim",
-			);
-		}
-		assertion = await signClientAssertion({
+export function createPrivateKeyJwtClientAssertionGetter(
+	options: PrivateKeyJwtClientAssertionGetterOptions,
+): ClientAssertionGetter {
+	return ({ clientId, tokenEndpoint }) =>
+		signPrivateKeyJwtClientAssertion({
 			clientId,
-			tokenEndpoint: audEndpoint,
-			privateKeyJwk: clientAssertion.privateKeyJwk,
-			privateKeyPem: clientAssertion.privateKeyPem,
-			kid: clientAssertion.kid,
-			algorithm: clientAssertion.algorithm,
-			expiresIn: clientAssertion.expiresIn,
+			tokenEndpoint,
+			privateKeyJwk: options.privateKeyJwk,
+			privateKeyPem: options.privateKeyPem,
+			kid: options.kid,
+			algorithm: options.algorithm,
+			expiresIn: options.expiresIn,
 		});
-	}
+}
+
+/**
+ * Resolves a client assertion getter into `client_assertion` + `client_assertion_type` params for injection into a token request body.
+ */
+export async function resolveClientAssertionParams({
+	getClientAssertion,
+	context,
+}: {
+	getClientAssertion: ClientAssertionGetter;
+	context: ClientAssertionContext;
+}): Promise<Record<string, string>> {
+	const assertion = await getClientAssertion(context);
 	return {
 		client_assertion: assertion,
 		client_assertion_type: CLIENT_ASSERTION_TYPE,

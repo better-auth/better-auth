@@ -42,6 +42,7 @@ export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,
