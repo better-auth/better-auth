@@ -2,7 +2,7 @@ import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -486,7 +486,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 
 		// 5. Exchange code at token endpoint with PKCE (no client_secret)
 		const { body: tokenBody, headers: tokenHeaders } =
-			createAuthorizationCodeRequest({
+			await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI: redirectUri,

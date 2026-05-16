@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -138,7 +138,7 @@ describe("pairwise subject identifiers", async () => {
 		const callbackUrl = new URL(callbackRedirectUrl);
 		const code = callbackUrl.searchParams.get("code")!;
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,

@@ -1,14 +1,14 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
-	AssertionSigningAlgorithm,
-	ClientAssertionProvider,
+	PrivateKeyJwtSigningAlgorithm,
+	TokenEndpointAuth,
 } from "better-auth";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	createAuthorizationURL,
-	createPrivateKeyJwtClientAssertionProvider,
+	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
 	HIDE_METADATA,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -1512,12 +1512,11 @@ async function handleOIDCCallback(
 		);
 	}
 
-	let authMethod: "basic" | "post" = "basic";
-	if (config.tokenEndpointAuthentication === "client_secret_post") {
-		authMethod = "post";
-	}
+	let tokenEndpointAuth: TokenEndpointAuth =
+		config.tokenEndpointAuthentication === "client_secret_post"
+			? { method: "client_secret_post" }
+			: { method: "client_secret_basic" };
 
-	let clientAssertionProvider: ClientAssertionProvider | undefined;
 	if (config.tokenEndpointAuthentication === "private_key_jwt") {
 		type PrivateKeyResult = {
 			privateKeyJwk?: JsonWebKey;
@@ -1554,20 +1553,31 @@ async function handleOIDCCallback(
 		}
 
 		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm;
-		const algorithm: AssertionSigningAlgorithm | undefined =
+		const algorithm: PrivateKeyJwtSigningAlgorithm | undefined =
 			rawAlg &&
-			(ASSERTION_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
-				? (rawAlg as AssertionSigningAlgorithm)
+			(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
+				? (rawAlg as PrivateKeyJwtSigningAlgorithm)
 				: undefined;
 
-		clientAssertionProvider = createPrivateKeyJwtClientAssertionProvider({
-			clientId: config.clientId,
-			privateKeyJwk: resolved.privateKeyJwk,
-			privateKeyPem: resolved.privateKeyPem,
-			kid: config.privateKeyId ?? resolved.kid,
-			algorithm,
-			tokenEndpoint: config.tokenEndpoint,
-		});
+		tokenEndpointAuth = {
+			method: "private_key_jwt",
+			getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+				privateKeyJwk: resolved.privateKeyJwk,
+				privateKeyPem: resolved.privateKeyPem,
+				kid: config.privateKeyId ?? resolved.kid,
+				algorithm,
+			}),
+		};
+	}
+
+	const tokenRequestOptions: {
+		clientId: string;
+		clientSecret?: string | undefined;
+	} = {
+		clientId: config.clientId,
+	};
+	if (tokenEndpointAuth.method !== "private_key_jwt") {
+		tokenRequestOptions.clientSecret = config.clientSecret;
 	}
 
 	const tokenResponse = await validateAuthorizationCode({
@@ -1578,13 +1588,9 @@ async function handleOIDCCallback(
 			provider.providerId,
 			options,
 		),
-		options: {
-			clientId: config.clientId,
-			clientSecret: config.clientSecret,
-		},
+		options: tokenRequestOptions,
 		tokenEndpoint: config.tokenEndpoint,
-		authentication: authMethod,
-		clientAssertionProvider,
+		tokenEndpointAuth,
 	}).catch((e) => {
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {

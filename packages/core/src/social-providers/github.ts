@@ -6,7 +6,7 @@ import {
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
-import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code";
+import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
 	login: string;
@@ -88,7 +88,7 @@ export const github = (options: GithubOptions) => {
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI,

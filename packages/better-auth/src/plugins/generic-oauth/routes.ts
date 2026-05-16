@@ -399,7 +399,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						},
 						tokenEndpoint: finalTokenUrl,
 						authentication: providerConfig.authentication,
-						clientAssertionProvider: providerConfig.clientAssertionProvider,
+						tokenEndpointAuth: providerConfig.tokenEndpointAuth,
 						additionalParams,
 					});
 				}

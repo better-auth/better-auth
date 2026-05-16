@@ -1,3 +1,4 @@
+import type { PrivateKeyJwtSigningAlgorithm } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { Prompt } from ".";
 
@@ -16,8 +17,8 @@ export type GrantType =
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header
-	| "client_secret_post"; // POST
-// | "private_key_jwt" // must also add alg_values_supported for that endpoint
+	| "client_secret_post" // POST
+	| "private_key_jwt";
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 export type BearerMethodsSupported = "header" | "body";
@@ -96,7 +97,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field token_endpoint_auth_methods_supported).
 	 */
-	token_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	token_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * URL of a page containing human-readable information
 	 * that developers might want or need to know when using the
@@ -142,7 +143,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field revocation_endpoint_auth_methods_supported).
 	 */
-	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	revocation_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * URL of the authorization server's OAuth 2.0
 	 * introspection endpoint [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)
@@ -163,7 +164,7 @@ export interface AuthServerMetadata {
 	 * the "private_key_jwt" and "client_secret_jwt" authentication methods
 	 * (see field introspection_endpoint_auth_methods_supported).
 	 */
-	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	introspection_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * Supported code challenge methods.
 	 *

@@ -1,5 +1,6 @@
 import type { JWTHeaderParameters } from "jose";
 import { importJWK, importPKCS8, SignJWT } from "jose";
+import type { Awaitable } from "../types";
 
 /** Asymmetric signing algorithms compatible with private_key_jwt (RFC 7523). */
 export const PRIVATE_KEY_JWT_SIGNING_ALGORITHMS = [
@@ -21,11 +22,22 @@ export type PrivateKeyJwtSigningAlgorithm =
 export const CLIENT_ASSERTION_TYPE =
 	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
-export type ClientAssertionProvider = () => Promise<string>;
+export type ClientAssertionGrantType =
+	| "authorization_code"
+	| "refresh_token"
+	| "client_credentials";
 
-export interface PrivateKeyJwtClientAssertionProviderOptions {
+export interface ClientAssertionContext {
 	clientId: string;
 	tokenEndpoint: string;
+	grantType: ClientAssertionGrantType;
+}
+
+export type ClientAssertionGetter = (
+	context: ClientAssertionContext,
+) => Awaitable<string>;
+
+export interface PrivateKeyJwtClientAssertionGetterOptions {
 	/** Private key in JWK format for signing. */
 	privateKeyJwk?: JsonWebKey;
 	/** Private key in PKCS#8 PEM format for signing. */
@@ -50,7 +62,7 @@ export interface PrivateKeyJwtClientAssertionProviderOptions {
  * - jti=unique
  * - iat=now
  */
-export async function signClientAssertion({
+export async function signPrivateKeyJwtClientAssertion({
 	clientId,
 	tokenEndpoint,
 	privateKeyJwk,
@@ -107,25 +119,36 @@ export async function signClientAssertion({
 }
 
 /**
- * Creates a client assertion provider for `private_key_jwt` authentication.
+ * Creates a client assertion getter for `private_key_jwt` authentication.
  *
  * The returned function signs a fresh RFC 7523 JWT assertion for every token endpoint request.
  */
-export function createPrivateKeyJwtClientAssertionProvider(
-	options: PrivateKeyJwtClientAssertionProviderOptions,
-): ClientAssertionProvider {
-	return () => signClientAssertion(options);
+export function createPrivateKeyJwtClientAssertionGetter(
+	options: PrivateKeyJwtClientAssertionGetterOptions,
+): ClientAssertionGetter {
+	return ({ clientId, tokenEndpoint }) =>
+		signPrivateKeyJwtClientAssertion({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: options.privateKeyJwk,
+			privateKeyPem: options.privateKeyPem,
+			kid: options.kid,
+			algorithm: options.algorithm,
+			expiresIn: options.expiresIn,
+		});
 }
 
 /**
- * Resolves a client assertion provider into `client_assertion` + `client_assertion_type` params for injection into a token request body.
+ * Resolves a client assertion getter into `client_assertion` + `client_assertion_type` params for injection into a token request body.
  */
-export async function resolveAssertionParams({
-	clientAssertionProvider,
+export async function resolveClientAssertionParams({
+	getClientAssertion,
+	context,
 }: {
-	clientAssertionProvider: ClientAssertionProvider;
+	getClientAssertion: ClientAssertionGetter;
+	context: ClientAssertionContext;
 }): Promise<Record<string, string>> {
-	const assertion = await clientAssertionProvider();
+	const assertion = await getClientAssertion(context);
 	return {
 		client_assertion: assertion,
 		client_assertion_type: CLIENT_ASSERTION_TYPE,

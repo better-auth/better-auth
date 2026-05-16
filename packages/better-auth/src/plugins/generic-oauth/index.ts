@@ -36,7 +36,7 @@ export type BaseOAuthProviderOptions = Pick<
 	GenericOAuthConfig,
 	| "clientId"
 	| "clientSecret"
-	| "clientAssertionProvider"
+	| "tokenEndpointAuth"
 	| "scopes"
 	| "redirectURI"
 	| "pkce"
@@ -44,6 +44,24 @@ export type BaseOAuthProviderOptions = Pick<
 	| "disableSignUp"
 	| "overrideUserInfo"
 >;
+
+function isSecretlessTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "private_key_jwt" ||
+		tokenEndpointAuth?.method === "none"
+	);
+}
+
+function isClientSecretTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "client_secret_basic" ||
+		tokenEndpointAuth?.method === "client_secret_post"
+	);
+}
 
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
@@ -72,6 +90,36 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;
+				const tokenEndpointAuth = c.tokenEndpointAuth;
+
+				if (
+					c.clientSecret &&
+					isSecretlessTokenEndpointAuth(tokenEndpointAuth)
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					isClientSecretTokenEndpointAuth(tokenEndpointAuth)
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" requires clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					!tokenEndpointAuth &&
+					c.authentication === "basic"
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": authentication "basic" requires clientSecret`,
+					);
+				}
+
 				return {
 					id: c.providerId,
 					name: c.providerId,
@@ -162,7 +210,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
-							clientAssertionProvider: c.clientAssertionProvider,
+							tokenEndpointAuth,
 						});
 					},
 					async refreshAccessToken(
@@ -193,7 +241,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							clientAssertionProvider: c.clientAssertionProvider,
+							tokenEndpointAuth,
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
