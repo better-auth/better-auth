@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
@@ -59,6 +61,21 @@ function getCookieValue(entry: string): string {
 describe("two-factor security: sign-in does not leak session cookies (cookieCache enabled)", async () => {
 	const TEST_USERNAME = "security_user";
 	const TEST_PHONE = "+15551230000";
+	const newSessionProbe = {
+		id: "new-session-probe",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) => ctx.path?.startsWith("/sign-in/") === true,
+					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.context.newSession) {
+							ctx.setHeader("x-new-session-visible", "true");
+						}
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
 
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
@@ -71,6 +88,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 					/* not exercised */
 				},
 			}),
+			newSessionProbe,
 		],
 	});
 
@@ -150,6 +168,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 	}) => {
 		const res = await call();
 		expect(res.status).toBe(200);
+		expect(res.headers.get("x-new-session-visible")).toBeNull();
 
 		const setCookies = extractSetCookies(res);
 		expect(setCookies.length).toBeGreaterThan(0);
