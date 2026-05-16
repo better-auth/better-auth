@@ -214,20 +214,31 @@ npx @better-auth/cli@latest generate
   The schema generator will output the new v2 format automatically.
 </Callout>
 
-And apply the new relations to your drizzle instance:
+The generated auth schema exports relations using `defineRelationsPart`, which is
+designed to be merged alongside your app's own `defineRelations`. Pass both to
+the drizzle instance — `schema` is no longer required since Drizzle v1 RC:
 
-```ts
+```ts title="db.ts"
 import { drizzle } from 'drizzle-orm/...';
-import * as schemas from './schema.ts';
-
-const { relations, ...schema } = schemas;
+// generated relations from auth CLI (uses defineRelationsPart)
+import { relations as authRelations } from './auth-schema.ts';
+// your app's own relations (uses defineRelations)
+import { relations } from './app-schema.ts';
 
 export const db = drizzle({
 	client,
-	schema, // [!code highlight]
-	relations, // [!code highlight]
+	// authRelations uses defineRelationsPart, // [!code highlight]
+	// so it must come after the main relations // [!code highlight]
+	relations: { ...relations, ...authRelations }, // [!code highlight]
 });
 ```
+
+<Callout type="info">
+  `defineRelationsPart` is a partial relation definition that must be spread
+  after full `defineRelations` entries. See the
+  [Drizzle docs on relation parts](https://orm.drizzle.team/docs/relations-v2#relations-parts)
+  for details.
+</Callout>
 
 ## Additional Information
 
