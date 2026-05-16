@@ -47,6 +47,9 @@ export const matchesOriginPattern = (
 	// Custom schemes (e.g. myapp://, exp://): compare scheme + authority
 	// exactly rather than using a prefix match, which would let
 	// "myapp://callback.attacker.tld" satisfy pattern "myapp://callback".
+	// NOTE: new URL() parsing of non-special schemes may vary across
+	// runtimes (Node, Bun, Deno, Workers). The catch fallback to strict
+	// equality handles runtimes where parsing fails entirely.
 	try {
 		const parsedUrl = new URL(url);
 		const parsedPattern = new URL(pattern);

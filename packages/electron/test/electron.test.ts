@@ -1194,6 +1194,45 @@ describe("Electron", () => {
 			expect(data).not.toBeNull();
 			expect(data).toHaveProperty("electron_authorization_code");
 		});
+
+		it("should default code_challenge_method to S256 in init-oauth-proxy", async () => {
+			const { auth: proxyAuth } = testUtils({
+				plugins: [electron()],
+			});
+			const { runMigrations } = await getMigrations(proxyAuth.options);
+			await runMigrations();
+
+			let capturedUrl: string | null = null;
+			const originalFetch = globalThis.fetch;
+
+			//@ts-expect-error - intentionally mocking fetch
+			globalThis.fetch = async (input: any, init?: any) => {
+				const url =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.toString()
+							: input.url;
+				if (url.includes("/sign-in/social")) {
+					capturedUrl = url;
+				}
+				return proxyAuth.handler(new Request(url, init));
+			};
+			try {
+				const codeChallenge = await s256Challenge("test-verifier");
+				await proxyAuth.handler(
+					new Request(
+						`http://localhost:3000/api/auth/electron/init-oauth-proxy?provider=google&state=abc&code_challenge=${encodeURIComponent(codeChallenge)}`,
+						{ method: "GET" },
+					),
+				);
+				expect(capturedUrl).not.toBeNull();
+				const params = new URLSearchParams(new URL(capturedUrl!).search);
+				expect(params.get("code_challenge_method")).toBe("S256");
+			} finally {
+				globalThis.fetch = originalFetch;
+			}
+		});
 	});
 
 	describe("origin header hardening", () => {
