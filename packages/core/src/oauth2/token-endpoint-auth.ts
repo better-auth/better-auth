@@ -77,6 +77,17 @@ function assertClientSecretConfigured(
 	}
 }
 
+function assertClientIdConfigured(
+	method: TokenEndpointAuthMethod,
+	clientId: string | undefined,
+): asserts clientId is string {
+	if (!clientId) {
+		throw new Error(
+			`${method} token endpoint authentication requires clientId`,
+		);
+	}
+}
+
 function setClientSecretPostAuth({
 	body,
 	options,
@@ -88,11 +99,12 @@ function setClientSecretPostAuth({
 	clientId: string | undefined;
 	requireClientSecret?: boolean | undefined;
 }) {
-	setClientId(body, clientId);
 	if (requireClientSecret) {
 		assertClientSecretConfigured("client_secret_post", options);
 	}
 	if (options.clientSecret) {
+		assertClientIdConfigured("client_secret_post", clientId);
+		setClientId(body, clientId);
 		body.set("client_secret", options.clientSecret);
 	}
 }
@@ -114,8 +126,9 @@ function setClientSecretBasicAuth({
 		);
 	}
 	assertClientSecretConfigured("client_secret_basic", options);
+	assertClientIdConfigured("client_secret_basic", clientId);
 	headers.authorization = `Basic ${base64.encode(
-		`${clientId ?? ""}:${options.clientSecret}`,
+		`${clientId}:${options.clientSecret}`,
 	)}`;
 }
 
@@ -155,11 +168,7 @@ export async function applyTokenEndpointAuth({
 
 	if (auth.method === "private_key_jwt") {
 		assertNoClientSecret(auth.method, options, body);
-		if (!clientId) {
-			throw new Error(
-				"private_key_jwt token endpoint authentication requires clientId",
-			);
-		}
+		assertClientIdConfigured(auth.method, clientId);
 		if (!tokenEndpoint) {
 			throw new Error(
 				"private_key_jwt token endpoint authentication requires tokenEndpoint",
