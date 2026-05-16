@@ -1,11 +1,42 @@
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
-import type { ClientAssertionProvider } from "./client-assertion";
-import { resolveAssertionParams } from "./client-assertion";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
+import type {
+	TokenEndpointAuth,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+
+interface AuthorizationCodeRequestInput {
+	code: string;
+	redirectURI: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: TokenEndpointSecretAuthentication | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
+	tokenEndpoint?: string | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface AuthorizationCodeRequestBaseInput {
+	code: string;
+	redirectURI: string;
+	options: Partial<ProviderOptions>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface ValidateAuthorizationCodeInput extends AuthorizationCodeRequestInput {
+	tokenEndpoint: string;
+}
 
 export async function authorizationCodeRequest({
 	code,
@@ -13,74 +44,50 @@ export async function authorizationCodeRequest({
 	redirectURI,
 	options,
 	authentication,
-	clientAssertionProvider,
+	tokenEndpointAuth,
+	tokenEndpoint,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	clientAssertionProvider?: ClientAssertionProvider | undefined;
-	tokenEndpoint?: string | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: AuthorizationCodeRequestInput) {
 	options = typeof options === "function" ? await options() : options;
-
-	const resolvedClientAssertionProvider =
-		clientAssertionProvider ?? options.clientAssertionProvider;
-	if (resolvedClientAssertionProvider) {
-		const assertionParams = await resolveAssertionParams({
-			clientAssertionProvider: resolvedClientAssertionProvider,
-		});
-		additionalParams = { ...additionalParams, ...assertionParams };
-	}
-
-	return createAuthorizationCodeRequest({
+	const request = buildAuthorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
 		options,
-		authentication,
 		deviceId,
 		headers,
 		additionalParams,
 		resource,
 	});
+
+	await applyTokenEndpointAuth({
+		body: request.body,
+		headers: request.headers,
+		options,
+		tokenEndpoint: tokenEndpoint ?? "",
+		grantType: "authorization_code",
+		tokenEndpointAuth,
+		authentication,
+	});
+
+	return request;
 }
 
-/**
- * @deprecated use async'd authorizationCodeRequest instead
- */
-export function createAuthorizationCodeRequest({
+function buildAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
 	options,
-	authentication,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: Partial<ProviderOptions>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: AuthorizationCodeRequestBaseInput) {
 	const body = new URLSearchParams();
-	const requestHeaders: Record<string, any> = {
+	const requestHeaders: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 		...headers,
@@ -101,22 +108,6 @@ export function createAuthorizationCodeRequest({
 			}
 		}
 	}
-	const primaryClientId = Array.isArray(options.clientId)
-		? options.clientId[0]
-		: options.clientId;
-	const hasClientAssertion = !!additionalParams.client_assertion;
-	if (authentication === "basic" && !hasClientAssertion) {
-		const encodedCredentials = base64.encode(
-			`${primaryClientId}:${options.clientSecret ?? ""}`,
-		);
-		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
-		body.set("client_id", primaryClientId);
-		if (!hasClientAssertion && options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
-		}
-	}
-
 	for (const [key, value] of Object.entries(additionalParams)) {
 		if (!body.has(key)) body.append(key, value);
 	}
@@ -134,31 +125,19 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
-	clientAssertionProvider,
+	tokenEndpointAuth,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
-	clientAssertionProvider?: ClientAssertionProvider | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: ValidateAuthorizationCodeInput) {
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
 		options,
 		authentication,
-		clientAssertionProvider,
+		tokenEndpointAuth,
 		tokenEndpoint,
 		deviceId,
 		headers,

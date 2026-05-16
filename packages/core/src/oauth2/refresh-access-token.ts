@@ -1,90 +1,78 @@
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
-import type { ClientAssertionProvider } from "./client-assertion";
-import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import type {
+	TokenEndpointAuth,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+
+interface RefreshAccessTokenRequestInput {
+	refreshToken: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	authentication?: TokenEndpointSecretAuthentication | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
+	tokenEndpoint?: string | undefined;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface RefreshAccessTokenRequestBaseInput {
+	refreshToken: string;
+	options: ProviderOptions;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
+	options: Partial<ProviderOptions>;
+	tokenEndpoint: string;
+}
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
-	clientAssertionProvider,
+	tokenEndpointAuth,
+	tokenEndpoint,
 	extraParams,
 	resource,
-}: {
-	refreshToken: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	authentication?: ("basic" | "post") | undefined;
-	clientAssertionProvider?: ClientAssertionProvider | undefined;
-	tokenEndpoint?: string | undefined;
-	extraParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: RefreshAccessTokenRequestInput) {
 	options = typeof options === "function" ? await options() : options;
-
-	const resolvedClientAssertionProvider =
-		clientAssertionProvider ?? options.clientAssertionProvider;
-	if (resolvedClientAssertionProvider) {
-		const assertionParams = await resolveAssertionParams({
-			clientAssertionProvider: resolvedClientAssertionProvider,
-		});
-		extraParams = { ...extraParams, ...assertionParams };
-	}
-
-	return createRefreshAccessTokenRequest({
+	const request = buildRefreshAccessTokenRequest({
 		refreshToken,
 		options,
-		authentication,
 		extraParams,
 		resource,
 	});
+
+	await applyTokenEndpointAuth({
+		body: request.body,
+		headers: request.headers,
+		options,
+		tokenEndpoint: tokenEndpoint ?? "",
+		grantType: "refresh_token",
+		tokenEndpointAuth,
+		authentication,
+	});
+
+	return request;
 }
 
-/**
- * @deprecated use async'd refreshAccessTokenRequest instead
- */
-export function createRefreshAccessTokenRequest({
+function buildRefreshAccessTokenRequest({
 	refreshToken,
 	options,
-	authentication,
 	extraParams,
 	resource,
-}: {
-	refreshToken: string;
-	options: ProviderOptions;
-	authentication?: ("basic" | "post") | undefined;
-	extraParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: RefreshAccessTokenRequestBaseInput) {
 	const body = new URLSearchParams();
-	const headers: Record<string, any> = {
+	const headers: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
-	const primaryClientId = Array.isArray(options.clientId)
-		? options.clientId[0]
-		: options.clientId;
-	const hasClientAssertion = !!extraParams?.client_assertion;
-	if (authentication === "basic" && !hasClientAssertion) {
-		if (primaryClientId) {
-			headers["authorization"] =
-				"Basic " +
-				base64.encode(`${primaryClientId}:${options.clientSecret ?? ""}`);
-		} else {
-			headers["authorization"] =
-				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
-		}
-	} else {
-		body.set("client_id", primaryClientId);
-		if (!hasClientAssertion && options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
-		}
-	}
-
 	if (resource) {
 		if (typeof resource === "string") {
 			body.append("resource", resource);
@@ -111,23 +99,18 @@ export async function refreshAccessToken({
 	options,
 	tokenEndpoint,
 	authentication,
-	clientAssertionProvider,
+	tokenEndpointAuth,
 	extraParams,
-}: {
-	refreshToken: string;
-	options: Partial<ProviderOptions>;
-	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
-	clientAssertionProvider?: ClientAssertionProvider | undefined;
-	extraParams?: Record<string, string> | undefined;
-}): Promise<OAuth2Tokens> {
+	resource,
+}: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
-		clientAssertionProvider,
+		tokenEndpointAuth,
 		tokenEndpoint,
 		extraParams,
+		resource,
 	});
 
 	const { data, error } = await betterFetch<{

@@ -96,7 +96,7 @@ export function hubspot(
 		tokenUrl: "https://api.hubapi.com/oauth/v1/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
-		clientAssertionProvider: options.clientAssertionProvider,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		authentication: "post",

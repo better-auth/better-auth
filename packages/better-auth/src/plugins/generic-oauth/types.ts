@@ -1,8 +1,8 @@
 import type { User } from "@better-auth/core/db";
 import type {
-	ClientAssertionProvider,
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
 export interface GenericOAuthOptions<ID extends string = string> {
@@ -48,9 +48,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	/** OAuth client secret */
 	clientSecret?: string | undefined;
 	/**
-	 * Callback that returns a client assertion used to authenticate token endpoint requests. The function is invoked for each token request, and does not include any built-in caching.
+	 * Token endpoint client authentication method.
+	 *
+	 * Use `private_key_jwt` for IdPs that authenticate clients with RFC 7523
+	 * client assertions instead of a client secret. Secret-based methods require
+	 * clientSecret.
 	 */
-	clientAssertionProvider?: ClientAssertionProvider | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -138,7 +142,9 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	authorizationUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
-	 * Warning: Search-params added here overwrite any default params.
+	 * Parameters already set by Better Auth are preserved. Configure token
+	 * endpoint client authentication with clientId, clientSecret, and
+	 * tokenEndpointAuth.
 	 */
 	tokenUrlParams?: Record<string, string> | undefined;
 	/**
@@ -152,6 +158,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Authentication method for token requests.
+	 * "basic" requires clientSecret.
 	 * @default "post"
 	 */
 	authentication?: ("basic" | "post") | undefined;

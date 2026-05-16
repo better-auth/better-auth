@@ -74,7 +74,7 @@ export function patreon(
 		tokenUrl: "https://www.patreon.com/api/oauth2/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
-		clientAssertionProvider: options.clientAssertionProvider,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

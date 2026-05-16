@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
-import { createPrivateKeyJwtClientAssertionProvider } from "better-auth/oauth2";
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -26,7 +26,6 @@ describe("private_key_jwt e2e", async () => {
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
-	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
 
 	// Generate RSA key pair
 	const keyPair = await generateKeyPair("RS256", { extractable: true });
@@ -139,14 +138,14 @@ describe("private_key_jwt e2e", async () => {
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							clientAssertionProvider:
-								createPrivateKeyJwtClientAssertionProvider({
-									clientId: oauthClient.client_id,
-									tokenEndpoint,
+							tokenEndpointAuth: {
+								method: "private_key_jwt",
+								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 									privateKeyJwk: privateJwk,
 									kid: "e2e-key-1",
 									algorithm: "RS256",
 								}),
+							},
 						},
 					],
 				}),
@@ -280,14 +279,14 @@ describe("private_key_jwt e2e", async () => {
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							clientAssertionProvider:
-								createPrivateKeyJwtClientAssertionProvider({
-									clientId: oauthJwksUriClient.client_id,
-									tokenEndpoint,
+							tokenEndpointAuth: {
+								method: "private_key_jwt",
+								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 									privateKeyJwk: privateJwk,
 									kid: "e2e-key-1",
 									algorithm: "RS256",
 								}),
+							},
 						},
 					],
 				}),

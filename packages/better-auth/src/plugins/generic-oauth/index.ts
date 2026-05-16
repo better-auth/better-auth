@@ -35,7 +35,7 @@ export type BaseOAuthProviderOptions = Pick<
 	GenericOAuthConfig,
 	| "clientId"
 	| "clientSecret"
-	| "clientAssertionProvider"
+	| "tokenEndpointAuth"
 	| "scopes"
 	| "redirectURI"
 	| "pkce"
@@ -50,6 +50,24 @@ interface DiscoveryDocument {
 	userinfo_endpoint?: string;
 	issuer?: string;
 	id_token_signing_alg_values_supported?: string[];
+}
+
+function isSecretlessTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "private_key_jwt" ||
+		tokenEndpointAuth?.method === "none"
+	);
+}
+
+function isClientSecretTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "client_secret_basic" ||
+		tokenEndpointAuth?.method === "client_secret_post"
+	);
 }
 
 async function fetchDiscovery(
@@ -201,9 +219,41 @@ export const genericOAuth = <const ID extends string>(
 					}
 				}
 
-				if (!c.clientSecret && !c.clientAssertionProvider) {
+				const tokenEndpointAuth = c.tokenEndpointAuth;
+				if (
+					c.clientSecret &&
+					isSecretlessTokenEndpointAuth(tokenEndpointAuth)
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					isClientSecretTokenEndpointAuth(tokenEndpointAuth)
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" requires clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					!tokenEndpointAuth &&
+					c.authentication === "basic"
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": authentication "basic" requires clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					!isSecretlessTokenEndpointAuth(tokenEndpointAuth)
+				) {
 					ctx.logger.warn(
-						`Provider "${c.providerId}": no clientSecret or clientAssertionProvider configured. Token exchange will fail unless this is a public client.`,
+						`Provider "${c.providerId}": no clientSecret configured for secret-based token endpoint authentication. Set tokenEndpointAuth: { method: "none" } for public clients.`,
 					);
 				}
 
@@ -266,8 +316,8 @@ export const genericOAuth = <const ID extends string>(
 							},
 							tokenEndpoint: tokenUrl,
 							authentication: c.authentication,
+							tokenEndpointAuth,
 							additionalParams: c.tokenUrlParams,
-							clientAssertionProvider: c.clientAssertionProvider,
 						});
 					},
 					async getUserInfo(tokens) {
@@ -312,7 +362,7 @@ export const genericOAuth = <const ID extends string>(
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							clientAssertionProvider: c.clientAssertionProvider,
+							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
 						});
 					},
