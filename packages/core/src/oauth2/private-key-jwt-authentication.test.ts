@@ -275,6 +275,25 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(body.get("client_secret")).toBeNull();
 	});
 
+	it.each([
+		"client_secret_basic",
+		"client_secret_post",
+	] as const)("rejects %s token endpoint authentication without clientId", async (method) => {
+		await expect(
+			authorizationCodeRequest({
+				code: "auth-code",
+				redirectURI: "https://rp.example.com/callback",
+				options: {
+					clientSecret: "client-secret",
+				},
+				tokenEndpoint,
+				tokenEndpointAuth: { method },
+			}),
+		).rejects.toThrow(
+			`${method} token endpoint authentication requires clientId`,
+		);
+	});
+
 	it("uses configured clientId over additional token client_id parameters", async () => {
 		const { body } = await authorizationCodeRequest({
 			code: "auth-code",
