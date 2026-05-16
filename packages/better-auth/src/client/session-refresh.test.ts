@@ -965,11 +965,13 @@ describe("session-refresh", () => {
 		// Wait for all async operations to complete
 		await vi.runAllTimersAsync();
 
-		// BUG: Currently this results in 2 requests when it should be 1:
-		// - First request from fetchSessionWithRefresh in session-refresh.ts
-		// - Second request from useAuthQuery subscription triggered by sessionSignal toggle
+		// Regression test: visibility changes previously caused 2 /get-session requests:
+		// 1. Direct fetch from fetchSessionWithRefresh in session-refresh.ts
+		// 2. Secondary fetch from useAuthQuery subscription triggered by sessionSignal toggle
 		//
-		// Expected: exactly 1 /get-session request per visibility event
+		// The $sessionRefreshMarker mechanism prevents the duplicate by setting skipNextRefetch
+		// when the marker changes, ensuring the signal-triggered fetch is skipped exactly once.
+		// This verifies that each visibility event now results in only 1 /get-session request.
 		expect(fetchCallCount).toBe(1);
 
 		unsubscribe();
