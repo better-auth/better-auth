@@ -1,5 +1,6 @@
 import type { PrivateKeyJwtSigningAlgorithm } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
+import type { JSONWebKeySet } from "jose";
 import type { Prompt } from ".";
 
 /**
@@ -87,7 +88,7 @@ export interface AuthServerMetadata {
 	 * Supported token endpoint authentication methods.
 	 *
 	 * @default
-	 * ["client_secret_basic", "client_secret_post"]
+	 * ["none", "client_secret_basic", "client_secret_post", "private_key_jwt"]
 	 */
 	token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
@@ -133,7 +134,7 @@ export interface AuthServerMetadata {
 	 * methods supported by this revocation endpoint
 	 *
 	 * @default
-	 * ["client_secret_basic", "client_secret_post"]
+	 * ["client_secret_basic", "client_secret_post", "private_key_jwt"]
 	 */
 	revocation_endpoint_auth_methods_supported?: AuthMethod[];
 	/**
@@ -154,7 +155,7 @@ export interface AuthServerMetadata {
 	 * methods supported by this introspection endpoint
 	 *
 	 * @default
-	 * ["client_secret_basic", "client_secret_post"]
+	 * ["client_secret_basic", "client_secret_post", "private_key_jwt"]
 	 */
 	introspection_endpoint_auth_methods_supported?: AuthMethod[];
 	/**
@@ -276,7 +277,7 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	jwks?: JSONWebKeySet;
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -288,7 +289,8 @@ export interface OAuthClient {
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1

@@ -14,8 +14,8 @@ import {
 	basicToClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
-	validateClientCredentials,
 } from "./utils";
+import { validateOAuthClientAuthentication } from "./utils/client-authentication";
 
 /**
  * IMPORTANT NOTES:
@@ -284,12 +284,13 @@ export async function revokeEndpoint(
 	}
 
 	// Validate client credentials
-	const client = await validateClientCredentials(
+	const client = await validateOAuthClientAuthentication({
 		ctx,
 		opts,
-		client_id,
-		client_secret,
-	);
+		clientId: client_id,
+		clientSecret: client_secret,
+		expectedAudience: ctx.request?.url,
+	});
 
 	try {
 		if (token_type_hint === undefined || token_type_hint === "access_token") {

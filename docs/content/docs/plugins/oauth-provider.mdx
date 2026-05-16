@@ -115,6 +115,32 @@ The plugin has a secured configuration by default providing ease to users unfami
     <Callout type="info">
       To create a public client (ie. without a client secret), set `token_endpoint_auth_method: "none"`.
     </Callout>
+
+    To create a `private_key_jwt` client, register key material with `jwks` or `jwks_uri`. The client is confidential, but no `client_secret` is issued or used.
+
+    {/* cspell:ignore AQAB */}
+
+    ```ts
+    const client = await auth.api.createOAuthClient({
+      headers,
+      body: {
+        redirect_uris: [redirectUri],
+        token_endpoint_auth_method: "private_key_jwt",
+        jwks: {
+          keys: [
+            {
+              kty: "RSA",
+              kid: "client-key-1",
+              alg: "RS256",
+              use: "sig",
+              n: "...",
+              e: "AQAB",
+            },
+          ],
+        },
+      },
+    });
+    ```
   </Step>
 </Steps>
 
@@ -447,10 +473,7 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-Note the following parameters are not yet supported:
-
-* `jwks`
-* `jwks_uri`
+For `private_key_jwt` clients, include exactly one of `jwks` or `jwks_uri`.
 
 ### Authorize Endpoint
 

@@ -253,7 +253,8 @@ interface GenericOAuthConfig {
   tokenUrl?: string;
   userInfoUrl?: string;
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
+  tokenEndpointAuth?: TokenEndpointAuth;
   scopes?: string[];
   redirectURI?: string;
   responseType?: string;
@@ -321,6 +322,61 @@ interface GenericOAuthConfig {
 **authorizationHeaders**: (Optional) Custom headers to include in the authorization request. Useful for providers that require special headers.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
+
+## Token Endpoint Client Authentication
+
+Use `tokenEndpointAuth` when your provider requires an explicit token endpoint client authentication method, or when you want to avoid storing a long-lived client secret.
+
+### Example: Private Key JWT
+
+```ts title="auth.ts"
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
+import { genericOAuth } from "better-auth/plugins/generic-oauth"
+
+genericOAuth({
+  config: [
+    {
+      providerId: "my-idp",
+      discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
+      clientId: process.env.IDP_CLIENT_ID!,
+      tokenEndpointAuth: {
+        method: "private_key_jwt",
+        getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+          privateKeyPem: process.env.IDP_PRIVATE_KEY!,
+          kid: process.env.IDP_PRIVATE_KEY_ID,
+        }),
+      },
+      pkce: true,
+    },
+  ],
+})
+```
+
+### Example: Assertion From Vercel OIDC
+
+For an application running on Vercel, the assertion can come from Vercel's OIDC federation token instead of a private key stored in your app.
+
+```ts title="auth.ts"
+import { getVercelOidcToken } from "@vercel/oidc"
+import { genericOAuth } from "better-auth/plugins/generic-oauth"
+
+genericOAuth({
+  config: [
+    {
+      providerId: "my-idp",
+      discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
+      clientId: process.env.IDP_CLIENT_ID!,
+      tokenEndpointAuth: {
+        method: "private_key_jwt",
+        getClientAssertion: async () => getVercelOidcToken(),
+      },
+      pkce: true,
+    },
+  ],
+})
+```
+
+Configure your IdP to trust the Vercel issuer mode used by your project. For team issuer mode, that is `https://oidc.vercel.com/<team-slug>`. The audience is typically `https://vercel.com/<team-slug>`, and the subject includes the owner, project, and environment, for example `owner:<team-slug>:project:<project-name>:environment:production`.
 
 ## Security: Issuer Validation
 

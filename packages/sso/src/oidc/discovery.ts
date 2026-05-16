@@ -519,8 +519,8 @@ function parseURL(name: string, endpoint: string, base?: string) {
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
-	existing?: "client_secret_basic" | "client_secret_post",
-): "client_secret_basic" | "client_secret_post" {
+	existing?: "client_secret_basic" | "client_secret_post" | "private_key_jwt",
+): "client_secret_basic" | "client_secret_post" | "private_key_jwt" {
 	if (existing) {
 		return existing;
 	}
@@ -537,6 +537,10 @@ export function selectTokenEndpointAuthMethod(
 
 	if (supported.includes("client_secret_post")) {
 		return "client_secret_post";
+	}
+
+	if (supported.includes("private_key_jwt")) {
+		return "private_key_jwt";
 	}
 
 	return "client_secret_basic";

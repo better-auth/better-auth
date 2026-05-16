@@ -153,6 +153,12 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationDefaultScopes?: Scopes;
 	/**
+	 * Maximum allowed lifetime, in seconds, for private_key_jwt client assertions.
+	 *
+	 * @default 300
+	 */
+	assertionMaxLifetime?: number;
+	/**
 	 * List of scopes for allowed clients in addition to
 	 * those listed in the default scope. Finalized allowed list is
 	 * the union of the default scopes and this list.
@@ -916,6 +922,10 @@ export interface SchemaClient<
 	softwareId?: string;
 	softwareVersion?: string;
 	softwareStatement?: string;
+	/** Serialized client JSON Web Key Set used for private_key_jwt. */
+	jwks?: string;
+	/** Trusted client JWKS URI used for private_key_jwt. */
+	jwksUri?: string;
 	//---- Authentication Metadata ----//
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
@@ -934,7 +944,8 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
 	//---- RFC6749 Spec ----//

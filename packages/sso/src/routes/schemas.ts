@@ -1,3 +1,4 @@
+import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "better-auth";
 import * as z from "zod";
 
 const oidcMappingSchema = z
@@ -23,22 +24,38 @@ const samlMappingSchema = z
 	})
 	.optional();
 
-const oidcConfigSchema = z.object({
-	clientId: z.string().optional(),
-	clientSecret: z.string().optional(),
-	authorizationEndpoint: z.url().optional(),
-	tokenEndpoint: z.url().optional(),
-	userInfoEndpoint: z.url().optional(),
-	tokenEndpointAuthentication: z
-		.enum(["client_secret_post", "client_secret_basic"])
-		.optional(),
-	jwksEndpoint: z.url().optional(),
-	discoveryEndpoint: z.url().optional(),
-	scopes: z.array(z.string()).optional(),
-	pkce: z.boolean().optional(),
-	overrideUserInfo: z.boolean().optional(),
-	mapping: oidcMappingSchema,
-});
+const oidcConfigSchema = z
+	.object({
+		clientId: z.string().optional(),
+		clientSecret: z.string().optional(),
+		authorizationEndpoint: z.url().optional(),
+		tokenEndpoint: z.url().optional(),
+		userInfoEndpoint: z.url().optional(),
+		tokenEndpointAuthentication: z
+			.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
+			.optional(),
+		privateKeyId: z.string().optional(),
+		privateKeyAlgorithm: z.enum(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS).optional(),
+		jwksEndpoint: z.url().optional(),
+		discoveryEndpoint: z.url().optional(),
+		scopes: z.array(z.string()).optional(),
+		pkce: z.boolean().optional(),
+		overrideUserInfo: z.boolean().optional(),
+		mapping: oidcMappingSchema,
+	})
+	.superRefine((config, ctx) => {
+		if (
+			config.tokenEndpointAuthentication === "private_key_jwt" &&
+			config.clientSecret
+		) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["clientSecret"],
+				message:
+					"clientSecret cannot be combined with private_key_jwt token endpoint authentication",
+			});
+		}
+	});
 
 const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),

@@ -147,7 +147,7 @@ describe("oauth register", async () => {
 			tos_uri: "https://example.com/terms",
 			policy_uri: "https://example.com/policy",
 			//---- Jwks (only one can be used) ----//
-			// jwks: [],
+			// jwks: { keys: [] },
 			// jwks_uri: "https://example.com/.well-known/jwks.json",
 			//---- User Software Identifiers ----//
 			software_id: "custom-software-id",

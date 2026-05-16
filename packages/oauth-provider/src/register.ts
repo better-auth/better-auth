@@ -27,6 +27,14 @@ function resolveUnauthenticatedAuth(body: OAuthClient): {
 	};
 }
 
+function isClientSecretAuth(method: TokenEndpointAuthMethod | undefined) {
+	return (
+		method === undefined ||
+		method === "client_secret_basic" ||
+		method === "client_secret_post"
+	);
+}
+
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -193,6 +201,23 @@ export async function checkOAuthClient(
 			error_description: `pkce is required for registered clients.`,
 		});
 	}
+
+	if (client.jwks && client.jwks_uri) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: "only one of jwks or jwks_uri can be configured",
+		});
+	}
+
+	if (
+		client.token_endpoint_auth_method === "private_key_jwt" &&
+		!(client.jwks || client.jwks_uri)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: "private_key_jwt clients require jwks or jwks_uri",
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -208,6 +233,7 @@ export async function createOAuthClientEndpoint(
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = body.token_endpoint_auth_method === "none";
+	const usesClientSecret = isClientSecretAuth(body.token_endpoint_auth_method);
 
 	// Check if client parameters are valid combination
 	await checkOAuthClient(ctx.body, opts, settings);
@@ -215,9 +241,9 @@ export async function createOAuthClientEndpoint(
 	// Generate clientId and clientSecret based on its type
 	const clientId =
 		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
-	const clientSecret = isPublic
-		? undefined
-		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
+	const clientSecret = usesClientSecret
+		? opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z")
+		: undefined;
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
@@ -234,9 +260,6 @@ export async function createOAuthClientEndpoint(
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
-		// Jwks unsupported
-		jwks: undefined,
-		jwks_uri: undefined,
 		// Required if client secret is issued
 		client_secret_expires_at: storedClientSecret
 			? settings.isRegister && opts?.clientRegistrationClientSecretExpiration
@@ -301,8 +324,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tos_uri: tos,
 		policy_uri: policy,
 		// Jwks (only one can be used)
-		jwks: _jwks,
-		jwks_uri: _jwksUri,
+		jwks,
+		jwks_uri: jwksUri,
 		// User Software Identifiers
 		software_id: softwareId,
 		software_version: softwareVersion,
@@ -363,6 +386,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		softwareId,
 		softwareVersion,
 		softwareStatement,
+		jwks: jwks ? JSON.stringify(jwks) : undefined,
+		jwksUri,
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
@@ -411,6 +436,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		softwareId,
 		softwareVersion,
 		softwareStatement,
+		jwks,
+		jwksUri,
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
@@ -438,6 +465,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		: undefined;
 	const _scopes = scopes?.join(" ");
 	const _metadata = parseClientMetadata(metadata);
+	const parsedJwks = jwks ? JSON.parse(jwks) : undefined;
 
 	return {
 		// All other metadata
@@ -458,8 +486,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		tos_uri: tos ?? undefined,
 		policy_uri: policy ?? undefined,
 		// Jwks (only one can be used)
-		// jwks, // Not Stored
-		// jwks_uri: jwksUri, // Not Stored
+		jwks: parsedJwks,
+		jwks_uri: jwksUri ?? undefined,
 		// User Software Identifiers
 		software_id: softwareId ?? undefined,
 		software_version: softwareVersion ?? undefined,

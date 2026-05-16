@@ -2512,4 +2512,130 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/dashboard");
 		});
 	});
+
+	describe("tokenEndpointAuth", () => {
+		it("should send client_assertion instead of client_secret at the token endpoint", async () => {
+			const assertion = "test-client-assertion-jwt";
+			const getClientAssertion = vi.fn(async () => assertion);
+			let capturedBody: Record<string, unknown> | null = null;
+
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				capturedBody = { ...(req as any).body };
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion,
+								},
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+				},
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.oauth2({
+				providerId: "test-assertion",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+			expect(getClientAssertion).toHaveBeenCalledOnce();
+			expect(getClientAssertion).toHaveBeenCalledWith({
+				clientId,
+				tokenEndpoint: expect.stringContaining(`localhost:${port}`),
+				grantType: "authorization_code",
+			});
+			expect(capturedBody).not.toBeNull();
+			const body = capturedBody!;
+			expect(body.grant_type).toBe("authorization_code");
+			expect(body.client_id).toBe(clientId);
+			expect(body.client_secret).toBeUndefined();
+			expect(body.client_assertion_type).toBe(
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			);
+			expect(body.client_assertion).toBe(assertion);
+		});
+
+		it("should reject secretless token endpoint auth combined with clientSecret", async () => {
+			const getClientAssertion = vi.fn(async () => "client-assertion");
+
+			await expect(
+				getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "test-assertion-with-secret",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									tokenEndpointAuth: {
+										method: "private_key_jwt",
+										getClientAssertion,
+									},
+									pkce: true,
+								},
+							],
+						}),
+					],
+				}),
+			).rejects.toThrow(
+				'Provider "test-assertion-with-secret": tokenEndpointAuth.method "private_key_jwt" cannot be combined with clientSecret',
+			);
+		});
+
+		it.each([
+			"client_secret_basic",
+			"client_secret_post",
+		] as const)("should reject %s token endpoint auth without clientSecret", async (method) => {
+			await expect(
+				getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: `test-${method}-without-secret`,
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									tokenEndpointAuth: {
+										method,
+									},
+									pkce: true,
+								},
+							],
+						}),
+					],
+				}),
+			).rejects.toThrow(
+				`Provider "test-${method}-without-secret": tokenEndpointAuth.method "${method}" requires clientSecret`,
+			);
+		});
+	});
 });

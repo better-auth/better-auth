@@ -132,6 +132,90 @@ describe("SSO", async () => {
 		});
 	});
 
+	it("should register a private_key_jwt OIDC provider without a client secret", async () => {
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt.localhost.com",
+				oidcConfig: {
+					clientId: "private-key-jwt-client",
+					tokenEndpointAuthentication: "private_key_jwt",
+					privateKeyId: "test-key",
+					privateKeyAlgorithm: "RS256",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "test-private-key-jwt",
+			},
+			headers,
+		});
+
+		expect(provider.oidcConfig).toMatchObject({
+			clientId: "private-key-jwt-client",
+			tokenEndpointAuthentication: "private_key_jwt",
+			privateKeyId: "test-key",
+			privateKeyAlgorithm: "RS256",
+		});
+		expect(provider.oidcConfig).not.toHaveProperty("clientSecret");
+	});
+
+	it("should reject private_key_jwt OIDC registration with a client secret", async () => {
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt-with-secret.localhost.com",
+				oidcConfig: {
+					clientId: "private-key-jwt-with-secret-client",
+					clientSecret: "should-not-be-used",
+					tokenEndpointAuthentication: "private_key_jwt",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+				providerId: "test-private-key-jwt-with-secret",
+			},
+			headers,
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(400);
+	});
+
+	it("should reject secret-based OIDC registration without a client secret", async () => {
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "client-secret-basic-without-secret.localhost.com",
+				oidcConfig: {
+					clientId: "client-secret-basic-without-secret-client",
+					tokenEndpointAuthentication: "client_secret_basic",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+				providerId: "test-client-secret-basic-without-secret",
+			},
+			headers,
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(400);
+	});
+
 	it("should fail to register a new SSO provider with invalid issuer", async () => {
 		const { headers } = await signInWithTestUser();
 

@@ -53,6 +53,17 @@ export const oAuthState = defineRequestState<{
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
+const tokenEndpointAuthMethodSchema = z.enum([
+	"none",
+	"client_secret_basic",
+	"client_secret_post",
+	"private_key_jwt",
+]);
+
+const jwksSchema = z.object({
+	keys: z.array(z.record(z.string(), z.unknown())),
+});
+
 /**
  * oAuth 2.1 provider plugin for Better Auth.
  *
@@ -631,6 +642,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						]),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
@@ -775,6 +788,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -916,6 +931,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -1171,9 +1188,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
+						jwks: jwksSchema.optional(),
+						jwks_uri: SafeUrlSchema.optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+						token_endpoint_auth_method: tokenEndpointAuthMethodSchema
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
@@ -1281,6 +1299,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description:
 															"JWT containing metadata values about the client software as claims",
 													},
+													jwks: {
+														type: "object",
+														description:
+															"Client JSON Web Key Set for private_key_jwt authentication",
+													},
+													jwks_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"Client JWKS URI for private_key_jwt authentication",
+													},
 													redirect_uris: {
 														type: "array",
 														items: {
@@ -1305,6 +1334,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															"none",
 															"client_secret_basic",
 															"client_secret_post",
+															"private_key_jwt",
 														],
 													},
 													grant_types: {

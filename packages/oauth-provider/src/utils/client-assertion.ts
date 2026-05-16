@@ -53,7 +53,7 @@ function isPrivateIpv4(hostname: string): boolean {
 	);
 }
 
-export function isPrivateHostname(hostname: string): boolean {
+function isPrivateHostname(hostname: string): boolean {
 	const lower = hostname.toLowerCase();
 	// Strip IPv6 brackets for uniform prefix matching
 	const host =

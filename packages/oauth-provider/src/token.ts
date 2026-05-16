@@ -27,8 +27,11 @@ import {
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
-	validateClientCredentials,
 } from "./utils";
+import {
+	hasClientAssertion,
+	validateOAuthClientAuthentication,
+} from "./utils/client-authentication";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -746,10 +749,16 @@ async function handleAuthorizationCodeGrant(
 
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
+	const isAuthCodeWithAssertion = client_id && hasClientAssertion(ctx.body);
 
-	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce) {
+	if (
+		!isAuthCodeWithSecret &&
+		!isAuthCodeWithPkce &&
+		!isAuthCodeWithAssertion
+	) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "Either code_verifier or client_secret is required",
+			error_description:
+				"Either code_verifier, client_secret, or client_assertion is required",
 			error: "invalid_request",
 		});
 	}
@@ -771,13 +780,14 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	/** Verify Client */
-	const client = await validateClientCredentials(
+	const client = await validateOAuthClientAuthentication({
 		ctx,
 		opts,
-		client_id,
-		client_secret,
+		clientId: client_id,
+		clientSecret: client_secret,
 		scopes,
-	);
+		expectedAudience: ctx.request?.url,
+	});
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -931,20 +941,21 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!client_secret) {
+	if (!client_secret && !hasClientAssertion(ctx.body)) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "Missing a required client_secret",
+			error_description: "Missing required client authentication",
 			error: "invalid_grant",
 		});
 	}
 
 	// Note: Scope check is done below instead of through the function since different requirements
-	const client = await validateClientCredentials(
+	const client = await validateOAuthClientAuthentication({
 		ctx,
 		opts,
-		client_id,
-		client_secret,
-	);
+		clientId: client_id,
+		clientSecret: client_secret,
+		expectedAudience: ctx.request?.url,
+	});
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
 	let requestedScopes = scope?.split(" ");
@@ -1088,13 +1099,14 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
+	const client = await validateOAuthClientAuthentication({
 		ctx,
 		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-	);
+		clientId: client_id,
+		clientSecret: client_secret, // Optional for refresh_grant but required on confidential clients
+		scopes: requestedScopes ?? scopes,
+		expectedAudience: ctx.request?.url,
+	});
 
 	const user = await ctx.context.internalAdapter.findUserById(
 		refreshToken.userId,

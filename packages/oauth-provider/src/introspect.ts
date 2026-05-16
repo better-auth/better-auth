@@ -19,8 +19,11 @@ import {
 	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
-	validateClientCredentials,
 } from "./utils";
+import {
+	hasClientAssertion,
+	validateOAuthClientAuthentication,
+} from "./utils/client-authentication";
 
 /**
  * IMPORTANT NOTES:
@@ -416,7 +419,7 @@ export async function introspectEndpoint(
 		client_id = res?.client_id;
 		client_secret = res?.client_secret;
 	}
-	if (!client_id || !client_secret) {
+	if (!client_id || (!client_secret && !hasClientAssertion(ctx.body))) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -435,12 +438,13 @@ export async function introspectEndpoint(
 	}
 
 	// Validate client credentials
-	const client = await validateClientCredentials(
+	const client = await validateOAuthClientAuthentication({
 		ctx,
 		opts,
-		client_id,
-		client_secret,
-	);
+		clientId: client_id,
+		clientSecret: client_secret,
+		expectedAudience: ctx.request?.url,
+	});
 
 	try {
 		if (token_type_hint === undefined || token_type_hint === "access_token") {

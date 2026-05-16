@@ -24,7 +24,8 @@ export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	clientSecret: string;
+	/** Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. */
+	clientSecret?: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string | undefined;
@@ -32,8 +33,12 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic")
+		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
 		| undefined;
+	/** Key ID for private_key_jwt key resolution. */
+	privateKeyId?: string | undefined;
+	/** Signing algorithm for private_key_jwt. Defaults to RS256. */
+	privateKeyAlgorithm?: string | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
 }
@@ -215,6 +220,16 @@ export interface SSOOptions {
 				 * OIDC configuration
 				 */
 				oidcConfig?: OIDCConfig;
+				/**
+				 * Private key material for private_key_jwt authentication.
+				 * Only used with defaultSSO and is not stored in the database.
+				 */
+				privateKey?: {
+					privateKeyJwk?: JsonWebKey;
+					privateKeyPem?: string;
+					kid?: string;
+					algorithm?: string;
+				};
 		  }>
 		| undefined;
 	/**
@@ -308,6 +323,20 @@ export interface SSOOptions {
 	 * per-provider callback URLs. Can be a path or a full URL.
 	 */
 	redirectURI?: string;
+	/**
+	 * Resolve private key material for private_key_jwt token endpoint authentication.
+	 * Called during token exchange so private keys do not need to be stored in the database.
+	 */
+	resolvePrivateKey?: (params: {
+		providerId: string;
+		keyId?: string | undefined;
+		issuer: string;
+	}) => Promise<{
+		privateKeyJwk?: JsonWebKey;
+		privateKeyPem?: string;
+		kid?: string;
+		algorithm?: string;
+	}>;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.

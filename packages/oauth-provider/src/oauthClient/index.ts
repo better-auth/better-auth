@@ -18,6 +18,17 @@ import {
 	updateClientEndpoint,
 } from "./endpoints";
 
+const tokenEndpointAuthMethodSchema = z.enum([
+	"none",
+	"client_secret_basic",
+	"client_secret_post",
+	"private_key_jwt",
+]);
+
+const jwksSchema = z.object({
+	keys: z.array(z.record(z.string(), z.unknown())),
+});
+
 export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/admin/oauth2/create-client",
@@ -35,9 +46,10 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
+				jwks: jwksSchema.optional(),
+				jwks_uri: SafeUrlSchema.optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema
 					.default("client_secret_basic")
 					.optional(),
 				grant_types: z
@@ -148,6 +160,17 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												description:
 													"JWT containing metadata values about the client software as claims",
 											},
+											jwks: {
+												type: "object",
+												description:
+													"Client JSON Web Key Set for private_key_jwt authentication",
+											},
+											jwks_uri: {
+												type: "string",
+												format: "uri",
+												description:
+													"Client JWKS URI for private_key_jwt authentication",
+											},
 											redirect_uris: {
 												type: "array",
 												items: {
@@ -164,6 +187,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													"none",
 													"client_secret_basic",
 													"client_secret_post",
+													"private_key_jwt",
 												],
 											},
 											grant_types: {
@@ -250,9 +274,10 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
+				jwks: jwksSchema.optional(),
+				jwks_uri: SafeUrlSchema.optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema
 					.default("client_secret_basic")
 					.optional(),
 				grant_types: z
@@ -352,6 +377,17 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												description:
 													"JWT containing metadata values about the client software as claims",
 											},
+											jwks: {
+												type: "object",
+												description:
+													"Client JSON Web Key Set for private_key_jwt authentication",
+											},
+											jwks_uri: {
+												type: "string",
+												format: "uri",
+												description:
+													"Client JWKS URI for private_key_jwt authentication",
+											},
 											redirect_uris: {
 												type: "array",
 												items: {
@@ -367,6 +403,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													"none",
 													"client_secret_basic",
 													"client_secret_post",
+													"private_key_jwt",
 												],
 											},
 											grant_types: {

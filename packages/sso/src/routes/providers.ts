@@ -134,6 +134,8 @@ function sanitizeProvider(
 					jwksEndpoint: oidcConfig.jwksEndpoint,
 					scopes: oidcConfig.scopes,
 					tokenEndpointAuthentication: oidcConfig.tokenEndpointAuthentication,
+					privateKeyId: oidcConfig.privateKeyId,
+					privateKeyAlgorithm: oidcConfig.privateKeyAlgorithm,
 				}
 			: undefined,
 		samlConfig: samlConfig
@@ -370,13 +372,25 @@ function mergeOIDCConfig(
 	updates: Partial<OIDCConfig>,
 	issuer: string,
 ): OIDCConfig {
+	const tokenEndpointAuthentication =
+		updates.tokenEndpointAuthentication ?? current.tokenEndpointAuthentication;
+	const clientSecret =
+		tokenEndpointAuthentication === "private_key_jwt"
+			? undefined
+			: (updates.clientSecret ?? current.clientSecret);
+	if (tokenEndpointAuthentication !== "private_key_jwt" && !clientSecret) {
+		throw new APIError("BAD_REQUEST", {
+			message: `clientSecret is required for ${tokenEndpointAuthentication ?? "client_secret_basic"} token endpoint authentication`,
+		});
+	}
+
 	return {
 		...current,
 		...updates,
 		issuer,
 		pkce: updates.pkce ?? current.pkce ?? true,
 		clientId: updates.clientId ?? current.clientId,
-		clientSecret: updates.clientSecret ?? current.clientSecret,
+		clientSecret,
 		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,
 		mapping: updates.mapping ?? current.mapping,
 		scopes: updates.scopes ?? current.scopes,
@@ -385,9 +399,10 @@ function mergeOIDCConfig(
 		tokenEndpoint: updates.tokenEndpoint ?? current.tokenEndpoint,
 		userInfoEndpoint: updates.userInfoEndpoint ?? current.userInfoEndpoint,
 		jwksEndpoint: updates.jwksEndpoint ?? current.jwksEndpoint,
-		tokenEndpointAuthentication:
-			updates.tokenEndpointAuthentication ??
-			current.tokenEndpointAuthentication,
+		tokenEndpointAuthentication,
+		privateKeyId: updates.privateKeyId ?? current.privateKeyId,
+		privateKeyAlgorithm:
+			updates.privateKeyAlgorithm ?? current.privateKeyAlgorithm,
 	};
 }
 

@@ -919,6 +919,44 @@ describe("SSO provider read endpoints", () => {
 			expect(updated.oidcConfig?.pkce).toBe(false);
 		});
 
+		it("should clear clientSecret when updating an OIDC provider to private_key_jwt", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: {
+						tokenEndpointAuthentication: "private_key_jwt",
+						privateKeyId: "test-key",
+						privateKeyAlgorithm: "RS256",
+					},
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.tokenEndpointAuthentication).toBe(
+				"private_key_jwt",
+			);
+			expect(updated.oidcConfig).not.toHaveProperty("clientSecret");
+
+			const storedProvider = (
+				data.ssoProvider as { providerId: string; oidcConfig?: string }[]
+			).find((provider) => provider.providerId === "my-oidc-provider");
+			expect(storedProvider?.oidcConfig).not.toContain("clientSecret");
+		});
+
 		it("should update issuer", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);

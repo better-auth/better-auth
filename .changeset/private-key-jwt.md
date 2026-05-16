@@ -17,4 +17,6 @@ Token endpoint client authentication parameters are derived from `clientId`, `cl
 
 The synchronous OAuth2 request builders `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` have been removed. Use the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest` helpers instead.
 
+OAuth provider clients can register `token_endpoint_auth_method: "private_key_jwt"` with either `jwks` or `jwks_uri`. These clients are confidential clients, but they do not receive or use a client secret. Token, introspection, and revocation endpoints now accept JWT client assertions for registered `private_key_jwt` clients.
+
 Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.

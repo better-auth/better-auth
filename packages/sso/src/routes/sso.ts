@@ -197,9 +197,13 @@ const ssoProviderBodySchema = z.object({
 			clientId: z.string({}).meta({
 				description: "The client ID",
 			}),
-			clientSecret: z.string({}).meta({
-				description: "The client secret",
-			}),
+			clientSecret: z
+				.string({})
+				.meta({
+					description:
+						"The client secret. Required for client_secret_basic and client_secret_post.",
+				})
+				.optional(),
 			authorizationEndpoint: z
 				.url()
 				.meta({
@@ -219,7 +223,11 @@ const ssoProviderBodySchema = z.object({
 				})
 				.optional(),
 			tokenEndpointAuthentication: z
-				.enum(["client_secret_post", "client_secret_basic"])
+				.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
+				.optional(),
+			privateKeyId: z.string().optional(),
+			privateKeyAlgorithm: z
+				.enum(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS)
 				.optional(),
 			jwksEndpoint: z
 				.url()
@@ -276,6 +284,28 @@ const ssoProviderBodySchema = z.object({
 					extraFields: z.record(z.string(), z.any()).optional(),
 				})
 				.optional(),
+		})
+		.superRefine((config, ctx) => {
+			const method =
+				config.tokenEndpointAuthentication ?? "client_secret_basic";
+			if (method === "private_key_jwt") {
+				if (config.clientSecret) {
+					ctx.addIssue({
+						code: "custom",
+						path: ["clientSecret"],
+						message:
+							"clientSecret cannot be combined with private_key_jwt token endpoint authentication",
+					});
+				}
+				return;
+			}
+			if (!config.clientSecret) {
+				ctx.addIssue({
+					code: "custom",
+					path: ["clientSecret"],
+					message: `clientSecret is required for ${method} token endpoint authentication`,
+				});
+			}
 		})
 		.optional(),
 	samlConfig: z
@@ -448,7 +478,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													},
 													clientSecret: {
 														type: "string",
-														description: "The client secret for the provider",
+														description:
+															"The client secret for the provider. Required for client_secret_basic and client_secret_post.",
 													},
 													authorizationEndpoint: {
 														type: "string",
@@ -482,10 +513,26 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													},
 													tokenEndpointAuthentication: {
 														type: "string",
-														enum: ["client_secret_post", "client_secret_basic"],
+														enum: [
+															"client_secret_post",
+															"client_secret_basic",
+															"private_key_jwt",
+														],
 														nullable: true,
 														description:
 															"Authentication method for the token endpoint",
+													},
+													privateKeyId: {
+														type: "string",
+														nullable: true,
+														description:
+															"Key ID for private_key_jwt key resolution",
+													},
+													privateKeyAlgorithm: {
+														type: "string",
+														nullable: true,
+														description:
+															"Signing algorithm for private_key_jwt",
 													},
 													jwksEndpoint: {
 														type: "string",
@@ -538,7 +585,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													"issuer",
 													"pkce",
 													"clientId",
-													"clientSecret",
 													"discoveryEndpoint",
 												],
 												description: "OIDC configuration for the provider",
@@ -726,6 +772,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						tokenEndpointAuthentication:
 							body.oidcConfig.tokenEndpointAuthentication ||
 							"client_secret_basic",
+						privateKeyId: body.oidcConfig.privateKeyId,
+						privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 						jwksEndpoint: body.oidcConfig.jwksEndpoint,
 						pkce: body.oidcConfig.pkce,
 						discoveryEndpoint:
@@ -751,6 +799,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
 					tokenEndpointAuthentication:
 						hydratedOIDCConfig.tokenEndpointAuthentication,
+					privateKeyId: body.oidcConfig.privateKeyId,
+					privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
 					pkce: body.oidcConfig.pkce,
 					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,

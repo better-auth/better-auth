@@ -288,6 +288,9 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc, "client_secret_post")).toBe(
 				"client_secret_post",
 			);
+			expect(selectTokenEndpointAuthMethod(doc, "private_key_jwt")).toBe(
+				"private_key_jwt",
+			);
 		});
 
 		it("should prefer client_secret_basic when both are supported", () => {
@@ -307,19 +310,26 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should default to client_secret_basic when only unsupported methods are advertised", () => {
+		it("should use private_key_jwt if only that is supported", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
-		it("should default to client_secret_basic for tls_client_auth only", () => {
+		it("should use private_key_jwt when it is the only supported configured method", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [
 					"tls_client_auth",
 					"private_key_jwt",
 				],
+			});
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
+		});
+
+		it("should default to client_secret_basic for tls_client_auth only", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: ["tls_client_auth"],
 			});
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
@@ -1026,7 +1036,7 @@ describe("OIDC Discovery", () => {
 			expect(result.scopesSupported).toEqual(["openid", "profile"]);
 		});
 
-		it("should default to client_secret_basic when IdP only supports methods we don't support", async () => {
+		it("should hydrate private_key_jwt when IdP only supports private_key_jwt", async () => {
 			mockBetterFetch.mockResolvedValueOnce({
 				data: {
 					issuer,
@@ -1039,7 +1049,7 @@ describe("OIDC Discovery", () => {
 			});
 
 			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
-			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+			expect(result.tokenEndpointAuthentication).toBe("private_key_jwt");
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
