@@ -73,7 +73,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED,
 			);
 		}
-		}
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
