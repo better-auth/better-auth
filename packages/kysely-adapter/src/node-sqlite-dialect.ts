@@ -254,7 +254,7 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 				isAutoIncrementing: col.name === autoIncrementCol,
 				hasDefaultValue: col.dflt_value != null,
 			})),
-			isView: true,
+			isView: false,
 		};
 	}
 }
