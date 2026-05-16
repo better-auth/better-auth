@@ -24,7 +24,11 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { parseCookies, SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import {
+	parseCookies,
+	SECURE_COOKIE_PREFIX,
+	splitSetCookieHeader,
+} from "./cookie-utils";
 import {
 	createAccountStore,
 	createSessionStore,
@@ -345,12 +349,14 @@ function removeSetCookieEntries(
 
 	for (const headers of targets) {
 		// `Headers.getSetCookie()` is standard on Node ≥18.14, Bun, Deno, and
-		// Cloudflare Workers, but older Node and some polyfilled Headers
-		// shims don't expose it. Degrade gracefully on those rather than
-		// throwing — the leak goes un-scrubbed, but every other expireCookie
-		// caller in the codebase keeps working.
-		if (typeof headers.getSetCookie !== "function") continue;
-		const existing = headers.getSetCookie();
+		// Cloudflare Workers, but older Node and some polyfilled Headers shims
+		// expose Set-Cookie as a collapsed string. Parse that fallback before
+		// rewriting the header so stale session cookies don't survive there.
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (!existing.length) continue;
 		const survivors = existing.filter(
 			(entry) => !entry.startsWith(exact) && !entry.startsWith(chunk),
 		);

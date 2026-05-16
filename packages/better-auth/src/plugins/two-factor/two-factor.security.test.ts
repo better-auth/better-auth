@@ -285,10 +285,11 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 
 describe("two-factor security: chunked session_data is fully scrubbed on 2FA-required sign-in", async () => {
 	// Forces session_data to be chunked by inflating the user payload past 4KB,
-	// then asserts every chunk (`session_data.0`, `session_data.1`, ...) is
-	// emptied. This pins the chunk-prefix branch of removeSetCookieEntries —
-	// without it, a future tightening of the match (e.g. exact-only) could
-	// silently leak `session_data.N` chunks while passing the non-chunked tests.
+	// verifies that the credential sign-in path actually emits chunks, then
+	// asserts the 2FA-required sign-in response exposes no valid chunk value.
+	// This pins the chunk-prefix branch of removeSetCookieEntries — without it,
+	// a future tightening of the match (e.g. exact-only) could silently leak
+	// `session_data.N` chunks while passing the non-chunked tests.
 	const filler = "x".repeat(2200);
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
@@ -314,6 +315,14 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 		update: { blob1: filler, blob2: filler },
 	});
 
+	const chunkProbeRes = await auth.api.signInEmail({
+		body: { email: testUser.email, password: testUser.password },
+		asResponse: true,
+	});
+	const chunkProbeEntries = extractSetCookies(chunkProbeRes).filter((entry) =>
+		entry.startsWith("better-auth.session_data."),
+	);
+
 	const enrollment = await auth.api.enableTwoFactor({
 		body: { password: testUser.password },
 		headers,
@@ -331,6 +340,11 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 	});
 	const totpCode = await createOTP(secret).totp();
 	await auth.api.verifyTOTP({ body: { code: totpCode }, headers });
+
+	it("test setup exercises chunked session_data cookies", () => {
+		expect(chunkProbeRes.status).toBe(200);
+		expect(chunkProbeEntries.length).toBeGreaterThan(0);
+	});
 
 	it("no session_data.N chunk leaks a non-empty value and replay cannot authenticate", async () => {
 		const res = await auth.api.signInEmail({
