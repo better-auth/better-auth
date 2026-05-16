@@ -34,7 +34,7 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 	return hasPermissionFn(input, acRoles);
 };
 
-interface OrganizationClientOptions {
+export interface OrganizationClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {
