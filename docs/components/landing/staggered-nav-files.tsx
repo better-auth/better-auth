@@ -38,8 +38,6 @@ const navFiles: NavFileItem[] = [
 	{ name: "docs", href: "/docs" },
 ];
 
-const pricingFile: NavFileItem = { name: "pricing", href: "/pricing" };
-
 interface ProductItem {
 	title: string;
 	tagline: string;
@@ -386,7 +384,6 @@ const mobileMenuSections: MobileMenuSection[] = [
 			href: p.href,
 		})),
 	},
-	{ name: "pricing", href: "/pricing" },
 	{ name: "resources", children: resourceFiles },
 	{ name: "enterprise", href: "/enterprise" },
 ];
@@ -731,33 +728,6 @@ export function StaggeredNavFiles() {
 								</motion.div>
 							)}
 						</AnimatePresence>
-					</motion.div>
-
-					{/* Pricing tab */}
-					<motion.div
-						initial={{ opacity: 0, y: -4 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.2, delay: 0.14, ease: "easeOut" }}
-						className="flex-1"
-					>
-						<Link
-							href={pricingFile.href}
-							className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
-								isPricingPage
-									? `bg-background border-b-2 ${activeTabBorderClass}`
-									: "bg-transparent hover:bg-foreground/[0.03]"
-							}`}
-						>
-							<span
-								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									isPricingPage
-										? "text-foreground"
-										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
-								}`}
-							>
-								{pricingFile.name}
-							</span>
-						</Link>
 					</motion.div>
 
 					{/* Enterprise tab */}
