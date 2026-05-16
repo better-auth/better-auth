@@ -17,6 +17,10 @@ export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
 	) => Promise<void>;
 }>;
 
+export interface UseAuthQueryConfig {
+	refreshMarkerAtom?: PreinitializedWritableAtom<any> | null;
+}
+
 export const useAuthQuery = <T>(
 	initializedAtom:
 		| PreinitializedWritableAtom<any>
@@ -33,6 +37,7 @@ export const useAuthQuery = <T>(
 				| ClientFetchOption
 		  )
 		| undefined,
+	config?: UseAuthQueryConfig,
 ) => {
 	const value: AuthQueryAtom<T> = atom({
 		data: null,
@@ -121,6 +126,10 @@ export const useAuthQuery = <T>(
 		? initializedAtom
 		: [initializedAtom];
 	let isInitialized = false;
+	let skipNextRefetch = false;
+	// Optional marker atom used by session management to deduplicate
+	// self-triggered signal bounces after a direct refresh fetch.
+	const refreshMarkerAtom = config?.refreshMarkerAtom ?? null;
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(async () => {
@@ -128,7 +137,18 @@ export const useAuthQuery = <T>(
 				// On server, don't trigger fetch
 				return;
 			}
+			if (initAtom === refreshMarkerAtom) {
+				if (isInitialized) {
+					skipNextRefetch = true;
+				}
+				return;
+			}
 			if (isInitialized) {
+				if (skipNextRefetch) {
+					// Consume the marker so only the signal bounce is skipped.
+					skipNextRefetch = false;
+					return;
+				}
 				await fn();
 			} else {
 				onMount(value, () => {

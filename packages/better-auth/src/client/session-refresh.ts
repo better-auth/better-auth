@@ -40,6 +40,7 @@ export interface SessionRefreshOptions {
 		} & Record<string, any>
 	>;
 	sessionSignal: WritableAtom<boolean>;
+	sessionRefreshMarker?: WritableAtom<number> | undefined;
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
 }
@@ -69,7 +70,13 @@ export type SessionResponse = (
 	Record<string, any>;
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
-	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
+	const {
+		sessionAtom,
+		sessionSignal,
+		sessionRefreshMarker,
+		$fetch,
+		options = {},
+	} = opts;
 
 	const refetchInterval = options.sessionOptions?.refetchInterval ?? 0;
 	const refetchOnWindowFocus =
@@ -126,6 +133,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 						data: sessionData,
 						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
 					});
+					if (sessionRefreshMarker) {
+						sessionRefreshMarker.set(sessionRefreshMarker.get() + 1);
+					}
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
 				})

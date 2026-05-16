@@ -16,12 +16,23 @@ export function getSessionAtom(
 	options?: BetterAuthClientOptions | undefined,
 ) {
 	const $signal = atom<boolean>(false);
+	// Marker atom incremented after direct session fetch to signal the query layer
+	// that the next signal toggle is self-originated and should skip one refetch.
+	const $sessionRefreshMarker = atom(0);
 	const session: SessionAtom = useAuthQuery<{
 		user: User;
 		session: Session;
-	}>($signal, "/get-session", $fetch, {
-		method: "GET",
-	});
+	}>(
+		[$signal, $sessionRefreshMarker],
+		"/get-session",
+		$fetch,
+		{
+			method: "GET",
+		},
+		{
+			refreshMarkerAtom: $sessionRefreshMarker,
+		},
+	);
 
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",
@@ -31,10 +42,10 @@ export function getSessionAtom(
 		const refreshManager = createSessionRefreshManager({
 			sessionAtom: session,
 			sessionSignal: $signal,
+			sessionRefreshMarker: $sessionRefreshMarker,
 			$fetch,
 			options,
 		});
-
 		refreshManager.init();
 		broadcastSessionUpdate = refreshManager.broadcastSessionUpdate;
 

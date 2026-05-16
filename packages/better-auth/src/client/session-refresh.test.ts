@@ -2,8 +2,11 @@
 
 import { atom } from "nanostores";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
+import { getGlobalFocusManager, kFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
+import { useAuthQuery } from "./query";
 import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 
@@ -884,5 +887,94 @@ describe("session-refresh", () => {
 		);
 
 		manager.cleanup();
+	});
+	it("should not cause duplicate /get-session requests on visibility change when useAuthQuery subscribes to sessionSignal", async () => {
+		vi.useFakeTimers();
+
+		// Reset focus manager to ensure clean state
+		delete (globalThis as any)[kFocusManager];
+
+		const sessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		};
+
+		let fetchCallCount = 0;
+		const mockFetch = vi.fn(async (url: string) => {
+			if (url === "/get-session") {
+				fetchCallCount++;
+			}
+			return {
+				data: sessionData,
+				error: null,
+			};
+		}) as any;
+
+		// Set up the signal (shared between useAuthQuery and session-refresh)
+		const $signal = atom<boolean>(false);
+		const $sessionRefreshMarker = atom(0);
+
+		// Create the session atom using useAuthQuery (simulating session-atom.ts getSessionAtom)
+		const session: SessionAtom = useAuthQuery<{
+			user: User;
+			session: Session;
+		}>(
+			[$signal, $sessionRefreshMarker],
+			"/get-session",
+			mockFetch,
+			{
+				method: "GET",
+			},
+			{
+				refreshMarkerAtom: $sessionRefreshMarker,
+			},
+		);
+
+		// Set up refresh manager (simulating onMount in session-atom.ts)
+		const refreshManager = createSessionRefreshManager({
+			sessionAtom: session,
+			sessionSignal: $signal,
+			sessionRefreshMarker: $sessionRefreshMarker,
+			$fetch: mockFetch,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		refreshManager.init();
+
+		// Subscribe to session atom to activate it (simulating component mount)
+		const unsubscribe = session.listen(() => {});
+
+		// Wait for initial fetch
+		await vi.runAllTimersAsync();
+		const _initialFetchCount = fetchCallCount;
+
+		// Wait past the rate limit window (5 seconds)
+		await vi.advanceTimersByTimeAsync(6000);
+
+		// Reset fetch count to isolate the visibility change test
+		fetchCallCount = 0;
+
+		// Simulate visibility change (user switches back to tab)
+		const focusManager = getGlobalFocusManager();
+		focusManager.setFocused(true);
+
+		// Wait for all async operations to complete
+		await vi.runAllTimersAsync();
+
+		// BUG: Currently this results in 2 requests when it should be 1:
+		// - First request from fetchSessionWithRefresh in session-refresh.ts
+		// - Second request from useAuthQuery subscription triggered by sessionSignal toggle
+		//
+		// Expected: exactly 1 /get-session request per visibility event
+		expect(fetchCallCount).toBe(1);
+
+		unsubscribe();
+		refreshManager.cleanup();
+		delete (globalThis as any)[kFocusManager];
+		vi.useRealTimers();
 	});
 });
