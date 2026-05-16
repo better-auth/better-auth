@@ -67,11 +67,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			code_challenge_method = "S256",
 		} = payload;
 		const method = code_challenge_method.toLowerCase();
-		if (method === "plain") {
+		if (method !== "s256") {
 			throw APIError.from(
 				"BAD_REQUEST",
 				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED,
 			);
+		}
 		}
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
