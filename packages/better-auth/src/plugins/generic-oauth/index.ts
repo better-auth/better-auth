@@ -248,15 +248,6 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
-				if (
-					!c.clientSecret &&
-					!isSecretlessTokenEndpointAuth(tokenEndpointAuth)
-				) {
-					ctx.logger.warn(
-						`Provider "${c.providerId}": no clientSecret configured for secret-based token endpoint authentication. Set tokenEndpointAuth: { method: "none" } for public clients.`,
-					);
-				}
-
 				genericProviders.push({
 					id: c.providerId,
 					name: c.name ?? c.providerId,

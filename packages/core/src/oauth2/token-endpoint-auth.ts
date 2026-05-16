@@ -40,12 +40,17 @@ export interface ApplyTokenEndpointAuthInput {
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 }
 
-export function getClientSecretTokenEndpointAuth(
+function getDefaultTokenEndpointAuth(
+	options: TokenEndpointClientOptions,
 	authentication?: TokenEndpointSecretAuthentication,
 ): TokenEndpointAuth {
-	return authentication === "basic"
-		? { method: "client_secret_basic" }
-		: { method: "client_secret_post" };
+	if (authentication === "basic") {
+		return { method: "client_secret_basic" };
+	}
+	if (options.clientSecret) {
+		return { method: "client_secret_post" };
+	}
+	return { method: "none" };
 }
 
 function assertNoClientSecret(
@@ -164,7 +169,7 @@ export async function applyTokenEndpointAuth({
 	}
 
 	const auth =
-		tokenEndpointAuth ?? getClientSecretTokenEndpointAuth(authentication);
+		tokenEndpointAuth ?? getDefaultTokenEndpointAuth(options, authentication);
 
 	if (auth.method === "private_key_jwt") {
 		assertNoClientSecret(auth.method, options, body);

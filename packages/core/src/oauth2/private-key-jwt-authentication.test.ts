@@ -254,6 +254,21 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(headers.authorization).toBeUndefined();
 	});
 
+	it("defaults to public-client token endpoint authentication without clientSecret", async () => {
+		const { body, headers } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: {
+				clientId,
+			},
+			tokenEndpoint,
+		});
+
+		expect(body.get("client_id")).toBe(clientId);
+		expect(body.get("client_secret")).toBeNull();
+		expect(headers.authorization).toBeUndefined();
+	});
+
 	it("rejects public-client token endpoint authentication without clientId", async () => {
 		await expect(
 			authorizationCodeRequest({

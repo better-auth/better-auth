@@ -245,7 +245,7 @@ interface GenericOAuthConfig {
 
 **clientSecret**: The OAuth client secret issued by your provider.
 
-**tokenEndpointAuth**: (Optional) Client authentication configuration for token endpoint requests. Use `{ method: "private_key_jwt", getClientAssertion }` for RFC 7523 client assertions, `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` for secret-based clients, and `{ method: "none" }` for public clients. Secret-based methods require `clientSecret`; do not combine `clientSecret` with `private_key_jwt` or `none`.
+**tokenEndpointAuth**: (Optional) Client authentication configuration for token endpoint requests. Use `{ method: "private_key_jwt", getClientAssertion }` for RFC 7523 client assertions, `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` for secret-based clients, and `{ method: "none" }` for public clients. Secret-based methods require `clientSecret`; do not combine `clientSecret` with `private_key_jwt` or `none`. If omitted, Better Auth sends secret-based token requests when `clientSecret` is configured and public-client token requests when it is not.
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
