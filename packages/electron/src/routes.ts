@@ -82,6 +82,15 @@ export const electronToken = (_opts: ElectronOptions) =>
 					ELECTRON_ERROR_CODES.MISSING_CODE_CHALLENGE,
 				);
 			}
+			if (
+				!tokenRecord.codeChallengeMethod ||
+				tokenRecord.codeChallengeMethod === "plain"
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED,
+				);
+			}
 			if (tokenRecord.codeChallengeMethod === "s256") {
 				const codeChallenge = Buffer.from(
 					base64Url.decode(tokenRecord.codeChallenge),
@@ -202,7 +211,7 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			searchParams.set("code_challenge", ctx.query.code_challenge);
 			searchParams.set(
 				"code_challenge_method",
-				ctx.query.code_challenge_method || "plain",
+				ctx.query.code_challenge_method || "S256",
 			);
 			searchParams.set("state", ctx.query.state);
 			const res = await betterFetch<{

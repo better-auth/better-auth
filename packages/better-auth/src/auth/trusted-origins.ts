@@ -41,7 +41,29 @@ export const matchesOriginPattern = (
 		return wildcardMatch(pattern)(host);
 	}
 	const protocol = getProtocol(url);
-	return protocol === "http:" || protocol === "https:" || !protocol
-		? pattern === getOrigin(url)
-		: url.startsWith(pattern);
+	if (protocol === "http:" || protocol === "https:" || !protocol) {
+		return pattern === getOrigin(url);
+	}
+	// Custom schemes (e.g. myapp://, exp://): compare scheme + authority
+	// exactly rather than using a prefix match, which would let
+	// "myapp://callback.attacker.tld" satisfy pattern "myapp://callback".
+	try {
+		const parsedUrl = new URL(url);
+		const parsedPattern = new URL(pattern);
+		if (parsedUrl.protocol !== parsedPattern.protocol) {
+			return false;
+		}
+		if (parsedUrl.host !== parsedPattern.host) {
+			return false;
+		}
+		// Non-special schemes may have empty pathname; normalize to "/"
+		const patternPath = parsedPattern.pathname.replace(/\/+$/, "") || "/";
+		if (patternPath === "/") {
+			return true;
+		}
+		const urlPath = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+		return urlPath === patternPath || urlPath.startsWith(`${patternPath}/`);
+	} catch {
+		return url === pattern;
+	}
 };

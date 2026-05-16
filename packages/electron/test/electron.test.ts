@@ -81,6 +81,10 @@ vi.mock("electron", () => mockElectron);
 describe("Electron", () => {
 	const { auth, client, proxyClient, options, customFetchImpl } = testUtils();
 
+	async function s256Challenge(verifier: string) {
+		return base64Url.encode(await createHash("SHA-256").digest(verifier));
+	}
+
 	it("should throw error when making requests outside the main process", async ({
 		setProcessType,
 	}) => {
@@ -112,6 +116,7 @@ describe("Electron", () => {
 		(globalThis as any)[kElectron] = new Map<string, string>([
 			["abc", "test-challenge"],
 		]);
+		const challenge = await s256Challenge("test-challenge");
 
 		const { error } = await proxyClient.signUp.email(
 			{
@@ -122,8 +127,8 @@ describe("Electron", () => {
 			{
 				query: {
 					client_id: "electron",
-					code_challenge: "test-challenge",
-					code_challenge_method: "plain",
+					code_challenge: challenge,
+					code_challenge_method: "S256",
 					state: "abc",
 				},
 				onResponse: async (ctx) => {
@@ -149,6 +154,7 @@ describe("Electron", () => {
 		(globalThis as any)[kElectron] = new Map<string, string>([
 			["abc", "test-challenge"],
 		]);
+		const challenge = await s256Challenge("test-challenge");
 
 		const { data } = await proxyClient.signUp.email(
 			{
@@ -159,8 +165,8 @@ describe("Electron", () => {
 			{
 				query: {
 					client_id: "electron",
-					code_challenge: "test-challenge",
-					code_challenge_method: "plain",
+					code_challenge: challenge,
+					code_challenge_method: "S256",
 					state: "abc",
 				},
 			},
@@ -236,8 +242,11 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		(globalThis as any)[kElectron] = new Map<string, string>([
-			["abc", "test-challenge"],
+			["abc", codeVerifier],
 		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -247,8 +256,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -308,8 +317,11 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		(globalThis as any)[kElectron] = new Map<string, string>([
-			["abc", "test-challenge"],
+			["abc", codeVerifier],
 		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -319,8 +331,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 999),
@@ -389,6 +401,9 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		// Create verification referencing a non-existent user id
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -397,8 +412,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: "non-existent-user",
-					codeChallenge: "x",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300_000),
@@ -409,7 +424,11 @@ describe("Electron", () => {
 			client
 				.$fetch("/electron/token", {
 					method: "POST",
-					body: { token: identifier, code_verifier: "x", state: "abc" },
+					body: {
+						token: identifier,
+						code_verifier: codeVerifier,
+						state: "abc",
+					},
 					throw: true,
 					customFetchImpl: (url, init) => {
 						const req = new Request(url.toString(), init);
@@ -439,6 +458,9 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
 			model: "verification",
@@ -446,8 +468,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "x",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300_000),
@@ -461,7 +483,11 @@ describe("Electron", () => {
 			await expect(
 				client.$fetch("/electron/token", {
 					method: "POST",
-					body: { token: identifier, code_verifier: "x", state: "abc" },
+					body: {
+						token: identifier,
+						code_verifier: codeVerifier,
+						state: "abc",
+					},
 					throw: true,
 					customFetchImpl: (url, init) => {
 						const req = new Request(url.toString(), init);
@@ -523,8 +549,11 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		(globalThis as any)[kElectron] = new Map<string, string>([
-			["abc", "test-challenge"],
+			["abc", codeVerifier],
 		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -534,8 +563,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -577,8 +606,11 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
 		(globalThis as any)[kElectron] = new Map<string, string>([
-			["abc", "test-challenge"],
+			["abc", codeVerifier],
 		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -588,8 +620,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -865,8 +897,11 @@ describe("Electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -876,8 +911,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
 				},
@@ -907,8 +942,11 @@ describe("Electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -918,8 +956,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 						state: "def",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1022,12 +1060,212 @@ describe("Electron", () => {
 				}),
 			).rejects.toThrowError("BAD_REQUEST");
 		});
+
+		it("should reject plain PKCE method at token endpoint", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signInEmail({
+				body: { email: "test@test.com", password: "password" },
+			});
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "attacker-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300_000),
+				},
+			});
+
+			const res = await client.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: "attacker-challenge",
+					state: "abc",
+				},
+				customFetchImpl: (url, init) => {
+					const req = new Request(url.toString(), init);
+					return auth.handler(req);
+				},
+			});
+			expect((res.error as any)?.code).toBe(
+				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED.code,
+			);
+		});
+
+		it("should reject verification rows without codeChallengeMethod", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signInEmail({
+				body: { email: "test@test.com", password: "password" },
+			});
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "some-challenge",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300_000),
+				},
+			});
+
+			const res = await client.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: "some-challenge",
+					state: "abc",
+				},
+				customFetchImpl: (url, init) => {
+					const req = new Request(url.toString(), init);
+					return auth.handler(req);
+				},
+			});
+			expect((res.error as any)?.code).toBe(
+				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED.code,
+			);
+		});
+
+		it("should reject plain PKCE method in sign-up query params", async () => {
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "attacker-verifier"],
+			]);
+
+			const res = await proxyClient.signUp.email(
+				{
+					email: "pkce-reject-signup@test.com",
+					password: "password",
+					name: "PKCE Reject Test",
+				},
+				{
+					query: {
+						client_id: "electron",
+						code_challenge: "attacker-verifier",
+						code_challenge_method: "plain",
+						state: "abc",
+					},
+				},
+			);
+
+			expect(res.error?.code).toBe(
+				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED.code,
+			);
+		});
+
+		it("should default to S256 when code_challenge_method is omitted", async () => {
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", codeVerifier],
+			]);
+
+			const { data } = await proxyClient.signUp.email(
+				{
+					email: "pkce-default-s256@test.com",
+					password: "password",
+					name: "Default S256",
+				},
+				{
+					query: {
+						client_id: "electron",
+						code_challenge: codeChallenge,
+						state: "abc",
+					},
+				},
+			);
+
+			expect(data).not.toBeNull();
+			expect(data).toHaveProperty("electron_authorization_code");
+		});
+	});
+
+	describe("origin header hardening", () => {
+		it("should not substitute electron-origin into Origin", async () => {
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					method: "GET",
+					headers: {
+						"electron-origin": "myapp:/",
+					},
+				}),
+			);
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body).toBeNull();
+		});
+
+		it("should accept requests with direct origin header from electron client", async () => {
+			await auth.api.signUpEmail({
+				body: {
+					email: "origin-direct@test.com",
+					password: "password",
+					name: "Origin Direct",
+				},
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "myapp:/",
+					},
+					body: JSON.stringify({
+						email: "origin-direct@test.com",
+						password: "password",
+					}),
+				}),
+			);
+			expect(res.status).toBe(200);
+		});
+
+		it("should not use electron-origin to spoof origin in hooks", async () => {
+			let observedOrigin: string | null = null;
+			const { auth: authInstance } = testUtils({
+				plugins: [electron()],
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						observedOrigin = ctx.request?.headers.get("origin") ?? null;
+					}),
+				},
+			});
+			const { runMigrations } = await getMigrations(authInstance.options);
+			await runMigrations();
+			await authInstance.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					method: "GET",
+					headers: {
+						"electron-origin": "http://attacker.com",
+					},
+				}),
+			);
+			expect(observedOrigin).not.toBe("http://attacker.com");
+		});
 	});
 
 	describe("cookies", () => {
 		async function setupSessionWithTokenExchange() {
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 			const { user } = await auth.api.signInEmail({
 				body: { email: "test@test.com", password: "password" },
@@ -1039,8 +1277,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1050,7 +1288,7 @@ describe("Electron", () => {
 				method: "POST",
 				body: {
 					token: identifier,
-					code_verifier: "test-challenge",
+					code_verifier: codeVerifier,
 					state: "abc",
 				},
 			});
@@ -1238,12 +1476,11 @@ describe("Electron", () => {
 		});
 	});
 
-	it("should modify origin header to electron origin if origin is not set", async ({
+	it("should set origin header directly from electron client", async ({
 		setProcessType,
 	}) => {
 		setProcessType("browser");
 
-		let originalOrigin: string | null = null;
 		let origin: string | null = null;
 		const { auth, client } = testUtils({
 			hooks: {
@@ -1251,16 +1488,7 @@ describe("Electron", () => {
 					origin = ctx.request?.headers.get("origin") ?? null;
 				}),
 			},
-			plugins: [
-				{
-					id: "test",
-					async onRequest(request, ctx) {
-						const origin = request.headers.get("origin");
-						originalOrigin = origin;
-					},
-				},
-				electron(),
-			],
+			plugins: [electron()],
 		});
 		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
@@ -1271,17 +1499,16 @@ describe("Electron", () => {
 			callbackURL: "http://localhost:3000/callback",
 		});
 		expect(origin).toBe("myapp:/");
-		expect(originalOrigin).toBeNull();
 	});
 
-	it("should not modify origin header if origin is set", async ({
+	it("should allow caller to override origin header", async ({
 		setProcessType,
 	}) => {
 		setProcessType("browser");
 
-		const originalOrigin = "test.com";
 		let origin: string | null = null;
 		const { auth, client } = testUtils({
+			trustedOrigins: ["http://custom-origin.com"],
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					origin = ctx.request?.headers.get("origin") ?? null;
@@ -1300,21 +1527,21 @@ describe("Electron", () => {
 			},
 			{
 				headers: {
-					origin: originalOrigin,
+					origin: "http://custom-origin.com",
 				},
 			},
 		);
-		expect(origin).toBe(originalOrigin);
+		expect(origin).toBe("http://custom-origin.com");
 	});
 
-	it("should not modify origin header if disableOriginOverride is set", async ({
+	it("should not use electron-origin header for origin substitution", async ({
 		setProcessType,
 	}) => {
 		setProcessType("browser");
 
 		let origin: string | null = null;
-		const { auth, client } = testUtils({
-			plugins: [electron({ disableOriginOverride: true })],
+		const { auth } = testUtils({
+			plugins: [electron()],
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					origin = ctx.request?.headers.get("origin") ?? null;
@@ -1323,13 +1550,15 @@ describe("Electron", () => {
 		});
 		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
-		await client.signUp.email({
-			name: "Test User",
-			email: "test@test.com",
-			password: "password",
-			callbackURL: "http://localhost:3000/callback",
-		});
-		expect(origin).toBe(null);
+		await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				method: "GET",
+				headers: {
+					"electron-origin": "http://attacker.com",
+				},
+			}),
+		);
+		expect(origin).not.toBe("http://attacker.com");
 	});
 
 	it("should register ipc handlers", async ({ setProcessType }) => {
@@ -1636,8 +1865,11 @@ describe("Electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -1647,8 +1879,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1694,8 +1926,11 @@ describe("Electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -1705,8 +1940,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1878,8 +2113,11 @@ describe("Electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
 			(globalThis as any)[kElectron] = new Map<string, string>([
-				["abc", "test-challenge"],
+				["abc", codeVerifier],
 			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -1889,8 +2127,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
