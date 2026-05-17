@@ -11,3 +11,4 @@ export {
 } from "./algorithms";
 
 export { validateSingleAssertion } from "./assertions";
+export { assertCertSources, type CertSourceConfig } from "./cert";

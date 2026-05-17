@@ -43,6 +43,7 @@ import {
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
 import {
+	assertCertSources,
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
 	validateSingleAssertion,
@@ -395,9 +396,13 @@ const ssoProviderBodySchema = z.object({
 			entryPoint: z.string({}).meta({
 				description: "The entry point of the provider",
 			}),
-			cert: z.union([z.string(), z.array(z.string()).nonempty()]).meta({
-				description: "The certificate(s) of the provider",
-			}),
+			cert: z
+				.union([z.string(), z.array(z.string()).nonempty()])
+				.optional()
+				.meta({
+					description:
+						"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Omit when `idpMetadata.metadata` XML is supplied: the certificates are then read from the metadata document.",
+				}),
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
@@ -860,6 +865,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			};
 
 			if (body.samlConfig) {
+				assertCertSources(body.samlConfig);
 				validateConfigAlgorithms(
 					{
 						signatureAlgorithm: body.samlConfig.signatureAlgorithm,

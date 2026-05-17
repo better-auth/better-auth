@@ -6,7 +6,7 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { validateConfigAlgorithms } from "../saml";
+import { assertCertSources, validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
@@ -141,9 +141,9 @@ function sanitizeProvider(
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
 					certificate: (() => {
-						const certs = Array.isArray(samlConfig.cert)
-							? samlConfig.cert
-							: [samlConfig.cert];
+						const rawCerts = samlConfig.idpMetadata?.cert ?? samlConfig.cert;
+						if (rawCerts === undefined) return undefined;
+						const certs = Array.isArray(rawCerts) ? rawCerts : [rawCerts];
 						const parsed = certs.map((cert) => {
 							try {
 								return parseCertificate(cert);
@@ -487,6 +487,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						currentSamlConfig.issuer ||
 						existingProvider.issuer,
 				);
+
+				assertCertSources(updatedSamlConfig);
 
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}

@@ -41,7 +41,12 @@ export interface OIDCConfig {
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
-	cert: string | string[];
+	/**
+	 * IdP signing certificate(s). Either a single PEM string or an array of PEMs
+	 * for rolling rotation. Omit when `idpMetadata.metadata` is supplied: the
+	 * certificates are then read from the metadata XML.
+	 */
+	cert?: string | string[];
 	callbackUrl: string;
 	audience?: string | undefined;
 	idpMetadata?:

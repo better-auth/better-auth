@@ -881,6 +881,86 @@ kBGIJYs=
 			expect(cert.fingerprintSha256).toBeDefined();
 		});
 
+		it("should report certs from idpMetadata.cert when present", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.ssoProvider.push({
+				id: "provider-idp-cert",
+				providerId: "idp-cert-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: user!.id,
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					cert: "invalid-fallback-cert",
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					idpMetadata: {
+						entityID: "https://idp.example.com",
+						cert: [VALID_CERT_1, VALID_CERT_2],
+					},
+				}),
+			});
+
+			const response = await auth.api.getSSOProvider({
+				query: { providerId: "idp-cert-provider" },
+				headers,
+			});
+
+			const certs = response.samlConfig?.certificate as {
+				fingerprintSha256: string;
+			}[];
+			expect(Array.isArray(certs)).toBe(true);
+			expect(certs).toHaveLength(2);
+			expect(certs[0]!.fingerprintSha256).toBeDefined();
+			expect(certs[1]!.fingerprintSha256).toBeDefined();
+		});
+
+		it("should omit certificate field when no cert is configured", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.ssoProvider.push({
+				id: "provider-metadata-only",
+				providerId: "metadata-only-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: user!.id,
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					idpMetadata: {
+						metadata: "<EntityDescriptor>...</EntityDescriptor>",
+					},
+				}),
+			});
+
+			const response = await auth.api.getSSOProvider({
+				query: { providerId: "metadata-only-provider" },
+				headers,
+			});
+
+			expect(response.samlConfig?.certificate).toBeUndefined();
+		});
+
 		it("should mask short clientId with just asterisks", async () => {
 			const { auth, getAuthHeaders, createOIDCProviderData, data } =
 				createTestAuth(false);
