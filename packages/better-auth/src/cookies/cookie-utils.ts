@@ -261,9 +261,9 @@ export function setRequestCookie(
  * Merge `Set-Cookie` header values into the target's `Cookie` header.
  * Mutates `target`.
  *
- * Name/value-level merge only. RFC 6265 §5 user-agent semantics
- * (expiration, domain/path scoping, ordering) are out of scope. Suitable
- * for single-request proxy, middleware, and test contexts.
+ * Name/value-level merge only. Expired cookies are removed by name; domain/path
+ * scoping and ordering are out of scope. Suitable for single-request proxy,
+ * middleware, and test contexts.
  */
 export function applySetCookies(
 	target: Headers,
@@ -272,13 +272,29 @@ export function applySetCookies(
 	const cookieMap = parseCookies(target.get("cookie") || "");
 	for (const setCookie of setCookieValues) {
 		for (const [name, attr] of parseSetCookieHeader(setCookie)) {
-			cookieMap.set(name, attr.value);
+			const maxAge = attr["max-age"];
+			const expiresAt = attr.expires?.getTime();
+			const hasValidMaxAge = maxAge !== undefined && !Number.isNaN(maxAge);
+			const isExpired = hasValidMaxAge
+				? maxAge <= 0
+				: expiresAt !== undefined &&
+					!Number.isNaN(expiresAt) &&
+					expiresAt <= Date.now();
+			if (isExpired) {
+				cookieMap.delete(name);
+			} else {
+				cookieMap.set(name, attr.value);
+			}
 		}
 	}
-	target.set(
-		"cookie",
-		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
-	);
+	if (cookieMap.size === 0) {
+		target.delete("cookie");
+	} else {
+		target.set(
+			"cookie",
+			Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+		);
+	}
 }
 
 export function setCookieToHeader(headers: Headers) {

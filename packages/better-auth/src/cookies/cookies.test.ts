@@ -1574,6 +1574,34 @@ describe("applySetCookies", () => {
 		applySetCookies(headers, ["a=new; Path=/"]);
 		expect(headers.get("cookie")).toBe("a=new; b=keep");
 	});
+
+	it("removes cookies expired by Max-Age", () => {
+		const headers = new Headers({ cookie: "a=old; b=keep" });
+		applySetCookies(headers, ["a=; Path=/; Max-Age=0"]);
+		expect(headers.get("cookie")).toBe("b=keep");
+	});
+
+	it("removes cookies expired by Expires", () => {
+		const headers = new Headers({ cookie: "a=old; b=keep" });
+		applySetCookies(headers, [
+			"a=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+		]);
+		expect(headers.get("cookie")).toBe("b=keep");
+	});
+
+	it("keeps cookies with positive Max-Age and past Expires", () => {
+		const headers = new Headers({ cookie: "a=old; b=keep" });
+		applySetCookies(headers, [
+			"a=new; Path=/; Max-Age=3600; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+		]);
+		expect(headers.get("cookie")).toBe("a=new; b=keep");
+	});
+
+	it("clears Cookie header when all cookies expire", () => {
+		const headers = new Headers({ cookie: "a=old" });
+		applySetCookies(headers, ["a=; Path=/; Max-Age=0"]);
+		expect(headers.get("cookie")).toBeNull();
+	});
 });
 
 describe("expireCookie", () => {
