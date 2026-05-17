@@ -1,3 +1,6 @@
+# Policy: fix shell-injection, cache, and credential-persistence findings.
+# Suppress only intentional metadata-only workflows, and state the trust
+# boundary so future workflow changes do not mix privilege with PR code.
 rules:
   dangerous-triggers:
     ignore:
@@ -8,3 +11,19 @@ rules:
       # Intentional: reads .changeset/*.md content via GitHub API only.
       # No checkout of fork code. No code execution.
       - auto-retarget.yml
+      # Intentional: applies labels from repository-owned config only. It does
+      # not check out or execute PR code; pull_request_target is required so
+      # labels can be applied to fork PRs.
+      - auto-label.yml
+      # Intentional: creates backports for already-merged PRs or maintainer
+      # slash commands. Checkout persists no credentials; the action receives
+      # an explicit token and does not execute fork PR code.
+      - backport.yml
+  use-trusted-publishing:
+    ignore:
+      # Intentional: pkg.pr.new publishes ephemeral PR preview packages, not npm
+      # release artifacts. Do not add id-token: write to this pull_request
+      # workflow without redesigning the preview-publish trust boundary. If a
+      # future maintainer enables trusted publishing here, also re-evaluate
+      # the pull_request trigger.
+      - preview.yml

@@ -18,6 +18,9 @@ outputs:
   playwright-version:
     description: 'Detected Playwright version'
     value: ${{ steps.detect-version.outputs.version }}
+  validated-browsers:
+    description: 'Validated browser arguments for Playwright install commands'
+    value: ${{ steps.validate-browsers.outputs.browsers }}
 
 runs:
   using: composite
@@ -38,31 +41,63 @@ runs:
       id: detect-version
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        PLAYWRIGHT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         PLAYWRIGHT_VERSION=$(pnpm --filter=. ls @playwright/test --json | jq --raw-output '.[0].devDependencies["@playwright/test"].version')
         if [ -z "$PLAYWRIGHT_VERSION" ] || [ "$PLAYWRIGHT_VERSION" = "null" ]; then
-          echo "::error::Could not detect @playwright/test version in ${{ inputs.working-directory }}. Ensure dependencies are installed before running this action."
+          echo "::error::Could not detect @playwright/test version in ${PLAYWRIGHT_WORKING_DIRECTORY}. Ensure dependencies are installed before running this action."
           exit 1
         fi
         echo "version=$PLAYWRIGHT_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Validate Playwright Browsers
+      id: validate-browsers
+      shell: bash
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ inputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+          for browser in "${browser_args[@]}"; do
+            if [[ ! "$browser" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]]; then
+              echo "::error::Invalid Playwright browser name: $browser"
+              exit 1
+            fi
+          done
+        fi
+        echo "browsers=${browser_args[*]}" >> "$GITHUB_OUTPUT"
 
     - name: Cache Playwright Browsers
       uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
       id: cache
       with:
         path: ${{ steps.cache-path.outputs.path }}
-        # Dynamically inject the requested browsers into the cache key ('all' is used as a fallback string if empty)
-        key: ${{ runner.os }}-playwright-${{ inputs.browsers || 'all' }}-${{ steps.detect-version.outputs.version }}
+        key: ${{ runner.os }}-playwright-${{ steps.validate-browsers.outputs.browsers || 'all' }}-${{ steps.detect-version.outputs.version }}
 
     - name: Install Playwright Browsers & OS Deps (Cache Miss)
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      # If inputs.browsers is empty, this safely resolves to 'pnpm exec playwright install --with-deps'
-      run: pnpm exec playwright install ${{ inputs.browsers }} --with-deps
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ steps.validate-browsers.outputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+        fi
+        pnpm exec playwright install "${browser_args[@]}" --with-deps
 
     - name: Install Playwright OS Dependencies (Cache Hit)
       if: steps.cache.outputs.cache-hit == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: pnpm exec playwright install-deps ${{ inputs.browsers }}
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ steps.validate-browsers.outputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+        fi
+        pnpm exec playwright install-deps "${browser_args[@]}"

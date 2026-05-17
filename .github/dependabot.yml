@@ -11,6 +11,8 @@ updates:
       - dependencies
     commit-message:
       prefix: "chore(deps):"
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
@@ -28,6 +30,7 @@ updates:
       prefix: "chore(deps):"
     versioning-strategy: increase
     cooldown:
+      default-days: 7
       semver-major-days: 5
     groups:
       workspace-minor-patch:
@@ -56,6 +59,7 @@ updates:
       prefix: "chore(deps):"
     versioning-strategy: increase
     cooldown:
+      default-days: 7
       semver-major-days: 5
     groups:
       demo-minor-patch:
