@@ -258,7 +258,7 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("should reject registration with an empty jwks.keys object", async () => {
+	it("should reject registration with an empty jwks.keys array", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",

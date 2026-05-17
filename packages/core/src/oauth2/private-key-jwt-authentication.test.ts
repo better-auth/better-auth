@@ -317,9 +317,13 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(body.get("client_secret")).toBeNull();
 	});
 
-	it("percent-encodes clientId and clientSecret for client_secret_basic per RFC 6749 §2.3.1", async () => {
-		const specialClientId = "id:with/special@chars";
-		const specialClientSecret = "secret with spaces & symbols";
+	it("form-url-encodes clientId and clientSecret for client_secret_basic per RFC 6749 §2.3.1", async () => {
+		// Use characters whose form-urlencoded encoding differs from
+		// encodeURIComponent: space becomes `+` and `!'()*` are escaped. The
+		// expected value is computed through URLSearchParams independently of
+		// the implementation so the test catches the wrong encoding choice.
+		const specialClientId = "alice!*'";
+		const specialClientSecret = "p@ss word (1)";
 
 		const { headers } = await authorizationCodeRequest({
 			code: "auth-code",
@@ -332,8 +336,10 @@ describe("private_key_jwt OAuth2 helpers", () => {
 			tokenEndpointAuth: { method: "client_secret_basic" },
 		});
 
+		const formEncode = (value: string) =>
+			new URLSearchParams({ v: value }).toString().slice("v=".length);
 		const expected = `Basic ${base64.encode(
-			`${encodeURIComponent(specialClientId)}:${encodeURIComponent(specialClientSecret)}`,
+			`${formEncode(specialClientId)}:${formEncode(specialClientSecret)}`,
 		)}`;
 		expect(headers.authorization).toBe(expected);
 	});

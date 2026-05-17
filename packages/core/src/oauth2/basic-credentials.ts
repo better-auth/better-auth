@@ -3,18 +3,39 @@ import { base64 } from "@better-auth/utils/base64";
 const BASIC_PREFIX = "Basic ";
 
 /**
+ * Encodes a value using `application/x-www-form-urlencoded` per the URL
+ * Living Standard. Differs from `encodeURIComponent` in two ways: it escapes
+ * `!`, `'`, `(`, `)`, and `*`, and it represents space as `+` rather than
+ * `%20`.
+ */
+function formUrlEncode(value: string): string {
+	return new URLSearchParams({ v: value }).toString().slice("v=".length);
+}
+
+/**
+ * Inverse of `formUrlEncode`: decodes a single `application/x-www-form-urlencoded`
+ * value, handling both `+` and `%20` as space.
+ */
+function formUrlDecode(value: string): string {
+	const decoded = new URLSearchParams(`v=${value}`).get("v");
+	if (decoded === null) {
+		throw new Error("form-url-encoded value could not be decoded");
+	}
+	return decoded;
+}
+
+/**
  * Encodes an OAuth client id and secret as an HTTP Basic credential string.
  *
- * Follows RFC 6749 §2.3.1: both values are percent-encoded
- * (`application/x-www-form-urlencoded`) prior to base64 encoding. The returned
- * string is the value of the `Authorization` header, including the `Basic `
- * prefix.
+ * Follows RFC 6749 §2.3.1: both values are `application/x-www-form-urlencoded`
+ * prior to base64 encoding. The returned string is the full value of the
+ * `Authorization` header, including the `Basic ` prefix.
  */
 export function encodeBasicCredentials(
 	clientId: string,
 	clientSecret: string,
 ): string {
-	const payload = `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`;
+	const payload = `${formUrlEncode(clientId)}:${formUrlEncode(clientSecret)}`;
 	return `${BASIC_PREFIX}${base64.encode(payload)}`;
 }
 
@@ -23,12 +44,13 @@ export function encodeBasicCredentials(
  * and secret.
  *
  * The base64 payload is split on the first `:` only, so secrets containing
- * colons round-trip correctly. Both values are percent-decoded per RFC 6749
- * §2.3.1.
+ * colons round-trip correctly. Each half is form-url-decoded per RFC 6749
+ * §2.3.1, accepting both `+` and `%20` as space. Per the URL Living Standard,
+ * invalid percent-escapes pass through as-is; downstream client lookup will
+ * fail with `invalid_client` for malformed credentials.
  *
  * Throws when the header is not a Basic credential, when the base64 payload
- * contains no `:`, when either half is empty, or when either half is not
- * valid percent-encoded text.
+ * contains no `:`, or when either half is empty.
  */
 export function decodeBasicCredentials(authorization: string): {
 	clientId: string;
@@ -52,15 +74,8 @@ export function decodeBasicCredentials(authorization: string): {
 			"Basic credential client id and secret must both be non-empty",
 		);
 	}
-	let clientId: string;
-	let clientSecret: string;
-	try {
-		clientId = decodeURIComponent(rawClientId);
-		clientSecret = decodeURIComponent(rawClientSecret);
-	} catch {
-		throw new Error(
-			"Basic credential contains invalid percent-encoded characters",
-		);
-	}
-	return { clientId, clientSecret };
+	return {
+		clientId: formUrlDecode(rawClientId),
+		clientSecret: formUrlDecode(rawClientSecret),
+	};
 }
