@@ -14,6 +14,18 @@ import {
 } from "jose";
 import { logger } from "../env";
 
+const joseUnauthorizedErrors = new Set([
+	"JWTClaimValidationFailed",
+	"JWTExpired",
+	"JWTInvalid",
+	"JWKSNoMatchingKey",
+	"JWSSignatureVerificationFailed",
+]);
+
+function isJoseUnauthorizedError(error: Error) {
+	return joseUnauthorizedErrors.has(error.name);
+}
+
 /** Last fetched jwks used locally in getJwks @internal */
 let jwks: JSONWebKeySet | undefined;
 
@@ -141,7 +153,7 @@ export async function verifyAccessToken(
 					throw new APIError("UNAUTHORIZED", {
 						message: "token expired",
 					});
-				} else if (error.name === "JWTInvalid") {
+				} else if (isJoseUnauthorizedError(error)) {
 					throw new APIError("UNAUTHORIZED", {
 						message: "token invalid",
 					});
