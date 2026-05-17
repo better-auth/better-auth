@@ -19,6 +19,20 @@ export const PRIVATE_KEY_JWT_SIGNING_ALGORITHMS = [
 export type PrivateKeyJwtSigningAlgorithm =
 	(typeof PRIVATE_KEY_JWT_SIGNING_ALGORITHMS)[number];
 
+function assertSupportedPrivateKeyJwtAlgorithm(
+	candidate: string,
+): asserts candidate is PrivateKeyJwtSigningAlgorithm {
+	if (
+		!(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as readonly string[]).includes(
+			candidate,
+		)
+	) {
+		throw new Error(
+			`Unsupported private_key_jwt signing algorithm: ${candidate}. Use one of ${PRIVATE_KEY_JWT_SIGNING_ALGORITHMS.join(", ")}.`,
+		);
+	}
+}
+
 export const CLIENT_ASSERTION_TYPE =
 	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -83,10 +97,16 @@ export async function signPrivateKeyJwtClientAssertion({
 	// JsonWebKey includes alg but not kid; access kid via index.
 	const jwk = privateKeyJwk as Record<string, unknown> | undefined;
 	const resolvedKid = kid ?? (jwk?.kid as string | undefined);
-	const resolvedAlg =
-		algorithm ??
-		(privateKeyJwk?.alg as PrivateKeyJwtSigningAlgorithm | undefined) ??
-		"RS256";
+	const jwkAlg = privateKeyJwk?.alg;
+	let resolvedAlg: PrivateKeyJwtSigningAlgorithm;
+	if (algorithm) {
+		resolvedAlg = algorithm;
+	} else if (typeof jwkAlg === "string") {
+		assertSupportedPrivateKeyJwtAlgorithm(jwkAlg);
+		resolvedAlg = jwkAlg;
+	} else {
+		resolvedAlg = "RS256";
+	}
 
 	let key: Awaited<ReturnType<typeof importJWK>>;
 	if (privateKeyJwk) {

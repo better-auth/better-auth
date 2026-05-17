@@ -317,6 +317,27 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(body.get("client_secret")).toBeNull();
 	});
 
+	it("percent-encodes clientId and clientSecret for client_secret_basic per RFC 6749 §2.3.1", async () => {
+		const specialClientId = "id:with/special@chars";
+		const specialClientSecret = "secret with spaces & symbols";
+
+		const { headers } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: {
+				clientId: specialClientId,
+				clientSecret: specialClientSecret,
+			},
+			tokenEndpoint,
+			tokenEndpointAuth: { method: "client_secret_basic" },
+		});
+
+		const expected = `Basic ${base64.encode(
+			`${encodeURIComponent(specialClientId)}:${encodeURIComponent(specialClientSecret)}`,
+		)}`;
+		expect(headers.authorization).toBe(expected);
+	});
+
 	it.each([
 		"client_secret_basic",
 		"client_secret_post",

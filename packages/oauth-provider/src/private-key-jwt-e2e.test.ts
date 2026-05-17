@@ -21,7 +21,15 @@ import type { OAuthClient } from "./types/oauth";
  * - Flow: RP → authorize → login → callback → token exchange (with JWT assertion) → session
  */
 describe("private_key_jwt e2e", async () => {
-	const port = 3002;
+	// Discover a free OS-assigned port so concurrent test files don't collide.
+	const tempServer = await listen(
+		(_req, res) => {
+			res.end();
+		},
+		{ port: 0 },
+	);
+	const port = tempServer.address?.port ?? 3002;
+	await tempServer.close();
 	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
