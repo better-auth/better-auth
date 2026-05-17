@@ -15,6 +15,12 @@ describe("escapeStripeSearchValue", () => {
 	it("should escape multiple quotes", () => {
 		expect(escapeStripeSearchValue('"a" and "b"')).toBe('\\"a\\" and \\"b\\"');
 	});
+
+	it("should escape backslashes before escaping quotes", () => {
+		expect(escapeStripeSearchValue('customer\\segment"admin')).toBe(
+			'customer\\\\segment\\"admin',
+		);
+	});
 });
 
 describe("resolvePlanItem", () => {
