@@ -6,11 +6,11 @@ import {
 
 describe("encode/decodeBasicCredentials", () => {
 	it("round-trips simple ASCII credentials", () => {
-		const header = encodeBasicCredentials("alice", "s3cret");
+		const header = encodeBasicCredentials("alice", "secret");
 		expect(header.startsWith("Basic ")).toBe(true);
 		expect(decodeBasicCredentials(header)).toEqual({
 			clientId: "alice",
-			clientSecret: "s3cret",
+			clientSecret: "secret",
 		});
 	});
 
@@ -70,7 +70,7 @@ describe("encode/decodeBasicCredentials", () => {
 	});
 
 	it("rejects a Basic payload without a separator", () => {
-		const payload = Buffer.from("idonly").toString("base64");
+		const payload = Buffer.from("missing-colon").toString("base64");
 		expect(() => decodeBasicCredentials(`Basic ${payload}`)).toThrow(
 			/separator/,
 		);
