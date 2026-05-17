@@ -249,6 +249,37 @@ describe("oauth register", async () => {
 		expect(response?.nested).toEqual({ key: "value" });
 	});
 
+	it("should reject registration with an empty jwks array", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: [] as Record<string, unknown>[],
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("should reject registration with an empty jwks.keys array", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: { keys: [] } as { keys: Record<string, unknown>[] },
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("should reject admin registration with an empty jwks array", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "private_key_jwt",
+					jwks: [] as Record<string, unknown>[],
+				},
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should register client with metadata and strip extra fields not in schema", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,

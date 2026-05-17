@@ -1465,7 +1465,7 @@ async function handleOIDCCallback(
 			});
 		}
 
-		if (!resolved) {
+		if (!resolved || (!resolved.privateKeyJwk && !resolved.privateKeyPem)) {
 			throw ctx.redirect(
 				`${
 					errorURL || callbackURL

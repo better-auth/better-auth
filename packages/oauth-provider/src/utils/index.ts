@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
@@ -416,27 +417,23 @@ export async function getStoredToken(
  *
  * @internal
  */
+// RFC 7235 §2.1: the auth scheme is case-insensitive and is followed by
+// one or more SP. Match liberally so requests using `basic` or extra
+// spaces aren't rejected before reaching the spec-correct decoder.
+const BASIC_SCHEME_PREFIX = /^Basic +/i;
+
 function basicToClientCredentials(authorization: string) {
-	if (authorization.startsWith("Basic ")) {
-		const encoded = authorization.replace("Basic ", "");
-		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		const [id, secret] = decoded.split(":", 2);
-		if (!id || !secret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		return {
-			client_id: id,
-			client_secret: secret,
-		};
+	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
+		return undefined;
+	}
+	try {
+		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
+		return { client_id: clientId, client_secret: clientSecret };
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid authorization header format",
+			error: "invalid_client",
+		});
 	}
 }
 

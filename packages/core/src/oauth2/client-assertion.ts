@@ -19,6 +19,57 @@ export const PRIVATE_KEY_JWT_SIGNING_ALGORITHMS = [
 export type PrivateKeyJwtSigningAlgorithm =
 	(typeof PRIVATE_KEY_JWT_SIGNING_ALGORITHMS)[number];
 
+function assertSupportedPrivateKeyJwtAlgorithm(
+	candidate: string,
+): asserts candidate is PrivateKeyJwtSigningAlgorithm {
+	if (
+		!(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as readonly string[]).includes(
+			candidate,
+		)
+	) {
+		throw new Error(
+			`Unsupported private_key_jwt signing algorithm: ${candidate}. Use one of ${PRIVATE_KEY_JWT_SIGNING_ALGORITHMS.join(", ")}.`,
+		);
+	}
+}
+
+/**
+ * Validates `private_key_jwt` options eagerly and returns the algorithm to
+ * use for signing.
+ *
+ * Asserts that key material is configured, that any explicit `algorithm` is
+ * supported, that any JWK-embedded `alg` is supported, and that the two
+ * agree when both are set.
+ */
+function resolveValidPrivateKeyJwtOptions(options: {
+	privateKeyJwk?: JsonWebKey;
+	privateKeyPem?: string;
+	algorithm?: PrivateKeyJwtSigningAlgorithm;
+}): PrivateKeyJwtSigningAlgorithm {
+	if (!options.privateKeyJwk && !options.privateKeyPem) {
+		throw new Error(
+			"private_key_jwt requires either privateKeyJwk or privateKeyPem",
+		);
+	}
+	if (options.algorithm) {
+		assertSupportedPrivateKeyJwtAlgorithm(options.algorithm);
+	}
+	const jwkAlg = options.privateKeyJwk?.alg;
+	if (typeof jwkAlg === "string") {
+		assertSupportedPrivateKeyJwtAlgorithm(jwkAlg);
+	}
+	if (
+		options.algorithm &&
+		typeof jwkAlg === "string" &&
+		options.algorithm !== jwkAlg
+	) {
+		throw new Error(
+			`JWK alg "${jwkAlg}" does not match configured algorithm "${options.algorithm}". Remove the JWK alg field, or pass an algorithm that matches the JWK.`,
+		);
+	}
+	return options.algorithm ?? (typeof jwkAlg === "string" ? jwkAlg : "RS256");
+}
+
 export const CLIENT_ASSERTION_TYPE =
 	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -79,25 +130,19 @@ export async function signPrivateKeyJwtClientAssertion({
 	algorithm?: PrivateKeyJwtSigningAlgorithm;
 	expiresIn?: number;
 }): Promise<string> {
-	// Fall back to JWK-embedded kid/alg when not explicitly provided (RFC 7517).
-	// JsonWebKey includes alg but not kid; access kid via index.
+	const resolvedAlg = resolveValidPrivateKeyJwtOptions({
+		privateKeyJwk,
+		privateKeyPem,
+		algorithm,
+	});
+	// Fall back to the JWK-embedded kid when not explicitly provided (RFC 7517).
+	// JsonWebKey types include alg but not kid; access kid via index.
 	const jwk = privateKeyJwk as Record<string, unknown> | undefined;
 	const resolvedKid = kid ?? (jwk?.kid as string | undefined);
-	const resolvedAlg =
-		algorithm ??
-		(privateKeyJwk?.alg as PrivateKeyJwtSigningAlgorithm | undefined) ??
-		"RS256";
 
-	let key: Awaited<ReturnType<typeof importJWK>>;
-	if (privateKeyJwk) {
-		key = await importJWK(privateKeyJwk, resolvedAlg);
-	} else if (privateKeyPem) {
-		key = await importPKCS8(privateKeyPem, resolvedAlg);
-	} else {
-		throw new Error(
-			"private_key_jwt requires either privateKeyJwk or privateKeyPem",
-		);
-	}
+	const key: Awaited<ReturnType<typeof importJWK>> = privateKeyJwk
+		? await importJWK(privateKeyJwk, resolvedAlg)
+		: await importPKCS8(privateKeyPem as string, resolvedAlg);
 
 	const now = Math.floor(Date.now() / 1000);
 	const jti = crypto.randomUUID();
@@ -121,11 +166,19 @@ export async function signPrivateKeyJwtClientAssertion({
 /**
  * Creates a client assertion getter for `private_key_jwt` authentication.
  *
- * The returned function signs a fresh RFC 7523 JWT assertion for every token endpoint request.
+ * Validates options eagerly (key material, supported algorithm, JWK alg
+ * agreement) so misconfiguration surfaces at construction rather than on the
+ * first token request. The returned function signs a fresh RFC 7523 JWT
+ * assertion for every token endpoint request.
  */
 export function createPrivateKeyJwtClientAssertionGetter(
 	options: PrivateKeyJwtClientAssertionGetterOptions,
 ): ClientAssertionGetter {
+	resolveValidPrivateKeyJwtOptions({
+		privateKeyJwk: options.privateKeyJwk,
+		privateKeyPem: options.privateKeyPem,
+		algorithm: options.algorithm,
+	});
 	return ({ clientId, tokenEndpoint }) =>
 		signPrivateKeyJwtClientAssertion({
 			clientId,
