@@ -98,15 +98,16 @@ export async function signPrivateKeyJwtClientAssertion({
 	const jwk = privateKeyJwk as Record<string, unknown> | undefined;
 	const resolvedKid = kid ?? (jwk?.kid as string | undefined);
 	const jwkAlg = privateKeyJwk?.alg;
-	let resolvedAlg: PrivateKeyJwtSigningAlgorithm;
-	if (algorithm) {
-		resolvedAlg = algorithm;
-	} else if (typeof jwkAlg === "string") {
+	if (typeof jwkAlg === "string") {
 		assertSupportedPrivateKeyJwtAlgorithm(jwkAlg);
-		resolvedAlg = jwkAlg;
-	} else {
-		resolvedAlg = "RS256";
 	}
+	if (algorithm && typeof jwkAlg === "string" && algorithm !== jwkAlg) {
+		throw new Error(
+			`JWK alg "${jwkAlg}" does not match configured algorithm "${algorithm}". Remove the JWK alg field, or pass an algorithm that matches the JWK.`,
+		);
+	}
+	const resolvedAlg: PrivateKeyJwtSigningAlgorithm =
+		algorithm ?? (typeof jwkAlg === "string" ? jwkAlg : "RS256");
 
 	let key: Awaited<ReturnType<typeof importJWK>>;
 	if (privateKeyJwk) {

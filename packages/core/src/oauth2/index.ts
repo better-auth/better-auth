@@ -1,3 +1,7 @@
+export {
+	decodeBasicCredentials,
+	encodeBasicCredentials,
+} from "./basic-credentials";
 export type {
 	ClientAssertionContext,
 	ClientAssertionGetter,

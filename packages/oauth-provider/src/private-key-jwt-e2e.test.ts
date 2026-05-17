@@ -3,10 +3,8 @@ import { toNodeHandler } from "better-auth/node";
 import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
-import { getTestInstance } from "better-auth/test";
+import { getHttpTestInstance, getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair } from "jose";
-import type { Listener } from "listhen";
-import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -21,19 +19,8 @@ import type { OAuthClient } from "./types/oauth";
  * - Flow: RP → authorize → login → callback → token exchange (with JWT assertion) → session
  */
 describe("private_key_jwt e2e", async () => {
-	// Discover a free OS-assigned port so concurrent test files don't collide.
-	const tempServer = await listen(
-		(_req, res) => {
-			res.end();
-		},
-		{ port: 0 },
-	);
-	const port = tempServer.address?.port ?? 3002;
-	await tempServer.close();
-	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
-	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	// Generate RSA key pair
 	const keyPair = await generateKeyPair("RS256", { extractable: true });
@@ -46,22 +33,40 @@ describe("private_key_jwt e2e", async () => {
 		customFetchImpl,
 		cookieSetter,
 		testUser,
-	} = await getTestInstance({
+		server,
 		baseURL: authServerBaseUrl,
-		trustedOrigins: ["https://trusted.example.com"],
-		plugins: [
-			jwt(),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				assertionMaxLifetime: 300,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
-			}),
-		],
-	});
+	} = await getHttpTestInstance(
+		{
+			trustedOrigins: ["https://trusted.example.com"],
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					assertionMaxLifetime: 300,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		},
+		{
+			handler: (auth) => {
+				const nodeHandler = toNodeHandler(auth.handler);
+				return async (req, res) => {
+					if (req.url === "/.well-known/openid-configuration") {
+						const config = await auth.api.getOpenIdConfig();
+						res.setHeader("Content-Type", "application/json");
+						res.end(JSON.stringify(config));
+						return;
+					}
+					await nodeHandler(req, res);
+				};
+			},
+		},
+	);
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	const authClient = createAuthClient({
 		plugins: [oauthProviderClient()],
@@ -69,25 +74,10 @@ describe("private_key_jwt e2e", async () => {
 		fetchOptions: { customFetchImpl },
 	});
 
-	let server: Listener;
 	let oauthClient: OAuthClient;
 	let oauthJwksUriClient: OAuthClient;
 
 	beforeAll(async () => {
-		// Start actual HTTP server for the authorization server
-		server = await listen(
-			async (req, res) => {
-				if (req.url === "/.well-known/openid-configuration") {
-					const config = await authorizationServer.api.getOpenIdConfig();
-					res.setHeader("Content-Type", "application/json");
-					res.end(JSON.stringify(config));
-				} else {
-					await toNodeHandler(authorizationServer.handler)(req, res);
-				}
-			},
-			{ port },
-		);
-
 		// Register a private_key_jwt client on the authorization server
 		const { headers } = await signInWithTestUser();
 		oauthClient = (await authorizationServer.api.adminCreateOAuthClient({

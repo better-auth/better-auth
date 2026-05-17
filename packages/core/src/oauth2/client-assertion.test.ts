@@ -179,6 +179,40 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 		).rejects.toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
 	});
 
+	it("rejects a JWK whose embedded alg conflicts with the explicit algorithm", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "RS256" };
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+				algorithm: "PS256",
+			}),
+		).rejects.toThrow(
+			/JWK alg "RS256" does not match configured algorithm "PS256"/,
+		);
+	});
+
+	it("rejects a disallowed embedded alg even when an explicit algorithm is set", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "HS256" };
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+				algorithm: "RS256",
+			}),
+		).rejects.toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
+	});
+
 	it("throws when neither JWK nor PEM is provided", async () => {
 		await expect(
 			signPrivateKeyJwtClientAssertion({ clientId, tokenEndpoint }),

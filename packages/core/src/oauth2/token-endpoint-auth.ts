@@ -1,4 +1,4 @@
-import { base64 } from "@better-auth/utils/base64";
+import { encodeBasicCredentials } from "./basic-credentials";
 import type {
 	ClientAssertionGetter,
 	ClientAssertionGrantType,
@@ -132,11 +132,10 @@ function setClientSecretBasicAuth({
 	}
 	assertClientSecretConfigured("client_secret_basic", options);
 	assertClientIdConfigured("client_secret_basic", clientId);
-	// RFC 6749 §2.3.1: clientId and clientSecret are
-	// application/x-www-form-urlencoded prior to base64 encoding.
-	headers.authorization = `Basic ${base64.encode(
-		`${encodeURIComponent(clientId)}:${encodeURIComponent(options.clientSecret)}`,
-	)}`;
+	headers.authorization = encodeBasicCredentials(
+		clientId,
+		options.clientSecret,
+	);
 }
 
 function assertCompleteManualClientAssertion(body: URLSearchParams) {
