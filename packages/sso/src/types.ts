@@ -41,12 +41,6 @@ export interface OIDCConfig {
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
-	/**
-	 * IdP signing certificate(s). Either a single PEM string or an array of PEMs
-	 * for rolling rotation. Omit when `idpMetadata.metadata` is supplied: the
-	 * certificates are then read from the metadata XML.
-	 */
-	cert?: string | string[];
 	callbackUrl: string;
 	audience?: string | undefined;
 	idpMetadata?:
@@ -55,6 +49,11 @@ export interface SAMLConfig {
 				entityID?: string;
 				entityURL?: string;
 				redirectURL?: string;
+				/**
+				 * IdP signing certificate(s). Pass a single PEM string or an array for
+				 * rolling rotation. Omit when `metadata` XML is supplied: the certs are
+				 * then read from the document. Required when `metadata` is not set.
+				 */
 				cert?: string | string[];
 				privateKey?: string;
 				privateKeyPass?: string;

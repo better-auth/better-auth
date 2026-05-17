@@ -903,8 +903,10 @@ const auth = betterAuth({
                     samlConfig: {
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
-                        cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                         callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs",
+                        idpMetadata: {
+                            cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                        },
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -964,26 +966,26 @@ You also need to provide Identity Provider (IdP) configuration:
 
 ### Signing Certificates and Rotation
 
-When your IdP rotates its signing certificate, list both the old and the new PEM in an array. Better Auth accepts SAML responses signed by either, so users keep signing in while the rotation completes.
+When your IdP rotates its signing certificate, list both the old and the new PEM in `idpMetadata.cert` as an array. Better Auth accepts SAML responses signed by either, so users keep signing in while the rotation completes.
 
 ```ts
 samlConfig: {
     entryPoint: "https://idp.example.com/sso",
-    cert: [
-        "-----BEGIN CERTIFICATE-----\n<current>\n-----END CERTIFICATE-----",
-        "-----BEGIN CERTIFICATE-----\n<next>\n-----END CERTIFICATE-----",
-    ],
     callbackUrl: "https://yourapp.com/api/auth/sso/saml2/callback/saml-provider",
     idpMetadata: {
         entityID: "https://idp.example.com",
         singleSignOnService: [
             { Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST", Location: "https://idp.example.com/sso" },
         ],
+        cert: [
+            "-----BEGIN CERTIFICATE-----\n<current>\n-----END CERTIFICATE-----",
+            "-----BEGIN CERTIFICATE-----\n<next>\n-----END CERTIFICATE-----",
+        ],
     },
 }
 ```
 
-Certificates can sit at the top level (`samlConfig.cert`) or inside `samlConfig.idpMetadata.cert`. Either form takes a single PEM or an array. If you set both, Better Auth uses the IdP metadata value and ignores the top-level one.
+`idpMetadata.cert` takes a single PEM string or an array. A single string is just the no-rotation case.
 
 If your IdP publishes a metadata XML document instead, pass it as `idpMetadata.metadata` and leave `cert` unset. The certificates come from the document, and rotation happens when the IdP republishes it. Setting both metadata XML and an explicit cert fails at registration, since the explicit value would never be used.
 
@@ -1454,7 +1456,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 <DatabaseTable
   fields={[
 {
-  name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
+name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
 },
 { name: "issuer", type: "string", description: "The issuer identifier" },
 { name: "domain", type: "string", description: "The domain of the provider" },
@@ -1530,21 +1532,21 @@ organizationProvisioning: {
 description: "Options for provisioning users to an organization.",
 type: "object",
 properties: {
-  disabled: {
-      description: "Disable organization provisioning.",
-      type: "boolean",
-      default: false,
-  },
-  defaultRole: {
-      description: "The default role for new users.",
-      type: "string",
-      enum: ["member", "admin"],
-      default: "member",
-  },
-  getRole: {
-      description: "A custom function to determine the role for new users.",
-      type: "function",
-  },
+disabled: {
+    description: "Disable organization provisioning.",
+    type: "boolean",
+    default: false,
+},
+defaultRole: {
+    description: "The default role for new users.",
+    type: "string",
+    enum: ["member", "admin"],
+    default: "member",
+},
+getRole: {
+    description: "A custom function to determine the role for new users.",
+    type: "function",
+},
 },
 },
 defaultOverrideUserInfo: {
@@ -1571,99 +1573,99 @@ domainVerification: {
 description: "Configure the domain verification feature",
 type: "object",
 properties: {
-  enabled: {
-      description: "Enables or disables the domain verification feature",
-      type: "boolean",
-      required: false
-  },
-  tokenPrefix: {
-      description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
-      type: "string",
-      required: false,
-      default: "better-auth-token"
-  },
+enabled: {
+    description: "Enables or disables the domain verification feature",
+    type: "boolean",
+    required: false
+},
+tokenPrefix: {
+    description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
+    type: "string",
+    required: false,
+    default: "better-auth-token"
+},
 },
 },
 defaultSSO: {
 description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
 type: "array",
 items: {
-  type: "object",
-  properties: {
-      domain: {
-          description: "The domain to match for this default provider.",
-          type: "string",
-          required: true,
-      },
-      providerId: {
-          description: "The provider ID to use for the default provider.",
-          type: "string",
-          required: true,
-      },
-      samlConfig: {
-          description: "SAML configuration for the default provider.",
-          type: "SAMLConfig",
-          required: false,
-      },
-      oidcConfig: {
-          description: "OIDC configuration for the default provider.",
-          type: "OIDCConfig",
-          required: false,
-      },
-  }
+type: "object",
+properties: {
+    domain: {
+        description: "The domain to match for this default provider.",
+        type: "string",
+        required: true,
+    },
+    providerId: {
+        description: "The provider ID to use for the default provider.",
+        type: "string",
+        required: true,
+    },
+    samlConfig: {
+        description: "SAML configuration for the default provider.",
+        type: "SAMLConfig",
+        required: false,
+    },
+    oidcConfig: {
+        description: "OIDC configuration for the default provider.",
+        type: "OIDCConfig",
+        required: false,
+    },
+}
 },
 },
 saml: {
 description: "SAML security options for AuthnRequest/InResponseTo validation, replay protection, and timestamp handling.",
 type: "object",
 properties: {
-  enableInResponseToValidation: {
-      description: "Enable InResponseTo validation for SP-initiated SAML flows.",
-      type: "boolean",
-      default: true,
-  },
-  allowIdpInitiated: {
-      description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
-      type: "boolean",
-      default: true,
-  },
-  requestTTL: {
-      description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
-      type: "number",
-      default: 300000,
-  },
-  clockSkew: {
-      description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
-      type: "number",
-      default: 300000,
-  },
-  requireTimestamps: {
-      description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
-      type: "boolean",
-      default: false,
-  },
-  algorithms: {
-      description: "Algorithm validation options.",
-      type: "object",
-      properties: {
-          onDeprecated: {
-              description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
-              type: "string",
-              enum: ["reject", "warn", "allow"],
-              default: "warn",
-          },
-      },
-  },
-  maxResponseSize: {
-      description: "Maximum allowed size for SAML responses in bytes.",
-      type: "number",
-      default: 262144,
-  },
-  maxMetadataSize: {
-      description: "Maximum allowed size for IdP metadata XML in bytes.",
-      type: "number",
-      default: 102400,
-  },
+enableInResponseToValidation: {
+    description: "Enable InResponseTo validation for SP-initiated SAML flows.",
+    type: "boolean",
+    default: true,
+},
+allowIdpInitiated: {
+    description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
+    type: "boolean",
+    default: true,
+},
+requestTTL: {
+    description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
+    type: "number",
+    default: 300000,
+},
+clockSkew: {
+    description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
+    type: "number",
+    default: 300000,
+},
+requireTimestamps: {
+    description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
+    type: "boolean",
+    default: false,
+},
+algorithms: {
+    description: "Algorithm validation options.",
+    type: "object",
+    properties: {
+        onDeprecated: {
+            description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
+            type: "string",
+            enum: ["reject", "warn", "allow"],
+            default: "warn",
+        },
+    },
+},
+maxResponseSize: {
+    description: "Maximum allowed size for SAML responses in bytes.",
+    type: "number",
+    default: 262144,
+},
+maxMetadataSize: {
+    description: "Maximum allowed size for IdP metadata XML in bytes.",
+    type: "number",
+    default: 102400,
+},
 },
 },
 modelName: {
@@ -1673,39 +1675,39 @@ default: "ssoProvider"
 },
 fields: {
 issuer: {
-  description: "Custom name for the issuer column",
-  type: "string",
-  default: "issuer",
+description: "Custom name for the issuer column",
+type: "string",
+default: "issuer",
 },
 oidcConfig: {
-  description: "Custom name for the oidcConfig column",
-  type: "string",
-  default: "oidcConfig",
+description: "Custom name for the oidcConfig column",
+type: "string",
+default: "oidcConfig",
 },
 samlConfig: {
-  description: "Custom name for the samlConfig column",
-  type: "string",
-  default: "samlConfig",
+description: "Custom name for the samlConfig column",
+type: "string",
+default: "samlConfig",
 },
 userId: {
-  description: "Custom name for the userId column",
-  type: "string",
-  default: "userId",
+description: "Custom name for the userId column",
+type: "string",
+default: "userId",
 },
 providerId: {
-  description: "Custom name for the providerId column",
-  type: "string",
-  default: "providerId",
+description: "Custom name for the providerId column",
+type: "string",
+default: "providerId",
 },
 organizationId: {
-  description: "Custom name for the organizationId column",
-  type: "string",
-  default: "organizationId",
+description: "Custom name for the organizationId column",
+type: "string",
+default: "organizationId",
 },
 domain: {
-  description: "Custom name for the domain column",
-  type: "string",
-  default: "domain",
+description: "Custom name for the domain column",
+type: "string",
+default: "domain",
 }
 }
 }}

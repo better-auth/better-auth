@@ -21,7 +21,6 @@ import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod";
 import { getVerificationIdentifier } from "./domain-verification";
@@ -43,7 +42,9 @@ import {
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
 import {
-	assertCertSources,
+	createIdP,
+	createSP,
+	validateCertSources,
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
 	validateSingleAssertion,
@@ -58,13 +59,13 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import {
-	createIdP,
-	createSAMLPostForm,
-	createSP,
-	findSAMLProvider,
-} from "./helpers";
+	decodeBase64ToUtf8,
+	domainMatches,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
+import { createSAMLPostForm, findSAMLProvider } from "./helpers";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -396,13 +397,6 @@ const ssoProviderBodySchema = z.object({
 			entryPoint: z.string({}).meta({
 				description: "The entry point of the provider",
 			}),
-			cert: z
-				.union([z.string(), z.array(z.string()).nonempty()])
-				.optional()
-				.meta({
-					description:
-						"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Omit when `idpMetadata.metadata` XML is supplied: the certificates are then read from the metadata document.",
-				}),
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
@@ -865,7 +859,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			};
 
 			if (body.samlConfig) {
-				assertCertSources(body.samlConfig);
+				validateCertSources(body.samlConfig);
 				validateConfigAlgorithms(
 					{
 						signatureAlgorithm: body.samlConfig.signatureAlgorithm,
@@ -889,7 +883,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						? JSON.stringify({
 								issuer: body.issuer,
 								entryPoint: body.samlConfig.entryPoint,
-								cert: body.samlConfig.cert,
 								callbackUrl: body.samlConfig.callbackUrl,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
@@ -1340,71 +1333,12 @@ export const signInSSO = (options?: SSOOptions) => {
 					);
 				}
 
-				let metadata = parsedSamlConfig.spMetadata.metadata;
-
-				if (!metadata) {
-					metadata =
-						saml
-							.SPMetadata({
-								entityID:
-									parsedSamlConfig.spMetadata?.entityID ||
-									parsedSamlConfig.issuer,
-								assertionConsumerService: [
-									{
-										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-										Location:
-											parsedSamlConfig.callbackUrl ||
-											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
-									},
-								],
-								wantMessageSigned:
-									parsedSamlConfig.wantAssertionsSigned || false,
-								authnRequestsSigned:
-									parsedSamlConfig.authnRequestsSigned || false,
-								nameIDFormat: parsedSamlConfig.identifierFormat
-									? [parsedSamlConfig.identifierFormat]
-									: undefined,
-							})
-							.getMetadata() || "";
-				}
-
-				const sp = saml.ServiceProvider({
-					metadata: metadata,
-					allowCreate: true,
-					privateKey:
-						parsedSamlConfig.spMetadata?.privateKey ||
-						parsedSamlConfig.privateKey,
-					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-				});
-
-				const idpData = parsedSamlConfig.idpMetadata;
-				let idp: IdentityProvider;
-				if (!idpData?.metadata) {
-					idp = saml.IdentityProvider({
-						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: idpData?.singleSignOnService || [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location: parsedSamlConfig.entryPoint,
-							},
-						],
-						signingCert: idpData?.cert || parsedSamlConfig.cert,
-						wantAuthnRequestsSigned:
-							parsedSamlConfig.authnRequestsSigned || false,
-						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: idpData?.encPrivateKey,
-						encPrivateKeyPass: idpData?.encPrivateKeyPass,
-					});
-				} else {
-					idp = saml.IdentityProvider({
-						metadata: idpData.metadata,
-						privateKey: idpData.privateKey,
-						privateKeyPass: idpData.privateKeyPass,
-						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: idpData.encPrivateKey,
-						encPrivateKeyPass: idpData.encPrivateKeyPass,
-					});
-				}
+				const sp = createSP(
+					parsedSamlConfig,
+					ctx.context.baseURL,
+					provider.providerId,
+				);
+				const idp = createIdP(parsedSamlConfig);
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
@@ -2094,60 +2028,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					message: "Invalid SAML configuration",
 				});
 			}
-			const idpData = parsedSamlConfig.idpMetadata;
-			let idp: IdentityProvider | null = null;
-
-			// Construct IDP with fallback to manual configuration
-			if (!idpData?.metadata) {
-				idp = saml.IdentityProvider({
-					entityID: idpData?.entityID || parsedSamlConfig.issuer,
-					singleSignOnService: idpData?.singleSignOnService || [
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-							Location: parsedSamlConfig.entryPoint,
-						},
-					],
-					signingCert: idpData?.cert || parsedSamlConfig.cert,
-					wantAuthnRequestsSigned:
-						parsedSamlConfig.authnRequestsSigned || false,
-					isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-					encPrivateKey: idpData?.encPrivateKey,
-					encPrivateKeyPass: idpData?.encPrivateKeyPass,
-				});
-			} else {
-				idp = saml.IdentityProvider({
-					metadata: idpData.metadata,
-					privateKey: idpData.privateKey,
-					privateKeyPass: idpData.privateKeyPass,
-					isAssertionEncrypted: idpData.isAssertionEncrypted,
-					encPrivateKey: idpData.encPrivateKey,
-					encPrivateKeyPass: idpData.encPrivateKeyPass,
-				});
-			}
-
-			// Construct SP with fallback to manual configuration
-			const spData = parsedSamlConfig.spMetadata;
-			const sp = saml.ServiceProvider({
-				metadata: spData?.metadata,
-				entityID: spData?.entityID || parsedSamlConfig.issuer,
-				assertionConsumerService: spData?.metadata
-					? undefined
-					: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: parsedSamlConfig.callbackUrl,
-							},
-						],
-				privateKey: spData?.privateKey || parsedSamlConfig.privateKey,
-				privateKeyPass: spData?.privateKeyPass,
-				isAssertionEncrypted: spData?.isAssertionEncrypted || false,
-				encPrivateKey: spData?.encPrivateKey,
-				encPrivateKeyPass: spData?.encPrivateKeyPass,
-				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
-			});
+			const idp = createIdP(parsedSamlConfig);
+			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
 
 			validateSingleAssertion(SAMLResponse);
 
@@ -2166,9 +2048,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
-					),
+					decodedResponse: decodeBase64ToUtf8(SAMLResponse),
 				});
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid SAML response",
@@ -2610,45 +2490,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const parsedSamlConfig = provider.samlConfig;
-			// Configure SP and IdP
-			const sp = saml.ServiceProvider({
-				entityID:
-					parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-				assertionConsumerService: [
-					{
-						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-						Location:
-							parsedSamlConfig.callbackUrl ||
-							`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
-					},
-				],
-				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				metadata: parsedSamlConfig.spMetadata?.metadata,
-				privateKey:
-					parsedSamlConfig.spMetadata?.privateKey ||
-					parsedSamlConfig.privateKey,
-				privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
-			});
-
-			// Update where we construct the IdP
-			const idpData = parsedSamlConfig.idpMetadata;
-			const idp = !idpData?.metadata
-				? saml.IdentityProvider({
-						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: idpData?.singleSignOnService || [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location: parsedSamlConfig.entryPoint,
-							},
-						],
-						signingCert: idpData?.cert || parsedSamlConfig.cert,
-					})
-				: saml.IdentityProvider({
-						metadata: idpData.metadata,
-					});
+			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
+			const idp = createIdP(parsedSamlConfig);
 
 			try {
 				validateSingleAssertion(SAMLResponse);
@@ -2685,9 +2528,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
-					),
+					decodedResponse: decodeBase64ToUtf8(SAMLResponse),
 				});
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid SAML response",
@@ -2788,9 +2629,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
-				"utf-8",
-			);
+			const samlContentAcs = decodeBase64ToUtf8(SAMLResponse);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 
 			if (assertionIdAcs) {

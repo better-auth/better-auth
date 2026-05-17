@@ -6,7 +6,11 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { assertCertSources, validateConfigAlgorithms } from "../saml";
+import {
+	resolveSigningCerts,
+	validateCertSources,
+	validateConfigAlgorithms,
+} from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
@@ -24,6 +28,26 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+type ParsedCert = ReturnType<typeof parseCertificate>;
+type SanitizedCert = ParsedCert | { error: string };
+
+function parseCertOrError(cert: string): SanitizedCert {
+	try {
+		return parseCertificate(cert);
+	} catch {
+		return { error: "Failed to parse certificate" };
+	}
+}
+
+function sanitizeSigningCerts(
+	config: SAMLConfig,
+): SanitizedCert | SanitizedCert[] | undefined {
+	const certs = resolveSigningCerts(config);
+	if (certs === undefined) return undefined;
+	const parsed = certs.map(parseCertOrError);
+	return parsed.length === 1 ? parsed[0] : parsed;
+}
 
 async function isOrgAdmin(
 	ctx: {
@@ -140,19 +164,7 @@ function sanitizeProvider(
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
-					certificate: (() => {
-						const rawCerts = samlConfig.idpMetadata?.cert ?? samlConfig.cert;
-						if (rawCerts === undefined) return undefined;
-						const certs = Array.isArray(rawCerts) ? rawCerts : [rawCerts];
-						const parsed = certs.map((cert) => {
-							try {
-								return parseCertificate(cert);
-							} catch {
-								return { error: "Failed to parse certificate" };
-							}
-						});
-						return parsed.length === 1 ? parsed[0] : parsed;
-					})(),
+					certificate: sanitizeSigningCerts(samlConfig),
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
@@ -350,7 +362,6 @@ function mergeSAMLConfig(
 		...updates,
 		issuer,
 		entryPoint: updates.entryPoint ?? current.entryPoint,
-		cert: updates.cert ?? current.cert,
 		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
 		spMetadata: updates.spMetadata ?? current.spMetadata,
 		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
@@ -488,7 +499,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
-				assertCertSources(updatedSamlConfig);
+				validateCertSources(updatedSamlConfig);
 
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}

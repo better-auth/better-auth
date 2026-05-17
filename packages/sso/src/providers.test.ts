@@ -129,10 +129,10 @@ describe("SSO provider read endpoints", () => {
 					domain: "example.com",
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
-						cert: TEST_CERT,
 						callbackUrl: "http://localhost:3000/api/sso/callback",
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { cert: TEST_CERT },
 						spMetadata: {},
 					},
 					organizationId,
@@ -381,10 +381,10 @@ describe("SSO provider read endpoints", () => {
 				organizationId: "some-org-id",
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: TEST_CERT,
 					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
+					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -424,10 +424,10 @@ describe("SSO provider read endpoints", () => {
 				organizationId: org!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: TEST_CERT,
 					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
+					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -620,10 +620,10 @@ describe("SSO provider read endpoints", () => {
 				organizationId: "some-org-id",
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: TEST_CERT,
 					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
+					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -661,10 +661,10 @@ describe("SSO provider read endpoints", () => {
 				organizationId: org!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: TEST_CERT,
 					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
+					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -781,8 +781,8 @@ kBGIJYs=
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: "invalid-cert-data",
 					callbackUrl: "http://localhost:3000/api/sso/callback",
+					idpMetadata: { cert: "invalid-cert-data" },
 				}),
 			});
 
@@ -818,8 +818,8 @@ kBGIJYs=
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: [VALID_CERT_1, VALID_CERT_2],
 					callbackUrl: "http://localhost:3000/api/sso/callback",
+					idpMetadata: { cert: [VALID_CERT_1, VALID_CERT_2] },
 				}),
 			});
 
@@ -863,8 +863,8 @@ kBGIJYs=
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					cert: VALID_CERT_1,
 					callbackUrl: "http://localhost:3000/api/sso/callback",
+					idpMetadata: { cert: VALID_CERT_1 },
 				}),
 			});
 
@@ -1289,8 +1289,8 @@ kBGIJYs=
 					providerId: "my-oidc-provider",
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
-						cert: TEST_CERT,
 						callbackUrl: "http://localhost:3000/api/sso/callback",
+						idpMetadata: { cert: TEST_CERT },
 						spMetadata: {},
 					},
 				},

@@ -29,6 +29,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { SAML_ERROR_CODES } from "./saml/error-codes";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -1192,12 +1193,12 @@ describe("SAML SSO", async () => {
 				domain: "http://localhost:8081",
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-					cert: certs,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
 					idpMetadata: {
+						cert: certs,
 						entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
 						singleSignOnService: [
 							{
@@ -1275,11 +1276,11 @@ describe("SAML SSO", async () => {
 					domain: "http://localhost:8081",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1306,11 +1307,11 @@ describe("SAML SSO", async () => {
 				domain: "http://localhost:8081",
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
-					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
+					idpMetadata: { cert: certificate },
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1327,11 +1328,11 @@ describe("SAML SSO", async () => {
 					domain: "http://localhost:8081",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1366,11 +1367,11 @@ describe("SAML SSO", async () => {
 				domain: "http://localhost:8081",
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
-					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
+					idpMetadata: { cert: certificate },
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1387,11 +1388,11 @@ describe("SAML SSO", async () => {
 					domain: "http://localhost:8081",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1407,7 +1408,7 @@ describe("SAML SSO", async () => {
 		});
 	});
 
-	it("should reject samlConfig.cert when idpMetadata.metadata is provided", async () => {
+	it("should reject when neither idpMetadata.cert nor idpMetadata.metadata is provided", async () => {
 		const headers = await getAuthHeaders();
 		await authClient.signIn.email(testUser, {
 			throw: true,
@@ -1417,16 +1418,12 @@ describe("SAML SSO", async () => {
 		await expect(
 			auth.api.registerSSOProvider({
 				body: {
-					providerId: "conflict-top-cert",
+					providerId: "missing-cert-source",
 					issuer: "http://localhost:8081",
 					domain: "http://localhost:8081",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
-						idpMetadata: {
-							metadata: idpMetadata,
-						},
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1437,9 +1434,7 @@ describe("SAML SSO", async () => {
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
 			body: {
-				message: expect.stringContaining(
-					"idpMetadata.metadata embeds its own signing certificates",
-				),
+				code: SAML_ERROR_CODES.CERT_SOURCE_MISSING.code,
 			},
 		});
 	});
@@ -1474,9 +1469,7 @@ describe("SAML SSO", async () => {
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
 			body: {
-				message: expect.stringContaining(
-					"idpMetadata.metadata embeds its own signing certificates",
-				),
+				code: SAML_ERROR_CODES.CERT_SOURCE_CONFLICT.code,
 			},
 		});
 	});
@@ -1495,8 +1488,8 @@ describe("SAML SSO", async () => {
 				domain: "http://localhost:8081",
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
-					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					idpMetadata: { cert: certificate },
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1513,8 +1506,8 @@ describe("SAML SSO", async () => {
 					domain: "http://localhost:8082",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -2884,8 +2877,8 @@ describe("SSO Provider Config Parsing", () => {
 				domain: "example.com",
 				samlConfig: {
 					entryPoint: "http://localhost:8081/sso",
-					cert: "test-cert",
 					callbackUrl: "http://localhost:3000/callback",
+					idpMetadata: { cert: "test-cert" },
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -2897,7 +2890,7 @@ describe("SSO Provider Config Parsing", () => {
 		expect(provider.samlConfig).toBeDefined();
 		expect(typeof provider.samlConfig).toBe("object");
 		expect(provider.samlConfig?.entryPoint).toBe("http://localhost:8081/sso");
-		expect(provider.samlConfig?.cert).toBe("test-cert");
+		expect(provider.samlConfig?.idpMetadata?.cert).toBe("test-cert");
 
 		const serialized = JSON.stringify(provider.samlConfig);
 		expect(serialized).not.toContain("[object Object]");
@@ -3886,11 +3879,11 @@ describe("SAML ACS Origin Check Bypass", () => {
 					domain: "origin-bypass.com",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -3940,11 +3933,11 @@ describe("SAML ACS Origin Check Bypass", () => {
 					domain: "origin-bypass-acs.com",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/sp/acs",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -4041,11 +4034,11 @@ describe("SAML ACS Origin Check Bypass", () => {
 					domain: "relay-security.com",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -4097,11 +4090,11 @@ describe("SAML Response Security", () => {
 				domain: "security-test.com",
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
-					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
+					idpMetadata: { cert: certificate },
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -4154,11 +4147,11 @@ describe("SAML Response Security", () => {
 				domain: "tamper-test.com",
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
-					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
+					idpMetadata: { cert: certificate },
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -4968,8 +4961,8 @@ describe("SAML Single Logout (SLO)", () => {
 					domain: "slo-disabled.com",
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5050,8 +5043,8 @@ describe("SAML Single Logout (SLO)", () => {
 					domain: "slo-origin.com",
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5101,8 +5094,8 @@ describe("SAML Single Logout (SLO)", () => {
 					domain: "slo-metadata.com",
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5139,8 +5132,8 @@ describe("SAML Single Logout (SLO)", () => {
 					domain: "slo-metadata-disabled.com",
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5178,8 +5171,8 @@ describe("SAML Single Logout (SLO)", () => {
 					domain: "sp-slo-no-idp.com",
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
-						cert: certificate,
 						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: { cert: certificate },
 						spMetadata: {
 							metadata: spMetadata,
 						},

@@ -1,5 +1,4 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import * as saml from "samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse } from "../utils";
 
@@ -36,68 +35,6 @@ export async function findSAMLProvider(
 				undefined
 			: undefined,
 	};
-}
-
-export function createSP(
-	config: SAMLConfig,
-	baseURL: string,
-	providerId: string,
-	sloOptions?: {
-		wantLogoutRequestSigned?: boolean;
-		wantLogoutResponseSigned?: boolean;
-	},
-) {
-	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
-	return saml.ServiceProvider({
-		entityID: config.spMetadata?.entityID || config.issuer,
-		assertionConsumerService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location:
-					config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`,
-			},
-		],
-		singleLogoutService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location: sloLocation,
-			},
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-				Location: sloLocation,
-			},
-		],
-		wantMessageSigned: config.wantAssertionsSigned || false,
-		wantLogoutRequestSigned: sloOptions?.wantLogoutRequestSigned ?? false,
-		wantLogoutResponseSigned: sloOptions?.wantLogoutResponseSigned ?? false,
-		metadata: config.spMetadata?.metadata,
-		privateKey: config.spMetadata?.privateKey || config.privateKey,
-		privateKeyPass: config.spMetadata?.privateKeyPass,
-	});
-}
-
-export function createIdP(config: SAMLConfig) {
-	const idpData = config.idpMetadata;
-	if (idpData?.metadata) {
-		return saml.IdentityProvider({
-			metadata: idpData.metadata,
-			privateKey: idpData.privateKey,
-			privateKeyPass: idpData.privateKeyPass,
-			encPrivateKey: idpData.encPrivateKey,
-			encPrivateKeyPass: idpData.encPrivateKeyPass,
-		});
-	}
-	return saml.IdentityProvider({
-		entityID: idpData?.entityID || config.issuer,
-		singleSignOnService: idpData?.singleSignOnService || [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-				Location: config.entryPoint,
-			},
-		],
-		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: idpData?.cert || config.cert,
-	});
 }
 
 function escapeHtml(str: string | undefined | null): string {

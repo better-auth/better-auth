@@ -42,7 +42,6 @@ const oidcConfigSchema = z.object({
 
 const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
-	cert: z.union([z.string(), z.array(z.string()).nonempty()]).optional(),
 	callbackUrl: z.string().url().optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
