@@ -417,8 +417,13 @@ export async function getStoredToken(
  *
  * @internal
  */
+// RFC 7235 §2.1: the auth scheme is case-insensitive and is followed by
+// one or more SP. Match liberally so requests using `basic` or extra
+// spaces aren't rejected before reaching the spec-correct decoder.
+const BASIC_SCHEME_PREFIX = /^Basic +/i;
+
 function basicToClientCredentials(authorization: string) {
-	if (!authorization.startsWith("Basic ")) {
+	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
 	}
 	try {

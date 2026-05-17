@@ -21,10 +21,11 @@ describe("encode/decodeBasicCredentials", () => {
 		expect(decodeBasicCredentials(header)).toEqual({ clientId, clientSecret });
 	});
 
-	it("uses application/x-www-form-urlencoded for each value (escapes `!'()*`, space → `+`)", () => {
+	it("uses application/x-www-form-urlencoded for each value (escapes `!'()`, space → `+`)", () => {
 		// Computed independently via URLSearchParams to avoid mirroring the
 		// implementation's encoding choice. This is the contract RFC 6749 §2.3.1
-		// requires; encodeURIComponent leaves `!'()*` unescaped and would fail.
+		// requires; encodeURIComponent leaves `!'()` unescaped and would fail.
+		// Note: the URL Standard percent-encode set leaves `*` unescaped.
 		const clientId = "alice!*'";
 		const clientSecret = "p@ss word (1)";
 		const header = encodeBasicCredentials(clientId, clientSecret);
@@ -67,6 +68,24 @@ describe("encode/decodeBasicCredentials", () => {
 		expect(() => decodeBasicCredentials("Bearer abc")).toThrow(
 			/not a Basic credential/,
 		);
+	});
+
+	it("accepts the Basic scheme case-insensitively (RFC 7235 §2.1)", () => {
+		const payload = Buffer.from("alice:secret").toString("base64");
+		for (const scheme of ["Basic", "basic", "BASIC", "BaSiC"] as const) {
+			expect(decodeBasicCredentials(`${scheme} ${payload}`)).toEqual({
+				clientId: "alice",
+				clientSecret: "secret",
+			});
+		}
+	});
+
+	it("accepts one or more spaces between the scheme and credentials", () => {
+		const payload = Buffer.from("alice:secret").toString("base64");
+		expect(decodeBasicCredentials(`Basic   ${payload}`)).toEqual({
+			clientId: "alice",
+			clientSecret: "secret",
+		});
 	});
 
 	it("rejects a Basic payload without a separator", () => {
