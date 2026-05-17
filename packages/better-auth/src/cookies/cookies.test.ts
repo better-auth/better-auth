@@ -1592,4 +1592,47 @@ describe("expireCookie", () => {
 			maxAge: 0,
 		});
 	});
+
+	it("scrubs collapsed Set-Cookie headers when getSetCookie is unavailable", () => {
+		const responseHeaders = new Headers();
+		responseHeaders.append("set-cookie", "keep=1; Path=/");
+		responseHeaders.append("set-cookie", "target=valid; Path=/");
+		responseHeaders.append("set-cookie", "target.0=chunk; Path=/");
+		Object.defineProperty(responseHeaders, "getSetCookie", {
+			value: undefined,
+		});
+
+		const setCookie = vi.fn(
+			(
+				name: string,
+				value: string,
+				options: { maxAge: number; path: string },
+			) => {
+				responseHeaders.append(
+					"set-cookie",
+					`${name}=${value}; Path=${options.path}; Max-Age=${options.maxAge}`,
+				);
+			},
+		);
+
+		expireCookie(
+			{
+				responseHeaders,
+				context: { responseHeaders },
+				setCookie,
+			} as any,
+			{
+				name: "target",
+				attributes: {
+					path: "/",
+				},
+			},
+		);
+
+		const setCookieHeader = responseHeaders.get("set-cookie") || "";
+		expect(setCookieHeader).toContain("keep=1");
+		expect(setCookieHeader).not.toContain("target=valid");
+		expect(setCookieHeader).not.toContain("target.0=chunk");
+		expect(setCookieHeader).toContain("target=; Path=/; Max-Age=0");
+	});
 });

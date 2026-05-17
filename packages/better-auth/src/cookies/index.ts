@@ -24,7 +24,11 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { parseCookies, SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import {
+	parseCookies,
+	SECURE_COOKIE_PREFIX,
+	splitSetCookieHeader,
+} from "./cookie-utils";
 import {
 	createAccountStore,
 	createSessionStore,
@@ -305,6 +309,65 @@ export async function setSessionCookie(
 	ctx.context.setNewSession(session);
 }
 
+type CookieScrubView = GenericEndpointContext & {
+	responseHeaders?: Headers;
+	context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
+};
+
+/**
+ * Remove any prior `Set-Cookie` entries on the current response whose cookie
+ * name matches `cookieName` or any chunked variant (`${cookieName}.0`, etc.).
+ *
+ * Prevents a valid cookie value from leaking on the wire when the same cookie
+ * is set and then expired within a single request (e.g. `/sign-in/email`
+ * writes credential session cookies and the 2FA after-hook expires them).
+ * Browsers honor the expiring entry, but anything reading the raw response
+ * headers — proxy/LB logs, server-side SDK consumers, observability tools —
+ * sees the earlier valid value and could replay it (bypassing the 2FA gate
+ * when the cookie cache is enabled).
+ *
+ * Scrubs both the local middleware scope's `responseHeaders` and the outer
+ * endpoint scope's `ctx.context.responseHeaders`, because plugin after-hooks
+ * run in a fresh local scope while accumulated response headers live on the
+ * outer one. `scoped.context` is required by {@link GenericEndpointContext}
+ * but unit-test mocks pass a minimal object via `as any`, so we use optional
+ * chaining defensively. The `Set` collapses the case where both scopes
+ * reference the same `Headers`.
+ */
+function removeSetCookieEntries(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+) {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		// `Headers.getSetCookie()` is standard on Node ≥18.14, Bun, Deno, and
+		// Cloudflare Workers, but older Node and some polyfilled Headers shims
+		// expose Set-Cookie as a collapsed string. Parse that fallback before
+		// rewriting the header so stale session cookies don't survive there.
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (!existing.length) continue;
+		const survivors = existing.filter(
+			(entry) => !entry.startsWith(exact) && !entry.startsWith(chunk),
+		);
+		if (survivors.length === existing.length) continue;
+		headers.delete("set-cookie");
+		for (const entry of survivors) {
+			headers.append("set-cookie", entry);
+		}
+	}
+}
+
 /**
  * Expires a cookie by setting `maxAge: 0` while preserving its attributes
  */
@@ -312,6 +375,7 @@ export function expireCookie(
 	ctx: GenericEndpointContext,
 	cookie: BetterAuthCookie,
 ) {
+	removeSetCookieEntries(ctx, cookie.name);
 	ctx.setCookie(cookie.name, "", {
 		...cookie.attributes,
 		maxAge: 0,
