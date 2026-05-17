@@ -2,17 +2,6 @@ import { X509Certificate } from "node:crypto";
 import { getHostname } from "tldts";
 
 /**
- * Decode a base64-encoded string into its UTF-8 form using runtime primitives
- * that work in Node, Bun, Deno, and Cloudflare Workers (no `Buffer`).
- */
-export function decodeBase64ToUtf8(value: string): string {
-	const binary = atob(value);
-	const bytes = new Uint8Array(binary.length);
-	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-	return new TextDecoder("utf-8").decode(bytes);
-}
-
-/**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
  * instead of JSON strings from TEXT/JSON columns.

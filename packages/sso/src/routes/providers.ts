@@ -40,13 +40,10 @@ function parseCertOrError(cert: string): SanitizedCert {
 	}
 }
 
-function sanitizeSigningCerts(
-	config: SAMLConfig,
-): SanitizedCert | SanitizedCert[] | undefined {
+function sanitizeSigningCerts(config: SAMLConfig): SanitizedCert[] | undefined {
 	const certs = resolveSigningCerts(config);
 	if (certs === undefined) return undefined;
-	const parsed = certs.map(parseCertOrError);
-	return parsed.length === 1 ? parsed[0] : parsed;
+	return certs.map(parseCertOrError);
 }
 
 async function isOrgAdmin(
@@ -184,7 +181,7 @@ export const listSSOProviders = () => {
 					responses: {
 						"200": {
 							description:
-								"List of SSO providers. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
+								"List of SSO providers. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 					},
 				},
@@ -311,7 +308,7 @@ export const getSSOProvider = () => {
 					responses: {
 						"200": {
 							description:
-								"SSO provider details. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
+								"SSO provider details. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -424,7 +421,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					responses: {
 						"200": {
 							description:
-								"SSO provider updated successfully. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
+								"SSO provider updated successfully. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",

@@ -987,9 +987,9 @@ samlConfig: {
 }
 ```
 
-`idpMetadata.cert` accepts a single PEM string or an array. The top-level `cert` field on `samlConfig` is also accepted for backwards compatibility; when both are set, `idpMetadata.cert` wins.
+Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
 
-If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. A registration that supplies neither `cert` nor `idpMetadata.metadata` is rejected at registration with the `SAML_CERT_SOURCE_MISSING` error code: samlify has nothing to verify SAML responses against.
+If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. A registration that supplies neither `cert` nor `idpMetadata.metadata` is rejected at registration with the `CERT_SOURCE_MISSING` error code: samlify has nothing to verify SAML responses against.
 
 ### SAML Attribute Mapping
 
