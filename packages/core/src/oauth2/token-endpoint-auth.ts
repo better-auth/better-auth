@@ -1,4 +1,4 @@
-import { base64 } from "@better-auth/utils/base64";
+import { encodeBasicCredentials } from "./basic-credentials";
 import type {
 	ClientAssertionGetter,
 	ClientAssertionGrantType,
@@ -74,7 +74,7 @@ function setClientId(body: URLSearchParams, clientId: string | undefined) {
 function assertClientSecretConfigured(
 	method: "client_secret_basic" | "client_secret_post",
 	options: TokenEndpointClientOptions,
-) {
+): asserts options is TokenEndpointClientOptions & { clientSecret: string } {
 	if (!options.clientSecret) {
 		throw new Error(
 			`${method} token endpoint authentication requires clientSecret`,
@@ -132,9 +132,10 @@ function setClientSecretBasicAuth({
 	}
 	assertClientSecretConfigured("client_secret_basic", options);
 	assertClientIdConfigured("client_secret_basic", clientId);
-	headers.authorization = `Basic ${base64.encode(
-		`${clientId}:${options.clientSecret}`,
-	)}`;
+	headers.authorization = encodeBasicCredentials(
+		clientId,
+		options.clientSecret,
+	);
 }
 
 function assertCompleteManualClientAssertion(body: URLSearchParams) {
