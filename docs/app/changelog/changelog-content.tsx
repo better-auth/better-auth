@@ -81,7 +81,7 @@ function MarkdownContent({ content }: { content: string }) {
 			components={{
 				h2: ({ children, ...props }) => (
 					<h2
-						className="text-2xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200 mt-6 mb-3"
+						className="text-2xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200 mt-6 mb-3 [&_code]:text-xl"
 						{...props}
 					>
 						{children}
@@ -89,7 +89,7 @@ function MarkdownContent({ content }: { content: string }) {
 				),
 				h3: ({ children, ...props }) => (
 					<h3
-						className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 mt-5 mb-2 tracking-tight"
+						className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 mt-5 mb-2 tracking-tight [&_code]:text-lg"
 						{...props}
 					>
 						{children}

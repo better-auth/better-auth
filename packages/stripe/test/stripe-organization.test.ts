@@ -11,6 +11,12 @@ describe("stripe - organization customer", () => {
 	const mockStripeOrg = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+			retrieve: vi.fn().mockImplementation((priceId: string) =>
+				Promise.resolve({
+					id: priceId,
+					recurring: { usage_type: "licensed", interval: "month" },
+				}),
+			),
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_org_mock123" }),
@@ -1836,6 +1842,12 @@ describe("stripe - organizationHooks integration", () => {
 	const mockStripeHooks = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+			retrieve: vi.fn().mockImplementation((priceId: string) =>
+				Promise.resolve({
+					id: priceId,
+					recurring: { usage_type: "licensed", interval: "month" },
+				}),
+			),
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_org_hooks_123" }),

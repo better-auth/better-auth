@@ -1,5 +1,5 @@
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
@@ -52,8 +52,8 @@ describe("oauth logout", async () => {
 	let server: Listener;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const logoutRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/logout`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const logoutRedirectUri = `${rpBaseUrl}/api/auth/callback/logout`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -119,7 +119,7 @@ describe("oauth logout", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -127,7 +127,7 @@ describe("oauth logout", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -415,8 +415,8 @@ describe("oauth logout - disableJwtPlugin", async () => {
 	let server: Listener;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const logoutRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/logout`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const logoutRedirectUri = `${rpBaseUrl}/api/auth/callback/logout`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -482,7 +482,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -490,7 +490,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {

@@ -1,6 +1,5 @@
 import { createAuthClient } from "better-auth/client";
 import {
-	genericOAuthClient,
 	multiSessionClient,
 	organizationClient,
 } from "better-auth/client/plugins";
@@ -255,7 +254,7 @@ describe("oauth", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -349,16 +348,15 @@ describe("oauth", async () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -425,16 +423,15 @@ describe("oauth", async () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -482,7 +479,7 @@ describe("oauth", async () => {
 		expect(signInLocationHeader).toBe("");
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain(
-			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`,
+			`${rpBaseUrl}/api/auth/callback/${providerId}`,
 		);
 		expect(signInResponse.url).not.toContain(`${authServerBaseUrl}/login`);
 	});
@@ -500,16 +497,15 @@ describe("oauth", async () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -557,7 +553,7 @@ describe("oauth", async () => {
 		expect(signInLocationHeader).toBe("");
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain(
-			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`,
+			`${rpBaseUrl}/api/auth/callback/${providerId}`,
 		);
 	});
 
@@ -574,16 +570,15 @@ describe("oauth", async () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -646,16 +641,15 @@ describe("oauth", async () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -743,13 +737,12 @@ describe("oauth", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: { customFetchImpl: customFetchImplRP },
 		});
 		const rpHeaders = new Headers();
-		const data = await client.signIn.oauth2(
-			{ providerId, callbackURL: "/success" },
+		const data = await client.signIn.social(
+			{ provider: providerId, callbackURL: "/success" },
 			{ throw: true, onSuccess: cookieSetter(rpHeaders) },
 		);
 
@@ -834,13 +827,12 @@ describe("oauth", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: { customFetchImpl: customFetchImplRP },
 		});
 		const rpHeaders = new Headers();
-		const data = await client.signIn.oauth2(
-			{ providerId, callbackURL: "/success" },
+		const data = await client.signIn.social(
+			{ provider: providerId, callbackURL: "/success" },
 			{ throw: true, onSuccess: cookieSetter(rpHeaders) },
 		);
 
@@ -904,16 +896,15 @@ describe("oauth", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const headers = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -980,6 +971,8 @@ describe("oauth - prompt", async () => {
 	let enableSelectAccount = false;
 	let enablePostLogin = false;
 	let selectedPostLogin = false;
+	let forcePostLoginRedirect = false;
+	let bypassReferenceIdCheck = false;
 	let isUserRegistered = true;
 	const {
 		auth: authorizationServer,
@@ -1015,11 +1008,13 @@ describe("oauth - prompt", async () => {
 					shouldRedirect({ session }) {
 						if (!enablePostLogin) return false;
 						if (selectedPostLogin) return false;
+						if (forcePostLoginRedirect) return true;
 						return !session?.activeOrganizationId;
 					},
 					consentReferenceId({ session }) {
 						if (!enablePostLogin) return undefined;
 						if (selectedPostLogin) return undefined;
+						if (bypassReferenceIdCheck) return undefined;
 						const activeOrganizationId = (session?.activeOrganizationId ??
 							undefined) as string | undefined;
 						if (!activeOrganizationId)
@@ -1060,7 +1055,7 @@ describe("oauth - prompt", async () => {
 	let org: Organization;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -1178,7 +1173,6 @@ describe("oauth - prompt", async () => {
 			prompt: "login",
 		});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1186,15 +1180,18 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
 				throw: true,
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 		expect(data.url).toContain(
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
@@ -1224,7 +1221,6 @@ describe("oauth - prompt", async () => {
 			prompt: "create",
 		});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1232,9 +1228,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1270,7 +1266,6 @@ describe("oauth - prompt", async () => {
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1279,9 +1274,9 @@ describe("oauth - prompt", async () => {
 
 		// Generate authorize url
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1354,7 +1349,6 @@ describe("oauth - prompt", async () => {
 				],
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1362,9 +1356,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1421,7 +1415,6 @@ describe("oauth - prompt", async () => {
 				prompt: "consent",
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1430,9 +1423,9 @@ describe("oauth - prompt", async () => {
 
 		// Generate authorize url
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1514,7 +1507,6 @@ describe("oauth - prompt", async () => {
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1522,9 +1514,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1582,7 +1574,6 @@ describe("oauth - prompt", async () => {
 				scopes: ["openid", "profile", "email", "offline_access"],
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1590,9 +1581,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1634,7 +1625,6 @@ describe("oauth - prompt", async () => {
 				scopes: ["openid", "profile", "email", "read:posts"],
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1642,9 +1632,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1731,7 +1721,6 @@ describe("oauth - prompt", async () => {
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1739,9 +1728,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1810,16 +1799,15 @@ describe("oauth - prompt", async () => {
 				prompt: "none",
 			});
 			const client = createAuthClient({
-				plugins: [genericOAuthClient()],
 				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
 
-			const data = await client.signIn.oauth2(
+			const data = await client.signIn.social(
 				{
-					providerId,
+					provider: providerId,
 					callbackURL: "/success",
 				},
 				{
@@ -1862,16 +1850,15 @@ describe("oauth - prompt", async () => {
 				prompt: "none",
 			});
 			const client = createAuthClient({
-				plugins: [genericOAuthClient()],
 				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,
 				},
 			});
 
-			const data = await client.signIn.oauth2(
+			const data = await client.signIn.social(
 				{
-					providerId,
+					provider: providerId,
 					callbackURL: "/success",
 				},
 				{
@@ -1914,7 +1901,6 @@ describe("oauth - prompt", async () => {
 				prompt: "login consent",
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1922,9 +1908,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -1932,6 +1918,9 @@ describe("oauth - prompt", async () => {
 				throw: true,
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 		expect(data.url).toContain(
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
@@ -1952,9 +1941,11 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
+		const loginRedirectSearch = new URL(loginRedirectUri, authServerBaseUrl)
+			.search;
 		vi.stubGlobal("window", {
 			location: {
-				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+				search: loginRedirectSearch,
 			},
 		});
 		onTestFinished(() => {
@@ -1969,11 +1960,118 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain("/consent");
 		expect(signInResponse.url).toContain("prompt=consent");
+		expect(signInResponse.url).not.toContain("prompt=login");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: loginRedirectSearch,
+			},
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		expect(consentRes.redirect).toBe(true);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain("code=");
+		expect(consentRes.url).not.toContain("/login");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/discussions/9261
+	 */
+	it("login+consent - should not accept stale login prompt without reauthentication", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const staleHeaders = new Headers();
+		const { user } = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(staleHeaders),
+			},
+		);
+		expect(user.id).toBeDefined();
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({
+				prompt: "login consent",
+			});
+		const client = createAuthClient({
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const rpHeaders = new Headers();
+		const data = await client.signIn.social(
+			{
+				provider: providerId,
+				callbackURL: "/success",
+			},
+			{
+				headers: rpHeaders,
+				throw: true,
+			},
+		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let loginRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: rpHeaders,
+			onError(context) {
+				loginRedirectUri = context.response.headers.get("Location") || "";
+				rpCookieSetter(rpHeaders)(context);
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+		expect(loginRedirectUri).toContain("prompt=login");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers: staleHeaders,
+				throw: true,
+			},
+		);
+		expect(consentRes.redirect).toBe(true);
+		expect(consentRes.url).toContain("/login");
+		expect(consentRes.url).toContain("prompt=login");
+		expect(consentRes.url).not.toContain("code=");
 	});
 
 	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async ({
@@ -1989,7 +2087,6 @@ describe("oauth - prompt", async () => {
 				prompt: "select_account consent",
 			});
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -1997,9 +2094,9 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -2069,7 +2166,7 @@ describe("oauth - prompt", async () => {
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient(), organization()],
+			plugins: [organization()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -2078,9 +2175,9 @@ describe("oauth - prompt", async () => {
 
 		// Generate authorize url
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -2147,7 +2244,7 @@ describe("oauth - prompt", async () => {
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await createTestInstance();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient(), organization()],
+			plugins: [organization()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -2156,9 +2253,9 @@ describe("oauth - prompt", async () => {
 
 		// Generate authorize url
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -2245,6 +2342,264 @@ describe("oauth - prompt", async () => {
 
 		enablePostLogin = false;
 	});
+
+	it("consent accept should not re-trigger postLogin redirect", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			forcePostLoginRedirect = false;
+		});
+
+		const freshHeaders = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(freshHeaders) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.social(
+			{ provider: providerId, callbackURL: "/success" },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeaders),
+			},
+		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: freshHeaders,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(freshHeaders)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain("/select-organization");
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const setActiveResponse = await serverClient.organization.setActive(
+			{ organizationId: org.id, organizationSlug: org.slug },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: cookieSetter(freshHeaders),
+			},
+		);
+		if (!isRedirectResult(setActiveResponse)) {
+			expect.unreachable();
+		}
+		const consentRedirectUri = setActiveResponse.url;
+		expect(consentRedirectUri).toContain(`/consent`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
+			},
+		});
+
+		forcePostLoginRedirect = true;
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onResponse: cookieSetter(freshHeaders),
+			},
+		);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain("code=");
+		expect(consentRes.url).not.toContain("/select-organization");
+	});
+
+	it("consent accept should not bypass postLogin when posted with a pre-postLogin signed query", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		bypassReferenceIdCheck = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			bypassReferenceIdCheck = false;
+		});
+
+		const freshHeaders = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(freshHeaders) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.social(
+			{ provider: providerId, callbackURL: "/success" },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeaders),
+			},
+		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: freshHeaders,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(freshHeaders)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain("/select-organization");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onResponse: cookieSetter(freshHeaders),
+			},
+		);
+		expect(consentRes.url).toContain("/select-organization");
+		expect(consentRes.url).not.toContain("code=");
+	});
+
+	it("consent accept should not skip postLogin when the ba_pl marker is from another session", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		bypassReferenceIdCheck = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			bypassReferenceIdCheck = false;
+		});
+
+		// Session A: sign in, complete setActive, capture the signed /consent URL (marker from A).
+		const headersA = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(headersA) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeadersA = new Headers();
+		const dataA = await client.signIn.social(
+			{ provider: providerId, callbackURL: "/success" },
+			{
+				headers: headersA,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeadersA),
+			},
+		);
+		if (!dataA.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let selectOrgUriA = "";
+		await serverClient.$fetch(dataA.url, {
+			method: "GET",
+			headers: headersA,
+			onError(context) {
+				selectOrgUriA = context.response.headers.get("Location") || "";
+				cookieSetter(headersA)(context);
+			},
+		});
+		expect(selectOrgUriA).toContain("/select-organization");
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgUriA, authServerBaseUrl).search,
+			},
+		});
+
+		const setActiveResponse = await serverClient.organization.setActive(
+			{ organizationId: org.id, organizationSlug: org.slug },
+			{ headers: headersA, throw: true, onSuccess: cookieSetter(headersA) },
+		);
+		if (!isRedirectResult(setActiveResponse)) {
+			expect.unreachable();
+		}
+		const consentUrlWithMarker = setActiveResponse.url;
+		expect(consentUrlWithMarker).toContain("/consent");
+
+		// Session B: a fresh sign-in for the same user. A new session row, no active org.
+		const headersB = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(headersB) },
+		);
+
+		// Session B posts to /consent using session A's marker.
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentUrlWithMarker, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{ headers: headersB, throw: true, onResponse: cookieSetter(headersB) },
+		);
+
+		// Session B must not be granted a code using session A's marker.
+		expect(consentRes.url).toContain("/select-organization");
+		expect(consentRes.url).not.toContain("code=");
+	});
 });
 
 describe("oauth - config", () => {
@@ -2253,7 +2608,7 @@ describe("oauth - config", () => {
 	let authServerUrl = `${authServerBaseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
@@ -2455,16 +2810,15 @@ describe("oauth - config", () => {
 			await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/success",
 			},
 			{
@@ -2556,16 +2910,15 @@ describe("oauth - config", () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/success",
 			},
 			{
@@ -2678,16 +3031,16 @@ describe("oauth - config", () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [oauthProviderResourceClient(), genericOAuthClient()],
+			plugins: [oauthProviderResourceClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oauthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/success",
 			},
 			{

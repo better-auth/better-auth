@@ -271,10 +271,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			before: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -375,6 +372,15 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							stateData.errorURL ||
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.baseURL}/error`;
+
+						if (
+							stateData.oauthState !== undefined &&
+							stateData.oauthState !== statePackage.state
+						) {
+							ctx.context.logger.error("OAuth proxy state binding mismatch");
+							throw redirectOnError(ctx, errorURL, "state_mismatch");
+						}
+
 						if (error) {
 							throw redirectOnError(ctx, errorURL, error);
 						}
@@ -479,10 +485,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);

@@ -2,37 +2,26 @@
 "@better-auth/sso": minor
 ---
 
-**Breaking changes**
-
-The top-level `samlConfig.cert` field is removed. SAML signing certificates now live under `samlConfig.idpMetadata.cert`. Move the value over verbatim:
-
-```ts
-// before
-samlConfig: { cert: pem, /* ... */ }
-
-// after
-samlConfig: { idpMetadata: { cert: pem }, /* ... */ }
-```
-
-If your IdP publishes a metadata XML document and you pass it as `samlConfig.idpMetadata.metadata`, drop `cert` entirely. The document already carries the signing certificates.
-
-Registration now requires exactly one certificate source. Two new error codes enforce this:
-
-- `SAML_CERT_SOURCE_CONFLICT`: `idpMetadata.metadata` is set together with `idpMetadata.cert`. Use one or the other.
-- `SAML_CERT_SOURCE_MISSING`: neither is set. One is required.
-
-The management endpoints (`getSSOProvider`, `listSSOProviders`, `updateSSOProvider`) return `samlConfig.certificate` in three shapes. A single parsed certificate when one is configured, an array when several are, and absent when the certificates live inside `idpMetadata.metadata`.
-
 **Rolling certificate rotation**
 
-`samlConfig.idpMetadata.cert` accepts either a single PEM string or an array. During a rotation, pass both the current and the upcoming PEM; SAML responses signed by either are accepted, so users stay signed in across the cutover.
+SAML signing certificates now accept an array of PEM strings, so administrators can publish a new IdP cert alongside the old one and complete the rotation without forcing every active session to re-authenticate. Responses signed by any listed cert are accepted.
 
 ```ts
-idpMetadata: {
-    cert: [currentPem, nextPem],
+samlConfig: {
+    idpMetadata: {
+        cert: [currentPem, nextPem],
+    },
 }
 ```
 
+Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
+
+**Validation**
+
+Registration now rejects SAML configs that supply no signing-cert source. samlify needs either an `idpMetadata.metadata` XML document (which embeds the certs) or an explicit PEM under `cert` or `idpMetadata.cert`. Configs missing both fail with `SAML_CERT_SOURCE_MISSING`.
+
+The management endpoints (`getSSOProvider`, `listSSOProviders`, `updateSSOProvider`) return `samlConfig.certificate` in three shapes: a single parsed certificate when one is configured, an array when several are, and absent when the certs live inside `idpMetadata.metadata`.
+
 **Fix**
 
-The SAML Single Logout callback could fail to decrypt encrypted `LogoutResponse` payloads because the IdP entity was constructed without `privateKey`, `encPrivateKey`, or `encPrivateKeyPass` on that code path. All three are now applied on every IdP construction.
+SAML Single Logout could fail to decrypt encrypted `LogoutResponse` payloads because the IdP entity was constructed without `privateKey`, `encPrivateKey`, or `encPrivateKeyPass` on that code path. All three are now applied on every IdP construction.

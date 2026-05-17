@@ -64,9 +64,9 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			return null;
 		}
 
-		// Check for OAuth callbacks (/callback/:id or /oauth2/callback/:providerId)
-		if (path.startsWith("/callback/") || path.startsWith("/oauth2/callback/")) {
-			return ctx.params?.id || ctx.params?.providerId || path.split("/").pop();
+		// Check for OAuth callbacks (/callback/:id)
+		if (path.startsWith("/callback/")) {
+			return ctx.params?.id || path.split("/").pop();
 		}
 		// Check for email sign-in/sign-up
 		if (path === "/sign-in/email" || path === "/sign-up/email") {

@@ -16,7 +16,7 @@ import {
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types";
+import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
@@ -266,8 +266,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
-		api: api as unknown as Omit<typeof endpoints, keyof PluginEndpoint> &
-			PluginEndpoint,
+		api: api as unknown as OverrideMerge<typeof endpoints, PluginEndpoint>,
 		middlewares,
 	};
 }
@@ -305,11 +304,10 @@ export const router = <Option extends BetterAuthOptions>(
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await withSpan(
-						`onRequest ${normalizedPath} ${plugin.id}`,
+						`onRequest ${plugin.id}`,
 						{
 							[ATTR_HOOK_TYPE]: "onRequest",
 							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
-							[ATTR_HTTP_ROUTE]: normalizedPath,
 						},
 						() => plugin.onRequest!(currentRequest, ctx),
 					);
@@ -331,15 +329,13 @@ export const router = <Option extends BetterAuthOptions>(
 		},
 		async onResponse(res, req) {
 			await onResponseRateLimit(req, ctx);
-			const normalizedPath = normalizePathname(req.url, basePath);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
-						`onResponse ${normalizedPath} ${plugin.id}`,
+						`onResponse ${plugin.id}`,
 						{
 							[ATTR_HOOK_TYPE]: "onResponse",
 							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
-							[ATTR_HTTP_ROUTE]: normalizedPath,
 							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
 						},
 						() => plugin.onResponse!(res, ctx),

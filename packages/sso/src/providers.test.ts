@@ -10,6 +10,49 @@ import { ssoClient } from "./client";
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
 
+const ROTATION_CERT_1 = `-----BEGIN CERTIFICATE-----
+MIIDlzCCAn+gAwIBAgIJAO1ymQc33+bWMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
+BAYTAkhLMRMwEQYDVQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQ
+cm92aWRlcjEUMBIGA1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDAeFw0x
+NTA3MDUxODAyMjdaFw0xODA3MDQxODAyMjdaMGIxCzAJBgNVBAYTAkhLMRMwEQYD
+VQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQcm92aWRlcjEUMBIG
+A1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBAODZsWhCe+yG0PalQPTUoD7yko5MTWMCRxJ8hSm2k7mG
+3Eg/Y2v0EBdCmTw7iDCevRqUmbmFnq7MROyV4eriJzh0KabAdZf7/k6koghst3ZU
+tWOwzshyxkBtWDwGmBpQGTGsKxJ8M1js3aSqNRXBT4OBWM9w2Glt1+8ty30RhYv3
+pSF+/HHLH7Ac+vLSIAlokaFW34RWTcJ/8rADuRWlXih4GfnIu0W/ncm5nTSaJiRA
+vr3dGDRO/khiXoJdbbOj7dHPULxVGbH9IbPK76TCwLbF7ikIMsPovVbTrpyL6vsb
+VUKeEl/5GKppTwp9DLAOeoSYpCYkkDkYKu9TRQjF02MCAwEAAaNQME4wHQYDVR0O
+BBYEFP2ut2AQdy6D1dwdwK740IHmbh38MB8GA1UdIwQYMBaAFP2ut2AQdy6D1dwd
+wK740IHmbh38MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBANMZUoPN
+mHzgja2PYkbvBYMHmpvUkVoiuvQ9cJPlqGTB2CRfG68BNNs/Clz8P7cIrAdkhCUw
+i1rSBhDuslGFNrSaIpv6B10FpBuKwef3G7YrPWFNEN6khY7aHNWSTHqKgs1DrGef
+2B9hvkrnHWbQVSVXrBFKe1wTCqcgGcOpYoSK7L8C6iX6uIA/uZYnVQ4NgBrizJ0a
+zkjdegz3hwO/gt4malEURy8D85/AAVt6PAzhpb9VJUGxSXr/EfntVUEz3L2gUFWW
+k1CnZFyz0rIOEt/zPmeAY8BLyd/Tjxm4Y+gwNazKq5y9AJS+m858b/nM4QdCnUE4
+yyoWAJDUHiAmvFA=
+-----END CERTIFICATE-----`;
+
+const ROTATION_CERT_2 = `-----BEGIN CERTIFICATE-----
+MIIDATCCAemgAwIBAgIUTDC29D27otkSCpMVYZSZ7135bZcwDQYJKoZIhvcNAQEL
+BQAwEDEOMAwGA1UEAwwFVGVzdDIwHhcNMjYwMzI3MTcyNDA4WhcNMzYwMzI0MTcy
+NDA4WjAQMQ4wDAYDVQQDDAVUZXN0MjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+AQoCggEBALXz/zRq88hhlLTJ47MoLdFqwjC9A9HiV6xOdezHhZ+vBaqCXsUcru9N
+3FfG6EVtuxSTLQIfgMpxifS4tF2tqkxBcW7JDGIuN02hjeWzlVztyAzISlZJUrGS
+kNnE11Br7p4O3OC1OcrpTBi/uBUPBiCFeeQCSIk+pf0h7Y4NUa27oTsZ6Qy0II7A
+2m5yqtlfyvxyLKIVIlDt1yCcvvJ2MSdiCcGDfyB/BmL5ow8kaR6bal1w/NRh8pNr
+OOjHmx3W+6Qv6g1M/mK7tITlstEEFJyWdzw6yEAZ7jyrHMkJKj9wTgmMxlx/H1d7
+st234qgFjm6w3WxA0AwaqNcjiD3SpxkCAwEAAaNTMFEwHQYDVR0OBBYEFPegA1b2
+piumrJ5DhMqgauhDrSYpMB8GA1UdIwQYMBaAFPegA1b2piumrJ5DhMqgauhDrSYp
+MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAE9imWiQSn1nde7x
+HPCZTuu3ydTNl6vT8yDHYUYBAC7kqUuhJ3gFd8x6toolxP2FvVuF4I7ovvRpW5zk
+eJ/AGOY4YB5g6K0MUpgy42V5WDXTqLR/62VCH+jQHgIjd0I728FWVoElXHYhupnR
+EKG5qVkfs8ySaBr/IV5nTSa0R9IyJX+Sb+qqITcD4CUmtNSwB1XhJq403VFCwiu+
+TQNsZdoNl0fm5SR11rDA3IffIxeAvTtZwSJ/hOfBQM1RnM24t6xYX7Oe/2ZPhN7v
+epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
+kBGIJYs=
+-----END CERTIFICATE-----`;
+
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
 
@@ -129,10 +172,9 @@ describe("SSO provider read endpoints", () => {
 					domain: "example.com",
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
-						callbackUrl: "http://localhost:3000/api/sso/callback",
+						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
-						idpMetadata: { cert: TEST_CERT },
 						spMetadata: {},
 					},
 					organizationId,
@@ -381,10 +423,9 @@ describe("SSO provider read endpoints", () => {
 				organizationId: "some-org-id",
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
+					cert: TEST_CERT,
 					audience: "my-audience",
 					wantAssertionsSigned: true,
-					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -424,10 +465,9 @@ describe("SSO provider read endpoints", () => {
 				organizationId: org!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
+					cert: TEST_CERT,
 					audience: "my-audience",
 					wantAssertionsSigned: true,
-					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -620,10 +660,9 @@ describe("SSO provider read endpoints", () => {
 				organizationId: "some-org-id",
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
+					cert: TEST_CERT,
 					audience: "my-audience",
 					wantAssertionsSigned: true,
-					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -661,10 +700,9 @@ describe("SSO provider read endpoints", () => {
 				organizationId: org!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
+					cert: TEST_CERT,
 					audience: "my-audience",
 					wantAssertionsSigned: true,
-					idpMetadata: { cert: TEST_CERT },
 					spMetadata: {},
 				}),
 			});
@@ -696,48 +734,6 @@ describe("SSO provider read endpoints", () => {
 	});
 
 	describe("sanitization", () => {
-		const VALID_CERT_1 = `-----BEGIN CERTIFICATE-----
-MIIDlzCCAn+gAwIBAgIJAO1ymQc33+bWMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
-BAYTAkhLMRMwEQYDVQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQ
-cm92aWRlcjEUMBIGA1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDAeFw0x
-NTA3MDUxODAyMjdaFw0xODA3MDQxODAyMjdaMGIxCzAJBgNVBAYTAkhLMRMwEQYD
-VQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQcm92aWRlcjEUMBIG
-A1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDCCASIwDQYJKoZIhvcNAQEB
-BQADggEPADCCAQoCggEBAODZsWhCe+yG0PalQPTUoD7yko5MTWMCRxJ8hSm2k7mG
-3Eg/Y2v0EBdCmTw7iDCevRqUmbmFnq7MROyV4eriJzh0KabAdZf7/k6koghst3ZU
-tWOwzshyxkBtWDwGmBpQGTGsKxJ8M1js3aSqNRXBT4OBWM9w2Glt1+8ty30RhYv3
-pSF+/HHLH7Ac+vLSIAlokaFW34RWTcJ/8rADuRWlXih4GfnIu0W/ncm5nTSaJiRA
-vr3dGDRO/khiXoJdbbOj7dHPULxVGbH9IbPK76TCwLbF7ikIMsPovVbTrpyL6vsb
-VUKeEl/5GKppTwp9DLAOeoSYpCYkkDkYKu9TRQjF02MCAwEAAaNQME4wHQYDVR0O
-BBYEFP2ut2AQdy6D1dwdwK740IHmbh38MB8GA1UdIwQYMBaAFP2ut2AQdy6D1dwd
-wK740IHmbh38MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBANMZUoPN
-mHzgja2PYkbvBYMHmpvUkVoiuvQ9cJPlqGTB2CRfG68BNNs/Clz8P7cIrAdkhCUw
-i1rSBhDuslGFNrSaIpv6B10FpBuKwef3G7YrPWFNEN6khY7aHNWSTHqKgs1DrGef
-2B9hvkrnHWbQVSVXrBFKe1wTCqcgGcOpYoSK7L8C6iX6uIA/uZYnVQ4NgBrizJ0a
-zkjdegz3hwO/gt4malEURy8D85/AAVt6PAzhpb9VJUGxSXr/EfntVUEz3L2gUFWW
-k1CnZFyz0rIOEt/zPmeAY8BLyd/Tjxm4Y+gwNazKq5y9AJS+m858b/nM4QdCnUE4
-yyoWAJDUHiAmvFA=
------END CERTIFICATE-----`;
-		const VALID_CERT_2 = `-----BEGIN CERTIFICATE-----
-MIIDATCCAemgAwIBAgIUTDC29D27otkSCpMVYZSZ7135bZcwDQYJKoZIhvcNAQEL
-BQAwEDEOMAwGA1UEAwwFVGVzdDIwHhcNMjYwMzI3MTcyNDA4WhcNMzYwMzI0MTcy
-NDA4WjAQMQ4wDAYDVQQDDAVUZXN0MjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
-AQoCggEBALXz/zRq88hhlLTJ47MoLdFqwjC9A9HiV6xOdezHhZ+vBaqCXsUcru9N
-3FfG6EVtuxSTLQIfgMpxifS4tF2tqkxBcW7JDGIuN02hjeWzlVztyAzISlZJUrGS
-kNnE11Br7p4O3OC1OcrpTBi/uBUPBiCFeeQCSIk+pf0h7Y4NUa27oTsZ6Qy0II7A
-2m5yqtlfyvxyLKIVIlDt1yCcvvJ2MSdiCcGDfyB/BmL5ow8kaR6bal1w/NRh8pNr
-OOjHmx3W+6Qv6g1M/mK7tITlstEEFJyWdzw6yEAZ7jyrHMkJKj9wTgmMxlx/H1d7
-st234qgFjm6w3WxA0AwaqNcjiD3SpxkCAwEAAaNTMFEwHQYDVR0OBBYEFPegA1b2
-piumrJ5DhMqgauhDrSYpMB8GA1UdIwQYMBaAFPegA1b2piumrJ5DhMqgauhDrSYp
-MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAE9imWiQSn1nde7x
-HPCZTuu3ydTNl6vT8yDHYUYBAC7kqUuhJ3gFd8x6toolxP2FvVuF4I7ovvRpW5zk
-eJ/AGOY4YB5g6K0MUpgy42V5WDXTqLR/62VCH+jQHgIjd0I728FWVoElXHYhupnR
-EKG5qVkfs8ySaBr/IV5nTSa0R9IyJX+Sb+qqITcD4CUmtNSwB1XhJq403VFCwiu+
-TQNsZdoNl0fm5SR11rDA3IffIxeAvTtZwSJ/hOfBQM1RnM24t6xYX7Oe/2ZPhN7v
-epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
-kBGIJYs=
------END CERTIFICATE-----`;
-
 		it("should not expose raw certificate PEM", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -781,8 +777,7 @@ kBGIJYs=
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
-					idpMetadata: { cert: "invalid-cert-data" },
+					cert: "invalid-cert-data",
 				}),
 			});
 
@@ -797,7 +792,7 @@ kBGIJYs=
 			).toBe("Failed to parse certificate");
 		});
 
-		it("should parse multiple signing certificates", async () => {
+		it("should report idpMetadata.cert array as multiple parsed certificates", async () => {
 			const { auth, getAuthHeaders, data } = createTestAuth(false);
 
 			const headers = await getAuthHeaders({
@@ -811,108 +806,19 @@ kBGIJYs=
 			);
 
 			data.ssoProvider.push({
-				id: "provider-multi-cert",
-				providerId: "multi-cert-provider",
+				id: "provider-rotation",
+				providerId: "rotation-provider",
 				issuer: "https://idp.example.com",
 				domain: "example.com",
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
-					idpMetadata: { cert: [VALID_CERT_1, VALID_CERT_2] },
+					idpMetadata: { cert: [ROTATION_CERT_1, ROTATION_CERT_2] },
 				}),
 			});
 
 			const response = await auth.api.getSSOProvider({
-				query: { providerId: "multi-cert-provider" },
-				headers,
-			});
-
-			expect(response.samlConfig?.certificate).toBeDefined();
-			expect(Array.isArray(response.samlConfig?.certificate)).toBe(true);
-			const certs = response.samlConfig?.certificate as {
-				fingerprintSha256: string;
-				notBefore: string;
-				notAfter: string;
-				publicKeyAlgorithm: string;
-			}[];
-			expect(certs).toHaveLength(2);
-			expect(certs[0]!.fingerprintSha256).toBeDefined();
-			expect(certs[1]!.fingerprintSha256).toBeDefined();
-			expect(certs[0]!.fingerprintSha256).not.toBe(certs[1]!.fingerprintSha256);
-		});
-
-		it("should return single object for single cert (not array)", async () => {
-			const { auth, getAuthHeaders, data } = createTestAuth(false);
-
-			const headers = await getAuthHeaders({
-				email: "owner@example.com",
-				password: "password123",
-				name: "Owner",
-			});
-
-			const user = (data.user as { id: string; email: string }[]).find(
-				(u) => u.email === "owner@example.com",
-			);
-
-			data.ssoProvider.push({
-				id: "provider-single-cert",
-				providerId: "single-cert-provider",
-				issuer: "https://idp.example.com",
-				domain: "example.com",
-				userId: user!.id,
-				samlConfig: JSON.stringify({
-					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
-					idpMetadata: { cert: VALID_CERT_1 },
-				}),
-			});
-
-			const response = await auth.api.getSSOProvider({
-				query: { providerId: "single-cert-provider" },
-				headers,
-			});
-
-			expect(response.samlConfig?.certificate).toBeDefined();
-			expect(Array.isArray(response.samlConfig?.certificate)).toBe(false);
-			const cert = response.samlConfig?.certificate as {
-				fingerprintSha256: string;
-			};
-			expect(cert.fingerprintSha256).toBeDefined();
-		});
-
-		it("should report certs from idpMetadata.cert when present", async () => {
-			const { auth, getAuthHeaders, data } = createTestAuth(false);
-
-			const headers = await getAuthHeaders({
-				email: "owner@example.com",
-				password: "password123",
-				name: "Owner",
-			});
-
-			const user = (data.user as { id: string; email: string }[]).find(
-				(u) => u.email === "owner@example.com",
-			);
-
-			data.ssoProvider.push({
-				id: "provider-idp-cert",
-				providerId: "idp-cert-provider",
-				issuer: "https://idp.example.com",
-				domain: "example.com",
-				userId: user!.id,
-				samlConfig: JSON.stringify({
-					entryPoint: "https://idp.example.com/sso",
-					cert: "invalid-fallback-cert",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
-					idpMetadata: {
-						entityID: "https://idp.example.com",
-						cert: [VALID_CERT_1, VALID_CERT_2],
-					},
-				}),
-			});
-
-			const response = await auth.api.getSSOProvider({
-				query: { providerId: "idp-cert-provider" },
+				query: { providerId: "rotation-provider" },
 				headers,
 			});
 
@@ -921,11 +827,10 @@ kBGIJYs=
 			}[];
 			expect(Array.isArray(certs)).toBe(true);
 			expect(certs).toHaveLength(2);
-			expect(certs[0]!.fingerprintSha256).toBeDefined();
-			expect(certs[1]!.fingerprintSha256).toBeDefined();
+			expect(certs[0]!.fingerprintSha256).not.toBe(certs[1]!.fingerprintSha256);
 		});
 
-		it("should omit certificate field when no cert is configured", async () => {
+		it("should prefer idpMetadata.cert over top-level cert in the sanitized response", async () => {
 			const { auth, getAuthHeaders, data } = createTestAuth(false);
 
 			const headers = await getAuthHeaders({
@@ -939,26 +844,29 @@ kBGIJYs=
 			);
 
 			data.ssoProvider.push({
-				id: "provider-metadata-only",
-				providerId: "metadata-only-provider",
+				id: "provider-precedence",
+				providerId: "precedence-provider",
 				issuer: "https://idp.example.com",
 				domain: "example.com",
 				userId: user!.id,
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
-					idpMetadata: {
-						metadata: "<EntityDescriptor>...</EntityDescriptor>",
-					},
+					cert: "invalid-fallback-cert",
+					idpMetadata: { cert: ROTATION_CERT_1 },
 				}),
 			});
 
 			const response = await auth.api.getSSOProvider({
-				query: { providerId: "metadata-only-provider" },
+				query: { providerId: "precedence-provider" },
 				headers,
 			});
 
-			expect(response.samlConfig?.certificate).toBeUndefined();
+			const cert = response.samlConfig?.certificate as {
+				fingerprintSha256?: string;
+				error?: string;
+			};
+			expect(cert.error).toBeUndefined();
+			expect(cert.fingerprintSha256).toBeDefined();
 		});
 
 		it("should mask short clientId with just asterisks", async () => {
@@ -1289,8 +1197,7 @@ kBGIJYs=
 					providerId: "my-oidc-provider",
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
-						callbackUrl: "http://localhost:3000/api/sso/callback",
-						idpMetadata: { cert: TEST_CERT },
+						cert: TEST_CERT,
 						spMetadata: {},
 					},
 				},

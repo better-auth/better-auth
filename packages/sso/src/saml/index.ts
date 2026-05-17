@@ -11,9 +11,5 @@ export {
 } from "./algorithms";
 
 export { validateSingleAssertion } from "./assertions";
-export {
-	createIdP,
-	createSP,
-	resolveSigningCerts,
-	validateCertSources,
-} from "./identity-provider";
+export { resolveSigningCerts, validateCertSources } from "./cert";
+export { validateAudience, validateInResponseTo } from "./response-validation";

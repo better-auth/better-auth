@@ -101,6 +101,7 @@ export const twoFactor = sqliteTable(
     userId: integer("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    verified: integer("verified", { mode: "boolean" }).default(true),
   },
   (table) => [
     index("twoFactor_secret_idx").on(table.secret),

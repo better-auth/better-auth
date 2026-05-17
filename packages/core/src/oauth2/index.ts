@@ -1,7 +1,24 @@
 export {
+	decodeBasicCredentials,
+	encodeBasicCredentials,
+} from "./basic-credentials";
+export type {
+	ClientAssertionContext,
+	ClientAssertionGetter,
+	ClientAssertionGrantType,
+	PrivateKeyJwtClientAssertionGetterOptions,
+	PrivateKeyJwtSigningAlgorithm,
+} from "./client-assertion";
+export {
+	CLIENT_ASSERTION_TYPE,
+	createPrivateKeyJwtClientAssertionGetter,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+	resolveClientAssertionParams,
+	signPrivateKeyJwtClientAssertion,
+} from "./client-assertion";
+export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,
-	createClientCredentialsTokenRequest,
 } from "./client-credentials-token";
 export { createAuthorizationURL } from "./create-authorization-url";
 export type {
@@ -11,14 +28,21 @@ export type {
 	ProviderOptions,
 } from "./oauth-provider";
 export {
-	createRefreshAccessTokenRequest,
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export { generateCodeChallenge, getOAuth2Tokens } from "./utils";
+export type {
+	TokenEndpointAuth,
+	TokenEndpointAuthMethod,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+export {
+	generateCodeChallenge,
+	getOAuth2Tokens,
+	getPrimaryClientId,
+} from "./utils";
 export {
 	authorizationCodeRequest,
-	createAuthorizationCodeRequest,
 	validateAuthorizationCode,
 	validateToken,
 } from "./validate-authorization-code";

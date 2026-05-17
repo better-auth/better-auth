@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -51,7 +51,7 @@ describe("oauth revoke", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	async function createAuthUrl(
@@ -83,7 +83,7 @@ describe("oauth revoke", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -91,7 +91,7 @@ describe("oauth revoke", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -331,7 +331,7 @@ describe("oauth revoke - config", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
 		"openid",
 		"email",

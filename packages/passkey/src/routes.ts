@@ -16,6 +16,7 @@ import {
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	requireResourceOwnership,
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -117,7 +118,7 @@ export const generatePasskeyRegistrationOptions = (
 		"/passkey/generate-register-options",
 		{
 			method: "GET",
-			use: requireSession ? [freshSessionMiddleware] : undefined,
+			use: requireSession ? [freshSessionMiddleware] : [],
 			query: generatePasskeyQuerySchema,
 			metadata: {
 				openapi: {
@@ -512,7 +513,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		{
 			method: "POST",
 			body: verifyPasskeyRegistrationBodySchema,
-			use: requireSession ? [freshSessionMiddleware] : undefined,
+			use: requireSession ? [freshSessionMiddleware] : [],
 			metadata: {
 				openapi: {
 					operationId: "passkeyVerifyRegistration",
@@ -837,6 +838,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				return ctx.json(
 					{
 						session: s,
+						user,
 					},
 					{
 						status: 200,
@@ -939,7 +941,16 @@ export const deletePasskey = createAuthEndpoint(
 	{
 		method: "POST",
 		body: deletePasskeyBodySchema,
-		use: [sessionMiddleware],
+		use: [
+			sessionMiddleware,
+			requireResourceOwnership({
+				model: "passkey",
+				idParam: "id",
+				idSource: "body",
+				notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+				forbiddenStatus: "UNAUTHORIZED",
+			}),
+		],
 		metadata: {
 			openapi: {
 				description: "Delete a specific passkey",
@@ -967,24 +978,9 @@ export const deletePasskey = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const passkey = await ctx.context.adapter.findOne<Passkey>({
-			model: "passkey",
-			where: [
-				{
-					field: "id",
-					value: ctx.body.id,
-				},
-			],
-		});
-		if (!passkey) {
-			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
-		}
-		if (passkey.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED");
-		}
 		await ctx.context.adapter.delete({
 			model: "passkey",
-			where: [{ field: "id", value: passkey.id }],
+			where: [{ field: "id", value: ctx.body.id }],
 		});
 		return ctx.json({
 			status: true,
@@ -1021,7 +1017,18 @@ export const updatePasskey = createAuthEndpoint(
 	{
 		method: "POST",
 		body: updatePassKeyBodySchema,
-		use: [sessionMiddleware],
+		use: [
+			sessionMiddleware,
+			requireResourceOwnership({
+				model: "passkey",
+				idParam: "id",
+				idSource: "body",
+				notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+				forbiddenError:
+					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+				forbiddenStatus: "UNAUTHORIZED",
+			}),
+		],
 		metadata: {
 			openapi: {
 				description: "Update a specific passkey's name",
@@ -1047,27 +1054,6 @@ export const updatePasskey = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const passkey = await ctx.context.adapter.findOne<Passkey>({
-			model: "passkey",
-			where: [
-				{
-					field: "id",
-					value: ctx.body.id,
-				},
-			],
-		});
-
-		if (!passkey) {
-			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
-		}
-
-		if (passkey.userId !== ctx.context.session.user.id) {
-			throw APIError.from(
-				"UNAUTHORIZED",
-				PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
-			);
-		}
-
 		const updatedPasskey = await ctx.context.adapter.update<Passkey>({
 			model: "passkey",
 			where: [

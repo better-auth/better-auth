@@ -17,6 +17,7 @@ import { passkeyClient } from "./client";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),
+	verifyAuthenticationResponse: vi.fn(),
 }));
 
 vi.mock("@simplewebauthn/server", async () => {
@@ -26,6 +27,7 @@ vi.mock("@simplewebauthn/server", async () => {
 	return {
 		...actual,
 		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
+		verifyAuthenticationResponse: serverMocks.verifyAuthenticationResponse,
 	};
 });
 
@@ -51,12 +53,14 @@ const mockRegistrationVerification = {
 };
 
 describe("passkey", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [passkey()],
-	});
+	const { auth, client, signInWithTestUser, sessionSetter, customFetchImpl } =
+		await getTestInstance({
+			plugins: [passkey()],
+		});
 
 	afterEach(() => {
 		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
 	});
 
 	it("should generate register options", async () => {
@@ -401,6 +405,185 @@ describe("passkey", async () => {
 			},
 		});
 		expect(deleteResult.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
+	 */
+	it("should not allow deleting another user's passkey", async () => {
+		const { user: userA } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: userA.id,
+				publicKey: "mockPublicKey",
+				name: "userA-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-user-delete-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await client.signUp.email(
+			{
+				email: "attacker-delete@test.com",
+				password: "password123",
+				name: "Attacker",
+			},
+			{ throw: true },
+		);
+		const headersB = new Headers();
+		await client.signIn.email(
+			{ email: "attacker-delete@test.com", password: "password123" },
+			{ throw: true, onSuccess: sessionSetter(headersB) },
+		);
+
+		await expect(
+			auth.api.deletePasskey({
+				headers: headersB,
+				body: { id: passkey.id },
+			}),
+		).rejects.toThrowError(APIError);
+
+		const stillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkey.id }],
+		});
+		expect(stillExists).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
+	 */
+	it("should not allow updating another user's passkey", async () => {
+		const { user: userA } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: userA.id,
+				publicKey: "mockPublicKey",
+				name: "original-name",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-user-update-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await client.signUp.email(
+			{
+				email: "attacker-update@test.com",
+				password: "password123",
+				name: "Attacker",
+			},
+			{ throw: true },
+		);
+		const headersB = new Headers();
+		await client.signIn.email(
+			{ email: "attacker-update@test.com", password: "password123" },
+			{ throw: true, onSuccess: sessionSetter(headersB) },
+		);
+
+		await expect(
+			auth.api.updatePasskey({
+				headers: headersB,
+				body: { id: passkey.id, name: "hacked" },
+			}),
+		).rejects.toThrowError(APIError);
+
+		const unchanged = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "id", value: passkey.id }],
+		});
+		expect(unchanged?.name).toBe("original-name");
+	});
+
+	it("should verify passkey authentication and return user", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers: headers,
+				customFetchImpl,
+			},
+		});
+
+		let passkeyCookie = "";
+		await client.passkey.generateAuthenticateOptions({
+			fetchOptions: {
+				onResponse(context) {
+					const setCookie = context.response.headers.get("Set-Cookie");
+					if (setCookie) {
+						passkeyCookie = setCookie.split(";")[0] ?? "";
+					}
+				},
+			},
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
+
+		const response = await auth.api.verifyPasskeyAuthentication({
+			headers,
+			body: {
+				response: {
+					id: "mockCredentialID",
+					rawId: "mockRawId",
+					response: {
+						clientDataJSON: "mockClientDataJSON",
+						authenticatorData: "mockAuthenticatorData",
+						signature: "mockSignature",
+						userHandle: "mockUserHandle",
+					},
+					type: "public-key",
+					clientExtensionResults: {},
+				},
+			},
+		});
+
+		expect(response.session).toBeDefined();
+		expect(response.user).toBeDefined();
+		expect(response.user.id).toBe(user.id);
+		expect(response.user.email).toBe(user.email);
 	});
 });
 

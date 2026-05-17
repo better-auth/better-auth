@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -51,7 +51,7 @@ describe("oauth introspect", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	async function createAuthUrl(
@@ -83,7 +83,7 @@ describe("oauth introspect", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -91,7 +91,7 @@ describe("oauth introspect", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -121,9 +121,7 @@ describe("oauth introspect", async () => {
 
 	async function getTokens(
 		overrides?: Partial<Parameters<typeof createAuthUrl>[0]>,
-		authCodeOverrides?: Partial<
-			Parameters<typeof createAuthorizationCodeRequest>[0]
-		>,
+		authCodeOverrides?: Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 		authorizeHeaders?: Headers,
 	) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl(overrides);
@@ -496,7 +494,7 @@ describe("oauth introspect - config", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
 		"openid",
 		"email",
