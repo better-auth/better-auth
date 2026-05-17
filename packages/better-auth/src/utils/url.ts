@@ -3,6 +3,8 @@ import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { wildcardMatch } from "./wildcard";
 
+const SLASH_CHAR_CODE = "/".charCodeAt(0);
+
 /**
  * Minimal loopback check for dev scheme inference only. Reachable from
  * `client/config.ts` via `getBaseURL`, so we MUST NOT import the full
@@ -27,10 +29,18 @@ function isLoopbackForDevScheme(host: string): boolean {
 	);
 }
 
+export function trimTrailingSlashes(value: string): string {
+	let end = value.length;
+	while (end > 0 && value.charCodeAt(end - 1) === SLASH_CHAR_CODE) {
+		end--;
+	}
+	return end === value.length ? value : value.slice(0, end);
+}
+
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
-		const pathname = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+		const pathname = trimTrailingSlashes(parsedUrl.pathname) || "/";
 		return pathname !== "/";
 	} catch {
 		throw new BetterAuthError(
@@ -68,7 +78,7 @@ function withPath(url: string, path = "/api/auth") {
 		return url;
 	}
 
-	const trimmedUrl = url.replace(/\/+$/, "");
+	const trimmedUrl = trimTrailingSlashes(url);
 
 	if (!path || path === "/") {
 		return trimmedUrl;
