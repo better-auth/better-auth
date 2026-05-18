@@ -257,7 +257,24 @@ function processZodType(zodType: z.ZodType<any>): any {
 	return baseSchema;
 }
 
+function deepClone(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map(deepClone);
+	}
+	if (value && typeof value === "object" && value.constructor === Object) {
+		const result: Record<string, unknown> = {};
+		for (const key of Object.keys(value)) {
+			result[key] = deepClone((value as Record<string, unknown>)[key]);
+		}
+		return result;
+	}
+	return value;
+}
+
 function getResponse(responses?: Record<string, any> | undefined) {
+	const cloned = responses
+		? (deepClone(responses) as Record<string, any>)
+		: undefined;
 	return {
 		"400": {
 			content: {
@@ -355,8 +372,33 @@ function getResponse(responses?: Record<string, any> | undefined) {
 			description:
 				"Internal Server Error. This is a problem with the server that you cannot fix.",
 		},
-		...responses,
+		...cloned,
 	} as any;
+}
+
+function getUniqueOperationId(
+	operationId: string | undefined,
+	method: string,
+	usedOperationIds: Set<string>,
+) {
+	if (!operationId) {
+		return undefined;
+	}
+	if (!usedOperationIds.has(operationId)) {
+		usedOperationIds.add(operationId);
+		return operationId;
+	}
+	const methodSuffix =
+		method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+	const baseOperationId = `${operationId}${methodSuffix}`;
+	let uniqueOperationId = baseOperationId;
+	let index = 2;
+	while (usedOperationIds.has(uniqueOperationId)) {
+		uniqueOperationId = `${baseOperationId}${index}`;
+		index++;
+	}
+	usedOperationIds.add(uniqueOperationId);
+	return uniqueOperationId;
 }
 
 function toOpenApiPath(path: string) {
@@ -419,6 +461,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
+	const usedOperationIds = new Set<string>();
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
@@ -434,7 +477,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: getUniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+						usedOperationIds,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -454,7 +501,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: getUniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+						usedOperationIds,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -519,7 +570,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: getUniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+							usedOperationIds,
+						),
 						security: [
 							{
 								bearerAuth: [],
@@ -540,7 +595,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: getUniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+							usedOperationIds,
+						),
 						security: [
 							{
 								bearerAuth: [],

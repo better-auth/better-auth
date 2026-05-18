@@ -139,6 +139,47 @@ describe("open-api", async () => {
 		expect(getSessionSchema.nullable).toBe(undefined);
 	});
 
+	it("should generate unique operationIds", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const seen = new Map<string, string>();
+
+		for (const [path, pathItem] of Object.entries(paths)) {
+			for (const method of ["get", "post", "put", "patch", "delete"]) {
+				const operationId = pathItem[method]?.operationId;
+				if (!operationId) {
+					continue;
+				}
+				expect(seen.get(operationId)).toBeUndefined();
+				seen.set(operationId, `${method.toUpperCase()} ${path}`);
+			}
+		}
+
+		expect(paths["/get-session"].get.operationId).toBe("getSession");
+		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9669
+	 */
+	it("should not share response objects between GET and POST methods", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const getResp = paths["/get-session"].get.responses;
+		const postResp = paths["/get-session"].post.responses;
+
+		expect(getResp).not.toBe(postResp);
+		expect(getResp["200"]).not.toBe(postResp["200"]);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/open-api/generate-schema"),
+		);
+		const serialized = await response.text();
+		expect(response.status).toBe(200);
+		expect(serialized).not.toContain("[Circular ref");
+	});
+
 	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
