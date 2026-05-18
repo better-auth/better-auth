@@ -1306,3 +1306,75 @@ describe("multi team support", async () => {
 		expect(stillTeam2Member).toBeUndefined();
 	});
 });
+
+describe("invitation with team id containing comma", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			advanced: {
+				database: {
+					generateId: ({ model }) => {
+						if (model === "team") {
+							return `team,id,${crypto.randomUUID()}`;
+						}
+						return crypto.randomUUID();
+					},
+				},
+			},
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+					teams: { enabled: true },
+				}),
+			],
+			logger: { level: "error" },
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+		},
+		{ testWith: "sqlite" },
+	);
+
+	const admin = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		headers: admin.headers,
+		body: { name: "Comma Org", slug: "comma-org" },
+	});
+	if (!org) throw new Error("failed to create organization");
+	const organizationId = org.id;
+
+	const team = await auth.api.createTeam({
+		headers: admin.headers,
+		body: { name: "Comma Team", organizationId },
+	});
+
+	it("seeds a team whose generated id contains the storage separator", () => {
+		expect(team.id).toContain(",");
+	});
+
+	it.each([
+		{ name: "string body", teamId: team.id },
+		{ name: "array body", teamId: [team.id] },
+	])("rejects createInvitation with $name", async ({ teamId }) => {
+		await expect(
+			auth.api.createInvitation({
+				headers: admin.headers,
+				body: {
+					email: "comma-invitee@email.com",
+					role: "member",
+					organizationId,
+					teamId,
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "INVALID_TEAM_ID" },
+		});
+	});
+});
