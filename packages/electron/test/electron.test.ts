@@ -2241,12 +2241,12 @@ describe("cookies getCookie", () => {
 		expect(getCookie(stored)).toBe("a=1; b=2");
 	});
 
-	it("skips stored entries whose value would split the Cookie header", () => {
+	it("percent-encodes stored values containing reserved cookie-octet bytes", () => {
 		const stored = JSON.stringify({
 			session: { value: "safe", expires: null },
-			evil: { value: "foo;bar=baz", expires: null },
+			pref: { value: "foo;bar=baz", expires: null },
 		});
-		expect(getCookie(stored)).toBe("session=safe");
+		expect(getCookie(stored)).toBe("session=safe; pref=foo%3Bbar%3Dbaz");
 	});
 
 	it("skips stored entries whose name violates the cookie-name token", () => {

@@ -414,8 +414,8 @@ describe("cookie-utils setRequestCookie", () => {
 
 	it("percent-encodes reserved cookie-octet bytes when serializing", () => {
 		const headers = new Headers({ cookie: "locale=en" });
-		setRequestCookie(headers, "session", "foo;evil=bar");
-		expect(headers.get("cookie")).toBe("locale=en; session=foo%3Bevil%3Dbar");
+		setRequestCookie(headers, "session", "foo;bar=baz");
+		expect(headers.get("cookie")).toBe("locale=en; session=foo%3Bbar%3Dbaz");
 	});
 
 	it("treats input as semantic and percent-encodes literal double-quotes", () => {
@@ -1589,10 +1589,8 @@ describe("applySetCookies", () => {
 
 	it("re-encodes Set-Cookie values containing reserved bytes on wire join", () => {
 		const headers = new Headers({ cookie: "session=safe" });
-		applySetCookies(headers, ["evil=foo%3Bsplit=hello; Path=/"]);
-		expect(headers.get("cookie")).toBe(
-			"session=safe; evil=foo%3Bsplit%3Dhello",
-		);
+		applySetCookies(headers, ["pref=foo%3Bbar=hello; Path=/"]);
+		expect(headers.get("cookie")).toBe("session=safe; pref=foo%3Bbar%3Dhello");
 	});
 
 	it("preserves literal double-quotes in Set-Cookie values", () => {
