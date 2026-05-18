@@ -326,6 +326,69 @@ describe("trusted origins", () => {
 		});
 	});
 
+	describe("dynamic baseURL allowedHosts protocol", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9634
+		 */
+		it("should trust the http origin of an allowed host when protocol is 'http'", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: {
+					allowedHosts: ["staging.example.com"],
+					protocol: "http",
+					fallback: "http://fallback.example.com",
+				},
+			});
+
+			await expect(isTrustedOrigin("http://staging.example.com")).resolves.toBe(
+				true,
+			);
+		});
+
+		it("should not trust the https origin of an allowed host when protocol is 'http'", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: {
+					allowedHosts: ["staging.example.com"],
+					protocol: "http",
+					fallback: "http://staging.example.com",
+				},
+			});
+
+			await expect(
+				isTrustedOrigin("https://staging.example.com"),
+			).resolves.toBe(false);
+		});
+
+		it("should trust the https origin of an allowed host when protocol is 'https'", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: {
+					allowedHosts: ["app.example.com"],
+					protocol: "https",
+					fallback: "https://app.example.com",
+				},
+			});
+
+			await expect(isTrustedOrigin("https://app.example.com")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("http://app.example.com")).resolves.toBe(
+				false,
+			);
+		});
+
+		it("should still trust http for loopback hosts regardless of protocol default", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: {
+					allowedHosts: ["localhost:3000"],
+					fallback: "https://app.example.com",
+				},
+			});
+
+			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
+				true,
+			);
+		});
+	});
+
 	it("should merge trustedOrigins from plugins using init() with user config", async () => {
 		const { isTrustedOrigin } = await createAuthTestInstance({
 			trustedOrigins: async () => ["https://user-dynamic.com"],
