@@ -178,7 +178,7 @@ verification record could not be written to the database.
 
 ### How to fix
 
-* Run `npx @better-auth/cli migrate` to ensure all tables exist.
+* Run `npx auth migrate` to ensure all tables exist.
 * Check your database connection and credentials.
 * Review any `databaseHooks` on the `verification` model that might prevent writes.
 
@@ -200,7 +200,7 @@ triggers, and what to do about it.
 | **Medium**    | Signed cookie expired (5 min) while DB record is still valid (10 min) | `state_security_mismatch`                                       | The cookie has a shorter TTL than the DB record; users between 5–10 min will hit this |
 | **Low**       | Secret rotation mid-flow                                              | `state_invalid` (cookie) or `state_mismatch` (DB + hashed)      | Rotate secrets during low-traffic windows                                             |
 | **Low**       | OAuth provider altered the state parameter                            | `state_mismatch` (DB)                                           | Verify the provider preserves `state` exactly; check for URL encoding issues          |
-| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `npx @better-auth/cli migrate`                                                    |
+| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `npx auth migrate`                                                    |
 | **Very low**  | Clock skew between server instances                                   | request expired                                                 | Enable NTP on all servers                                                             |
 
 ***

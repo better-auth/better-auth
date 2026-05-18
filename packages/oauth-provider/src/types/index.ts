@@ -6,10 +6,14 @@ import type { Awaitable } from "./helpers";
 import type { GrantType } from "./oauth";
 
 export type {
+	AuthMethod,
 	AuthServerMetadata,
+	BearerMethodsSupported,
+	GrantType,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
+	TokenEndpointAuthMethod,
 } from "./oauth";
 
 export type StoreTokenType =
@@ -1043,7 +1047,7 @@ export interface OAuthRefreshToken<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
 	token: string;
-	sessionId: string;
+	sessionId?: string;
 	userId: string;
 	referenceId?: string;
 	clientId?: string;
