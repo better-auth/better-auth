@@ -1593,10 +1593,10 @@ describe("applySetCookies", () => {
 		expect(headers.get("cookie")).toBe("session=safe; pref=foo%3Bbar%3Dhello");
 	});
 
-	it("preserves literal double-quotes in Set-Cookie values", () => {
+	it("strips RFC 6265 quoted-string wrapping from Set-Cookie values", () => {
 		const headers = new Headers();
 		applySetCookies(headers, ['token="abc"; Path=/']);
-		expect(headers.get("cookie")).toBe("token=%22abc%22");
+		expect(headers.get("cookie")).toBe("token=abc");
 	});
 });
 
