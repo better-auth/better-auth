@@ -13,23 +13,6 @@ import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
-/**
- * Derive a stable, short identifier for a JWT token so we can
- * track whether it has already been consumed.  We use the first
- * 43 characters of the base64url-encoded SHA-256 digest of the
- * raw token string (≈ 256 bits of entropy, URL-safe, no padding).
- */
-async function getTokenIdentifier(token: string): Promise<string> {
-	const encoded = new TextEncoder().encode(token);
-	const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const base64 = btoa(String.fromCharCode(...hashArray))
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "");
-	return `used-email-token:${base64}`;
-}
-
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -323,11 +306,11 @@ export const verifyEmail = createAuthEndpoint(
 		const parsed = schema.parse(jwt.payload);
 		/**
 		 * Enforce single-use for change-email tokens BEFORE any DB lookups.
-		 * JWT-based tokens are stateless so they remain cryptographically valid
-		 * until expiry. We store a record of consumed tokens in the verification
-		 * table so replaying the same link is rejected immediately — even after
-		 * the email has already been updated in the DB (which would otherwise
-		 * cause a misleading USER_NOT_FOUND error on reuse).
+		 * The token is stored in the verification table when it is issued
+		 * (in update-user.ts). Here we look it up and delete it atomically —
+		 * if it is not found the token has already been used or was never issued.
+		 *
+		 * This follows the same store-and-delete pattern used by password reset.
 		 *
 		 * @see https://github.com/better-auth/better-auth/issues/9479
 		 */
@@ -336,22 +319,17 @@ export const verifyEmail = createAuthEndpoint(
 			(parsed.requestType === "change-email-confirmation" ||
 				parsed.requestType === "change-email-verification")
 		) {
-			const tokenIdentifier = await getTokenIdentifier(token);
-			const alreadyUsed =
+			const tokenIdentifier = `change-email:${token}`;
+			const storedToken =
 				await ctx.context.internalAdapter.findVerificationValue(
 					tokenIdentifier,
 				);
-			if (alreadyUsed) {
+			if (!storedToken || storedToken.expiresAt < new Date()) {
 				return redirectOnError(BASE_ERROR_CODES.TOKEN_ALREADY_USED);
 			}
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: tokenIdentifier,
-				value: "used",
-				expiresAt: getDate(
-					ctx.context.options.emailVerification?.expiresIn ?? 3600,
-					"sec",
-				),
-			});
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				tokenIdentifier,
+			);
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
@@ -376,6 +354,14 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `change-email:${newToken}`,
+						value: newToken,
+						expiresAt: getDate(
+							ctx.context.options.emailVerification?.expiresIn ?? 3600,
+							"sec",
+						),
+					});
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)
 						: encodeURIComponent("/");

@@ -6,6 +6,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
+import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
@@ -835,6 +836,14 @@ export const changeEmail = createAuthEndpoint(
 					requestType: "change-email-confirmation",
 				},
 			);
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `change-email:${token}`,
+				value: token,
+				expiresAt: getDate(
+					ctx.context.options.emailVerification?.expiresIn ?? 3600,
+					"sec",
+				),
+			});
 			const url = `${
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
@@ -870,6 +879,14 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `change-email:${token}`,
+			value: token,
+			expiresAt: getDate(
+				ctx.context.options.emailVerification?.expiresIn ?? 3600,
+				"sec",
+			),
+		});
 		const url = `${
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
