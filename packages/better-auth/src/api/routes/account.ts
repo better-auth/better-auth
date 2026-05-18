@@ -853,6 +853,13 @@ const accountInfoQuerySchema = z.optional(
 					"The provider given account id for which to get the account info",
 			})
 			.optional(),
+		providerId: z
+			.string()
+			.meta({
+				description:
+					"The provider ID to disambiguate provider-issued account IDs",
+			})
+			.optional(),
 		userId: z
 			.string()
 			.meta({
@@ -916,7 +923,11 @@ export const accountInfo = createAuthEndpoint(
 		query: accountInfoQuerySchema,
 	},
 	async (ctx) => {
-		const { accountId: providedAccountId, userId } = ctx.query || {};
+		const {
+			accountId: providedAccountId,
+			providerId: providedProviderId,
+			userId,
+		} = ctx.query || {};
 		const resolvedUserId = await resolveUserId(ctx, userId);
 
 		let account: Account | undefined = undefined;
@@ -928,10 +939,15 @@ export const accountInfo = createAuthEndpoint(
 				}
 			}
 		} else {
-			const accountData =
-				await ctx.context.internalAdapter.findAccount(providedAccountId);
-			if (accountData) {
-				account = accountData;
+			const accounts =
+				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+			const matchingAccounts = accounts.filter(
+				(acc) =>
+					acc.accountId === providedAccountId &&
+					(!providedProviderId || acc.providerId === providedProviderId),
+			);
+			if (matchingAccounts.length === 1) {
+				account = matchingAccounts[0];
 			}
 		}
 
