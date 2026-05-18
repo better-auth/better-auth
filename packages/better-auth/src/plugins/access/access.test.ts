@@ -187,4 +187,38 @@ describe("access", () => {
 			expect(response.error).toContain("audit");
 		}
 	});
+
+	it("should return the same unauthorized error format for unknown and denied resources", () => {
+		const unknownResource = looseRole.authorize({
+			audit: ["read"],
+		});
+		const deniedAction = looseRole.authorize({
+			project: ["delete-many"],
+		});
+
+		expect(unknownResource).toEqual({
+			success: false,
+			error: 'unauthorized to access resource "audit"',
+		});
+		expect(deniedAction).toEqual({
+			success: false,
+			error: 'unauthorized to access resource "project"',
+		});
+	});
+
+	it("should reject malformed action connector requests", () => {
+		expect(() =>
+			role1.authorize({
+				project: { actions: ["create"], connector: "XOR" },
+			} as never),
+		).toThrow("Invalid access control request");
+	});
+
+	it("should reject non-string action values", () => {
+		expect(() =>
+			role1.authorize({
+				project: ["create", 1],
+			} as never),
+		).toThrow("Invalid access control request");
+	});
 });
