@@ -188,7 +188,7 @@ describe("access", () => {
 		}
 	});
 
-	it("should return the same unauthorized error format for unknown and denied resources", () => {
+	it("should preserve unauthorized error formats for unknown and denied resources", () => {
 		const unknownResource = looseRole.authorize({
 			audit: ["read"],
 		});
@@ -198,7 +198,7 @@ describe("access", () => {
 
 		expect(unknownResource).toEqual({
 			success: false,
-			error: 'unauthorized to access resource "audit"',
+			error: "You are not allowed to access resource: audit",
 		});
 		expect(deniedAction).toEqual({
 			success: false,
@@ -206,19 +206,22 @@ describe("access", () => {
 		});
 	});
 
-	it("should reject malformed action connector requests", () => {
-		expect(() =>
-			role1.authorize({
-				project: { actions: ["create"], connector: "XOR" },
-			} as never),
-		).toThrow("Invalid access control request");
+	it("should preserve AND behavior for unknown action connectors", () => {
+		const response = role1.authorize({
+			project: { actions: ["create", "delete-many"], connector: "XOR" },
+		} as never);
+
+		expect(response.success).toBe(false);
 	});
 
-	it("should reject non-string action values", () => {
-		expect(() =>
-			role1.authorize({
-				project: ["create", 1],
-			} as never),
-		).toThrow("Invalid access control request");
+	it("should return an unauthorized response for non-string action values", () => {
+		const response = role1.authorize({
+			project: ["create", 1],
+		} as never);
+
+		expect(response).toEqual({
+			success: false,
+			error: 'unauthorized to access resource "project"',
+		});
 	});
 });

@@ -14,26 +14,32 @@ export type AuthorizeResponse =
 type Connector = "OR" | "AND";
 
 type NormalizedActionRequest = {
-	actions: string[];
+	actions: unknown[];
 	connector: Connector;
 };
 
-function unauthorizedResponse(requestedResource: string): AuthorizeResponse {
+function unknownResourceResponse(requestedResource: string): AuthorizeResponse {
+	return {
+		success: false,
+		error: `You are not allowed to access resource: ${requestedResource}`,
+	};
+}
+
+function unauthorizedResourceResponse(
+	requestedResource: string,
+): AuthorizeResponse {
 	return {
 		success: false,
 		error: `unauthorized to access resource "${requestedResource}"`,
 	};
 }
 
-function isConnector(connector: unknown): connector is Connector {
-	return connector === "OR" || connector === "AND";
+function normalizeConnector(connector: unknown): Connector {
+	return connector === "OR" ? "OR" : "AND";
 }
 
-function isActionList(actions: unknown): actions is string[] {
-	return (
-		Array.isArray(actions) &&
-		actions.every((action) => typeof action === "string")
-	);
+function isActionList(actions: unknown): actions is unknown[] {
+	return Array.isArray(actions);
 }
 
 function normalizeActionRequest(
@@ -55,14 +61,27 @@ function normalizeActionRequest(
 		connector?: unknown;
 	};
 
-	if (!isActionList(actions) || !isConnector(connector)) {
-		throw new BetterAuthError("Invalid access control request");
+	if (!isActionList(actions)) {
+		return {
+			actions: [],
+			connector: normalizeConnector(connector),
+		};
 	}
 
 	return {
 		actions,
-		connector,
+		connector: normalizeConnector(connector),
 	};
+}
+
+function hasAllowedAction(
+	allowedActions: readonly string[],
+	requestedAction: unknown,
+) {
+	return (
+		typeof requestedAction === "string" &&
+		allowedActions.includes(requestedAction)
+	);
 }
 
 function isResourceAuthorized(
@@ -75,12 +94,12 @@ function isResourceAuthorized(
 
 	if (connector === "OR") {
 		return actions.some((requestedAction) =>
-			allowedActions.includes(requestedAction),
+			hasAllowedAction(allowedActions, requestedAction),
 		);
 	}
 
 	return actions.every((requestedAction) =>
-		allowedActions.includes(requestedAction),
+		hasAllowedAction(allowedActions, requestedAction),
 	);
 }
 
@@ -102,7 +121,7 @@ export function role<
 				const allowedActions = statements[requestedResource];
 				if (!allowedActions) {
 					if (connector === "AND") {
-						return unauthorizedResponse(requestedResource);
+						return unknownResourceResponse(requestedResource);
 					}
 					continue;
 				}
@@ -119,7 +138,7 @@ export function role<
 					return { success: true };
 				}
 				if (!isAuthorized && connector === "AND") {
-					return unauthorizedResponse(requestedResource);
+					return unauthorizedResourceResponse(requestedResource);
 				}
 			}
 			if (hasAuthorizedResource) {

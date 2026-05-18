@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Refactor `role.authorize` control flow and reject malformed access action connector requests.
+Refactor `role.authorize` control flow while preserving existing authorization behavior.
