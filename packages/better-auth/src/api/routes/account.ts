@@ -822,6 +822,13 @@ const accountInfoQuerySchema = z.optional(
 					"The provider given account id for which to get the account info",
 			})
 			.optional(),
+		providerId: z
+			.string()
+			.meta({
+				description:
+					"The provider ID to disambiguate provider-issued account IDs",
+			})
+			.optional(),
 	}),
 );
 
@@ -881,6 +888,7 @@ export const accountInfo = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const providedAccountId = ctx.query?.accountId;
+		const providedProviderId = ctx.query?.providerId;
 		let account: Account | undefined = undefined;
 		if (!providedAccountId) {
 			if (ctx.context.options.account?.storeAccountCookie) {
@@ -889,12 +897,19 @@ export const accountInfo = createAuthEndpoint(
 					account = accountData;
 				}
 			}
+		} else if (providedProviderId) {
+			account =
+				(await ctx.context.internalAdapter.findAccountByProviderId(
+					providedAccountId,
+					providedProviderId,
+				)) ?? undefined;
 		} else {
-			const accountData =
-				await ctx.context.internalAdapter.findAccount(providedAccountId);
-			if (accountData) {
-				account = accountData;
-			}
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				ctx.context.session.user.id,
+			);
+			account = accounts.find(
+				(account) => account.accountId === providedAccountId,
+			);
 		}
 
 		if (!account || account.userId !== ctx.context.session.user.id) {

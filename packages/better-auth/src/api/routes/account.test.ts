@@ -227,6 +227,74 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should resolve account info from the current user's accounts when provider account IDs collide", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+				encryptOAuthTokens: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+		const sharedAccountId = "shared-provider-account-id";
+		const otherUser = await ctx.internalAdapter.createUser({
+			name: "Other User",
+			email: "other-account-info@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: otherUser.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "other-access-token",
+		});
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "current-access-token",
+		});
+
+		getUserInfoMock.mockResolvedValueOnce({
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				emailVerified: user.emailVerified,
+			},
+			data: { source: "current-user" },
+		});
+
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId },
+				method: "GET",
+			});
+
+			expect(info.error).toBeNull();
+			expect(info.data).toMatchObject({
+				data: { source: "current-user" },
+			});
+			expect(getUserInfoMock).toHaveBeenCalledWith(
+				expect.objectContaining({ accessToken: "current-access-token" }),
+			);
+		});
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {

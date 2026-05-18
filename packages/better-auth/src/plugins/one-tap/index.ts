@@ -156,7 +156,11 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							user: parseUserOutput(ctx.context.options, newUser.user),
 						});
 					}
-					const account = await ctx.context.internalAdapter.findAccount(sub);
+					const account =
+						await ctx.context.internalAdapter.findAccountByProviderId(
+							sub,
+							"google",
+						);
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const providerEmailVerified =

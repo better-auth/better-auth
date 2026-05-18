@@ -2,13 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oneTap } from "./index";
 
-const verifiedPayload = {
+const defaultVerifiedPayload = {
 	email: "one-tap-user@example.com",
 	email_verified: true,
 	name: "One Tap User",
 	picture: "https://example.com/photo.jpg",
 	sub: "google_oauth_sub_one_tap",
 };
+
+const verifiedPayload = { ...defaultVerifiedPayload };
 
 vi.mock("jose", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("jose")>();
@@ -24,7 +26,7 @@ vi.mock("jose", async (importOriginal) => {
 
 describe("one-tap implicit linking gate", async () => {
 	afterEach(() => {
-		verifiedPayload.email_verified = true;
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
 	});
 
 	/**
@@ -157,6 +159,65 @@ describe("one-tap implicit linking gate", async () => {
 			],
 		});
 		expect(accounts.length).toBeGreaterThanOrEqual(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("links Google One Tap when another provider has the same account ID", async () => {
+		verifiedPayload.email = "one-tap-provider-collision@example.com";
+		verifiedPayload.sub = "shared-one-tap-provider-account-id";
+
+		const { auth, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					requireLocalEmailVerified: false,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const ctx = await auth.$context;
+		const otherUser = await ctx.internalAdapter.createUser({
+			name: "Other Provider User",
+			email: "one-tap-other-provider@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: otherUser.id,
+			providerId: "github",
+			accountId: verifiedPayload.sub,
+		});
+
+		await client.signUp.email({
+			email: verifiedPayload.email,
+			password: "password123",
+			name: "Pre-existing Local User",
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		const googleAccounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "google" },
+				{ field: "accountId", value: verifiedPayload.sub },
+			],
+		});
+		expect(googleAccounts).toHaveLength(1);
 	});
 
 	it("honors accountLinking.disableImplicitLinking even when the local user is verified", async () => {
