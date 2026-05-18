@@ -15,6 +15,49 @@ describe("drizzle-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("should fail fast for MySQL creates without an id instead of guessing the latest row", async () => {
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+		const selectFn = vi.fn();
+		const db = {
+			_: { fullSchema: { user: userTable } },
+			insert: vi.fn().mockReturnValue({
+				values: vi.fn().mockReturnValue({
+					config: { values: [{ name: { value: "Test" } }] },
+					execute: vi.fn().mockResolvedValue(undefined),
+				}),
+			}),
+			select: selectFn,
+		} as any;
+		const factory = drizzleAdapter(db, { provider: "mysql" });
+		const adapter = factory({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: {
+				database: {
+					generateId: false,
+				},
+			},
+		});
+
+		await expect(
+			adapter.create({
+				model: "user",
+				data: {
+					name: "Test",
+					email: "test@example.com",
+				},
+			}),
+		).rejects.toThrow(/Unable to safely return the inserted "user" row/);
+		expect(selectFn).not.toHaveBeenCalled();
+	});
+
 	describe("checkMissingFields", () => {
 		function createMockDb(schema: Record<string, Record<string, any>>) {
 			return {
