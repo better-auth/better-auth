@@ -1,4 +1,5 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse } from "../utils";
@@ -15,6 +16,15 @@ function normalizePem(pem: string | undefined): string | undefined {
 		.split("\n")
 		.map((line) => line.trim())
 		.join("\n");
+}
+
+/**
+ * Same as `normalizePem`, but applied across the resolved list of IdP signing
+ * certificates so multi-cert rotation configs survive the line-trim step.
+ */
+function normalizePemList(certs: string[] | undefined): string[] | undefined {
+	if (!certs) return certs;
+	return certs.map((pem) => normalizePem(pem) ?? pem);
 }
 
 export async function findSAMLProvider(
@@ -139,7 +149,7 @@ export function createIdP(config: SAMLConfig) {
 			},
 		],
 		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: normalizePem(idpData?.cert || config.cert),
+		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
 		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
 		encPrivateKey: normalizePem(idpData?.encPrivateKey),
