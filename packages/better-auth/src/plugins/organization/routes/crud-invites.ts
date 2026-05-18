@@ -404,6 +404,23 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			if (
+				ctx.context.orgOptions.teams?.enabled &&
+				"teamId" in ctx.body &&
+				ctx.body.teamId
+			) {
+				const requestedTeamIds =
+					typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId]
+						: (ctx.body.teamId as string[]);
+				if (requestedTeamIds.some((id) => id.includes(","))) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TEAM_ID,
+					);
+				}
+			}
+
+			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
 				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
