@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-`deleteOrganization` and `removeMember` cascades now run inside a transaction so a mid-cascade failure rolls back instead of leaving orphan rows.
+`deleteOrganization` and `removeMember` now roll back instead of leaving orphan rows when a step fails.

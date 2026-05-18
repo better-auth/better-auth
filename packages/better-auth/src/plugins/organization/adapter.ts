@@ -355,9 +355,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					],
 				});
-				// remove member from all teams they're part of via a single `in`
-				// query so the cascade stays portable across transaction backends
-				// that reject parallel ops on the same session (notably MongoDB).
 				if (options?.teams?.enabled) {
 					const teams = await adapter.findMany<Team>({
 						model: "team",
