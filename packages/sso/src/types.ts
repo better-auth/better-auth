@@ -57,18 +57,25 @@ export interface SAMLConfig {
 	 */
 	entryPoint: string;
 	/**
-	 * IdP signing certificate. Used to verify SAML response signatures
-	 * when `idpMetadata.metadata` is not provided. Ignored when IdP
-	 * metadata XML is set (the certificate is extracted from the XML).
-	 * When both this and `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence.
+	 * IdP signing certificate(s). Used to verify SAML response signatures when
+	 * `idpMetadata.metadata` is not provided. Ignored when IdP metadata XML is
+	 * set (the certificate is extracted from the XML). When both this and
+	 * `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence. Pass an
+	 * array of PEM strings for rolling rotation; responses signed by any
+	 * listed cert are accepted.
 	 */
-	cert: string;
+	cert?: string | string[];
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;
 				entityID?: string;
-				cert?: string;
+				/**
+				 * IdP signing certificate(s). Pass a single PEM string or an array
+				 * for rolling rotation. Takes precedence over the top-level `cert`
+				 * when both are set. Omit when `metadata` XML is supplied.
+				 */
+				cert?: string | string[];
 				privateKey?: string;
 				privateKeyPass?: string;
 				isAssertionEncrypted?: boolean;

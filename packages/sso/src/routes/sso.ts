@@ -1,13 +1,14 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
-	AssertionSigningAlgorithm,
-	ClientAssertionConfig,
+	PrivateKeyJwtSigningAlgorithm,
+	TokenEndpointAuth,
 } from "better-auth";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	createAuthorizationURL,
+	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
 	HIDE_METADATA,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -33,7 +34,7 @@ import {
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateConfigAlgorithms } from "../saml";
+import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
@@ -53,6 +54,7 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import { registerSSOProviderBodySchema } from "./schemas";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -144,220 +146,12 @@ export const spMetadata = (options?: SSOOptions) => {
 	);
 };
 
-const ssoProviderBodySchema = z.object({
-	providerId: z.string({}).meta({
-		description:
-			"The ID of the provider. This is used to identify the provider during login and callback",
-	}),
-	issuer: z.string({}).meta({
-		description: "The issuer of the provider",
-	}),
-	domain: z.string({}).meta({
-		description:
-			"The domain(s) of the provider. For enterprise multi-domain SSO where a single IdP serves multiple email domains, use comma-separated values (e.g., 'company.com,subsidiary.com,acquired-company.com')",
-	}),
-	oidcConfig: z
-		.object({
-			clientId: z.string({}).meta({
-				description: "The client ID",
-			}),
-			clientSecret: z.string({}).optional().meta({
-				description:
-					"The client secret. Required for client_secret_basic/client_secret_post. Optional for private_key_jwt.",
-			}),
-			authorizationEndpoint: z
-				.string({})
-				.meta({
-					description: "The authorization endpoint",
-				})
-				.optional(),
-			tokenEndpoint: z
-				.string({})
-				.meta({
-					description: "The token endpoint",
-				})
-				.optional(),
-			userInfoEndpoint: z
-				.string({})
-				.meta({
-					description: "The user info endpoint",
-				})
-				.optional(),
-			tokenEndpointAuthentication: z
-				.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
-				.optional(),
-			privateKeyId: z.string().optional(),
-			privateKeyAlgorithm: z.string().optional(),
-			jwksEndpoint: z
-				.string({})
-				.meta({
-					description: "The JWKS endpoint",
-				})
-				.optional(),
-			discoveryEndpoint: z.string().optional(),
-			skipDiscovery: z
-				.boolean()
-				.meta({
-					description:
-						"Skip OIDC discovery during registration. When true, you must provide authorizationEndpoint, tokenEndpoint, and jwksEndpoint manually.",
-				})
-				.optional(),
-			scopes: z
-				.array(z.string(), {})
-				.meta({
-					description:
-						"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
-				})
-				.optional(),
-			pkce: z
-				.boolean({})
-				.meta({
-					description: "Whether to use PKCE for the authorization flow",
-				})
-				.default(true)
-				.optional(),
-			mapping: z
-				.object({
-					id: z.string({}).meta({
-						description: "Field mapping for user ID (defaults to 'sub')",
-					}),
-					email: z.string({}).meta({
-						description: "Field mapping for email (defaults to 'email')",
-					}),
-					emailVerified: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for email verification (defaults to 'email_verified')",
-						})
-						.optional(),
-					name: z.string({}).meta({
-						description: "Field mapping for name (defaults to 'name')",
-					}),
-					image: z
-						.string({})
-						.meta({
-							description: "Field mapping for image (defaults to 'picture')",
-						})
-						.optional(),
-					extraFields: z.record(z.string(), z.any()).optional(),
-				})
-				.optional(),
-		})
-		.optional(),
-	samlConfig: z
-		.object({
-			entryPoint: z.string({}).meta({
-				description: "The entry point of the provider",
-			}),
-			cert: z.string({}).meta({
-				description: "The certificate of the provider",
-			}),
-			audience: z.string().optional(),
-			idpMetadata: z
-				.object({
-					metadata: z.string().optional(),
-					entityID: z.string().optional(),
-					cert: z.string().optional(),
-					privateKey: z.string().optional(),
-					privateKeyPass: z.string().optional(),
-					isAssertionEncrypted: z.boolean().optional(),
-					encPrivateKey: z.string().optional(),
-					encPrivateKeyPass: z.string().optional(),
-					singleSignOnService: z
-						.array(
-							z.object({
-								Binding: z.string().meta({
-									description: "The binding type for the SSO service",
-								}),
-								Location: z.string().meta({
-									description: "The URL for the SSO service",
-								}),
-							}),
-						)
-						.optional()
-						.meta({
-							description: "Single Sign-On service configuration",
-						}),
-				})
-				.optional(),
-			spMetadata: z
-				.object({
-					metadata: z.string().optional(),
-					entityID: z.string().optional(),
-					binding: z.string().optional(),
-					privateKey: z.string().optional(),
-					privateKeyPass: z.string().optional(),
-					isAssertionEncrypted: z.boolean().optional(),
-					encPrivateKey: z.string().optional(),
-					encPrivateKeyPass: z.string().optional(),
-				})
-				.optional(),
-			wantAssertionsSigned: z.boolean().optional(),
-			authnRequestsSigned: z.boolean().optional(),
-			signatureAlgorithm: z.string().optional(),
-			digestAlgorithm: z.string().optional(),
-			identifierFormat: z.string().optional(),
-			privateKey: z.string().optional(),
-			mapping: z
-				.object({
-					id: z.string({}).meta({
-						description: "Field mapping for user ID (defaults to 'nameID')",
-					}),
-					email: z.string({}).meta({
-						description: "Field mapping for email (defaults to 'email')",
-					}),
-					emailVerified: z
-						.string({})
-						.meta({
-							description: "Field mapping for email verification",
-						})
-						.optional(),
-					name: z.string({}).meta({
-						description: "Field mapping for name (defaults to 'displayName')",
-					}),
-					firstName: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for first name (defaults to 'givenName')",
-						})
-						.optional(),
-					lastName: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for last name (defaults to 'surname')",
-						})
-						.optional(),
-					extraFields: z.record(z.string(), z.any()).optional(),
-				})
-				.optional(),
-		})
-		.optional(),
-	organizationId: z
-		.string({})
-		.meta({
-			description:
-				"If organization plugin is enabled, the organization id to link the provider to",
-		})
-		.optional(),
-	overrideUserInfo: z
-		.boolean({})
-		.meta({
-			description:
-				"Override user info with the provider info. Defaults to false",
-		})
-		.default(false)
-		.optional(),
-});
-
 export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
 			method: "POST",
-			body: ssoProviderBodySchema,
+			body: registerSSOProviderBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -573,12 +367,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			const body = ctx.body;
-			const issuerValidator = z.string().url();
-			if (issuerValidator.safeParse(body.issuer).error) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid issuer. Must be a valid URL",
-				});
-			}
 
 			if (body.samlConfig?.idpMetadata?.metadata) {
 				const maxMetadataSize =
@@ -721,6 +509,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					},
 					options?.saml?.algorithms,
 				);
+
+				validateCertSources(body.samlConfig);
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
@@ -1432,15 +1222,12 @@ async function handleOIDCCallback(
 		);
 	}
 
-	let authMethod: "basic" | "post" | "private_key_jwt" = "basic";
-	if (config.tokenEndpointAuthentication === "client_secret_post") {
-		authMethod = "post";
-	} else if (config.tokenEndpointAuthentication === "private_key_jwt") {
-		authMethod = "private_key_jwt";
-	}
+	let tokenEndpointAuth: TokenEndpointAuth =
+		config.tokenEndpointAuthentication === "client_secret_post"
+			? { method: "client_secret_post" }
+			: { method: "client_secret_basic" };
 
-	let clientAssertionConfig: ClientAssertionConfig | undefined;
-	if (authMethod === "private_key_jwt") {
+	if (config.tokenEndpointAuthentication === "private_key_jwt") {
 		type PrivateKeyResult = {
 			privateKeyJwk?: JsonWebKey;
 			privateKeyPem?: string;
@@ -1467,7 +1254,7 @@ async function handleOIDCCallback(
 			});
 		}
 
-		if (!resolved) {
+		if (!resolved || (!resolved.privateKeyJwk && !resolved.privateKeyPem)) {
 			throw ctx.redirect(
 				`${
 					errorURL || callbackURL
@@ -1476,19 +1263,31 @@ async function handleOIDCCallback(
 		}
 
 		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm;
-		const algorithm: AssertionSigningAlgorithm | undefined =
+		const algorithm: PrivateKeyJwtSigningAlgorithm | undefined =
 			rawAlg &&
-			(ASSERTION_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
-				? (rawAlg as AssertionSigningAlgorithm)
+			(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
+				? (rawAlg as PrivateKeyJwtSigningAlgorithm)
 				: undefined;
 
-		clientAssertionConfig = {
-			privateKeyJwk: resolved.privateKeyJwk,
-			privateKeyPem: resolved.privateKeyPem,
-			kid: config.privateKeyId ?? resolved.kid,
-			algorithm,
-			tokenEndpoint: config.tokenEndpoint,
+		tokenEndpointAuth = {
+			method: "private_key_jwt",
+			getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+				privateKeyJwk: resolved.privateKeyJwk,
+				privateKeyPem: resolved.privateKeyPem,
+				kid: config.privateKeyId ?? resolved.kid,
+				algorithm,
+			}),
 		};
+	}
+
+	const tokenRequestOptions: {
+		clientId: string;
+		clientSecret?: string | undefined;
+	} = {
+		clientId: config.clientId,
+	};
+	if (tokenEndpointAuth.method !== "private_key_jwt") {
+		tokenRequestOptions.clientSecret = config.clientSecret;
 	}
 
 	const tokenResponse = await validateAuthorizationCode({
@@ -1499,13 +1298,9 @@ async function handleOIDCCallback(
 			provider.providerId,
 			options,
 		),
-		options: {
-			clientId: config.clientId,
-			clientSecret: config.clientSecret,
-		},
+		options: tokenRequestOptions,
 		tokenEndpoint: config.tokenEndpoint,
-		authentication: authMethod,
-		clientAssertion: clientAssertionConfig,
+		tokenEndpointAuth,
 	}).catch((e) => {
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {

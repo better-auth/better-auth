@@ -151,9 +151,9 @@ describe("SSO", async () => {
 			});
 		} catch (e) {
 			expect(e).toMatchObject({
-				status: "BAD_REQUEST",
+				status: 400,
 				body: {
-					message: "Invalid issuer. Must be a valid URL",
+					message: "[body.issuer] Invalid URL",
 				},
 			});
 		}
@@ -1466,6 +1466,33 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		server.service.on("beforeResponse", responseHandler);
 		await server.issuer.keys.generate("RS256");
 		await server.start(8080, "localhost");
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt.com",
+				providerId: "private-key-jwt-provider",
+				oidcConfig: {
+					clientId: "private-key-jwt-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+		});
 	});
 
 	afterAll(async () => {
@@ -1504,33 +1531,6 @@ describe("OIDC SSO with private_key_jwt", async () => {
 	it("should sign in using private_key_jwt and resolvePrivateKey", async () => {
 		capturedTokenRequest = undefined;
 		resolvePrivateKey.mockClear();
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			headers,
-			body: {
-				issuer: server.issuer.url!,
-				domain: "private-key-jwt.com",
-				providerId: "private-key-jwt-provider",
-				oidcConfig: {
-					clientId: "private-key-jwt-client",
-					authorizationEndpoint: `${server.issuer.url}/authorize`,
-					tokenEndpoint: `${server.issuer.url}/token`,
-					jwksEndpoint: `${server.issuer.url}/jwks`,
-					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-					tokenEndpointAuthentication: "private_key_jwt",
-					privateKeyId: "private-key-jwt-key",
-					privateKeyAlgorithm: "RS256",
-					mapping: {
-						id: "sub",
-						email: "email",
-						emailVerified: "email_verified",
-						name: "name",
-						image: "picture",
-					},
-				},
-			},
-		});
 
 		const signInHeaders = new Headers();
 		const res = await authClient.signIn.sso({
@@ -1592,6 +1592,25 @@ describe("OIDC SSO with private_key_jwt", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
+	});
+
+	it("should redirect with no_private_key_available when resolvePrivateKey returns no key material", async () => {
+		resolvePrivateKey.mockResolvedValueOnce(
+			{} as Awaited<ReturnType<typeof resolvePrivateKey>>,
+		);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "private-key-jwt-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+		expect(callbackURL).toContain("error_description=no_private_key_available");
 	});
 });
 
