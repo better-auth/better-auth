@@ -129,4 +129,62 @@ describe("access", () => {
 		});
 		expect(failedResponse.success).toBe(false);
 	});
+
+	it("should fail when a resource is requested with an empty action list (array form)", () => {
+		const responseAnd = role1.authorize({ project: [] });
+		expect(responseAnd.success).toBe(false);
+
+		const responseOr = role1.authorize({ project: [] }, "OR");
+		expect(responseOr.success).toBe(false);
+	});
+
+	it("should fail when a resource is requested with an empty action list (object form)", () => {
+		const responseAnd = role1.authorize({
+			project: { actions: [], connector: "AND" },
+		});
+		expect(responseAnd.success).toBe(false);
+
+		const responseOr = role1.authorize({
+			project: { actions: [], connector: "OR" },
+		});
+		expect(responseOr.success).toBe(false);
+	});
+
+	it("should fail when every requested resource is empty under OR across multiple resources", () => {
+		const response = role1.authorize({ project: [], ui: [] }, "OR");
+		expect(response.success).toBe(false);
+	});
+
+	const looseStatements: Record<string, readonly string[]> = {
+		project: ["create", "update", "delete"],
+	};
+	const looseAc = createAccessControl(looseStatements);
+	const looseRole = looseAc.newRole(looseStatements);
+
+	it("should continue evaluating remaining resources under OR when an earlier resource is unknown to the role", () => {
+		const response = looseRole.authorize(
+			{ audit: ["read"], project: ["create"] },
+			"OR",
+		);
+		expect(response.success).toBe(true);
+	});
+
+	it("should still fail under OR when no resource matches, including unknown ones", () => {
+		const response = looseRole.authorize(
+			{ audit: ["read"], project: ["delete-many"] },
+			"OR",
+		);
+		expect(response.success).toBe(false);
+	});
+
+	it("should fail under AND when a resource is unknown to the role", () => {
+		const response = looseRole.authorize({
+			audit: ["read"],
+			project: ["create"],
+		});
+		expect(response.success).toBe(false);
+		if (!response.success) {
+			expect(response.error).toContain("audit");
+		}
+	});
 });
