@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithEndpointContext } from "@better-auth/core/context";
+import {
+	runWithEndpointContext,
+	runWithRequestState,
+} from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import {
@@ -16,7 +19,7 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
-import { freshSessionMiddleware } from "./session";
+import { freshSessionMiddleware, getSessionFromCtx } from "./session";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -1205,6 +1208,70 @@ describe("cookie cache refreshCache", async () => {
 		vi.useRealTimers();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8763
+	 */
+	it("should forward cookie cache headers from getSessionFromCtx", async () => {
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const requestCookies = parseCookies(headers.get("cookie") || "");
+		for (const name of requestCookies.keys()) {
+			if (
+				name === ctx.authCookies.sessionData.name ||
+				name.startsWith(`${ctx.authCookies.sessionData.name}.`)
+			) {
+				requestCookies.delete(name);
+			}
+		}
+		headers.set(
+			"cookie",
+			Array.from(requestCookies, ([name, value]) => `${name}=${value}`).join(
+				"; ",
+			),
+		);
+
+		const endpointCtx = {
+			context: ctx,
+			headers,
+			query: {},
+		} as unknown as GenericEndpointContext;
+
+		await runWithRequestState(new WeakMap(), async () => {
+			await runWithEndpointContext(endpointCtx, async () => {
+				const session = await getSessionFromCtx(endpointCtx);
+				expect(session?.user.email).toBe(testUser.email);
+
+				const parsed = parseSetCookieHeader(
+					endpointCtx.context.responseHeaders?.get("set-cookie") || "",
+				);
+				const forwardedSessionDataCookie = Array.from(parsed.keys()).some(
+					(name) =>
+						name === ctx.authCookies.sessionData.name ||
+						name.startsWith(`${ctx.authCookies.sessionData.name}.`),
+				);
+				expect(forwardedSessionDataCookie).toBe(true);
+			});
+		});
+	});
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7994
 	 */
