@@ -741,11 +741,12 @@ export const changeEmail = createAuthEndpoint(
 		const canUpdateWithoutVerification =
 			ctx.context.session.user.emailVerified !== true &&
 			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
-		const canSendConfirmation =
-			ctx.context.session.user.emailVerified &&
-			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 		const canSendVerification =
 			ctx.context.options.emailVerification?.sendVerificationEmail;
+		const canSendConfirmation =
+			canSendVerification &&
+			ctx.context.session.user.emailVerified &&
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (
 			!canUpdateWithoutVerification &&
@@ -800,9 +801,9 @@ export const changeEmail = createAuthEndpoint(
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					ctx.body.callbackURL || "/",
+				)}`;
 				await ctx.context.runInBackgroundOrAwait(
 					canSendVerification(
 						{
@@ -838,7 +839,9 @@ export const changeEmail = createAuthEndpoint(
 			);
 			const url = `${
 				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+			}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				canSendConfirmation(
 					{
@@ -873,7 +876,9 @@ export const changeEmail = createAuthEndpoint(
 		);
 		const url = `${
 			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			ctx.body.callbackURL || "/",
+		)}`;
 		await ctx.context.runInBackgroundOrAwait(
 			canSendVerification(
 				{
