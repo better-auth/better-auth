@@ -1,8 +1,4 @@
-import {
-	cookieNameRegex,
-	normalizeCookieValue,
-	parseSetCookieHeader,
-} from "better-auth/cookies";
+import { cookieNameRegex, parseSetCookieHeader } from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
@@ -48,9 +44,7 @@ export function getCookie(cookie: string) {
 	for (const [key, value] of Object.entries(parsed)) {
 		if (value.expires && new Date(value.expires) < new Date()) continue;
 		if (!cookieNameRegex.test(key)) continue;
-		const val = normalizeCookieValue(value.value);
-		if (val === undefined) continue;
-		pairs.push(`${key}=${val}`);
+		pairs.push(`${key}=${encodeURIComponent(value.value)}`);
 	}
 	return pairs.join("; ");
 }

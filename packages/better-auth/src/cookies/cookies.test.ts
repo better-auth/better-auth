@@ -412,16 +412,16 @@ describe("cookie-utils setRequestCookie", () => {
 		);
 	});
 
-	it("skips values that would split the Cookie header on the wire", () => {
+	it("percent-encodes reserved cookie-octet bytes when serializing", () => {
 		const headers = new Headers({ cookie: "locale=en" });
 		setRequestCookie(headers, "session", "foo;evil=bar");
-		expect(headers.get("cookie")).toBe("locale=en");
+		expect(headers.get("cookie")).toBe("locale=en; session=foo%3Bevil%3Dbar");
 	});
 
-	it("unquotes RFC 6265 quoted-string values before writing", () => {
+	it("treats input as semantic and percent-encodes literal double-quotes", () => {
 		const headers = new Headers();
 		setRequestCookie(headers, "token", '"abc"');
-		expect(headers.get("cookie")).toBe("token=abc");
+		expect(headers.get("cookie")).toBe("token=%22abc%22");
 	});
 });
 
@@ -1587,16 +1587,18 @@ describe("applySetCookies", () => {
 		expect(headers.get("cookie")).toBe("a=new; b=keep");
 	});
 
-	it("drops Set-Cookie entries whose decoded value would split when serialized", () => {
+	it("re-encodes Set-Cookie values containing reserved bytes on wire join", () => {
 		const headers = new Headers({ cookie: "session=safe" });
 		applySetCookies(headers, ["evil=foo%3Bsplit=hello; Path=/"]);
-		expect(headers.get("cookie")).toBe("session=safe");
+		expect(headers.get("cookie")).toBe(
+			"session=safe; evil=foo%3Bsplit%3Dhello",
+		);
 	});
 
-	it("unquotes RFC 6265 quoted-string values before serializing", () => {
+	it("preserves literal double-quotes in Set-Cookie values", () => {
 		const headers = new Headers();
 		applySetCookies(headers, ['token="abc"; Path=/']);
-		expect(headers.get("cookie")).toBe("token=abc");
+		expect(headers.get("cookie")).toBe("token=%22abc%22");
 	});
 });
 
