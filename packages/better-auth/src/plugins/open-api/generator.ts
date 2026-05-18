@@ -379,26 +379,34 @@ function getResponse(responses?: Record<string, any> | undefined) {
 function getUniqueOperationId(
 	operationId: string | undefined,
 	method: string,
-	usedOperationIds: Set<string>,
+	path: string,
+	operationIdCounts: Map<string, number>,
+	operationIdMethodCounts: Map<string, number>,
 ) {
 	if (!operationId) {
 		return undefined;
 	}
-	if (!usedOperationIds.has(operationId)) {
-		usedOperationIds.add(operationId);
+	if ((operationIdCounts.get(operationId) || 0) <= 1) {
 		return operationId;
 	}
-	const methodSuffix =
-		method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
-	const baseOperationId = `${operationId}${methodSuffix}`;
-	let uniqueOperationId = baseOperationId;
-	let index = 2;
-	while (usedOperationIds.has(uniqueOperationId)) {
-		uniqueOperationId = `${baseOperationId}${index}`;
-		index++;
+	const methodSuffix = toPascalCase(method);
+	if ((operationIdMethodCounts.get(`${operationId}:${method}`) || 0) <= 1) {
+		return `${operationId}${methodSuffix}`;
 	}
-	usedOperationIds.add(uniqueOperationId);
-	return uniqueOperationId;
+	return `${operationId}${methodSuffix}${toPathOperationIdSuffix(path)}`;
+}
+
+function toPathOperationIdSuffix(path: string) {
+	return path
+		.split("/")
+		.flatMap((part) => part.replace(/[{}]/g, "").split(/[^a-zA-Z0-9]+/))
+		.filter(Boolean)
+		.map(toPascalCase)
+		.join("");
+}
+
+function toPascalCase(value: string) {
+	return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
 function toOpenApiPath(path: string) {
@@ -461,7 +469,59 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
-	const usedOperationIds = new Set<string>();
+	const operationIdCounts = new Map<string, number>();
+	const operationIdMethodCounts = new Map<string, number>();
+	const countOperationIds = (api: Endpoint[]) => {
+		for (const value of api) {
+			if (!value.path || ctx.options.disabledPaths?.includes(value.path)) {
+				continue;
+			}
+			const endpointOptions = value.options as EndpointOptions;
+			if (endpointOptions.metadata?.SERVER_ONLY) {
+				continue;
+			}
+			const operationId = endpointOptions.metadata?.openapi?.operationId;
+			if (!operationId) {
+				continue;
+			}
+			const methods = Array.isArray(endpointOptions.method)
+				? endpointOptions.method
+				: [endpointOptions.method];
+			operationIdCounts.set(
+				operationId,
+				(operationIdCounts.get(operationId) || 0) + methods.length,
+			);
+			for (const method of methods) {
+				const key = `${operationId}:${method}`;
+				operationIdMethodCounts.set(
+					key,
+					(operationIdMethodCounts.get(key) || 0) + 1,
+				);
+			}
+		}
+	};
+
+	countOperationIds(Object.values(baseEndpoints.api) as Endpoint[]);
+	for (const plugin of options.plugins || []) {
+		if (plugin.id === "open-api") {
+			continue;
+		}
+		const pluginEndpoints = getEndpoints(ctx, {
+			...options,
+			plugins: [plugin],
+		});
+		const api = Object.keys(pluginEndpoints.api)
+			.map((key) => {
+				if (
+					baseEndpoints.api[key as keyof typeof baseEndpoints.api] === undefined
+				) {
+					return pluginEndpoints.api[key as keyof typeof pluginEndpoints.api];
+				}
+				return null;
+			})
+			.filter((x) => x !== null) as Endpoint[];
+		countOperationIds(api);
+	}
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
@@ -480,7 +540,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					operationId: getUniqueOperationId(
 						options.metadata?.openapi?.operationId,
 						method,
-						usedOperationIds,
+						path,
+						operationIdCounts,
+						operationIdMethodCounts,
 					),
 					security: [
 						{
@@ -504,7 +566,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					operationId: getUniqueOperationId(
 						options.metadata?.openapi?.operationId,
 						method,
-						usedOperationIds,
+						path,
+						operationIdCounts,
+						operationIdMethodCounts,
 					),
 					security: [
 						{
@@ -573,7 +637,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 						operationId: getUniqueOperationId(
 							options.metadata?.openapi?.operationId,
 							method,
-							usedOperationIds,
+							path,
+							operationIdCounts,
+							operationIdMethodCounts,
 						),
 						security: [
 							{
@@ -598,7 +664,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 						operationId: getUniqueOperationId(
 							options.metadata?.openapi?.operationId,
 							method,
-							usedOperationIds,
+							path,
+							operationIdCounts,
+							operationIdMethodCounts,
 						),
 						security: [
 							{

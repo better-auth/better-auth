@@ -155,7 +155,7 @@ describe("open-api", async () => {
 			}
 		}
 
-		expect(paths["/get-session"].get.operationId).toBe("getSession");
+		expect(paths["/get-session"].get.operationId).toBe("getSessionGet");
 		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
 	});
 

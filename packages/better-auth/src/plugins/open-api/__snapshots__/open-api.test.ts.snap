@@ -1584,7 +1584,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/get-session": {
       "get": {
         "description": "Get the current session",
-        "operationId": "getSession",
+        "operationId": "getSessionGet",
         "parameters": [],
         "responses": {
           "200": {
