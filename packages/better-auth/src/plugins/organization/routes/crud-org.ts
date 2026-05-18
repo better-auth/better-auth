@@ -703,16 +703,30 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
-			const isMember = await adapter.checkMembership({
+			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organization.id,
 			});
-			if (!isMember) {
+			if (!member) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
+			}
+
+			const allowedRoles = options?.fullOrganizationAccessRoles;
+			if (allowedRoles) {
+				const memberRoles = member.role.split(",");
+				const hasAllowedRole = memberRoles.some((role) =>
+					allowedRoles.includes(role),
+				);
+				if (!hasAllowedRole) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_THIS_ORGANIZATION,
+					);
+				}
 			}
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
