@@ -66,7 +66,7 @@ const signingCertSchema = z
 			"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation.",
 	});
 
-export const oidcConfigSchema = z.object({
+const oidcConfigSchema = z.object({
 	clientId: z.string().meta({ description: "The client ID" }),
 	clientSecret: z
 		.string()
@@ -124,7 +124,7 @@ export const oidcConfigSchema = z.object({
 	mapping: oidcMappingSchema,
 });
 
-export const samlConfigSchema = z.object({
+const samlConfigSchema = z.object({
 	entryPoint: z
 		.string()
 		.url()
