@@ -4,4 +4,5 @@ allowBuilds:
   sharp: true
 
 overrides:
-  next: ^16.2.3
+  next: 16.2.6
+  postcss@<8.5.10: ^8.5.14
