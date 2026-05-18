@@ -11,5 +11,5 @@ export {
 } from "./algorithms";
 
 export { validateSingleAssertion } from "./assertions";
-
+export { resolveSigningCerts, validateCertSources } from "./cert";
 export { validateAudience, validateInResponseTo } from "./response-validation";
