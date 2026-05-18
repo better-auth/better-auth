@@ -61,6 +61,23 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 };
 
 /**
+ * Extracts an OAuth access token from Authorization header-style values.
+ *
+ * OAuth endpoints must accept both Bearer and DPoP authorization schemes.
+ * Unknown schemes are left unchanged for backward compatibility with callers
+ * that historically sent the raw token value without a scheme.
+ *
+ * @internal
+ */
+export function getAuthorizationToken(value: string | null | undefined) {
+	if (typeof value !== "string") {
+		return value;
+	}
+	const match = /^\s*(Bearer|DPoP)\s+(.+)\s*$/i.exec(value);
+	return match?.[2] ?? value;
+}
+
+/**
  * Normalizes timestamp-like values returned by adapters.
  *
  * Accepts Date instances, epoch milliseconds as numbers, and strings that are

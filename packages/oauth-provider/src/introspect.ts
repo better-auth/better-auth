@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import {
 	basicToClientCredentials,
+	getAuthorizationToken,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -424,9 +425,7 @@ export async function introspectEndpoint(
 	}
 
 	// Check token
-	if (token && typeof token === "string" && token.startsWith("Bearer ")) {
-		token = token.replace("Bearer ", "");
-	}
+	token = getAuthorizationToken(token) ?? "";
 	if (!token?.length) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing a required token for introspection",

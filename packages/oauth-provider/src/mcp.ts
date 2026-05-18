@@ -3,6 +3,7 @@ import { verifyAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import type { Awaitable } from "./types/helpers";
+import { getAuthorizationToken } from "./utils";
 
 /**
  * A request middleware handler that checks and responds with
@@ -21,9 +22,7 @@ export const mcpHandler = (
 ) => {
 	return async (req: Request) => {
 		const authorization = req.headers?.get("authorization") ?? undefined;
-		const accessToken = authorization?.startsWith("Bearer ")
-			? authorization.replace("Bearer ", "")
-			: authorization;
+		const accessToken = getAuthorizationToken(authorization);
 		try {
 			if (!accessToken?.length) {
 				throw new APIError("UNAUTHORIZED", {

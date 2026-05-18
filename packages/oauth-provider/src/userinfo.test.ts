@@ -204,6 +204,27 @@ describe("oauth userinfo", async () => {
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/8806
 	 */
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8656
+	 */
+	it("should accept DPoP authorization scheme for userinfo", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: `DPoP ${tokens.data?.access_token ?? ""}`,
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			email: user.email,
+		});
+	});
+
 	it("should return userinfo via auth.api with headers only (no Request)", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();

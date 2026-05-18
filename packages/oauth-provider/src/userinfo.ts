@@ -3,7 +3,11 @@ import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
-import { getClient, resolveSubjectIdentifier } from "./utils";
+import {
+	getAuthorizationToken,
+	getClient,
+	resolveSubjectIdentifier,
+} from "./utils";
 
 /**
  * Provides shared /userinfo and id_token claims functionality
@@ -38,10 +42,7 @@ export async function userInfoEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const authorization = ctx.headers?.get("authorization");
-	const token =
-		typeof authorization === "string" && authorization?.startsWith("Bearer ")
-			? authorization?.replace("Bearer ", "")
-			: authorization;
+	const token = getAuthorizationToken(authorization);
 	if (!token?.length) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "authorization header not found",

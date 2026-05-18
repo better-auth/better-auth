@@ -190,6 +190,29 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8656
+	 */
+	it("should accept DPoP authorization scheme for access token revocation", async () => {
+		const tokens = await getTokens();
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: `DPoP ${tokens.data?.access_token!}`,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(

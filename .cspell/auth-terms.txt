@@ -1,6 +1,7 @@
 totp
 otps
 pkce
+dpop
 unban
 siwe
 scim
