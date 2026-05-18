@@ -284,8 +284,7 @@ export const communityPlugins: CommunityPlugin[] = [
 	{
 		name: "ton-better-auth",
 		url: "https://github.com/mhbdev/ton-better-auth",
-		description:
-			"Sign in with Ton Connect",
+		description: "Sign in with Ton Connect",
 		author: {
 			name: "mhbdev",
 			github: "mhbdev",
