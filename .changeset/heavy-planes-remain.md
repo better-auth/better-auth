@@ -16,11 +16,13 @@ samlConfig: {
 
 Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
 
+**Breaking: response shape**
+
+The management endpoints (`getSSOProvider`, `listSSOProviders`, `updateSSOProvider`) now return `samlConfig.certificate` as an array of parsed certificates in every case, even when a single cert is configured. The field is absent only when certs live inside `idpMetadata.metadata`. Update consumers to read an array; no more `Array.isArray` branching.
+
 **Validation**
 
 Registration now rejects SAML configs that supply no signing-cert source. samlify needs either an `idpMetadata.metadata` XML document (which embeds the certs) or an explicit PEM under `cert` or `idpMetadata.cert`. Configs missing both fail with `CERT_SOURCE_MISSING`.
-
-The management endpoints (`getSSOProvider`, `listSSOProviders`, `updateSSOProvider`) return `samlConfig.certificate` as an array of parsed certificates, or absent when the certs live inside `idpMetadata.metadata`. The array always has the same shape, so consumers no longer need to branch on `Array.isArray` before reading fingerprints.
 
 **Fix**
 
