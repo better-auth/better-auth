@@ -316,3 +316,201 @@ describe("organization creation in database hooks", async () => {
 		expect((org as any)?.name).toBe("Before-After Org");
 	});
 });
+
+describe("organization member deletion in database hooks", async () => {
+	it("should call member delete after when removing a member", async () => {
+		let deletedMember: any = null;
+		let hookSawInternalAdapter = false;
+
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+			databaseHooks: {
+				member: {
+					delete: {
+						after: async (member: any, ctx: any) => {
+							deletedMember = member;
+							hookSawInternalAdapter = !!ctx?.context?.internalAdapter;
+						},
+					},
+				},
+			} as any,
+		});
+
+		const owner = await signInWithTestUser();
+		const addedUser = await auth.api.signUpEmail({
+			body: {
+				email: "member-delete-after@example.com",
+				password: "password123",
+				name: "Member Delete After",
+			},
+		});
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: {
+				name: "Member Delete After Org",
+				slug: "member-delete-after-org",
+			},
+		});
+		const member = await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				organizationId: org.id,
+				userId: addedUser.user.id,
+				role: "member",
+			},
+		});
+
+		const removedMember = await auth.api.removeMember({
+			headers: owner.headers,
+			body: {
+				organizationId: org.id,
+				memberIdOrEmail: addedUser.user.email,
+			},
+		});
+
+		expect(removedMember.member.id).toBe(member.id);
+		expect(deletedMember).toMatchObject({
+			id: member.id,
+			organizationId: org.id,
+			userId: addedUser.user.id,
+		});
+		expect(hookSawInternalAdapter).toBe(true);
+		const members = await db.findMany({
+			model: "member",
+			where: [{ field: "id", value: member.id }],
+		});
+		expect(members).toHaveLength(0);
+	});
+
+	it("should block member removal when delete before returns false", async () => {
+		let afterRemoveMemberCalled = false;
+		let deleteAfterHookCalled = false;
+
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						afterRemoveMember: async () => {
+							afterRemoveMemberCalled = true;
+						},
+					},
+				}),
+			],
+			databaseHooks: {
+				member: {
+					delete: {
+						before: async () => false,
+						after: async () => {
+							deleteAfterHookCalled = true;
+						},
+					},
+				},
+			} as any,
+		});
+
+		const owner = await signInWithTestUser();
+		const addedUser = await auth.api.signUpEmail({
+			body: {
+				email: "member-delete-veto@example.com",
+				password: "password123",
+				name: "Member Delete Veto",
+			},
+		});
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: {
+				name: "Member Delete Veto Org",
+				slug: "member-delete-veto-org",
+			},
+		});
+		const member = await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				organizationId: org.id,
+				userId: addedUser.user.id,
+				role: "member",
+			},
+		});
+
+		const response = await auth.api.removeMember({
+			headers: owner.headers,
+			body: {
+				organizationId: org.id,
+				memberIdOrEmail: addedUser.user.email,
+			},
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			message: "Member could not be deleted",
+		});
+		expect(afterRemoveMemberCalled).toBe(false);
+		expect(deleteAfterHookCalled).toBe(false);
+		const members = await db.findMany({
+			model: "member",
+			where: [{ field: "id", value: member.id }],
+		});
+		expect(members).toHaveLength(1);
+	});
+
+	it("should call member delete after when leaving an organization", async () => {
+		let deletedMemberId: string | null = null;
+
+		const { auth, db, signInWithTestUser, signInWithUser } =
+			await getTestInstance({
+				plugins: [organization()],
+				databaseHooks: {
+					member: {
+						delete: {
+							after: async (member: any) => {
+								deletedMemberId = member.id;
+							},
+						},
+					},
+				} as any,
+			});
+
+		const owner = await signInWithTestUser();
+		const email = "member-leave-after@example.com";
+		const password = "password123";
+		const addedUser = await auth.api.signUpEmail({
+			body: {
+				email,
+				password,
+				name: "Member Leave After",
+			},
+		});
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: {
+				name: "Member Leave After Org",
+				slug: "member-leave-after-org",
+			},
+		});
+		const member = await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				organizationId: org.id,
+				userId: addedUser.user.id,
+				role: "member",
+			},
+		});
+		const addedUserSession = await signInWithUser(email, password);
+
+		const leftMember = await auth.api.leaveOrganization({
+			headers: addedUserSession.headers,
+			body: {
+				organizationId: org.id,
+			},
+		});
+
+		expect(leftMember.id).toBe(member.id);
+		expect(deletedMemberId).toBe(member.id);
+		const members = await db.findMany({
+			model: "member",
+			where: [{ field: "id", value: member.id }],
+		});
+		expect(members).toHaveLength(0);
+	});
+});
