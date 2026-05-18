@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -17,7 +18,11 @@ import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
 import { rpInitiatedLogoutEndpoint } from "./logout";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import {
+	authServerMetadata,
+	metadataResponse,
+	oidcServerMetadata,
+} from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
@@ -169,6 +174,56 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	const handleIssuerMetadataRequest: NonNullable<
+		BetterAuthPlugin["onRequest"]
+	> = async (request, ctx) => {
+		const requestPath = new URL(request.url).pathname.replace(/\/$/, "") || "/";
+		const issuer = opts.disableJwtPlugin
+			? ctx.baseURL
+			: (getJwtPlugin(ctx)?.options?.jwt?.issuer ?? ctx.baseURL);
+		let issuerPath = "/";
+		try {
+			issuerPath = new URL(issuer).pathname.replace(/\/$/, "") || "";
+		} catch {
+			issuerPath = new URL(ctx.baseURL).pathname.replace(/\/$/, "") || "";
+		}
+
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+
+		if (
+			requestPath === `${issuerPath}/.well-known/oauth-authorization-server`
+		) {
+			if (opts.scopes?.includes("openid")) {
+				return {
+					response: metadataResponse(oidcServerMetadata(endpointCtx, opts)),
+				};
+			}
+			const jwtPluginOptions = opts.disableJwtPlugin
+				? undefined
+				: getJwtPlugin(ctx)?.options;
+			return {
+				response: metadataResponse(
+					authServerMetadata(endpointCtx, jwtPluginOptions, {
+						scopes_supported:
+							opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+						public_client_supported:
+							opts.allowUnauthenticatedClientRegistration,
+						grant_types_supported: opts.grantTypes,
+						jwt_disabled: opts.disableJwtPlugin,
+					}),
+				),
+			};
+		}
+
+		if (
+			opts.scopes?.includes("openid") &&
+			requestPath === `${issuerPath}/.well-known/openid-configuration`
+		) {
+			return {
+				response: metadataResponse(oidcServerMetadata(endpointCtx, opts)),
+			};
+		}
+	};
 	return {
 		id: "oauth-provider",
 		version: PACKAGE_VERSION,
@@ -228,6 +283,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				}
 			}
 		},
+		onRequest: handleIssuerMetadataRequest,
 		hooks: {
 			before: [
 				{

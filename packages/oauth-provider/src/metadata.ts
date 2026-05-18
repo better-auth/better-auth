@@ -115,7 +115,10 @@ export function oidcServerMetadata(
 const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
 
-function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+export function metadataResponse(
+	body: unknown,
+	extraHeaders?: HeadersInit,
+): Response {
 	const headers = new Headers(extraHeaders);
 	if (!headers.has("Cache-Control")) {
 		headers.set("Cache-Control", METADATA_CACHE_CONTROL);

@@ -69,6 +69,7 @@ describe("oauth metadata", async () => {
 		return {
 			auth,
 			client: unauthenticatedClient,
+			customFetchImpl,
 		};
 	}
 
@@ -121,6 +122,21 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8343
+	 */
+	it("should serve authorization server metadata at the direct issuer well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
 	});
 
 	it("should not have an openid-configuration, has auth server configuration", async () => {
