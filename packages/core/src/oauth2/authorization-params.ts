@@ -1,9 +1,8 @@
 import * as z from "zod";
-import { RESERVED_AUTHORIZATION_PARAMS } from "./create-authorization-url";
-
-const RESERVED_AUTHORIZATION_PARAMS_SET = new Set<string>(
+import {
 	RESERVED_AUTHORIZATION_PARAMS,
-);
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+} from "./create-authorization-url";
 
 /**
  * Zod schema for the `additionalParams` field on social sign-in and

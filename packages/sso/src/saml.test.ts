@@ -657,6 +657,18 @@ describe("SAML SSO with defaultSSO array", async () => {
 			redirect: true,
 		});
 	});
+
+	it("should reject additionalParams when routing to a SAML provider", async () => {
+		await expect(
+			auth.api.signInSSO({
+				body: {
+					providerId: "default-saml",
+					callbackURL: "http://localhost:3000/dashboard",
+					additionalParams: { domain_hint: "contoso.com" },
+				},
+			}),
+		).rejects.toThrow(/additionalParams is not supported for SAML/);
+	});
 });
 
 describe("SAML SSO with signed AuthnRequests", async () => {

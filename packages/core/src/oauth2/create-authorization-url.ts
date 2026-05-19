@@ -18,7 +18,7 @@ export const RESERVED_AUTHORIZATION_PARAMS = [
 	"scope",
 ] as const;
 
-const RESERVED_AUTHORIZATION_PARAMS_SET = new Set<string>(
+export const RESERVED_AUTHORIZATION_PARAMS_SET: ReadonlySet<string> = new Set(
 	RESERVED_AUTHORIZATION_PARAMS,
 );
 

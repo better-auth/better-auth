@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
-import { RESERVED_AUTHORIZATION_PARAMS } from "../oauth2";
+import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
 
 /**
  * WeChat user profile information
@@ -75,10 +75,7 @@ export const wechat = (options: WeChatOptions) => {
 			url.searchParams.set("lang", options.lang || "cn");
 			if (additionalParams) {
 				for (const [key, value] of Object.entries(additionalParams)) {
-					if (
-						(RESERVED_AUTHORIZATION_PARAMS as readonly string[]).includes(key)
-					)
-						continue;
+					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 					if (key === "appid") continue;
 					url.searchParams.set(key, value);
 				}

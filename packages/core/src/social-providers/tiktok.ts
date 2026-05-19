@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
-	RESERVED_AUTHORIZATION_PARAMS,
+	RESERVED_AUTHORIZATION_PARAMS_SET,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -149,10 +149,7 @@ export const tiktok = (options: TiktokOptions) => {
 			url.searchParams.set("state", state);
 			if (additionalParams) {
 				for (const [key, value] of Object.entries(additionalParams)) {
-					if (
-						(RESERVED_AUTHORIZATION_PARAMS as readonly string[]).includes(key)
-					)
-						continue;
+					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 					if (key === "client_key") continue;
 					url.searchParams.set(key, value);
 				}

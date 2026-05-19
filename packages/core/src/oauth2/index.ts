@@ -17,6 +17,7 @@ export {
 export {
 	createAuthorizationURL,
 	RESERVED_AUTHORIZATION_PARAMS,
+	RESERVED_AUTHORIZATION_PARAMS_SET,
 } from "./create-authorization-url";
 export type {
 	OAuth2Tokens,

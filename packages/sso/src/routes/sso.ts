@@ -1010,7 +1010,7 @@ export const signInSSO = (options?: SSOOptions) => {
 											type: "object",
 											additionalProperties: { type: "string" },
 											description:
-												"Extra query parameters to append to the provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected.",
+												"Extra query parameters to append to the OIDC provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected. Not supported for SAML providers.",
 										},
 										requestSignUp: {
 											type: "boolean",
@@ -1262,6 +1262,12 @@ export const signInSSO = (options?: SSOOptions) => {
 				});
 			}
 			if (provider.samlConfig) {
+				if (ctx.body.additionalParams) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"additionalParams is not supported for SAML providers; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters.",
+					});
+				}
 				const parsedSamlConfig =
 					typeof provider.samlConfig === "object"
 						? provider.samlConfig
