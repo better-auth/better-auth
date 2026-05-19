@@ -810,3 +810,60 @@ describe("magic link allowedAttempts", async () => {
 		}
 	});
 });
+
+describe("magic link confirmationUrl", async () => {
+	it("should use the custom confirmationUrl as the magic link destination", async () => {
+		let capturedUrl = "";
+
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					confirmationUrl: "/auth/magic-link/confirm",
+					async sendMagicLink({ url }) {
+						capturedUrl = url;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({ email: testUser.email });
+
+		const parsedUrl = new URL(capturedUrl);
+		expect(parsedUrl.pathname).toBe("/auth/magic-link/confirm");
+		expect(parsedUrl.searchParams.get("token")).toBeDefined();
+		expect(parsedUrl.searchParams.get("callbackURL")).toBeDefined();
+	});
+
+	it("should fall back to the default verify URL when confirmationUrl is not set", async () => {
+		let capturedUrl = "";
+
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink({ url }) {
+						capturedUrl = url;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({ email: testUser.email });
+
+		const parsedUrl = new URL(capturedUrl);
+		expect(parsedUrl.pathname).toBe("/api/auth/magic-link/verify");
+	});
+});
