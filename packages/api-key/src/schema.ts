@@ -131,6 +131,15 @@ export const apiKeySchema = ({
 					defaultValue: 0,
 				},
 				/**
+				 * Start of the current fixed rate-limit window. The window is
+				 * `[rateLimitWindowStart, rateLimitWindowStart + rateLimitTimeWindow)`.
+				 */
+				rateLimitWindowStart: {
+					type: "date",
+					required: false,
+					input: false,
+				},
+				/**
 				 * The remaining number of requests before the key is revoked.
 				 *
 				 * If this is null, then the key is not revoked.

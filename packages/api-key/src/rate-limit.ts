@@ -12,6 +12,10 @@ interface RateLimitResult {
 /**
  * Determines if a request is allowed based on rate limiting parameters.
  *
+ * Uses a **fixed window**: at most `rateLimitMax` successful validations within
+ * each `[windowStart, windowStart + rateLimitTimeWindow)` interval. The window
+ * start does not move on each request (unlike a purely last-activity-based rule).
+ *
  * @returns An object indicating whether the request is allowed and, if not,
  *          a message and updated ApiKey data.
  */
@@ -23,10 +27,11 @@ export function isRateLimited(
 	opts: PredefinedApiKeyOptions,
 ): RateLimitResult {
 	const now = new Date();
-	const lastRequest = apiKey.lastRequest;
+	const nowMs = now.getTime();
 	const rateLimitTimeWindow = apiKey.rateLimitTimeWindow;
 	const rateLimitMax = apiKey.rateLimitMax;
 	let requestCount = apiKey.requestCount;
+	const rateLimitWindowStart = apiKey.rateLimitWindowStart;
 
 	if (opts.rateLimit.enabled === false)
 		return {
@@ -54,44 +59,55 @@ export function isRateLimited(
 		};
 	}
 
-	if (lastRequest === null) {
-		// No previous requests, so allow the first one.
+	// No window yet (new key, or counters reset after config change / migration).
+	if (rateLimitWindowStart == null) {
 		return {
 			success: true,
 			message: null,
-			update: { lastRequest: now, requestCount: 1 },
+			update: {
+				rateLimitWindowStart: now,
+				requestCount: 1,
+				lastRequest: now,
+			},
 			tryAgainIn: null,
 		};
 	}
 
-	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
+	const windowStartMs = new Date(rateLimitWindowStart).getTime();
+	const elapsed = nowMs - windowStartMs;
 
-	if (timeSinceLastRequest > rateLimitTimeWindow) {
-		// Time window has passed, reset the request count.
+	if (elapsed >= rateLimitTimeWindow) {
+		// New window: full quota again until the next boundary.
 		return {
 			success: true,
 			message: null,
-			update: { lastRequest: now, requestCount: 1 },
+			update: {
+				rateLimitWindowStart: now,
+				requestCount: 1,
+				lastRequest: now,
+			},
 			tryAgainIn: null,
 		};
 	}
 
 	if (requestCount >= rateLimitMax) {
-		// Rate limit exceeded.
+		const windowEndMs = windowStartMs + rateLimitTimeWindow;
 		return {
 			success: false,
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
 			update: null,
-			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
+			tryAgainIn: Math.max(0, Math.ceil(windowEndMs - nowMs)),
 		};
 	}
 
-	// Request is allowed.
 	requestCount++;
 	return {
 		success: true,
 		message: null,
 		tryAgainIn: null,
-		update: { lastRequest: now, requestCount: requestCount },
+		update: {
+			lastRequest: now,
+			requestCount: requestCount,
+		},
 	};
 }

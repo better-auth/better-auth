@@ -70,14 +70,14 @@ const createApiKeyBodySchema = z.object({
 		.number()
 		.meta({
 			description:
-				"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
+				"Length of each fixed rate-limit window in milliseconds. server-only. Eg: 1000",
 		})
 		.optional(),
 	rateLimitMax: z
 		.number()
 		.meta({
 			description:
-				"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+				"Maximum successful validations per fixed window. server-only. Eg: 100",
 		})
 		.optional(),
 	rateLimitEnabled: z
@@ -241,6 +241,13 @@ export function createApiKey({
 											requestCount: {
 												type: "number",
 												description: "Current request count in window",
+											},
+											rateLimitWindowStart: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description:
+													"Start of the current fixed rate-limit window (inclusive)",
 											},
 											permissions: {
 												type: "object",
@@ -467,6 +474,7 @@ export function createApiKey({
 				referenceId: referenceId,
 				lastRefillAt: null,
 				lastRequest: null,
+				rateLimitWindowStart: null,
 				metadata: null,
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
