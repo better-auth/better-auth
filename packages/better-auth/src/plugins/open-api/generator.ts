@@ -190,6 +190,19 @@ function getRequestBody(options: EndpointOptions): any {
 			},
 		};
 	}
+	// Handle ZodIntersection body (e.g. z.object({...}).and(z.record(...)))
+	if (options.body instanceof z.ZodIntersection) {
+		const schema = processZodType(options.body);
+		if (!schema || !schema.properties) return undefined;
+		return {
+			required: true,
+			content: {
+				"application/json": {
+					schema,
+				},
+			},
+		};
+	}
 	return undefined;
 }
 
@@ -224,6 +237,46 @@ function processZodType(zodType: z.ZodType<any>): any {
 			...innerSchema,
 			default: defaultValue,
 		};
+	}
+	// record unwrapping (z.record())
+	if (zodType instanceof z.ZodRecord) {
+		const valueType = processZodType((zodType as any)._def.valueType);
+		return {
+			type: "object",
+			additionalProperties: valueType,
+		};
+	}
+	// intersection unwrapping (.and())
+	if (zodType instanceof z.ZodIntersection) {
+		const left = processZodType((zodType as any)._def.left);
+		const right = processZodType((zodType as any)._def.right);
+		// If both sides are objects, merge their properties directly
+		if (
+			left.type === "object" &&
+			right.type === "object" &&
+			left.properties &&
+			right.properties
+		) {
+			return {
+				type: "object",
+				properties: { ...left.properties, ...right.properties },
+				...(left.required || right.required
+					? {
+							required: [...(left.required ?? []), ...(right.required ?? [])],
+						}
+					: {}),
+				additionalProperties: true,
+			};
+		}
+		// If one side is a record (additionalProperties), absorb it
+		if (left.type === "object" && right.additionalProperties !== undefined) {
+			return { ...left, additionalProperties: right.additionalProperties };
+		}
+		if (right.type === "object" && left.additionalProperties !== undefined) {
+			return { ...right, additionalProperties: left.additionalProperties };
+		}
+		// Fallback: use allOf
+		return { allOf: [left, right] };
 	}
 	// object unwrapping
 	if (zodType instanceof z.ZodObject) {

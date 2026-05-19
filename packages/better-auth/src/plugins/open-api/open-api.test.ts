@@ -277,3 +277,43 @@ describe("open-api", async () => {
 		expect(baseTypes).toContain("boolean");
 	});
 });
+
+describe("open-api ZodIntersection and ZodRecord support", async () => {
+	const { auth: authWithEmailOTP } = await getTestInstance({
+		plugins: [
+			openAPI(),
+			(await import("../email-otp")).emailOTP({
+				async sendVerificationOTP() {},
+			}),
+		],
+	});
+
+	it("should include requestBody for signInEmailOTP endpoint", async () => {
+		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const endpoint = paths["/sign-in/email-otp"];
+
+		expect(endpoint).toBeDefined();
+		expect(endpoint.post).toBeDefined();
+		expect(endpoint.post.requestBody).toBeDefined();
+
+		const body = endpoint.post.requestBody.content["application/json"].schema;
+		expect(body).toBeDefined();
+		expect(body.properties).toBeDefined();
+		expect(body.properties.email).toBeDefined();
+		expect(body.properties.otp).toBeDefined();
+	});
+
+	it("should produce a valid object schema from ZodIntersection", async () => {
+		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const body =
+			paths["/sign-in/email-otp"].post.requestBody.content["application/json"]
+				.schema;
+
+		// The merged schema should be type object
+		expect(body.type).toBe("object");
+		// .and(z.record()) adds additionalProperties
+		expect(body.additionalProperties).toBeDefined();
+	});
+});
