@@ -29,9 +29,13 @@ import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
-	deleteFromPrompt,
 	getJwtPlugin,
+	getSignedQueryIssuedAt,
 	mergeDiscoveryMetadata,
+	postLoginClearedParam,
+	removePromptFromQuery,
+	searchParamsToQuery,
+	signedQueryIssuedAtParam,
 	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
@@ -45,9 +49,11 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const oAuthState = defineRequestState<{ query?: string } | null>(
-	() => null,
-);
+export const oAuthState = defineRequestState<{
+	query?: string;
+	signedQueryIssuedAt?: Date;
+	postLoginClearedForSession?: string;
+} | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
 /**
@@ -244,11 +250,18 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
+						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
 						const queryParams = new URLSearchParams(query);
+						const postLoginClearedForSession =
+							queryParams.get(postLoginClearedParam) ?? undefined;
 						queryParams.delete("sig");
 						queryParams.delete("exp");
+						queryParams.delete(signedQueryIssuedAtParam);
+						queryParams.delete(postLoginClearedParam);
 						await oAuthState.set({
 							query: queryParams.toString(),
+							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
+							postLoginClearedForSession,
 						});
 
 						// If path is social sign-in, add to additional data body
@@ -302,7 +315,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
-						ctx.query = deleteFromPrompt(query, "login");
+						ctx.query = searchParamsToQuery(
+							removePromptFromQuery(query, "login"),
+						);
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
@@ -1201,9 +1216,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						jwks: z
 							.union([
-								z.array(z.record(z.string(), z.unknown())),
+								z.array(z.record(z.string(), z.unknown())).min(1),
 								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())),
+									keys: z.array(z.record(z.string(), z.unknown())).min(1),
 								}),
 							])
 							.optional(),

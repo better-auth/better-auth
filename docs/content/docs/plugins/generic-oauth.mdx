@@ -190,6 +190,8 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 
 All providers support the same optional fields:
 
+* `clientSecret?: string` - OAuth client secret
+* `tokenEndpointAuth?: TokenEndpointAuth` - Client authentication configuration for token endpoint requests
 * `scopes?: string[]` - Array of OAuth scopes to request
 * `redirectURI?: string` - Custom redirect URI
 * `pkce?: boolean` - Enable PKCE (defaults to `true`)
@@ -206,6 +208,8 @@ When adding the plugin to your auth config, you can configure multiple OAuth pro
 Each provider configuration object supports the following options:
 
 ```ts
+import type { TokenEndpointAuth } from "better-auth/oauth2";
+
 interface GenericOAuthConfig {
   providerId: string;
   discoveryUrl?: string;
@@ -213,7 +217,8 @@ interface GenericOAuthConfig {
   tokenUrl?: string;
   userInfoUrl?: string;
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
+  tokenEndpointAuth?: TokenEndpointAuth;
   scopes?: string[];
   redirectURI?: string;
   responseType?: string;
@@ -240,9 +245,11 @@ interface GenericOAuthConfig {
 
 **clientSecret**: The OAuth client secret issued by your provider.
 
+**tokenEndpointAuth**: (Optional) Client authentication configuration for token endpoint requests. Use `{ method: "private_key_jwt", getClientAssertion }` for RFC 7523 client assertions, `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` for secret-based clients, and `{ method: "none" }` for public clients. Secret-based methods require `clientSecret`; do not combine `clientSecret` with `private_key_jwt` or `none`. If omitted, Better Auth sends secret-based token requests when `clientSecret` is configured and public-client token requests when it is not.
+
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
-**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include `:providerId` placeholder (e.g., `https://example.com/api/auth/oauth2/callback/my-provider`).
+**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include the `:providerId` placeholder (e.g., `https://example.com/api/auth/callback/my-provider`).
 
 **responseType**: (Optional) The OAuth response type. Defaults to `"code"` for authorization code flow.
 
@@ -262,39 +269,63 @@ interface GenericOAuthConfig {
 
 **authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
 
-**tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. These can override default parameters.
+**tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. Parameters already set by Better Auth are preserved. Configure token endpoint client authentication with `clientId`, `clientSecret`, and `tokenEndpointAuth`.
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
 
 **disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
 
-**authentication**: (Optional) The authentication method for token requests. Can be `'basic'`, `'post'`, or `'private_key_jwt'`. Defaults to `'post'`.
+**authentication**: (Optional) Secret-based token request authentication. Can be `'basic'` or `'post'`. Defaults to `'post'`. `'basic'` requires `clientSecret`. For token endpoint methods beyond client secrets, configure `tokenEndpointAuth`.
 
-**clientAssertion**: (Optional) Configuration for `private_key_jwt` authentication. Required when `authentication` is `'private_key_jwt'`. Accepts:
+For `private_key_jwt`, set `tokenEndpointAuth.method` to `"private_key_jwt"`. You can provide your own `getClientAssertion` function, or use `createPrivateKeyJwtClientAssertionGetter` to sign an RFC 7523 JWT assertion from a private key:
 
-* `privateKeyJwk` — Private key in JWK format
-* `privateKeyPem` — Private key in PKCS#8 PEM format
-* `kid` — Key ID to include in the JWT header
-* `algorithm` — Signing algorithm (defaults to `'RS256'`)
-* `expiresIn` — Assertion lifetime in seconds (defaults to `120`)
+```ts
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2";
+
+genericOAuth({
+    config: [
+        {
+            providerId: "my-idp",
+            clientId: "your-client-id",
+            tokenUrl: "https://idp.example.com/oauth/token",
+            authorizationUrl: "https://idp.example.com/oauth/authorize",
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+                    privateKeyJwk: { /* your JWK */ },
+                    kid: "my-key-1",
+                    algorithm: "RS256",
+                }),
+            },
+            pkce: true,
+        },
+    ],
+}),
+```
+
+You can also return an assertion from another provider:
 
 ```ts
 genericOAuth({
     config: [
         {
             providerId: "my-idp",
-            clientId: "your-client-id",
+            clientId: process.env.IDP_CLIENT_ID!,
             discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
-            authentication: "private_key_jwt",
-            clientAssertion: {
-                privateKeyJwk: { /* your JWK */ },
-                kid: "my-key-1",
-                algorithm: "RS256",
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                getClientAssertion: async ({ clientId, tokenEndpoint, grantType }) => {
+                    return getWorkloadIdentityToken({
+                        clientId,
+                        audience: tokenEndpoint,
+                        grantType,
+                    });
+                },
             },
             pkce: true,
         },
     ],
-}),
+});
 ```
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
@@ -429,6 +460,41 @@ getUserInfo: async (tokens) => {
   };
 }
 ```
+
+### IDP-Initiated Flows
+
+Some OAuth providers (e.g., [Clever](https://dev.clever.com/docs/oauth-implementation#initiating-logins)) let the identity provider redirect users to your callback URL without first having the user click a "sign in" button in your app. These callbacks arrive with a `code` parameter but no `state`, which would normally be rejected because the missing `state` breaks the standard CSRF check.
+
+Set `allowIdpInitiated: true` on the provider to accept these flows safely:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        genericOAuth({
+            config: [
+                {
+                    providerId: "clever",
+                    discoveryUrl: "https://clever.com/.well-known/openid-configuration",
+                    clientId: process.env.CLEVER_CLIENT_ID,
+                    clientSecret: process.env.CLEVER_CLIENT_SECRET,
+                    allowIdpInitiated: true,
+                },
+            ],
+        }),
+    ],
+});
+```
+
+When a stateless callback hits `/callback/:providerId`, Better Auth discards the provider-issued code and restarts the flow server-side: a fresh `state` and PKCE verifier are generated, and the user is redirected to the provider's authorize endpoint. The provider recognizes the user's live session and completes the flow automatically. CSRF protection and PKCE are preserved throughout.
+
+Leave `allowIdpInitiated` off (the default) for any provider that always initiates the flow from your side — stateless callbacks to those providers indicate malformed or malicious requests and should be rejected.
+
+<Callout type="warn">
+  Set the global `baseURL` option when enabling `allowIdpInitiated`. IDP-initiated callbacks carry no initiating request body, so the bounce uses `baseURL` as the post-login destination. If `baseURL` is unset, the bounce fails with `CALLBACK_URL_REQUIRED`.
+</Callout>
 
 ### Error Handling
 

@@ -1,12 +1,12 @@
-import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
 import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
-	createRefreshAccessTokenRequest,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -114,7 +114,7 @@ describe("oauth token - authorization_code", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -122,7 +122,7 @@ describe("oauth token - authorization_code", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -188,6 +188,35 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.sub).toBeDefined();
 		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.email).toBeUndefined();
+	});
+
+	it("should exchange a PKCE authorization code when state is omitted", async () => {
+		const scopes = ["openid"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+		});
+		authUrl.searchParams.delete("state");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).not.toContain("state=");
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe(scopes.join(" "));
 	});
 
 	it("scope openid+profile should provide access_token and id_token", async ({
@@ -459,7 +488,7 @@ describe("oauth token - refresh_token", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -467,7 +496,7 @@ describe("oauth token - refresh_token", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -543,7 +572,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -593,7 +622,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(originalIdToken.auth_time).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -632,7 +661,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -690,7 +719,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -737,7 +766,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -795,7 +824,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -838,7 +867,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -876,7 +905,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -922,7 +951,7 @@ describe("oauth token - refresh_token", async () => {
 
 		// New tokens should not work either
 		const { body: newBody, headers: newHeaders } =
-			createRefreshAccessTokenRequest({
+			await refreshAccessTokenRequest({
 				refreshToken: newTokens?.data?.refresh_token!,
 				options: {
 					clientId: oauthClient.client_id,
@@ -1023,7 +1052,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -1058,7 +1087,7 @@ describe("oauth token - client_credentials", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -1093,7 +1122,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -1238,7 +1267,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		expect(code).toBeTruthy();
 		expect(returnedState).toBe(state);
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code: code!,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -1906,7 +1935,7 @@ describe("id token claim override security", async () => {
 		expect(code).toBeTruthy();
 		expect(returnedState).toBe(state);
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code: code!,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2013,7 +2042,7 @@ describe("loopback redirect URI matching", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: requestedUri,
@@ -2064,7 +2093,7 @@ describe("loopback redirect URI matching", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: requestedUri,
@@ -2215,7 +2244,7 @@ describe("scope preservation through authorization code flow", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2316,7 +2345,7 @@ describe("at_hash in id tokens", async () => {
 		const callbackUrl = new URL(callbackRedirectUrl);
 		const code = callbackUrl.searchParams.get("code")!;
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2447,7 +2476,7 @@ describe("at_hash in id tokens", async () => {
 			},
 		});
 		const code = new URL(callbackUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2557,7 +2586,7 @@ describe("customTokenResponseFields", async () => {
 		const url = new URL(callbackRedirectUrl);
 		const code = url.searchParams.get("code")!;
 
-		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2646,7 +2675,7 @@ describe("customTokenResponseFields", async () => {
 		});
 
 		const code = new URL(callbackUrl).searchParams.get("code")!;
-		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2678,7 +2707,7 @@ describe("customTokenResponseFields", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers: tokenHeaders } = createClientCredentialsTokenRequest(
+		const { body, headers: tokenHeaders } = await clientCredentialsTokenRequest(
 			{
 				options: {
 					clientId: oauthClient.client_id,
@@ -2713,6 +2742,23 @@ describe("verificationValueSchema", () => {
 				redirect_uri: "https://example.com/callback",
 				scope: "openid",
 				state: "abc123",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should validate a verification value without state", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
 			},
 			userId: "user-1",
 			sessionId: "session-1",

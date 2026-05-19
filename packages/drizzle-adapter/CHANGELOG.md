@@ -1,6 +1,45 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
+
+## 1.7.0-beta.2
+
+### Patch Changes
+
+- [#9165](https://github.com/better-auth/better-auth/pull/9165) [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - chore(adapters): require patched `drizzle-orm` and `kysely` peer versions
+
+  Narrows the `drizzle-orm` peer to `^0.45.2` and the `kysely` peer to `^0.28.14`. Both new ranges track the minor line that carries the vulnerability fix and nothing newer, so the adapters only advertise support for versions that have actually been tested against. Consumers on older ORM releases see an install-time warning and can upgrade alongside the adapter; the peer is marked optional, so installs do not hard-fail.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.2
+
 ## 1.7.0-beta.1
+
+## 1.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b)]:
+  - @better-auth/core@1.6.10
+
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
+  - @better-auth/core@1.6.9
+
+## 1.6.8
+
+### Patch Changes
+
+- Updated dependencies [[`9aa8e63`](https://github.com/better-auth/better-auth/commit/9aa8e63de84549634216e13e407cf6d8aa61acc3)]:
+  - @better-auth/core@1.6.8
 
 ## 1.6.7
 

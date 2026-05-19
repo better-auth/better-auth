@@ -1,6 +1,6 @@
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
-import { generateCodeChallenge } from "./utils";
+import { generateCodeChallenge, getPrimaryClientId } from "./utils";
 
 /**
  * Query-parameter names that are populated by the framework as part of the
@@ -64,9 +64,10 @@ export async function createAuthorizationURL({
 	options = typeof options === "function" ? await options() : options;
 	const url = new URL(options.authorizationEndpoint || authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
-	const primaryClientId = Array.isArray(options.clientId)
-		? options.clientId[0]
-		: options.clientId;
+	const primaryClientId = getPrimaryClientId(options.clientId);
+	if (!primaryClientId) {
+		throw new Error("OAuth provider requires clientId");
+	}
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
 	if (scopes) {

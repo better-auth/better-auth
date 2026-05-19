@@ -37,6 +37,10 @@ description: LinkedIn Provider
         },
     })
     ```
+
+    <Callout>
+      LinkedIn's `email` and `email_verified` claims are [documented as optional](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2) and may be absent when no confirmed email is associated with the member. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `mapProfileToUser` fallback.
+    </Callout>
   </Step>
 
   <Step>

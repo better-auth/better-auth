@@ -151,9 +151,9 @@ describe("SSO", async () => {
 			});
 		} catch (e) {
 			expect(e).toMatchObject({
-				status: "BAD_REQUEST",
+				status: 400,
 				body: {
-					message: "Invalid issuer. Must be a valid URL",
+					message: "[body.issuer] Invalid URL",
 				},
 			});
 		}
@@ -1486,6 +1486,33 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		server.service.on("beforeResponse", responseHandler);
 		await server.issuer.keys.generate("RS256");
 		await server.start(8080, "localhost");
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt.com",
+				providerId: "private-key-jwt-provider",
+				oidcConfig: {
+					clientId: "private-key-jwt-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+		});
 	});
 
 	afterAll(async () => {
@@ -1524,33 +1551,6 @@ describe("OIDC SSO with private_key_jwt", async () => {
 	it("should sign in using private_key_jwt and resolvePrivateKey", async () => {
 		capturedTokenRequest = undefined;
 		resolvePrivateKey.mockClear();
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			headers,
-			body: {
-				issuer: server.issuer.url!,
-				domain: "private-key-jwt.com",
-				providerId: "private-key-jwt-provider",
-				oidcConfig: {
-					clientId: "private-key-jwt-client",
-					authorizationEndpoint: `${server.issuer.url}/authorize`,
-					tokenEndpoint: `${server.issuer.url}/token`,
-					jwksEndpoint: `${server.issuer.url}/jwks`,
-					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-					tokenEndpointAuthentication: "private_key_jwt",
-					privateKeyId: "private-key-jwt-key",
-					privateKeyAlgorithm: "RS256",
-					mapping: {
-						id: "sub",
-						email: "email",
-						emailVerified: "email_verified",
-						name: "name",
-						image: "picture",
-					},
-				},
-			},
-		});
 
 		const signInHeaders = new Headers();
 		const res = await authClient.signIn.sso({
@@ -1612,6 +1612,25 @@ describe("OIDC SSO with private_key_jwt", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
+	});
+
+	it("should redirect with no_private_key_available when resolvePrivateKey returns no key material", async () => {
+		resolvePrivateKey.mockResolvedValueOnce(
+			{} as Awaited<ReturnType<typeof resolvePrivateKey>>,
+		);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "private-key-jwt-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+		expect(callbackURL).toContain("error_description=no_private_key_available");
 	});
 });
 
@@ -1742,5 +1761,139 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+});
+
+describe("SSO OIDC IDP-initiated bounce", async () => {
+	const { customFetchImpl } = await getTestInstance({
+		trustedOrigins: ["http://localhost:8080"],
+		plugins: [
+			sso({
+				defaultSSO: [
+					{
+						domain: "idp-initiated.com",
+						providerId: "idp-initiated",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "idp-initiated-client",
+							clientSecret: "idp-initiated-secret",
+							pkce: true,
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+							allowIdpInitiated: true,
+						},
+					},
+					{
+						domain: "strict-oidc.com",
+						providerId: "strict-oidc",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "strict-client",
+							clientSecret: "strict-secret",
+							pkce: true,
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
+				],
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should bounce a stateless OIDC callback to the provider's authorize endpoint when allowIdpInitiated is true", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toContain("http://localhost:8080/authorize");
+		const url = new URL(location);
+		expect(url.searchParams.get("state")).toBeTruthy();
+		expect(url.searchParams.get("client_id")).toBe("idp-initiated-client");
+		expect(url.searchParams.get("code")).toBeNull();
+	});
+
+	it("should not bounce when the `code` parameter is empty", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).not.toContain("http://localhost:8080/authorize");
+	});
+
+	it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=idp-issued-code&state=",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).not.toContain("http://localhost:8080/authorize");
+		expect(location).toContain("please_restart_the_process");
+	});
+
+	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
+		const { customFetchImpl: sharedRedirectFetch } = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+					defaultSSO: [
+						{
+							domain: "idp-initiated-shared.com",
+							providerId: "idp-initiated-shared",
+							oidcConfig: {
+								issuer: "http://localhost:8080",
+								clientId: "idp-initiated-shared-client",
+								clientSecret: "idp-initiated-shared-secret",
+								pkce: true,
+								discoveryEndpoint:
+									"http://localhost:8080/.well-known/openid-configuration",
+								allowIdpInitiated: true,
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const res = await sharedRedirectFetch(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated-shared?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toContain("http://localhost:8080/authorize");
+		const url = new URL(location);
+		expect(url.searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/sso/callback",
+		);
+		expect(url.searchParams.get("state")).toBeTruthy();
+	});
+
+	it("should redirect to the error page for providers without the flag", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/strict-oidc?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("please_restart_the_process");
 	});
 });
