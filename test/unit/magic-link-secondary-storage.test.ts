@@ -217,7 +217,7 @@ describe("magic link with secondary storage (string return)", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=EXPIRED_TOKEN");
+					expect(location).toContain("?error=INVALID_TOKEN");
 				},
 			},
 		);
