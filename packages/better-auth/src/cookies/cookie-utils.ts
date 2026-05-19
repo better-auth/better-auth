@@ -1,4 +1,5 @@
 function tryDecode(str: string): string {
+	if (str.indexOf("%") === -1) return str;
 	try {
 		return decodeURIComponent(str);
 	} catch {
@@ -101,13 +102,13 @@ export function parseSetCookieHeader(
 		const [nameValue, ...attributes] = parts;
 		const [name, ...valueParts] = (nameValue || "").split("=");
 
-		const value = valueParts.join("=");
+		const value = unquoteCookieValue(valueParts.join("="));
 
-		if (!name || value === undefined) {
+		if (!name) {
 			return;
 		}
 
-		const decodedValue = value.includes("%") ? tryDecode(value) : value;
+		const decodedValue = tryDecode(value);
 		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {
@@ -178,7 +179,7 @@ export function toCookieOptions(
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6
  */
-const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
+export const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
 
 /**
  * Cookie-value char set per RFC 6265 §4.1.1, plus space and comma.
@@ -187,6 +188,18 @@ const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
  * @see https://github.com/golang/go/issues/7243
  */
 const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
+
+/**
+ * Strip surrounding double-quotes per RFC 6265 §4.1.1 quoted-string form.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+ */
+function unquoteCookieValue(value: string): string {
+	if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) {
+		return value;
+	}
+	return value.slice(1, -1);
+}
 
 /**
  * Trim leading/trailing OWS (space / horizontal tab) per RFC 7230 §3.2.3.
@@ -225,12 +238,10 @@ export function parseCookies(cookie: string): Map<string, string> {
 		const eq = chunk.indexOf("=");
 		if (eq === -1) continue;
 		const key = trimOWS(chunk.slice(0, eq));
-		let val = trimOWS(chunk.slice(eq + 1));
-		if (val.length >= 2 && val[0] === '"' && val[val.length - 1] === '"') {
-			val = val.slice(1, -1);
-		}
+		const val = unquoteCookieValue(trimOWS(chunk.slice(eq + 1)));
+		// Validate wire-format octets, then decode to the semantic value.
 		if (cookieNameRegex.test(key) && cookieValueRegex.test(val)) {
-			cookieMap.set(key, val);
+			cookieMap.set(key, tryDecode(val));
 		}
 	}
 	return cookieMap;
@@ -250,10 +261,14 @@ export function setRequestCookie(
 	value: string,
 ): void {
 	const cookieMap = parseCookies(headers.get("cookie") || "");
-	cookieMap.set(name, value);
+	if (cookieNameRegex.test(name)) {
+		cookieMap.set(name, value);
+	}
 	headers.set(
 		"cookie",
-		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+		Array.from(cookieMap, ([k, v]) => `${k}=${encodeURIComponent(v)}`).join(
+			"; ",
+		),
 	);
 }
 
@@ -272,12 +287,16 @@ export function applySetCookies(
 	const cookieMap = parseCookies(target.get("cookie") || "");
 	for (const setCookie of setCookieValues) {
 		for (const [name, attr] of parseSetCookieHeader(setCookie)) {
-			cookieMap.set(name, attr.value);
+			if (cookieNameRegex.test(name)) {
+				cookieMap.set(name, attr.value);
+			}
 		}
 	}
 	target.set(
 		"cookie",
-		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+		Array.from(cookieMap, ([k, v]) => `${k}=${encodeURIComponent(v)}`).join(
+			"; ",
+		),
 	);
 }
 
