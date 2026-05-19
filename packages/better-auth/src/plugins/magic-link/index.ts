@@ -89,6 +89,31 @@ export interface MagicLinkOptions {
 				| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
 		  )
 		| undefined;
+	/**
+	 * Optional URL to which the user should be redirected after clicking the
+	 * magic‑link verification endpoint.
+	 *
+	 * By default the verification endpoint (`/api/auth/magic-link/verify`) consumes
+	 * the single‑use token on the first GET request. This is problematic when
+	 * email security gateways pre‑fetch the link, causing the token to be used
+	 * before the user clicks it. Supplying a `confirmationUrl` makes the plugin
+	 * generate a link that points to a lightweight confirmation page (e.g.
+	 * `/api/auth/magic-link/confirm?token=…`). The token is only consumed when the
+	 * user clicks the **“Continue”** button on that page, preventing scanners from
+	 * invalidating the link.
+	 *
+	 * The value can be a full URL or a relative path. If omitted, the original
+	 * behavior (direct verification URL) is preserved.
+	 *
+	 * @example
+	 * ```ts
+	 * magicLink({
+	 *   confirmationUrl: "/auth/magic-link/confirm",
+	 *   sendMagicLink: ({ email, url }) => sendEmail(email, url),
+	 * });
+	 * ```
+	 */
+	confirmationUrl?: string;
 }
 
 const signInMagicLinkBodySchema = z.object({
@@ -245,10 +270,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
 					const basePath = pathname ? "" : ctx.context.options.basePath || "";
-					const url = new URL(
-						`${pathname}${basePath}/magic-link/verify`,
-						realBaseURL.origin,
-					);
+					const endpoint = opts.confirmationUrl
+						? opts.confirmationUrl
+						: `${pathname}${basePath}/magic-link/verify`;
+					const url = new URL(endpoint, realBaseURL.origin);
 					url.searchParams.set("token", verificationToken);
 					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
 					if (ctx.body.newUserCallbackURL) {

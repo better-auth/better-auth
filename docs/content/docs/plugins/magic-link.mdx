@@ -155,3 +155,29 @@ The storage backend itself is controlled by the global [`verification`](/docs/re
 <Callout type="warn">
   When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee from [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx) requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). If the implementation only exposes `get` and `delete`, the consume falls back to an in-process JavaScript lock that does not coordinate across multiple application instances. Multi-instance deployments using secondary-storage verification MUST configure a backend that implements `getAndDelete`.
 </Callout>
+
+**confirmationUrl**: An optional URL (absolute or relative path) that replaces the default `/magic-link/verify` endpoint as the destination of the emailed link.
+
+When set, the link sent to the user points to your own confirmation page with `token` and `callbackURL` as query parameters. The token is **not** consumed at this stage. Your page should show a "Sign in" button that navigates to `/api/auth/magic-link/verify?token=...`, which then consumes the token and creates the session.
+
+This prevents corporate email security scanners (Microsoft Safe Links, Proofpoint, etc.) from pre-fetching and invalidating the single-use token before the user clicks it.
+
+```ts title="server.ts"
+magicLink({
+  confirmationUrl: "/auth/magic-link/confirm", // your app's confirmation page
+  sendMagicLink: async ({ email, url }) => {
+    // url now points to /auth/magic-link/confirm?token=...&callbackURL=...
+    await sendEmail(email, url);
+  },
+})
+```
+
+Your confirmation page links the user to the real verification endpoint:
+
+```tsx title="app/auth/magic-link/confirm/page.tsx"
+// Next.js example
+export default function ConfirmPage({ searchParams }) {
+  const verifyUrl = `/api/auth/magic-link/verify?token=${searchParams.token}&callbackURL=${searchParams.callbackURL ?? "/"}`;
+  return <a href={verifyUrl}>Click here to sign in</a>;
+}
+```
