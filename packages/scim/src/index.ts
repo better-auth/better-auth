@@ -33,6 +33,10 @@ export const scim = (options?: SCIMOptions) => {
 		storeSCIMToken: "plain",
 		...options,
 	} satisfies SCIMOptions;
+	// TODO(scim-provider-ownership-default-on): flip default to `true` on next.
+	// Kept default-off on main so existing SQL deployments don't need a schema
+	// migration mid-upgrade. The dedicated next-minor PR adds the
+	// `scimProvider.userId` column and flips the default in one step.
 	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);

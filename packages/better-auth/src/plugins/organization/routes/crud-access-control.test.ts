@@ -10,6 +10,16 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
 
 describe("dynamic access control", async () => {
+	it("should preserve exact built-in organization role statement types", () => {
+		expectTypeOf(adminAc.statements.organization).toEqualTypeOf<
+			readonly ["update"]
+		>();
+		expectTypeOf(ownerAc.statements.organization).toEqualTypeOf<
+			readonly ["update", "delete"]
+		>();
+		expectTypeOf(memberAc.statements.organization).toEqualTypeOf<readonly []>();
+	});
+
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
