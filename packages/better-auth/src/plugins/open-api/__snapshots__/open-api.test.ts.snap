@@ -1876,10 +1876,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "additionalProperties": {
-                      "description": undefined,
-                      "type": "string",
-                    },
+                    "additionalProperties": {},
                     "type": [
                       "object",
                       "null",
@@ -3941,10 +3938,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "additionalProperties": {
-                      "description": undefined,
-                      "type": "string",
-                    },
+                    "additionalProperties": {},
                     "type": [
                       "object",
                       "null",
@@ -4768,11 +4762,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "additionalProperties": {},
                 "type": "object",
               },
             },
           },
+          "required": true,
         },
         "responses": {
           "200": {
