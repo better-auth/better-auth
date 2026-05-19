@@ -32,6 +32,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
+			cloneRequest: true,
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
@@ -232,7 +233,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const shouldReturnGenericDuplicateResponse =
-					ctx.context.options.emailAndPassword.requireEmailVerification;
+					ctx.context.options.emailAndPassword.requireEmailVerification ||
+					ctx.context.options.emailAndPassword.autoSignIn === false;
 				const shouldSkipAutoSignIn =
 					ctx.context.options.emailAndPassword.autoSignIn === false ||
 					shouldReturnGenericDuplicateResponse;
@@ -258,7 +260,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
 									{ user: dbUser.user },
-									ctx.request,
+									ctx.request?.clone(),
 								),
 							);
 						}
@@ -387,7 +389,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									url,
 									token,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}

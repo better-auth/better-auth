@@ -567,6 +567,19 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							[opts.phoneNumberVerified]: true,
 						},
 					);
+				if (!user) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+					);
+				}
+				await opts?.callbackOnVerification?.(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						user,
+					},
+					ctx,
+				);
 				return ctx.json({
 					status: true,
 					token: session.session.token,

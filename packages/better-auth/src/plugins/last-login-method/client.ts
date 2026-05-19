@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { parseCookies } from "../../cookies/cookie-utils";
 import { PACKAGE_VERSION } from "../../version";
 
 /**
@@ -16,12 +17,7 @@ function getCookieValue(name: string): string | null {
 	if (typeof document === "undefined") {
 		return null;
 	}
-
-	const cookie = document.cookie
-		.split("; ")
-		.find((row) => row.startsWith(`${name}=`));
-
-	return cookie ? cookie.split("=")[1]! : null;
+	return parseCookies(document.cookie).get(name) ?? null;
 }
 
 /**

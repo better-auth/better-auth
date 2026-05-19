@@ -4,6 +4,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -164,10 +165,11 @@ export const callbackOAuth = createAuthEndpoint(
 			})
 			.then((res) => res?.user);
 
-		if (!userInfo) {
+		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
 		}
+		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -195,7 +197,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 			const existingAccount =
 				await c.context.internalAdapter.findAccountByProviderId(
-					String(userInfo.id),
+					providerAccountId,
 					provider.id,
 				);
 
@@ -221,7 +223,7 @@ export const callbackOAuth = createAuthEndpoint(
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
 					providerId: provider.id,
-					accountId: String(userInfo.id),
+					accountId: providerAccountId,
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
@@ -242,21 +244,19 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!userInfo.email) {
-			c.context.logger.error(
-				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
-			);
+			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError("email_not_found");
 		}
 		const accountData = {
 			providerId: provider.id,
-			accountId: String(userInfo.id),
+			accountId: providerAccountId,
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
-				id: String(userInfo.id),
+				id: providerAccountId,
 				email: userInfo.email,
 				name: userInfo.name || "",
 			},
