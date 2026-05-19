@@ -7,7 +7,7 @@ import { setSessionCookie } from "../../cookies";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { parseState } from "../../oauth2/state";
+import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
@@ -81,6 +81,25 @@ export const callbackOAuth = createAuthEndpoint(
 			user: userData,
 			iss,
 		} = queryOrBody;
+
+		if (state === undefined && code) {
+			const provider = await getAwaitableValue(c.context.socialProviders, {
+				value: c.params.id,
+			});
+			if (provider?.allowIdpInitiated) {
+				const { state: freshState, codeVerifier } = await generateState(
+					c,
+					undefined,
+					undefined,
+				);
+				const authUrl = await provider.createAuthorizationURL({
+					state: freshState,
+					codeVerifier,
+					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				});
+				throw c.redirect(authUrl.toString());
+			}
+		}
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
