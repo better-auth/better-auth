@@ -192,7 +192,7 @@ export const callbackOAuth = createAuthEndpoint(
 				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				return redirectOnError("email_doesn't_match");
+				return redirectOnError("email_mismatch");
 			}
 
 			const existingAccount =

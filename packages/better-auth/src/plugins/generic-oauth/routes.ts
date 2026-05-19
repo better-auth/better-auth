@@ -460,7 +460,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						true &&
 					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
-					return redirectOnError("email_doesn't_match");
+					return redirectOnError("email_mismatch");
 				}
 				const existingAccount =
 					await ctx.context.internalAdapter.findAccountByProviderId(
