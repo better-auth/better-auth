@@ -155,12 +155,10 @@ function getRequestBody(options: EndpointOptions): any {
 		return options.metadata.openapi.requestBody;
 	}
 	if (!options.body) return undefined;
-	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
-	) {
+	const body = options.body as z.ZodType<any>;
+	if (body instanceof z.ZodObject || body instanceof z.ZodOptional) {
 		// @ts-expect-error
-		const shape = options.body.shape;
+		const shape = body.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
@@ -173,12 +171,7 @@ function getRequestBody(options: EndpointOptions): any {
 			}
 		});
 		return {
-			required:
-				options.body instanceof z.ZodOptional
-					? false
-					: options.body
-						? true
-						: false,
+			required: body instanceof z.ZodOptional ? false : body ? true : false,
 			content: {
 				"application/json": {
 					schema: {
@@ -190,20 +183,18 @@ function getRequestBody(options: EndpointOptions): any {
 			},
 		};
 	}
-	// Handle ZodIntersection body (e.g. z.object({...}).and(z.record(...)))
-	if (options.body instanceof z.ZodIntersection) {
-		const schema = processZodType(options.body);
-		if (!schema || !schema.properties) return undefined;
-		return {
-			required: true,
-			content: {
-				"application/json": {
-					schema,
-				},
+	// Generic fallback: handle ZodIntersection, ZodRecord, and any other
+	// Zod types processZodType supports (allOf, additionalProperties, etc.)
+	const schema = processZodType(body);
+	if (!schema) return undefined;
+	return {
+		required: !(body instanceof z.ZodOptional),
+		content: {
+			"application/json": {
+				schema,
 			},
-		};
-	}
-	return undefined;
+		},
+	};
 }
 
 function processZodType(zodType: z.ZodType<any>): any {
@@ -238,6 +229,10 @@ function processZodType(zodType: z.ZodType<any>): any {
 			default: defaultValue,
 		};
 	}
+	// ZodAny / ZodUnknown → unconstrained schema {}
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
+		return {};
+	}
 	// record unwrapping (z.record())
 	if (zodType instanceof z.ZodRecord) {
 		const valueType = processZodType((zodType as any)._def.valueType);
@@ -262,7 +257,9 @@ function processZodType(zodType: z.ZodType<any>): any {
 				properties: { ...left.properties, ...right.properties },
 				...(left.required || right.required
 					? {
-							required: [...(left.required ?? []), ...(right.required ?? [])],
+							required: Array.from(
+								new Set([...(left.required ?? []), ...(right.required ?? [])]),
+							),
 						}
 					: {}),
 				additionalProperties: true,
