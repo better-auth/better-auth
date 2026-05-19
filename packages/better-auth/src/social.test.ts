@@ -229,6 +229,34 @@ describe("Social Providers", async (c) => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5441
+	 */
+	it("should forward additionalParams to the authorization URL", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				access_type: "offline",
+				hd: "example.com",
+			},
+		});
+		const url = new URL(signInRes.data!.url!);
+		expect(url.searchParams.get("access_type")).toBe("offline");
+		expect(url.searchParams.get("hd")).toBe("example.com");
+	});
+
+	it("should reject additionalParams that collide with reserved OAuth params", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				redirect_uri: "https://attacker.example/callback",
+			},
+		});
+		expect(signInRes.error?.status).toBe(400);
+	});
+
 	it("should be able to sign in with social providers", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({

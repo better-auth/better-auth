@@ -20,7 +20,13 @@ export const vercel = (options: VercelOptions) => {
 	return {
 		id: "vercel",
 		name: "Vercel",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Vercel");
 			}
@@ -40,6 +46,7 @@ export const vercel = (options: VercelOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

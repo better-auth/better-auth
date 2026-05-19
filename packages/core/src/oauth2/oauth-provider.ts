@@ -35,6 +35,13 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string | undefined;
 		loginHint?: string | undefined;
+		/**
+		 * Extra query parameters to append to the authorization URL.
+		 * Providers forward these to the shared `createAuthorizationURL` helper,
+		 * which drops any keys present in `RESERVED_AUTHORIZATION_PARAMS`
+		 * before applying them.
+		 */
+		additionalParams?: Record<string, string> | undefined;
 	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {

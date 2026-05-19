@@ -42,7 +42,7 @@ export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
 		name: "Twitch",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["user:read:email", "openid"];
@@ -61,6 +61,7 @@ export const twitch = (options: TwitchOptions) => {
 					"preferred_username",
 					"picture",
 				],
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

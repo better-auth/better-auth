@@ -56,6 +56,7 @@ export const line = (options: LineOptions) => {
 			codeVerifier,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -71,6 +72,7 @@ export const line = (options: LineOptions) => {
 				codeVerifier,
 				redirectURI,
 				loginHint,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

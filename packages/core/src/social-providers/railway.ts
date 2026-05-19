@@ -29,7 +29,13 @@ export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "email", "profile"];
@@ -43,6 +49,7 @@ export const railway = (options: RailwayOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

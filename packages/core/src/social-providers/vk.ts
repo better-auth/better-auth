@@ -30,7 +30,13 @@ export const vk = (options: VkOption) => {
 	return {
 		id: "vk",
 		name: "VK",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -44,6 +50,7 @@ export const vk = (options: VkOption) => {
 				state,
 				redirectURI,
 				codeVerifier,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({

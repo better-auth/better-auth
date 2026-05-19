@@ -132,6 +132,30 @@ const requestAdditionalScopes = async () => {
   Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
 </Callout>
 
+### Customizing the Authorization URL
+
+To forward extra query parameters to the provider's authorization endpoint, pass `additionalParams` when calling `signIn.social` or `linkSocial`. The values are applied after the framework has written the OAuth state, PKCE challenge, and `redirect_uri`; the reserved keys `state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, and `scope` are rejected with a 400 so a caller cannot break the callback correlation.
+
+```ts
+await authClient.signIn.social({
+  provider: "cognito",
+  additionalParams: {
+    identity_provider: "Google", // skip the Cognito hosted-UI picker
+  },
+});
+
+await authClient.linkSocial({
+  provider: "google",
+  loginHint: "user@example.com",
+  additionalParams: {
+    access_type: "offline",
+    prompt: "consent",
+  },
+});
+```
+
+The provider's own baked-in query parameters (for example Google's `include_granted_scopes=true`, Facebook's `config_id`, Cognito's `identity_provider` when set via `identityProvider`) are merged with call-time `additionalParams`; the call-time value wins on key collisions.
+
 ### Passing Additional Data Through OAuth Flow
 
 Better Auth allows you to pass additional data through the OAuth flow without storing it in the database. This is useful for scenarios like tracking referral codes, analytics sources, or other temporary data that should be processed during authentication but not persisted.
