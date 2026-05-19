@@ -1,3 +1,4 @@
+export { additionalAuthorizationParamsSchema } from "./authorization-params";
 export {
 	decodeBasicCredentials,
 	encodeBasicCredentials,
@@ -20,7 +21,11 @@ export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,
 } from "./client-credentials-token";
-export { createAuthorizationURL } from "./create-authorization-url";
+export {
+	createAuthorizationURL,
+	RESERVED_AUTHORIZATION_PARAMS,
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+} from "./create-authorization-url";
 export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,

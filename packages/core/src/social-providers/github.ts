@@ -69,6 +69,7 @@ export const github = (options: GithubOptions) => {
 			loginHint,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -85,6 +86,7 @@ export const github = (options: GithubOptions) => {
 				redirectURI,
 				loginHint,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
