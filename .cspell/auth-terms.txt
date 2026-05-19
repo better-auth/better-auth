@@ -34,3 +34,6 @@ rgba
 idtoken
 HIBP
 cimd
+dpop
+atproto
+bsky
