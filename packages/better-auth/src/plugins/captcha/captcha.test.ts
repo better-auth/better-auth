@@ -1,6 +1,8 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { emailOTP } from "../email-otp";
+import { emailOTPClient } from "../email-otp/client";
 import { captcha } from ".";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -437,6 +439,244 @@ describe("captcha", async () => {
 			});
 
 			expect(res.error?.status).toBe(403);
+		});
+	});
+
+	describe("exempt paths", () => {
+		it("should not apply captcha to /sign-in/email-otp with default endpoints", async () => {
+			let capturedOtp = "";
+
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+						}),
+						emailOTP({
+							async sendVerificationOTP({ otp }) {
+								capturedOtp = otp;
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const send = await client.emailOtp.sendVerificationOtp({
+				email: "test@test.com",
+				type: "sign-in",
+			});
+			expect(send.data?.success).toBe(true);
+			expect(capturedOtp.length).toBe(6);
+
+			const res = await client.signIn.emailOtp({
+				email: "test@test.com",
+				otp: capturedOtp,
+			});
+
+			expect(res.error?.status).not.toBe(400);
+		});
+
+		it("should still apply captcha when /sign-in/email-otp is explicitly opted in", async () => {
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+							endpoints: ["/sign-in/email-otp"],
+						}),
+						emailOTP({
+							sendVerificationOTP: async () => {},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const res = await client.signIn.emailOtp({
+				email: "test@test.com",
+				otp: "000000",
+			});
+
+			expect(res.error?.status).toBe(400);
+		});
+
+		it("should still apply captcha when a protected pathname contains duplicate slashes", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in//email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+		});
+
+		it("should still apply captcha when a protected pathname has a trailing slash", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email/", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+		});
+
+		it("should still apply captcha when a protected pathname has leading duplicate slashes", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth//sign-in/email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+		});
+
+		it("should not apply captcha to sub-routes of default protected endpoints", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sign-in/email/extra-segment",
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					},
+				),
+			);
+
+			// Captcha must not block sub-routes; only paths listed in `endpoints`
+			// are protected after the move from substring to exact matching.
+			expect(res.status).not.toBe(400);
+		});
+	});
+
+	describe("wildcard endpoints", () => {
+		it("should apply captcha to single-segment wildcard matches", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email-otp", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+		});
+
+		it("should not match nested routes with a single-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			// Single-segment `*` stops at slashes, mirroring rate-limiter and
+			// trusted-origin semantics.
+			expect(res.status).not.toBe(400);
+		});
+
+		it("should apply captcha to nested routes with a multi-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/**"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
 		});
 	});
 });

@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
+import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
@@ -33,27 +34,19 @@ export const captcha = (options: CaptchaOptions) =>
 				const basePath = ctx.options.basePath ?? "/api/auth";
 				let pathname = url.pathname.replace(basePath, "");
 
-				// remove trailing or leading slashes & add leading slash if not present
+				// Normalize slashes so endpoint matching can be exact.
 				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
 				if (pathname.startsWith("//")) pathname = pathname.slice(1);
 				if (!pathname.startsWith("/")) pathname = "/" + pathname;
+				pathname = pathname.replace(/\/\/+/g, "/");
+				if (pathname.length > 1 && pathname.endsWith("/"))
+					pathname = pathname.slice(0, -1);
 
-				// we don't want to accidentally block email-otp endpoint.
-				const blockedPaths = ["/sign-in/email-otp"].reduce<string[]>(
-					(acc, curr) => {
-						// if custom endpoints includes a blocked path, we dont include the blocked path in the blocked paths array
-						if (options.endpoints?.length && options.endpoints.includes(curr)) {
-							return acc;
-						}
-						return [...acc, curr];
-					},
-					[],
+				const match = endpoints.some((endpoint) =>
+					endpoint.includes("*")
+						? wildcardMatch(endpoint)(pathname)
+						: endpoint === pathname,
 				);
-				const match = endpoints.some((endpoint) => {
-					return (
-						pathname.includes(endpoint) && !blockedPaths.includes(endpoint)
-					);
-				});
 
 				if (!match) {
 					return undefined;
