@@ -220,9 +220,11 @@ export interface InternalAdapter<
 	 * Atomically consume a single-use verification row by `identifier` and
 	 * return it. Only the first concurrent caller receives the latest row;
 	 * subsequent callers receive `null`. Consuming one row invalidates the
-	 * whole identifier so stale rows cannot be replayed. Callers MUST gate any
-	 * state change (issue session, mint token, change password) on a non-null
-	 * result.
+	 * whole identifier so stale rows cannot be replayed. Rows past their
+	 * `expiresAt` are treated as already invalid: the row is deleted but
+	 * `null` is returned, so callers do not need to gate on `expiresAt`
+	 * themselves. Callers MUST gate any state change (issue session, mint
+	 * token, change password) on a non-null result.
 	 *
 	 * Replaces the racy `findVerificationValue` + `deleteVerificationByIdentifier`
 	 * pair at single-use credential consumption sites.

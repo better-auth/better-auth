@@ -376,9 +376,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					if (tokenValue.expiresAt < new Date()) {
-						redirectWithError("EXPIRED_TOKEN");
-					}
 					const { email, name } = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string | undefined;
