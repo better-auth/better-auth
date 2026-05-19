@@ -196,20 +196,7 @@ function getRequestBody(options: EndpointOptions): any {
 function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
-		const innerType = zodType.unwrap() as any;
-		const innerSchema = processZodType(innerType);
-		if (innerSchema.type) {
-			const type = Array.isArray(innerSchema.type)
-				? innerSchema.type
-				: [innerSchema.type];
-			return {
-				...innerSchema,
-				type: Array.from(new Set([...type, "null"])),
-			};
-		}
-		return {
-			anyOf: [innerSchema, { type: "null" }],
-		};
+		return processZodType(zodType.unwrap() as any);
 	}
 	// default unwrapping
 	if (zodType instanceof z.ZodDefault) {

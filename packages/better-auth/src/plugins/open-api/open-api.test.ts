@@ -71,8 +71,7 @@ describe("open-api", async () => {
 		expect(schema_properties.idToken).toBeDefined();
 
 		const idTokenType = schema_properties.idToken.type;
-		expect(idTokenType).toContain("object");
-		expect(idTokenType).toContain("null");
+		expect(idTokenType).toBe("object");
 
 		expect(schema_properties.idToken.properties).toBeDefined();
 		expect(schema_properties.idToken.properties.token).toBeDefined();
@@ -81,48 +80,16 @@ describe("open-api", async () => {
 
 		const accessTokenType =
 			schema_properties.idToken.properties.accessToken.type;
-		expect(accessTokenType).toContain("string");
-		expect(accessTokenType).toContain("null");
+		expect(accessTokenType).toBe("string");
 
 		expect(schema_properties.idToken.properties.refreshToken).toBeDefined();
 		const refreshTokenType =
 			schema_properties.idToken.properties.refreshToken.type;
-		expect(refreshTokenType).toContain("string");
-		expect(refreshTokenType).toContain("null");
+		expect(refreshTokenType).toBe("string");
 
 		expect(schema_properties.idToken.required).toContain("token");
 		expect(schema_properties.idToken.required).not.toContain("accessToken");
 		expect(schema_properties.idToken.required).not.toContain("refreshToken");
-	});
-
-	it("should use OpenAPI 3.1 nullable format for optional primitive types", async () => {
-		const schema = await auth.api.generateOpenAPISchema();
-		const paths = schema.paths as Record<string, any>;
-
-		const signInSocialPath = paths["/sign-in/social"];
-		const schema_properties =
-			signInSocialPath.post.requestBody.content["application/json"].schema
-				.properties;
-
-		const accessTokenType =
-			schema_properties.idToken.properties.accessToken.type;
-		const refreshTokenType =
-			schema_properties.idToken.properties.refreshToken.type;
-
-		expect(Array.isArray(accessTokenType)).toBe(true);
-		expect(accessTokenType).toContain("string");
-		expect(accessTokenType).toContain("null");
-
-		expect(Array.isArray(refreshTokenType)).toBe(true);
-		expect(refreshTokenType).toContain("string");
-		expect(refreshTokenType).toContain("null");
-
-		expect(schema_properties.idToken.properties.accessToken.nullable).toBe(
-			undefined,
-		);
-		expect(schema_properties.idToken.properties.refreshToken.nullable).toBe(
-			undefined,
-		);
 	});
 
 	it("should use OpenAPI 3.1 nullable format for get-session response", async () => {
@@ -137,31 +104,6 @@ describe("open-api", async () => {
 		expect(getSessionSchema.type).toContain("object");
 		expect(getSessionSchema.type).toContain("null");
 		expect(getSessionSchema.nullable).toBe(undefined);
-	});
-
-	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {
-		const schema = await auth.api.generateOpenAPISchema();
-		const paths = schema.paths as Record<string, any>;
-
-		const signInSocialPath = paths["/sign-in/social"];
-		const schema_properties =
-			signInSocialPath.post.requestBody.content["application/json"].schema
-				.properties;
-
-		const parentRequired =
-			signInSocialPath.post.requestBody.content["application/json"].schema
-				.required;
-		const isIdTokenOptional = !parentRequired?.includes("idToken");
-		expect(isIdTokenOptional).toBe(true);
-
-		const idTokenSchema = schema_properties.idToken;
-		const _hasAnyOf = idTokenSchema.anyOf !== undefined;
-		const hasTypeArrayWithNull =
-			Array.isArray(idTokenSchema.type) && idTokenSchema.type.includes("null");
-
-		expect(hasTypeArrayWithNull).toBe(true);
-
-		expect(idTokenSchema.nullable).toBe(undefined);
 	});
 
 	it("should generate OpenAPI 3.1 compliant schemas from Zod types", async () => {
@@ -252,5 +194,22 @@ describe("open-api", async () => {
 		expect(signUpProps.rememberMe).toBeDefined();
 		const baseTypes = getBaseType(signUpProps.rememberMe.type);
 		expect(baseTypes).toContain("boolean");
+	});
+
+	it("should not make optional fields nullable", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+
+		const paths = schema.paths as Record<string, any>;
+
+		const signInSocialPath = paths["/sign-in/social"];
+
+		const requestSchema =
+			signInSocialPath.post.requestBody.content["application/json"].schema;
+
+		const callbackURL = requestSchema.properties.callbackURL;
+
+		expect(callbackURL.type).toBe("string");
+
+		expect(requestSchema.required).not.toContain("callbackURL");
 	});
 });
