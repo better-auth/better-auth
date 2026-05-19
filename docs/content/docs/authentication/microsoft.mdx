@@ -46,6 +46,30 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
   </Step>
 </Steps>
 
+## Large Profile Images ⚠️
+
+Microsoft returns profile images as base64-encoded strings, which can exceed HTTP header size limits and cause request failures.
+
+To work around this, use the `mapProfileToUser` function to either upload the image to your own storage or strip it entirely:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    microsoft: {
+      mapProfileToUser: (profile) => {
+        const imgURL = uploadImageToStorage(profile.picture);
+
+        return {
+          image: imgURL, // or `null` to discard the image
+        };
+      },
+    },
+  },
+});
+```
+
 ## Sign In with Microsoft
 
 To sign in with Microsoft, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
