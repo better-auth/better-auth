@@ -151,3 +151,17 @@ The `storeToken` function can be one of the following:
 * `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
 
 The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
+**confirmationUrl**: An optional URL (absolute or relative) that replaces the default `/magic-link/verify` endpoint as the destination of the emailed link.
+
+When set, the magic‑link email points to your custom confirmation page with `token` and `callbackURL` query parameters. The token is **not** consumed at this stage. Your page should present a “Sign in” button that navigates to `/api/auth/magic-link/verify?token=...`, which then consumes the token and creates the session.
+
+This is useful for avoiding corporate email security scanners that pre‑fetch URLs and invalidate single‑use tokens.
+
+```ts title="server.ts"
+magicLink({
+  confirmationUrl: "/auth/magic-link/confirm",
+  sendMagicLink: async ({ email, url }) => {
+    await sendEmail(email, url);
+  },
+})
+```
