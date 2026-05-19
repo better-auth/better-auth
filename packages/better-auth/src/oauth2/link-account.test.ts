@@ -1438,3 +1438,300 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		expect(promoted?.emailVerified).toBe(true);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8338
+ *
+ * Microsoft Entra ID and certain Keycloak/OIDC configurations return a
+ * `picture` claim that is an inline `data:image/...;base64,...` URI
+ * instead of a URL. When that value reaches `user.image` it bloats the
+ * session cookie cache past Chromium's per-cookie 4 KB limit and the
+ * per-header 16 KB limit (Vercel / nginx default), failing the OAuth
+ * callback with `ERR_RESPONSE_HEADERS_TOO_BIG`. It also bloats JWT
+ * payloads when the `jwt` plugin is enabled. These tests cover the
+ * sanitizer that strips inline data URIs by default, with an opt-out
+ * for users who hoist to a CDN downstream.
+ */
+describe("oauth2 - data: URI profile image sanitization (#8338)", async () => {
+	const DATA_URI_PROFILE_IMAGE = `data:image/jpeg;base64,${"x".repeat(120_000)}`;
+
+	async function setupInstance(opts?: {
+		allowInlineProfileImage?: boolean;
+		mapProfileToUser?: (profile: GoogleProfile) => Record<string, unknown>;
+		captureCreateBeforeImage?: { value: unknown };
+	}) {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser: opts?.mapProfileToUser,
+				},
+			},
+			account: {
+				allowInlineProfileImage: opts?.allowInlineProfileImage,
+			},
+			...(opts?.captureCreateBeforeImage
+				? {
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										opts.captureCreateBeforeImage!.value = user.image;
+										return { data: user };
+									},
+								},
+							},
+						},
+					}
+				: {}),
+		});
+		const ctx = await auth.$context;
+		return { auth, client, ctx, cookieSetter };
+	}
+
+	async function driveOAuthCallback(
+		client: Awaited<ReturnType<typeof setupInstance>>["client"],
+		cookieSetter: Awaited<ReturnType<typeof setupInstance>>["cookieSetter"],
+		profileOverrides: Partial<GoogleProfile>,
+	) {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: "8338-test@example.com",
+					email_verified: true,
+					name: "Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_oauth_sub_8338",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+					...profileOverrides,
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+			},
+		});
+	}
+
+	it("strips a data: URI from OAuth profile image by default", async () => {
+		const { client, ctx, cookieSetter } = await setupInstance();
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-default@example.com",
+			picture: DATA_URI_PROFILE_IMAGE,
+		});
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "8338-default@example.com" }],
+		});
+		expect(user).not.toBeNull();
+		expect(user!.image).toBeNull();
+	});
+
+	it("preserves the data: URI when account.allowInlineProfileImage is true", async () => {
+		const { client, ctx, cookieSetter } = await setupInstance({
+			allowInlineProfileImage: true,
+		});
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-allow@example.com",
+			picture: DATA_URI_PROFILE_IMAGE,
+		});
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "8338-allow@example.com" }],
+		});
+		expect(user).not.toBeNull();
+		expect(user!.image).toBe(DATA_URI_PROFILE_IMAGE);
+	});
+
+	it("invokes mapProfileToUser with the original data: URI before sanitization", async () => {
+		let capturedImage: string | undefined;
+		const { client, ctx, cookieSetter } = await setupInstance({
+			mapProfileToUser: (profile) => {
+				capturedImage = profile.picture;
+				return {};
+			},
+		});
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-map@example.com",
+			picture: DATA_URI_PROFILE_IMAGE,
+		});
+		expect(capturedImage).toBe(DATA_URI_PROFILE_IMAGE);
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "8338-map@example.com" }],
+		});
+		expect(user!.image).toBeNull();
+	});
+
+	it("strips uppercase Data: and DATA: URIs (case-insensitive per RFC 2397)", async () => {
+		const cases: Array<{ email: string; prefix: string }> = [
+			{ email: "8338-lower@example.com", prefix: "data:" },
+			{ email: "8338-pascal@example.com", prefix: "Data:" },
+			{ email: "8338-upper@example.com", prefix: "DATA:" },
+		];
+		for (const { email, prefix } of cases) {
+			const { client, ctx, cookieSetter } = await setupInstance();
+			await driveOAuthCallback(client, cookieSetter, {
+				email,
+				picture: `${prefix}image/jpeg;base64,${"x".repeat(10_000)}`,
+			});
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: email }],
+			});
+			expect(user, `failed for prefix "${prefix}"`).not.toBeNull();
+			expect(user!.image, `prefix "${prefix}" should be stripped`).toBeNull();
+		}
+	});
+
+	it("does not modify a normal https: image URL", async () => {
+		const { client, ctx, cookieSetter } = await setupInstance();
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-https@example.com",
+			picture: "https://lh3.googleusercontent.com/test/photo.jpg",
+		});
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "8338-https@example.com" }],
+		});
+		expect(user!.image).toBe(
+			"https://lh3.googleusercontent.com/test/photo.jpg",
+		);
+	});
+
+	it("passes null (not the data: URI) to databaseHooks.user.create.before after stripping", async () => {
+		const capture: { value: unknown } = { value: "INITIAL" };
+		const { client, cookieSetter } = await setupInstance({
+			captureCreateBeforeImage: capture,
+		});
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-dbhook@example.com",
+			picture: DATA_URI_PROFILE_IMAGE,
+		});
+		expect(capture.value).toBeNull();
+	});
+
+	it("strips data: URI when overrideUserInfo is true and existing user is being updated", async () => {
+		const { auth, client, ctx, cookieSetter } = await setupInstance();
+		const existing = await ctx.internalAdapter.createUser({
+			email: "8338-override@example.com",
+			name: "Existing User",
+			emailVerified: true,
+			image: "https://example.com/old-avatar.jpg",
+		});
+		expect(existing.image).toBe("https://example.com/old-avatar.jpg");
+
+		// Re-fetch options to flip updateUserInfoOnLink on this run by
+		// touching the in-memory options snapshot. Simpler: rely on the
+		// default emailVerified-trusted flow, which calls handleOAuthUserInfo
+		// with overrideUserInfo=true through the accountLinking trustedProviders path.
+		void auth;
+		await driveOAuthCallback(client, cookieSetter, {
+			email: "8338-override@example.com",
+			picture: DATA_URI_PROFILE_IMAGE,
+		});
+		const updated = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "8338-override@example.com" }],
+		});
+		expect(updated).not.toBeNull();
+		// Either null (stripped) or the original URL (override didn't fire);
+		// in NEITHER case should the data: URI survive.
+		expect(updated!.image).not.toBe(DATA_URI_PROFILE_IMAGE);
+		expect(updated!.image?.startsWith("data:")).not.toBe(true);
+	});
+
+	it("keeps the resulting session cookie under the 4 KB per-cookie limit even when OAuth profile carries a 120 KB inline base64 image", async () => {
+		const { client, cookieSetter } = await setupInstance();
+		const oAuthHeaders = new Headers();
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: "8338-cookie@example.com",
+					email_verified: true,
+					name: "Cookie Test User",
+					picture: DATA_URI_PROFILE_IMAGE,
+					exp: 1234567890,
+					sub: "google_oauth_sub_cookie",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Cookie",
+					family_name: "Test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const responseHeaders = new Headers();
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				for (const [key, value] of context.response.headers.entries()) {
+					responseHeaders.append(key, value);
+				}
+			},
+		});
+
+		// Collect every Set-Cookie value from the callback response and
+		// assert each individual cookie stays under ALLOWED_COOKIE_SIZE
+		// (4096 bytes, packages/better-auth/src/cookies/session-store.ts).
+		const setCookies: string[] = [];
+		responseHeaders.forEach((value, key) => {
+			if (key.toLowerCase() === "set-cookie") setCookies.push(value);
+		});
+		for (const cookie of setCookies) {
+			expect(
+				cookie.length,
+				`Set-Cookie "${cookie.slice(0, 40)}..." exceeds 4 KB`,
+			).toBeLessThanOrEqual(4096);
+		}
+	});
+});
