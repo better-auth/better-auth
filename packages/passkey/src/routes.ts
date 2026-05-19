@@ -675,6 +675,104 @@ const verifyPasskeyAuthenticationBodySchema = z.object({
 	response: z.record(z.any(), z.any()),
 });
 
+interface PasskeyAssertionResult {
+	passkey: Passkey;
+	verificationToken: string;
+}
+
+async function handlePasskeyAssertion(
+	options: RequiredPassKeyOptions,
+	ctx: GenericEndpointContext,
+): Promise<PasskeyAssertionResult> {
+	const origin = options?.origin || ctx.headers?.get("origin") || "";
+	if (!origin) {
+		throw new APIError("BAD_REQUEST", {
+			message: "origin missing",
+		});
+	}
+	const resp = ctx.body.response;
+	const webAuthnCookie = ctx.context.createAuthCookie(
+		options.advanced.webAuthnChallengeCookie,
+	);
+	const verificationToken = await ctx.getSignedCookie(
+		webAuthnCookie.name,
+		ctx.context.secret,
+	);
+	if (!verificationToken) {
+		throw APIError.from("BAD_REQUEST", PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND);
+	}
+
+	const data =
+		await ctx.context.internalAdapter.findVerificationValue(verificationToken);
+	if (!data) {
+		throw APIError.from("BAD_REQUEST", PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND);
+	}
+	const { expectedChallenge } = JSON.parse(
+		data.value,
+	) as WebAuthnChallengeValue;
+	const passkey = await ctx.context.adapter.findOne<Passkey>({
+		model: "passkey",
+		where: [
+			{
+				field: "credentialID",
+				value: resp.id,
+			},
+		],
+	});
+	if (!passkey) {
+		throw APIError.from("UNAUTHORIZED", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
+	}
+
+	const authBaseURL =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: undefined;
+	const verification = await verifyAuthenticationResponse({
+		response: resp as AuthenticationResponseJSON,
+		expectedChallenge,
+		expectedOrigin: origin,
+		expectedRPID: getRpID(options, authBaseURL),
+		credential: {
+			id: passkey.credentialID,
+			publicKey: base64.decode(passkey.publicKey),
+			counter: passkey.counter,
+			transports: passkey.transports?.split(
+				",",
+			) as AuthenticatorTransportFuture[],
+		},
+		requireUserVerification: false,
+	});
+	const { verified } = verification;
+	if (!verified)
+		throw APIError.from(
+			"UNAUTHORIZED",
+			PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+		);
+
+	if (options.authentication?.afterVerification) {
+		await options.authentication.afterVerification({
+			ctx,
+			verification,
+			clientData: resp as AuthenticationResponseJSON,
+		});
+	}
+
+	await ctx.context.adapter.update<Passkey>({
+		model: "passkey",
+		where: [
+			{
+				field: "id",
+				value: passkey.id,
+			},
+		],
+		update: {
+			counter: verification.authenticationInfo.newCounter,
+		},
+	});
+
+	return { passkey, verificationToken };
+}
+
 export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 	createAuthEndpoint(
 		"/passkey/verify-authentication",
@@ -714,102 +812,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			},
 		},
 		async (ctx) => {
-			const origin = options?.origin || ctx.headers?.get("origin") || "";
-			if (!origin) {
-				throw new APIError("BAD_REQUEST", {
-					message: "origin missing",
-				});
-			}
-			const resp = ctx.body.response;
-			const webAuthnCookie = ctx.context.createAuthCookie(
-				options.advanced.webAuthnChallengeCookie,
-			);
-			const verificationToken = await ctx.getSignedCookie(
-				webAuthnCookie.name,
-				ctx.context.secret,
-			);
-			if (!verificationToken) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-				);
-			}
-
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
-			if (!data) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-				);
-			}
-			const { expectedChallenge } = JSON.parse(
-				data.value,
-			) as WebAuthnChallengeValue;
-			const passkey = await ctx.context.adapter.findOne<Passkey>({
-				model: "passkey",
-				where: [
-					{
-						field: "credentialID",
-						value: resp.id,
-					},
-				],
-			});
-			if (!passkey) {
-				throw APIError.from(
-					"UNAUTHORIZED",
-					PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
-				);
-			}
 			try {
-				const authBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
-				const verification = await verifyAuthenticationResponse({
-					response: resp as AuthenticationResponseJSON,
-					expectedChallenge,
-					expectedOrigin: origin,
-					expectedRPID: getRpID(options, authBaseURL),
-					credential: {
-						id: passkey.credentialID,
-						publicKey: base64.decode(passkey.publicKey),
-						counter: passkey.counter,
-						transports: passkey.transports?.split(
-							",",
-						) as AuthenticatorTransportFuture[],
-					},
-					requireUserVerification: false,
-				});
-				const { verified } = verification;
-				if (!verified)
-					throw APIError.from(
-						"UNAUTHORIZED",
-						PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-					);
-
-				if (options.authentication?.afterVerification) {
-					await options.authentication.afterVerification({
-						ctx,
-						verification,
-						clientData: resp as AuthenticationResponseJSON,
-					});
-				}
-
-				await ctx.context.adapter.update<Passkey>({
-					model: "passkey",
-					where: [
-						{
-							field: "id",
-							value: passkey.id,
-						},
-					],
-					update: {
-						counter: verification.authenticationInfo.newCounter,
-					},
-				});
+				const { passkey, verificationToken } = await handlePasskeyAssertion(
+					options,
+					ctx,
+				);
 				const s = await ctx.context.internalAdapter.createSession(
 					passkey.userId,
 				);
@@ -846,6 +853,76 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			} catch (e) {
 				ctx.context.logger.error("Failed to verify authentication", e);
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				);
+			}
+		},
+	);
+
+export const verifyPasskeyAssertion = (options: RequiredPassKeyOptions) =>
+	createAuthEndpoint(
+		"/passkey/verify-assertion",
+		{
+			method: "POST",
+			use: [sessionMiddleware],
+			body: verifyPasskeyAuthenticationBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "passkeyVerifyAssertion",
+					description:
+						"Verify a passkey assertion for step-up authentication without creating a session",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											verified: { type: "boolean" },
+											userId: { type: "string" },
+											credentialId: { type: "string" },
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				$Infer: {
+					body: {} as {
+						response: AuthenticationResponseJSON;
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			try {
+				const { passkey, verificationToken } = await handlePasskeyAssertion(
+					options,
+					ctx,
+				);
+				if (passkey.userId !== ctx.context.session.user.id) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+					);
+				}
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
+				return ctx.json(
+					{
+						verified: true,
+						userId: passkey.userId,
+						credentialId: passkey.credentialID,
+					},
+					{ status: 200 },
+				);
+			} catch (e) {
+				ctx.context.logger.error("Failed to verify passkey assertion", e);
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,

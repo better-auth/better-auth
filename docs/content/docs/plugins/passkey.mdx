@@ -206,6 +206,67 @@ await authClient.signIn.passkey({
 });
 ```
 
+### Step-up authentication (re-auth without creating a session)
+
+Use `verifyPasskey` to verify a passkey assertion **without creating a session**. This is useful for step-up authentication on sensitive operations like money transfers, account changes, or resource deletion — where you need cryptographic proof of user presence but don't want orphaned sessions polluting your session table.
+
+Like `signIn.passkey`, it performs the full WebAuthn verification ceremony (challenge → browser assertion → server verification + counter update). The difference: it returns `{ verified, userId, credentialId }` instead of creating a session and setting cookies.
+
+<APIMethod path="/passkey/verify-assertion" method="POST" requireSession>
+  ```ts
+  type verifyPasskey = {
+      /**
+       * Browser autofill, a.k.a. Conditional UI.
+       */
+      autoFill?: boolean
+      /**
+       * Optional WebAuthn extensions
+       */
+      extensions?: AuthenticationExtensionsClientInputs
+      /**
+       * Client fetch options
+       */
+      fetchOptions?: ClientFetchOption
+  }
+  ```
+</APIMethod>
+
+#### Server-side
+
+```ts
+const result = await auth.api.verifyPasskeyAssertion({
+  headers,
+  body: { response: assertionResponse },
+});
+
+if (result.verified) {
+  // userId is confirmed via passkey. Proceed with sensitive action.
+  await performSensitiveAction(result.userId);
+}
+```
+
+#### Client-side
+
+```ts
+const { data } = await authClient.passkey.verifyPasskey({
+  autoFill: false,
+  fetchOptions: {
+    onError(context) {
+      console.error("Step-up verification failed:", context.error.message);
+    },
+  },
+});
+
+if (data?.verified) {
+  // Tell your backend the user has re-authenticated
+  await approveSensitiveAction({ credentialId: data.credentialId });
+}
+```
+
+<Callout>
+  `verifyPasskey` does **not** create a session or refresh the existing session. If you need both step-up and session refresh, use `signIn.passkey` instead.
+</Callout>
+
 ### Extensions
 
 You can use WebAuthn extensions through the client API by passing `extensions`. When `returnWebAuthnResponse` is true, the client returns `webauthn.clientExtensionResults`.

@@ -7,6 +7,7 @@ import {
 	generatePasskeyRegistrationOptions,
 	listPasskeys,
 	updatePasskey,
+	verifyPasskeyAssertion,
 	verifyPasskeyAuthentication,
 	verifyPasskeyRegistration,
 } from "./routes";
@@ -50,6 +51,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 				}),
 			verifyPasskeyRegistration: verifyPasskeyRegistration(opts),
 			verifyPasskeyAuthentication: verifyPasskeyAuthentication(opts),
+			verifyPasskeyAssertion: verifyPasskeyAssertion(opts),
 			listPasskeys,
 			deletePasskey,
 			updatePasskey,

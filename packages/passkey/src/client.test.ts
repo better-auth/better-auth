@@ -201,4 +201,47 @@ describe("passkey client", () => {
 			consoleError.mockRestore();
 		}
 	});
+
+	it("should verify passkey step-up without creating session", async () => {
+		const fetchMock = vi.fn(async (path: string, options?: any) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: [],
+						userVerification: "preferred",
+					},
+				};
+			}
+			if (path === "/passkey/verify-assertion") {
+				expect(options?.body).toHaveProperty("response");
+				return {
+					data: {
+						verified: true,
+						userId: "user-id",
+						credentialId: "credential-id",
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startAuthentication.mockResolvedValue({
+			clientExtensionResults: {},
+		});
+
+		const result = await actions.passkey.verifyPasskey();
+
+		expect(result.data?.verified).toBe(true);
+		expect(result.data?.userId).toBe("user-id");
+		expect(result.data?.credentialId).toBe("credential-id");
+		expect((result.data as any)?.session).toBeUndefined();
+	});
 });
