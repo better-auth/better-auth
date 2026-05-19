@@ -1,10 +1,60 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
+
+/**
+ * Strips inline base64 `data:` URIs from OAuth-provided profile images.
+ *
+ * Microsoft Entra ID (via the library's own Graph `/me/photo/$value`
+ * fetch in `packages/core/src/social-providers/microsoft-entra-id.ts`)
+ * and some Keycloak/OIDC setups return a `picture` claim that is an
+ * embedded base64 image instead of a URL. That value cascades into:
+ *   1. the session cookie cache (blows past Chromium's per-cookie 4 KB
+ *      limit per RFC 6265 §6.1, failing OAuth callback with
+ *      `ERR_RESPONSE_HEADERS_TOO_BIG`)
+ *   2. JWT payloads when the `jwt` plugin is enabled (the default
+ *      payload is the full user object)
+ *
+ * OIDC Core §5.1 defines `picture` as a URL, so a `data:` URI is
+ * out-of-spec; the `data:` prefix is a near-zero-false-positive signal
+ * (real signed CDN URLs, Unicode names and enterprise claims never
+ * start with it). Match is case-insensitive per RFC 2397 (URI scheme
+ * names are case-insensitive).
+ *
+ * The opt-out (`account.allowInlineProfileImage`) is for users with an
+ * existing `mapProfileToUser` or `databaseHooks.user.create.before`
+ * pipeline that uploads the inline image to a CDN.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8338
+ */
+function sanitizeOAuthProfileImage<T extends { image?: string | null }>(
+	userInfo: T,
+	options: BetterAuthOptions,
+	log: { warn: (msg: string) => void },
+): T {
+	if (options.account?.allowInlineProfileImage) return userInfo;
+	const image = userInfo.image;
+	if (typeof image !== "string" || !image.toLowerCase().startsWith("data:")) {
+		return userInfo;
+	}
+	log.warn(
+		"Stripped inline data: URI from OAuth profile image " +
+			"(would have exceeded the per-cookie size limit and bloated " +
+			"JWT payloads if the jwt plugin is enabled). " +
+			"Set account.allowInlineProfileImage=true to keep it, or use " +
+			"mapProfileToUser / databaseHooks.user.create.before to upload " +
+			"the image to a CDN. " +
+			"See https://github.com/better-auth/better-auth/issues/8338",
+	);
+	return { ...userInfo, image: null };
+}
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
 // call below needs null-safety, and `findOAuthUser` must accept a nullable email.
@@ -19,8 +69,12 @@ export async function handleOAuthUserInfo(
 		isTrustedProvider?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
+	const userInfo = sanitizeOAuthProfileImage(
+		opts.userInfo,
+		c.context.options,
+		c.context.logger,
+	);
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),

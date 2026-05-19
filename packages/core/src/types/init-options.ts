@@ -1001,6 +1001,33 @@ export type BetterAuthOptions = {
 				 */
 				updateAccountOnSignIn?: boolean;
 				/**
+				 * If true, allows inline `data:image/...;base64,...` URIs to be
+				 * stored in `user.image` from OAuth-provided profile data
+				 * (e.g. from Microsoft Entra ID via Graph `/me/photo/$value`).
+				 *
+				 * By default (false), inline data URIs are stripped (set to
+				 * `null`) and a warn-level log is emitted. Such values
+				 * typically exceed the per-cookie 4 KB limit (Chromium /
+				 * RFC 6265 §6.1) and the per-header 16 KB limit (Vercel /
+				 * nginx default), causing the OAuth callback to fail with
+				 * `ERR_RESPONSE_HEADERS_TOO_BIG` when the session cookie
+				 * cache is enabled. They also bloat JWT payloads when the
+				 * `jwt` plugin is enabled, because the default payload is
+				 * the full user object. OIDC Core §5.1 defines the
+				 * `picture` claim as a URL, so a `data:` URI is non-standard.
+				 *
+				 * Set to true if you have a `mapProfileToUser` callback or
+				 * `databaseHooks.user.create.before` hook that hoists the
+				 * inline image to a CDN and replaces it with a URL. Note
+				 * that `mapProfileToUser` runs before this sanitizer, so it
+				 * can capture the original data URI even when this option
+				 * is false.
+				 *
+				 * @default false
+				 * @see https://github.com/better-auth/better-auth/issues/8338
+				 */
+				allowInlineProfileImage?: boolean;
+				/**
 				 * Configuration for account linking.
 				 */
 				accountLinking?: {
