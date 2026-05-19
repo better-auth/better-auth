@@ -2,6 +2,12 @@ allowBuilds:
   better-sqlite3: true
 
 overrides:
+  '@babel/plugin-transform-modules-systemjs@<=7.29.3': 7.29.4
+  brace-expansion@<2: 1.1.13
+  brace-expansion@>=4: 5.0.5
   node-forge: ^1.4.0
+  picomatch@<2.3.2: 2.3.2
   picomatch@>=4: ^4.0.4
+  postcss@<8.5.10: ^8.5.14
+  'yaml@>=2.0.0 <2.8.3': 2.8.3
   '@xmldom/xmldom': ^0.8.12

@@ -521,6 +521,15 @@ describe("lastLoginMethod", async () => {
 					trustedProviders: ["google"],
 				},
 			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
 		});
 
 		await client.signUp.email(
