@@ -95,6 +95,17 @@ export interface OAuthProvider<
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
+	 * Accept callbacks that arrive without a `state` parameter. When true,
+	 * the shared OAuth callback handler restarts the flow server-side with
+	 * fresh `state` and PKCE instead of rejecting the request. Intended for
+	 * providers that initiate OAuth without RP-side flow kickoff (e.g.
+	 * Clever). Leave unset for any provider that always initiates from the
+	 * RP.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
+	/**
 	 * Options for the provider
 	 */
 	options?: O | undefined;
