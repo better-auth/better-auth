@@ -646,14 +646,7 @@ async function checkVerificationValue(
 
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "Invalid code",
-			error: "invalid_grant",
-		});
-	}
-
-	if (!verification.expiresAt || verification.expiresAt < new Date()) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code expired",
+			error_description: "invalid code",
 			error: "invalid_grant",
 		});
 	}
