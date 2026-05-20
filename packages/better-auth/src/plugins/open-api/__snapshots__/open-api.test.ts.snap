@@ -22,6 +22,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "idToken": {
@@ -52,6 +53,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "accountId",
           "providerId",
           "userId",
@@ -72,6 +74,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "ipAddress": {
@@ -92,6 +95,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "expiresAt",
           "token",
           "createdAt",
@@ -116,6 +120,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "boolean",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "image": {
@@ -138,6 +143,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "name",
           "email",
           "createdAt",
@@ -158,6 +164,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "identifier": {
@@ -173,6 +180,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "identifier",
           "value",
           "expiresAt",
