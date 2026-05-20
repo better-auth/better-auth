@@ -683,8 +683,21 @@ export const mongodbAdapter = (
 
 								await session.commitTransaction();
 								return result;
-							} catch (err) {
-								await session.abortTransaction();
+							} catch (err: any) {
+								await session.abortTransaction().catch(() => {});
+								if (
+									err.message?.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
+									err.message?.includes("Transactions are not supported")
+								) {
+									const adapter = createAdapterFactory({
+										config: {
+											...adapterOptions!.config,
+											transaction: false,
+										},
+										adapter: createCustomAdapter(db),
+									})(lazyOptions!);
+									return await cb(adapter);
+								}
 								throw err;
 							} finally {
 								await session.endSession();
