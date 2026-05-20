@@ -7,6 +7,7 @@ import type {
 	ProtectedHeaderParameters,
 } from "jose";
 import {
+	errors as joseErrors,
 	createLocalJWKSet,
 	decodeProtectedHeader,
 	jwtVerify,
@@ -15,6 +16,13 @@ import {
 import { logger } from "../env";
 
 /** Last fetched jwks used locally in getJwks @internal */
+// Small, stable set: jose errors that mean "server problem," not "bad token."
+const JOSE_INFRA_CODES = new Set<string>([
+	joseErrors.JWKSTimeout?.code || "ERR_JWKS_TIMEOUT",
+	joseErrors.JWKSInvalid?.code || "ERR_JWKS_INVALID",
+	joseErrors.JWKSMultipleMatchingKeys?.code || "ERR_JWKS_MULTIPLE_MATCHING_KEYS",
+]);
+
 let jwks: JSONWebKeySet | undefined;
 
 export interface VerifyAccessTokenRemote {
@@ -82,7 +90,9 @@ export async function getJwks(
 		throw new Error(error as unknown as string);
 	}
 
-	if (!jwtHeaders.kid) throw new Error("Missing jwt kid");
+	if (!jwtHeaders.kid) {
+		throw new APIError("UNAUTHORIZED", { message: "invalid access token" });
+	}
 
 	// Fetch jwks if not set or has a different kid than the one stored
 	if (!jwks || !jwks.keys.find((jwk) => jwk.kid === jwtHeaders.kid)) {
@@ -134,20 +144,20 @@ export async function verifyAccessToken(
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {
-			if (error instanceof Error) {
-				if (error.name === "TypeError" || error.name === "JWSInvalid") {
-					// likely an opaque token (continue)
-				} else if (error.name === "JWTExpired") {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token expired",
-					});
-				} else if (error.name === "JWTInvalid") {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token invalid",
-					});
-				} else {
+			if (
+				error instanceof Error &&
+				(error.name === "TypeError" || error.name === "JWSInvalid")
+			) {
+				// likely an opaque token (continue)
+			} else if (error instanceof joseErrors.JOSEError) {
+				if (JOSE_INFRA_CODES.has(error.code)) {
 					throw error;
 				}
+				throw new APIError("UNAUTHORIZED", {
+					message: "invalid access token",
+				});
+			} else if (error instanceof Error) {
+				throw error;
 			} else {
 				throw new Error(error as unknown as string);
 			}
