@@ -59,19 +59,19 @@ describe("update-role", async (it) => {
 				roleId: createdRole.id,
 				organizationId: org.id,
 				data: {
-					permissions: newPermissions,
+					permission: newPermissions,
 				},
 			},
 			headers,
 		});
 
-		expect(updatedRole?.permissions).toEqual(newPermissions);
+		expect(updatedRole?.permission).toEqual(newPermissions);
 		expect(updatedRole?.role).toBe(roleData.role);
 		expectTypeOf(updatedRole).toEqualTypeOf<{
 			id: string;
 			role: string;
 			organizationId: string;
-			permissions: Record<string, string[]>;
+			permission: Record<string, string[]>;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
 		} | null>();
@@ -212,14 +212,14 @@ describe("update-role", async (it) => {
 				organizationId: org.id,
 				data: {
 					roleName: "updated-role",
-					permissions: newPermissions,
+					permission: newPermissions,
 				},
 			},
 			headers,
 		});
 
 		expect(updatedRole?.role).toBe("updated-role");
-		expect(updatedRole?.permissions).toEqual(newPermissions);
+		expect(updatedRole?.permission).toEqual(newPermissions);
 	});
 
 	it("should keep role name when renaming to same name", async () => {
@@ -274,14 +274,14 @@ describe("update-role", async (it) => {
 				roleName: "lookup-by-name",
 				organizationId: org.id,
 				data: {
-					permissions: { member: ["create", "update"] },
+					permission: { member: ["create", "update"] },
 				},
 			},
 			headers,
 		});
 
 		expect(updatedRole?.role).toBe("lookup-by-name");
-		expect(updatedRole?.permissions).toEqual({ member: ["create", "update"] });
+		expect(updatedRole?.permission).toEqual({ member: ["create", "update"] });
 	});
 
 	it("should not allow updating a role with permissions the user does not have", async () => {
@@ -309,7 +309,7 @@ describe("update-role", async (it) => {
 					roleId: createdRole.id,
 					organizationId: org.id,
 					data: {
-						permissions: invalidPermissions,
+						permission: invalidPermissions,
 					},
 				},
 				headers,
@@ -376,7 +376,7 @@ describe("update-role", async (it) => {
 					roleId: createdRole.id,
 					organizationId: org.id,
 					data: {
-						permissions: invalidResourcePermissions,
+						permission: invalidResourcePermissions,
 					},
 				},
 				headers,

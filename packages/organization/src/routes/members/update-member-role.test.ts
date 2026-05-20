@@ -219,6 +219,128 @@ describe("update member role", async (it) => {
 	});
 });
 
+describe("update member role - role validation", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	it("should reject invalid/unknown role strings", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: `invalid-role-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "invalid role user",
+			},
+		});
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+			headers,
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		await expect(
+			auth.api.updateMemberRole({
+				headers,
+				body: {
+					organizationId: org?.id,
+					memberId: member!.id,
+					role: "superadmin",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should reject when any role in array is invalid", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: `invalid-role-arr-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "invalid role array user",
+			},
+		});
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+			headers,
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		await expect(
+			auth.api.updateMemberRole({
+				headers,
+				body: {
+					organizationId: org?.id,
+					memberId: member!.id,
+					role: ["admin", "nonexistent"],
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should accept valid built-in roles", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: `valid-role-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "valid role user",
+			},
+		});
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+			headers,
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		const updatedMember = await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: org?.id,
+				memberId: member!.id,
+				role: "admin",
+			},
+		});
+
+		expect(updatedMember?.role).toBe("admin");
+	});
+});
+
 describe("update member role - last owner protection", async (it) => {
 	const plugin = organization({
 		async sendInvitationEmail(data, request) {},

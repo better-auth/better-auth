@@ -4,6 +4,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod/v4";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
+import { resolveOrgOptions } from "../../helpers/resolve-org-options";
 import { orgMiddleware } from "../../middleware/org-middleware";
 import type { OrganizationOptions } from "../../types";
 
@@ -15,9 +16,10 @@ export type ListUserInvitations<O extends OrganizationOptions> = ReturnType<
  * List all invitations a user has received
  */
 export const listUserInvitations = <O extends OrganizationOptions>(
-	options: O,
-) =>
-	createAuthEndpoint(
+	_options: O,
+) => {
+	const options = resolveOrgOptions(_options);
+	return createAuthEndpoint(
 		"/organization/list-user-invitations",
 		{
 			method: "GET",
@@ -115,18 +117,32 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
+			if (
+				session &&
+				options.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				const code = "EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
+			}
+
 			const userEmail = session?.user.email || ctx.query?.email;
 			if (!userEmail) {
 				const code = "MISSING_SESSION_HEADERS_OR_EMAIL_QUERY_PARAMETER";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const adapter = getOrgAdapter<O>(ctx.context, _options);
 
 			const invitations = await adapter.listUserInvitations(userEmail);
+			const now = new Date();
 			const pendingInvitations = invitations
-				.filter((inv) => inv.status === "pending")
+				.filter(
+					(inv) => inv.status === "pending" && new Date(inv.expiresAt) > now,
+				)
 				.map(adapter.applyInvitationPrivacy);
 			return ctx.json(pendingInvitations);
 		},
 	);
+};

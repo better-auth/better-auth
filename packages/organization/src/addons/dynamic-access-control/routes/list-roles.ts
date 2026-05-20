@@ -95,9 +95,9 @@ export const listRoles = <O extends DynamicAccessControlOptions>(
 															description:
 																"ID of the organization the role belongs to",
 														},
-														permissions: {
+														permission: {
 															type: "object",
-															description: "Permissions for the role",
+															description: "Permission for the role",
 														},
 														createdAt: {
 															type: "string",
@@ -116,7 +116,7 @@ export const listRoles = <O extends DynamicAccessControlOptions>(
 														"id",
 														"role",
 														"organizationId",
-														"permissions",
+														"permission",
 														"createdAt",
 													],
 												},

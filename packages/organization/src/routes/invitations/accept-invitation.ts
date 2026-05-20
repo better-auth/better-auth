@@ -147,6 +147,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
+			const existingMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: invitation.organizationId,
+			});
+			if (existingMember) {
+				const code = "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("BAD_REQUEST", msg);
+			}
+
 			const acceptInvitationHooks = getHook("AcceptInvitation");
 
 			await acceptInvitationHooks.before(
@@ -161,9 +171,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			const acceptedI = await adapter.updateInvitation({
 				invitationId,
 				status: "accepted",
+				expectedCurrentStatus: "pending",
 			});
 			if (!acceptedI) {
-				const code = "FAILED_TO_RETRIEVE_INVITATION";
+				const code = "INVITATION_NOT_FOUND";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
@@ -201,17 +212,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				session.session.token,
 				invitation.organizationId,
 			);
-
-			if (!acceptedI) {
-				const code = "INVITATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: msg.message,
-					},
-				});
-			}
 
 			await acceptInvitationHooks.after(
 				{

@@ -17,6 +17,7 @@ async function defineInstance<Plugins extends BetterAuthPlugin[]>(
 	const instance = await getTestInstance(
 		{
 			plugins: plugins,
+			trustedOrigins: ["https://myapp.com"],
 			logger: {
 				level: "error",
 			},
@@ -233,6 +234,136 @@ describe("accept invitation callback", async (it) => {
 		expect(redirectLocation).toContain(
 			"YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
 		);
+	});
+
+	it("should reject protocol-relative URLs to prevent open redirect", async () => {
+		const invitedEmail = `callback-open-redirect-${crypto.randomUUID()}@test.com`;
+
+		const invitationResult = await auth.api.createInvitationURL({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: invitedEmail,
+				role: "member",
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: invitedEmail,
+				password: "test123456",
+				name: "Open Redirect User",
+			},
+		});
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedEmail,
+			"test123456",
+		);
+
+		// Protocol-relative URL should be stripped (treated as no callbackURL)
+		const result = await auth.api.acceptInvitationCallback({
+			headers: invitedHeaders,
+			query: {
+				invitationId: invitationResult.invitation.id,
+				callbackURL: "//evil.com",
+			},
+		});
+
+		// Should return JSON instead of redirecting to evil.com
+		expect(result?.invitation).toBeDefined();
+		expect(result?.member).toBeDefined();
+	});
+
+	it("should reject untrusted absolute callbackURLs", async () => {
+		const invitedEmail = `callback-untrusted-${crypto.randomUUID()}@test.com`;
+
+		const invitationResult = await auth.api.createInvitationURL({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: invitedEmail,
+				role: "member",
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: invitedEmail,
+				password: "test123456",
+				name: "Untrusted URL User",
+			},
+		});
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedEmail,
+			"test123456",
+		);
+
+		// Untrusted absolute URL should be stripped
+		const result = await auth.api.acceptInvitationCallback({
+			headers: invitedHeaders,
+			query: {
+				invitationId: invitationResult.invitation.id,
+				callbackURL: "https://evil.com/steal",
+			},
+		});
+
+		expect(result?.invitation).toBeDefined();
+		expect(result?.member).toBeDefined();
+	});
+
+	it("should apply privacy filter on JSON response", async () => {
+		const privacyPlugin = organization({
+			async sendInvitationEmail() {},
+			privacy: {
+				enabled: true,
+				hiddenMemberFields: ["email"],
+			},
+		});
+		const privacyInstance = await defineInstance([privacyPlugin]);
+
+		const { headers: privacyOwnerHeaders } =
+			await privacyInstance.signInWithTestUser();
+		const privacyOrgData = getOrganizationData();
+		const privacyOrg = await privacyInstance.auth.api.createOrganization({
+			headers: privacyOwnerHeaders,
+			body: {
+				name: privacyOrgData.name,
+				slug: privacyOrgData.slug,
+			},
+		});
+
+		const privacyEmail = `callback-privacy-${crypto.randomUUID()}@test.com`;
+		const invResult = await privacyInstance.auth.api.createInvitationURL({
+			headers: privacyOwnerHeaders,
+			body: {
+				organizationId: privacyOrg.id,
+				email: privacyEmail,
+				role: "member",
+			},
+		});
+
+		await privacyInstance.auth.api.signUpEmail({
+			body: {
+				email: privacyEmail,
+				password: "test123456",
+				name: "Privacy User",
+			},
+		});
+		const { headers: privacyInvitedHeaders } =
+			await privacyInstance.signInWithUser(privacyEmail, "test123456");
+
+		const result = await privacyInstance.auth.api.acceptInvitationCallback({
+			headers: privacyInvitedHeaders,
+			query: {
+				invitationId: invResult.invitation.id,
+			},
+		});
+
+		// Email should be hidden by privacy filter
+		expect(result?.invitation).toBeDefined();
+		expect(
+			(result?.invitation as Record<string, unknown>).email,
+		).toBeUndefined();
 	});
 
 	it("should throw error without redirect when no callbackURL and invalid invitation", async () => {

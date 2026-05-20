@@ -26,10 +26,10 @@ export const getAddonSchema = <Options extends DynamicAccessControlOptions>(
 					required: true,
 					fieldName: options.schema?.organizationRole?.fields?.role,
 				},
-				permissions: {
+				permission: {
 					type: "string",
 					required: true,
-					fieldName: options.schema?.organizationRole?.fields?.permissions,
+					fieldName: options.schema?.organizationRole?.fields?.permission,
 					transform: {
 						input: (value: DBPrimitive) => {
 							if (typeof value === "object" && value !== null) {

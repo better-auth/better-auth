@@ -55,13 +55,13 @@ describe("dynamic-access-control", async (it) => {
 
 		expect(role?.id).toBeDefined();
 		expect(role?.role).toBe(roleData.role);
-		expect(role?.permissions).toEqual(roleData.permissions);
+		expect(role?.permission).toEqual(roleData.permission);
 		expect(role?.organizationId).toBe(org.id);
 		expectTypeOf(role).toEqualTypeOf<{
 			id: string;
 			role: string;
 			organizationId: string;
-			permissions: Record<string, string[]>;
+			permission: Record<string, string[]>;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
 		}>();
@@ -149,7 +149,7 @@ describe("dynamic-access-control", async (it) => {
 
 		const roleData = getRoleData({
 			organizationId: org.id,
-			permissions: complexPermissions,
+			permission: complexPermissions,
 		});
 
 		const role = await auth.api.createRole({
@@ -157,7 +157,7 @@ describe("dynamic-access-control", async (it) => {
 			headers,
 		});
 
-		expect(role.permissions).toEqual(complexPermissions);
+		expect(role.permission).toEqual(complexPermissions);
 	});
 
 	it("should not allow creating a role with permissions the user does not have", async () => {
@@ -175,7 +175,7 @@ describe("dynamic-access-control", async (it) => {
 
 		const roleData = getRoleData({
 			organizationId: org.id,
-			permissions: invalidPermissions,
+			permission: invalidPermissions,
 		});
 
 		await expect(
@@ -225,7 +225,7 @@ describe("dynamic-access-control", async (it) => {
 
 		const roleData = getRoleData({
 			organizationId: org.id,
-			permissions: invalidResourcePermissions,
+			permission: invalidResourcePermissions,
 		});
 
 		await expect(

@@ -198,6 +198,11 @@ Get the role of a member in an organization. If no `userId` is provided, returns
        * If not provided, uses the active organization.
        */
       organizationId?: string = "org-id"
+      /**
+       * The organization slug to get the member's role from.
+       * Alternative to organizationId.
+       */
+      organizationSlug?: string = "org-slug"
   }
   ```
 </APIMethod>
@@ -223,6 +228,11 @@ List all members of an organization with pagination, sorting, and filtering supp
        */
       organizationId?: string = "org-id"
       /**
+       * The organization slug to list members for.
+       * Alternative to organizationId.
+       */
+      organizationSlug?: string = "org-slug"
+      /**
        * Maximum number of members to return.
        */
       limit?: number = 10
@@ -243,13 +253,13 @@ List all members of an organization with pagination, sorting, and filtering supp
        */
       filterField?: string = "role"
       /**
-       * Value to filter by.
+       * Value to filter by. Supports arrays for "in" operator.
        */
-      filterValue?: string | number | boolean = "admin"
+      filterValue?: string | number | boolean | string[] | number[] = "admin"
       /**
        * Filter operator.
        */
-      filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains" = "eq"
+      filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
   }
   ```
 </APIMethod>

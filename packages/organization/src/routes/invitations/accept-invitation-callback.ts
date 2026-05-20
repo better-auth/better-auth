@@ -32,6 +32,28 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 ) => {
 	const options = resolveOrgOptions(_options);
 
+	function validateCallbackURL(
+		callbackURL: string | undefined,
+		ctx: { context: { baseURL?: string; trustedOrigins?: string[] } },
+	): string | undefined {
+		if (!callbackURL) return undefined;
+		if (callbackURL.startsWith("/") && !callbackURL.startsWith("//")) {
+			return callbackURL;
+		}
+		try {
+			const parsed = new URL(callbackURL);
+			if (ctx.context.baseURL) {
+				const base = new URL(ctx.context.baseURL);
+				if (parsed.origin === base.origin) return callbackURL;
+			}
+			const trusted = ctx.context.trustedOrigins ?? [];
+			if (trusted.some((origin) => parsed.origin === origin)) {
+				return callbackURL;
+			}
+		} catch {}
+		return undefined;
+	}
+
 	return createAuthEndpoint(
 		"/organization/accept-invitation-callback",
 		{
@@ -75,14 +97,14 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const { invitationId, callbackURL } = ctx.query;
+			const { invitationId } = ctx.query;
+			const callbackURL = validateCallbackURL(ctx.query.callbackURL, ctx);
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 
-			// Helper function to redirect with error
 			function redirectOnError(error: { code: string; message: string }) {
 				if (callbackURL) {
-					const url = new URL(callbackURL);
+					const url = new URL(callbackURL, ctx.context.baseURL);
 					url.searchParams.set("error", error.code);
 					throw ctx.redirect(url.toString());
 				}
@@ -139,6 +161,16 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 				return redirectOnError(msg);
 			}
 
+			const existingMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: invitation.organizationId,
+			});
+			if (existingMember) {
+				const code = "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				return redirectOnError(msg);
+			}
+
 			const acceptInvitationHooks = getHook("AcceptInvitation");
 
 			await acceptInvitationHooks.before(
@@ -153,9 +185,10 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 			const acceptedI = await adapter.updateInvitation({
 				invitationId,
 				status: "accepted",
+				expectedCurrentStatus: "pending",
 			});
 			if (!acceptedI) {
-				const code = "FAILED_TO_RETRIEVE_INVITATION";
+				const code = "INVITATION_NOT_FOUND";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				return redirectOnError(msg);
 			}
@@ -211,7 +244,7 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 
 			// If no callback URL, return JSON response
 			return ctx.json({
-				invitation: acceptedI,
+				invitation: adapter.applyInvitationPrivacy(acceptedI),
 				member,
 				organization,
 			});

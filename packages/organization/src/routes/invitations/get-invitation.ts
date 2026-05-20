@@ -4,6 +4,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod/v4";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
+import { resolveOrgOptions } from "../../helpers/resolve-org-options";
 import { orgMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
 
@@ -17,7 +18,8 @@ export type GetInvitation<O extends OrganizationOptions> = ReturnType<
 	typeof getInvitation<O>
 >;
 
-export const getInvitation = <O extends OrganizationOptions>(options: O) => {
+export const getInvitation = <O extends OrganizationOptions>(_options: O) => {
+	const options = resolveOrgOptions(_options);
 	return createAuthEndpoint(
 		"/organization/get-invitation",
 		{
@@ -89,7 +91,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
 			if (!session) throw APIError.fromStatus("UNAUTHORIZED");
-			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const adapter = getOrgAdapter<O>(ctx.context, _options);
 			const invitation = await adapter.findInvitationById(ctx.query.id);
 			if (
 				!invitation ||
@@ -102,6 +104,14 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) => {
 			}
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				const code = "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
+			}
+			if (
+				options.requireEmailVerificationOnInvitation &&
+				!session.user.emailVerified
+			) {
+				const code = "EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}

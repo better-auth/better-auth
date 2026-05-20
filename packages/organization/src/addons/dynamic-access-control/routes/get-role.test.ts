@@ -59,12 +59,12 @@ describe("get-role", async (it) => {
 
 		expect(role.id).toBe(createdRole.id);
 		expect(role.role).toBe(roleData.role);
-		expect(role.permissions).toEqual(roleData.permissions);
+		expect(role.permission).toEqual(roleData.permission);
 		expectTypeOf(role).toEqualTypeOf<{
 			id: string;
 			role: string;
 			organizationId: string;
-			permissions: Record<string, string[]>;
+			permission: Record<string, string[]>;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
 		}>();

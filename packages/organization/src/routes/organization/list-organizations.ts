@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { InferOrganization, OrganizationOptions } from "../../types";

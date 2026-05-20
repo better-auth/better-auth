@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect } from "vitest";
 import { organizationClient } from "../../client";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
 import { getOrganizationData } from "../../test/utils";
 
@@ -425,6 +426,68 @@ describe("list user invitations", async (it) => {
 				headers: new Headers(),
 			}),
 		).rejects.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9577
+	 */
+	describe("list user invitations with email verification gate", async (it) => {
+		const verifyPlugin = organization({
+			requireEmailVerificationOnInvitation: true,
+			async sendInvitationEmail() {},
+		});
+		const { auth: verifyAuth, signInWithUser: verifySignIn } =
+			await defineInstance([verifyPlugin]);
+
+		it("should block unverified email from listing invitations", async () => {
+			const rng = crypto.randomUUID();
+			const adminUser = {
+				email: `admin-verify-${rng}@test.com`,
+				password: rng,
+				name: `admin-verify-${rng}`,
+			};
+			const invitedUser = {
+				email: `unverified-list-${rng}@test.com`,
+				password: rng,
+				name: `unverified-list-${rng}`,
+			};
+
+			await verifyAuth.api.signUpEmail({ body: adminUser });
+			await verifyAuth.api.signUpEmail({ body: invitedUser });
+
+			const { headers: adminHeaders } = await verifySignIn(
+				adminUser.email,
+				adminUser.password,
+			);
+			const { headers: invitedHeaders } = await verifySignIn(
+				invitedUser.email,
+				invitedUser.password,
+			);
+
+			const orgData = getOrganizationData();
+			const org = await verifyAuth.api.createOrganization({
+				headers: adminHeaders,
+				body: { name: orgData.name, slug: orgData.slug },
+			});
+
+			await verifyAuth.api.createInvitation({
+				headers: adminHeaders,
+				body: {
+					organizationId: org.id,
+					email: invitedUser.email,
+					role: "member",
+				},
+			});
+
+			await expect(
+				verifyAuth.api.listUserInvitations({
+					headers: invitedHeaders,
+				}),
+			).rejects.toThrow(
+				ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION
+					.message,
+			);
+		});
 	});
 
 	describe("disable slugs", async (it) => {

@@ -21,7 +21,7 @@ const baseRoleSchema = z.object({
 	role: z.string().min(1).meta({
 		description: "The name of the role",
 	}),
-	permissions: z.record(z.string(), z.array(z.string())).meta({
+	permission: z.record(z.string(), z.array(z.string())).meta({
 		description:
 			"The permissions for the role, as a record of resource to actions",
 	}),
@@ -72,9 +72,9 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 												description:
 													"ID of the organization the role belongs to",
 											},
-											permissions: {
+											permission: {
 												type: "object",
-												description: "Permissions for the role",
+												description: "Permission for the role",
 											},
 											createdAt: {
 												type: "string",
@@ -91,7 +91,7 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 											"id",
 											"role",
 											"organizationId",
-											"permissions",
+											"permission",
 											"createdAt",
 										],
 									},
@@ -156,18 +156,13 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const {
-				organizationId: _,
-				role,
-				permissions,
-				...additionalFields
-			} = body;
+			const { organizationId: _, role, permission, ...additionalFields } = body;
 
 			// Validate that all resources in permissions are valid according to ac.statements
 			const ac = ctx.context.orgOptions.ac;
 			if (ac) {
 				const validResources = Object.keys(ac.statements);
-				const providedResources = Object.keys(permissions);
+				const providedResources = Object.keys(permission);
 				const invalidResource = providedResources.find(
 					(r) => !validResources.includes(r),
 				);
@@ -179,7 +174,7 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 
 			// Check privilege escalation: user cannot grant permissions they don't have
 			const missingPermissions: string[] = [];
-			for (const [resource, actions] of Object.entries(permissions)) {
+			for (const [resource, actions] of Object.entries(permission)) {
 				for (const action of actions) {
 					const userHasPermission = await hasPermission(
 						{
@@ -212,7 +207,7 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 			const roleData = await (async () => {
 				const roleObj = {
 					role,
-					permissions,
+					permission,
 					organizationId: realOrganizationId as string,
 					createdAt: new Date(),
 					updatedAt: new Date(),

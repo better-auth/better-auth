@@ -5,14 +5,14 @@
 export const getRoleData = (
 	overrides: {
 		role?: string;
-		permissions?: Record<string, string[]>;
+		permission?: Record<string, string[]>;
 		organizationId?: string;
 	} = {},
 ) => {
 	const uuid = crypto.randomUUID().slice(0, 8);
 	return {
 		role: overrides.role ?? `test-role-${uuid}`,
-		permissions: overrides.permissions ?? {
+		permission: overrides.permission ?? {
 			member: ["create"],
 		},
 		organizationId: overrides.organizationId ?? "",

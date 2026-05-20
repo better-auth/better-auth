@@ -13,6 +13,7 @@ import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
+import { validateRoles } from "../../helpers/validate-roles";
 import { orgMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
 
@@ -62,11 +63,17 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 				$Infer,
 				openapi: {
 					operationId: "addOrganizationMember",
-					description: "Add a member to an organization",
+					description:
+						"Add a member to an organization. This is a server-only endpoint.",
 				},
 			},
 		},
 		async (ctx) => {
+			if (ctx.request) {
+				const message = "This endpoint is only available for server-side calls";
+				throw APIError.fromStatus("FORBIDDEN", { message });
+			}
+
 			const body = getBody(ctx);
 
 			const roleIsEmpty =
@@ -79,6 +86,13 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			const orgId = await getOrganizationId({ ctx });
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 			const realOrgId = await adapter.getRealOrganizationId(orgId);
+
+			await validateRoles({
+				roles: body.role,
+				organizationId: realOrgId,
+				options,
+				ctx,
+			});
 
 			// Check if teams addon is enabled when teamId is provided
 			const teamId = "teamId" in body ? (body.teamId as string) : undefined;

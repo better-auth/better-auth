@@ -442,3 +442,41 @@ describe("list members with defaultOrganizationIdField: slug", async (it) => {
 		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message);
 	});
 });
+
+describe("list members with organizationSlug", async (it) => {
+	const plugin = organization();
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should list members by organizationSlug", async () => {
+		const result = await auth.api.listMembers({
+			headers,
+			query: {
+				organizationSlug: testOrg.slug,
+			},
+		});
+
+		expect(result.members.length).toBe(1);
+		expect(result.total).toBe(1);
+	});
+
+	it("should throw error for non-existent organizationSlug", async () => {
+		await expect(
+			auth.api.listMembers({
+				headers,
+				query: {
+					organizationSlug: "non-existent-slug-" + crypto.randomUUID(),
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message);
+	});
+});

@@ -66,7 +66,7 @@ You can create a new role within an organization using the `organization.createR
       /**
        * The permissions for the role, as a record of resource to actions.
        */
-      permissions: Record<string, string[]> = {
+      permission: Record<string, string[]> = {
           "organization": ["read", "update"],
           "member": ["read"]
       }
@@ -85,7 +85,7 @@ type Result = {
     id: string;
     role: string;
     organizationId: string;
-    permissions: Record<string, string[]>;
+    permission: Record<string, string[]>;
     createdAt: Date;
     updatedAt?: Date;
     // Additional fields if configured in schema
@@ -132,7 +132,7 @@ You can update a role's name and/or permissions using the `organization.updateRo
           /**
            * The new permissions for the role.
            */
-          permissions?: Record<string, string[]> = {
+          permission?: Record<string, string[]> = {
               "organization": ["read", "update"],
               "member": ["read", "create"]
           }
@@ -148,7 +148,7 @@ type Result = {
     id: string;
     role: string;
     organizationId: string;
-    permissions: Record<string, string[]>;
+    permission: Record<string, string[]>;
     createdAt: Date;
     updatedAt?: Date;
     // Additional fields if configured in schema
@@ -240,7 +240,7 @@ type Result = {
     id: string;
     role: string;
     organizationId: string;
-    permissions: Record<string, string[]>;
+    permission: Record<string, string[]>;
     createdAt: Date;
     updatedAt?: Date;
     // Additional fields if configured in schema
@@ -292,7 +292,7 @@ type Result = {
         id: string;
         role: string;
         organizationId: string;
-        permissions: Record<string, string[]>;
+        permission: Record<string, string[]>;
         createdAt: Date;
         updatedAt?: Date;
         // Additional fields if configured in schema
@@ -414,7 +414,7 @@ The organization role table includes the following fields:
 | `id`             | `string`                   | Unique identifier             |
 | `role`           | `string`                   | Role name                     |
 | `organizationId` | `string`                   | Reference to the organization |
-| `permissions`    | `Record<string, string[]>` | Permissions for the role      |
+| `permission`     | `Record<string, string[]>` | Permissions for the role      |
 | `createdAt`      | `Date`                     | Creation timestamp            |
 | `updatedAt`      | `Date?`                    | Last update timestamp         |
 

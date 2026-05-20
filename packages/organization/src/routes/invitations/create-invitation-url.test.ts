@@ -16,6 +16,7 @@ async function defineInstance<Plugins extends BetterAuthPlugin[]>(
 	const instance = await getTestInstance(
 		{
 			plugins: plugins,
+			trustedOrigins: ["https://myapp.com"],
 			logger: {
 				level: "error",
 			},
@@ -198,6 +199,7 @@ describe("create invitation URL", async (it) => {
 				role: "member",
 				createdAt: new Date(),
 			},
+			forceAllowId: true,
 		});
 
 		await expect(
@@ -239,6 +241,51 @@ describe("create invitation URL", async (it) => {
 				},
 			}),
 		).rejects.toThrow(ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND.message);
+	});
+});
+
+describe("invitation URL security", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reject callbackURL with untrusted origin", async () => {
+		await expect(
+			auth.api.createInvitationURL({
+				headers,
+				body: {
+					organizationId: testOrg.id,
+					email: `untrusted-url-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					callbackURL: "https://evil.com/phish",
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject teamId containing comma to prevent injection", async () => {
+		await expect(
+			auth.api.createInvitationURL({
+				headers,
+				body: {
+					organizationId: testOrg.id,
+					email: `comma-team-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					teamId: "team1,team2",
+				},
+			}),
+		).rejects.toThrow();
 	});
 });
 

@@ -185,7 +185,7 @@ invitation details using the `organization.getInvitation` method.
 This returns information about the invitation including the organization name,
 inviter details, and assigned role.
 
-<APIMethod path="/organization/get-invitation" method="GET" requireSession note="The user's email must match the invitation email.">
+<APIMethod path="/organization/get-invitation" method="GET" requireSession note="The user's email must match the invitation email. Requires verified email by default.">
   ```ts
   type getInvitation = {
       /**
@@ -195,6 +195,11 @@ inviter details, and assigned role.
   }
   ```
 </APIMethod>
+
+<Callout type="info">
+  By default, the user must have a verified email to view invitation details.
+  This can be configured with the `requireEmailVerificationOnInvitation` option.
+</Callout>
 
 ## Accepting an Invitation
 
@@ -324,7 +329,7 @@ type ListInvitationsResponse = {
 Users can retrieve all pending invitations they have received across all organizations
 using the `organization.listUserInvitations` method.
 
-<APIMethod path="/organization/list-user-invitations" method="GET" requireSession note="Returns only pending invitations. Server-side calls can optionally pass an email query parameter.">
+<APIMethod path="/organization/list-user-invitations" method="GET" requireSession note="Returns only pending invitations. Requires verified email by default. Server-side calls can optionally pass an email query parameter.">
   ```ts
   type listUserInvitations = {
       /**
@@ -336,6 +341,12 @@ using the `organization.listUserInvitations` method.
   }
   ```
 </APIMethod>
+
+<Callout type="info">
+  By default, users with unverified emails cannot list their invitations.
+  Server-side SDK calls without a session are trusted and skip this check.
+  This can be configured with the `requireEmailVerificationOnInvitation` option.
+</Callout>
 
 The response is an array of pending invitations:
 
@@ -438,7 +449,7 @@ organization({
 
 ### `cancelPendingInvitationsOnReInvite`
 
-When `true`, cancels any existing pending invitations before creating a new one for the same email.
+When `true`, automatically cancels any existing pending invitations before creating a new one for the same email. This allows re-inviting a user without requiring the `resend` flag.
 
 ```ts
 organization({
@@ -450,9 +461,22 @@ organization({
 
 <Callout type="info">
   This differs from `resend`. With `cancelPendingInvitationsOnReInvite`, a new
-  invitation is created and the old one is marked as canceled. With `resend`,
-  the existing invitation is reused.
+  invitation is created and the old one is marked as canceled — the caller does
+  not need to set `resend: true`. With `resend`, the existing invitation is
+  reused and its expiration is updated.
 </Callout>
+
+### `requireEmailVerificationOnInvitation`
+
+When `true`, users must have a verified email address to accept, reject, view, or list invitations. This prevents unverified email addresses from being used as proof of invitation ownership.
+
+```ts
+organization({
+    requireEmailVerificationOnInvitation: true // Enable the gate
+})
+```
+
+**Default:** `false`
 
 ### `privacy`
 

@@ -126,7 +126,12 @@ export const removeMember = <O extends OrganizationOptions>(_options: O) => {
 			const isOwner = roles.includes(creatorRole);
 
 			if (isOwner) {
-				if (member.role !== creatorRole) {
+				if (
+					!member.role
+						.split(",")
+						.map((r) => r.trim())
+						.includes(creatorRole)
+				) {
 					const code = "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
 					const msg = ORGANIZATION_ERROR_CODES[code];
 					throw APIError.from("BAD_REQUEST", msg);

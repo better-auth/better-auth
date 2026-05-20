@@ -444,3 +444,68 @@ describe("get invitation", async (it) => {
 		expect(receivedInvitation?.createdAt).toBeDefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9577
+ */
+describe("get invitation with email verification gate", async (it) => {
+	const plugin = organization({
+		requireEmailVerificationOnInvitation: true,
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithUser } = await defineInstance([plugin]);
+
+	const ownerEmail = `owner-email-verify-${crypto.randomUUID()}@test.com`;
+	await auth.api.signUpEmail({
+		body: {
+			email: ownerEmail,
+			password: "test123456",
+			name: "Owner",
+		},
+	});
+	const { headers } = await signInWithUser(ownerEmail, "test123456");
+
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should block unverified email from viewing invitation", async () => {
+		const invitedEmail = `get-unverified-${crypto.randomUUID()}@test.com`;
+
+		await auth.api.signUpEmail({
+			body: {
+				email: invitedEmail,
+				password: "test123456",
+				name: "Unverified User",
+			},
+		});
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedEmail,
+			"test123456",
+		);
+
+		const invitation = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: invitedEmail,
+				role: "member",
+			},
+		});
+
+		await expect(
+			auth.api.getInvitation({
+				query: { id: invitation.invitation.id },
+				headers: invitedHeaders,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION
+				.message,
+		);
+	});
+});

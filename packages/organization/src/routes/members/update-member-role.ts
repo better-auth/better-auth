@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod/v4";
-import { hasPermission, parseRoles } from "../../access";
+import { defaultRoles, hasPermission, parseRoles } from "../../access";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
@@ -97,6 +97,44 @@ export const updateMemberRole = <O extends OrganizationOptions>(
 				: ctx.body.role
 					? [ctx.body.role]
 					: [];
+
+			const defaults = Object.keys(defaultRoles);
+			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
+			const validStaticRoles = new Set([...defaults, ...customRoles]);
+			const unknownRoles = roleToSet.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+			if (unknownRoles.length > 0) {
+				const hasDynamicAC = options.use?.some(
+					(addon) => addon.id === "dynamic-access-control",
+				);
+				if (hasDynamicAC) {
+					const foundRoles = await ctx.context.adapter.findMany<{
+						role: string;
+					}>({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: realOrgId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+					if (stillInvalid.length > 0) {
+						throw APIError.from("BAD_REQUEST", {
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message}: ${stillInvalid.join(", ")}`,
+							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+						});
+					}
+				} else {
+					throw APIError.from("BAD_REQUEST", {
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message}: ${unknownRoles.join(", ")}`,
+						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+					});
+				}
+			}
 
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,

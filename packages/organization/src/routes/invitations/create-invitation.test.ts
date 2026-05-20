@@ -813,3 +813,158 @@ describe("invite by user ID", async (it) => {
 		expect(acceptResult!.member.organizationId).toBe(newOrg.id);
 	});
 });
+
+describe("role validation", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reject invitation with unknown role", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `unknown-role-${crypto.randomUUID()}@test.com`,
+					role: "nonexistent-role",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should reject invitation with unknown role in multi-role array", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `unknown-multi-${crypto.randomUUID()}@test.com`,
+					role: ["member", "nonexistent-role"],
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should allow invitation with valid built-in roles", async () => {
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email: `valid-role-${crypto.randomUUID()}@test.com`,
+				role: "admin",
+			},
+		});
+		expect(result.invitation.role).toBe("admin");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9452
+ */
+describe("cancelPendingInvitationsOnReInvite", async (it) => {
+	const plugin = organization({
+		cancelPendingInvitationsOnReInvite: true,
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser, adapter } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should allow re-inviting without resend flag when cancelPendingInvitationsOnReInvite is enabled", async () => {
+		const email = `reinvite-auto-${crypto.randomUUID()}@test.com`;
+		const first = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "member",
+			},
+		});
+		expect(first.invitation.status).toBe("pending");
+
+		const second = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "admin",
+			},
+		});
+		expect(second.invitation.status).toBe("pending");
+		expect(second.invitation.role).toBe("admin");
+		expect(second.invitation.id).not.toBe(first.invitation.id);
+
+		const oldInvitation = await adapter.findOne({
+			model: "invitation",
+			where: [{ field: "id", value: first.invitation.id }],
+		});
+		expect(oldInvitation.status).toBe("canceled");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9616
+ */
+describe("comma-in-teamId validation", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reject teamId containing a comma", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `comma-team-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					teamId: "team1,team2",
+				},
+			}),
+		).rejects.toThrow("Team id contains a reserved character");
+	});
+
+	it("should reject teamId array containing a comma", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `comma-arr-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					teamId: ["valid-team", "bad,team"],
+				},
+			}),
+		).rejects.toThrow("Team id contains a reserved character");
+	});
+});

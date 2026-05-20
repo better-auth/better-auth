@@ -187,4 +187,26 @@ describe("get active member role", async (it) => {
 			}),
 		).rejects.toThrow("You are not a member of this organization");
 	});
+
+	it("should return role when providing organizationSlug", async () => {
+		const activeMember = await auth.api.getActiveMemberRole({
+			headers,
+			query: {
+				organizationSlug: testOrg.slug,
+			},
+		});
+
+		expect(activeMember?.role).toBe("owner");
+	});
+
+	it("should throw error for non-existent organizationSlug", async () => {
+		await expect(
+			auth.api.getActiveMemberRole({
+				headers,
+				query: {
+					organizationSlug: "non-existent-slug-" + crypto.randomUUID(),
+				},
+			}),
+		).rejects.toThrow("Organization not found");
+	});
 });

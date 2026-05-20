@@ -50,7 +50,7 @@ const baseUpdateRoleSchema = z.object({
 				description: "The new name for the role",
 			})
 			.optional(),
-		permissions: z
+		permission: z
 			.record(z.string(), z.array(z.string()))
 			.meta({
 				description:
@@ -87,7 +87,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 						organizationId?: string | undefined;
 						data: {
 							roleName?: string | undefined;
-							permissions?: Record<string, string[]> | undefined;
+							permission?: Record<string, string[]> | undefined;
 						};
 					},
 				},
@@ -114,9 +114,9 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 												description:
 													"ID of the organization the role belongs to",
 											},
-											permissions: {
+											permission: {
 												type: "object",
-												description: "Permissions for the role",
+												description: "Permission for the role",
 											},
 											createdAt: {
 												type: "string",
@@ -133,7 +133,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 											"id",
 											"role",
 											"organizationId",
-											"permissions",
+											"permission",
 											"createdAt",
 										],
 									},
@@ -217,7 +217,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 
 			const {
 				roleName: newRoleName,
-				permissions,
+				permission,
 				...additionalFields
 			} = body.data;
 
@@ -254,11 +254,11 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 				updates.role = normalizedName;
 			}
 
-			if (permissions) {
+			if (permission) {
 				const ac = ctx.context.orgOptions.ac;
 				if (ac) {
 					const validResources = Object.keys(ac.statements);
-					const providedResources = Object.keys(permissions);
+					const providedResources = Object.keys(permission);
 					const invalidResource = providedResources.find(
 						(r) => !validResources.includes(r),
 					);
@@ -269,7 +269,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 				}
 
 				const missingPermissions: string[] = [];
-				for (const [resource, actions] of Object.entries(permissions)) {
+				for (const [resource, actions] of Object.entries(permission)) {
 					for (const action of actions) {
 						const userHasPermission = await hasPermission(
 							{
@@ -297,7 +297,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 					});
 				}
 
-				updates.permissions = permissions;
+				updates.permission = permission;
 			}
 
 			const hookResult = await updateRoleHook.before(
@@ -305,7 +305,7 @@ export const updateRole = <O extends DynamicAccessControlOptions>(
 					role: existingRole,
 					updates: updates as {
 						role?: string;
-						permissions?: Record<string, string[]>;
+						permission?: Record<string, string[]>;
 						[key: string]: unknown;
 					},
 					user: session.user,

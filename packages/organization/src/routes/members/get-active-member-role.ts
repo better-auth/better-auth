@@ -1,9 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
-import { getOrganizationId } from "../../helpers/get-organization-id";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
 
@@ -21,6 +20,13 @@ const getActiveMemberRoleQuerySchema = z
 			.meta({
 				description:
 					"The organization ID to get the member's role from. If not provided, will default to the user's active organization. Eg: \"organization-id\"",
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description:
+					"The organization slug to get the member's role from. If not provided, will default to the user's active organization. Eg: \"organization-slug\"",
 			})
 			.optional(),
 	})
@@ -70,7 +76,23 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
-			const organizationId = await getOrganizationId({ ctx });
+			let organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
+			if (ctx.query?.organizationSlug) {
+				const organization = await adapter.findOrganizationById(
+					ctx.query.organizationSlug,
+					"slug",
+				);
+				if (!organization) {
+					const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+					throw APIError.from("BAD_REQUEST", msg);
+				}
+				organizationId = organization.id;
+			}
+			if (!organizationId) {
+				const msg = ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
 			const realOrgId = await adapter.getRealOrganizationId(organizationId);
 
 			const isMember = await adapter.findMemberByOrgId({

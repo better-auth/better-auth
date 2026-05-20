@@ -1,9 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
-import { getOrganizationId } from "../../helpers/get-organization-id";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
 
@@ -14,6 +14,13 @@ const listMembersQuerySchema = z
 			.meta({
 				description:
 					'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description:
+					'The organization slug to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
 			})
 			.optional(),
 		limit: z.coerce
@@ -33,7 +40,7 @@ const listMembersQuerySchema = z
 			})
 			.optional(),
 		sortBy: z
-			.string()
+			.enum(["createdAt", "role", "userId"])
 			.meta({
 				description: "The field to sort by",
 			})
@@ -45,7 +52,7 @@ const listMembersQuerySchema = z
 			})
 			.optional(),
 		filterField: z
-			.string()
+			.enum(["role", "userId", "createdAt"])
 			.meta({
 				description: "The field to filter by",
 			})
@@ -57,9 +64,11 @@ const listMembersQuerySchema = z
 			})
 			.or(z.number())
 			.or(z.boolean())
+			.or(z.array(z.string()))
+			.or(z.array(z.number()))
 			.optional(),
 		filterOperator: z
-			.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+			.enum(whereOperators)
 			.meta({
 				description: "The operator to use for the filter",
 			})
@@ -141,10 +150,25 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
-			const organizationId = await getOrganizationId({ ctx });
+			let organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
+			if (ctx.query?.organizationSlug) {
+				const organization = await adapter.findOrganizationById(
+					ctx.query.organizationSlug,
+					"slug",
+				);
+				if (!organization) {
+					const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+					throw APIError.from("BAD_REQUEST", msg);
+				}
+				organizationId = organization.id;
+			}
+			if (!organizationId) {
+				const msg = ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
 			const realOrgId = await adapter.getRealOrganizationId(organizationId);
 
-			// Verify the user is a member of this organization
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: realOrgId,

@@ -4,6 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
+import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import type { Team } from "../addons";
@@ -481,6 +482,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					],
 				});
+				await adapter.updateMany({
+					model: "session",
+					where: [
+						{
+							field: "activeOrganizationId",
+							value: organizationId,
+						},
+					],
+					update: {
+						activeOrganizationId: null,
+					},
+				});
 				await adapter.delete<InferOrganization<O, false>>({
 					model: "organization",
 					where: [
@@ -659,16 +672,24 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		updateInvitation: async (data: {
 			invitationId: string;
 			status: "accepted" | "canceled" | "rejected";
+			expectedCurrentStatus?: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const whereClause: Array<{ field: string; value: string }> = [
+				{
+					field: "id",
+					value: data.invitationId,
+				},
+			];
+			if (data.expectedCurrentStatus) {
+				whereClause.push({
+					field: "status",
+					value: data.expectedCurrentStatus,
+				});
+			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "id",
-						value: data.invitationId,
-					},
-				],
+				where: whereClause,
 				update: {
 					status: data.status,
 				},
@@ -713,30 +734,66 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				role: string;
 				organizationId: string;
 				teamIds: string[];
-			} & Record<string, any>; // This represents the additionalFields for the invitation
+			} & Record<string, any>;
 			user: User;
 		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			const expiresAt = getDate(options.invitationExpiresIn, "sec");
-			const teamId =
-				invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null;
-			const { teamIds: _teamIds, ...invitationData } = invitation;
-			const invite = await adapter.create<
-				Omit<InvitationInput, "id">,
-				InferInvitation<O, false>
-			>({
-				model: "invitation",
-				data: {
-					status: "pending",
-					expiresAt,
-					createdAt: new Date(),
-					inviterId: user.id,
-					...invitationData,
-					teamId,
-				},
-			});
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const inviteeUser = await adapter.findOne<{ id: string }>({
+					model: "user",
+					where: [
+						{
+							field: "email",
+							value: invitation.email.toLowerCase(),
+						},
+					],
+					select: ["id"],
+				});
+				if (inviteeUser) {
+					const existingMember = await adapter.findOne<{ id: string }>({
+						model: "member",
+						where: [
+							{
+								field: "userId",
+								value: inviteeUser.id,
+							},
+							{
+								field: "organizationId",
+								value: invitation.organizationId,
+							},
+						],
+						select: ["id"],
+					});
+					if (existingMember) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+						);
+					}
+				}
 
-			return filterInvitationOutput(invite);
+				const expiresAt = getDate(options.invitationExpiresIn, "sec");
+				const teamId =
+					invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null;
+				const { teamIds: _teamIds, ...invitationData } = invitation;
+				const invite = await adapter.create<
+					InvitationInput,
+					InferInvitation<O, false>
+				>({
+					model: "invitation",
+					data: {
+						status: "pending",
+						expiresAt,
+						createdAt: new Date(),
+						inviterId: user.id,
+						...invitationData,
+						teamId,
+					},
+					forceAllowId: true,
+				});
+
+				return filterInvitationOutput(invite);
+			});
 		},
 		countMembers: async (data: { organizationId: RealOrganizationId }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -893,7 +950,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			sortOrder?: "asc" | "desc";
 			filter?: {
 				field: string;
-				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				operator?: WhereOperator;
 				value: any;
 			};
 		}) => {
@@ -901,7 +958,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const whereClause: Array<{
 				field: string;
 				value: any;
-				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				operator?: WhereOperator;
 			}> = [{ field: "organizationId", value: data.organizationId }];
 
 			if (data.filter?.field) {

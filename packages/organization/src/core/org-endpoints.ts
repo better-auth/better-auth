@@ -1,6 +1,7 @@
 import type { AuthContext, Prettify } from "@better-auth/core";
 import { getSessionFromCtx } from "better-auth/api";
 import type { Endpoint, UnionToIntersection } from "better-call";
+import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import type { AcceptInvitation } from "../routes/invitations/accept-invitation";
 import { acceptInvitation } from "../routes/invitations/accept-invitation";
 import type { AcceptInvitationCallback } from "../routes/invitations/accept-invitation-callback";
@@ -43,6 +44,8 @@ import type { GetFullOrganization } from "../routes/organization/get-full-organi
 import { getFullOrganization } from "../routes/organization/get-full-organization";
 import type { GetOrganization } from "../routes/organization/get-organization";
 import { getOrganization } from "../routes/organization/get-organization";
+import type { HasPermission } from "../routes/organization/has-permission";
+import { createHasPermission } from "../routes/organization/has-permission";
 import type { ListOrganizations } from "../routes/organization/list-organizations";
 import { listOrganizations } from "../routes/organization/list-organizations";
 import type { SetActiveOrganization } from "../routes/organization/set-active-organization";
@@ -99,6 +102,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	updateMemberRole: UpdateMemberRole<O>;
 	leaveOrganization: LeaveOrganization<O>;
 	listMembers: ListMembers<O>;
+	hasPermission: HasPermission<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -139,16 +143,20 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		updateMemberRole: updateMemberRole(options),
 		leaveOrganization: leaveOrganization(options),
 		listMembers: listMembers(options),
+		hasPermission: createHasPermission(options),
 		...(addonEndpoints || {}),
 	};
 
 	/**
 	 * the orgMiddleware type-asserts an empty object representing org options, roles, and a getSession function.
 	 * This `shimContext` function is used to add those missing properties to the context object.
+	 * We inject resolved options to ensure defaults (e.g. requireEmailVerificationOnInvitation)
+	 * are applied even when the user doesn't set them explicitly.
 	 */
+	const resolvedOptions = resolveOrgOptions(options);
 	return shimContext(endpoints, {
-		orgOptions: options,
-		roles: options.roles,
+		orgOptions: resolvedOptions,
+		roles: resolvedOptions.roles,
 		getSession: async (context: AuthContext) => {
 			return await getSessionFromCtx(context as any);
 		},

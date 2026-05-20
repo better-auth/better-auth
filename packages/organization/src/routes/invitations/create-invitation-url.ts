@@ -14,6 +14,7 @@ import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
+import { validateRoles } from "../../helpers/validate-roles";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type {
 	InferInvitation,
@@ -219,6 +220,35 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			if (ctx.body.callbackURL) {
+				const isRelative = ctx.body.callbackURL.startsWith("/");
+				let isTrusted = false;
+				if (!isRelative) {
+					try {
+						const parsed = new URL(ctx.body.callbackURL);
+						const base = ctx.context.baseURL
+							? new URL(ctx.context.baseURL)
+							: null;
+						if (base && parsed.origin === base.origin) {
+							isTrusted = true;
+						}
+						const trusted =
+							(ctx.context as { trustedOrigins?: string[] }).trustedOrigins ??
+							[];
+						if (trusted.some((origin) => parsed.origin === origin)) {
+							isTrusted = true;
+						}
+					} catch {}
+				}
+				if (!isRelative && !isTrusted) {
+					throw APIError.from("BAD_REQUEST", {
+						message:
+							"callbackURL must be a relative path or trusted origin URL",
+						code: "INVALID_CALLBACK_URL",
+					});
+				}
+			}
+
 			const session = ctx.context.session;
 			const organization = await getOrganizationId<
 				InferOrganization<O, false>,
@@ -287,8 +317,18 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 			const roles = parseRoles(ctx.body.role);
 
+			await validateRoles({
+				roles: ctx.body.role,
+				organizationId,
+				options,
+				ctx,
+			});
+
 			if (
-				member.role !== creatorRole &&
+				!member.role
+					.split(",")
+					.map((r) => r.trim())
+					.includes(creatorRole) &&
 				roles.split(",").includes(creatorRole)
 			) {
 				const code = "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE";
@@ -376,7 +416,11 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 
 				const url = generateInvitationURL(updatedInvitation.id!);
 
-				return ctx.json({ url, invitation: updatedInvitation, organization });
+				return ctx.json({
+					url,
+					invitation: adapter.applyInvitationPrivacy(updatedInvitation),
+					organization,
+				});
 			}
 
 			const invitationLimit = await options.invitationLimit(
@@ -403,6 +447,13 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 					typeof ctx.body.teamId === "string"
 						? [ctx.body.teamId as string]
 						: ((ctx.body.teamId as string[]) ?? []);
+			}
+
+			if (teamIds.some((id) => id.includes(","))) {
+				throw APIError.from("BAD_REQUEST", {
+					message: "Team id contains a reserved character",
+					code: "INVALID_TEAM_ID",
+				});
 			}
 
 			if (teamsAddon && teamIds.length > 0) {

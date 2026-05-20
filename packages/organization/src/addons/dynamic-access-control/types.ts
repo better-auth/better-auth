@@ -61,7 +61,7 @@ export type DynamicAccessControlHooks =
 					role: {
 						role: string;
 						organizationId: string;
-						permissions: Record<string, string[]>;
+						permission: Record<string, string[]>;
 						[key: string]: any;
 					};
 					user?: User & Record<string, any>;
@@ -94,7 +94,7 @@ export type DynamicAccessControlHooks =
 					role: OrganizationRole & Record<string, any>;
 					updates: {
 						role?: string;
-						permissions?: Record<string, string[]>;
+						permission?: Record<string, string[]>;
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;

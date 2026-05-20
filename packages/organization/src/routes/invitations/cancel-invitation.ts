@@ -57,7 +57,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(
 			const invitationId = ctx.body.invitationId;
 			const invitation = await adapter.findInvitationById(invitationId);
 
-			if (!invitation) {
+			if (!invitation || invitation.status !== "pending") {
 				const code = "INVITATION_NOT_FOUND";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
