@@ -232,4 +232,38 @@ describe("Feishu/Lark generic OAuth provider helpers", () => {
 			scopes: ["contact:user.email:readonly"],
 		});
 	});
+
+	it("refreshes Lark tokens from wrapped token responses", async () => {
+		const provider = lark({
+			clientId: "lark-client-id",
+			clientSecret: "lark-client-secret",
+		});
+
+		mockedFetch.mockImplementationOnce(async (_input, init) => {
+			expect(JSON.parse(init?.body as string)).toEqual({
+				client_id: "lark-client-id",
+				client_secret: "lark-client-secret",
+				grant_type: "refresh_token",
+				refresh_token: "refresh-token",
+			});
+			return Response.json({
+				code: 0,
+				data: {
+					access_token: "wrapped-refreshed-access-token",
+					refresh_token: "wrapped-refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				},
+			});
+		});
+
+		const tokens = await provider.refreshAccessToken?.("refresh-token");
+
+		expect(tokens).toMatchObject({
+			accessToken: "wrapped-refreshed-access-token",
+			refreshToken: "wrapped-refreshed-refresh-token",
+			tokenType: "Bearer",
+		});
+		expect(tokens?.accessTokenExpiresAt).toBeInstanceOf(Date);
+	});
 });
