@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -428,23 +429,34 @@ export async function processSAMLResponse(
 		parsedSamlConfig.callbackUrl ||
 		ctx.context.baseURL;
 
-	const result = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email as string,
-			name: (userInfo.name || userInfo.email) as string,
-			id: userInfo.id as string,
-			emailVerified: Boolean(userInfo.emailVerified),
-		},
-		account: {
-			providerId,
-			accountId: userInfo.id as string,
-			accessToken: "",
-			refreshToken: "",
-		},
-		callbackURL: callbackUrl,
-		disableSignUp: options?.disableImplicitSignUp,
-		isTrustedProvider,
-	});
+	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		result = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email as string,
+				name: (userInfo.name || userInfo.email) as string,
+				id: userInfo.id as string,
+				emailVerified: Boolean(userInfo.emailVerified),
+			},
+			account: {
+				providerId,
+				accountId: userInfo.id as string,
+				accessToken: "",
+				refreshToken: "",
+			},
+			callbackURL: callbackUrl,
+			disableSignUp: options?.disableImplicitSignUp,
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = callbackUrl.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${callbackUrl}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 
 	if (result.error) {
 		throw ctx.redirect(

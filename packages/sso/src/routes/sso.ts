@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	createAuthorizationURL,
@@ -1654,31 +1655,43 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	const linked = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
-			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
-				: false,
-		},
-		account: {
-			idToken: tokenResponse.idToken,
-			accessToken: tokenResponse.accessToken,
-			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
-			providerId: provider.providerId,
-			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-			scope: tokenResponse.scopes?.join(","),
-		},
-		callbackURL,
-		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-		overrideUserInfo: config.overrideUserInfo,
-		isTrustedProvider,
-	});
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		linked = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email,
+				name: userInfo.name || "",
+				id: userInfo.id,
+				image: userInfo.image,
+				emailVerified: options?.trustEmailVerified
+					? userInfo.emailVerified || false
+					: false,
+			},
+			account: {
+				idToken: tokenResponse.idToken,
+				accessToken: tokenResponse.accessToken,
+				refreshToken: tokenResponse.refreshToken,
+				accountId: userInfo.id,
+				providerId: provider.providerId,
+				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+				scope: tokenResponse.scopes?.join(","),
+			},
+			callbackURL,
+			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+			overrideUserInfo: config.overrideUserInfo,
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 	if (linked.error) {
 		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
 	}
