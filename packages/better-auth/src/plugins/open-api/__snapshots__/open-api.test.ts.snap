@@ -146,6 +146,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "id",
           "name",
           "email",
+          "emailVerified",
           "createdAt",
           "updatedAt",
           "role",

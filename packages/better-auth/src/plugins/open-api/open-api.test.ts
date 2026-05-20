@@ -37,6 +37,12 @@ describe("open-api", async () => {
 			type: "string",
 		});
 		expect(schemas["User"]!.required).toContain("id");
+		expect(schemas["User"]!.properties.emailVerified).toEqual({
+			default: false,
+			readOnly: true,
+			type: "boolean",
+		});
+		expect(schemas["User"]!.required).toContain("emailVerified");
 		expect(schemas["Session"]!.properties.id).toEqual({
 			readOnly: true,
 			type: "string",

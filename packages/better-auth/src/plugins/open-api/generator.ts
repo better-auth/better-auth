@@ -386,15 +386,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
-		const required: string[] = ["id"];
+		const required = new Set<string>(["id"]);
 		const properties: Record<string, FieldSchema> = {
 			id: { type: "string", readOnly: true },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
 			if (!fieldValue) return;
 			properties[fieldKey] = getFieldSchema(fieldValue);
-			if (fieldValue.required && fieldValue.input !== false) {
-				required.push(fieldKey);
+			if (fieldValue.required && fieldValue.returned !== false) {
+				required.add(fieldKey);
 			}
 		});
 
@@ -407,7 +407,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		acc[modelName] = {
 			type: "object",
 			properties,
-			required,
+			required: Array.from(required),
 		};
 		return acc;
 	}, {});
