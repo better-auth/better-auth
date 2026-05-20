@@ -253,7 +253,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							"Failed to create user or session",
 							result.error,
 						);
-						throw redirectOnError(ctx, errorURL, "user_creation_failed");
+						throw redirectOnError(
+							ctx,
+							errorURL,
+							result.errorCode || "user_creation_failed",
+						);
 					}
 
 					await setSessionCookie(ctx, result.data);

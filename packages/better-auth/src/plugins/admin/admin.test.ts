@@ -75,6 +75,7 @@ describe("Admin plugin", async () => {
 		customFetchImpl,
 	} = await getTestInstance(
 		{
+			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
@@ -620,7 +621,44 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(errorLocation).toBeDefined();
-		expect(errorLocation).toContain("error=banned");
+		expect(errorLocation).toContain("error=BANNED_USER");
+	});
+
+	it("should redirect banned social sign-in to a cross-origin errorCallbackURL", async () => {
+		const errorCallbackURL = "https://frontend.example.com/auth-error";
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				errorCallbackURL,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				errorLocation = context.response.headers.get("location");
+			},
+		});
+		expect(errorLocation).toBeTruthy();
+		const url = new URL(errorLocation!);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(`${url.origin}${url.pathname}`).toBe(errorCallbackURL);
+		expect(url.searchParams.get("error")).toBe("BANNED_USER");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Custom banned user message",
+		);
 	});
 
 	it("should change banned user message", async () => {

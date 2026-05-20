@@ -268,6 +268,10 @@ export const callbackOAuth = createAuthEndpoint(
 			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
 		if (result.error) {
+			if (result.errorCode) {
+				c.context.logger.error(result.errorCode);
+				return redirectOnError(result.errorCode, result.error);
+			}
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}

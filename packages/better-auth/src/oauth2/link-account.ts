@@ -239,21 +239,37 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id);
-	if (!session) {
+	try {
+		const session = await c.context.internalAdapter.createSession(user.id);
+		if (!session) {
+			return {
+				error: "unable to create session",
+				data: null,
+				isRegister: false,
+			};
+		}
+		return {
+			data: {
+				session,
+				user,
+			},
+			error: null,
+			isRegister,
+		};
+	} catch (e: any) {
+		logger.error(e);
+		if (isAPIError(e) && e.body?.code) {
+			return {
+				error: e.body.message || e.message,
+				errorCode: e.body.code,
+				data: null,
+				isRegister: false,
+			};
+		}
 		return {
 			error: "unable to create session",
 			data: null,
 			isRegister: false,
 		};
 	}
-
-	return {
-		data: {
-			session,
-			user,
-		},
-		error: null,
-		isRegister,
-	};
 }

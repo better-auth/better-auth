@@ -530,7 +530,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			});
 
 			if (result.error) {
-				return redirectOnError(result.error.split(" ").join("_"));
+				return redirectOnError(
+					result.errorCode || result.error.split(" ").join("_"),
+				);
 			}
 			const { session, user } = result.data!;
 			await setSessionCookie(ctx, {
