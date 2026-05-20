@@ -253,7 +253,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
-							throw redirectOnError(ctx, errorURL, e.body.code);
+							throw redirectOnError(ctx, errorURL, e.body.code, e.body.message);
 						}
 						throw e;
 					}

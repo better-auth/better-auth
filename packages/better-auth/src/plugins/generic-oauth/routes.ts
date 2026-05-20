@@ -316,17 +316,15 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			} = parsedState;
 			const code = ctx.query.code;
 
-			function redirectOnError(error: string) {
+			function redirectOnError(error: string, description?: string) {
 				const defaultErrorURL =
 					ctx.context.options.onAPIError?.errorURL ||
 					`${ctx.context.baseURL}/error`;
-				let url = errorURL || defaultErrorURL;
-				if (url.includes("?")) {
-					url = `${url}&error=${encodeURIComponent(error)}`;
-				} else {
-					url = `${url}?error=${encodeURIComponent(error)}`;
-				}
-				throw ctx.redirect(url);
+				const baseURL = errorURL || defaultErrorURL;
+				const params = new URLSearchParams({ error });
+				if (description) params.set("error_description", description);
+				const sep = baseURL.includes("?") ? "&" : "?";
+				throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 			}
 
 			let finalTokenUrl = providerConfig.tokenUrl;
@@ -533,7 +531,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				});
 			} catch (e) {
 				if (isAPIError(e) && e.body?.code) {
-					return redirectOnError(e.body.code);
+					return redirectOnError(e.body.code, e.body.message);
 				}
 				throw e;
 			}
