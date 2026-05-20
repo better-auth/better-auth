@@ -1,7 +1,11 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
-import { parseSetCookieHeader, toCookieOptions } from "../cookies";
+import {
+	parseSetCookieHeader,
+	splitSetCookieHeader,
+	toCookieOptions,
+} from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
@@ -85,9 +89,12 @@ export const nextCookies = () => {
 							return;
 						}
 						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
-							if (!setCookies) return;
-							const parsed = parseSetCookieHeader(setCookies);
+							const setCookies = (
+								typeof returned.getSetCookie === "function"
+									? returned.getSetCookie()
+									: splitSetCookieHeader(returned.get("set-cookie") || "")
+							).filter((setCookie) => setCookie.trim().length > 0);
+							if (!setCookies.length) return;
 							let cookieHelper: Awaited<
 								ReturnType<typeof import("next/headers.js").cookies>
 							>;
@@ -108,14 +115,17 @@ export const nextCookies = () => {
 								}
 								throw error;
 							}
-							parsed.forEach((value, key) => {
-								if (!key) return;
-								try {
-									cookieHelper.set(key, value.value, toCookieOptions(value));
-								} catch {
-									// this will fail if the cookie is being set on server component
-								}
-							});
+							for (const setCookie of setCookies) {
+								const parsed = parseSetCookieHeader(setCookie);
+								parsed.forEach((value, key) => {
+									if (!key) return;
+									try {
+										cookieHelper.set(key, value.value, toCookieOptions(value));
+									} catch {
+										// this will fail if the cookie is being set on server component
+									}
+								});
+							}
 							return;
 						}
 					}),

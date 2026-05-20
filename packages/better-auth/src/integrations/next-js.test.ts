@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("next-js integration", () => {
@@ -108,6 +110,90 @@ describe("next-js integration", () => {
 		expect(cookiesMock).not.toHaveBeenCalled();
 		expect(session).not.toBeNull();
 		expect(session?.needsRefresh).toBe(true);
+	});
+
+	it("should forward multiple set-cookie headers via getSetCookie", async () => {
+		const cookieSet = vi.fn();
+		vi.doMock("next/headers.js", () => ({
+			cookies: vi.fn(async () => ({
+				set: cookieSet,
+				delete: vi.fn(),
+				get: vi.fn(),
+			})),
+			headers: vi.fn(async () => new Headers({})),
+		}));
+
+		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
+			import("../test-utils/test-instance"),
+			import("./next-js"),
+		]);
+
+		const multipleCookiesPlugin = {
+			id: "multiple-cookies",
+			endpoints: {
+				setMultipleCookies: createAuthEndpoint(
+					"/set-multiple-cookies",
+					{
+						method: "GET",
+					},
+					async (ctx) => {
+						ctx.setCookie("first", "one");
+						ctx.setCookie("second", "two");
+						return ctx.json({ ok: true });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth } = await getTestInstance(
+			{
+				plugins: [multipleCookiesPlugin, nextCookies()],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const originalGet = Headers.prototype.get;
+		const getSetCookie = vi.fn(() => ["first=one", "second=two"]);
+		const getSetCookieDescriptor = Object.getOwnPropertyDescriptor(
+			Headers.prototype,
+			"getSetCookie",
+		);
+		Object.defineProperty(Headers.prototype, "getSetCookie", {
+			configurable: true,
+			value: getSetCookie,
+		});
+		const getSpy = vi
+			.spyOn(Headers.prototype, "get")
+			.mockImplementation(function (name: string) {
+				if (name.toLowerCase() === "set-cookie") {
+					return null;
+				}
+				return originalGet.call(this, name);
+			});
+
+		try {
+			await auth.api.setMultipleCookies();
+		} finally {
+			getSpy.mockRestore();
+			if (getSetCookieDescriptor) {
+				Object.defineProperty(
+					Headers.prototype,
+					"getSetCookie",
+					getSetCookieDescriptor,
+				);
+			} else {
+				Reflect.deleteProperty(Headers.prototype, "getSetCookie");
+			}
+		}
+
+		expect(getSetCookie).toHaveBeenCalled();
+		expect(cookieSet).toHaveBeenCalledTimes(2);
+		expect(cookieSet.mock.calls.map(([name, value]) => [name, value])).toEqual([
+			["first", "one"],
+			["second", "two"],
+		]);
 	});
 
 	/**
