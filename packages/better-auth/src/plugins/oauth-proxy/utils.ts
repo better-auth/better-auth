@@ -81,5 +81,5 @@ export function redirectOnError(
 	error: string,
 ): never {
 	const sep = errorURL.includes("?") ? "&" : "?";
-	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
+	throw ctx.redirect(`${errorURL}${sep}error=${encodeURIComponent(error)}`);
 }
