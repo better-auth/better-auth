@@ -225,6 +225,26 @@ function processZodType(zodType: z.ZodType<any>): any {
 			default: defaultValue,
 		};
 	}
+	// record: map to an open-ended object with typed values
+	if (zodType instanceof z.ZodRecord) {
+		const valueType = (zodType as any)._zod?.def?.valueType;
+		const additionalProperties =
+			valueType instanceof z.ZodType
+				? processZodType(valueType as z.ZodType<any>)
+				: {};
+		return {
+			type: "object",
+			additionalProperties,
+			description: (zodType as any).description,
+		};
+	}
+
+	// unconstrained value types: emit an empty schema so consumers don't
+	// infer a narrower shape than the runtime accepts
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
+		return { description: (zodType as any).description };
+	}
+
 	// object unwrapping
 	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape;

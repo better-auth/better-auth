@@ -42,6 +42,19 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	region: string;
 	userPoolId: string;
 	requireClientSecret?: boolean | undefined;
+	/**
+	 * Skip the Cognito hosted-UI identity-provider picker by preselecting an
+	 * IdP (maps to the `identity_provider` query parameter on the authorize
+	 * request). Accepts `"COGNITO"`, a SAML/OIDC provider name configured on
+	 * the User Pool, or one of the social providers (`"Google"`, `"Facebook"`,
+	 * `"LoginWithAmazon"`, `"SignInWithApple"`).
+	 *
+	 * Per-request overrides via `signIn.social({ additionalParams: { identity_provider } })`
+	 * take precedence over this value.
+	 *
+	 * @see https://docs.aws.amazon.com/cognito/latest/developerguide/authorization-endpoint.html
+	 */
+	identityProvider?: string | undefined;
 }
 
 export const cognito = (options: CognitoOptions) => {
@@ -60,7 +73,13 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!getPrimaryClientId(options.clientId)) {
 				logger.error(
 					"ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
@@ -91,6 +110,12 @@ export const cognito = (options: CognitoOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams: {
+					...(options.identityProvider
+						? { identity_provider: options.identityProvider }
+						: {}),
+					...(additionalParams ?? {}),
+				},
 			});
 			// AWS Cognito requires scopes to be encoded with %20 instead of +
 			// URLSearchParams encodes spaces as + by default, so we need to fix this

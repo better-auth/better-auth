@@ -1216,9 +1216,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						jwks: z
 							.union([
-								z.array(z.record(z.string(), z.unknown())),
+								z.array(z.record(z.string(), z.unknown())).min(1),
 								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())),
+									keys: z.array(z.record(z.string(), z.unknown())).min(1),
 								}),
 							])
 							.optional(),

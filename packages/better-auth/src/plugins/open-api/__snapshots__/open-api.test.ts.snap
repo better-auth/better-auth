@@ -1876,9 +1876,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
+                    "additionalProperties": {
+                      "description": undefined,
+                    },
                     "description": undefined,
                     "type": [
-                      "string",
+                      "object",
+                      "null",
+                    ],
+                  },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "description": undefined,
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "type": [
+                      "object",
                       "null",
                     ],
                   },
@@ -1944,6 +1958,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     ],
                     "type": [
                       "object",
+                      "null",
+                    ],
+                  },
+                  "loginHint": {
+                    "description": "The login hint to use for the authorization code request",
+                    "type": [
+                      "string",
                       "null",
                     ],
                   },
@@ -3938,9 +3959,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
+                    "additionalProperties": {
+                      "description": undefined,
+                    },
                     "description": undefined,
                     "type": [
-                      "string",
+                      "object",
+                      "null",
+                    ],
+                  },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "description": undefined,
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "type": [
+                      "object",
                       "null",
                     ],
                   },

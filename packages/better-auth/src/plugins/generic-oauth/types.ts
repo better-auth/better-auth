@@ -1,8 +1,8 @@
 import type { User } from "@better-auth/core/db";
 import type {
-	ClientAssertionConfig,
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
 export interface GenericOAuthOptions<ID extends string = string> {
@@ -47,6 +47,14 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	clientId: string;
 	/** OAuth client secret */
 	clientSecret?: string | undefined;
+	/**
+	 * Token endpoint client authentication method.
+	 *
+	 * Use `private_key_jwt` for IdPs that authenticate clients with RFC 7523
+	 * client assertions instead of a client secret. Secret-based methods require
+	 * clientSecret.
+	 */
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -142,7 +150,9 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	authorizationUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
-	 * Warning: Search-params added here overwrite any default params.
+	 * Parameters already set by Better Auth are preserved. Configure token
+	 * endpoint client authentication with clientId, clientSecret, and
+	 * tokenEndpointAuth.
 	 */
 	tokenUrlParams?: Record<string, string> | undefined;
 	/**
@@ -156,14 +166,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Authentication method for token requests.
+	 * "basic" requires clientSecret.
 	 * @default "post"
 	 */
-	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
-	/**
-	 * Client assertion config for `private_key_jwt` authentication.
-	 * Required when `authentication` is `"private_key_jwt"`.
-	 */
-	clientAssertion?: ClientAssertionConfig | undefined;
+	authentication?: ("basic" | "post") | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
@@ -182,4 +188,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Accept callbacks from providers that initiate the OAuth flow without
+	 * sending a `state` parameter (e.g. Clever). When enabled, stateless
+	 * callbacks restart the OAuth flow server-side with a fresh `state` and
+	 * PKCE verifier. See the generic-oauth docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }

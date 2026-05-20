@@ -37,7 +37,13 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
@@ -52,6 +58,7 @@ export const polar = (options: PolarOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
