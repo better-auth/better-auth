@@ -74,6 +74,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/memory-adapter": "workspace:*",
     "better-call": "catalog:",
     "tsdown": "catalog:"
   },

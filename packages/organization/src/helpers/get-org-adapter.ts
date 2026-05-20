@@ -1,5 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
@@ -458,35 +461,37 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return filterOrgOutput(res);
 		},
 		deleteOrganization: async (organizationId: RealOrganizationId) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.deleteMany({
-				model: "member",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				await adapter.deleteMany({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.deleteMany({
+					model: "invitation",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.delete<InferOrganization<O, false>>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				return organizationId;
 			});
-			await adapter.deleteMany({
-				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
-			});
-			await adapter.delete<InferOrganization<O, false>>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: organizationId,
-					},
-				],
-			});
-			return organizationId;
 		},
 		/**
 		 * @requires db
@@ -940,32 +945,36 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: RealOrganizationId;
 			userId: string;
 		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.delete({
-				model: "member",
-				where: [{ field: "id", value: data.memberId }],
-			});
-
-			const isTeamsEnabled = options.use.some((x) => x.id === "teams");
-			if (isTeamsEnabled) {
-				const teams = await adapter.findMany<Team>({
-					model: "team",
-					where: [{ field: "organizationId", value: data.organizationId }],
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				await adapter.delete({
+					model: "member",
+					where: [{ field: "id", value: data.memberId }],
 				});
-				await Promise.all(
-					teams.map((team) =>
-						adapter.deleteMany({
+
+				const isTeamsEnabled = options.use.some((x) => x.id === "teams");
+				if (isTeamsEnabled) {
+					const teams = await adapter.findMany<Team>({
+						model: "team",
+						where: [{ field: "organizationId", value: data.organizationId }],
+					});
+					if (teams.length > 0) {
+						await adapter.deleteMany({
 							model: "teamMember",
 							where: [
-								{ field: "teamId", value: team.id },
 								{ field: "userId", value: data.userId },
+								{
+									field: "teamId",
+									value: teams.map((team) => team.id),
+									operator: "in",
+								},
 							],
-						}),
-					),
-				);
-			}
+						});
+					}
+				}
 
-			return data.memberId;
+				return data.memberId;
+			});
 		},
 		/**
 		 * Update a member's role in an organization.

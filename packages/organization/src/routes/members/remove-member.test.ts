@@ -1,6 +1,9 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { BetterAuthPlugin } from "better-auth";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
+import { teams } from "../../addons";
+import { teamsClient } from "../../addons/teams/client";
 import { organizationClient } from "../../client";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
@@ -370,5 +373,121 @@ describe("remove member - clear active organization", async (it) => {
 		const sessionAfter = await auth.api.getSession({ headers: memberHeaders });
 		//@ts-expect-error - session is not defined
 		expect(sessionAfter?.session.activeOrganizationId).toBeNull();
+	});
+});
+
+describe("remove member - cascade rollback", async (it) => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9630
+	 */
+	it("rolls back when an intermediate step throws", async () => {
+		const db: Record<string, any[]> = {
+			users: [],
+			session: [],
+			account: [],
+			verification: [],
+			organization: [],
+			member: [],
+			invitation: [],
+			team: [],
+			teamMember: [],
+		};
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				database: memoryAdapter(db, { debugLogs: false }),
+				user: { modelName: "users" },
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						use: [teams()],
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ use: [teamsClient()] })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+		});
+		const organizationId = org.id;
+
+		const teamsResponse = await auth.api.listTeams({
+			headers,
+			query: { organizationId },
+		});
+		const teamId = teamsResponse.teams[0]!.id;
+
+		const signUpRes = await auth.api.signUpEmail({
+			body: {
+				email: "memberuser@email.com",
+				password: "password",
+				name: "Member User",
+			},
+		});
+		const newUserId = signUpRes.user.id;
+
+		const addedMember = await auth.api.addMember({
+			body: { organizationId, userId: newUserId, role: "member" },
+		});
+		const memberId = addedMember!.id;
+
+		await auth.api.addTeamMember({
+			headers,
+			body: { userId: newUserId, teamId, organizationId },
+		});
+
+		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
+		const spy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (cb: any) => {
+				return originalTransaction(async (trx: any) => {
+					const originalDeleteMany = trx.deleteMany.bind(trx);
+					trx.deleteMany = async (args: any) => {
+						if (args.model === "teamMember") {
+							throw new Error("simulated mid-cascade failure");
+						}
+						return originalDeleteMany(args);
+					};
+					return cb(trx);
+				});
+			});
+
+		try {
+			await expect(
+				auth.api.removeMember({
+					headers,
+					body: { organizationId, memberIdOrEmail: memberId },
+				}),
+			).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		const memberStillThere = await ctx.adapter.findOne({
+			model: "member",
+			where: [{ field: "id", value: memberId }],
+		});
+		expect(memberStillThere).not.toBeNull();
+
+		const teamMemberCount = await ctx.adapter.count({
+			model: "teamMember",
+			where: [
+				{ field: "teamId", value: teamId },
+				{ field: "userId", value: newUserId },
+			],
+		});
+		expect(teamMemberCount).toBe(1);
 	});
 });

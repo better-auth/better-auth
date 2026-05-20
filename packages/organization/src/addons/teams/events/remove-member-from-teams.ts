@@ -1,7 +1,9 @@
 import type { AuthContext } from "@better-auth/core";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { RealOrganizationId } from "../../../helpers/get-org-adapter";
-import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import type { ResolvedTeamsOptions } from "../types";
 
@@ -30,12 +32,20 @@ export const removeMemberFromTeams = async (
 	const teamAdapter = getTeamAdapter(context, options);
 	const teams = await teamAdapter.getTeams(realOrgId);
 
+	if (teams.length === 0) return;
+
 	await runWithTransaction(context.adapter, async () => {
-		for (const team of teams) {
-			await teamAdapter.removeTeamMember({
-				teamId: team.id as RealTeamId,
-				userId,
-			});
-		}
+		const adapter = await getCurrentAdapter(context.adapter);
+		await adapter.deleteMany({
+			model: "teamMember",
+			where: [
+				{ field: "userId", value: userId },
+				{
+					field: "teamId",
+					value: teams.map((team) => team.id),
+					operator: "in",
+				},
+			],
+		});
 	});
 };
