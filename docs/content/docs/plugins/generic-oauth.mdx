@@ -92,8 +92,10 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 ### Supported Providers
 
 * **Auth0** - `auth0(options)`
+* **Feishu** - `feishu(options)`
 * **HubSpot** - `hubspot(options)`
 * **Keycloak** - `keycloak(options)`
+* **Lark** - `lark(options)`
 * **LINE** - `line(options)`
 * **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
 * **Okta** - `okta(options)`
@@ -109,9 +111,11 @@ import {
 	genericOAuth,
 	// providers
 	auth0,
+	feishu,
 	gumroad,
 	hubspot,
 	keycloak,
+	lark,
 	line,
 	microsoftEntraId,
 	okta,
@@ -128,6 +132,10 @@ export const auth = betterAuth({
 					clientSecret: process.env.AUTH0_CLIENT_SECRET,
 					domain: process.env.AUTH0_DOMAIN,
 				}),
+				feishu({
+					clientId: process.env.FEISHU_CLIENT_ID,
+					clientSecret: process.env.FEISHU_CLIENT_SECRET,
+				}),
 				gumroad({
 					clientId: process.env.GUMROAD_CLIENT_ID,
 					clientSecret: process.env.GUMROAD_CLIENT_SECRET,
@@ -141,6 +149,10 @@ export const auth = betterAuth({
 					clientId: process.env.KEYCLOAK_CLIENT_ID,
 					clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
 					issuer: process.env.KEYCLOAK_ISSUER,
+				}),
+				lark({
+					clientId: process.env.LARK_CLIENT_ID,
+					clientSecret: process.env.LARK_CLIENT_SECRET,
 				}),
 				// LINE supports multiple channels (countries) - use different providerIds
 				line({
@@ -180,8 +192,10 @@ export const auth = betterAuth({
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
 * **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+* **Feishu**: No additional required fields. Uses Feishu China endpoints (`accounts.feishu.cn` and `open.feishu.cn`). To receive email in user info, enable and request `contact:user.email:readonly`
 * **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
 * **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+* **Lark**: No additional required fields. Uses Lark global endpoints (`accounts.larksuite.com` and `open.larksuite.com`). To receive email in user info, enable and request `contact:user.email:readonly`
 * **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
 * **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
@@ -225,6 +239,13 @@ interface GenericOAuthConfig {
   prompt?: string;
   pkce?: boolean;
   accessType?: string;
+  getToken?: (data: {
+    code: string;
+    redirectURI: string;
+    codeVerifier?: string;
+    deviceId?: string;
+  }) => Promise<OAuth2Tokens>;
+  refreshAccessToken?: (refreshToken: string) => Promise<OAuth2Tokens>;
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
 }
 ```
@@ -262,6 +283,8 @@ interface GenericOAuthConfig {
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
+
+**refreshAccessToken**: (Optional) A custom function to refresh access tokens. If provided, this function will be used instead of the default refresh token exchange logic. This is useful for providers with non-standard token endpoints.
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 

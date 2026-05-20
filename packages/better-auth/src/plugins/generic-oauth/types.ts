@@ -118,6 +118,14 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		  }) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
+	 * Custom function to refresh access tokens.
+	 * If provided, this function will be used instead of the default refresh token exchange logic.
+	 * This is useful for providers with non-standard token endpoints.
+	 */
+	refreshAccessToken?:
+		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| undefined;
+	/**
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication

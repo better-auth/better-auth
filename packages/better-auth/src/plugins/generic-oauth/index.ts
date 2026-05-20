@@ -344,6 +344,9 @@ export const genericOAuth = <const ID extends string>(
 					async refreshAccessToken(
 						refreshToken: string,
 					): Promise<OAuth2Tokens> {
+						if (c.refreshAccessToken) {
+							return c.refreshAccessToken(refreshToken);
+						}
 						if (!tokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",

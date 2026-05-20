@@ -9,9 +9,11 @@
  * import {
  *  genericOAuth,
  *  auth0,
+ *  feishu,
  *  gumroad,
  *  hubspot,
  *  keycloak,
+ *  lark,
  *  line,
  *  microsoftEntraId,
  *  okta,
@@ -27,6 +29,8 @@
  *         auth0({ clientId, clientSecret, domain }),
  *         microsoftEntraId({ clientId, clientSecret, tenantId }),
  *         slack({ clientId, clientSecret }),
+ *         feishu({ clientId, clientSecret }),
+ *         lark({ clientId, clientSecret }),
  *         keycloak({ clientId, clientSecret, issuer }),
  *         gumroad({ clientId, clientSecret }),
  *       ],
@@ -37,6 +41,13 @@
  */
 
 export { type Auth0Options, auth0 } from "./auth0";
+export {
+	type FeishuOptions,
+	type FeishuProfile,
+	feishu,
+	type LarkOptions,
+	lark,
+} from "./feishu";
 export { type GumroadOptions, gumroad } from "./gumroad";
 export { type HubSpotOptions, hubspot } from "./hubspot";
 export { type KeycloakOptions, keycloak } from "./keycloak";
