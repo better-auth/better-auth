@@ -17,6 +17,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
 import { HIDE_METADATA } from "../../utils";
+import { isAPIError } from "../../utils/is-api-error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
 
@@ -514,25 +515,31 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw ctx.redirect(toRedirectTo);
 			}
 
-			const result = await handleOAuthUserInfo(ctx, {
-				userInfo,
-				account: {
-					providerId: providerConfig.providerId,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				callbackURL: callbackURL,
-				disableSignUp:
-					(providerConfig.disableImplicitSignUp && !requestSignUp) ||
-					providerConfig.disableSignUp,
-				overrideUserInfo: providerConfig.overrideUserInfo,
-			});
+			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+			try {
+				result = await handleOAuthUserInfo(ctx, {
+					userInfo,
+					account: {
+						providerId: providerConfig.providerId,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					callbackURL: callbackURL,
+					disableSignUp:
+						(providerConfig.disableImplicitSignUp && !requestSignUp) ||
+						providerConfig.disableSignUp,
+					overrideUserInfo: providerConfig.overrideUserInfo,
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					return redirectOnError(e.body.code);
+				}
+				throw e;
+			}
 
 			if (result.error) {
-				return redirectOnError(
-					result.errorCode || result.error.split(" ").join("_"),
-				);
+				return redirectOnError(result.error.split(" ").join("_"));
 			}
 			const { session, user } = result.data!;
 			await setSessionCookie(ctx, {

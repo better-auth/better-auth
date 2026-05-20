@@ -257,15 +257,10 @@ export async function handleOAuthUserInfo(
 			isRegister,
 		};
 	} catch (e: any) {
-		logger.error(e);
-		if (isAPIError(e) && e.body?.code) {
-			return {
-				error: e.body.message || e.message,
-				errorCode: e.body.code,
-				data: null,
-				isRegister: false,
-			};
+		if (isAPIError(e)) {
+			throw e;
 		}
+		logger.error(e);
 		return {
 			error: "unable to create session",
 			data: null,

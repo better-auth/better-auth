@@ -19,6 +19,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
+import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import {
@@ -242,22 +243,26 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.warn("Failed to clean up OAuth state", e);
 					}
 
-					const result = await handleOAuthUserInfo(ctx, {
-						userInfo: payload.userInfo,
-						account: payload.account,
-						callbackURL: payload.callbackURL,
-						disableSignUp: payload.disableSignUp,
-					});
+					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+					try {
+						result = await handleOAuthUserInfo(ctx, {
+							userInfo: payload.userInfo,
+							account: payload.account,
+							callbackURL: payload.callbackURL,
+							disableSignUp: payload.disableSignUp,
+						});
+					} catch (e) {
+						if (isAPIError(e) && e.body?.code) {
+							throw redirectOnError(ctx, errorURL, e.body.code);
+						}
+						throw e;
+					}
 					if (result.error || !result.data) {
 						ctx.context.logger.error(
 							"Failed to create user or session",
 							result.error,
 						);
-						throw redirectOnError(
-							ctx,
-							errorURL,
-							result.errorCode || "user_creation_failed",
-						);
+						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
 					await setSessionCookie(ctx, result.data);

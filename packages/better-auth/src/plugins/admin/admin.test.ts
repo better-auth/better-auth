@@ -1,5 +1,6 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -1971,5 +1972,69 @@ describe("edge cases: userId validation", async () => {
 				},
 			}),
 		).rejects.toThrow("user not found");
+	});
+});
+
+describe("Admin plugin id-token sign-in", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-admin-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const clientId = "admin-idtoken-client.googleusercontent.com";
+
+	const signIdToken = (email: string) =>
+		new SignJWT({
+			email,
+			email_verified: true,
+			name: "Banned ID Token User",
+			sub: "banned-google-sub",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(clientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		server.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it("should return BANNED_USER 403 JSON for id-token sign-in by banned user", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [admin({ bannedUserMessage: "Custom banned user message" })],
+				socialProviders: {
+					google: { clientId, clientSecret: "test-secret" },
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true, banned: true },
+							}),
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idToken = await signIdToken("banned-idtoken@test.com");
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.message).toBe("Custom banned user message");
 	});
 });
