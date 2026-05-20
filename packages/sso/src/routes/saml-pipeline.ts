@@ -428,6 +428,7 @@ export async function processSAMLResponse(
 		relayState?.callbackURL ||
 		parsedSamlConfig.callbackUrl ||
 		ctx.context.baseURL;
+	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
@@ -452,8 +453,8 @@ export async function processSAMLResponse(
 		if (isAPIError(e) && e.body?.code) {
 			const params = new URLSearchParams({ error: e.body.code });
 			if (e.body.message) params.set("error_description", e.body.message);
-			const sep = callbackUrl.includes("?") ? "&" : "?";
-			throw ctx.redirect(`${callbackUrl}${sep}${params.toString()}`);
+			const sep = errorUrl.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${errorUrl}${sep}${params.toString()}`);
 		}
 		throw e;
 	}
