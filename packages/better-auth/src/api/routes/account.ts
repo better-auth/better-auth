@@ -907,9 +907,12 @@ export const accountInfo = createAuthEndpoint(
 			const accounts = await ctx.context.internalAdapter.findAccounts(
 				ctx.context.session.user.id,
 			);
-			account = accounts.find(
+			const matchingAccounts = accounts.filter(
 				(account) => account.accountId === providedAccountId,
 			);
+			if (matchingAccounts.length === 1) {
+				account = matchingAccounts[0];
+			}
 		}
 
 		if (!account || account.userId !== ctx.context.session.user.id) {
