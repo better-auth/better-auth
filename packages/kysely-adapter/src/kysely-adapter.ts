@@ -8,6 +8,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -57,6 +58,7 @@ export const kyselyAdapter = (
 	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let mysqlNoIdWarned = false;
 	const createCustomAdapter = (
 		db: Kysely<any>,
 		inTransaction = false,
@@ -68,7 +70,21 @@ export const kyselyAdapter = (
 			getDefaultModelName,
 			getFieldAttributes,
 			getModelName,
+			options,
 		}) => {
+			if (
+				config?.type === "mysql" &&
+				options.advanced?.database?.generateId === false &&
+				!mysqlNoIdWarned
+			) {
+				mysqlNoIdWarned = true;
+				logger.warn(
+					"[Kysely Adapter] MySQL does not support INSERT...RETURNING. " +
+						"With generateId set to false, the adapter uses best-effort fallback " +
+						"strategies (unique columns, full-field match) to retrieve inserted rows. " +
+						'For reliable behavior, use Better Auth\'s default ID generation, a custom generateId function, or generateId: "serial" for auto-increment.',
+				);
+			}
 			const selectAllJoins = (join: JoinConfig | undefined) => {
 				// Use selectAll which will handle column naming appropriately
 				const allSelects: RawBuilder<unknown>[] = [];
@@ -109,48 +125,107 @@ export const kyselyAdapter = (
 				model: string,
 				where: Where[],
 			) => {
-				let res: any;
 				if (config?.type === "mysql") {
-					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
-					// Change this if there is a better way.
 					await builder.execute();
-					const field = values.id
-						? "id"
-						: where.length > 0 && where[0]?.field
-							? where[0].field
-							: "id";
 
-					if (!values.id && where.length === 0) {
-						res = await db
+					// Updates: re-query by the where clause field
+					if (where.length > 0) {
+						const field = values.id
+							? "id"
+							: where[0]?.field
+								? where[0].field
+								: "id";
+						const value =
+							values[field] !== undefined ? values[field] : where[0]?.value;
+						return await db
 							.selectFrom(model)
 							.selectAll()
-							.orderBy(getFieldName({ model, field }), "desc")
+							.where(
+								getFieldName({ model, field }),
+								value === null ? "is" : "=",
+								value,
+							)
 							.limit(1)
 							.executeTakeFirst();
-						return res;
 					}
 
-					const value =
-						values[field] !== undefined ? values[field] : where[0]?.value;
-					res = await db
-						.selectFrom(model)
-						.selectAll()
-						.orderBy(getFieldName({ model, field }), "desc")
-						.where(
-							getFieldName({ model, field }),
-							value === null ? "is" : "=",
-							value,
-						)
-						.limit(1)
-						.executeTakeFirst();
-					return res;
+					// Inserts: cascading strategy inside a transaction
+					const fetchInserted = async (trx: any) => {
+						// 1. Known id from the data
+						if (values.id) {
+							return await trx
+								.selectFrom(model)
+								.selectAll()
+								.where(getFieldName({ model, field: "id" }), "=", values.id)
+								.limit(1)
+								.executeTakeFirst();
+						}
+
+						// 2. Serial auto-increment: LAST_INSERT_ID()
+						if (options.advanced?.database?.generateId === "serial") {
+							const lastIdResult =
+								await sql`SELECT LAST_INSERT_ID() as id`.execute(trx);
+							const lastId = (lastIdResult.rows[0] as any)?.id;
+							if (lastId) {
+								return await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(getFieldName({ model, field: "id" }), "=", lastId)
+									.limit(1)
+									.executeTakeFirst();
+							}
+						}
+
+						// 3. Unique column lookup via Better Auth schema
+						const defaultModel = getDefaultModelName(model);
+						const modelSchema = schema[defaultModel]?.fields;
+						if (modelSchema) {
+							for (const [fieldKey, fieldAttr] of Object.entries(modelSchema)) {
+								if (!fieldAttr.unique) continue;
+								const dbFieldName = getFieldName({
+									model,
+									field: fieldKey,
+								});
+								const val = values[dbFieldName];
+								if (val === undefined || val === null) continue;
+								const row = await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(dbFieldName, "=", val)
+									.limit(1)
+									.executeTakeFirst();
+								if (row) return row;
+							}
+						}
+
+						// 4. Full-field match (last resort) — LIMIT 2 to detect ambiguity
+						let query = trx.selectFrom(model).selectAll();
+						let hasConditions = false;
+						for (const [key, val] of Object.entries(values)) {
+							if (val === undefined) continue;
+							query = query.where(key, val === null ? "is" : "=", val);
+							hasConditions = true;
+						}
+						if (hasConditions) {
+							const rows = await query.limit(2).execute();
+							if (rows.length === 1) return rows[0];
+						}
+
+						logger.warn(
+							`[Kysely Adapter] Unable to safely identify the inserted "${model}" row on MySQL. ` +
+								'Enable Better Auth ID generation or use generateId: "serial" for reliable behavior.',
+						);
+						return null;
+					};
+
+					return inTransaction
+						? fetchInserted(db)
+						: db.transaction().execute(fetchInserted);
 				}
 				if (config?.type === "mssql") {
-					res = await builder.outputAll("inserted").executeTakeFirst();
-					return res;
+					return await builder.outputAll("inserted").executeTakeFirst();
 				}
-				res = await builder.returningAll().executeTakeFirst();
-				return res;
+				return await builder.returningAll().executeTakeFirst();
 			};
 			function convertWhereClause(model: string, w?: Where[] | undefined) {
 				if (!w)
