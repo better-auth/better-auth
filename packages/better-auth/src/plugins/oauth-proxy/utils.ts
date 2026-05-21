@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin } from "../../utils/url";
+import { getOrigin, trimTrailingSlashes } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
 /**
@@ -8,7 +8,7 @@ import type { OAuthProxyOptions } from "./index";
  */
 export function stripTrailingSlash(url: string | undefined): string {
 	if (!url) return "";
-	return url.replace(/\/+$/, "");
+	return trimTrailingSlashes(url);
 }
 
 /**

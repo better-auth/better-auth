@@ -422,6 +422,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
+	// Indexes are collected separately and appended last to ensure all
+	// referenced columns/tables exist before any CREATE INDEX executes.
+	const deferredIndexes: CreateIndexBuilder[] = [];
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
@@ -434,7 +438,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 						.createIndex(indexName)
 						.on(table.table)
 						.columns([fieldName]);
-					migrations.push(field.unique ? indexBuilder.unique() : indexBuilder);
+					deferredIndexes.push(
+						field.unique ? indexBuilder.unique() : indexBuilder,
+					);
 				}
 
 				const built = builder.addColumn(fieldName, type, (col) => {
@@ -469,8 +475,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
-
-	const toBeIndexed: CreateIndexBuilder[] = [];
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
@@ -540,19 +544,15 @@ export async function getMigrations(config: BetterAuthOptions) {
 						)
 						.on(table.table)
 						.columns([fieldName]);
-					toBeIndexed.push(field.unique ? builder.unique() : builder);
+					deferredIndexes.push(field.unique ? builder.unique() : builder);
 				}
 			}
 			migrations.push(dbT);
 		}
 	}
 
-	// instead of adding the index straight to `migrations`,
-	// we do this at the end so that indexes are created after the table is created
-	if (toBeIndexed.length) {
-		for (const index of toBeIndexed) {
-			migrations.push(index);
-		}
+	for (const index of deferredIndexes) {
+		migrations.push(index);
 	}
 
 	async function runMigrations() {
