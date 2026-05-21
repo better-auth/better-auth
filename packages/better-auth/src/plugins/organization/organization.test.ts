@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -3912,5 +3912,212 @@ describe("organization additionalFields with returned: false", async () => {
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");
+	});
+});
+
+describe("delete cascade rollback", async () => {
+	it("rolls back deleteOrganization when an intermediate step throws", async () => {
+		const db: Record<string, any[]> = {
+			users: [],
+			session: [],
+			account: [],
+			verification: [],
+			organization: [],
+			member: [],
+			invitation: [],
+			team: [],
+			teamMember: [],
+		};
+		const { auth, signInWithTestUser, client } = await getTestInstance(
+			{
+				database: memoryAdapter(db, { debugLogs: false }),
+				user: { modelName: "users" },
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: { enabled: true },
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+
+		const orgRes = await client.organization.create({
+			name: "Cascade Org",
+			slug: "cascade-org",
+			fetchOptions: { headers },
+		});
+		const organizationId = orgRes.data?.id as string;
+		expect(organizationId).toBeDefined();
+
+		const inviteRes = await client.organization.inviteMember(
+			{
+				email: "invitee@email.com",
+				role: "member",
+				organizationId,
+			},
+			{ headers },
+		);
+		expect(inviteRes.data).toBeDefined();
+
+		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
+		const spy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (cb: any) => {
+				return originalTransaction(async (trx: any) => {
+					const originalDeleteMany = trx.deleteMany.bind(trx);
+					trx.deleteMany = async (args: any) => {
+						if (args.model === "invitation") {
+							throw new Error("simulated mid-cascade failure");
+						}
+						return originalDeleteMany(args);
+					};
+					return cb(trx);
+				});
+			});
+
+		try {
+			await expect(
+				auth.api.deleteOrganization({
+					headers,
+					body: { organizationId },
+				}),
+			).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		const memberCount = await ctx.adapter.count({
+			model: "member",
+			where: [{ field: "organizationId", value: organizationId }],
+		});
+		expect(memberCount).toBeGreaterThan(0);
+		const invitationCount = await ctx.adapter.count({
+			model: "invitation",
+			where: [{ field: "organizationId", value: organizationId }],
+		});
+		expect(invitationCount).toBeGreaterThan(0);
+		const org = await ctx.adapter.findOne({
+			model: "organization",
+			where: [{ field: "id", value: organizationId }],
+		});
+		expect(org).not.toBeNull();
+	});
+
+	it("rolls back removeMember when an intermediate step throws", async () => {
+		const db: Record<string, any[]> = {
+			users: [],
+			session: [],
+			account: [],
+			verification: [],
+			organization: [],
+			member: [],
+			invitation: [],
+			team: [],
+			teamMember: [],
+		};
+		const { auth, signInWithTestUser, client, cookieSetter } =
+			await getTestInstance(
+				{
+					database: memoryAdapter(db, { debugLogs: false }),
+					user: { modelName: "users" },
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+							teams: { enabled: true },
+						}),
+					],
+					logger: { level: "error" },
+				},
+				{
+					clientOptions: {
+						plugins: [organizationClient({ teams: { enabled: true } })],
+					},
+				},
+			);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+
+		const orgRes = await client.organization.create({
+			name: "Cascade Member Org",
+			slug: "cascade-member-org",
+			fetchOptions: { headers },
+		});
+		const organizationId = orgRes.data?.id as string;
+
+		const teamRes = await client.organization.createTeam(
+			{ name: "Cascade Team", organizationId },
+			{ headers },
+		);
+		const teamId = teamRes.data?.id as string;
+
+		const newUserHeaders = new Headers();
+		const signUpRes = await client.signUp.email(
+			{
+				email: "memberuser@email.com",
+				password: "password",
+				name: "Member User",
+			},
+			{ onSuccess: cookieSetter(newUserHeaders) },
+		);
+		const newUserId = signUpRes.data?.user.id as string;
+
+		const addedMember = await auth.api.addMember({
+			body: { organizationId, userId: newUserId, role: "member" },
+		});
+		const memberId = addedMember!.id;
+
+		await auth.api.addTeamMember({
+			headers,
+			body: { userId: newUserId, teamId, organizationId },
+		});
+
+		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
+		const spy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (cb: any) => {
+				return originalTransaction(async (trx: any) => {
+					const originalDeleteMany = trx.deleteMany.bind(trx);
+					trx.deleteMany = async (args: any) => {
+						if (args.model === "teamMember") {
+							throw new Error("simulated mid-cascade failure");
+						}
+						return originalDeleteMany(args);
+					};
+					return cb(trx);
+				});
+			});
+
+		try {
+			await expect(
+				auth.api.removeMember({
+					headers,
+					body: { organizationId, memberIdOrEmail: memberId },
+				}),
+			).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		const memberStillThere = await ctx.adapter.findOne({
+			model: "member",
+			where: [{ field: "id", value: memberId }],
+		});
+		expect(memberStillThere).not.toBeNull();
+		const teamMemberCount = await ctx.adapter.count({
+			model: "teamMember",
+			where: [
+				{ field: "teamId", value: teamId },
+				{ field: "userId", value: newUserId },
+			],
+		});
+		expect(teamMemberCount).toBe(1);
 	});
 });
