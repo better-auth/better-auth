@@ -103,6 +103,28 @@ export interface OrganizationOptions {
 		  }
 		| undefined;
 	/**
+	 * Cache configuration for organization permission checks.
+	 *
+	 * When enabled, Better Auth will use the global `secondaryStorage`
+	 * to cache dynamic role definitions for each organization.
+	 */
+	permissionCache?:
+		| {
+				/**
+				 * Whether to enable permission caching for dynamic organization roles.
+				 *
+				 * @default false
+				 */
+				enabled?: boolean;
+				/**
+				 * Cache TTL in seconds.
+				 *
+				 * @default 60
+				 */
+				ttl?: number;
+		  }
+		| undefined;
+	/**
 	 * Support for team.
 	 */
 	teams?: {

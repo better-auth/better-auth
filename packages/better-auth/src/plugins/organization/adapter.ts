@@ -426,6 +426,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			if (options?.dynamicAccessControl?.enabled) {
+				await adapter.deleteMany({
+					model: "organizationRole",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+			}
 			await adapter.delete<InferOrganization<O, false>>({
 				model: "organization",
 				where: [

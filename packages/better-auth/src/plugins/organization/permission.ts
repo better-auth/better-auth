@@ -1,15 +1,20 @@
 import type { Role } from "../access";
 import type { OrganizationOptions } from "./types";
 
+export type AccessControlRoleMap = {
+	[x: string]: Role<any> | undefined;
+};
+
 export const hasPermissionFn = (
 	input: HasPermissionBaseInput,
-	acRoles: {
-		[x: string]: Role<any> | undefined;
-	},
+	acRoles: AccessControlRoleMap,
 ) => {
 	if (!input.permissions) return false;
 
-	const roles = input.role.split(",");
+	const roles = input.role
+		.split(",")
+		.map((role) => role.trim())
+		.filter(Boolean);
 	const creatorRole = input.options.creatorRole || "owner";
 	const isCreator = roles.includes(creatorRole);
 
@@ -30,12 +35,12 @@ export type PermissionExclusive = {
 	permissions: { [key: string]: string[] };
 };
 
-export const cacheAllRoles = new Map<
-	string,
-	{
-		[x: string]: Role<any> | undefined;
-	}
->();
+export type InMemoryRoleCacheEntry = {
+	expiresAt: number;
+	roles: AccessControlRoleMap;
+};
+
+export const cacheAllRoles = new Map<string, InMemoryRoleCacheEntry>();
 
 export type HasPermissionBaseInput = {
 	role: string;
