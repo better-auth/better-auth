@@ -1,6 +1,6 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { organization } from "@better-auth/organization";
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
 import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 
 /**

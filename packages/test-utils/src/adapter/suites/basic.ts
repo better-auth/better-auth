@@ -10,10 +10,10 @@ import type {
 	Member,
 	Organization,
 	Team,
-} from "better-auth/plugins/organization";
-import { organization } from "better-auth/plugins/organization";
+} from "@better-auth/organization";
+import { organization, teams } from "@better-auth/organization";
+import { createTestSuite } from "@better-auth/test-utils/adapter";
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -2559,9 +2559,7 @@ export const getNormalTestSuiteTests = (
 		"findOne - multiple joins should return result even when some joined tables have no matching rows":
 			async () => {
 				await modifyBetterAuthOptions(
-					{
-						plugins: [organization({ teams: { enabled: true } })],
-					},
+					{ plugins: [organization({ use: [teams()] })] },
 					true,
 				);
 
@@ -2572,7 +2570,9 @@ export const getNormalTestSuiteTests = (
 					forceAllowId: true,
 				});
 
-				const organizationData = await adapter.create<Organization>({
+				const organizationData = await adapter.create<
+					Organization & { slug: string }
+				>({
 					model: "organization",
 					data: {
 						name: "Test Organization",

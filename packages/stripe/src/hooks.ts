@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { Organization } from "better-auth/plugins/organization";
+import type { Organization } from "@better-auth/organization";
 import type Stripe from "stripe";
 import { subscriptionMetadata } from "./metadata";
 import type { CustomerType, StripeOptions, Subscription } from "./types";

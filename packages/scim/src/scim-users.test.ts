@@ -1,9 +1,10 @@
+import { organization } from "@better-auth/organization";
 import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
-import { bearer, organization } from "better-auth/plugins";
+import { bearer } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";

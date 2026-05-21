@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../admin";
 import { emailOTP } from "../email-otp";
-import { organization } from "../organization";
 import { testUtils } from "./index";
 import type { TestHelpers } from "./types";
 
@@ -196,81 +196,103 @@ describe("testUtils plugin", async () => {
 		});
 	});
 
-	describe("with organization plugin", async () => {
+	describe("with admin plugin", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [testUtils(), organization()],
+			plugins: [testUtils(), admin()],
 		});
 		const test = (await auth.$context).test;
 
-		it("should expose organization helpers", () => {
-			expect(test.createOrganization).toBeDefined();
-			expect(test.saveOrganization).toBeDefined();
-			expect(test.deleteOrganization).toBeDefined();
-			expect(test.addMember).toBeDefined();
+		it("should work alongside admin plugin", () => {
+			expect(test.createUser).toBeDefined();
+			expect(test.saveUser).toBeDefined();
+			expect(test.deleteUser).toBeDefined();
 		});
 
-		it("should create organization with default values", () => {
-			const org = test.createOrganization!();
-
-			expect(org.id).toBeDefined();
-			expect(org.name).toBe("Test Organization");
-			expect(org.slug).toBeDefined();
-			expect(org.createdAt).toBeInstanceOf(Date);
-		});
-
-		it("should create organization with overrides", () => {
-			const org = test.createOrganization!({
-				name: "Custom Org",
-				slug: "custom-org",
-			});
-
-			expect(org.name).toBe("Custom Org");
-			expect(org.slug).toBe("custom-org");
-		});
-
-		it("should save and delete organization", async () => {
+		it("should save user with default admin role", async () => {
 			const user = test.createUser({
-				email: `test-org-${Date.now()}@example.com`,
+				email: `test-admin-${Date.now()}@example.com`,
 			});
-			await test.saveUser(user);
+			const savedUser = await test.saveUser(user);
 
-			const org = test.createOrganization!({
-				name: "Test Org for Delete",
-			});
-			const savedOrg = await test.saveOrganization!(org);
-
-			expect(savedOrg.id).toBe(org.id);
-			expect(savedOrg.name).toBe(org.name);
-
-			// Delete organization (should cascade to members/invitations)
-			await test.deleteOrganization!(org.id as string);
+			expect(savedUser.id).toBe(user.id);
+			expect((savedUser as Record<string, unknown>).role).toBe("user");
 
 			// Cleanup
 			await test.deleteUser(user.id);
 		});
 
-		it("should add member to organization", async () => {
-			const user = test.createUser({
-				email: `test-member-${Date.now()}@example.com`,
-			});
-			await test.saveUser(user);
-
-			const org = test.createOrganization!();
-			await test.saveOrganization!(org);
-
-			const member = await test.addMember!({
-				userId: user.id,
-				organizationId: org.id as string,
+		it("should allow setting custom role via admin API", async () => {
+			const adminUser = test.createUser({
+				email: `admin-user-${Date.now()}@example.com`,
 				role: "admin",
 			});
+			await test.saveUser(adminUser);
 
-			expect(member.userId).toBe(user.id);
-			expect(member.organizationId).toBe(org.id);
-			expect(member.role).toBe("admin");
+			const regularUser = test.createUser({
+				email: `regular-user-${Date.now()}@example.com`,
+			});
+			await test.saveUser(regularUser);
+
+			// Login as admin and set role
+			const { headers } = await test.login({ userId: adminUser.id });
+			await auth.api.setRole({
+				headers,
+				body: { userId: regularUser.id, role: "admin" },
+			});
+
+			// Verify role was updated
+			const updatedUser = await auth.api.getUser({
+				headers,
+				query: { id: regularUser.id },
+			});
+			expect(updatedUser?.role).toBe("admin");
 
 			// Cleanup
-			await test.deleteOrganization!(org.id as string);
-			await test.deleteUser(user.id);
+			await test.deleteUser(adminUser.id);
+			await test.deleteUser(regularUser.id);
+		});
+
+		it("should support ban/unban operations", async () => {
+			const adminUser = test.createUser({
+				email: `ban-admin-${Date.now()}@example.com`,
+				role: "admin",
+			});
+			await test.saveUser(adminUser);
+
+			const targetUser = test.createUser({
+				email: `ban-target-${Date.now()}@example.com`,
+			});
+			await test.saveUser(targetUser);
+
+			const { headers } = await test.login({ userId: adminUser.id });
+
+			// Ban user
+			await auth.api.banUser({
+				headers,
+				body: { userId: targetUser.id },
+			});
+
+			const bannedUser = await auth.api.getUser({
+				headers,
+				query: { id: targetUser.id },
+			});
+			expect(bannedUser?.banned).toBe(true);
+
+			// Unban user
+			await auth.api.unbanUser({
+				headers,
+				body: { userId: targetUser.id },
+			});
+
+			const unbannedUser = await auth.api.getUser({
+				headers,
+				query: { id: targetUser.id },
+			});
+			expect(unbannedUser?.banned).toBe(false);
+
+			// Cleanup
+			await test.deleteUser(adminUser.id);
+			await test.deleteUser(targetUser.id);
 		});
 	});
 

@@ -1,0 +1,127 @@
+---
+title: Roles & Permissions
+description: Configure roles and permissions for fine-grained access control.
+---
+
+The organization plugin provides a flexible role-based access control (RBAC) system for managing permissions.
+
+## Default Roles
+
+The plugin comes with three built-in roles:
+
+| Role     | Description                                   |
+| -------- | --------------------------------------------- |
+| `owner`  | Full access to all organization features      |
+| `admin`  | Can manage members, invitations, and settings |
+| `member` | Basic access to organization resources        |
+
+## Custom Roles
+
+Define custom roles with specific permissions:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "@better-auth/organization"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            roles: {
+                owner: {
+                    permissions: ["*"] // All permissions
+                },
+                admin: {
+                    permissions: [
+                        "member:read",
+                        "member:write",
+                        "invitation:read",
+                        "invitation:write",
+                        "organization:read",
+                        "organization:update"
+                    ]
+                },
+                member: {
+                    permissions: [
+                        "member:read",
+                        "organization:read"
+                    ]
+                },
+                viewer: {
+                    permissions: [
+                        "organization:read"
+                    ]
+                }
+            }
+        })
+    ]
+})
+```
+
+## Checking Permissions
+
+You can check if the current user has specific permissions using the `organization.hasPermission` method. This performs a server-side permission check against the user's role in the organization.
+
+<APIMethod path="/organization/has-permission" method="POST" requireSession note="Checks permissions for the current user's role in the specified (or active) organization.">
+  ```ts
+  type hasPermission = {
+      /**
+       * The permissions to check. Keys are resource names, values are arrays of actions.
+       */
+      permissions: Record<string, string[]>
+      /**
+       * The organization ID to check permissions for.
+       * If not provided, uses the active organization.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+Returns:
+
+```ts
+type HasPermissionResponse = {
+    success: boolean
+    error: null
+}
+```
+
+### Example Usage
+
+```ts
+const result = await authClient.organization.hasPermission({
+    permissions: {
+        member: ["create", "delete"],
+    },
+    organizationId: "org_123",
+})
+
+if (result.success) {
+    // User can create and delete members
+}
+```
+
+### Client-Side Permission Check
+
+For client-side permission checking without a server round-trip, use `checkRolePermission`:
+
+```ts
+const isAuthorized = authClient.organization.checkRolePermission({
+    role: "admin",
+    permissions: {
+        member: ["create"],
+    },
+})
+```
+
+## Permission Format
+
+Permissions follow the `resource:action` format:
+
+* `organization:read` - View organization details
+* `organization:update` - Update organization settings
+* `organization:delete` - Delete the organization
+* `member:read` - View member list
+* `member:write` - Add/remove members
+* `invitation:read` - View invitations
+* `invitation:write` - Create/cancel invitations

@@ -1,0 +1,98 @@
+---
+title: Active Organizations
+description: Learn about how active organizations work in Better Auth.
+---
+
+The organization plugin tracks which organization a user is currently working in through the concept of an "active organization." This is stored on the user's session and allows endpoints to automatically scope operations to the correct organization without requiring the `organizationId` parameter on every call.
+
+## How It Works
+
+When a user sets an active organization, the `activeOrganizationId` field is written to their session. Subsequent API calls that accept an optional `organizationId` will fall back to this value when no explicit ID is provided.
+
+The resolution order for organization-scoped endpoints is:
+
+1. Explicit `organizationId` in the request body or query
+2. `activeOrganizationId` from the session
+3. If neither exists, a `NO_ACTIVE_ORGANIZATION` error is thrown
+
+## Setting the Active Organization
+
+Use `organization.setActive` to set or clear the active organization:
+
+```ts
+// Set the active organization
+await authClient.organization.setActive({
+    organizationId: "org-id",
+})
+
+// Clear the active organization
+await authClient.organization.setActive({
+    organizationId: null,
+})
+```
+
+When setting an active organization, the plugin verifies that the user is a member. If they are not, the active organization is cleared and a `FORBIDDEN` error is returned.
+
+## Client-Side Reactive Queries
+
+The organization client plugin provides reactive queries that automatically re-fetch when the active organization changes:
+
+```ts
+import { createAuthClient } from "better-auth/client"
+import { organizationClient } from "@better-auth/organization/client"
+
+const authClient = createAuthClient({
+    plugins: [organizationClient()]
+})
+
+// Reactive query — re-fetches when active organization changes
+const { data: org } = authClient.useActiveOrganization()
+
+// Get the active member (current user's membership in the active org)
+const { data: member } = authClient.useActiveMember()
+
+// Get the active member's role
+const { data: role } = authClient.useActiveMemberRole()
+```
+
+These queries are backed by signal-based reactivity (nanostores) and automatically invalidate whenever the active organization is changed through `setActive` or any other organization mutation.
+
+## Endpoints That Use the Active Organization
+
+The following endpoints will automatically use the active organization when `organizationId` is omitted:
+
+| Endpoint              | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| `getFullOrganization` | Returns the active org with members, invitations, and teams |
+| `getActiveMember`     | Returns the current user's member record                    |
+| `getActiveMemberRole` | Returns the current user's role                             |
+| `listMembers`         | Lists members of the active org                             |
+| `listInvitations`     | Lists invitations for the active org                        |
+| `inviteMember`        | Creates an invitation in the active org                     |
+| `removeMember`        | Removes a member from the active org                        |
+| `updateMemberRole`    | Updates a member's role in the active org                   |
+| `updateOrganization`  | Updates the active org                                      |
+| `deleteOrganization`  | Deletes the active org                                      |
+
+## Session Schema
+
+The plugin adds the `activeOrganizationId` field to the `session` table:
+
+| Field                  | Type      | Description                                                                         |
+| ---------------------- | --------- | ----------------------------------------------------------------------------------- |
+| `activeOrganizationId` | `string?` | The ID of the currently active organization, or `null` if no organization is active |
+
+## Automatic Clearing
+
+The active organization is automatically cleared when:
+
+* The user is removed from the organization
+* The user leaves the organization
+* The organization is deleted
+* The user calls `setActive({ organizationId: null })`
+
+<Callout type="info">
+  If the user attempts to access `getFullOrganization` while their active organization
+  is set to one they are no longer a member of, the active organization is automatically
+  cleared and a `FORBIDDEN` error is returned.
+</Callout>
