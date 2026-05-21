@@ -357,6 +357,83 @@ describe("account", async () => {
 		});
 	});
 
+	it("should require providerId when a current user's provider account IDs collide", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const githubProvider = ctx.socialProviders.find((v) => v.id === "github")!;
+		const googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
+		const sharedAccountId = "shared-provider-account-id";
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "google-access-token",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId: sharedAccountId,
+			accessToken: "github-access-token",
+		});
+
+		await runWithUser(async () => {
+			const ambiguousInfo = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId },
+				method: "GET",
+			});
+
+			expect(ambiguousInfo.error?.message).toBe(
+				BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+			);
+			expect(googleGetUserInfoMock).not.toHaveBeenCalled();
+			expect(githubGetUserInfoMock).not.toHaveBeenCalled();
+
+			githubGetUserInfoMock.mockResolvedValueOnce({
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					emailVerified: user.emailVerified,
+				},
+				data: { source: "github" },
+			});
+			const githubInfo = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId, providerId: "github" },
+				method: "GET",
+			});
+
+			expect(githubInfo.error).toBeNull();
+			expect(githubInfo.data).toMatchObject({
+				data: { source: "github" },
+			});
+			expect(githubGetUserInfoMock).toHaveBeenCalledWith(
+				expect.objectContaining({ accessToken: "github-access-token" }),
+			);
+		});
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
