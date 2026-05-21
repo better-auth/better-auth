@@ -572,10 +572,39 @@ describe("SSO disable implicit sign in", async () => {
 		});
 	});
 
-	it("should not create user with SSO provider when sign ups are disabled", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9412
+	 */
+	it("should redirect with normalized error when sign ups are disabled", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "signup-disabled-normalized.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "signup-disabled-normalized",
+			},
+			headers: adminHeaders,
+		});
+
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({
-			email: "my-email@localhost.com",
+			providerId: "signup-disabled-normalized",
+			loginHint: "my-email@signup-disabled-normalized.com",
 			callbackURL: "/dashboard",
 			fetchOptions: {
 				throw: true,
@@ -584,10 +613,10 @@ describe("SSO disable implicit sign in", async () => {
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
-			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fsignup-disabled-normalized",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain("/api/auth/error?error=signup disabled");
+		expect(callbackURL).toContain("/api/auth/error?error=signup_disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
