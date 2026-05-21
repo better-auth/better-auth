@@ -9,11 +9,15 @@ export const defaultEndpoints = [
 export const Providers = {
 	CLOUDFLARE_TURNSTILE: "cloudflare-turnstile",
 	GOOGLE_RECAPTCHA: "google-recaptcha",
+	GOOGLE_RECAPTCHA_ENTERPRISE: "google-recaptcha-enterprise",
 	HCAPTCHA: "hcaptcha",
 	CAPTCHAFOX: "captchafox",
 } as const;
 
-export const siteVerifyMap: Record<Provider, string> = {
+export const siteVerifyMap: Record<
+	Exclude<Provider, typeof Providers.GOOGLE_RECAPTCHA_ENTERPRISE>,
+	string
+> = {
 	[Providers.CLOUDFLARE_TURNSTILE]:
 		"https://challenges.cloudflare.com/turnstile/v0/siteverify",
 	[Providers.GOOGLE_RECAPTCHA]:

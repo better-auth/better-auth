@@ -64,6 +64,8 @@ export const captcha = (options: CaptchaOptions) =>
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
+				const expectedAction =
+					request.headers.get("x-captcha-action")?.trim() || undefined;
 				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
 
 				if (!captchaResponse) {
@@ -74,23 +76,39 @@ export const captcha = (options: CaptchaOptions) =>
 					});
 				}
 
-				const siteVerifyURL =
-					options.siteVerifyURLOverride || siteVerifyMap[options.provider];
-
 				const handlerParams = {
-					siteVerifyURL,
 					captchaResponse,
 					secretKey: options.secretKey,
 					remoteIP: remoteUserIP,
 				};
 
+				// reCAPTCHA Enterprise uses the Assessments API rather than a
+				// static siteverify URL, so it's resolved before siteVerifyMap.
+				if (options.provider === Providers.GOOGLE_RECAPTCHA_ENTERPRISE) {
+					return await verifyHandlers.googleRecaptchaEnterprise({
+						...handlerParams,
+						siteVerifyURL: options.siteVerifyURLOverride,
+						projectId: options.projectId,
+						siteKey: options.siteKey,
+						expectedAction,
+						minScore: options.minScore,
+					});
+				}
+
+				const siteVerifyURL =
+					options.siteVerifyURLOverride || siteVerifyMap[options.provider];
+
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
-					return await verifyHandlers.cloudflareTurnstile(handlerParams);
+					return await verifyHandlers.cloudflareTurnstile({
+						...handlerParams,
+						siteVerifyURL,
+					});
 				}
 
 				if (options.provider === Providers.GOOGLE_RECAPTCHA) {
 					return await verifyHandlers.googleRecaptcha({
 						...handlerParams,
+						siteVerifyURL,
 						minScore: options.minScore,
 					});
 				}
@@ -98,6 +116,7 @@ export const captcha = (options: CaptchaOptions) =>
 				if (options.provider === Providers.HCAPTCHA) {
 					return await verifyHandlers.hCaptcha({
 						...handlerParams,
+						siteVerifyURL,
 						siteKey: options.siteKey,
 					});
 				}
@@ -105,6 +124,7 @@ export const captcha = (options: CaptchaOptions) =>
 				if (options.provider === Providers.CAPTCHAFOX) {
 					return await verifyHandlers.captchaFox({
 						...handlerParams,
+						siteVerifyURL,
 						siteKey: options.siteKey,
 					});
 				}

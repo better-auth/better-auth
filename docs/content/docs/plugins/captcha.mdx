@@ -6,6 +6,7 @@ description: Captcha plugin
 The **Captcha Plugin** integrates bot protection into your Better Auth system by adding captcha verification for key endpoints. This plugin ensures that only human users can perform actions like signing up, signing in, or resetting passwords. The following providers are currently supported:
 
 * [Google reCAPTCHA](https://developers.google.com/recaptcha)
+* [Google reCAPTCHA Enterprise](https://cloud.google.com/recaptcha)
 * [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/)
 * [hCaptcha](https://www.hcaptcha.com/)
 * [CaptchaFox](https://captchafox.com/)
@@ -27,10 +28,21 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     export const auth = betterAuth({
         plugins: [
             captcha({ // [!code highlight]
-                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
+                provider: "cloudflare-turnstile", // or google-recaptcha, google-recaptcha-enterprise, hcaptcha, captchafox // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
         ],
+    });
+    ```
+
+    **Google reCAPTCHA Enterprise** uses the Google Cloud [Assessments API](https://cloud.google.com/recaptcha/docs/create-assessment-website) instead of the standard `siteverify` endpoint, so it also needs a `projectId` and `siteKey` (here `secretKey` is the Google Cloud API key):
+
+    ```ts title="auth.ts"
+    captcha({
+        provider: "google-recaptcha-enterprise",
+        secretKey: process.env.RECAPTCHA_API_KEY!,
+        projectId: "my-gcp-project",
+        siteKey: "6Lc...",
     });
     ```
   </Step>
@@ -62,6 +74,10 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     * To implement Google reCAPTCHA on the client side, follow the official [Google reCAPTCHA documentation](https://developers.google.com/recaptcha/intro) or use libraries like [react-google-recaptcha](https://www.npmjs.com/package/react-google-recaptcha) (v2) and [react-google-recaptcha-v3](https://www.npmjs.com/package/react-google-recaptcha-v3) (v3).
     * To implement hCaptcha on the client side, follow the official [hCaptcha documentation](https://docs.hcaptcha.com/#add-the-hcaptcha-widget-to-your-webpage) or use libraries like [@hcaptcha/react-hcaptcha](https://www.npmjs.com/package/@hcaptcha/react-hcaptcha)
     * To implement CaptchaFox on the client side, follow the official [CaptchaFox documentation](https://docs.captchafox.com/getting-started) or use libraries like [@captchafox/react](https://www.npmjs.com/package/@captchafox/react)
+
+    <Callout type="info">
+      For **Google reCAPTCHA Enterprise**, you can additionally send an `x-captcha-action` header (e.g. `"sign_in"`). When present, the server verifies it against the assessment's action, blocking tokens issued for a different action from being replayed.
+    </Callout>
   </Step>
 </Steps>
 
@@ -87,8 +103,9 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 ## Plugin Options
 
 * **`provider` (required)**: your captcha provider.
-* **`secretKey` (required)**: your provider's secret key used for the server-side validation.
+* **`secretKey` (required)**: your provider's secret key used for the server-side validation. For *Google reCAPTCHA Enterprise*, this is the Google Cloud API key.
 * `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
-* `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
-* `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
-* `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.
+* `minScore` (optional - only *Google reCAPTCHA v3* and *Enterprise*): minimum score threshold (0.0 - 1.0). Default is `0.5`.
+* `projectId` (**required for *Google reCAPTCHA Enterprise***): the Google Cloud project ID that owns the reCAPTCHA key.
+* `siteKey` (required for *Google reCAPTCHA Enterprise*; optional for *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
+* `siteVerifyURLOverride` (optional): overrides the endpoint URL for the captcha verification request.

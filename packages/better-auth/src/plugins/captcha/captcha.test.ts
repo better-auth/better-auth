@@ -287,6 +287,208 @@ describe("captcha", async () => {
 			expect(res.error?.status).toBe(403);
 		});
 	});
+	describe("google-recaptcha-enterprise", async () => {
+		const { client } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "google-recaptcha-enterprise",
+					secretKey: "xx-api-key",
+					projectId: "xx-project",
+					siteKey: "xx-site-key",
+				}),
+			],
+		});
+
+		it("Should successfully sign in users if they passed the CAPTCHA challenge", async () => {
+			mockBetterFetch.mockClear();
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: {
+						valid: true,
+						action: "sign_in",
+						hostname: "example.com",
+						invalidReason: "INVALID_REASON_UNSPECIFIED",
+					},
+					riskAnalysis: { score: 0.9, reasons: [] },
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+						"x-captcha-action": "sign_in",
+						"x-forwarded-for": "127.0.0.1",
+					},
+				},
+			});
+
+			expect(res.data?.user).toBeDefined();
+			expect(mockBetterFetch).toHaveBeenCalled();
+
+			const [calledUrl, fetchOptions] = mockBetterFetch.mock.calls[0]!;
+			expect(calledUrl).toBe(
+				"https://recaptchaenterprise.googleapis.com/v1/projects/xx-project/assessments?key=xx-api-key",
+			);
+			expect(fetchOptions.method).toBe("POST");
+			expect(fetchOptions.headers).toMatchObject({
+				"Content-Type": "application/json",
+			});
+			const body = JSON.parse(fetchOptions.body as string);
+			expect(body).toEqual({
+				event: {
+					token: "captcha-token",
+					siteKey: "xx-site-key",
+					userIpAddress: "127.0.0.1",
+					expectedAction: "sign_in",
+				},
+			});
+		});
+
+		it("Should return 403 when tokenProperties.valid is false", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: {
+						valid: false,
+						invalidReason: "EXPIRED",
+					},
+					riskAnalysis: { score: 0.9, reasons: [] },
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "expired-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("Should return 403 when riskAnalysis.score is below minScore", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: { valid: true, action: "" },
+					riskAnalysis: { score: 0.1, reasons: ["AUTOMATION"] },
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "low-score-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("Should return 403 when expectedAction is provided and does not match", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: { valid: true, action: "homepage" },
+					riskAnalysis: { score: 0.9, reasons: [] },
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+						"x-captcha-action": "sign_in",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("Should pass when no expectedAction header is sent (action check skipped)", async () => {
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: { valid: true, action: "anything" },
+					riskAnalysis: { score: 0.9, reasons: [] },
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.data?.user).toBeDefined();
+		});
+
+		it("Should return 500 if the assessments call fails", async () => {
+			mockBetterFetch.mockResolvedValue({
+				error: "Failed to fetch",
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			expect(res.error?.status).toBe(500);
+		});
+
+		it("Should honor siteVerifyURLOverride", async () => {
+			const { client: overrideClient } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "google-recaptcha-enterprise",
+						secretKey: "xx-api-key",
+						projectId: "xx-project",
+						siteKey: "xx-site-key",
+						siteVerifyURLOverride:
+							"https://proxy.example.com/recaptcha-assessment",
+					}),
+				],
+			});
+
+			mockBetterFetch.mockClear();
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					tokenProperties: { valid: true, action: "" },
+					riskAnalysis: { score: 0.9, reasons: [] },
+				},
+			});
+
+			await overrideClient.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: {
+					headers: {
+						"x-captcha-response": "captcha-token",
+					},
+				},
+			});
+
+			const [calledUrl] = mockBetterFetch.mock.calls[0]!;
+			expect(calledUrl).toBe("https://proxy.example.com/recaptcha-assessment");
+		});
+	});
 	describe("hcaptcha", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
