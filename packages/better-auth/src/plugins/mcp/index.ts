@@ -551,12 +551,6 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
-							error: "invalid_grant",
-						});
-					}
 
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {

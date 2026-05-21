@@ -6,7 +6,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.16.0",
     "better-sqlite3": "^12.6.2",
-    "drizzle-kit": "^0.30.6",
+    "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "mongodb": "^7.1.0",
     "mysql2": "^3.18.2",
