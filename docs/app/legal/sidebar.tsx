@@ -19,29 +19,27 @@ export function LegalSidebar() {
 	const pathname = usePathname();
 
 	return (
-		<aside className="w-full md:w-[250px] shrink-0 px-5 md:px-7 pt-12 md:py-40 md:sticky md:top-0 md:h-dvh">
-			<p className="font-mono text-xs uppercase tracking-wider text-foreground/50 mb-2">
-				Legal
-			</p>
-			<nav className="flex flex-col gap-1 border-l py-2">
-				{legalPages.map((page) => {
-					const active = pathname === page.href;
-					return (
-						<Link
-							key={page.href}
-							href={page.href}
-							className={cn(
-								"text-sm py-0.5 md:py-1 transition-colors ml-4",
-								active
-									? "text-foreground font-medium"
-									: "text-foreground/60 hover:text-foreground/80",
-							)}
-						>
+		<nav className="border-t border-foreground/10 pt-4 space-y-0">
+			{legalPages.map((page) => {
+				const active = pathname === page.href;
+				return (
+					<Link
+						key={page.href}
+						href={page.href}
+						className={cn(
+							"flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0 transition-colors",
+							active
+								? "text-foreground"
+								: "text-foreground/70 dark:text-foreground/55 hover:text-foreground",
+						)}
+					>
+						<span className="text-[11px] uppercase tracking-wider">
 							{page.name}
-						</Link>
-					);
-				})}
-			</nav>
-		</aside>
+						</span>
+						{active && <span className="text-[11px] font-mono">→</span>}
+					</Link>
+				);
+			})}
+		</nav>
 	);
 }

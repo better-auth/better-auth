@@ -56,15 +56,56 @@ const deleteSCIMProviderConnectionBodySchema = z.object({
 	providerId: z.string(),
 });
 
-async function getSCIMUserOrgIds(
+function parseMemberRoles(role: string): string[] {
+	return role
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function hasRequiredRole(memberRole: string, requiredRole: string[]): boolean {
+	return (
+		!requiredRole.length ||
+		parseMemberRoles(memberRole).some((role) => requiredRole.includes(role))
+	);
+}
+
+function resolveRequiredRoles(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+): string[] {
+	if (opts.requiredRole) {
+		return opts.requiredRole;
+	}
+
+	const creatorRole =
+		ctx.context.getPlugin("organization")?.options?.creatorRole;
+
+	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
+}
+
+// TODO(scim-provider-ownership-default-on): flip default to `true` on next so
+// new non-org SCIM tokens are owner-locked by default. Coupled with the
+// `scimProvider.userId` schema column. Tracks the SCIM provider-ownership
+// advisory.
+function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
+	return opts.providerOwnership?.enabled ?? false;
+}
+
+async function getSCIMUserOrgMemberships(
 	ctx: GenericEndpointContext,
 	userId: string,
-): Promise<Set<string>> {
+): Promise<Map<string, string[]>> {
 	const members = await ctx.context.adapter.findMany<Member>({
 		model: "member",
 		where: [{ field: "userId", value: userId }],
 	});
-	return new Set(members.map((m) => m.organizationId));
+	return new Map(
+		members.map((member) => [
+			member.organizationId,
+			parseMemberRoles(member.role),
+		]),
+	);
 }
 
 function normalizeSCIMProvider(provider: SCIMProvider) {
@@ -99,6 +140,7 @@ async function assertSCIMProviderAccess(
 	ctx: GenericEndpointContext,
 	userId: string,
 	provider: SCIMProvider,
+	requiredRole: string[],
 ): Promise<void> {
 	if (provider.organizationId) {
 		if (!ctx.context.hasPlugin("organization")) {
@@ -119,6 +161,12 @@ async function assertSCIMProviderAccess(
 					"You must be a member of the organization to access this provider",
 			});
 		}
+
+		if (!hasRequiredRole(member.role, requiredRole)) {
+			throw new APIError("FORBIDDEN", {
+				message: "Insufficient role for this operation",
+			});
+		}
 	} else if (provider.userId && provider.userId !== userId) {
 		throw new APIError("FORBIDDEN", {
 			message: "You must be the owner to access this provider",
@@ -130,6 +178,7 @@ async function checkSCIMProviderAccess(
 	ctx: GenericEndpointContext,
 	userId: string,
 	providerId: string,
+	requiredRole: string[],
 ): Promise<SCIMProvider> {
 	const provider = await ctx.context.adapter.findOne<SCIMProvider>({
 		model: "scimProvider",
@@ -142,7 +191,7 @@ async function checkSCIMProviderAccess(
 		});
 	}
 
-	await assertSCIMProviderAccess(ctx, userId, provider);
+	await assertSCIMProviderAccess(ctx, userId, provider, requiredRole);
 
 	return provider;
 }
@@ -183,10 +232,41 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 		async (ctx) => {
 			const { providerId, organizationId } = ctx.body;
 			const user = ctx.context.session.user;
+			const requiredRole = resolveRequiredRoles(ctx, opts);
 
 			if (providerId.includes(":")) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Provider id contains forbidden characters",
+				});
+			}
+
+			// A SCIM token authenticates as the row whose providerId matches the
+			// claim in the bearer token. If a caller mints a token whose
+			// providerId collides with a built-in account.providerId
+			// (`credential`, `email-otp`, `magic-link`, `phone-number`,
+			// `anonymous`, `siwe`, or any configured social provider key), the
+			// resulting token can be used to act against accounts that were
+			// never SCIM-provisioned, which would be a privilege escalation.
+			// Reject the collision at issuance.
+			//
+			// We read social provider keys from `options.socialProviders` (raw
+			// config) rather than `context.socialProviders` (resolved list) so
+			// that providers configured with `enabled: false` are still
+			// rejected: their account rows can persist in the DB from a prior
+			// enabled state.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				"email-otp",
+				"magic-link",
+				"phone-number",
+				"anonymous",
+				"siwe",
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
+			]);
+			if (reservedProviderIds.has(providerId)) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"Provider id collides with a built-in account provider and cannot be used for SCIM",
 				});
 			}
 
@@ -206,6 +286,12 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 						message: "You are not a member of the organization",
 					});
 				}
+
+				if (!hasRequiredRole(member.role, requiredRole)) {
+					throw new APIError("FORBIDDEN", {
+						message: "Insufficient role for this operation",
+					});
+				}
 			}
 
 			const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
@@ -219,7 +305,12 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			});
 
 			if (scimProvider) {
-				await assertSCIMProviderAccess(ctx, user.id, scimProvider);
+				await assertSCIMProviderAccess(
+					ctx,
+					user.id,
+					scimProvider,
+					requiredRole,
+				);
 				await ctx.context.adapter.delete<SCIMProvider>({
 					model: "scimProvider",
 					where: [{ field: "id", value: scimProvider.id }],
@@ -242,10 +333,10 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			const newSCIMProvider = await ctx.context.adapter.create<SCIMProvider>({
 				model: "scimProvider",
 				data: {
-					providerId: providerId,
-					organizationId: organizationId,
+					providerId,
+					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
-					...(opts.providerOwnership?.enabled ? { userId: user.id } : {}),
+					...(isProviderOwnershipEnabled(opts) ? { userId: user.id } : {}),
 				},
 			});
 
@@ -266,7 +357,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 		},
 	);
 
-export const listSCIMProviderConnections = () =>
+export const listSCIMProviderConnections = (opts: SCIMOptions) =>
 	createAuthEndpoint(
 		"/scim/list-provider-connections",
 		{
@@ -277,7 +368,7 @@ export const listSCIMProviderConnections = () =>
 					operationId: "listSCIMProviderConnections",
 					summary: "List SCIM providers",
 					description:
-						"Returns SCIM providers for organizations the user is a member of.",
+						"Returns SCIM providers the user owns or has the required org role for.",
 					responses: {
 						"200": {
 							description: "List of SCIM providers",
@@ -311,18 +402,27 @@ export const listSCIMProviderConnections = () =>
 		},
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
-			const userOrgIds: Set<string> = ctx.context.hasPlugin("organization")
-				? await getSCIMUserOrgIds(ctx, userId)
-				: new Set();
+			const requiredRole = resolveRequiredRoles(ctx, opts);
+			const orgMemberships: Map<string, string[]> = ctx.context.hasPlugin(
+				"organization",
+			)
+				? await getSCIMUserOrgMemberships(ctx, userId)
+				: new Map();
 
 			const allProviders = await ctx.context.adapter.findMany<SCIMProvider>({
 				model: "scimProvider",
 			});
 
 			const accessibleProviders = allProviders.filter((p) => {
-				if (p.organizationId) return userOrgIds.has(p.organizationId); // org level access
-				if (p.userId === userId) return true; // owner access
-				return !p.userId; // no org and no owner
+				if (p.organizationId) {
+					const roles = orgMemberships.get(p.organizationId);
+					return roles
+						? !requiredRole.length ||
+								roles.some((role) => requiredRole.includes(role))
+						: false;
+				}
+				// Owned by this user, or legacy provider without ownership tracking
+				return p.userId === userId || !p.userId;
 			});
 
 			const providers = accessibleProviders.map((p) =>
@@ -333,7 +433,7 @@ export const listSCIMProviderConnections = () =>
 		},
 	);
 
-export const getSCIMProviderConnection = () =>
+export const getSCIMProviderConnection = (opts: SCIMOptions) =>
 	createAuthEndpoint(
 		"/scim/get-provider-connection",
 		{
@@ -377,14 +477,20 @@ export const getSCIMProviderConnection = () =>
 		async (ctx) => {
 			const { providerId } = ctx.query;
 			const userId = ctx.context.session.user.id;
+			const requiredRole = resolveRequiredRoles(ctx, opts);
 
-			const provider = await checkSCIMProviderAccess(ctx, userId, providerId);
+			const provider = await checkSCIMProviderAccess(
+				ctx,
+				userId,
+				providerId,
+				requiredRole,
+			);
 
 			return ctx.json(normalizeSCIMProvider(provider));
 		},
 	);
 
-export const deleteSCIMProviderConnection = () =>
+export const deleteSCIMProviderConnection = (opts: SCIMOptions) =>
 	createAuthEndpoint(
 		"/scim/delete-provider-connection",
 		{
@@ -423,8 +529,9 @@ export const deleteSCIMProviderConnection = () =>
 		async (ctx) => {
 			const { providerId } = ctx.body;
 			const userId = ctx.context.session.user.id;
+			const requiredRole = resolveRequiredRoles(ctx, opts);
 
-			await checkSCIMProviderAccess(ctx, userId, providerId);
+			await checkSCIMProviderAccess(ctx, userId, providerId, requiredRole);
 
 			await ctx.context.adapter.delete<SCIMProvider>({
 				model: "scimProvider",
@@ -943,6 +1050,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			await ctx.context.internalAdapter.deleteSessions(userId);
 			await ctx.context.internalAdapter.deleteUser(userId);
 
 			ctx.setStatus(204);

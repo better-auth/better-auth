@@ -136,7 +136,7 @@ export default async function Page({
 			<div className="w-full lg:w-[70%] flex flex-col">
 				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
 					{/* Article body */}
-					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none">
+					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
 						<MDX
 							components={{
 								...defaultMdxComponents,
@@ -165,6 +165,27 @@ export default async function Page({
 										{children}
 									</Callout>
 								),
+								HeaderLabel: ({
+									children,
+									variant = "default",
+								}: {
+									children: React.ReactNode;
+									variant?: "default" | "info" | "warning";
+								}) => {
+									const colors = {
+										default: "text-neutral-600 dark:text-neutral-300",
+										info: "text-blue-500 dark:text-blue-400",
+										warning: "text-amber-600 dark:text-amber-400",
+									};
+									return (
+										<span
+											data-header-label="true"
+											className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
+										>
+											{children}
+										</span>
+									);
+								},
 								Contributors: ({ usernames }: { usernames: string[] }) => (
 									<div className="flex flex-wrap gap-1.5 not-prose">
 										{usernames.map((username) => (

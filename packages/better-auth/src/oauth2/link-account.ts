@@ -6,6 +6,8 @@ import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
 
+// TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
+// call below needs null-safety, and `findOAuthUser` must accept a nullable email.
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
@@ -50,8 +52,13 @@ export async function handleOAuthUserInfo(
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
 				c.context.trustedProviders.includes(account.providerId);
+			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
+			// the gate unconditional.
+			const requireLocalEmailVerified =
+				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
 				accountLinking?.enabled === false ||
 				accountLinking?.disableImplicitLinking === true
 			) {
@@ -85,6 +92,10 @@ export async function handleOAuthUserInfo(
 				};
 			}
 
+			// Reachable only when `requireLocalEmailVerified: false` lets the link
+			// proceed for an unverified local row. The IdP's verified email is
+			// promoted to the local row so subsequent flows treat it as verified.
+			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&

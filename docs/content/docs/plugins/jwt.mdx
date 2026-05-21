@@ -12,55 +12,58 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
 ## Installation
 
 <Steps>
-<Step>
-### Add the plugin to your **auth** config
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { jwt } from "better-auth/plugins" // [!code highlight]
+  <Step>
+    ### Add the plugin to your **auth** config
 
-export const auth = betterAuth({
-    plugins: [
-        jwt(), // [!code highlight]
-    ]
-})
-```
-</Step>
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { jwt } from "better-auth/plugins" // [!code highlight]
 
-<Step>
+    export const auth = betterAuth({
+        plugins: [
+            jwt(), // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
     ### Migrate the database
 
     Run the migration or generate the schema to add the necessary fields and tables to the database.
 
     <Tabs items={["migrate", "generate"]}>
-        <Tab value="migrate">
+      <Tab value="migrate">
         ```package-install
         npx auth migrate
         ```
-        </Tab>
-        <Tab value="generate">
+      </Tab>
+
+      <Tab value="generate">
         ```package-install
         npx auth generate
         ```
-        </Tab>
+      </Tab>
     </Tabs>
+
     See the [Schema](#schema) section to add the fields manually.
-</Step>
-<Step>
-### Add the client plugin to your auth client
+  </Step>
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
+  <Step>
+    ### Add the client plugin to your auth client
 
-export const authClient = createAuthClient({
-  plugins: [
-    jwtClient() // [!code highlight]
-  ]
-})
-```
-</Step>
-</Steps>    
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
 
+    export const authClient = createAuthClient({
+      plugins: [
+        jwtClient() // [!code highlight]
+      ]
+    })
+    ```
+  </Step>
+</Steps>
 
 ## Usage
 
@@ -92,7 +95,7 @@ This is the recommended approach for client applications that need JWT tokens fo
 2. **Using your session token**
 
 To get the token, call the `/token` endpoint. This will return the following:
-  
+
 ```json
   { 
     "token": "ey..."
@@ -126,6 +129,7 @@ await authClient.getSession({
 ```
 
 ### Verifying the token
+
 The token can be verified in your own service, without the need for an additional verify call or database check.
 For this JWKS is used. The public key can be fetched from the `/api/auth/jwks` endpoint.
 
@@ -249,9 +253,10 @@ jwt({
 By default, the JWKS endpoint is available at `/jwks`. You can customize this path using the `jwksPath` option.
 
 This is useful when you need to:
-- Follow OAuth 2.0/OIDC conventions (e.g., `/.well-known/jwks.json`)
-- Match existing API conventions in your application
-- Avoid path conflicts with other endpoints
+
+* Follow OAuth 2.0/OIDC conventions (e.g., `/.well-known/jwks.json`)
+* Match existing API conventions in your application
+* Avoid path conflicts with other endpoints
 
 **Server Configuration:**
 
@@ -300,9 +305,10 @@ if (data) {
 This is an advanced feature. Configuration outside of this plugin **MUST** be provided.
 
 Implementers:
-- `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
-- If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
-- When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+
+* `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
+* If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
+* When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
 
 #### Localized Signing
 
@@ -331,7 +337,7 @@ jwt({
 
 #### Remote Signing
 
-Useful if you are using a remote Key Management Service such as [Google KMS](https://cloud.google.com/kms/docs/encrypt-decrypt-rsa#kms-encrypt-asymmetric-nodejs), [Amazon KMS](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html), or [Azure Key Vault](https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-7.4&tabs=HTTP).
+Useful if you are using a remote Key Management Service such as [Google KMS](https://cloud.google.com/kms/docs/encrypt-decrypt-rsa#kms-encrypt-asymmetric-nodejs), [Amazon KMS](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html), or [Azure Key Vault](https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-7.4\&tabs=HTTP).
 
 ```ts title="auth.ts"
 jwt({
@@ -362,7 +368,6 @@ jwt({
 })
 ```
 
-
 ## Schema
 
 The JWT plugin adds the following tables to the database:
@@ -371,37 +376,37 @@ The JWT plugin adds the following tables to the database:
 
 Table Name: `jwks`
 
-<DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each web key",
-      isPrimaryKey: true
-    },
-    { 
-      name: "publicKey", 
-      type: "string", 
-      description: "The public part of the web key" 
-    },
-    { 
-      name: "privateKey", 
-      type: "string", 
-      description: "The private part of the web key" 
-    },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the web key was created" 
-    },
-    { 
-      name: "expiresAt", 
-      type: "Date", 
-      description: "Timestamp of when the web key expires",
-      isOptional: true
-    },
-  ]}
-  />
+export const jwksTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each web key",
+		isPrimaryKey: true,
+	},
+	{
+		name: "publicKey",
+		type: "string",
+		description: "The public part of the web key",
+	},
+	{
+		name: "privateKey",
+		type: "string",
+		description: "The private part of the web key",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the web key was created",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "Timestamp of when the web key expires",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="jwks" fields={jwksTableFields} />
 
 <Callout>
   You can customize the table name and fields for the `jwks` table. See the [Database concept documentation](/docs/concepts/database#custom-table-names) for more information on how to customize plugin schema.
@@ -425,32 +430,37 @@ jwt({
 ```
 
 #### EdDSA
-- **Default Curve**: `Ed25519`
-- **Optional Property**: `crv`
-  - Available options: `Ed25519`, `Ed448`
-  - Default: `Ed25519`
+
+* **Default Curve**: `Ed25519`
+* **Optional Property**: `crv`
+  * Available options: `Ed25519`, `Ed448`
+  * Default: `Ed25519`
 
 #### ES256
-- No additional properties
+
+* No additional properties
 
 #### RSA256
-- **Optional Property**: `modulusLength`
-  - Expects a number
-  - Default: `2048`
+
+* **Optional Property**: `modulusLength`
+  * Expects a number
+  * Default: `2048`
 
 #### PS256
-- **Optional Property**: `modulusLength`
-  - Expects a number
-  - Default: `2048`
+
+* **Optional Property**: `modulusLength`
+  * Expects a number
+  * Default: `2048`
 
 #### ECDH-ES
-- **Optional Property**: `crv`
-  - Available options: `P-256`, `P-384`, `P-521`
-  - Default: `P-256`
+
+* **Optional Property**: `crv`
+  * Available options: `P-256`, `P-384`, `P-521`
+  * Default: `P-256`
 
 #### ES512
-- No additional properties
 
+* No additional properties
 
 ### Disable private key encryption
 
@@ -481,8 +491,8 @@ jwt({
 })
 ```
 
-- `rotationInterval`: The interval in seconds to rotate the key pair.
-- `gracePeriod`: The period in seconds to keep the old key pair valid after rotation. This is useful to allow clients to verify tokens signed by the old key pair. The default value is 30 days.
+* `rotationInterval`: The interval in seconds to rotate the key pair.
+* `gracePeriod`: The period in seconds to keep the old key pair valid after rotation. This is useful to allow clients to verify tokens signed by the old key pair. The default value is 30 days.
 
 ### Modify JWT payload
 
@@ -503,6 +513,7 @@ jwt({
 ```
 
 ### Modify Issuer, Audience, Subject or Expiration time
+
 If none is given, the `BASE_URL` is used as the issuer and the audience is set to the `BASE_URL`. The expiration time is set to 15 minutes.
 
 ```ts title="auth.ts"

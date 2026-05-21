@@ -46,8 +46,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							content: {
 								"application/json": {
 									schema: {
-										type: "object",
-										nullable: true,
+										// better-call's OpenAPI schema type doesn't yet model OAS 3.1 union `type`.
+										type: ["object", "null"] as unknown as "object",
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",

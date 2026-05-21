@@ -14,8 +14,9 @@ import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, Scope, VerificationValue } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { verificationValueSchema } from "./types/zod";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
@@ -189,6 +190,35 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 	});
 
+	it("should exchange a PKCE authorization code when state is omitted", async () => {
+		const scopes = ["openid"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+		});
+		authUrl.searchParams.delete("state");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).not.toContain("state=");
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe(scopes.join(" "));
+	});
+
 	it("scope openid+profile should provide access_token and id_token", async ({
 		expect,
 	}) => {
@@ -358,6 +388,51 @@ describe("oauth token - authorization_code", async () => {
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
+	});
+
+	/**
+	 * Concurrent redemption of the same authorization code must mint
+	 * tokens for exactly one caller. Before the atomic-consume primitive,
+	 * two requests could both pass the find step before either delete
+	 * completed and both proceeded to issue token pairs.
+	 *
+	 * The interleaving relies on the in-memory adapter yielding control at
+	 * each `await` boundary; reverting `consumeVerificationValue` to the old
+	 * find/delete pair makes this test fail with two successes (verified
+	 * empirically), so a synthetic scheduling barrier is unnecessary.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79
+	 */
+	it("rejects concurrent redemption of the same authorization code", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const [first, second] = await Promise.all([
+			validateAuthCode({ code: code!, codeVerifier }),
+			validateAuthCode({ code: code!, codeVerifier }),
+		]);
+
+		const successes = [first, second].filter((r) => r.error === null);
+		const failures = [first, second].filter((r) => r.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(successes[0]?.data?.access_token).toBeDefined();
+		expect(successes[0]?.data?.id_token).toBeDefined();
+		expect(failures[0]?.error?.error).toBe("invalid_grant");
 	});
 });
 
@@ -945,6 +1020,259 @@ describe("oauth token - refresh_token", async () => {
 		});
 		expect(newTokensRefresh.error?.status).toBeDefined();
 	});
+
+	/**
+	 * Concurrent refresh-token rotation against the same parent must mint
+	 * tokens for exactly one caller. Before the atomic CAS on the parent
+	 * row, two concurrent requests both passed the `revoked` check and
+	 * each minted a fresh refresh token (forked family). The loser now
+	 * fails with `invalid_grant`; the parent row's `revoked` flag is set,
+	 * so any subsequent replay of the original token trips the existing
+	 * family-invalidation guard in `handleRefreshTokenGrant`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("rejects concurrent rotation of the same refresh token", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		async function refresh(refreshToken: string) {
+			const { body, headers } = createRefreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		}
+
+		const [first, second] = await Promise.all([
+			refresh(tokens!.refresh_token!),
+			refresh(tokens!.refresh_token!),
+		]);
+
+		const successes = [first, second].filter((r) => r.error === null);
+		const failures = [first, second].filter((r) => r.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(successes[0]?.data?.refresh_token).toBeDefined();
+		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+
+		// Replay of the original (now revoked) parent token must trigger
+		// the existing family-invalidation guard.
+		const replay = await refresh(tokens!.refresh_token!);
+		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * After a contested rotation, the winner's child refresh token must remain
+	 * usable for a subsequent rotation. The CAS only revokes the parent row; it
+	 * must not poison the rest of the legitimate user's session.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("winner's child token is usable for a subsequent rotation", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		async function refresh(refreshToken: string) {
+			const { body, headers } = createRefreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		}
+
+		const [first, second] = await Promise.all([
+			refresh(tokens!.refresh_token!),
+			refresh(tokens!.refresh_token!),
+		]);
+
+		const winner = [first, second].find((r) => r.error === null);
+		expect(winner?.data?.refresh_token).toBeDefined();
+
+		const next = await refresh(winner!.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(winner!.data!.refresh_token);
+	});
+
+	/**
+	 * /oauth2/revoke (RFC 7009) on an active refresh token must mark the row
+	 * `revoked` (via the same CAS used in rotation) so that subsequent reuse
+	 * trips the family-invalidation guard.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("revoke endpoint marks the refresh row revoked and blocks reuse", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const revoke = await client.$fetch("/oauth2/revoke", {
+			method: "POST",
+			body: new URLSearchParams({
+				token: tokens!.refresh_token!,
+				token_type_hint: "refresh_token",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+		expect(revoke.error).toBeNull();
+
+		const context = await authorizationServer.$context;
+		const refreshRows = await context.adapter.findMany<{
+			id: string;
+			revoked: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		expect(refreshRows.length).toBeGreaterThanOrEqual(1);
+		// The just-revoked row must carry a `revoked` timestamp.
+		expect(refreshRows.some((r) => r.revoked != null)).toBe(true);
+
+		// Reusing the revoked refresh token must trip the family-invalidation
+		// guard in handleRefreshTokenGrant (revoked flag → invalidate family).
+		const { body: replayBody, headers: replayHeaders } =
+			createRefreshAccessTokenRequest({
+				refreshToken: tokens!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+		const replay = await client.$fetch<{
+			error?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: replayBody,
+			headers: replayHeaders,
+		});
+		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * V1 from variants.md: revokeRefreshToken racing against
+	 * handleRefreshTokenGrant on the same parent row. Both paths must run
+	 * through the same CAS so exactly one wins; the loser fails closed and
+	 * the parent stays revoked.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("concurrent revoke + rotate against the same refresh token: exactly one wins", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+		const parentToken = tokens!.refresh_token!;
+
+		const refresh = () => {
+			const { body, headers } = createRefreshAccessTokenRequest({
+				refreshToken: parentToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		};
+
+		const revoke = () =>
+			client.$fetch("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams({
+					token: parentToken,
+					token_type_hint: "refresh_token",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret!,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
+
+		const [refreshResult, revokeResult] = await Promise.all([
+			refresh(),
+			revoke(),
+		]);
+
+		// /oauth2/revoke is RFC 7009 §2.2 always-200, so the racer outcome is
+		// observable through the refresh result alone:
+		//   - refresh won the CAS  → mints a fresh refresh_token; revoke is a no-op
+		//   - revoke won the CAS  → refresh returns invalid_grant
+		expect(revokeResult.error).toBeNull();
+		if (refreshResult.error === null) {
+			expect(refreshResult.data?.refresh_token).toBeDefined();
+		} else {
+			const errPayload = refreshResult.error as { error?: string } | null;
+			expect(errPayload?.error).toBe("invalid_grant");
+		}
+
+		// In both orderings, replaying the parent must now fail closed
+		// (either revoked by the explicit revoke or rotated out by the refresh).
+		const replay = await refresh();
+		const replayErr = replay.error as { error?: string } | null;
+		expect(replayErr?.error).toBe("invalid_grant");
+	});
 });
 
 describe("oauth token - client_credentials", async () => {
@@ -1490,7 +1818,6 @@ describe("oauth token - config", async () => {
 		const refreshedTokens = await client.oauth2.token(
 			{
 				resource: validAudience,
-				// @ts-expect-error refresh token is sent
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1600,7 +1927,6 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				// @ts-expect-error refresh token is sent
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1950,5 +2276,606 @@ describe("id token claim override security", async () => {
 		expect(claims.iat).not.toBe(0);
 		expect(claims.exp).not.toBe(0);
 		expect(claims.sid).not.toBe("evil-sid");
+	});
+});
+
+describe("loopback redirect URI matching", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const state = "123";
+
+	it("127.0.0.1 with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:9090/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("[::1] with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://[::1]:8080/callback";
+		const requestedUri = "http://[::1]:3000/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("non-loopback with different ports should be rejected", async ({
+		expect,
+	}) => {
+		const registeredUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+		const requestedUri = "http://localhost:9999/api/auth/oauth2/callback/test";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+
+	it("loopback with different path should be rejected", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:8080/other-path";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+});
+
+describe("scope preservation through authorization code flow", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	it("scopes from authorization request should survive into token response", async ({
+		expect,
+	}) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const requestedScopes = ["openid", "profile", "email"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: requestedScopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ scope?: string }>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});
+
+describe("customTokenResponseFields", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customTokenResponseFields: ({ grantType, verificationValue }) => {
+					if (
+						grantType === "authorization_code" &&
+						verificationValue?.referenceId
+					) {
+						return { org_id: verificationValue.referenceId };
+					}
+					return { server_time: "2024-01-01" };
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "custom-fields-test";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("should include custom fields in authorization_code token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			server_time?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.server_time).toBe("2024-01-01");
+	});
+
+	it("should not allow custom fields to override standard OAuth fields", async () => {
+		const authServerBaseUrl2 = "http://localhost:3000";
+		const {
+			auth: auth2,
+			signInWithTestUser: signIn2,
+			customFetchImpl: fetch2,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl2,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl2 } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customTokenResponseFields: () => ({
+						access_token: "should-be-ignored",
+						token_type: "should-be-ignored",
+						custom_field: "should-be-present",
+					}),
+				}),
+			],
+		});
+
+		const { headers: headers2 } = await signIn2();
+		const client2 = createAuthClient({
+			plugins: [oauthProviderClient(), jwtClient()],
+			baseURL: authServerBaseUrl2,
+			fetchOptions: { customFetchImpl: fetch2, headers: headers2 },
+		});
+
+		const response = await auth2.api.adminCreateOAuthClient({
+			headers: headers2,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: response!.client_id!,
+				clientSecret: response!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl2}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackUrl = "";
+		await client2.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const code = new URL(callbackUrl).searchParams.get("code")!;
+		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: response!.client_id!,
+				clientSecret: response!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client2.$fetch<{
+			access_token?: string;
+			token_type?: string;
+			custom_field?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).not.toBe("should-be-ignored");
+		expect(tokens.data?.token_type).toBe("Bearer");
+		expect(tokens.data?.custom_field).toBe("should-be-present");
+	});
+
+	it("should include custom fields in client_credentials token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { body, headers: tokenHeaders } = createClientCredentialsTokenRequest(
+			{
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			},
+		);
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			server_time?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.server_time).toBe("2024-01-01");
+	});
+});
+
+describe("verificationValueSchema", () => {
+	it("should validate a well-formed verification value", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				state: "abc123",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should validate a verification value without state", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject a verification value with wrong type", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "password_reset",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject a verification value missing required fields", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("should pass through unknown fields for extensibility", () => {
+		const value = {
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+			userId: "u1",
+			sessionId: "s1",
+			futureField: "should-pass-through",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect((result.data as Record<string, unknown>).futureField).toBe(
+				"should-pass-through",
+			);
+		}
 	});
 });

@@ -442,7 +442,7 @@ describe("updateUser", async () => {
 		const { headers } = await signInWithTestUser();
 		const res = await client.updateUser(
 			{
-				// @ts-expect-error newField has input: false
+				//@ts-expect-error - newField is not available in the user input
 				newField: "new",
 			},
 			{
@@ -762,6 +762,83 @@ describe("change-email without sendVerificationEmail", async () => {
 			expect(resExisting.error?.status).toBe(400);
 			expect(resNonExisting.error?.status).toBe(400);
 			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
+	});
+});
+
+describe("change-email callbackURL preservation", async () => {
+	const sendChangeEmail = vi.fn();
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail() {},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async ({ url }) => {
+					sendChangeEmail(url);
+				},
+			},
+		},
+	});
+
+	it("preserves a callbackURL that carries its own query string", async () => {
+		// Verified user routes through the sendChangeEmailConfirmation branch.
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const callback = "/dashboard?tab=settings&from=email";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail: "new-email@email.com",
+				callbackURL: callback,
+			});
+		});
+
+		expect(sendChangeEmail).toHaveBeenCalledOnce();
+		const sent = sendChangeEmail.mock.calls[0]?.[0] as string;
+		expect(sent).toBeTypeOf("string");
+
+		// Round-tripping through URLSearchParams recovers the callbackURL verbatim.
+		const parsed = new URL(sent);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callback);
+		// The trailing `from=email` segment must not leak into the outer URL.
+		expect(parsed.searchParams.get("from")).toBeNull();
+	});
+});
+
+describe("change-email rejects confirmation-only config for verified users", async () => {
+	// Verified user with sendChangeEmailConfirmation but no sendVerificationEmail
+	// cannot complete the flow: the confirmation step generates a second token
+	// that requires sendVerificationEmail to deliver. The request must fail at
+	// the gate rather than return a misleading success.
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async () => {},
+			},
+		},
+	});
+
+	it("returns 400 when sendVerificationEmail is not configured", async () => {
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "unreachable@email.com",
+			});
+			expect(res.error?.status).toBe(400);
 		});
 	});
 });
