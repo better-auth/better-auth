@@ -8,6 +8,9 @@ describe("getAuthorizationToken", () => {
 		expect(getAuthorizationToken("dpop lowercase-token")).toBe(
 			"lowercase-token",
 		);
+		expect(getAuthorizationToken("  DPoP token-with-padding  ")).toBe(
+			"token-with-padding",
+		);
 	});
 
 	it("preserves raw token values for backwards compatibility", () => {

@@ -74,7 +74,7 @@ export function getAuthorizationToken(value: string | null | undefined) {
 		return value;
 	}
 	const match = /^\s*(Bearer|DPoP)\s+(.+)\s*$/i.exec(value);
-	return match?.[2] ?? value;
+	return match?.[2]?.trim() ?? value;
 }
 
 /**
