@@ -34,6 +34,7 @@ import type {
 } from "../oidc-provider";
 import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
+import { defaultClientSecretHasher } from "../oidc-provider/utils";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
@@ -49,6 +50,12 @@ interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
 	oidcConfig?: OIDCOptions | undefined;
+	/**
+	 * How to store client secrets. Mirrors oidcProvider's storeClientSecret option.
+	 * - "plain" (default): store plaintext for backward compatibility.
+	 * - "hashed": SHA-256 + base64url before INSERT; hash-compare on token.
+	 */
+	storeClientSecret?: OIDCOptions["storeClientSecret"];
 }
 
 export const getMCPProviderMetadata = (
@@ -191,6 +198,43 @@ export const mcp = (options: MCPOptions) => {
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
+	/**
+	 * Store client secret using the configured method (mirrors oidcProvider).
+	 */
+	async function storeMcpClientSecret(clientSecret: string): Promise<string> {
+		const mode = options.storeClientSecret ?? opts.storeClientSecret;
+		if (mode === "hashed") {
+			return await defaultClientSecretHasher(clientSecret);
+		}
+		if (typeof mode === "object" && "hash" in (mode as object)) {
+			return await (mode as { hash: (s: string) => Promise<string> }).hash(
+				clientSecret,
+			);
+		}
+		return clientSecret;
+	}
+
+	/**
+	 * Verify a plaintext client_secret against the stored value.
+	 */
+	async function verifyMcpClientSecret(
+		storedClientSecret: string,
+		clientSecret: string,
+	): Promise<boolean> {
+		const mode = options.storeClientSecret ?? opts.storeClientSecret;
+		if (mode === "hashed") {
+			const hashed = await defaultClientSecretHasher(clientSecret);
+			return constantTimeEqual(hashed, storedClientSecret);
+		}
+		if (typeof mode === "object" && "hash" in (mode as object)) {
+			const hashed = await (
+				mode as { hash: (s: string) => Promise<string> }
+			).hash(clientSecret);
+			return constantTimeEqual(hashed, storedClientSecret);
+		}
+		return constantTimeEqual(clientSecret, storedClientSecret);
+	}
+
 	const provider = oidcProvider({ ...opts, __skipDeprecationWarning: true });
 	return {
 		id: "mcp",
@@ -474,7 +518,7 @@ export const mcp = (options: MCPOptions) => {
 									error: "invalid_client",
 								});
 							}
-							const isValidSecret = constantTimeEqual(
+							const isValidSecret = await verifyMcpClientSecret(
 								refreshClient.clientSecret,
 								client_secret.toString(),
 							);
@@ -625,7 +669,7 @@ export const mcp = (options: MCPOptions) => {
 								error: "invalid_client",
 							});
 						}
-						const isValidSecret = constantTimeEqual(
+						const isValidSecret = await verifyMcpClientSecret(
 							client.clientSecret,
 							client_secret.toString(),
 						);
@@ -934,7 +978,14 @@ export const mcp = (options: MCPOptions) => {
 					// Determine client type based on auth method
 					const clientType =
 						body.token_endpoint_auth_method === "none" ? "public" : "web";
-					const finalClientSecret = clientType === "public" ? "" : clientSecret;
+					// plaintextClientSecret is returned once in the response (RFC 7591).
+					// storedClientSecret is what goes into the DB (possibly hashed).
+					const plaintextClientSecret =
+						clientType === "public" ? "" : clientSecret;
+					const storedClientSecret =
+						clientType !== "public" && plaintextClientSecret
+							? await storeMcpClientSecret(plaintextClientSecret)
+							: plaintextClientSecret;
 
 					await ctx.context.adapter.create({
 						model: modelName.oauthClient,
@@ -943,7 +994,7 @@ export const mcp = (options: MCPOptions) => {
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
-							clientSecret: finalClientSecret,
+							clientSecret: storedClientSecret,
 							redirectUrls: body.redirect_uris.join(","),
 							type: clientType,
 							authenticationScheme:
@@ -978,7 +1029,8 @@ export const mcp = (options: MCPOptions) => {
 						metadata: body.metadata,
 						...(clientType !== "public"
 							? {
-									client_secret: finalClientSecret,
+									// Always return plaintext once (RFC 7591), even when storing hashed.
+									client_secret: plaintextClientSecret,
 									client_secret_expires_at: 0, // 0 means it doesn't expire
 								}
 							: {}),
