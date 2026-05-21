@@ -880,6 +880,49 @@ describe("passkey", async () => {
 		const fulfilled = results.filter((r) => r.ok);
 		expect(fulfilled.length).toBe(1);
 	});
+
+	it("should reject when the WebAuthn challenge is not consumable", async () => {
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		const context = await auth.$context;
+		const consumeSpy = vi
+			.spyOn(context.internalAdapter, "consumeVerificationValue")
+			.mockResolvedValueOnce(null);
+
+		try {
+			await expect(
+				auth.api.verifyPasskeyAuthentication({
+					headers,
+					body: {
+						response: {
+							id: "",
+							rawId: "",
+							response: {
+								clientDataJSON: "",
+								authenticatorData: "",
+								signature: "",
+							},
+							clientExtensionResults: {},
+							type: "public-key" as const,
+						},
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "CHALLENGE_NOT_FOUND" },
+			});
+			expect(consumeSpy).toHaveBeenCalledOnce();
+		} finally {
+			consumeSpy.mockRestore();
+		}
+	});
 });
 
 describe("passkey expirationTime per-request", () => {
