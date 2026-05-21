@@ -93,7 +93,7 @@ export const hasPermission = async (
 	if (input.useMemoryCache) {
 		// Only read from cache, don't update it with potentially incomplete data
 		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
-	} else if (dynamicAccessControl) {
+	} else if (dynamicAccessControl && input.options.ac) {
 		cacheAllRoles.set(input.organizationId, acRoles);
 	}
 

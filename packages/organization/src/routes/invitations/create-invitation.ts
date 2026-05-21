@@ -408,11 +408,11 @@ export const createInvitation = <O extends OrganizationOptions>(
 			}
 
 			const {
-				email: _,
-				role: __,
-				organizationId: ___,
-				resend: ____,
-				teamId: _____,
+				email: _email,
+				role: _role,
+				organizationId: _organizationId,
+				resend: _resend,
+				teamId: _teamId,
 				...additionalFields
 			} = ctx.body as typeof ctx.body & { teamId?: string | string[] };
 

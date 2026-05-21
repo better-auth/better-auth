@@ -132,9 +132,9 @@ export const removeMember = <O extends OrganizationOptions>(_options: O) => {
 						.map((r) => r.trim())
 						.includes(creatorRole)
 				) {
-					const code = "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
+					const code = "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER";
 					const msg = ORGANIZATION_ERROR_CODES[code];
-					throw APIError.from("BAD_REQUEST", msg);
+					throw APIError.from("FORBIDDEN", msg);
 				}
 				const { members } = await adapter.listMembers({
 					organizationId: realOrgId,

@@ -115,6 +115,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(
 			const canceledI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "canceled",
+				expectedCurrentStatus: "pending",
 			});
 
 			await cancelInvitationHooks.after(

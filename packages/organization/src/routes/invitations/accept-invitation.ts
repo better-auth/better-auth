@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { setSessionCookie } from "better-auth/cookies";
 import * as z from "zod/v4";
@@ -168,23 +169,42 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			const acceptedI = await adapter.updateInvitation({
-				invitationId,
-				status: "accepted",
-				expectedCurrentStatus: "pending",
-			});
-			if (!acceptedI) {
-				const code = "INVITATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
-			}
+			const { acceptedInvitation, member } = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					const acceptedInvitation = await adapter.updateInvitation({
+						invitationId,
+						status: "accepted",
+						expectedCurrentStatus: "pending",
+					});
+					if (!acceptedInvitation) {
+						const code = "INVITATION_NOT_FOUND";
+						const msg = ORGANIZATION_ERROR_CODES[code];
+						throw APIError.from("BAD_REQUEST", msg);
+					}
 
-			// Team support: add user to teams if teams addon is enabled and invitation has teamId
+					const member = await adapter.createMember({
+						organizationId: invitation.organizationId,
+						userId: session.user.id,
+						role: invitation.role,
+						createdAt: new Date(),
+					});
+
+					return { acceptedInvitation, member };
+				},
+			);
+
 			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
-			if (teamsAddon && "teamId" in acceptedI && acceptedI.teamId) {
+			if (
+				teamsAddon &&
+				"teamId" in acceptedInvitation &&
+				acceptedInvitation.teamId
+			) {
 				const { updatedSession } = await teamsAddon.events.acceptInvitation(
 					{
-						invitation: acceptedI as Invitation & { teamId: string },
+						invitation: acceptedInvitation as Invitation & {
+							teamId: string;
+						},
 						user: session.user,
 						session: session.session,
 						organizationId: invitation.organizationId,
@@ -201,13 +221,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				}
 			}
 
-			const member = await adapter.createMember({
-				organizationId: invitation.organizationId,
-				userId: session.user.id,
-				role: invitation.role,
-				createdAt: new Date(),
-			});
-
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
@@ -215,7 +228,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 
 			await acceptInvitationHooks.after(
 				{
-					invitation: acceptedI as unknown as Invitation,
+					invitation: acceptedInvitation as unknown as Invitation,
 					member,
 					user: session.user,
 					organization,
@@ -224,7 +237,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			);
 
 			return ctx.json({
-				invitation: adapter.applyInvitationPrivacy(acceptedI),
+				invitation: adapter.applyInvitationPrivacy(acceptedInvitation),
 				member,
 				organization,
 			});

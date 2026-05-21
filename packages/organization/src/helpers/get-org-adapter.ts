@@ -464,6 +464,42 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		deleteOrganization: async (organizationId: RealOrganizationId) => {
 			return runWithTransaction(baseAdapter, async () => {
 				const adapter = await getCurrentAdapter(baseAdapter);
+
+				const isTeamsEnabled = options.use.some((x) => x.id === "teams");
+				if (isTeamsEnabled) {
+					const teams = await adapter.findMany<{ id: string }>({
+						model: "team",
+						where: [{ field: "organizationId", value: organizationId }],
+						select: ["id"],
+					});
+					if (teams.length > 0) {
+						await adapter.deleteMany({
+							model: "teamMember",
+							where: [
+								{
+									field: "teamId",
+									value: teams.map((t) => t.id),
+									operator: "in",
+								},
+							],
+						});
+					}
+					await adapter.deleteMany({
+						model: "team",
+						where: [{ field: "organizationId", value: organizationId }],
+					});
+				}
+
+				const isDACEnabled = options.use.some(
+					(x) => x.id === "dynamic-access-control",
+				);
+				if (isDACEnabled) {
+					await adapter.deleteMany({
+						model: "organizationRole",
+						where: [{ field: "organizationId", value: organizationId }],
+					});
+				}
+
 				await adapter.deleteMany({
 					model: "member",
 					where: [

@@ -104,7 +104,7 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 	const { schema } = buildEndpointSchema({
 		baseSchema: baseInvitationUrlSchema,
 		additionalFieldsSchema: options?.schema as O["schema"],
-		additionalFieldsModel: "organization",
+		additionalFieldsModel: "invitation",
 	});
 
 	return createAuthEndpoint(
@@ -468,12 +468,12 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 			}
 
 			const {
-				email: _,
-				role: __,
-				organizationId: ___,
-				resend: ____,
-				teamId: _____,
-				callbackURL: ______,
+				email: _email,
+				role: _role,
+				organizationId: _organizationId,
+				resend: _resend,
+				teamId: _teamId,
+				callbackURL: _callbackURL,
 				...additionalFields
 			} = ctx.body as typeof ctx.body & {
 				teamId?: string | string[];

@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { setSessionCookie } from "better-auth/cookies";
 import * as z from "zod/v4";
@@ -102,7 +103,10 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 
-			function redirectOnError(error: { code: string; message: string }) {
+			function redirectOnError(error: {
+				code: string;
+				message: string;
+			}): never {
 				if (callbackURL) {
 					const url = new URL(callbackURL, ctx.context.baseURL);
 					url.searchParams.set("error", error.code);
@@ -182,23 +186,43 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			const acceptedI = await adapter.updateInvitation({
-				invitationId,
-				status: "accepted",
-				expectedCurrentStatus: "pending",
-			});
-			if (!acceptedI) {
-				const code = "INVITATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				return redirectOnError(msg);
-			}
+			const { acceptedInvitation, member } = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					const acceptedInvitation = await adapter.updateInvitation({
+						invitationId,
+						status: "accepted",
+						expectedCurrentStatus: "pending",
+					});
+					if (!acceptedInvitation) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+						);
+					}
 
-			// Team support: add user to teams if teams addon is enabled and invitation has teamId
+					const member = await adapter.createMember({
+						organizationId: invitation.organizationId,
+						userId: session.user.id,
+						role: invitation.role,
+						createdAt: new Date(),
+					});
+
+					return { acceptedInvitation, member };
+				},
+			);
+
 			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
-			if (teamsAddon && "teamId" in acceptedI && acceptedI.teamId) {
+			if (
+				teamsAddon &&
+				"teamId" in acceptedInvitation &&
+				acceptedInvitation.teamId
+			) {
 				const { updatedSession } = await teamsAddon.events.acceptInvitation(
 					{
-						invitation: acceptedI as Invitation & { teamId: string },
+						invitation: acceptedInvitation as Invitation & {
+							teamId: string;
+						},
 						user: session.user,
 						session: session.session,
 						organizationId: invitation.organizationId,
@@ -215,13 +239,6 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 				}
 			}
 
-			const member = await adapter.createMember({
-				organizationId: invitation.organizationId,
-				userId: session.user.id,
-				role: invitation.role,
-				createdAt: new Date(),
-			});
-
 			await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
@@ -229,7 +246,7 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 
 			await acceptInvitationHooks.after(
 				{
-					invitation: acceptedI as unknown as Invitation,
+					invitation: acceptedInvitation as unknown as Invitation,
 					member,
 					user: session.user,
 					organization,
@@ -237,14 +254,12 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			// Redirect to callback URL on success
 			if (callbackURL) {
 				throw ctx.redirect(callbackURL);
 			}
 
-			// If no callback URL, return JSON response
 			return ctx.json({
-				invitation: adapter.applyInvitationPrivacy(acceptedI),
+				invitation: adapter.applyInvitationPrivacy(acceptedInvitation),
 				member,
 				organization,
 			});

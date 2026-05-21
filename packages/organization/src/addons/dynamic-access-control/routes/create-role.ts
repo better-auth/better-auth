@@ -145,7 +145,14 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			// Check if a role with this name already exists in the organization
+			const defaultRoleNames = ctx.context.orgOptions.roles
+				? Object.keys(ctx.context.orgOptions.roles)
+				: ["owner", "admin", "member"];
+			if (defaultRoleNames.includes(body.role.toLowerCase())) {
+				const msg = ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
+
 			const existingRole = await roleAdapter.findRoleByName({
 				roleName: body.role,
 				organizationId: realOrganizationId,
