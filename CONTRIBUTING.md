@@ -226,9 +226,12 @@ it before merge.
 
 ## Following Up on Closed Issues and PRs
 
-Closed issues and PRs are automatically locked after 7 days of inactivity and tagged with the `locked` label. This keeps follow-ups from piling up on stale threads, so any new context can be triaged on its own.
+Closed issues and PRs are automatically locked after 7 days of inactivity
+and tagged with the `locked` label. This keeps follow-ups from piling up
+on stale threads, so any new context can be triaged on its own.
 
-If you're hitting a similar problem or have new information, open a new issue or PR and reference the locked one.
+If you're hitting a similar problem or have new information, open a new
+issue or PR and reference the locked one.
 
 ## AI Policy
 
