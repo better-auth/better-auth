@@ -11,7 +11,7 @@ describe("mongodb-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
-	it("claimOne returns the deleted document from Mongo metadata", async () => {
+	it("consumeOne returns the deleted document from Mongo metadata", async () => {
 		const deleted = {
 			_id: "verification-id",
 			identifier: "magic-link-token",
@@ -24,7 +24,7 @@ describe("mongodb-adapter", () => {
 		} as any;
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
-		const result = await adapter.claimOne({
+		const result = await adapter.consumeOne({
 			model: "verification",
 			where: [{ field: "identifier", value: "magic-link-token" }],
 		});

@@ -1,21 +1,25 @@
 import { BetterAuthError } from "@better-auth/core/error";
-import type { Statements, Subset } from "./types";
+import type {
+	ExactRoleStatements,
+	Role,
+	RoleAuthorizeRequest,
+	RoleInput,
+	Statements,
+} from "./types";
 
 export type AuthorizeResponse =
 	| { success: false; error: string }
 	| { success: true; error?: never | undefined };
 
-export function role<TStatements extends Statements>(statements: TStatements) {
+export function role<
+	const TRoleStatements extends Statements,
+	TAuthorizeStatements extends Statements = TRoleStatements,
+>(
+	statements: TRoleStatements,
+): Role<ExactRoleStatements<TRoleStatements>, TAuthorizeStatements> {
 	return {
-		authorize<K extends keyof TStatements>(
-			request: {
-				[key in K]?:
-					| TStatements[key]
-					| {
-							actions: TStatements[key];
-							connector: "OR" | "AND";
-					  };
-			},
+		authorize(
+			request: RoleAuthorizeRequest<TAuthorizeStatements>,
 			connector: "OR" | "AND" = "AND",
 		): AuthorizeResponse {
 			let success = false;
@@ -24,22 +28,33 @@ export function role<TStatements extends Statements>(statements: TStatements) {
 			)) {
 				const allowedActions = statements[requestedResource];
 				if (!allowedActions) {
-					return {
-						success: false,
-						error: `You are not allowed to access resource: ${requestedResource}`,
-					};
+					if (connector === "AND") {
+						return {
+							success: false,
+							error: `You are not allowed to access resource: ${requestedResource}`,
+						};
+					}
+					success = false;
+					continue;
 				}
 				if (Array.isArray(requestedActions)) {
-					success = (requestedActions as string[]).every((requestedAction) =>
-						allowedActions.includes(requestedAction),
-					);
+					success =
+						requestedActions.length > 0 &&
+						(requestedActions as string[]).every((requestedAction) =>
+							allowedActions.includes(requestedAction),
+						);
 				} else {
 					if (typeof requestedActions === "object") {
 						const actions = requestedActions as {
 							actions: string[];
 							connector: "OR" | "AND";
 						};
-						if (actions.connector === "OR") {
+						if (
+							!Array.isArray(actions.actions) ||
+							actions.actions.length === 0
+						) {
+							success = false;
+						} else if (actions.connector === "OR") {
 							success = actions.actions.some((requestedAction) =>
 								allowedActions.includes(requestedAction),
 							);
@@ -80,8 +95,10 @@ export function createAccessControl<const TStatements extends Statements>(
 	s: TStatements,
 ) {
 	return {
-		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
-			return role<Subset<K, TStatements>>(statements);
+		newRole<const TRoleStatements extends Statements>(
+			statements: RoleInput<TStatements, TRoleStatements>,
+		) {
+			return role<TRoleStatements, TStatements>(statements);
 		},
 		statements: s,
 	};

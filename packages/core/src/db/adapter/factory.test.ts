@@ -56,7 +56,7 @@ function createTestAdapter({
 	});
 }
 
-describe("createAdapterFactory claimOne fallback", () => {
+describe("createAdapterFactory consumeOne fallback", () => {
 	it("uses transaction adapter methods without double-transforming input or output", async () => {
 		const findMany: CustomAdapter["findMany"] = async <T>(
 			params: Parameters<CustomAdapter["findMany"]>[0],
@@ -111,16 +111,18 @@ describe("createAdapterFactory claimOne fallback", () => {
 			}),
 		});
 
-		const result = await adapter.claimOne<{ id: string; identifier: string }>({
-			model: "verification",
-			where: [{ field: "identifier", value: "token" }],
-		});
+		const result = await adapter.consumeOne<{ id: string; identifier: string }>(
+			{
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+			},
+		);
 
 		expect(result?.id).toBe("verification-id");
 		expect(result?.identifier).toBe("stored-token:output");
 	});
 
-	it("returns null when the delete loses the claim race", async () => {
+	it("returns null when the delete loses the consume race", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
 				findMany: async <T>() =>
@@ -134,7 +136,7 @@ describe("createAdapterFactory claimOne fallback", () => {
 			}),
 		});
 
-		const result = await adapter.claimOne({
+		const result = await adapter.consumeOne({
 			model: "verification",
 			where: [{ field: "identifier", value: "token" }],
 		});

@@ -22,7 +22,7 @@ describe("kysely-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
-	it("claimOne deletes only the selected row for non-unique predicates", async () => {
+	it("consumeOne deletes only the selected row for non-unique predicates", async () => {
 		const selectQuery = {
 			select: vi.fn(() => selectQuery),
 			where: vi.fn(() => selectQuery),
@@ -44,7 +44,7 @@ describe("kysely-adapter", () => {
 		} as any;
 		const adapter = kyselyAdapter(db)({});
 
-		const result = await adapter.claimOne({
+		const result = await adapter.consumeOne({
 			model: "verification",
 			where: [{ field: "identifier", value: "same-identifier" }],
 		});
