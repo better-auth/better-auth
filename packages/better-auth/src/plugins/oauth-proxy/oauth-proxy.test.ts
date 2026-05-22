@@ -615,6 +615,79 @@ describe("oauth-proxy", async () => {
 			expect(previewSessions.length).toBe(1);
 		});
 
+		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							disableSignUp: true,
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+			expect(encryptedProfile).toBeTruthy();
+
+			let proxyRedirect: string | null = null;
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						proxyRedirect = context.response.headers.get("location");
+					},
+				},
+			);
+			expect(proxyRedirect).toBeTruthy();
+			const url = new URL(proxyRedirect!);
+			expect(url.searchParams.get("error")).toBe("signup_disabled");
+		});
+
 		it("should reject expired profile payloads", async () => {
 			const { client, auth } = await getTestInstance({
 				plugins: [
