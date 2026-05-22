@@ -420,17 +420,20 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
-	const seenOperationIds = new Map<string, number>();
+	const seenOperationIds = new Set<string>();
 	const uniqueOperationId = (
 		operationId: string | undefined,
 		method: string,
 	) => {
 		if (!operationId) return undefined;
-		const count = seenOperationIds.get(operationId) ?? 0;
-		seenOperationIds.set(operationId, count + 1);
-		return count === 0
-			? operationId
-			: `${operationId}${capitalizeFirstLetter(method.toLowerCase())}`;
+		const base = seenOperationIds.has(operationId)
+			? `${operationId}${capitalizeFirstLetter(method.toLowerCase())}`
+			: operationId;
+		let result = base;
+		let n = 2;
+		while (seenOperationIds.has(result)) result = `${base}${n++}`;
+		seenOperationIds.add(result);
+		return result;
 	};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
