@@ -205,148 +205,16 @@ describe("SCIM", () => {
 			const { auth } = createTestInstance();
 			const schemas = await auth.api.getSCIMSchemas();
 
-			expect(schemas).toMatchInlineSnapshot(`
-				{
-				  "Resources": [
-				    {
-				      "attributes": [
-				        {
-				          "caseExact": true,
-				          "description": "Unique opaque identifier for the User",
-				          "multiValued": false,
-				          "mutability": "readOnly",
-				          "name": "id",
-				          "required": false,
-				          "returned": "default",
-				          "type": "string",
-				          "uniqueness": "server",
-				        },
-				        {
-				          "caseExact": false,
-				          "description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider",
-				          "multiValued": false,
-				          "mutability": "readWrite",
-				          "name": "userName",
-				          "required": true,
-				          "returned": "default",
-				          "type": "string",
-				          "uniqueness": "server",
-				        },
-				        {
-				          "caseExact": true,
-				          "description": "The name of the User, suitable for display to end-users.  The name SHOULD be the full name of the User being described, if known.",
-				          "multiValued": false,
-				          "mutability": "readOnly",
-				          "name": "displayName",
-				          "required": false,
-				          "returned": "default",
-				          "type": "string",
-				          "uniqueness": "none",
-				        },
-				        {
-				          "description": "A Boolean value indicating the User's administrative status.",
-				          "multiValued": false,
-				          "mutability": "readOnly",
-				          "name": "active",
-				          "required": false,
-				          "returned": "default",
-				          "type": "boolean",
-				        },
-				        {
-				          "description": "The components of the user's real name.",
-				          "multiValued": false,
-				          "name": "name",
-				          "required": false,
-				          "subAttributes": [
-				            {
-				              "caseExact": false,
-				              "description": "The full name, including all middlenames, titles, and suffixes as appropriate, formatted for display(e.g., 'Ms. Barbara J Jensen, III').",
-				              "multiValued": false,
-				              "mutability": "readWrite",
-				              "name": "formatted",
-				              "required": false,
-				              "returned": "default",
-				              "type": "string",
-				              "uniqueness": "none",
-				            },
-				            {
-				              "caseExact": false,
-				              "description": "The family name of the User, or last name in most Western languages (e.g., 'Jensen' given the fullname 'Ms. Barbara J Jensen, III').",
-				              "multiValued": false,
-				              "mutability": "readWrite",
-				              "name": "familyName",
-				              "required": false,
-				              "returned": "default",
-				              "type": "string",
-				              "uniqueness": "none",
-				            },
-				            {
-				              "caseExact": false,
-				              "description": "The given name of the User, or first name in most Western languages (e.g., 'Barbara' given the full name 'Ms. Barbara J Jensen, III').",
-				              "multiValued": false,
-				              "mutability": "readWrite",
-				              "name": "givenName",
-				              "required": false,
-				              "returned": "default",
-				              "type": "string",
-				              "uniqueness": "none",
-				            },
-				          ],
-				          "type": "complex",
-				        },
-				        {
-				          "description": "Email addresses for the user.  The value SHOULD be canonicalized by the service provider, e.g., 'bjensen@example.com' instead of 'bjensen@EXAMPLE.COM'. Canonical type values of 'work', 'home', and 'other'.",
-				          "multiValued": true,
-				          "mutability": "readWrite",
-				          "name": "emails",
-				          "required": false,
-				          "returned": "default",
-				          "subAttributes": [
-				            {
-				              "caseExact": false,
-				              "description": "Email addresses for the user.  The value SHOULD be canonicalized by the service provider, e.g., 'bjensen@example.com' instead of 'bjensen@EXAMPLE.COM'. Canonical type values of 'work', 'home', and 'other'.",
-				              "multiValued": false,
-				              "mutability": "readWrite",
-				              "name": "value",
-				              "required": false,
-				              "returned": "default",
-				              "type": "string",
-				              "uniqueness": "server",
-				            },
-				            {
-				              "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute, e.g., the preferred mailing address or primary email address.  The primary attribute value 'true' MUST appear no more than once.",
-				              "multiValued": false,
-				              "mutability": "readWrite",
-				              "name": "primary",
-				              "required": false,
-				              "returned": "default",
-				              "type": "boolean",
-				            },
-				          ],
-				          "type": "complex",
-				          "uniqueness": "none",
-				        },
-				      ],
-				      "description": "User Account",
-				      "id": "urn:ietf:params:scim:schemas:core:2.0:User",
-				      "meta": {
-				        "location": "http://localhost:3000/api/auth/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
-				        "resourceType": "Schema",
-				      },
-				      "name": "User",
-				      "schemas": [
-				        "urn:ietf:params:scim:schemas:core:2.0:Schema",
-				      ],
-				    },
-				  ],
-				  "itemsPerPage": 1,
-				  "schemas": [
-				    "urn:ietf:params:scim:api:messages:2.0:ListResponse",
-				  ],
-				  "startIndex": 1,
-				  "totalResults": 1,
-				}
-			`);
+			expect(schemas).toMatchObject({
+				itemsPerPage: 2,
+				startIndex: 1,
+				totalResults: 2,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+			});
+			expect(schemas.Resources.map((schema) => schema.id)).toEqual([
+				"urn:ietf:params:scim:schemas:core:2.0:User",
+				"urn:ietf:params:scim:schemas:core:2.0:Group",
+			]);
 		});
 
 		it("should fetch a single resource schema", async () => {
@@ -519,32 +387,26 @@ describe("SCIM", () => {
 			const { auth } = createTestInstance();
 			const resourceTypes = await auth.api.getSCIMResourceTypes();
 
-			expect(resourceTypes).toMatchInlineSnapshot(`
-				{
-				  "Resources": [
-				    {
-				      "description": "User Account",
-				      "endpoint": "/Users",
-				      "id": "User",
-				      "meta": {
-				        "location": "http://localhost:3000/api/auth/scim/v2/ResourceTypes/User",
-				        "resourceType": "ResourceType",
-				      },
-				      "name": "User",
-				      "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
-				      "schemas": [
-				        "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
-				      ],
-				    },
-				  ],
-				  "itemsPerPage": 1,
-				  "schemas": [
-				    "urn:ietf:params:scim:api:messages:2.0:ListResponse",
-				  ],
-				  "startIndex": 1,
-				  "totalResults": 1,
-				}
-			`);
+			expect(resourceTypes).toMatchObject({
+				itemsPerPage: 2,
+				startIndex: 1,
+				totalResults: 2,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+			});
+			expect(resourceTypes.Resources).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: "User",
+						endpoint: "/Users",
+						schema: "urn:ietf:params:scim:schemas:core:2.0:User",
+					}),
+					expect.objectContaining({
+						id: "Group",
+						endpoint: "/Groups",
+						schema: "urn:ietf:params:scim:schemas:core:2.0:Group",
+					}),
+				]),
+			);
 		});
 
 		it("should fetch a single resource type", async () => {

@@ -14,20 +14,36 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
 import * as z from "zod";
+import {
+	APIGroupSchema,
+	OpenAPIGroupResourceSchema,
+	SCIMGroupResourceSchema,
+	SCIMGroupResourceType,
+} from "./group-schemas";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import type { AuthMiddleware } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
 import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import type { DBFilter } from "./scim-filters";
-import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import {
+	parseSCIMGroupFilter,
+	parseSCIMUserFilter,
+	SCIMParseError,
+} from "./scim-filters";
 import {
 	ResourceTypeOpenAPISchema,
 	SCIMSchemaOpenAPISchema,
 	ServiceProviderOpenAPISchema,
 } from "./scim-metadata";
-import { createUserResource } from "./scim-resources";
+import { createGroupResource, createUserResource } from "./scim-resources";
 import { storeSCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+import type {
+	SCIMGroup,
+	SCIMGroupMember,
+	SCIMGroupMembership,
+	SCIMOptions,
+	SCIMProvider,
+} from "./types";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -36,8 +52,11 @@ import {
 } from "./user-schemas";
 import { getResourceURL } from "./utils";
 
-const supportedSCIMSchemas = [SCIMUserResourceSchema];
-const supportedSCIMResourceTypes = [SCIMUserResourceType];
+const supportedSCIMSchemas = [SCIMUserResourceSchema, SCIMGroupResourceSchema];
+const supportedSCIMResourceTypes = [
+	SCIMUserResourceType,
+	SCIMGroupResourceType,
+];
 const supportedMediaTypes = ["application/json", "application/scim+json"];
 
 const generateSCIMTokenBodySchema = z.object({
@@ -630,6 +649,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.baseURL,
 				user,
 				account,
+				await getUserSCIMGroups(ctx, user.id),
 			);
 
 			ctx.setStatus(201);
@@ -713,6 +733,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.baseURL,
 				updatedUser!,
 				updatedAccount,
+				await getUserSCIMGroups(ctx, updatedUser!.id),
 			);
 
 			return ctx.json(userResource);
@@ -724,6 +745,408 @@ const listSCIMUsersQuerySchema = z
 		filter: z.string().optional(),
 	})
 	.optional();
+
+const listSCIMGroupsQuerySchema = z
+	.object({
+		filter: z.string().optional(),
+		startIndex: z.coerce.number().int().min(1).optional(),
+		count: z.coerce.number().int().min(0).optional(),
+	})
+	.optional();
+
+const patchSCIMGroupBodySchema = z.object({
+	schemas: z
+		.array(z.string())
+		.refine(
+			(s) => s.includes("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+			{
+				message: "Invalid schemas for PatchOp",
+			},
+		),
+	Operations: z.array(
+		z.object({
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
+			path: z.string().optional(),
+			value: z.any(),
+		}),
+	),
+});
+
+function getOrganizationId(ctx: GenericEndpointContext): string {
+	const organizationId = ctx.context.scimProvider.organizationId;
+	if (!organizationId) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail: "SCIM Groups require an organization-scoped token",
+			scimType: "invalidValue",
+		});
+	}
+	return organizationId;
+}
+
+function getGroupIdFromParam(groupId: string) {
+	return decodeURIComponent(groupId);
+}
+
+function normalizeRoleSet(roles: string | string[]): string[] {
+	const roleList = Array.isArray(roles) ? roles : [roles];
+	return Array.from(new Set(roleList.flatMap(parseMemberRoles)));
+}
+
+function serializeRoleSet(roles: string[]): string {
+	return roles.join(",");
+}
+
+function memberHasRoles(member: Member, roles: string[]): boolean {
+	const memberRoles = parseMemberRoles(member.role);
+	return roles.every((role) => memberRoles.includes(role));
+}
+
+function addRolesToMember(member: Member, roles: string[]): string {
+	return serializeRoleSet(
+		Array.from(new Set([...parseMemberRoles(member.role), ...roles])),
+	);
+}
+
+function removeRolesFromMember(member: Member, roles: string[]): string {
+	return serializeRoleSet(
+		parseMemberRoles(member.role).filter((role) => !roles.includes(role)),
+	);
+}
+
+function groupMembershipFromRoles(
+	baseURL: string,
+	roles: string[],
+): SCIMGroupMembership[] {
+	return roles.map((role) => ({
+		value: role,
+		$ref: getResourceURL(
+			`/scim/v2/Groups/${encodeURIComponent(role)}`,
+			baseURL,
+		),
+		display: role,
+	}));
+}
+
+async function resolveGroupRoles(
+	opts: SCIMOptions,
+	group: SCIMGroup,
+): Promise<string[]> {
+	const mappedRoles = opts.mapGroupToRole
+		? await opts.mapGroupToRole(group)
+		: group.displayName;
+	const roles = normalizeRoleSet(mappedRoles);
+	if (roles.length === 0) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail: "Group must map to at least one organization role",
+			scimType: "invalidValue",
+		});
+	}
+	return roles;
+}
+
+async function findSCIMProviderAccounts(ctx: GenericEndpointContext) {
+	return ctx.context.adapter.findMany<Account>({
+		model: "account",
+		where: [
+			{ field: "providerId", value: ctx.context.scimProvider.providerId },
+		],
+	});
+}
+
+async function findSCIMOrganizationMembers(ctx: GenericEndpointContext) {
+	const organizationId = getOrganizationId(ctx);
+	const accounts = await findSCIMProviderAccounts(ctx);
+	const accountUserIds = accounts.map((account) => account.userId);
+
+	if (accountUserIds.length === 0) {
+		return { members: [] as Member[], users: [] as User[] };
+	}
+
+	const [members, users] = await Promise.all([
+		ctx.context.adapter.findMany<Member>({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: organizationId },
+				{ field: "userId", value: accountUserIds, operator: "in" },
+			],
+		}),
+		ctx.context.adapter.findMany<User>({
+			model: "user",
+			where: [{ field: "id", value: accountUserIds, operator: "in" }],
+		}),
+	]);
+
+	return { members, users };
+}
+
+function getUserDisplay(user: User): string {
+	return user.name || user.email || user.id;
+}
+
+function userToMemberRef(user: User, baseURL: string): SCIMGroupMembership {
+	return {
+		value: user.id,
+		$ref: getResourceURL(`/scim/v2/Users/${user.id}`, baseURL),
+		display: getUserDisplay(user),
+	};
+}
+
+async function replaceGroupMembers(
+	ctx: GenericEndpointContext,
+	roles: string[],
+	memberUserIds: Set<string>,
+) {
+	const { members } = await findSCIMOrganizationMembers(ctx);
+	await Promise.all(
+		members.map((member) =>
+			updateMemberRoles(ctx, member.userId, (currentMember) =>
+				memberUserIds.has(member.userId)
+					? addRolesToMember(currentMember, roles)
+					: removeRolesFromMember(currentMember, roles),
+			),
+		),
+	);
+}
+
+async function addGroupRoles(
+	ctx: GenericEndpointContext,
+	roles: string[],
+	users: User[],
+) {
+	await Promise.all(
+		users.map((user) =>
+			updateMemberRoles(ctx, user.id, (member) =>
+				addRolesToMember(member, roles),
+			),
+		),
+	);
+}
+
+async function removeGroupRoles(
+	ctx: GenericEndpointContext,
+	roles: string[],
+	users: User[],
+) {
+	await Promise.all(
+		users.map((user) =>
+			updateMemberRoles(ctx, user.id, (member) =>
+				removeRolesFromMember(member, roles),
+			),
+		),
+	);
+}
+
+function getPatchMemberFromPath(path?: string): SCIMGroupMember | null {
+	if (!path) {
+		return null;
+	}
+
+	const match = path.match(/^members\s*\[\s*value\s+eq\s+"([^"]+)"\s*\]$/i);
+	if (!match) {
+		return null;
+	}
+
+	return { value: match[1] };
+}
+
+function normalizePatchMembers(operation: {
+	op: "replace" | "add" | "remove";
+	path?: string;
+	value: unknown;
+}): { members: SCIMGroupMember[]; removeAll?: boolean } | null {
+	const path = operation.path?.trim();
+	const memberFromPath = getPatchMemberFromPath(path);
+
+	if (memberFromPath) {
+		return { members: [memberFromPath] };
+	}
+
+	if (path && path.toLowerCase() !== "members") {
+		return null;
+	}
+
+	if (operation.value === undefined) {
+		if (operation.op === "remove") {
+			return { members: [], removeAll: true };
+		}
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail: "Group member patch operation must include a value",
+			scimType: "invalidValue",
+		});
+	}
+
+	if (Array.isArray(operation.value)) {
+		return { members: operation.value as SCIMGroupMember[] };
+	}
+	const value = operation.value as Record<string, unknown> | undefined;
+	if (value?.members && Array.isArray(value.members)) {
+		return { members: value.members as SCIMGroupMember[] };
+	}
+	return { members: [operation.value as SCIMGroupMember] };
+}
+
+function getSCIMMemberValue(member: SCIMGroupMember): string {
+	if (member.type?.toLowerCase() === "group") {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail: "Nested SCIM Groups are not supported",
+			scimType: "invalidValue",
+		});
+	}
+
+	if (member.value) {
+		return member.value;
+	}
+
+	if (member.$ref) {
+		if (member.$ref.includes("/Groups/")) {
+			throw new SCIMAPIError("BAD_REQUEST", {
+				detail: "Nested SCIM Groups are not supported",
+				scimType: "invalidValue",
+			});
+		}
+		const userId = member.$ref.match(/\/Users\/([^/?#]+)/)?.[1];
+		if (userId) {
+			return decodeURIComponent(userId);
+		}
+	}
+
+	throw new SCIMAPIError("BAD_REQUEST", {
+		detail: "Group member must reference a SCIM User",
+		scimType: "invalidValue",
+	});
+}
+
+async function resolveSCIMGroupUsers(
+	ctx: GenericEndpointContext,
+	members: SCIMGroupMember[] = [],
+): Promise<User[]> {
+	const users: User[] = [];
+	const seenUserIds = new Set<string>();
+	const organizationId = getOrganizationId(ctx);
+	const providerId = ctx.context.scimProvider.providerId;
+
+	for (const member of members) {
+		const userId = getSCIMMemberValue(member);
+		if (seenUserIds.has(userId)) {
+			continue;
+		}
+		const { user } = await findUserById(ctx.context.adapter, {
+			userId,
+			providerId,
+			organizationId,
+		});
+		if (!user) {
+			throw new SCIMAPIError("BAD_REQUEST", {
+				detail: "Group member target was not found",
+				scimType: "noTarget",
+			});
+		}
+		seenUserIds.add(userId);
+		users.push(user);
+	}
+
+	return users;
+}
+
+async function updateMemberRoles(
+	ctx: GenericEndpointContext,
+	userId: string,
+	updateRole: (member: Member) => string,
+) {
+	const organizationId = getOrganizationId(ctx);
+	const member = await ctx.context.adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{ field: "organizationId", value: organizationId },
+			{ field: "userId", value: userId },
+		],
+	});
+
+	if (!member) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail: "Group member target was not found",
+			scimType: "noTarget",
+		});
+	}
+
+	return ctx.context.adapter.update<Member>({
+		model: "member",
+		where: [{ field: "id", value: member.id }],
+		update: { role: updateRole(member) },
+	});
+}
+
+function getGroupMembers(
+	roles: string[],
+	members: Member[],
+	usersById: Map<string, User>,
+	baseURL: string,
+): SCIMGroupMembership[] {
+	return members
+		.filter((member) => memberHasRoles(member, roles))
+		.map((member) => {
+			const user = usersById.get(member.userId);
+			if (!user) {
+				return null;
+			}
+			return userToMemberRef(user, baseURL);
+		})
+		.filter((member): member is SCIMGroupMembership => Boolean(member));
+}
+
+async function getGroupResource(
+	ctx: GenericEndpointContext,
+	groupId: string,
+	allowEmpty = false,
+) {
+	const roles = normalizeRoleSet(getGroupIdFromParam(groupId));
+	const { members, users } = await findSCIMOrganizationMembers(ctx);
+	const usersById = new Map(users.map((user) => [user.id, user]));
+	const groupMembers = getGroupMembers(
+		roles,
+		members,
+		usersById,
+		ctx.context.baseURL,
+	);
+
+	if (!allowEmpty && groupMembers.length === 0) {
+		throw new SCIMAPIError("NOT_FOUND", {
+			detail: "Group not found",
+		});
+	}
+
+	return createGroupResource(ctx.context.baseURL, {
+		id: serializeRoleSet(roles),
+		members: groupMembers,
+	});
+}
+
+async function getUserSCIMGroups(
+	ctx: GenericEndpointContext,
+	userId: string,
+): Promise<SCIMGroupMembership[] | undefined> {
+	const organizationId = ctx.context.scimProvider.organizationId;
+	if (!organizationId) {
+		return undefined;
+	}
+
+	const member = await ctx.context.adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{ field: "organizationId", value: organizationId },
+			{ field: "userId", value: userId },
+		],
+	});
+
+	return groupMembershipFromRoles(
+		ctx.context.baseURL,
+		parseMemberRoles(member?.role ?? ""),
+	);
+}
 
 export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 	createAuthEndpoint(
@@ -821,6 +1244,24 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				where: [...userFilters, ...apiFilters],
 			});
 
+			const membersByUserId = new Map<string, Member>();
+			if (organizationId) {
+				const members = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: organizationId },
+						{
+							field: "userId",
+							value: users.map((user) => user.id),
+							operator: "in",
+						},
+					],
+				});
+				for (const member of members) {
+					membersByUserId.set(member.userId, member);
+				}
+			}
+
 			return ctx.json({
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				totalResults: users.length,
@@ -828,9 +1269,341 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				itemsPerPage: users.length,
 				Resources: users.map((user) => {
 					const account = accounts.find((a) => a.userId === user.id);
-					return createUserResource(ctx.context.baseURL, user, account);
+					const member = membersByUserId.get(user.id);
+					return createUserResource(
+						ctx.context.baseURL,
+						user,
+						account,
+						organizationId
+							? groupMembershipFromRoles(
+									ctx.context.baseURL,
+									parseMemberRoles(member?.role ?? ""),
+								)
+							: undefined,
+					);
 				}),
 			});
+		},
+	);
+
+export const listSCIMGroups = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups",
+		{
+			method: "GET",
+			query: listSCIMGroupsQuerySchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "List SCIM groups",
+					description:
+						"Returns virtual SCIM groups backed by organization roles.",
+					responses: {
+						"200": {
+							description: "SCIM group list",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											totalResults: { type: "number" },
+											itemsPerPage: { type: "number" },
+											startIndex: { type: "number" },
+											Resources: {
+												type: "array",
+												items: OpenAPIGroupResourceSchema,
+											},
+										},
+									},
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const { members, users } = await findSCIMOrganizationMembers(ctx);
+			const usersById = new Map(users.map((user) => [user.id, user]));
+			let roles = Array.from(
+				new Set(members.flatMap((member) => parseMemberRoles(member.role))),
+			).sort((a, b) => a.localeCompare(b));
+
+			if (ctx.query?.filter) {
+				const { value } = parseSCIMAPIGroupFilter(ctx.query.filter);
+				roles = roles.filter((role) => role.toLowerCase() === value);
+			}
+
+			const totalResults = roles.length;
+			const startIndex = ctx.query?.startIndex ?? 1;
+			const count = ctx.query?.count ?? totalResults;
+			const paginatedRoles = roles.slice(
+				startIndex - 1,
+				startIndex - 1 + count,
+			);
+
+			const baseURL = ctx.context.baseURL;
+			const Resources = paginatedRoles.map((role) => {
+				const resolvedRoles = normalizeRoleSet(getGroupIdFromParam(role));
+				const groupMembers = getGroupMembers(
+					resolvedRoles,
+					members,
+					usersById,
+					baseURL,
+				);
+				return createGroupResource(baseURL, {
+					id: serializeRoleSet(resolvedRoles),
+					members: groupMembers,
+				});
+			});
+
+			return ctx.json({
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				totalResults,
+				startIndex,
+				itemsPerPage: Resources.length,
+				Resources,
+			});
+		},
+	);
+
+export const getSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "GET",
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Get SCIM group details",
+					description:
+						"Returns a virtual SCIM group backed by an organization role.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			return ctx.json(await getGroupResource(ctx, ctx.params.groupId));
+		},
+	);
+
+export const createSCIMGroup = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups",
+		{
+			method: "POST",
+			body: APIGroupSchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Create SCIM group",
+					description:
+						"Creates a virtual SCIM group by applying mapped organization role(s) to SCIM users.",
+					responses: {
+						"201": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			getOrganizationId(ctx);
+			const roles = await resolveGroupRoles(opts, ctx.body);
+			const groupId = serializeRoleSet(roles);
+
+			const { members } = await findSCIMOrganizationMembers(ctx);
+			if (members.some((member) => memberHasRoles(member, roles))) {
+				throw new SCIMAPIError("CONFLICT", {
+					detail: "Group already exists",
+					scimType: "uniqueness",
+				});
+			}
+
+			const users = await resolveSCIMGroupUsers(ctx, ctx.body.members);
+			await Promise.all(
+				users.map((user) =>
+					updateMemberRoles(ctx, user.id, (member) =>
+						addRolesToMember(member, roles),
+					),
+				),
+			);
+
+			const groupResource = createGroupResource(ctx.context.baseURL, {
+				id: groupId,
+				externalId: ctx.body.externalId,
+				displayName: ctx.body.displayName,
+				members: users.map((user) =>
+					userToMemberRef(user, ctx.context.baseURL),
+				),
+			});
+
+			ctx.setStatus(201);
+			ctx.setHeader("location", groupResource.meta.location);
+			return ctx.json(groupResource);
+		},
+	);
+
+export const updateSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "PUT",
+			body: APIGroupSchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Update SCIM group",
+					description:
+						"Replaces membership for a virtual SCIM group while preserving unrelated roles.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+			const users = await resolveSCIMGroupUsers(ctx, ctx.body.members);
+			const nextUserIds = new Set(users.map((user) => user.id));
+
+			await replaceGroupMembers(ctx, roles, nextUserIds);
+
+			return ctx.json(await getGroupResource(ctx, ctx.params.groupId, true));
+		},
+	);
+
+export const patchSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "PATCH",
+			body: patchSCIMGroupBodySchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Patch SCIM group",
+					description:
+						"Adds, removes, or replaces members of a virtual SCIM group.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+
+			for (const operation of ctx.body.Operations) {
+				const patchMembers = normalizePatchMembers(operation);
+				if (!patchMembers) {
+					continue;
+				}
+
+				const users = await resolveSCIMGroupUsers(ctx, patchMembers.members);
+				const userIds = new Set(users.map((user) => user.id));
+
+				if (operation.op === "replace") {
+					await replaceGroupMembers(ctx, roles, userIds);
+				} else if (operation.op === "add") {
+					await addGroupRoles(ctx, roles, users);
+				} else if (operation.op === "remove") {
+					if (patchMembers.removeAll) {
+						await replaceGroupMembers(ctx, roles, new Set());
+					} else {
+						await removeGroupRoles(ctx, roles, users);
+					}
+				}
+			}
+
+			return ctx.json(await getGroupResource(ctx, ctx.params.groupId, true));
+		},
+	);
+
+export const deleteSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "DELETE",
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: [...supportedMediaTypes, ""],
+				openapi: {
+					summary: "Delete SCIM group",
+					description:
+						"Removes mapped organization role(s) from all members without deleting organization memberships.",
+					responses: {
+						"204": {
+							description: "Delete applied successfully",
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+			const { members } = await findSCIMOrganizationMembers(ctx);
+
+			await Promise.all(
+				members
+					.filter((member) => memberHasRoles(member, roles))
+					.map((member) =>
+						updateMemberRoles(ctx, member.userId, (currentMember) =>
+							removeRolesFromMember(currentMember, roles),
+						),
+					),
+			);
+
+			ctx.setStatus(204);
+			return;
 		},
 	);
 
@@ -878,7 +1651,14 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
-			return ctx.json(createUserResource(ctx.context.baseURL, user, account));
+			return ctx.json(
+				createUserResource(
+					ctx.context.baseURL,
+					user,
+					account,
+					await getUserSCIMGroups(ctx, user.id),
+				),
+			);
 		},
 	);
 
@@ -1338,4 +2118,16 @@ const parseSCIMAPIUserFilter = (filter?: string) => {
 	}
 
 	return filters;
+};
+
+const parseSCIMAPIGroupFilter = (filter: string) => {
+	try {
+		return parseSCIMGroupFilter(filter);
+	} catch (error) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail:
+				error instanceof SCIMParseError ? error.message : "Invalid SCIM filter",
+			scimType: "invalidFilter",
+		});
+	}
 };

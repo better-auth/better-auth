@@ -17,6 +17,26 @@ export type SCIMName = {
 
 export type SCIMEmail = { value?: string; primary?: boolean };
 
+export type SCIMGroupMember = {
+	value?: string;
+	$ref?: string;
+	display?: string;
+	type?: string;
+};
+
+export type SCIMGroup = {
+	id?: string;
+	externalId?: string;
+	displayName: string;
+	members?: SCIMGroupMember[];
+};
+
+export type SCIMGroupMembership = {
+	value: string;
+	$ref: string;
+	display: string;
+};
+
 export type SCIMOptions = {
 	/**
 	 * SCIM provider ownership configuration. When enabled, each provider
@@ -37,6 +57,14 @@ export type SCIMOptions = {
 	 * These will take precedence over the database when present.
 	 */
 	defaultSCIM?: Omit<SCIMProvider, "id">[];
+	/**
+	 * Maps an incoming SCIM Group resource to Better Auth organization role(s).
+	 *
+	 * Defaults to using the group's displayName as the role name.
+	 */
+	mapGroupToRole?: (
+		group: SCIMGroup,
+	) => string | string[] | Promise<string | string[]>;
 	/**
 	 * A callback that runs before a new SCIM token is generated.
 	 * Runs after the built-in role check, so it can add additional

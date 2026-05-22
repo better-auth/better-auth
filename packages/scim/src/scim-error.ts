@@ -78,6 +78,15 @@ export const SCIMErrorOpenAPISchemas = {
 			},
 		},
 	},
+	"409": {
+		description:
+			"Conflict. The requested resource conflicts with an existing resource.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
 	"429": {
 		description:
 			"Too Many Requests. You have exceeded the rate limit. Try again later.",

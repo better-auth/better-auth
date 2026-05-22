@@ -1,10 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
+	createSCIMGroup,
 	createSCIMUser,
+	deleteSCIMGroup,
 	deleteSCIMProviderConnection,
 	deleteSCIMUser,
 	generateSCIMToken,
+	getSCIMGroup,
 	getSCIMProviderConnection,
 	getSCIMResourceType,
 	getSCIMResourceTypes,
@@ -12,9 +15,12 @@ import {
 	getSCIMSchemas,
 	getSCIMServiceProviderConfig,
 	getSCIMUser,
+	listSCIMGroups,
 	listSCIMProviderConnections,
 	listSCIMUsers,
+	patchSCIMGroup,
 	patchSCIMUser,
+	updateSCIMGroup,
 	updateSCIMUser,
 } from "./routes";
 import type { SCIMOptions } from "./types";
@@ -51,6 +57,12 @@ export const scim = (options?: SCIMOptions) => {
 			deleteSCIMUser: deleteSCIMUser(authMiddleware),
 			updateSCIMUser: updateSCIMUser(authMiddleware),
 			listSCIMUsers: listSCIMUsers(authMiddleware),
+			getSCIMGroup: getSCIMGroup(authMiddleware),
+			createSCIMGroup: createSCIMGroup(authMiddleware, opts),
+			patchSCIMGroup: patchSCIMGroup(authMiddleware),
+			deleteSCIMGroup: deleteSCIMGroup(authMiddleware),
+			updateSCIMGroup: updateSCIMGroup(authMiddleware),
+			listSCIMGroups: listSCIMGroups(authMiddleware),
 			getSCIMServiceProviderConfig,
 			getSCIMSchemas,
 			getSCIMSchema,

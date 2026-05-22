@@ -1,3 +1,4 @@
+import { SCIMGroupResourceSchema } from "./group-schemas";
 import { SCIMUserResourceSchema } from "./user-schemas";
 
 export type DBFilter = {
@@ -12,6 +13,10 @@ const SCIMOperators: Record<string, string | undefined> = {
 
 const SCIMUserAttributes: Record<string, string | undefined> = {
 	userName: "email",
+};
+
+const SCIMGroupAttributes: Record<string, string | undefined> = {
+	displayName: "displayName",
 };
 
 export class SCIMParseError extends Error {}
@@ -66,4 +71,28 @@ export const parseSCIMUserFilter = (filter: string) => {
 	});
 
 	return filters;
+};
+
+export const parseSCIMGroupFilter = (filter: string) => {
+	const { attribute, operator, value } = parseSCIMFilter(filter);
+
+	const targetAttribute = SCIMGroupAttributes[attribute];
+	const resourceAttribute = SCIMGroupResourceSchema.attributes.find(
+		(attr) => attr.name === attribute,
+	);
+
+	if (!targetAttribute || !resourceAttribute) {
+		throw new SCIMParseError(`The attribute "${attribute}" is not supported`);
+	}
+
+	let finalValue = value.replaceAll('"', "");
+	if (!resourceAttribute.caseExact) {
+		finalValue = finalValue.toLowerCase();
+	}
+
+	return {
+		field: targetAttribute,
+		value: finalValue,
+		operator,
+	};
 };
