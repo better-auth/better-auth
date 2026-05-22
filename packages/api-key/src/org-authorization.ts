@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import type { OrganizationOptions } from "better-auth/plugins/organization";
+import type { OrganizationOptions } from "@better-auth/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 
 /**
@@ -91,9 +91,7 @@ export async function checkOrgApiKeyPermission(
 
 	// Check permission using the organization's permission system
 	const hasPermissionResult = await checkPermission(
-		ctx,
 		member.role,
-		organizationId,
 		requiredAction,
 		orgOptions,
 	);
@@ -114,32 +112,37 @@ export async function checkOrgApiKeyPermission(
  * are granted full access to API key operations.
  */
 async function checkPermission(
-	ctx: GenericEndpointContext,
 	role: string,
-	organizationId: string,
 	action: ApiKeyPermissionAction,
 	orgOptions: OrganizationOptions,
 ): Promise<boolean> {
-	// Import hasPermission dynamically to avoid circular dependencies
-	const { hasPermission } = await import("better-auth/plugins/organization");
+	const roles = role.split(",");
+	const creatorRole = orgOptions.creatorRole || "owner";
 
-	try {
-		const result = await hasPermission(
-			{
-				role,
-				options: orgOptions,
-				permissions: {
-					apiKey: [action],
-				},
-				organizationId,
-				// Allow organization owners full access to API keys
-				allowCreatorAllPermissions: true,
-			},
-			ctx,
-		);
-
-		return result;
-	} catch {
-		return false;
+	// Organization owners/creators have full access to API keys
+	if (roles.includes(creatorRole)) {
+		return true;
 	}
+
+	// For non-owners, check if their role has the required apiKey permission
+	const configuredRoles = orgOptions.roles || {};
+
+	for (const r of roles) {
+		const roleConfig = configuredRoles[r as keyof typeof configuredRoles];
+		if (roleConfig) {
+			try {
+				const result = roleConfig.authorize({
+					apiKey: [action],
+				});
+				if (result?.success) {
+					return true;
+				}
+			} catch {
+				// Role doesn't have apiKey permissions defined
+				continue;
+			}
+		}
+	}
+
+	return false;
 }

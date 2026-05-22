@@ -71,12 +71,16 @@ type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
  */
 export type FieldAttributeToObject<
 	Fields extends Record<string, DBFieldAttribute>,
-> = AddOptionalFields<
-	{
-		[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
-	},
-	Fields
->;
+> = [keyof Fields] extends [never]
+	? {}
+	: string extends keyof Fields
+		? {}
+		: AddOptionalFields<
+				{
+					[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
+				},
+				Fields
+			>;
 
 type AddOptionalFields<
 	T extends Record<string, any>,
@@ -111,14 +115,22 @@ export type InferAdditionalFieldsFromPluginOptions<
 			| undefined;
 	},
 	isClientSide extends boolean = true,
-> = Options["schema"] extends {
-	[key in SchemaName]?: {
-		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
-	};
-}
-	? isClientSide extends true
-		? FieldAttributeToObject<RemoveFieldsWithInputFalse<Field>>
-		: FieldAttributeToObject<Field>
+> = Options["schema"] extends
+	| {
+			[key in SchemaName]?:
+				| {
+						additionalFields?: infer Field extends
+							| Record<string, DBFieldAttribute>
+							| undefined;
+				  }
+				| undefined;
+	  }
+	| undefined
+	? Field extends Record<string, DBFieldAttribute>
+		? isClientSide extends true
+			? FieldAttributeToObject<RemoveFieldsWithInputFalse<Field>>
+			: FieldAttributeToObject<Field>
+		: {}
 	: {};
 
 type RemoveFieldsWithInputFalse<T extends Record<string, DBFieldAttribute>> = {

@@ -1,0 +1,156 @@
+---
+title: Privacy
+description: Control what member and invitation data is exposed in API responses.
+---
+
+The organization plugin includes privacy settings that allow you to hide sensitive fields like email addresses from API responses. This is useful when you want to protect member privacy while still allowing organization functionality.
+
+## Enabling Privacy
+
+Privacy is disabled by default. To enable it, set the `privacy` option when configuring the organization plugin:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "@better-auth/organization"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            privacy: true // Enable with defaults
+        })
+    ]
+})
+```
+
+When set to `true`, the following defaults are applied:
+
+* Member emails are hidden from `getFullOrganization` responses
+* Invitation emails are hidden from all invitation-related endpoints
+* Inviter emails are hidden from `getInvitation` responses
+
+## Custom Configuration
+
+You can customize which fields are hidden using the detailed configuration:
+
+```ts title="auth.ts"
+organization({
+    privacy: {
+        // Fields to hide from member user data
+        hiddenMemberFields: ["email", "image"],
+        // Fields to hide from invitation data
+        hiddenInvitationFields: ["email"]
+    }
+})
+```
+
+### Available Options
+
+| Option                   | Type                               | Default     | Description                                       |
+| ------------------------ | ---------------------------------- | ----------- | ------------------------------------------------- |
+| `hiddenMemberFields`     | `("email" \| "name" \| "image")[]` | `["email"]` | Fields to hide from member user data in responses |
+| `hiddenInvitationFields` | `"email"[]`                        | `["email"]` | Fields to hide from invitation data in responses  |
+
+## Affected Endpoints
+
+When privacy is enabled, the following endpoints are affected:
+
+### Member Data
+
+**`getFullOrganization`** - The `members[].user` object will have hidden fields removed:
+
+```ts
+// With privacy: { hiddenMemberFields: ["email"] }
+{
+    members: [
+        {
+            id: "member-id",
+            userId: "user-id",
+            role: "admin",
+            user: {
+                id: "user-id",
+                name: "John Doe",
+                image: "https://...",
+                // email is hidden
+            }
+        }
+    ]
+}
+```
+
+### Invitation Data
+
+All invitation-related endpoints will have hidden fields removed:
+
+* `listInvitations` - Each invitation object
+* `listUserInvitations` - Each invitation object
+* `createInvitation` - The returned invitation
+* `createInvitationUrl` - The returned invitation
+* `acceptInvitation` - The returned invitation
+* `rejectInvitation` - The returned invitation
+* `cancelInvitation` - The returned invitation
+* `getInvitation` - The invitation object and `inviterEmail` field
+
+```ts
+// With privacy: { hiddenInvitationFields: ["email"] }
+{
+    invitation: {
+        id: "invitation-id",
+        role: "member",
+        status: "pending",
+        organizationId: "org-id",
+        // email is hidden
+    }
+}
+```
+
+## Examples
+
+### Hide Only Member Emails
+
+```ts
+organization({
+    privacy: {
+        hiddenMemberFields: ["email"],
+        hiddenInvitationFields: [] // Keep invitation emails visible
+    }
+})
+```
+
+### Hide Only Invitation Emails
+
+```ts
+organization({
+    privacy: {
+        hiddenMemberFields: [], // Keep member data visible
+        hiddenInvitationFields: ["email"]
+    }
+})
+```
+
+### Hide All Sensitive Member Data
+
+```ts
+organization({
+    privacy: {
+        hiddenMemberFields: ["email", "name", "image"],
+        hiddenInvitationFields: ["email"]
+    }
+})
+```
+
+## Important Notes
+
+<Callout type="info">
+  Privacy is a **plugin-level setting** that applies to all organizations globally.
+  It cannot be configured per-organization.
+</Callout>
+
+<Callout type="warn">
+  When privacy is enabled, hidden fields are removed for **all users**, including
+  organization owners and administrators. There are no role-based exceptions.
+</Callout>
+
+<Callout type="info">
+  Internal operations (like sending invitation emails via `sendInvitationEmail` callback)
+  still have access to the full data. Privacy filtering only affects API responses.
+</Callout>

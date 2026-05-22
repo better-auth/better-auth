@@ -5,7 +5,8 @@ import { createAuthEndpoint } from "../api";
 import { betterAuth } from "../auth/minimal";
 import type { InferCtx } from "../client/path-to-object";
 import { tanstackStartCookies } from "../integrations/tanstack-start";
-import { admin, organization, twoFactor } from "../plugins";
+import { admin, multiSession, twoFactor } from "../plugins";
+
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -202,7 +203,7 @@ describe("general types", async () => {
 
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [twoFactor(), organization()],
+			plugins: [twoFactor()],
 		});
 		expectTypeOf<typeof auth.$Infer.Session.user>().toEqualTypeOf<{
 			id: string;
@@ -224,7 +225,6 @@ describe("general types", async () => {
 			token: string;
 			ipAddress?: string | undefined | null;
 			userAgent?: string | undefined | null;
-			activeOrganizationId?: string | undefined | null;
 		}>();
 	});
 
@@ -300,10 +300,10 @@ describe("plugin types through factory and indirection patterns", () => {
 
 	it("preserves endpoint types with mixed-shape plugins", () => {
 		const auth = betterAuth({
-			plugins: [admin(), organization(), tanstackStartCookies()],
+			plugins: [admin(), multiSession(), tanstackStartCookies()],
 		});
 		expectTypeOf(auth.api.createUser).toBeFunction();
-		expectTypeOf(auth.api.createOrganization).toBeFunction();
+		expectTypeOf(auth.api.listDeviceSessions).toBeFunction();
 	});
 
 	it("preserves $ERROR_CODES through factory ReturnType", () => {

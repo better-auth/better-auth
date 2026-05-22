@@ -8,6 +8,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "@better-auth/organization": "workspace:*"
   }
 }

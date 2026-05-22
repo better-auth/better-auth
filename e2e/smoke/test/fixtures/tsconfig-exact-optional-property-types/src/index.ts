@@ -1,10 +1,8 @@
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { betterAuth } from "better-auth";
-import {
-	inferAdditionalFields,
-	organizationClient,
-} from "better-auth/client/plugins";
+import { inferAdditionalFields } from "better-auth/client/plugins";
 import { nextCookies } from "better-auth/next-js";
-import { organization } from "better-auth/plugins";
 import { createAuthClient } from "better-auth/react";
 
 const auth = betterAuth({

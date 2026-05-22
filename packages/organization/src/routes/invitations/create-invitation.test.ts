@@ -1,0 +1,970 @@
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
+import { describe, expect } from "vitest";
+import { organizationClient } from "../../client";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { organization } from "../../organization";
+import { getOrganizationData } from "../../test/utils";
+
+/**
+ * Helper to define `getTestInstance` as a shorter alias, specific to the organization plugin.
+ * @internal
+ */
+async function defineInstance<Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient()],
+			},
+		},
+	);
+
+	const adapter = (await instance.auth.$context).adapter;
+
+	return { ...instance, adapter };
+}
+
+describe("create invitation", async (it) => {
+	const plugin = organization({
+		membershipLimit: 6,
+		async sendInvitationEmail(data, request) {},
+		invitationLimit: 5,
+	});
+	const { auth, signInWithTestUser, signInWithUser, adapter } =
+		await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	// Create an organization for testing
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it.each([
+		{
+			role: "owner" as const,
+			email: `invite-owner-${crypto.randomUUID()}@test.com`,
+		},
+		{
+			role: "admin" as const,
+			email: `invite-admin-${crypto.randomUUID()}@test.com`,
+		},
+		{
+			role: "member" as const,
+			email: `invite-member-${crypto.randomUUID()}@test.com`,
+		},
+	])("invites user to organization with role $role", async ({
+		role,
+		email,
+	}) => {
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email,
+				role,
+			},
+		});
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(email);
+		expect(result.invitation.role).toBe(role);
+		expect(result.invitation.status).toBe("pending");
+	});
+
+	it("should create invitation with multiple roles", async () => {
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: `multi-role-${crypto.randomUUID()}@test.com`,
+				role: ["admin", "member"],
+			},
+		});
+		expect(result.invitation.role).toBe("admin,member");
+	});
+
+	it("should validate email format", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: testOrg.id,
+					email: "invalid-email",
+					role: "member",
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should not allow inviting a user twice regardless of email casing", async () => {
+		const rng = crypto.randomUUID();
+		const userEmail = `${rng}@email.com`;
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: userEmail,
+				role: "member",
+			},
+		});
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(userEmail);
+
+		// Try to invite the same email again
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: testOrg.id,
+					email: userEmail,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+
+		// Try to invite the same email with different casing
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: testOrg.id,
+					email: userEmail.toUpperCase(),
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should not allow inviting user who is already a member", async () => {
+		// Create a new organization for this test
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		// Create a new user
+		const memberEmail = `already-member-${crypto.randomUUID()}@test.com`;
+		const { user: memberUser } = (await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: "password123",
+				name: "Already Member",
+			},
+		})) as unknown as { user: { id: string } };
+
+		// Add as member directly via adapter
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: newOrg.id,
+				userId: memberUser.id,
+				role: "member",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		// Try to invite the user who is already a member
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					email: memberEmail,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
+		);
+
+		// Also test with uppercase email
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					email: memberEmail.toUpperCase(),
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should not allow inviting member with a creator role unless they are creator", async () => {
+		// Create a new organization
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		// Create an admin user
+		const adminEmail = `admin-user-${crypto.randomUUID()}@test.com`;
+		const { user: adminUser } = (await auth.api.signUpEmail({
+			body: {
+				email: adminEmail,
+				password: "test123456",
+				name: "Admin User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		// Add admin to org via adapter
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: newOrg.id,
+				userId: adminUser.id,
+				role: "admin",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		// Sign in as admin and try to invite someone with owner role
+		const { headers: adminHeaders } = await signInWithUser(
+			adminEmail,
+			"test123456",
+		);
+
+		await expect(
+			auth.api.createInvitation({
+				headers: adminHeaders,
+				body: {
+					organizationId: newOrg.id,
+					email: `some-user-${crypto.randomUUID()}@test.com`,
+					role: "owner",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
+				.message,
+		);
+	});
+
+	it("should not allow non-members to invite", async () => {
+		// Create a user who is not a member of the org
+		const nonMemberEmail = `non-member-${crypto.randomUUID()}@test.com`;
+		await auth.api.signUpEmail({
+			body: {
+				email: nonMemberEmail,
+				password: "test123456",
+				name: "Non Member",
+			},
+		});
+		const { headers: nonMemberHeaders } = await signInWithUser(
+			nonMemberEmail,
+			"test123456",
+		);
+
+		await expect(
+			auth.api.createInvitation({
+				headers: nonMemberHeaders,
+				body: {
+					organizationId: testOrg.id,
+					email: `someone-${crypto.randomUUID()}@test.com`,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND.message);
+	});
+});
+
+describe("invitation limit", async (it) => {
+	const plugin = organization({
+		invitationLimit: 1,
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should invite member to organization", async () => {
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email: `invite-limit-test-${crypto.randomUUID()}@test.com`,
+				role: "member",
+			},
+		});
+		expect(result.invitation.status).toBe("pending");
+	});
+
+	it("should throw error when invitation limit is reached", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `invite-limit-test-2-${crypto.randomUUID()}@test.com`,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
+		);
+	});
+
+	it("should throw error with custom invitation limit", async () => {
+		const { auth: auth2, signInWithTestUser: signInWithTestUser2 } =
+			await defineInstance([
+				organization({
+					invitationLimit: async (data, ctx) => {
+						return 0;
+					},
+					async sendInvitationEmail() {},
+				}),
+			]);
+		const { headers: headers2 } = await signInWithTestUser2();
+		const customOrgData = getOrganizationData();
+		const customOrg = await auth2.api.createOrganization({
+			body: {
+				name: customOrgData.name,
+				slug: customOrgData.slug,
+			},
+			headers: headers2,
+		});
+
+		await expect(
+			auth2.api.createInvitation({
+				body: {
+					email: `custom-limit-test-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					organizationId: customOrg.id,
+				},
+				headers: headers2,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
+		);
+	});
+});
+
+describe("resend invitation should reuse existing", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser, adapter } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reuse existing invitation when resend is true", async () => {
+		const email = `resend-test-${crypto.randomUUID()}@test.com`;
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "member",
+			},
+		});
+		expect(result.invitation.status).toBe("pending");
+		const originalInviteId = result.invitation.id;
+		const originalExpiresAt = result.invitation.expiresAt;
+
+		// Wait a bit to ensure expiresAt will be different
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		// Resend the invitation
+		const resendResult = (await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "member",
+				resend: true,
+			},
+		})) as any;
+
+		// Check response - resend may return different structure
+		expect(resendResult).toBeDefined();
+
+		// Try to access invitation either at top level or nested
+		const resendInvitation = resendResult.id
+			? resendResult
+			: resendResult.invitation || resendResult;
+		expect(resendInvitation).toBeDefined();
+		expect(resendInvitation.id).toBe(originalInviteId);
+		expect(resendInvitation.status).toBe("pending");
+		// expiresAt should be updated
+		expect(new Date(resendInvitation.expiresAt).getTime()).toBeGreaterThan(
+			new Date(originalExpiresAt).getTime(),
+		);
+
+		// Check DB to ensure only 1 invitation exists (not duplicated)
+		const invitations = await adapter.findMany({
+			model: "invitation",
+			where: [
+				{ field: "email", value: email },
+				{ field: "organizationId", value: org.id },
+			],
+		});
+		expect(invitations.length).toBe(1);
+	});
+});
+
+describe("organization invitation hooks", async (it) => {
+	let hooksCalled: string[] = [];
+
+	const plugin = organization({
+		hooks: {
+			beforeCreateInvitation: async (data) => {
+				hooksCalled.push("beforeCreateInvitation");
+			},
+			afterCreateInvitation: async (data) => {
+				hooksCalled.push("afterCreateInvitation");
+			},
+		},
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should call invitation hooks", async () => {
+		hooksCalled = [];
+
+		await auth.api.createInvitation({
+			headers,
+			body: {
+				email: `hooks-test-${crypto.randomUUID()}@example.com`,
+				role: "member",
+			},
+		});
+
+		expect(hooksCalled).toContain("beforeCreateInvitation");
+		expect(hooksCalled).toContain("afterCreateInvitation");
+	});
+});
+
+describe("member permission to invite", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser, signInWithUser, adapter } =
+		await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should not allow members without invite permission to invite", async () => {
+		// Create a member user
+		const memberEmail = `member-no-invite-${crypto.randomUUID()}@test.com`;
+		const { user: memberUser } = (await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: "test123456",
+				name: "Member User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		// Add as member (default member role doesn't have invite permission)
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: org.id,
+				userId: memberUser.id,
+				role: "member",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		const { headers: memberHeaders } = await signInWithUser(
+			memberEmail,
+			"test123456",
+		);
+
+		await expect(
+			auth.api.createInvitation({
+				headers: memberHeaders,
+				body: {
+					organizationId: org.id,
+					email: `someone-to-invite-${crypto.randomUUID()}@test.com`,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES
+				.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION.message,
+		);
+	});
+
+	it("should allow admins to invite members", async () => {
+		// Create an admin user
+		const adminEmail = `admin-can-invite-${crypto.randomUUID()}@test.com`;
+		const { user: adminUser } = (await auth.api.signUpEmail({
+			body: {
+				email: adminEmail,
+				password: "test123456",
+				name: "Admin User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		// Add as admin
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: org.id,
+				userId: adminUser.id,
+				role: "admin",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminEmail,
+			"test123456",
+		);
+
+		const inviteEmail = `admin-invited-${crypto.randomUUID()}@test.com`;
+		const result = await auth.api.createInvitation({
+			headers: adminHeaders,
+			body: {
+				organizationId: org.id,
+				email: inviteEmail,
+				role: "member",
+			},
+		});
+		expect(result.invitation.email).toBe(inviteEmail);
+		expect(result.invitation.role).toBe("member");
+	});
+});
+
+describe("invite by user ID", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser, signInWithUser, adapter } =
+		await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should invite user by userId", async () => {
+		const userEmail = `invite-by-id-${crypto.randomUUID()}@test.com`;
+		const { user: invitedUser } = (await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "User To Invite",
+			},
+		})) as unknown as { user: { id: string } };
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				userId: invitedUser.id,
+				role: "member",
+			},
+		});
+
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(userEmail);
+		expect(result.invitation.role).toBe("member");
+		expect(result.invitation.status).toBe("pending");
+	});
+
+	it("should throw error when userId does not exist", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					userId: "non-existent-user-id",
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.USER_NOT_FOUND.message);
+	});
+
+	it("should not allow inviting user by ID who is already a member", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const memberEmail = `already-member-by-id-${crypto.randomUUID()}@test.com`;
+		const { user: memberUser } = (await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: "password123",
+				name: "Already Member By ID",
+			},
+		})) as unknown as { user: { id: string } };
+
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: newOrg.id,
+				userId: memberUser.id,
+				role: "member",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					userId: memberUser.id,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should not allow inviting user by ID who is already invited", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const userEmail = `double-invite-by-id-${crypto.randomUUID()}@test.com`;
+		const { user: invitedUser } = (await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Double Invite User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: newOrg.id,
+				userId: invitedUser.id,
+				role: "member",
+			},
+		});
+		expect(result.invitation).toBeDefined();
+
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					userId: invitedUser.id,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should work with both email and userId provided (userId takes precedence)", async () => {
+		const userEmail = `both-email-and-id-${crypto.randomUUID()}@test.com`;
+		const { user: invitedUser } = (await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Both Email And ID User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				userId: invitedUser.id,
+				email: "different-email@test.com",
+				role: "member",
+			},
+		});
+
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(userEmail);
+	});
+
+	it("should allow invited user to accept invitation", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const userEmail = `accept-invite-by-id-${crypto.randomUUID()}@test.com`;
+		const { user: invitedUser } = (await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Accept Invite User",
+			},
+		})) as unknown as { user: { id: string } };
+
+		const inviteResult = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: newOrg.id,
+				userId: invitedUser.id,
+				role: "member",
+			},
+		});
+
+		const { headers: inviteeHeaders } = await signInWithUser(
+			userEmail,
+			"test123456",
+		);
+
+		const acceptResult = await auth.api.acceptInvitation({
+			headers: inviteeHeaders,
+			body: {
+				invitationId: inviteResult.invitation.id,
+			},
+		});
+
+		expect(acceptResult!.invitation.status).toBe("accepted");
+		expect(acceptResult!.member).toBeDefined();
+		expect(acceptResult!.member.userId).toBe(invitedUser.id);
+		expect(acceptResult!.member.organizationId).toBe(newOrg.id);
+	});
+});
+
+describe("role validation", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reject invitation with unknown role", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `unknown-role-${crypto.randomUUID()}@test.com`,
+					role: "nonexistent-role",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should reject invitation with unknown role in multi-role array", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `unknown-multi-${crypto.randomUUID()}@test.com`,
+					role: ["member", "nonexistent-role"],
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message);
+	});
+
+	it("should allow invitation with valid built-in roles", async () => {
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email: `valid-role-${crypto.randomUUID()}@test.com`,
+				role: "admin",
+			},
+		});
+		expect(result.invitation.role).toBe("admin");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9452
+ */
+describe("cancelPendingInvitationsOnReInvite", async (it) => {
+	const plugin = organization({
+		cancelPendingInvitationsOnReInvite: true,
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser, adapter } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should allow re-inviting without resend flag when cancelPendingInvitationsOnReInvite is enabled", async () => {
+		const email = `reinvite-auto-${crypto.randomUUID()}@test.com`;
+		const first = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "member",
+			},
+		});
+		expect(first.invitation.status).toBe("pending");
+
+		const second = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				email,
+				role: "admin",
+			},
+		});
+		expect(second.invitation.status).toBe("pending");
+		expect(second.invitation.role).toBe("admin");
+		expect(second.invitation.id).not.toBe(first.invitation.id);
+
+		const oldInvitation = await adapter.findOne({
+			model: "invitation",
+			where: [{ field: "id", value: first.invitation.id }],
+		});
+		expect(oldInvitation.status).toBe("canceled");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9616
+ */
+describe("comma-in-teamId validation", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should reject teamId containing a comma", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `comma-team-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					teamId: "team1,team2",
+				},
+			}),
+		).rejects.toThrow("Team id contains a reserved character");
+	});
+
+	it("should reject teamId array containing a comma", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					email: `comma-arr-${crypto.randomUUID()}@test.com`,
+					role: "member",
+					teamId: ["valid-team", "bad,team"],
+				},
+			}),
+		).rejects.toThrow("Team id contains a reserved character");
+	});
+});
