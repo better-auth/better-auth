@@ -257,10 +257,20 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 						throw e;
 					}
-					if (result.error || !result.data) {
+					if (result.error) {
 						ctx.context.logger.error(
-							"Failed to create user or session",
+							"OAuth proxy callback error",
 							result.error,
+						);
+						throw redirectOnError(
+							ctx,
+							errorURL,
+							result.error.split(" ").join("_"),
+						);
+					}
+					if (!result.data) {
+						ctx.context.logger.error(
+							"OAuth proxy callback missing session data",
 						);
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
