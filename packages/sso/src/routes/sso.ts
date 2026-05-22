@@ -1693,7 +1693,10 @@ async function handleOIDCCallback(
 		throw e;
 	}
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({ error: linked.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
 	const { session, user } = linked.data!;
 
