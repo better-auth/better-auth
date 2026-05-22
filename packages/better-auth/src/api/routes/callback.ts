@@ -9,6 +9,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { isAPIError } from "../../utils/is-api-error";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -253,20 +254,28 @@ export const callbackOAuth = createAuthEndpoint(
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
-		const result = await handleOAuthUserInfo(c, {
-			userInfo: {
-				...userInfo,
-				id: providerAccountId,
-				email: userInfo.email,
-				name: userInfo.name || "",
-			},
-			account: accountData,
-			callbackURL,
-			disableSignUp:
-				(provider.disableImplicitSignUp && !requestSignUp) ||
-				provider.options?.disableSignUp,
-			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
-		});
+		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+		try {
+			result = await handleOAuthUserInfo(c, {
+				userInfo: {
+					...userInfo,
+					id: providerAccountId,
+					email: userInfo.email,
+					name: userInfo.name || "",
+				},
+				account: accountData,
+				callbackURL,
+				disableSignUp:
+					(provider.disableImplicitSignUp && !requestSignUp) ||
+					provider.options?.disableSignUp,
+				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+			});
+		} catch (e) {
+			if (isAPIError(e) && e.body?.code) {
+				return redirectOnError(e.body.code, e.body.message);
+			}
+			throw e;
+		}
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
