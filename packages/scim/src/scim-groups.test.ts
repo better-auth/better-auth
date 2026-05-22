@@ -219,6 +219,14 @@ describe("SCIM Groups", () => {
 			itemsPerPage: 1,
 			Resources: [expect.objectContaining({ id: "member" })],
 		});
+		await expect(
+			auth.api.listSCIMGroups({
+				query: { filter: 'displayName ne "member"' },
+				headers: headers(scimToken),
+			}),
+		).rejects.toMatchObject({
+			body: { status: "400", scimType: "invalidFilter" },
+		});
 	});
 
 	it("should include role groups on user resources", async () => {
@@ -359,7 +367,6 @@ describe("SCIM Groups", () => {
 					{
 						op: "remove",
 						path: `members[value eq "${userA.id}"]`,
-						value: undefined,
 					},
 				],
 			},
@@ -369,8 +376,12 @@ describe("SCIM Groups", () => {
 			params: { groupId: "admin" },
 			body: {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-				Operations: [{ op: "remove", path: "members", value: undefined }],
+				Operations: [{ op: "remove", path: "members" }],
 			},
+			headers: headers(scimToken),
+		});
+		const emptyGroup = await auth.api.getSCIMGroup({
+			params: { groupId: "admin" },
 			headers: headers(scimToken),
 		});
 
@@ -378,6 +389,7 @@ describe("SCIM Groups", () => {
 			expect.objectContaining({ value: userB.id }),
 		]);
 		expect(removeAll.members).toEqual([]);
+		expect(emptyGroup.members).toEqual([]);
 	});
 
 	it("should delete only the mapped role and keep org membership", async () => {
@@ -455,6 +467,11 @@ describe("SCIM Groups", () => {
 
 		await expect(createGroup(orgAToken, "admin", [])).rejects.toMatchObject({
 			body: { status: "409", scimType: "uniqueness" },
+		});
+		await expect(
+			createGroup(orgAToken, "admin,editor", [{ value: userA.id }]),
+		).rejects.toMatchObject({
+			body: { status: "400", scimType: "invalidValue" },
 		});
 		await expect(
 			createGroup(orgAToken, "nested", [{ value: "admin", type: "Group" }]),

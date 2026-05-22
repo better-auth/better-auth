@@ -771,7 +771,7 @@ const patchSCIMGroupBodySchema = z.object({
 				.default("replace")
 				.pipe(z.enum(["replace", "add", "remove"])),
 			path: z.string().optional(),
-			value: z.any(),
+			value: z.any().optional(),
 		}),
 	),
 });
@@ -791,9 +791,30 @@ function getGroupIdFromParam(groupId: string) {
 	return decodeURIComponent(groupId);
 }
 
-function normalizeRoleSet(roles: string | string[]): string[] {
+function validateRoleName(role: string): string {
+	const trimmedRole = role.trim();
+	if (!trimmedRole) {
+		return "";
+	}
+	if (trimmedRole.includes(",")) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail:
+				'SCIM Group role names cannot contain ",". Return multiple roles as an array from mapGroupToRole.',
+			scimType: "invalidValue",
+		});
+	}
+	return trimmedRole;
+}
+
+function normalizeRoleSet(
+	roles: string | string[],
+	options: { splitComma?: boolean } = {},
+): string[] {
 	const roleList = Array.isArray(roles) ? roles : [roles];
-	return Array.from(new Set(roleList.flatMap(parseMemberRoles)));
+	const normalizedRoles = roleList.flatMap((role) =>
+		options.splitComma ? parseMemberRoles(role) : [validateRoleName(role)],
+	);
+	return Array.from(new Set(normalizedRoles.filter(Boolean)));
 }
 
 function serializeRoleSet(roles: string[]): string {
@@ -903,7 +924,7 @@ async function replaceGroupMembers(
 	const { members } = await findSCIMOrganizationMembers(ctx);
 	await Promise.all(
 		members.map((member) =>
-			updateMemberRoles(ctx, member.userId, (currentMember) =>
+			updateExistingMemberRoles(ctx, member, (currentMember) =>
 				memberUserIds.has(member.userId)
 					? addRolesToMember(currentMember, roles)
 					: removeRolesFromMember(currentMember, roles),
@@ -917,12 +938,20 @@ async function addGroupRoles(
 	roles: string[],
 	users: User[],
 ) {
+	const membersByUserId = await findOrganizationMembersByUserIds(
+		ctx,
+		users.map((user) => user.id),
+	);
 	await Promise.all(
-		users.map((user) =>
-			updateMemberRoles(ctx, user.id, (member) =>
-				addRolesToMember(member, roles),
-			),
-		),
+		users.map((user) => {
+			const member = membersByUserId.get(user.id);
+			if (!member) {
+				throwGroupMemberNotFound();
+			}
+			return updateExistingMemberRoles(ctx, member, (currentMember) =>
+				addRolesToMember(currentMember, roles),
+			);
+		}),
 	);
 }
 
@@ -931,12 +960,20 @@ async function removeGroupRoles(
 	roles: string[],
 	users: User[],
 ) {
+	const membersByUserId = await findOrganizationMembersByUserIds(
+		ctx,
+		users.map((user) => user.id),
+	);
 	await Promise.all(
-		users.map((user) =>
-			updateMemberRoles(ctx, user.id, (member) =>
-				removeRolesFromMember(member, roles),
-			),
-		),
+		users.map((user) => {
+			const member = membersByUserId.get(user.id);
+			if (!member) {
+				throwGroupMemberNotFound();
+			}
+			return updateExistingMemberRoles(ctx, member, (currentMember) =>
+				removeRolesFromMember(currentMember, roles),
+			);
+		}),
 	);
 }
 
@@ -956,7 +993,7 @@ function getPatchMemberFromPath(path?: string): SCIMGroupMember | null {
 function normalizePatchMembers(operation: {
 	op: "replace" | "add" | "remove";
 	path?: string;
-	value: unknown;
+	value?: unknown;
 }): { members: SCIMGroupMember[]; removeAll?: boolean } | null {
 	const path = operation.path?.trim();
 	const memberFromPath = getPatchMemberFromPath(path);
@@ -1024,59 +1061,93 @@ async function resolveSCIMGroupUsers(
 	ctx: GenericEndpointContext,
 	members: SCIMGroupMember[] = [],
 ): Promise<User[]> {
-	const users: User[] = [];
-	const seenUserIds = new Set<string>();
 	const organizationId = getOrganizationId(ctx);
 	const providerId = ctx.context.scimProvider.providerId;
+	const userIds = Array.from(
+		new Set(members.map((member) => getSCIMMemberValue(member))),
+	);
 
-	for (const member of members) {
-		const userId = getSCIMMemberValue(member);
-		if (seenUserIds.has(userId)) {
-			continue;
-		}
-		const { user } = await findUserById(ctx.context.adapter, {
-			userId,
-			providerId,
-			organizationId,
-		});
-		if (!user) {
-			throw new SCIMAPIError("BAD_REQUEST", {
-				detail: "Group member target was not found",
-				scimType: "noTarget",
-			});
-		}
-		seenUserIds.add(userId);
-		users.push(user);
+	if (userIds.length === 0) {
+		return [];
 	}
 
-	return users;
+	const [accounts, organizationMembers, users] = await Promise.all([
+		ctx.context.adapter.findMany<Account>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: providerId },
+				{ field: "userId", value: userIds, operator: "in" },
+			],
+		}),
+		ctx.context.adapter.findMany<Member>({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: organizationId },
+				{ field: "userId", value: userIds, operator: "in" },
+			],
+		}),
+		ctx.context.adapter.findMany<User>({
+			model: "user",
+			where: [{ field: "id", value: userIds, operator: "in" }],
+		}),
+	]);
+
+	const accountUserIds = new Set(accounts.map((account) => account.userId));
+	const memberUserIds = new Set(
+		organizationMembers.map((member) => member.userId),
+	);
+	const usersById = new Map(users.map((user) => [user.id, user]));
+
+	return userIds.map((userId) => {
+		const user = usersById.get(userId);
+		if (!accountUserIds.has(userId) || !memberUserIds.has(userId) || !user) {
+			throwGroupMemberNotFound();
+		}
+		return user;
+	});
 }
 
-async function updateMemberRoles(
+function throwGroupMemberNotFound(): never {
+	throw new SCIMAPIError("BAD_REQUEST", {
+		detail: "Group member target was not found",
+		scimType: "noTarget",
+	});
+}
+
+async function findOrganizationMembersByUserIds(
 	ctx: GenericEndpointContext,
-	userId: string,
-	updateRole: (member: Member) => string,
-) {
+	userIds: string[],
+): Promise<Map<string, Member>> {
+	if (userIds.length === 0) {
+		return new Map();
+	}
+
 	const organizationId = getOrganizationId(ctx);
-	const member = await ctx.context.adapter.findOne<Member>({
+	const members = await ctx.context.adapter.findMany<Member>({
 		model: "member",
 		where: [
 			{ field: "organizationId", value: organizationId },
-			{ field: "userId", value: userId },
+			{ field: "userId", value: userIds, operator: "in" },
 		],
 	});
 
-	if (!member) {
-		throw new SCIMAPIError("BAD_REQUEST", {
-			detail: "Group member target was not found",
-			scimType: "noTarget",
-		});
+	return new Map(members.map((member) => [member.userId, member]));
+}
+
+async function updateExistingMemberRoles(
+	ctx: GenericEndpointContext,
+	member: Member,
+	updateRole: (member: Member) => string,
+) {
+	const role = updateRole(member);
+	if (role === member.role) {
+		return member;
 	}
 
 	return ctx.context.adapter.update<Member>({
 		model: "member",
 		where: [{ field: "id", value: member.id }],
-		update: { role: updateRole(member) },
+		update: { role },
 	});
 }
 
@@ -1101,9 +1172,11 @@ function getGroupMembers(
 async function getGroupResource(
 	ctx: GenericEndpointContext,
 	groupId: string,
-	allowEmpty = false,
+	allowEmpty = true,
 ) {
-	const roles = normalizeRoleSet(getGroupIdFromParam(groupId));
+	const roles = normalizeRoleSet(getGroupIdFromParam(groupId), {
+		splitComma: true,
+	});
 	const { members, users } = await findSCIMOrganizationMembers(ctx);
 	const usersById = new Map(users.map((user) => [user.id, user]));
 	const groupMembers = getGroupMembers(
@@ -1347,7 +1420,9 @@ export const listSCIMGroups = (authMiddleware: AuthMiddleware) =>
 
 			const baseURL = ctx.context.baseURL;
 			const Resources = paginatedRoles.map((role) => {
-				const resolvedRoles = normalizeRoleSet(getGroupIdFromParam(role));
+				const resolvedRoles = normalizeRoleSet(getGroupIdFromParam(role), {
+					splitComma: true,
+				});
 				const groupMembers = getGroupMembers(
 					resolvedRoles,
 					members,
@@ -1447,13 +1522,7 @@ export const createSCIMGroup = (
 			}
 
 			const users = await resolveSCIMGroupUsers(ctx, ctx.body.members);
-			await Promise.all(
-				users.map((user) =>
-					updateMemberRoles(ctx, user.id, (member) =>
-						addRolesToMember(member, roles),
-					),
-				),
-			);
+			await addGroupRoles(ctx, roles, users);
 
 			const groupResource = createGroupResource(ctx.context.baseURL, {
 				id: groupId,
@@ -1499,7 +1568,9 @@ export const updateSCIMGroup = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId), {
+				splitComma: true,
+			});
 			const users = await resolveSCIMGroupUsers(ctx, ctx.body.members);
 			const nextUserIds = new Set(users.map((user) => user.id));
 
@@ -1538,7 +1609,9 @@ export const patchSCIMGroup = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId), {
+				splitComma: true,
+			});
 
 			for (const operation of ctx.body.Operations) {
 				const patchMembers = normalizePatchMembers(operation);
@@ -1589,14 +1662,16 @@ export const deleteSCIMGroup = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId));
+			const roles = normalizeRoleSet(getGroupIdFromParam(ctx.params.groupId), {
+				splitComma: true,
+			});
 			const { members } = await findSCIMOrganizationMembers(ctx);
 
 			await Promise.all(
 				members
 					.filter((member) => memberHasRoles(member, roles))
 					.map((member) =>
-						updateMemberRoles(ctx, member.userId, (currentMember) =>
+						updateExistingMemberRoles(ctx, member, (currentMember) =>
 							removeRolesFromMember(currentMember, roles),
 						),
 					),
@@ -2122,7 +2197,13 @@ const parseSCIMAPIUserFilter = (filter?: string) => {
 
 const parseSCIMAPIGroupFilter = (filter: string) => {
 	try {
-		return parseSCIMGroupFilter(filter);
+		const parsedFilter = parseSCIMGroupFilter(filter);
+		if (parsedFilter.operator !== "eq") {
+			throw new SCIMParseError(
+				`The operator "${parsedFilter.operator}" is not supported`,
+			);
+		}
+		return parsedFilter;
 	} catch (error) {
 		throw new SCIMAPIError("BAD_REQUEST", {
 			detail:

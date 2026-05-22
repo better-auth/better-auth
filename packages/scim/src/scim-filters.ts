@@ -46,6 +46,13 @@ const parseSCIMFilter = (filter: string) => {
 	return { attribute, operator, value };
 };
 
+const unquoteFilterValue = (value: string) => {
+	if (value.startsWith('"') && value.endsWith('"')) {
+		return value.slice(1, -1);
+	}
+	return value;
+};
+
 export const parseSCIMUserFilter = (filter: string) => {
 	const { attribute, operator, value } = parseSCIMFilter(filter);
 
@@ -59,7 +66,7 @@ export const parseSCIMUserFilter = (filter: string) => {
 		throw new SCIMParseError(`The attribute "${attribute}" is not supported`);
 	}
 
-	let finalValue = value.replaceAll('"', "");
+	let finalValue = unquoteFilterValue(value);
 	if (!resourceAttribute.caseExact) {
 		finalValue = finalValue.toLowerCase();
 	}
@@ -85,7 +92,7 @@ export const parseSCIMGroupFilter = (filter: string) => {
 		throw new SCIMParseError(`The attribute "${attribute}" is not supported`);
 	}
 
-	let finalValue = value.replaceAll('"', "");
+	let finalValue = unquoteFilterValue(value);
 	if (!resourceAttribute.caseExact) {
 		finalValue = finalValue.toLowerCase();
 	}
