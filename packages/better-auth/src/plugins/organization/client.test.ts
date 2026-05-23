@@ -84,16 +84,17 @@ describe("organization", () => {
 		);
 
 		expect(activeOrgListener).toBeDefined();
-		const matcher = activeOrgListener?.matcher;
+		const matcher = activeOrgListener!.matcher;
 		expect(matcher).toBeDefined();
 
-		expect(matcher?.("/sign-in/email")).toBe(true);
-		expect(matcher?.("/sign-up/email")).toBe(true);
-		expect(matcher?.("/verify-email")).toBe(true);
-		expect(matcher?.("/update-session")).toBe(true);
-		expect(matcher?.("/delete-user")).toBe(true);
+		expect(matcher("/sign-in/email")).toBe(true);
+		expect(matcher("/sign-up/email")).toBe(true);
+		expect(matcher("/sign-out")).toBe(true);
+		expect(matcher("/verify-email")).toBe(true);
+		expect(matcher("/update-session")).toBe(true);
+		expect(matcher("/delete-user")).toBe(true);
 
-		expect(matcher?.("/organization/get-full-organization")).toBe(true);
-		expect(matcher?.("/get-session")).toBe(false);
+		expect(matcher("/organization/get-full-organization")).toBe(true);
+		expect(matcher("/get-session")).toBe(false);
 	});
 });

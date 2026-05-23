@@ -82,6 +82,15 @@ export interface OrganizationClientOptions {
 		| undefined;
 }
 
+const ACTIVE_ORG_SESSION_PATHS = new Set([
+	"/sign-out",
+	"/sign-in/email",
+	"/sign-up/email",
+	"/verify-email",
+	"/update-session",
+	"/delete-user",
+]);
+
 export const organizationClient = <CO extends OrganizationClientOptions>(
 	options?: CO | undefined,
 ) => {
@@ -249,12 +258,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			{
 				matcher(path) {
 					return (
-						path === "/sign-out" ||
-						path === "/sign-in/email" ||
-						path === "/sign-up/email" ||
-						path === "/verify-email" ||
-						path === "/update-session" ||
-						path === "/delete-user" ||
+						ACTIVE_ORG_SESSION_PATHS.has(path) ||
 						path.startsWith("/organization")
 					);
 				},
