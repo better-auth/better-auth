@@ -236,6 +236,59 @@
 	animation: shimmer 3s ease-in-out infinite;
 }
 
+/* NPM download card - animated gradient border on hover */
+.npm-download-card {
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	position: relative;
+}
+
+.npm-download-card::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border: 1px solid transparent;
+	background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.08),
+			rgba(130, 200, 160, 0.12),
+			rgba(255, 255, 255, 0.08),
+			transparent
+		)
+		border-box;
+	mask:
+		linear-gradient(#fff 0 0) padding-box,
+		linear-gradient(#fff 0 0);
+	mask-composite: exclude;
+	-webkit-mask:
+		linear-gradient(#fff 0 0) padding-box,
+		linear-gradient(#fff 0 0);
+	-webkit-mask-composite: xor;
+	opacity: 0;
+	transition: opacity 0.5s ease;
+	background-size: 200% 100%;
+	animation: border-shimmer 3s linear infinite;
+	pointer-events: none;
+}
+
+.npm-download-card:hover::before {
+	opacity: 1;
+}
+
+.npm-download-card:hover {
+	border-color: rgba(255, 255, 255, 0.04);
+	box-shadow: 0 0 30px rgba(130, 200, 160, 0.03);
+}
+
+@keyframes border-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
 @keyframes scroll-features {
 	0% {
 		transform: translateY(0);

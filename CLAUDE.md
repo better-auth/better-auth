@@ -17,7 +17,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 
 - ALWAYS use `pnpm` (never npm, yarn, or bun)
 - NEVER run `pnpm test` (runs all packages). Use `vitest path/to/test -t <pattern>`
-- Type check: `pnpm lint:types`
+- Type check: `pnpm typecheck`
 - Formatting/linting runs automatically on commit (Lefthook + Biome). No need to run manually.
 
 ## Writing Code
@@ -55,7 +55,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - Bug fixes and new features MUST include tests
 - For bug fixes: if the issue is reproducible in a test, write a failing test first, then implement the fix
 - Update docs (`docs/content/docs/`) when changing public API
-- Ensure `pnpm lint:types` passes before finishing
+- Ensure `pnpm typecheck` passes before finishing
 - DO NOT COMMIT unless the user explicitly asks
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`. Use `!` for breaking changes (e.g. `feat(auth)!:`)
 - PRs target `main`

@@ -46,8 +46,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							content: {
 								"application/json": {
 									schema: {
-										type: "object",
-										nullable: true,
+										// better-call's OpenAPI schema type doesn't yet model OAS 3.1 union `type`.
+										type: ["object", "null"] as unknown as "object",
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -278,13 +278,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								await getShouldSkipSessionRefresh();
 
 							if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
-								const cookieMaxAge =
-									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
-								const newExpiresAt = getDate(cookieMaxAge, "sec");
 								const refreshedSession = {
 									session: {
 										...session.session,
-										expiresAt: newExpiresAt,
 									},
 									user: session.user,
 									updatedAt: Date.now(),
@@ -546,17 +542,32 @@ export const getSessionFromCtx = async <
 		method: "GET",
 		asResponse: false,
 		headers: ctx.headers!,
-		returnHeaders: false,
+		returnHeaders: true,
 		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
 		},
-	}).catch((e) => {
+	}).catch(() => {
 		return null;
 	});
-	ctx.context.session = session;
-	return session as {
+	if (!session) {
+		ctx.context.session = null;
+		return null;
+	}
+	if (session.headers) {
+		session.headers.forEach((value, key) => {
+			if (!ctx.context.responseHeaders) {
+				ctx.context.responseHeaders = new Headers({ [key]: value });
+			} else if (key.toLowerCase() === "set-cookie") {
+				ctx.context.responseHeaders.append(key, value);
+			} else {
+				ctx.context.responseHeaders.set(key, value);
+			}
+		});
+	}
+	ctx.context.session = session.response;
+	return session.response as {
 		session: S & Session;
 		user: U & User;
 	} | null;

@@ -379,13 +379,15 @@ export function basicToClientCredentials(authorization: string) {
 	if (authorization.startsWith("Basic ")) {
 		const encoded = authorization.replace("Basic ", "");
 		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
+		const separatorIndex = decoded.indexOf(":");
+		if (separatorIndex === -1) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			});
 		}
-		const [id, secret] = decoded.split(":", 2);
+		const id = decoded.slice(0, separatorIndex);
+		const secret = decoded.slice(separatorIndex + 1);
 		if (!id || !secret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
@@ -558,21 +560,42 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
  */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+export const signedQueryIssuedAtParam = "ba_iat";
+export const postLoginClearedParam = "ba_pl";
+
+export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
+	if (!raw) return null;
+	const issuedAt = Number(raw);
+	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+	return new Date(issuedAt);
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return nextQuery;
 }
 
 enum PKCERequirementErrors {

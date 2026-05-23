@@ -14,6 +14,7 @@ import type {
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
+import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
 	basicToClientCredentials,
@@ -71,7 +72,7 @@ export async function tokenEndpoint(
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	user: User,
+	user: User | undefined,
 	client: SchemaClient<Scope[]>,
 	audience: string | string[],
 	scopes: string[],
@@ -101,7 +102,7 @@ async function createJwtAccessToken(
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
-			sub: user.id,
+			sub: user?.id,
 			aud:
 				typeof audience === "string"
 					? audience
@@ -266,6 +267,56 @@ async function createOpaqueAccessToken(
 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
 }
 
+/**
+ * Tear down the entire refresh-token family for a (client, user) pair, plus
+ * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
+ * Access tokens are deleted first so the parent rows' foreign-key children
+ * do not block the refresh-row delete.
+ *
+ * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
+ * with respect to each other. Between them, a concurrent rotation in a
+ * different worker can `create` a fresh refresh row (and, immediately after,
+ * an access-token row referencing it) for the same (client, user) pair,
+ * leaving the family partially rebuilt and the new refresh row orphaned of
+ * any deletion. Closing this window requires the same transactional adapter
+ * contract tracked under FIXME(strict-family-invalidation) in
+ * `createRefreshToken`.
+ *
+ * @internal
+ */
+export async function invalidateRefreshFamily(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+) {
+	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+	});
+	if (refreshTokens.length) {
+		await ctx.context.adapter.deleteMany({
+			model: "oauthAccessToken",
+			where: [
+				{
+					field: "refreshId",
+					operator: "in",
+					value: refreshTokens.map((r) => r.id),
+				},
+			],
+		});
+	}
+	await ctx.context.adapter.deleteMany({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+	});
+}
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -283,37 +334,78 @@ async function createRefreshToken(
 		? await opts.generateRefreshToken()
 		: generateRandomString(32, "A-Z", "a-z");
 	const sessionId = payload?.sid as string | undefined;
-	// Mark old refresh as stale
-	if (originalRefresh?.id) {
-		await ctx.context.adapter.update({
+	const storedToken = await storeToken(
+		opts.storeTokens,
+		token,
+		"refresh_token",
+	);
+	const newRow = {
+		token: storedToken,
+		clientId: client.clientId,
+		sessionId,
+		userId: user.id,
+		referenceId,
+		authTime,
+		scopes,
+		createdAt: new Date(iat * 1000),
+		expiresAt: new Date(exp * 1000),
+	};
+
+	// Initial issuance (no rotation): single insert.
+	if (!originalRefresh?.id) {
+		const refreshToken = await ctx.context.adapter.create<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
 			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "id",
-					value: originalRefresh.id,
-				},
-			],
-			update: {
-				revoked: new Date(iat * 1000),
-			},
+			data: newRow,
+		});
+		return {
+			id: refreshToken.id,
+			token: await encodeRefreshToken(opts, token, sessionId),
+		};
+	}
+
+	// Rotation: atomic compare-and-swap on the parent row. Concurrent
+	// rotations against the same parent both observe `revoked === null` on
+	// the read in `handleRefreshTokenGrant`, but only one wins this update.
+	// The loser fails closed with `invalid_grant`; the parent row is now
+	// revoked, so any subsequent replay of the original refresh token
+	// triggers the existing family-invalidation guard in
+	// `handleRefreshTokenGrant`.
+	//
+	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
+	// immediate family invalidation on detected concurrent redemption.
+	// Doing that here requires wrapping the entire mint chain
+	// (CAS + create-refresh + create-access) in a real database
+	// transaction so the race-loser's family delete cannot interleave
+	// with the winner's still-in-flight inserts. Tracked for a follow-up
+	// minor once the adapter contract exposes opt-in transactional
+	// rotation.
+	const won = await ctx.context.adapter.update<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "id", value: originalRefresh.id },
+			{ field: "revoked", operator: "eq", value: null },
+		],
+		update: {
+			revoked: new Date(iat * 1000),
+		},
+	});
+
+	if (!won) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
 		});
 	}
 
-	// Issue new refresh token
-	const refreshToken = await ctx.context.adapter.create({
+	const refreshToken = await ctx.context.adapter.create<
+		OAuthRefreshToken<Scope[]> & { id: string }
+	>({
 		model: "oauthRefreshToken",
-		data: {
-			token: await storeToken(opts.storeTokens, token, "refresh_token"),
-			clientId: client.clientId,
-			sessionId,
-			userId: user.id,
-			referenceId,
-			authTime,
-			scopes,
-			createdAt: new Date(iat * 1000),
-			expiresAt: new Date(exp * 1000),
-		},
+		data: newRow,
 	});
+
 	return {
 		id: refreshToken.id,
 		token: await encodeRefreshToken(opts, token, sessionId),
@@ -364,22 +456,42 @@ async function checkResource(
 	return audience?.length === 1 ? audience.at(0) : audience;
 }
 
+interface CreateUserTokensParams {
+	client: SchemaClient<Scope[]>;
+	scopes: string[];
+	grantType: GrantType;
+	user?: User;
+	referenceId?: string;
+	sessionId?: string;
+	nonce?: string;
+	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+	authTime?: Date;
+	verificationValue?: VerificationValue;
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	client: SchemaClient<Scope[]>,
-	scopes: string[],
-	user: User,
-	referenceId?: string,
-	sessionId?: string,
-	nonce?: string,
-	additional?: {
-		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	},
-	authTime?: Date,
+	params: CreateUserTokensParams,
 ) {
+	const {
+		client,
+		scopes,
+		user,
+		grantType,
+		referenceId,
+		sessionId,
+		nonce,
+		refreshToken: existingRefreshToken,
+		authTime,
+		verificationValue,
+	} = params;
+
 	const iat = Math.floor(Date.now() / 1000);
-	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
+	const baseExpiry = user
+		? (opts.accessTokenExpiresIn ?? 3600)
+		: (opts.m2mAccessTokenExpiresIn ?? 3600);
+	const defaultExp = iat + baseExpiry;
 	const exp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -395,14 +507,26 @@ async function createUserTokens(
 	// Check requested audience if sent as the resource parameter
 	const audience = await checkResource(ctx, opts, scopes);
 	const isRefreshToken =
-		additional?.refreshToken?.scopes?.includes("offline_access") ||
-		scopes.includes("offline_access");
+		user &&
+		(existingRefreshToken?.scopes?.includes("offline_access") ||
+			scopes.includes("offline_access"));
 	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
-	const isIdToken = scopes.includes("openid");
+	const isIdToken = user && scopes.includes("openid");
+
+	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
+	const customFields = opts.customTokenResponseFields
+		? await opts.customTokenResponseFields({
+				grantType,
+				user,
+				scopes,
+				metadata: parseClientMetadata(client.metadata),
+				verificationValue,
+			})
+		: undefined;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
-		isRefreshToken && !isJwtAccessToken
+		isRefreshToken && user && !isJwtAccessToken
 			? await createRefreshToken(
 					ctx,
 					opts,
@@ -415,7 +539,7 @@ async function createUserTokens(
 						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 						sid: sessionId,
 					},
-					additional?.refreshToken,
+					existingRefreshToken,
 					authTime,
 				)
 			: undefined;
@@ -453,7 +577,7 @@ async function createUserTokens(
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
-			: isRefreshToken
+			: isRefreshToken && user
 				? createRefreshToken(
 						ctx,
 						opts,
@@ -466,11 +590,11 @@ async function createUserTokens(
 							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 							sid: sessionId,
 						},
-						additional?.refreshToken,
+						existingRefreshToken,
 						authTime,
 					)
 				: undefined,
-		isIdToken
+		isIdToken && user
 			? createIdToken(
 					ctx,
 					opts,
@@ -486,10 +610,11 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
+			...customFields,
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
-			token_type: "Bearer",
+			token_type: "Bearer" as const,
 			refresh_token: refreshToken?.token,
 			scope: scopes.join(" "),
 			id_token: idToken,
@@ -511,56 +636,44 @@ async function checkVerificationValue(
 	client_id: string,
 	redirect_uri?: string,
 ) {
-	const verification = await ctx.context.internalAdapter.findVerificationValue(
-		await storeToken(opts.storeTokens, code, "authorization_code"),
-	);
-	const verificationValue: VerificationValue = verification
-		? JSON.parse(verification?.value)
-		: undefined;
+	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
+	// receives the row and mints tokens; concurrent racers receive `null`
+	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			await storeToken(opts.storeTokens, code, "authorization_code"),
+		);
 
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "Invalid code",
-			error: "invalid_verification",
+			error_description: "invalid code",
+			error: "invalid_grant",
 		});
 	}
 
-	// Delete used code
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-		await storeToken(opts.storeTokens, code, "authorization_code"),
-	);
+	let rawValue: unknown;
+	try {
+		rawValue = JSON.parse(verification.value);
+	} catch {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "malformed verification value",
+			error: "invalid_grant",
+		});
+	}
+	const parsed = verificationValueSchema.safeParse(rawValue);
+	if (!parsed.success) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "malformed verification value",
+			error: "invalid_grant",
+		});
+	}
+	// Zod's passthrough adds index signature; the schema already validates the structure
+	const verificationValue = parsed.data as VerificationValue;
 
-	// Check verification
-	if (!verification.expiresAt || verification.expiresAt < new Date()) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code expired",
-			error: "invalid_verification",
-		});
-	}
-
-	// Check verification value
-	if (!verificationValue) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing verification value content",
-			error: "invalid_verification",
-		});
-	}
-	if (verificationValue.type !== "authorization_code") {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "incorrect verification type",
-			error: "invalid_verification",
-		});
-	}
 	if (verificationValue.query.client_id !== client_id) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "invalid client_id",
 			error: "invalid_client",
-		});
-	}
-	if (!verificationValue.userId) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing user_id on challenge",
-			error: "invalid_user",
 		});
 	}
 	if (
@@ -764,18 +877,17 @@ async function handleAuthorizationCodeGrant(
 			? normalizeTimestampValue(verificationValue.authTime)
 			: resolveSessionAuthTime(session);
 
-	return createUserTokens(
-		ctx,
-		opts,
+	return createUserTokens(ctx, opts, {
 		client,
-		verificationValue.query.scope?.split(" ") ?? [],
+		scopes: verificationValue.query.scope?.split(" ") ?? [],
 		user,
-		verificationValue.referenceId,
-		session.id,
-		verificationValue.query?.nonce,
-		undefined,
+		grantType: "authorization_code",
+		referenceId: verificationValue.referenceId,
+		sessionId: session.id,
+		nonce: verificationValue.query?.nonce,
 		authTime,
-	);
+		verificationValue,
+	});
 }
 
 /**
@@ -856,76 +968,11 @@ async function handleClientCredentialsGrant(
 			[];
 	}
 
-	// Check requested audience if sent as the resource parameter
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const audience = await checkResource(ctx, opts, requestedScopes);
-
-	const iat = Math.floor(Date.now() / 1000);
-	const defaultExp = iat + (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const exp =
-		opts.scopeExpirations && requestedScopes
-			? requestedScopes
-					.map((sc) =>
-						opts.scopeExpirations?.[sc]
-							? toExpJWT(opts.scopeExpirations[sc], iat)
-							: defaultExp,
-					)
-					.reduce((prev, curr) => {
-						return prev < curr ? prev : curr;
-					}, defaultExp)
-			: defaultExp;
-
-	const customClaims = opts.customAccessTokenClaims
-		? await opts.customAccessTokenClaims({
-				scopes: requestedScopes,
-				resource: ctx.body.resource,
-				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
-
-	const accessToken =
-		audience && !opts.disableJwtPlugin
-			? await signJWT(ctx, {
-					options: jwtPluginOptions,
-					payload: {
-						...customClaims,
-						aud: audience,
-						azp: client.clientId,
-						scope: requestedScopes.join(" "),
-						iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-						iat,
-						exp,
-					},
-				})
-			: await createOpaqueAccessToken(
-					ctx,
-					opts,
-					undefined,
-					client,
-					requestedScopes,
-					{
-						iat,
-						exp,
-					},
-				);
-
-	return ctx.json(
-		{
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: "Bearer",
-			scope: requestedScopes.join(" "),
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	return createUserTokens(ctx, opts, {
+		client,
+		scopes: requestedScopes,
+		grantType: "client_credentials",
+	});
 }
 
 /**
@@ -1010,21 +1057,9 @@ async function handleRefreshTokenGrant(
 			error: "invalid_grant",
 		});
 	}
-	// Replay revoke (delete all tokens for that user-client)
+	// Replay revoke (RFC 9700 §4.14: tear down the family)
 	if (refreshToken.revoked) {
-		await ctx.context.adapter.deleteMany({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "clientId",
-					value: client_id,
-				},
-				{
-					field: "userId",
-					value: refreshToken.userId,
-				},
-			],
-		});
+		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
@@ -1070,18 +1105,14 @@ async function handleRefreshTokenGrant(
 			: undefined;
 
 	// Generate new tokens
-	return createUserTokens(
-		ctx,
-		opts,
+	return createUserTokens(ctx, opts, {
 		client,
-		requestedScopes ?? scopes,
+		scopes: requestedScopes ?? scopes,
 		user,
-		refreshToken.referenceId,
-		refreshToken.sessionId,
-		undefined,
-		{
-			refreshToken,
-		},
+		grantType: "refresh_token",
+		referenceId: refreshToken.referenceId,
+		sessionId: refreshToken.sessionId,
+		refreshToken,
 		authTime,
-	);
+	});
 }

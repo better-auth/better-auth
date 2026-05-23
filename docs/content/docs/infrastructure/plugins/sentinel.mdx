@@ -24,12 +24,14 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option     | Type              | Description                         |
-| ---------- | ----------------- | ----------------------------------- |
-| `apiUrl`   | `string`          | Better Auth Infrastructure API URL  |
-| `kvUrl`    | `string`          | KV store URL for rate limiting data |
-| `apiKey`   | `string`          | Your API key for authentication     |
-| `security` | `SecurityOptions` | Security feature configuration      |
+| Option       | Type              | Description                                                           |
+| ------------ | ----------------- | --------------------------------------------------------------------- |
+| `apiUrl`     | `string`          | Better Auth Infrastructure API URL                                    |
+| `kvUrl`      | `string`          | KV store URL for rate limiting data                                   |
+| `apiKey`     | `string`          | Your API key for authentication                                       |
+| `apiTimeout` | `number`          | Timeout in ms for Infra API HTTP requests (`apiUrl`). Default: `3000` |
+| `kvTimeout`  | `number`          | Timeout in ms for KV HTTP requests (`kvUrl`). Default: `1000`         |
+| `security`   | `SecurityOptions` | Security feature configuration                                        |
 
 ### SecurityOptions
 
@@ -45,6 +47,7 @@ interface SecurityOptions {
   freeTrialAbuse?: FreeTrialAbuseConfig;
   compromisedPassword?: CompromisedPasswordConfig;
   emailValidation?: EmailValidationConfig;
+  emailNormalization?: { enabled?: boolean };
   staleUsers?: StaleUsersConfig;
   challengeDifficulty?: number;
 }
@@ -274,6 +277,26 @@ sentinel({
 * `medium` - Also check for valid MX records
 * `high` - Additional heuristic checks
 
+### Email normalization
+
+Sentinel can normalize email addresses before sign-up and sign-in so aliases and provider quirks do not create duplicate accounts or mismatched logins. Normalization includes lowercasing, stripping plus-address tags on common providers (for example `user+tag@gmail.com` → `user@gmail.com`), removing dots in Gmail-style addresses, and mapping `googlemail.com` to `gmail.com`.
+
+Use `security.emailNormalization` when you want to control this separately from disposable-domain validation (`emailValidation`):
+
+```ts
+sentinel({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  security: {
+    emailValidation: {
+      enabled: false, // skip disposable / MX checks
+    },
+    emailNormalization: {
+      enabled: true, // still normalize for deduplication and consistent sign-in
+    },
+  },
+}),
+```
+
 ## Proof-of-Work Challenges
 
 When a security check results in a "challenge" action, Sentinel issues a Proof-of-Work (PoW) challenge that must be solved by the client.
@@ -319,9 +342,10 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option               | Type      | Default | Description                        |
-| -------------------- | --------- | ------- | ---------------------------------- |
-| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges |
+| Option               | Type      | Default | Description                                             |
+| -------------------- | --------- | ------- | ------------------------------------------------------- |
+| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges                      |
+| `kvTimeout`          | `number`  | `1000`  | Timeout in ms for KV identify and related HTTP requests |
 
 ### Browser Fingerprinting
 
@@ -403,6 +427,7 @@ export const authClient = createAuthClient({
 | Option                | Type                            | Default                                                 | Description                                                                 |
 | --------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com` | KV identify endpoint base URL                                               |
+| `kvTimeout`           | `number`                        | `1000`                                                  | Timeout in ms for KV identify and related HTTP requests                     |
 | `autoSolveChallenge`  | `boolean`                       | `true`                                                  | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution` |
 | `onChallengeReceived` | `(reason: string) => void`      | —                                                       | Called when a PoW challenge is received                                     |
 | `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                       | Called after a successful solve                                             |

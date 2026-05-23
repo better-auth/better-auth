@@ -6,10 +6,14 @@ import type { Awaitable } from "./helpers";
 import type { GrantType } from "./oauth";
 
 export type {
+	AuthMethod,
 	AuthServerMetadata,
+	BearerMethodsSupported,
+	GrantType,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
+	TokenEndpointAuthMethod,
 } from "./oauth";
 
 export type StoreTokenType =
@@ -496,6 +500,37 @@ export interface OAuthOptions<
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
 	/**
+	 * Custom fields to include in the token response body.
+	 *
+	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
+	 * this adds fields to the JSON response envelope alongside `access_token`,
+	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
+	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
+	 * be overridden.
+	 *
+	 * @param info - context that may be useful when creating custom fields
+	 */
+	customTokenResponseFields?: (info: {
+		/** The grant type being processed */
+		grantType: GrantType;
+		/**
+		 * The user, if applicable.
+		 * Undefined for `client_credentials` (M2M, no user).
+		 * Always present for `authorization_code` and `refresh_token`.
+		 */
+		user?: (User & Record<string, unknown>) | null;
+		/** Scopes granted for this token */
+		scopes: Scopes;
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/**
+		 * The authorization code verification value.
+		 * Only present for `authorization_code` grant. Contains the original
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 */
+		verificationValue?: VerificationValue;
+	}) => Awaitable<Record<string, unknown>>;
+	/**
 	 * Overwrite specific /.well-known/openid-configuration
 	 * values so they are not available publically.
 	 * This may be important if not all clients need specific scopes.
@@ -721,10 +756,12 @@ export interface OAuthAuthorizationQuery {
 	 * Cross-Site Request Forgery (CSRF, XSRF) mitigation is done by cryptographically binding the
 	 * value of this parameter with a browser cookie.
 	 *
+	 * Recommended for clients, but optional for the authorization server.
+	 *
 	 * Note: Better Auth stores the state in a database instead of a cookie. - This is to minimize
 	 * the complication with native apps and other clients that may not have access to cookies.
 	 */
-	state: string;
+	state?: string;
 	/**
 	 * The client ID. Must be the ID of a registered client.
 	 */
@@ -1004,7 +1041,7 @@ export interface OAuthRefreshToken<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
 	token: string;
-	sessionId: string;
+	sessionId?: string;
 	userId: string;
 	referenceId?: string;
 	clientId?: string;
