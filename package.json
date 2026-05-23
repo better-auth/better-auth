@@ -50,7 +50,7 @@
     "lefthook": "^2.1.4",
     "nyc": "^17.1.0",
     "publint": "^0.3.17",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.14",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }
