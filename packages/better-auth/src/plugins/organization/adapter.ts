@@ -1,5 +1,8 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
@@ -328,48 +331,51 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 			userId?: string;
 		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			let userId: string;
-			if (!_userId) {
-				const member = await adapter.findOne<Member>({
-					model: "member",
-					where: [{ field: "id", value: memberId }],
-				});
-				if (!member) {
-					throw new BetterAuthError("Member not found");
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				let userId: string;
+				if (!_userId) {
+					const member = await adapter.findOne<Member>({
+						model: "member",
+						where: [{ field: "id", value: memberId }],
+					});
+					if (!member) {
+						throw new BetterAuthError("Member not found");
+					}
+					userId = member.userId;
+				} else {
+					userId = _userId;
 				}
-				userId = member.userId;
-			} else {
-				userId = _userId;
-			}
-			const member = await adapter.delete<InferMember<O, false>>({
-				model: "member",
-				where: [
-					{
-						field: "id",
-						value: memberId,
-					},
-				],
-			});
-			// remove member from all teams they're part of
-			if (options?.teams?.enabled) {
-				const teams = await adapter.findMany<Team>({
-					model: "team",
-					where: [{ field: "organizationId", value: organizationId }],
+				const member = await adapter.delete<InferMember<O, false>>({
+					model: "member",
+					where: [
+						{
+							field: "id",
+							value: memberId,
+						},
+					],
 				});
-				await Promise.all(
-					teams.map((team) =>
-						adapter.deleteMany({
+				if (options?.teams?.enabled) {
+					const teams = await adapter.findMany<Team>({
+						model: "team",
+						where: [{ field: "organizationId", value: organizationId }],
+					});
+					if (teams.length > 0) {
+						await adapter.deleteMany({
 							model: "teamMember",
 							where: [
-								{ field: "teamId", value: team.id },
 								{ field: "userId", value: userId },
+								{
+									field: "teamId",
+									value: teams.map((team) => team.id),
+									operator: "in",
+								},
 							],
-						}),
-					),
-				);
-			}
-			return member;
+						});
+					}
+				}
+				return member;
+			});
 		},
 		updateOrganization: async (
 			organizationId: string,
@@ -407,35 +413,37 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			) as InferOrganization<O>;
 		},
 		deleteOrganization: async (organizationId: string) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.deleteMany({
-				model: "member",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				await adapter.deleteMany({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.deleteMany({
+					model: "invitation",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.delete<InferOrganization<O, false>>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				return organizationId;
 			});
-			await adapter.deleteMany({
-				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
-			});
-			await adapter.delete<InferOrganization<O, false>>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: organizationId,
-					},
-				],
-			});
-			return organizationId;
 		},
 		setActiveOrganization: async (
 			sessionToken: string,

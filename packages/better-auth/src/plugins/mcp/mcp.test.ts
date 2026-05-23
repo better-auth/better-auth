@@ -338,6 +338,92 @@ describe("mcp", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	// FIXME(mcp-race-coverage): write a `/mcp/token` race-redemption
+	// regression test once the consent + PKCE harness here can hand us a code
+	// without going through genericOAuth. The `/mcp/token` handler calls the
+	// same `internalAdapter.consumeVerificationValue` primitive that
+	// `@better-auth/oauth-provider` and `better-auth`'s `oidc-provider` plugin
+	// use, both of which already carry the race regression test, so a
+	// regression in the primitive surfaces in those tests today.
+	it.skip("rejects concurrent redemption of the same authorization code", async ({
+		expect,
+	}) => {
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-confidential"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-confidential",
+								clientId: confidentialClient.clientId,
+								clientSecret: confidentialClient.clientSecret || "",
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								// Confidential client authenticates via client_secret;
+								// no PKCE so we can replay the issued code at the
+								// token endpoint without a stored verifier.
+								pkce: false,
+							},
+						],
+					}),
+				],
+			});
+		const oAuthHeaders = new Headers();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5004",
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const data = await client.signIn.oauth2(
+			{ providerId: "test-confidential", callbackURL: "/dashboard" },
+			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
+		);
+
+		let redirectURI = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context: any) {
+				redirectURI = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(redirectURI).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		// `redirect_uri` matches what the auth-code flow recorded for the
+		// client; PKCE is verified server-side from the stored verifier.
+		const redirectUri = confidentialClient.redirectUrls[0]!;
+		const exchange = () =>
+			serverClient.$fetch<{ access_token?: string; error?: string }>(
+				"/mcp/token",
+				{
+					method: "POST",
+					body: {
+						grant_type: "authorization_code",
+						client_id: confidentialClient.clientId,
+						client_secret: confidentialClient.clientSecret,
+						code,
+						redirect_uri: redirectUri,
+					},
+				},
+			);
+
+		const [first, second] = await Promise.all([exchange(), exchange()]);
+		const successes = [first, second].filter(
+			(r) => (r.data as any)?.access_token != null,
+		);
+		const failures = [first, second].filter((r) => r.error != null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect((failures[0]!.error as any).error).toBe("invalid_grant");
+	});
+
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
 		const metadata = await serverClient.$fetch(
 			"/.well-known/oauth-authorization-server",
@@ -355,7 +441,7 @@ describe("mcp", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256", "none"],
+			id_token_signing_alg_values_supported: ["RS256"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -389,7 +475,7 @@ describe("mcp", async () => {
 			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
-			resource_signing_alg_values_supported: ["RS256", "none"],
+			resource_signing_alg_values_supported: ["RS256"],
 		});
 	});
 
@@ -1089,5 +1175,41 @@ describe("mcp refresh_token grant client authentication", () => {
 		expect(response.status).toBe(401);
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+ */
+describe("mcp discovery metadata (security)", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [mcp({ loginPage: "/login" })],
+	});
+
+	it("/.well-known/oauth-authorization-server must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-authorization-server",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			id_token_signing_alg_values_supported: string[];
+		};
+		expect(body.id_token_signing_alg_values_supported).not.toContain("none");
+	});
+
+	it("/.well-known/oauth-protected-resource must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-protected-resource",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			resource_signing_alg_values_supported: string[];
+		};
+		expect(body.resource_signing_alg_values_supported).not.toContain("none");
 	});
 });

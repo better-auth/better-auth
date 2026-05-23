@@ -5,6 +5,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
+import { parseCookies } from "./cookie-utils";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;
@@ -20,30 +21,6 @@ interface Cookie {
 }
 
 type Chunks = Record<string, string>;
-
-/**
- * Parse cookies from the request headers
- */
-function parseCookiesFromContext(
-	ctx: GenericEndpointContext,
-): Record<string, string> {
-	const cookieHeader = ctx.headers?.get("cookie");
-	if (!cookieHeader) {
-		return {};
-	}
-
-	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
-
-	for (const pair of pairs) {
-		const [name, ...valueParts] = pair.split("=");
-		if (name && valueParts.length > 0) {
-			cookies[name] = valueParts.join("=");
-		}
-	}
-
-	return cookies;
-}
 
 /**
  * Extract the chunk index from a cookie name
@@ -63,9 +40,9 @@ function readExistingChunks(
 	ctx: GenericEndpointContext,
 ): Chunks {
 	const chunks: Chunks = {};
-	const cookies = parseCookiesFromContext(ctx);
+	const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 
-	for (const [name, value] of Object.entries(cookies)) {
+	for (const [name, value] of cookies) {
 		if (name.startsWith(cookieName)) {
 			chunks[name] = value;
 		}
@@ -247,16 +224,7 @@ export function getChunkedCookie(
 		return null;
 	}
 
-	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
-	for (const pair of pairs) {
-		const [name, ...valueParts] = pair.split("=");
-		if (name && valueParts.length > 0) {
-			cookies[name] = valueParts.join("=");
-		}
-	}
-
-	for (const [name, val] of Object.entries(cookies)) {
+	for (const [name, val] of parseCookies(cookieHeader)) {
 		if (name.startsWith(cookieName + ".")) {
 			const parts = name.split(".");
 			const indexStr = parts.at(-1);

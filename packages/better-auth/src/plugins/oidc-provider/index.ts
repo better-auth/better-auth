@@ -95,9 +95,7 @@ export const getMetadata = (
 			? jwtPlugin.options.jwt.issuer
 			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
-	const supportedAlgs = options?.useJWTPlugin
-		? ["RS256", "EdDSA", "none"]
-		: ["HS256", "none"];
+	const supportedAlgs = options?.useJWTPlugin ? ["RS256", "EdDSA"] : ["HS256"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -309,7 +307,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
 		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
-		allowPlainCodeChallengeMethod: true,
+		allowPlainCodeChallengeMethod: false,
 		storeClientSecret: "plain" as const,
 		...options,
 		scopes: [
@@ -865,12 +863,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					/**
-					 * We need to check if the code is valid before we can proceed
-					 * with the rest of the request.
-					 */
+					// Atomic single-use redemption per RFC 6749 §4.1.2. The first
+					// caller receives the row; concurrent racers receive `null`
+					// and fall through to the `invalid_grant` error path.
+					//
+					// TODO(legacy-hardening-coordinate): in-flight follow-ups at
+					// https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+					// and https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
+					// touch this same surface. Whoever lands second must rebase
+					// to keep the atomic consume + `invalid_grant` semantics in
+					// place; do not regress to a `findVerificationValue` +
+					// delete pair.
 					const verificationValue =
-						await ctx.context.internalAdapter.findVerificationValue(
+						await ctx.context.internalAdapter.consumeVerificationValue(
 							code.toString(),
 						);
 					if (!verificationValue) {
@@ -879,16 +884,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
-							error: "invalid_grant",
-						});
-					}
-
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
-					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client_id is required",
@@ -980,24 +975,23 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
-					const challenge =
-						value.codeChallengeMethod === "plain"
-							? code_verifier
-							: await createHash("SHA-256", "base64urlnopad").digest(
-									code_verifier,
-								);
+					if (value.codeChallenge) {
+						const challenge =
+							value.codeChallengeMethod === "plain"
+								? code_verifier
+								: await createHash("SHA-256", "base64urlnopad").digest(
+										code_verifier,
+									);
 
-					if (challenge !== value.codeChallenge) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code verification failed",
-							error: "invalid_request",
-						});
+						if (challenge !== value.codeChallenge) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "code verification failed",
+								error: "invalid_request",
+							});
+						}
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
-					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
 					await ctx.context.adapter.create({

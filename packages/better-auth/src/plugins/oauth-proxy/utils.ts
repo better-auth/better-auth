@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin } from "../../utils/url";
+import { getOrigin, trimTrailingSlashes } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
 /**
@@ -8,7 +8,7 @@ import type { OAuthProxyOptions } from "./index";
  */
 export function stripTrailingSlash(url: string | undefined): string {
 	if (!url) return "";
-	return url.replace(/\/+$/, "");
+	return trimTrailingSlashes(url);
 }
 
 /**
@@ -79,7 +79,10 @@ export function redirectOnError(
 	ctx: GenericEndpointContext,
 	errorURL: string,
 	error: string,
+	description?: string,
 ): never {
+	const params = new URLSearchParams({ error });
+	if (description) params.set("error_description", description);
 	const sep = errorURL.includes("?") ? "&" : "?";
-	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
+	throw ctx.redirect(`${errorURL}${sep}${params.toString()}`);
 }
