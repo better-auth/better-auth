@@ -38,13 +38,12 @@ const navFiles: NavFileItem[] = [
 	{ name: "docs", href: "/docs" },
 ];
 
-const pricingFile: NavFileItem = { name: "pricing", href: "/pricing" };
-
 interface ProductItem {
 	title: string;
 	tagline: string;
 	description: string;
 	href: string;
+	activatesTab?: boolean;
 	Icon: React.ComponentType<{ className?: string }>;
 	Pattern?: React.FC<{ className?: string }>;
 	patternClassName?: string;
@@ -307,6 +306,7 @@ const products: ProductItem[] = [
 		description:
 			"The TypeScript auth library. Plugins, adapters, and 20+ social providers.",
 		href: "/docs/introduction",
+		activatesTab: false,
 		Icon: FrameworkLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -318,6 +318,7 @@ const products: ProductItem[] = [
 		description:
 			"Dashboard, audit logs, security detection, SSO, and abuse protection.",
 		href: "/pricing",
+		activatesTab: true,
 		Icon: InfraLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -386,7 +387,6 @@ const mobileMenuSections: MobileMenuSection[] = [
 			href: p.href,
 		})),
 	},
-	{ name: "pricing", href: "/pricing" },
 	{ name: "resources", children: resourceFiles },
 	{ name: "enterprise", href: "/enterprise" },
 ];
@@ -442,6 +442,11 @@ export function StaggeredNavFiles() {
 	);
 	const isDocs = pathname.startsWith("/docs");
 	const isPricingPage = pathname === "/pricing";
+	const isProductsPage = products.some(
+		(p) =>
+			p.activatesTab &&
+			(pathname === p.href || pathname.startsWith(`${p.href}/`)),
+	);
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
@@ -450,6 +455,7 @@ export function StaggeredNavFiles() {
 		isActive("/") ||
 		isDocs ||
 		isPricingPage ||
+		isProductsPage ||
 		isResourcePage ||
 		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
@@ -655,16 +661,20 @@ export function StaggeredNavFiles() {
 					>
 						<div
 							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
-								productsOpen
-									? "bg-foreground/[0.04]"
-									: "hover:bg-foreground/[0.03]"
+								isProductsPage
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: productsOpen
+										? "bg-foreground/4"
+										: "hover:bg-foreground/3"
 							}`}
 						>
 							<span
 								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									productsOpen
-										? "text-foreground/80"
-										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+									isProductsPage
+										? "text-foreground"
+										: productsOpen
+											? "text-foreground/80"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 								}`}
 							>
 								products
@@ -731,33 +741,6 @@ export function StaggeredNavFiles() {
 								</motion.div>
 							)}
 						</AnimatePresence>
-					</motion.div>
-
-					{/* Pricing tab */}
-					<motion.div
-						initial={{ opacity: 0, y: -4 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.2, delay: 0.14, ease: "easeOut" }}
-						className="flex-1"
-					>
-						<Link
-							href={pricingFile.href}
-							className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
-								isPricingPage
-									? `bg-background border-b-2 ${activeTabBorderClass}`
-									: "bg-transparent hover:bg-foreground/[0.03]"
-							}`}
-						>
-							<span
-								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									isPricingPage
-										? "text-foreground"
-										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
-								}`}
-							>
-								{pricingFile.name}
-							</span>
-						</Link>
 					</motion.div>
 
 					{/* Enterprise tab */}

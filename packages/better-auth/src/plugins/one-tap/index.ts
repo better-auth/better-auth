@@ -159,10 +159,20 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const account = await ctx.context.internalAdapter.findAccount(sub);
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
+						const providerEmailVerified =
+							typeof email_verified === "boolean"
+								? email_verified
+								: toBoolean(email_verified);
+						// FIXME(next-minor): drop `requireLocalEmailVerified` option and
+						// make the gate unconditional.
+						const requireLocalEmailVerified =
+							accountLinking?.requireLocalEmailVerified ?? true;
 						const shouldLinkAccount =
 							accountLinking?.enabled !== false &&
+							accountLinking?.disableImplicitLinking !== true &&
+							(!requireLocalEmailVerified || user.user.emailVerified) &&
 							(ctx.context.trustedProviders.includes("google") ||
-								email_verified);
+								providerEmailVerified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
 								userId: user.user.id,
@@ -173,7 +183,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							});
 						} else {
 							throw new APIError("UNAUTHORIZED", {
-								message: "Google sub doesn't match",
+								message:
+									"Google identity cannot be linked: implicit account-linking is disabled, the local email is not verified, or the Google email_verified claim is false and Google is not a trusted provider",
 							});
 						}
 					}
