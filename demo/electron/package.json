@@ -28,22 +28,22 @@
     "clsx": "^2.1.1",
     "conf": "^15.1.0",
     "electron-store": "^11.0.2",
-    "tailwind-merge": "^3.5.0",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
-    "@tailwindcss/vite": "^4.2.1",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
-    "electron": "^39.8.1",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^39.8.10",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "tailwindcss": "^4.2.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2"
+    "vite": "^7.3.3"
   }
 }
