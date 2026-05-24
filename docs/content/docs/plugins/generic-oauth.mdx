@@ -137,6 +137,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 * **Okta** - `okta(options)`
 * **Slack** - `slack(options)`
 * **Patreon** - `patreon(options)`
+* **42** - `fortytwo(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -155,6 +156,7 @@ import {
 	okta,
 	slack,
 	patreon,
+  fortytwo
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -209,6 +211,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
+        fortytwo({
+          clientId: process.env.FT_CLIENT_UID,
+          clientSecret: process.env.FT_CLIENT_SECRET,
+        })
 			],
 		}),
 	],
@@ -225,15 +231,19 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
+* **42**: No additional required fields
 
 All providers support the same optional fields:
 
 * `scopes?: string[]` - Array of OAuth scopes to request
 * `redirectURI?: string` - Custom redirect URI
-* `pkce?: boolean` - Enable PKCE (defaults to `false`)
 * `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
 * `disableSignUp?: boolean` - Disable sign-up entirely
 * `overrideUserInfo?: boolean` - Override user info on sign in
+
+Almost all providers support PKCE, through an optional field:
+
+* `pkce?: boolean` - Enable PKCE (defaults to `false`, overridden to false in fortytwo)
 
 ## Configuration
 
