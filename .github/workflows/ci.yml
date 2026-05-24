@@ -181,13 +181,13 @@ jobs:
         run: pnpm coverage
 
       - name: Docker Compose Diagnostics
-        if: failure()
+        if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
-          docker compose ps
-          docker compose logs --no-color mssql
+          docker compose ps --all || true
+          docker compose logs --no-color mssql || true
 
       - name: Stop Docker Containers
-        if: always()
+        if: always() && hashFiles('docker-compose.yml') != ''
         run: docker compose down --volumes --remove-orphans
 
   ci:

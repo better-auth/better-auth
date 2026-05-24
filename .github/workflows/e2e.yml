@@ -71,13 +71,13 @@ jobs:
         run: pnpm e2e:smoke
 
       - name: Docker Compose Diagnostics
-        if: failure()
+        if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
-          docker compose ps
-          docker compose logs --no-color mssql
+          docker compose ps --all || true
+          docker compose logs --no-color mssql || true
 
       - name: Stop Docker Containers
-        if: always()
+        if: always() && hashFiles('docker-compose.yml') != ''
         run: docker compose down --volumes --remove-orphans
   integration:
     name: Integration test
@@ -123,13 +123,13 @@ jobs:
         run: pnpm e2e:integration --filter=./e2e/integration
 
       - name: Docker Compose Diagnostics
-        if: failure()
+        if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
-          docker compose ps
-          docker compose logs --no-color mssql
+          docker compose ps --all || true
+          docker compose logs --no-color mssql || true
 
       - name: Stop Docker Containers
-        if: always()
+        if: always() && hashFiles('docker-compose.yml') != ''
         run: docker compose down --volumes --remove-orphans
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
@@ -177,13 +177,13 @@ jobs:
         run: pnpm e2e:integration --filter="$FILTER"
 
       - name: Docker Compose Diagnostics
-        if: failure()
+        if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
-          docker compose ps
-          docker compose logs --no-color mssql
+          docker compose ps --all || true
+          docker compose logs --no-color mssql || true
 
       - name: Stop Docker Containers
-        if: always()
+        if: always() && hashFiles('docker-compose.yml') != ''
         run: docker compose down --volumes --remove-orphans
 
   e2e:
