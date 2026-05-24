@@ -53,10 +53,16 @@ const mockRegistrationVerification = {
 };
 
 describe("passkey", async () => {
-	const { auth, client, signInWithTestUser, sessionSetter, customFetchImpl } =
-		await getTestInstance({
-			plugins: [passkey()],
-		});
+	const {
+		auth,
+		client,
+		signInWithTestUser,
+		sessionSetter,
+		cookieSetter,
+		customFetchImpl,
+	} = await getTestInstance({
+		plugins: [passkey()],
+	});
 
 	afterEach(() => {
 		serverMocks.verifyRegistrationResponse.mockReset();
@@ -584,6 +590,338 @@ describe("passkey", async () => {
 		expect(response.user).toBeDefined();
 		expect(response.user.id).toBe(user.id);
 		expect(response.user.email).toBe(user.email);
+	});
+
+	it("should propagate inner APIError status when registration verification fails", async () => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValueOnce({
+			verified: false,
+			registrationInfo: undefined,
+		});
+
+		let captured: APIError | undefined;
+		try {
+			await auth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			});
+		} catch (e) {
+			captured = e as APIError;
+		}
+
+		expect(captured).toBeInstanceOf(APIError);
+		expect(captured?.status).toBe("BAD_REQUEST");
+		expect((captured?.body as { code?: string } | undefined)?.code).toBe(
+			"FAILED_TO_VERIFY_REGISTRATION",
+		);
+	});
+
+	it("should propagate inner APIError status when authentication verification fails", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		let passkeyCookie = "";
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse(ctx) {
+				const setCookie = ctx.response.headers.get("Set-Cookie");
+				if (setCookie) {
+					passkeyCookie = setCookie.split(";")[0] ?? "";
+				}
+			},
+		});
+
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+			verified: false,
+			authenticationInfo: { newCounter: 0 },
+		});
+
+		let captured: APIError | undefined;
+		try {
+			await auth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: {
+						id: "mockCredentialID",
+						rawId: "mockRawId",
+						response: {
+							clientDataJSON: "mockClientDataJSON",
+							authenticatorData: "mockAuthenticatorData",
+							signature: "mockSignature",
+							userHandle: "mockUserHandle",
+						},
+						type: "public-key",
+						clientExtensionResults: {},
+					},
+				},
+			});
+		} catch (e) {
+			captured = e as APIError;
+		}
+
+		expect(captured).toBeInstanceOf(APIError);
+		expect(captured?.status).toBe("UNAUTHORIZED");
+		expect((captured?.body as { code?: string } | undefined)?.code).toBe(
+			"AUTHENTICATION_FAILED",
+		);
+	});
+
+	it("should register at most one passkey under concurrent verification of the same challenge", async () => {
+		let raceUserId = "";
+		const {
+			auth: raceAuth,
+			client: raceClient,
+			cookieSetter: raceCookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: raceUserId,
+							name: "race@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const signedUp = await raceAuth.api.signUpEmail({
+			body: {
+				email: "race@example.com",
+				password: "password1234",
+				name: "Race User",
+			},
+		});
+		raceUserId = signedUp.user.id;
+
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = raceCookieSetter(headers);
+
+		await raceClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		let release: () => void = () => {};
+		const gate = new Promise<void>((r) => {
+			release = r;
+		});
+		serverMocks.verifyRegistrationResponse.mockImplementation(async () => {
+			await gate;
+			return {
+				verified: true,
+				registrationInfo: {
+					aaguid: "race-aaguid",
+					credentialDeviceType: "singleDevice",
+					credentialBackedUp: false,
+					credential: {
+						id: "race-reg-credential-id",
+						publicKey: new Uint8Array([1, 2, 3]),
+						counter: 0,
+					},
+				},
+			};
+		});
+
+		const body = {
+			response: {
+				id: "race-reg-credential-id",
+				response: { transports: ["internal"] },
+			},
+		};
+
+		const settle = (
+			p: ReturnType<typeof raceAuth.api.verifyPasskeyRegistration>,
+		) =>
+			p
+				.then((v) => ({ ok: true as const, v }))
+				.catch((e) => ({ ok: false as const, e }));
+		const reqA = settle(
+			raceAuth.api.verifyPasskeyRegistration({
+				headers: new Headers(headers),
+				body,
+			}),
+		);
+		const reqB = settle(
+			raceAuth.api.verifyPasskeyRegistration({
+				headers: new Headers(headers),
+				body,
+			}),
+		);
+
+		for (let i = 0; i < 50; i++) {
+			await new Promise((r) => setImmediate(r));
+		}
+		release();
+		await Promise.all([reqA, reqB]);
+
+		const raceContext = await raceAuth.$context;
+		const rows = await raceContext.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: "race-reg-credential-id" }],
+		});
+		expect(rows.length).toBe(1);
+	});
+
+	it("should mint at most one session under concurrent verification of the same challenge", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "race-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "race-credential-id",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		let passkeyCookie = "";
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse(ctx) {
+				const setCookie = ctx.response.headers.get("Set-Cookie");
+				if (setCookie) {
+					passkeyCookie = setCookie.split(";")[0] ?? "";
+				}
+			},
+		});
+
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		const body = {
+			response: {
+				id: "race-credential-id",
+				rawId: "race-credential-id",
+				response: {
+					clientDataJSON: "mockClientDataJSON",
+					authenticatorData: "mockAuthenticatorData",
+					signature: "mockSignature",
+					userHandle: "mockUserHandle",
+				},
+				type: "public-key" as const,
+				clientExtensionResults: {},
+			},
+		};
+
+		const settle = (
+			p: ReturnType<typeof auth.api.verifyPasskeyAuthentication>,
+		) =>
+			p
+				.then((v) => ({ ok: true as const, v }))
+				.catch((e) => ({ ok: false as const, e }));
+		const results = await Promise.all([
+			settle(
+				auth.api.verifyPasskeyAuthentication({
+					headers: new Headers(headers),
+					body,
+				}),
+			),
+			settle(
+				auth.api.verifyPasskeyAuthentication({
+					headers: new Headers(headers),
+					body,
+				}),
+			),
+		]);
+		const fulfilled = results.filter((r) => r.ok);
+		expect(fulfilled.length).toBe(1);
+	});
+
+	it("should reject when the WebAuthn challenge is not consumable", async () => {
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		const context = await auth.$context;
+		const consumeSpy = vi
+			.spyOn(context.internalAdapter, "consumeVerificationValue")
+			.mockResolvedValueOnce(null);
+
+		try {
+			await expect(
+				auth.api.verifyPasskeyAuthentication({
+					headers,
+					body: {
+						response: {
+							id: "",
+							rawId: "",
+							response: {
+								clientDataJSON: "",
+								authenticatorData: "",
+								signature: "",
+							},
+							clientExtensionResults: {},
+							type: "public-key" as const,
+						},
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "CHALLENGE_NOT_FOUND" },
+			});
+			expect(consumeSpy).toHaveBeenCalledOnce();
+		} finally {
+			consumeSpy.mockRestore();
+		}
 	});
 });
 
