@@ -2,7 +2,8 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-export interface FortyTwoOptions extends BaseOAuthProviderOptions {}
+export interface FortyTwoOptions
+	extends Omit<BaseOAuthProviderOptions, "pkce"> {}
 
 export interface FortyTwoProfile extends Record<string, unknown> {
 	/** the user's id */
@@ -142,7 +143,7 @@ export function fortytwo(options: FortyTwoOptions): GenericOAuthConfig {
 		clientSecret: options.clientSecret,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
-		/** unsure if PKCE is possible */
+		/** unsure if PKCE is possible, disabling */
 		pkce: false,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,

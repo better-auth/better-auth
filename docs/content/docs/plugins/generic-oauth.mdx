@@ -156,7 +156,7 @@ import {
 	okta,
 	slack,
 	patreon,
-  fortytwo
+	fortytwo
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -241,9 +241,9 @@ All providers support the same optional fields:
 * `disableSignUp?: boolean` - Disable sign-up entirely
 * `overrideUserInfo?: boolean` - Override user info on sign in
 
-Almost all providers support PKCE, through an optional field:
+Almost all providers support PKCE through an optional field, except for 42 (fortytwo):
 
-* `pkce?: boolean` - Enable PKCE (defaults to `false`, overridden to false in fortytwo)
+* `pkce?: boolean` - Enable PKCE (defaults to `false`)
 
 ## Configuration
 
