@@ -4,7 +4,7 @@ import type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
-import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
+import { toPascalCase } from "@better-auth/core/utils/string";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -427,7 +427,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	) => {
 		if (!operationId) return undefined;
 		const base = seenOperationIds.has(operationId)
-			? `${operationId}${capitalizeFirstLetter(method.toLowerCase())}`
+			? `${operationId}${toPascalCase(method)}`
 			: operationId;
 		let result = base;
 		let n = 2;

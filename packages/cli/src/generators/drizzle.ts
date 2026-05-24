@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -7,14 +8,7 @@ import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
-	if (camelCase) {
-		return str;
-	}
-	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
-	return str
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
-		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
-		.toLowerCase();
+	return camelCase ? str : toSnakeCase(str);
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
