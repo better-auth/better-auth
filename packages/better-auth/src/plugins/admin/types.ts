@@ -48,6 +48,16 @@ export interface AdminOptions {
 	 */
 	impersonationSessionDuration?: number | undefined;
 	/**
+	 * Enable organization administration endpoints.
+	 *
+	 * Requires the organization plugin to be configured.
+	 */
+	organizations?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
+	/**
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<AdminSchema> | undefined;

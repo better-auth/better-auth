@@ -3,7 +3,10 @@ import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, userAc } from "./access";
-import type { admin } from "./admin";
+import type {
+	AdminPluginWithOrganizations,
+	AdminPluginWithoutOrganizations,
+} from "./admin";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 
@@ -11,6 +14,11 @@ export * from "./error-codes";
 
 interface AdminClientOptions {
 	ac?: AccessControl | undefined;
+	organizations?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
 	roles?:
 		| {
 				[key in string]: Role;
@@ -34,6 +42,17 @@ export const adminClient = <O extends AdminClientOptions>(
 	type PermissionExclusive = {
 		permissions: PermissionType;
 	};
+	type ServerAdminOptions = {
+		ac: O["ac"] extends AccessControl
+			? O["ac"]
+			: AccessControl<DefaultStatements>;
+		roles: O["roles"] extends Record<string, Role>
+			? O["roles"]
+			: {
+					admin: Role;
+					user: Role;
+				};
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -44,19 +63,11 @@ export const adminClient = <O extends AdminClientOptions>(
 	return {
 		id: "admin-client",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<
-			typeof admin<{
-				ac: O["ac"] extends AccessControl
-					? O["ac"]
-					: AccessControl<DefaultStatements>;
-				roles: O["roles"] extends Record<string, Role>
-					? O["roles"]
-					: {
-							admin: Role;
-							user: Role;
-						};
-			}>
-		>,
+		$InferServerPlugin: {} as O["organizations"] extends { enabled: true }
+			? AdminPluginWithOrganizations<
+					ServerAdminOptions & { organizations: { enabled: true } }
+				>
+			: AdminPluginWithoutOrganizations<ServerAdminOptions>,
 		getActions: () => ({
 			admin: {
 				checkRolePermission: <
@@ -82,6 +93,7 @@ export const adminClient = <O extends AdminClientOptions>(
 		}),
 		pathMethods: {
 			"/admin/list-users": "GET",
+			"/admin/list-organizations": "GET",
 			"/admin/impersonate-user": "POST",
 			"/admin/stop-impersonating": "POST",
 		},

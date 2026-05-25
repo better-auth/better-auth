@@ -7,6 +7,7 @@ import { PACKAGE_VERSION } from "../../version";
 import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
+	adminListOrganizations,
 	adminUpdateUser,
 	banUser,
 	createUser,
@@ -38,7 +39,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const admin = <O extends AdminOptions>(options?: O | undefined) => {
+const createAdminPlugin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		...(options || {}),
 		defaultRole: options?.defaultRole ?? "user",
@@ -71,7 +72,12 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	return {
 		id: "admin",
 		version: PACKAGE_VERSION,
-		init() {
+		init(ctx) {
+			if (opts.organizations?.enabled && !ctx.hasPlugin("organization")) {
+				throw new BetterAuthError(
+					"The admin organization endpoints require the organization plugin to be enabled.",
+				);
+			}
 			return {
 				options: {
 					databaseHooks: {
@@ -162,6 +168,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			createUser: createUser(opts),
 			adminUpdateUser: adminUpdateUser(opts),
 			listUsers: listUsers(opts),
+			...(opts.organizations?.enabled
+				? { adminListOrganizations: adminListOrganizations(opts) }
+				: {}),
 			listUserSessions: listUserSessions(opts),
 			unbanUser: unbanUser(opts),
 			banUser: banUser(opts),
@@ -178,3 +187,38 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
+
+type DefaultAdminPlugin<O extends AdminOptions> = ReturnType<
+	typeof createAdminPlugin<O>
+>;
+
+export type AdminPluginWithoutOrganizations<O extends AdminOptions> = Omit<
+	DefaultAdminPlugin<O>,
+	"endpoints"
+> & {
+	endpoints: Omit<DefaultAdminPlugin<O>["endpoints"], "adminListOrganizations">;
+};
+
+export type AdminPluginWithOrganizations<O extends AdminOptions> = Omit<
+	DefaultAdminPlugin<O>,
+	"endpoints"
+> & {
+	endpoints: Omit<
+		DefaultAdminPlugin<O>["endpoints"],
+		"adminListOrganizations"
+	> & {
+		adminListOrganizations: ReturnType<typeof adminListOrganizations>;
+	};
+};
+
+export function admin<
+	O extends AdminOptions & { organizations: { enabled: true } },
+>(options: O): AdminPluginWithOrganizations<O>;
+export function admin<O extends AdminOptions>(
+	options?: O | undefined,
+): AdminPluginWithoutOrganizations<O>;
+export function admin<O extends AdminOptions>(options?: O | undefined) {
+	return createAdminPlugin(options) as
+		| AdminPluginWithoutOrganizations<O>
+		| AdminPluginWithOrganizations<O>;
+}

@@ -1,6 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { WhereOperator } from "@better-auth/core/db/adapter";
+import type { Where, WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
@@ -614,6 +614,51 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 
 			return organizations;
+		},
+		listAllOrganizations: async (data: {
+			limit?: number | undefined;
+			offset?: number | undefined;
+			sortBy?: string | undefined;
+			sortDirection?: "asc" | "desc" | undefined;
+			where?: Where[] | undefined;
+		}): Promise<InferOrganization<O>[]> => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const organizations = await adapter.findMany<InferOrganization<O, false>>(
+				{
+					model: "organization",
+					where: data.where,
+					limit: data.limit,
+					offset: data.offset,
+					sortBy: data.sortBy
+						? {
+								field: data.sortBy,
+								direction: data.sortDirection || "asc",
+							}
+						: undefined,
+				},
+			);
+
+			return organizations.map((organization) => {
+				const result = {
+					...organization,
+					metadata: organization.metadata
+						? parseJSON<Record<string, any>>(organization.metadata)
+						: undefined,
+				};
+				return filterOutputFields(
+					result,
+					orgAdditionalFields,
+				) as InferOrganization<O>;
+			});
+		},
+		countOrganizations: async (
+			where?: Where[] | undefined,
+		): Promise<number> => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			return adapter.count({
+				model: "organization",
+				where,
+			});
 		},
 		createTeam: async (data: TeamInput) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
