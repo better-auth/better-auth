@@ -78,6 +78,52 @@ describe("admin + username plugin interaction", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should search users by custom username field", async () => {
+		const created = await client.admin.createUser(
+			{
+				email: "searchusername5990@example.com",
+				password: "some-secure-password",
+				name: "Search Username 5990",
+				role: "user",
+				data: { username: "SearchUser5990" },
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id;
+
+		try {
+			const res = await client.admin.listUsers({
+				search: [
+					{
+						field: "username",
+						operator: "eq",
+						value: "searchuser5990",
+					},
+				],
+				fetchOptions: {
+					headers: adminHeaders,
+				},
+			});
+
+			expect(res.data?.total).toBe(1);
+			expect(res.data?.users[0]?.email).toBe("searchusername5990@example.com");
+		} finally {
+			if (userId) {
+				await client.admin.removeUser(
+					{ userId },
+					{
+						headers: adminHeaders,
+					},
+				);
+			}
+		}
+	});
+
+	/**
 	 * This test validates the bug reported in issue #9446
 	 * Currently FAILS because duplicate username validation is not performed
 	 * when creating users via admin endpoint - instead of a proper error,

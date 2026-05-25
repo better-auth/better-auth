@@ -207,7 +207,19 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "Get the account info provided by the provider",
         "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "accountId",
+            "schema": {
+              "description": "The provider given account id for which to get the account info",
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -366,7 +378,74 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": undefined,
         "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+        ],
         "responses": {
           "400": {
             "content": {
@@ -477,16 +556,128 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": undefined,
         "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "properties": {
+                  "code": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "device_id": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "error": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "error_description": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "state": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "user": {
+                    "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                },
+                "required": [],
                 "type": "object",
               },
             },
           },
+          "required": false,
         },
         "responses": {
           "400": {
@@ -1585,7 +1776,30 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "Get the current session",
         "operationId": "getSession",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "disableCookieCache",
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "disableRefresh",
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1721,7 +1935,30 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Get the current session",
         "operationId": "getSessionPost",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "disableCookieCache",
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "disableRefresh",
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2854,7 +3091,19 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Reset the password for a user",
         "operationId": "resetPassword",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "description": undefined,
+              "type": [
+                "string",
+                "null",
+              ],
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {

@@ -152,6 +152,106 @@ Allows an admin to list all users in the database.
   ```
 </APIMethod>
 
+For multi-field search, call the same endpoint with a `POST` body. The legacy `GET` query parameters above are still supported.
+
+<APIMethod path="/admin/list-users" method="POST" requireSession note={"Recommended when searching across multiple fields or custom user fields."} resultVariable={"users"}>
+  ```ts
+  type listUsers = {
+    /**
+     * Search conditions to apply to the user table.
+     */
+    search?: {
+      /**
+       * The field to search in. Can be a built-in field or a custom user field.
+       */
+      field: string = "email"
+      /**
+       * The operator to use for the search. Defaults to `eq` when omitted.
+       */
+      operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+      /**
+       * The value to search for.
+       */
+      value: string | number | boolean | string[] | number[] = "hello@example.com"
+      /**
+       * How this condition is combined with the other search conditions. Defaults to `AND` when omitted.
+       */
+      connector?: "AND" | "OR" = "AND"
+      /**
+       * Case sensitivity for string comparisons. Defaults to `sensitive` when omitted.
+       */
+      mode?: "sensitive" | "insensitive" = "sensitive"
+    }[]
+    /**
+     * The number of users to return. Defaults to 100.
+     */
+    limit?: string | number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: string | number = 100
+    /**
+     * The field to sort by.
+     */
+    sortBy?: string = "name"
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by.
+     */
+    filterField?: string = "role"
+    /**
+     * The value to filter by.
+     */
+    filterValue?: string | number | boolean | string[] | number[] = "admin"
+    /**
+     * The operator to use for the filter.
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+  }
+  ```
+</APIMethod>
+
+#### Multi-Field Search
+
+Use `search` to match users across multiple fields. Set `connector: "OR"` on each condition for a search bar that matches any field.
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+const users = await authClient.admin.listUsers({
+    search: [
+        {
+            field: "email",
+            operator: "contains",
+            value: "@example.com",
+            connector: "OR",
+            mode: "insensitive",
+        },
+        {
+            field: "name",
+            operator: "contains",
+            value: "john",
+            connector: "OR",
+            mode: "insensitive",
+        },
+        {
+            field: "username",
+            operator: "contains",
+            value: "john",
+            connector: "OR",
+            mode: "insensitive",
+        },
+    ],
+});
+```
+
+Custom fields must exist in your user schema. `mode: "insensitive"` support depends on the configured database adapter.
+
+When calling the `POST` request from a browser with cookie-based auth, add your frontend origin to [`trustedOrigins`](/docs/reference/options#trustedorigins), like other authenticated `POST` endpoints.
+
 #### Query Filtering
 
 The `listUsers` function supports various filter operators including `eq`, `contains`, `starts_with`, and `ends_with`.

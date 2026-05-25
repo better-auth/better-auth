@@ -109,23 +109,43 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+type IsCatchAllQuery<Query> = string extends keyof Query
+	? true
+	: number extends keyof Query
+		? true
+		: symbol extends keyof Query
+			? true
+			: false;
+
 type InferCtxQuery<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
-	C["query"] extends Record<string, any>
+	IsAny<C["query"]> extends true
 		? {
-				query: C["query"];
 				fetchOptions?: FetchOptions | undefined;
 			}
-		: C["query"] extends Record<string, any> | undefined
+		: [NonNullable<C["query"]>] extends [never]
 			? {
-					query?: C["query"] | undefined;
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: {
-					fetchOptions?: FetchOptions | undefined;
-				};
+			: NonNullable<C["query"]> extends Record<string, any>
+				? IsCatchAllQuery<NonNullable<C["query"]>> extends true
+					? {
+							fetchOptions?: FetchOptions | undefined;
+						}
+					: HasRequiredKeys<NonNullable<C["query"]>> extends true
+						? {
+								query: C["query"];
+								fetchOptions?: FetchOptions | undefined;
+							}
+						: {
+								query?: C["query"] | undefined;
+								fetchOptions?: FetchOptions | undefined;
+							}
+				: {
+						fetchOptions?: FetchOptions | undefined;
+					};
 
 export type InferCtx<
 	C extends InputContext<any, any>,
@@ -133,11 +153,11 @@ export type InferCtx<
 > =
 	IsAny<C["body"]> extends true
 		? InferCtxQuery<C, FetchOptions>
-		: C["body"] extends Record<string, any>
-			? C["body"] & {
-					fetchOptions?: FetchOptions | undefined;
-				}
-			: InferCtxQuery<C, FetchOptions>;
+		: [NonNullable<C["body"]>] extends [never]
+			? InferCtxQuery<C, FetchOptions>
+			: NonNullable<C["body"]> extends Record<string, any>
+				? NonNullable<C["body"]> & InferCtxQuery<C, FetchOptions>
+				: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 

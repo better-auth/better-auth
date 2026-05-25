@@ -518,6 +518,41 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 		},
 	);
 
+const listUsersWhereValueSchema = z.union([
+	z.string(),
+	z.number(),
+	z.boolean(),
+	z.array(z.string()),
+	z.array(z.number()),
+]);
+
+const listUsersSearchSchema = z.object({
+	field: z.string().meta({
+		description: 'The field to search in. Eg: "email", "name", "username"',
+	}),
+	operator: z
+		.enum(whereOperators)
+		.meta({
+			description: "The operator to use for the search",
+		})
+		.optional(),
+	value: listUsersWhereValueSchema.meta({
+		description: 'The value to search for. Eg: "some name"',
+	}),
+	connector: z
+		.enum(["AND", "OR"])
+		.meta({
+			description: "The connector to use with the other search conditions",
+		})
+		.optional(),
+	mode: z
+		.enum(["sensitive", "insensitive"])
+		.meta({
+			description: "The case sensitivity mode for string comparisons",
+		})
+		.optional(),
+});
+
 const listUsersQuerySchema = z.object({
 	searchValue: z.string().optional().meta({
 		description: 'The value to search for. Eg: "some name"',
@@ -569,14 +604,16 @@ const listUsersQuerySchema = z.object({
 		})
 		.optional(),
 	filterValue: z
-		.string()
+		.union([
+			z.string(),
+			z.number(),
+			z.boolean(),
+			z.array(z.string()),
+			z.array(z.number()),
+		])
 		.meta({
 			description: "The value to filter by",
 		})
-		.or(z.number())
-		.or(z.boolean())
-		.or(z.array(z.string()))
-		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
 		.enum(whereOperators)
@@ -586,13 +623,30 @@ const listUsersQuerySchema = z.object({
 		.optional(),
 });
 
+const listUsersBodySchema = listUsersQuerySchema
+	.omit({
+		searchValue: true,
+		searchField: true,
+		searchOperator: true,
+	})
+	.extend({
+		search: z
+			.array(listUsersSearchSchema)
+			.meta({
+				description: "The search conditions to apply to the user table",
+			})
+			.optional(),
+	})
+	.optional();
+
 export const listUsers = (opts: AdminOptions) =>
 	createAuthEndpoint(
 		"/admin/list-users",
 		{
-			method: "GET",
+			method: ["GET", "POST"],
 			use: [adminMiddleware],
-			query: listUsersQuerySchema,
+			query: listUsersQuerySchema.optional(),
+			body: listUsersBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "listUsers",
@@ -648,9 +702,15 @@ export const listUsers = (opts: AdminOptions) =>
 				);
 			}
 
+			const input = {
+				...(ctx.query ?? {}),
+				...(ctx.body ?? {}),
+			};
 			const where: Where[] = [];
 
-			if (ctx.query?.searchValue) {
+			if (ctx.body && "search" in ctx.body) {
+				where.push(...(ctx.body.search ?? []));
+			} else if (ctx.query?.searchValue) {
 				where.push({
 					field: ctx.query.searchField || "email",
 					operator: ctx.query.searchOperator || "contains",
@@ -658,22 +718,24 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			if (ctx.query?.filterValue !== undefined) {
+			if (input.filterValue !== undefined) {
 				where.push({
-					field: ctx.query.filterField || "email",
-					operator: ctx.query.filterOperator || "eq",
-					value: ctx.query.filterValue,
+					field: input.filterField || "email",
+					operator: input.filterOperator || "eq",
+					value: input.filterValue,
 				});
 			}
 
 			try {
+				const limit = Number(input.limit) || undefined;
+				const offset = Number(input.offset) || undefined;
 				const users = await ctx.context.internalAdapter.listUsers(
-					Number(ctx.query?.limit) || undefined,
-					Number(ctx.query?.offset) || undefined,
-					ctx.query?.sortBy
+					limit,
+					offset,
+					input.sortBy
 						? {
-								field: ctx.query.sortBy,
-								direction: ctx.query.sortDirection || "asc",
+								field: input.sortBy,
+								direction: input.sortDirection || "asc",
 							}
 						: undefined,
 					where.length ? where : undefined,
@@ -686,8 +748,8 @@ export const listUsers = (opts: AdminOptions) =>
 						parseUserOutput(ctx.context.options, user),
 					) as UserWithRole[],
 					total: total,
-					limit: Number(ctx.query?.limit) || undefined,
-					offset: Number(ctx.query?.offset) || undefined,
+					limit,
+					offset,
 				});
 			} catch {
 				return ctx.json({

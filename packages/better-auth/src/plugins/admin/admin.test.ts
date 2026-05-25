@@ -487,6 +487,159 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow POST multi-field search and filters through the client", async () => {
+		const createdUserIds: string[] = [];
+
+		try {
+			const alpha = await client.admin.createUser(
+				{
+					name: "Issue 5990 Alpha",
+					email: "issue-5990-alpha@test.com",
+					password: "password",
+					role: "admin",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (alpha.data?.user.id) {
+				createdUserIds.push(alpha.data.user.id);
+			}
+
+			const beta = await client.admin.createUser(
+				{
+					name: "Issue 5990 Beta",
+					email: "issue-5990-beta@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (beta.data?.user.id) {
+				createdUserIds.push(beta.data.user.id);
+			}
+
+			const res = await client.admin.listUsers({
+				search: [
+					{
+						field: "email",
+						operator: "contains",
+						value: "issue-5990-alpha",
+						connector: "OR",
+					},
+					{
+						field: "name",
+						operator: "contains",
+						value: "Issue 5990 Beta",
+						connector: "OR",
+					},
+				],
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: "admin",
+				fetchOptions: {
+					headers: adminHeaders,
+				},
+			});
+
+			expect(res.data?.total).toBe(1);
+			expect(res.data?.users.map((user) => user.email)).toEqual([
+				"issue-5990-alpha@test.com",
+			]);
+		} finally {
+			for (const userId of createdUserIds) {
+				await client.admin.removeUser(
+					{ userId },
+					{
+						headers: adminHeaders,
+					},
+				);
+			}
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow POST multi-field search through the server API", async () => {
+		const createdUserIds: string[] = [];
+
+		try {
+			const match = await client.admin.createUser(
+				{
+					name: "Issue 5990 Gamma Match",
+					email: "issue-5990-gamma@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (match.data?.user.id) {
+				createdUserIds.push(match.data.user.id);
+			}
+
+			const nonMatch = await client.admin.createUser(
+				{
+					name: "Issue 5990 Gamma Other",
+					email: "issue-5990-other@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (nonMatch.data?.user.id) {
+				createdUserIds.push(nonMatch.data.user.id);
+			}
+
+			const res = await auth.api.listUsers({
+				method: "POST",
+				headers: adminHeaders,
+				body: {
+					search: [
+						{
+							field: "email",
+							operator: "contains",
+							value: "issue-5990-gamma",
+							connector: "AND",
+						},
+						{
+							field: "name",
+							operator: "contains",
+							value: "Match",
+							connector: "AND",
+						},
+					],
+					limit: 5,
+					sortBy: "email",
+					sortDirection: "asc",
+				},
+			});
+
+			expect(res.total).toBe(1);
+			expect(res.users.map((user) => user.email)).toEqual([
+				"issue-5990-gamma@test.com",
+			]);
+		} finally {
+			for (const userId of createdUserIds) {
+				await client.admin.removeUser(
+					{ userId },
+					{
+						headers: adminHeaders,
+					},
+				);
+			}
+		}
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{
