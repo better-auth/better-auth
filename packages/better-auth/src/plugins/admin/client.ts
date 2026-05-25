@@ -93,7 +93,9 @@ export const adminClient = <O extends AdminClientOptions>(
 		}),
 		pathMethods: {
 			"/admin/list-users": "GET",
-			"/admin/list-organizations": "GET",
+			...(options?.organizations?.enabled
+				? { "/admin/list-organizations": "GET" as const }
+				: {}),
 			"/admin/impersonate-user": "POST",
 			"/admin/stop-impersonating": "POST",
 		},

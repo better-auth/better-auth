@@ -134,7 +134,18 @@ describe("Admin organization listing", async () => {
 		]);
 		expect(page.data?.total).toBe(1);
 		expect(page.data?.limit).toBe(1);
-		expect(page.data?.offset).toBeUndefined();
+		expect(page.data?.offset).toBe(0);
+
+		const zeroLimit = await client.admin.listOrganizations({
+			query: {
+				limit: 0,
+				offset: 0,
+			},
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(zeroLimit.data?.organizations).toEqual([]);
+		expect(zeroLimit.data?.limit).toBe(0);
+		expect(zeroLimit.data?.offset).toBe(0);
 
 		const filtered = await client.admin.listOrganizations({
 			query: {
@@ -176,6 +187,12 @@ describe("Admin organization listing configuration", () => {
 		expect(
 			(auth.api as unknown as Record<string, unknown>).adminListOrganizations,
 		).toBeUndefined();
+		expect(adminClient().pathMethods).not.toHaveProperty(
+			"/admin/list-organizations",
+		);
+		expect(
+			adminClient({ organizations: { enabled: true } }).pathMethods,
+		).toHaveProperty("/admin/list-organizations", "GET");
 	});
 
 	it("honors custom admin organization permissions", async () => {

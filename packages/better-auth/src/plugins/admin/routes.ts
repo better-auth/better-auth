@@ -720,6 +720,14 @@ const listOrganizationsQuerySchema = listUsersQuerySchema.extend({
 		.optional(),
 });
 
+const parsePaginationValue = (value: string | number | undefined) => {
+	if (value === undefined) {
+		return undefined;
+	}
+	const parsedValue = Number(value);
+	return Number.isNaN(parsedValue) ? undefined : parsedValue;
+};
+
 export const adminListOrganizations = (opts: AdminOptions) =>
 	createAuthEndpoint(
 		"/admin/list-organizations",
@@ -804,11 +812,13 @@ export const adminListOrganizations = (opts: AdminOptions) =>
 				});
 			}
 
+			const limit = parsePaginationValue(ctx.query?.limit);
+			const offset = parsePaginationValue(ctx.query?.offset);
 			const adapter = getOrgAdapter(ctx.context, organizationPlugin.options);
 			const [organizations, total] = await Promise.all([
 				adapter.listAllOrganizations({
-					limit: Number(ctx.query?.limit) || undefined,
-					offset: Number(ctx.query?.offset) || undefined,
+					limit,
+					offset,
 					sortBy: ctx.query?.sortBy,
 					sortDirection: ctx.query?.sortDirection,
 					where: where.length ? where : undefined,
@@ -818,8 +828,8 @@ export const adminListOrganizations = (opts: AdminOptions) =>
 			return ctx.json({
 				organizations,
 				total,
-				limit: Number(ctx.query?.limit) || undefined,
-				offset: Number(ctx.query?.offset) || undefined,
+				limit,
+				offset,
 			});
 		},
 	);
