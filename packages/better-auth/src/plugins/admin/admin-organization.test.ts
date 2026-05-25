@@ -147,6 +147,17 @@ describe("Admin organization listing", async () => {
 		expect(zeroLimit.data?.limit).toBe(0);
 		expect(zeroLimit.data?.offset).toBe(0);
 
+		const blankPagination = await client.admin.listOrganizations({
+			query: {
+				limit: "",
+				offset: " ",
+			},
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(blankPagination.data?.organizations).toHaveLength(2);
+		expect(blankPagination.data?.limit).toBeUndefined();
+		expect(blankPagination.data?.offset).toBeUndefined();
+
 		const filtered = await client.admin.listOrganizations({
 			query: {
 				filterField: "slug",

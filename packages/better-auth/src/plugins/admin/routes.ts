@@ -721,7 +721,10 @@ const listOrganizationsQuerySchema = listUsersQuerySchema.extend({
 });
 
 const parsePaginationValue = (value: string | number | undefined) => {
-	if (value === undefined) {
+	if (
+		value === undefined ||
+		(typeof value === "string" && value.trim() === "")
+	) {
 		return undefined;
 	}
 	const parsedValue = Number(value);
