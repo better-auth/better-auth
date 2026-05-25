@@ -10,6 +10,8 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to change users role",
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS: "You are not allowed to create users",
 	YOU_ARE_NOT_ALLOWED_TO_LIST_USERS: "You are not allowed to list users",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_ORGANIZATIONS:
+		"You are not allowed to list organizations",
 	YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS:
 		"You are not allowed to list users sessions",
 	YOU_ARE_NOT_ALLOWED_TO_BAN_USERS: "You are not allowed to ban users",

@@ -5,7 +5,11 @@ import {
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import {
+	APIError,
+	BASE_ERROR_CODES,
+	BetterAuthError,
+} from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import {
@@ -16,6 +20,7 @@ import {
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import type { AccessControl, ArrayElement } from "../access";
+import { getOrgAdapter } from "../organization/adapter";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -695,6 +700,140 @@ export const listUsers = (opts: AdminOptions) =>
 					total: 0,
 				});
 			}
+		},
+	);
+
+const listOrganizationsQuerySchema = listUsersQuerySchema.extend({
+	searchField: z
+		.enum(["name", "slug"])
+		.meta({
+			description:
+				'The field to search in, defaults to name. Can be `name` or `slug`. Eg: "name"',
+		})
+		.optional(),
+	limit: z
+		.string()
+		.meta({
+			description: "The number of organizations to return",
+		})
+		.or(z.number())
+		.optional(),
+});
+
+const parsePaginationValue = (value: string | number | undefined) => {
+	if (
+		value === undefined ||
+		(typeof value === "string" && value.trim() === "")
+	) {
+		return undefined;
+	}
+	const parsedValue = Number(value);
+	return Number.isNaN(parsedValue) ? undefined : parsedValue;
+};
+
+export const adminListOrganizations = (opts: AdminOptions) =>
+	createAuthEndpoint(
+		"/admin/list-organizations",
+		{
+			method: "GET",
+			use: [adminMiddleware],
+			query: listOrganizationsQuerySchema,
+			metadata: {
+				openapi: {
+					operationId: "adminListOrganizations",
+					summary: "List organizations",
+					description: "List all organizations as a system administrator",
+					responses: {
+						200: {
+							description: "List of organizations",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											organizations: {
+												type: "array",
+												items: {
+													$ref: "#/components/schemas/Organization",
+												},
+											},
+											total: {
+												type: "number",
+											},
+											limit: {
+												type: "number",
+											},
+											offset: {
+												type: "number",
+											},
+										},
+										required: ["organizations", "total"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const canListOrganizations = hasPermission({
+				userId: ctx.context.session.user.id,
+				role: ctx.context.session.user.role,
+				options: opts,
+				permissions: {
+					organization: ["admin-list"],
+				},
+			});
+			if (!canListOrganizations) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_ORGANIZATIONS,
+				);
+			}
+
+			const organizationPlugin = ctx.context.getPlugin("organization");
+			if (!organizationPlugin) {
+				throw new BetterAuthError(
+					"The admin organization endpoints require the organization plugin to be enabled.",
+				);
+			}
+
+			const where: Where[] = [];
+			if (ctx.query?.searchValue) {
+				where.push({
+					field: ctx.query.searchField || "name",
+					operator: ctx.query.searchOperator || "contains",
+					value: ctx.query.searchValue,
+				});
+			}
+			if (ctx.query?.filterValue !== undefined) {
+				where.push({
+					field: ctx.query.filterField || "slug",
+					operator: ctx.query.filterOperator || "eq",
+					value: ctx.query.filterValue,
+				});
+			}
+
+			const limit = parsePaginationValue(ctx.query?.limit);
+			const offset = parsePaginationValue(ctx.query?.offset);
+			const adapter = getOrgAdapter(ctx.context, organizationPlugin.options);
+			const [organizations, total] = await Promise.all([
+				adapter.listAllOrganizations({
+					limit,
+					offset,
+					sortBy: ctx.query?.sortBy,
+					sortDirection: ctx.query?.sortDirection,
+					where: where.length ? where : undefined,
+				}),
+				adapter.countOrganizations(where.length ? where : undefined),
+			]);
+			return ctx.json({
+				organizations,
+				total,
+				limit,
+				offset,
+			});
 		},
 	);
 

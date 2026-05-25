@@ -207,6 +207,73 @@ const totalUsers = users.total;
 const totalPages = Math.ceil(totalUsers / pageSize)
 ```
 
+### List Organizations
+
+Allows an admin to list organizations across the application, regardless of
+membership. This endpoint requires both the Admin and Organization plugins and
+must be enabled explicitly.
+
+```ts title="auth.ts"
+import { admin, organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        admin({
+            organizations: { enabled: true }, // [!code highlight]
+        }),
+        organization(), // [!code highlight]
+    ],
+})
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { adminClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        adminClient({
+            organizations: { enabled: true }, // [!code highlight]
+        }),
+    ],
+})
+```
+
+<APIMethod path="/admin/list-organizations" method="GET" requireSession resultVariable={"organizations"}>
+  ```ts
+  type adminListOrganizations = {
+    /**
+     * The value to search for.
+     */
+    searchValue?: string = "Acme"
+    /**
+     * The field to search in, defaults to name.
+     */
+    searchField?: "name" | "slug" = "name"
+    /**
+     * The operator to use for the search.
+     */
+    searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+    /**
+     * Pagination and sorting options.
+     */
+    limit?: string | number
+    offset?: string | number
+    sortBy?: string
+    sortDirection?: "asc" | "desc"
+    /**
+     * Arbitrary organization field filter options.
+     */
+    filterField?: string = "slug"
+    filterValue?: string | number | boolean | string[] | number[]
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+  }
+  ```
+</APIMethod>
+
+The response is `{ organizations, total, limit, offset }`. With custom access
+control, callers need the `organization: ["admin-list"]` permission.
+
 ### Get User
 
 Fetches a user's information using an id.
@@ -456,6 +523,9 @@ By default, there are two resources with up to six permissions.
 
 **session**:
 `list` `revoke` `delete`
+
+**organization**:
+`admin-list`
 
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
@@ -805,6 +875,19 @@ admin({
 ```
 
 If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
+
+### Organizations
+
+Enable read-only system administrator access to list all organizations. The
+Organization plugin must also be enabled.
+
+```ts title="auth.ts"
+admin({
+    organizations: {
+        enabled: true,
+    },
+})
+```
 
 ### impersonationSessionDuration
 
