@@ -11,11 +11,13 @@ import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
 import { HIDE_METADATA } from "../../utils";
+import { isAPIError } from "../../utils/is-api-error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
 
@@ -282,9 +284,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
 				throw ctx.redirect(
-					`${defaultErrorURL}?error=${
-						ctx.query.error || "oAuth_code_missing"
-					}&error_description=${ctx.query.error_description}`,
+					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
 				);
 			}
 			const providerId = ctx.params?.providerId;
@@ -316,17 +316,15 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			} = parsedState;
 			const code = ctx.query.code;
 
-			function redirectOnError(error: string) {
+			function redirectOnError(error: string, description?: string) {
 				const defaultErrorURL =
 					ctx.context.options.onAPIError?.errorURL ||
 					`${ctx.context.baseURL}/error`;
-				let url = errorURL || defaultErrorURL;
-				if (url.includes("?")) {
-					url = `${url}&error=${error}`;
-				} else {
-					url = `${url}?error=${error}`;
-				}
-				throw ctx.redirect(url);
+				const baseURL = errorURL || defaultErrorURL;
+				const params = new URLSearchParams({ error });
+				if (description) params.set("error_description", description);
+				const sep = baseURL.includes("?") ? "&" : "?";
+				throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 			}
 
 			let finalTokenUrl = providerConfig.tokenUrl;
@@ -433,7 +431,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						? mapUser.email.toLowerCase()
 						: userInfo.email?.toLowerCase();
 					if (!email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
+						ctx.context.logger.error(
+							missingEmailLogMessage(providerConfig.providerId, {
+								source: "generic",
+							}),
+							userInfo,
+						);
 						throw redirectOnError("email_is_missing");
 					}
 					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
@@ -510,20 +513,28 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw ctx.redirect(toRedirectTo);
 			}
 
-			const result = await handleOAuthUserInfo(ctx, {
-				userInfo,
-				account: {
-					providerId: providerConfig.providerId,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				callbackURL: callbackURL,
-				disableSignUp:
-					(providerConfig.disableImplicitSignUp && !requestSignUp) ||
-					providerConfig.disableSignUp,
-				overrideUserInfo: providerConfig.overrideUserInfo,
-			});
+			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+			try {
+				result = await handleOAuthUserInfo(ctx, {
+					userInfo,
+					account: {
+						providerId: providerConfig.providerId,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					callbackURL: callbackURL,
+					disableSignUp:
+						(providerConfig.disableImplicitSignUp && !requestSignUp) ||
+						providerConfig.disableSignUp,
+					overrideUserInfo: providerConfig.overrideUserInfo,
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					return redirectOnError(e.body.code, e.body.message);
+				}
+				throw e;
+			}
 
 			if (result.error) {
 				return redirectOnError(result.error.split(" ").join("_"));

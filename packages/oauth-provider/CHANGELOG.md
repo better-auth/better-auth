@@ -1,5 +1,118 @@
 # @better-auth/oauth-provider
 
+## 1.6.11
+
+### Patch Changes
+
+- [`b4bc65a`](https://github.com/better-auth/better-auth/commit/b4bc65a007784b2eb0efb459e5fa6fd8055d3ec9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the OAuth authorization-code grant: two concurrent token-exchange requests sharing the same `code` could both pass the find step before either delete completed and each mint an independent access/refresh/id token set. The `authorization_code` handler in `@better-auth/oauth-provider`, plus the legacy `oidc-provider` and `mcp` plugins in `better-auth`, now consume the verification row atomically via `internalAdapter.consumeVerificationValue`. The first caller mints tokens; concurrent racers receive `invalid_grant` (RFC 6749 §5.2). Malformed-verification-value branches in `@better-auth/oauth-provider` previously returned a project-specific `invalid_verification` code; those are now `invalid_grant` so spec-compliant clients can branch on the standard code.
+
+- [`c6918ec`](https://github.com/better-auth/better-auth/commit/c6918ecc9e3a75892169415d7f6c95b591b6a52d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the OAuth refresh-token grant rotation: two concurrent requests presenting the same refresh token both passed the `revoked` check before either revocation write completed, so each minted a fresh refresh token (forked family). `createRefreshToken` now performs an atomic compare-and-swap on the parent row (`UPDATE ... WHERE id = ? AND revoked IS NULL`) before issuing the new token, and `revokeRefreshToken` uses the same CAS. The loser of a concurrent rotation receives `invalid_grant`; the parent row's `revoked` flag is set, so any subsequent replay trips the existing family-invalidation guard. The `oauthRefreshToken.token` column gains a `unique` constraint for parity with `oauthAccessToken.token`.
+
+  `@better-auth/memory-adapter` now treats `undefined` and `null` as equivalent under an `eq null` `where` clause, mirroring SQL `IS NULL` and Mongo's missing-or-null semantics. The adapter factory's `transformInput` skips writing optional fields whose value is `undefined`, so a CAS predicate like `WHERE revoked IS NULL` against a freshly created row (where the field is absent) used to fail-closed on every call. Without this change the refresh-token rotation above is broken for any deployment using the in-memory adapter.
+
+  **Migration note:** the better-auth migration generator only emits `UNIQUE` for newly-created columns. Existing installs will not get the new `oauthRefreshToken.token` unique constraint via `migrate`/`generate`; add it manually if your operational tooling relies on it (e.g. `CREATE UNIQUE INDEX oauth_refresh_token_token_uniq ON "oauthRefreshToken" (token);`). The CAS fix above does not depend on the database-level constraint to be correct; the constraint is defense-in-depth so collisions from buggy custom `generateRefreshToken` callbacks fail loudly.
+
+  Strict family invalidation on contested rotations (per RFC 9700 §4.14) is deferred to a follow-up minor; closing it cleanly requires opt-in transactional rotation in the adapter contract so the family-delete cannot interleave with the winner's in-flight access-token insert.
+
+- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`a26333b`](https://github.com/better-auth/better-auth/commit/a26333b5fb1a044e76c18385441d3ecc2240ab70), [`99a254a`](https://github.com/better-auth/better-auth/commit/99a254a79b59d5a3f5ca2123260118cddb5beed7), [`ee93485`](https://github.com/better-auth/better-auth/commit/ee934854999390ee5ca73592fe205a470a810b83), [`5f09d56`](https://github.com/better-auth/better-auth/commit/5f09d566a64ac9a0499d9664ce700edbf0630cea), [`b4bc65a`](https://github.com/better-auth/better-auth/commit/b4bc65a007784b2eb0efb459e5fa6fd8055d3ec9), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`a1c9f3c`](https://github.com/better-auth/better-auth/commit/a1c9f3c08e7398e900e099839aa6dcc8d1d0b816), [`23094a6`](https://github.com/better-auth/better-auth/commit/23094a628f007f801be6d26e5b15dc5fc6fc4eb8), [`142b86c`](https://github.com/better-auth/better-auth/commit/142b86c43d2e6b258236a298a31237e97f87d64d), [`1f2ff42`](https://github.com/better-auth/better-auth/commit/1f2ff4215c4affff0b140b0c0a712c0dde35659c), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`699b09a`](https://github.com/better-auth/better-auth/commit/699b09a2064dcb7d37046b5a90626c0b6f57af90), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
+  - @better-auth/core@1.6.11
+  - better-auth@1.6.11
+
+## 1.6.10
+
+### Patch Changes
+
+- [#9344](https://github.com/better-auth/better-auth/pull/9344) [`408a307`](https://github.com/better-auth/better-auth/commit/408a3076bdd5b450c96bdad82be797ac8a8d3f83) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): bind consent-accept postLogin skip to the signing session
+
+  When `authorize` emits a signed redirect past the postLogin gate it now
+  records `ba_pl=<sessionId>` in the signed authorization query. On consent
+  accept, `authorizeEndpoint` is called with `{ postLogin: true }` only when
+  the incoming signed query's marker matches the current session's id;
+  otherwise it re-enters `authorize` with `postLogin.shouldRedirect` still
+  enforced. Resolves the post-consent bounce back to the postLogin page for
+  `setActive`-driven flows, blocks a direct POST to `/oauth2/consent` with
+  a pre-postLogin signed query from skipping `shouldRedirect`, and prevents
+  a different or newly logged-in session from re-using another session's
+  marker to skip `shouldRedirect`.
+
+- [#9389](https://github.com/better-auth/better-auth/pull/9389) [`f7bc1c7`](https://github.com/better-auth/better-auth/commit/f7bc1c73490d657a8ffa92a58ecfa9d8403d4fda) Thanks [@zllovesuki](https://github.com/zllovesuki)! - Add indexes to OAuth provider foreign-key fields in generated schemas.
+
+- [#9344](https://github.com/better-auth/better-auth/pull/9344) [`408a307`](https://github.com/better-auth/better-auth/commit/408a3076bdd5b450c96bdad82be797ac8a8d3f83) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): complete stale `prompt=login consent` continuations after forced login
+
+  Consent continuations now carry the signed authorization request issue time and
+  only clear a lingering `login` prompt when the active session was created for
+  that request. This preserves forced reauthentication semantics while avoiding
+  the loop where a completed reauthentication is sent back to `/login`.
+
+- [#9406](https://github.com/better-auth/better-auth/pull/9406) [`d427d1d`](https://github.com/better-auth/better-auth/commit/d427d1dba91db8861d935ca5838f49eb7e617f67) Thanks [@cyphercodes](https://github.com/cyphercodes)! - Export OAuth provider helper types used by public declarations so downstream declaration emit can name auth instances portably.
+
+- [#9324](https://github.com/better-auth/better-auth/pull/9324) [`6b03a45`](https://github.com/better-auth/better-auth/commit/6b03a45a14d905aa070068290adfedfd4c5f4e2d) Thanks [@dvanmali](https://github.com/dvanmali)! - Make `sessionId` optional in refresh token types to match the refresh token schema.
+
+- Updated dependencies [[`1e0f26d`](https://github.com/better-auth/better-auth/commit/1e0f26d4c83608d14a533f33458ade0f8504fd16), [`8c1e917`](https://github.com/better-auth/better-auth/commit/8c1e91757d91d103c332e90201c39ce5892c37e8), [`b2d655c`](https://github.com/better-auth/better-auth/commit/b2d655c77c7c627ada17456d1de106fdce6fa18e), [`09f1327`](https://github.com/better-auth/better-auth/commit/09f1327acb9c6bbfeb272dc62c7013172cf33153), [`906b7b3`](https://github.com/better-auth/better-auth/commit/906b7b34a710d49798e166395da2bcd2be13ef46), [`e9c978e`](https://github.com/better-auth/better-auth/commit/e9c978e2af9e61d35f50fd040305cbb8fdda32ba), [`e71aad3`](https://github.com/better-auth/better-auth/commit/e71aad3b6d67502cfb770fa8890f3ab58c537114), [`80a655d`](https://github.com/better-auth/better-auth/commit/80a655d271dcae5f785a70f13be60f80fb828cf1), [`15ff28a`](https://github.com/better-auth/better-auth/commit/15ff28a957a18df8ecd2aa08d66b94c91ae9a6a4), [`88a7c67`](https://github.com/better-auth/better-auth/commit/88a7c678f4db3f7da580d53071b2595b92354a45), [`9a7b51d`](https://github.com/better-auth/better-auth/commit/9a7b51d0d3dfbc6b2697fe5f9edd0bb480bdf89b), [`1b25902`](https://github.com/better-auth/better-auth/commit/1b259024dcd1bbbc08559ee057f22c01929a72a7), [`cf59136`](https://github.com/better-auth/better-auth/commit/cf591360e72a8d01741618cd61cdeea84cf8398a), [`a597ee0`](https://github.com/better-auth/better-auth/commit/a597ee01ed4e6d85aba5ee9f15100acc578390d9), [`fc02ced`](https://github.com/better-auth/better-auth/commit/fc02cedb708e2b5987a177539a903cc35155a426), [`9f1ef1f`](https://github.com/better-auth/better-auth/commit/9f1ef1f7e5500e0b3dbe2a18e25e3519847cd7a9), [`36ef808`](https://github.com/better-auth/better-auth/commit/36ef808c6cedec6eeb9a3a4e6790e0ab46d96ff3), [`c1336c5`](https://github.com/better-auth/better-auth/commit/c1336c563d45f93ca3fd4da4e6c767fc267d86d0), [`3a9a2c3`](https://github.com/better-auth/better-auth/commit/3a9a2c37eeab1d0c98845a47642d4dc27fe54ceb), [`fde0432`](https://github.com/better-auth/better-auth/commit/fde043207ef3d5a5e1f74aa5ddabf77d523d52d4), [`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b)]:
+  - better-auth@1.6.10
+  - @better-auth/core@1.6.10
+
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
+  - @better-auth/core@1.6.9
+  - better-auth@1.6.9
+
+## 1.6.8
+
+### Patch Changes
+
+- [#9328](https://github.com/better-auth/better-auth/pull/9328) [`8e3cc34`](https://github.com/better-auth/better-auth/commit/8e3cc3453c8e0b066dd3ba3d492d9494a1670d62) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): accept authorization-code flows without `state`
+
+  Align authorization-code verification with the authorize endpoint and OAuth/OIDC semantics by treating `state` as optional for the authorization server. The provider still echoes `state` when present, and Better Auth client helpers continue to generate and validate it.
+
+- Updated dependencies [[`856ab24`](https://github.com/better-auth/better-auth/commit/856ab2426c0dce7377ee1ca26dbb7d9e52fb6429), [`9aa8e63`](https://github.com/better-auth/better-auth/commit/9aa8e63de84549634216e13e407cf6d8aa61acc3)]:
+  - better-auth@1.6.8
+  - @better-auth/core@1.6.8
+
+## 1.6.7
+
+### Patch Changes
+
+- [#9244](https://github.com/better-auth/better-auth/pull/9244) [`4e0e6e1`](https://github.com/better-auth/better-auth/commit/4e0e6e1fd32705063cf4831c0339212066aa369f) Thanks [@TanishValesha](https://github.com/TanishValesha)! - read OAuth2 userinfo `Authorization` from `ctx.headers` when `ctx.request` is absent, so `auth.api.oauth2UserInfo({ headers })` matches HTTP `GET /oauth2/userinfo`.
+
+- Updated dependencies [[`307196a`](https://github.com/better-auth/better-auth/commit/307196a405e067f4a863de2ed68528e8d4bdc162), [`4a180f0`](https://github.com/better-auth/better-auth/commit/4a180f0b0c084c59e7b006058d3fdbd8542face5), [`4f373ee`](https://github.com/better-auth/better-auth/commit/4f373eed8a42e02460dbd2ee9973b9493cea04eb), [`e1b1cfc`](https://github.com/better-auth/better-auth/commit/e1b1cfc7a262c8bf0c383a7b2b1d140472d33e56), [`d053a45`](https://github.com/better-auth/better-auth/commit/d053a4583e0db9132e52a100ae33e13d040a6bae)]:
+  - better-auth@1.6.7
+  - @better-auth/core@1.6.7
+
+## 1.6.6
+
+### Patch Changes
+
+- [#9226](https://github.com/better-auth/better-auth/pull/9226) [`e64ff72`](https://github.com/better-auth/better-auth/commit/e64ff720fb8514cb78aedd1660223d8b948284da) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Consolidate host/IP classification behind `@better-auth/core/utils/host` and close several loopback/SSRF bypasses that the previous per-package regex checks missed.
+
+  **Electron user-image proxy: SSRF bypasses closed (`@better-auth/electron`).** `fetchUserImage` previously gated outbound requests with a bespoke IPv4/IPv6 regex that missed multiple vectors. All of the following were reachable in production and are now blocked:
+  - `http://tenant.localhost/` and other `*.localhost` names (RFC 6761 reserves the entire TLD for loopback).
+  - `http://[::ffff:169.254.169.254]/` (IPv4-mapped IPv6 to AWS IMDS, the classic SSRF bypass).
+  - `http://metadata.google.internal/`, `http://metadata.goog/` (GCP instance metadata).
+  - `http://instance-data/`, `http://instance-data.ec2.internal/` (AWS IMDS alternate FQDNs).
+  - `http://100.100.100.200/` (Alibaba Cloud IMDS; lives in RFC 6598 shared address space `100.64/10`, which the old regex did not cover).
+  - `http://0.0.0.0:PORT/` (the Linux/macOS kernel routes the unspecified address to loopback: Oligo's "0.0.0.0 Day").
+  - `http://[fc00::...]/`, `http://[fd00::...]/` (IPv6 ULA per RFC 4193) and IPv6 link-local `fe80::/10`, neither of which the regex recognized.
+
+  Documentation ranges (RFC 5737 / RFC 3849), benchmarking (`198.18/15`), multicast, and broadcast are also now rejected.
+
+  **`better-auth`: `0.0.0.0` is no longer treated as loopback.** The previous `isLoopbackHost` implementation in `packages/better-auth/src/utils/url.ts` classified `0.0.0.0` alongside `127.0.0.1` / `::1` / `localhost`. `0.0.0.0` is the unspecified address, not loopback; treating it as such lets browser-origin requests reach localhost-bound dev services (Oligo's "0.0.0.0 Day"). The helper now accepts the full `127.0.0.0/8` range and any `*.localhost` name, and rejects `0.0.0.0`.
+
+  **`better-auth`: trusted-origin substring hardening.** `getTrustedOrigins` previously used `host.includes("localhost") || host.includes("127.0.0.1")` when deciding whether to add an `http://` variant for a dynamic `baseURL.allowedHosts` entry. Misconfigurations like `evil-localhost.com` or `127.0.0.1.nip.io` would incorrectly gain an HTTP origin in the trust list. The check now uses the shared classifier, so only real loopback hosts get the HTTP variant.
+
+  **`@better-auth/oauth-provider`: RFC 8252 compliance.**
+  - §7.3 redirect URI matching now accepts the full `127.0.0.0/8` range (not just `127.0.0.1`) plus `[::1]`, with port-flexible comparison. Port-flexible matching is limited to IP literals; DNS names such as `localhost` continue to use exact-string matching per §8.3 ("NOT RECOMMENDED" for loopback).
+  - `validateIssuerUrl` uses the shared loopback check rather than a two-hostname literal comparison.
+
+  **New module: `@better-auth/core/utils/host`.** Exposes `classifyHost`, `isLoopbackIP`, `isLoopbackHost`, and `isPublicRoutableHost`. One RFC 6890 / RFC 6761 / RFC 8252 implementation that handles IPv4, IPv6 (including bracketed literals, zone IDs, IPv4-mapped addresses, and 6to4 / NAT64 / Teredo tunnel forms with embedded-IPv4 recursion), and FQDNs, with a curated cloud-metadata FQDN set. All bespoke loopback/private/link-local checks across the monorepo now route through it.
+
+- Updated dependencies [[`b5742f9`](https://github.com/better-auth/better-auth/commit/b5742f9d08d7c6ae0848279b79c8bcc0a09082d7), [`4debfb6`](https://github.com/better-auth/better-auth/commit/4debfb600ff448f3e63ed242a2fb5a2c41654be1), [`9ea7eb1`](https://github.com/better-auth/better-auth/commit/9ea7eb1eab28d50d40836ab4e2cbe5a81c4da1aa), [`a844c7d`](https://github.com/better-auth/better-auth/commit/a844c7dd087715678787cb10bf9670fad46e535b), [`ab4c10f`](https://github.com/better-auth/better-auth/commit/ab4c10fbc09defcd851d614acecc111cc114b543), [`a61083e`](https://github.com/better-auth/better-auth/commit/a61083e023163d0a14d9e886ce556ba459677428), [`e64ff72`](https://github.com/better-auth/better-auth/commit/e64ff720fb8514cb78aedd1660223d8b948284da)]:
+  - @better-auth/core@1.6.6
+  - better-auth@1.6.6
+
 ## 1.6.5
 
 ### Patch Changes

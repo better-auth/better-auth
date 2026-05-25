@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: 'Package name (e.g., better-auth, @better-auth/cli)'
+        description: 'Package name (e.g., better-auth, @better-auth/core)'
         required: true
         type: string
       version:
@@ -28,6 +28,7 @@ jobs:
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
 
       - name: Add dist-tag
         run: |
