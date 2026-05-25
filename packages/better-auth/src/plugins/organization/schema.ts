@@ -299,6 +299,7 @@ export const organizationSchema = z.object({
 		.or(z.string().transform((v) => JSON.parse(v)))
 		.optional(),
 	createdAt: z.date(),
+	updatedAt: z.date().optional(),
 });
 
 export const memberSchema = z.object({

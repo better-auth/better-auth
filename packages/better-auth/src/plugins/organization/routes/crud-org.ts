@@ -180,6 +180,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organization: {
 					...orgData,
 					createdAt: new Date(),
+					updatedAt: new Date(),
 				},
 			});
 
@@ -225,6 +226,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 					organizationId: organization.id,
 					name: `${organization.name}`,
 					createdAt: new Date(),
+					updatedAt: new Date(),
 				};
 				if (options?.organizationHooks?.beforeCreateTeam) {
 					const response = await options?.organizationHooks.beforeCreateTeam({

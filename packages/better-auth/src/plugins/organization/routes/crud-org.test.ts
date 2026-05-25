@@ -471,5 +471,34 @@ describe("organization hooks", async () => {
 		});
 		expect(internalOrg).toBeDefined();
 		expect(internalOrg?.name).toBe("Internal Org");
+		expect(internalOrg?.updatedAt).toBeDefined();
+		expect(internalOrg?.createdAt).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9743
+	 */
+	it("should set both createdAt and updatedAt when creating organization", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		const result = await auth.api.createOrganization({
+			body: {
+				name: "test-org",
+				slug: "test-org-updated-at",
+			},
+			headers,
+		});
+		expect(result).toBeDefined();
+		expect(result?.createdAt).toBeDefined();
+		expect(result?.updatedAt).toBeDefined();
+		expect(result?.createdAt).toBeInstanceOf(Date);
+		expect(result?.updatedAt).toBeInstanceOf(Date);
+		// Ensure both are set to approximately the same time
+		const timeDiff = Math.abs(
+			(result?.updatedAt?.getTime() ?? 0) - (result?.createdAt?.getTime() ?? 0),
+		);
+		expect(timeDiff).toBeLessThan(100); // Within 100ms
 	});
 });
