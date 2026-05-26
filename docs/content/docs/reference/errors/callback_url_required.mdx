@@ -1,0 +1,20 @@
+---
+title: callback_url_required
+description: A reset token was provided but the callbackURL is missing.
+---
+
+## What is it?
+
+This error is thrown during the password reset validation step (`GET /reset-password`) when the
+request contains a `token` but `callbackURL` query parameter with no value. Better Auth needs `callbackURL`
+to know where to redirect the user after the token is verified.
+
+## Common Causes
+
+* POST `/request-password-reset` was called without providing a `redirectTo` value.
+* A password reset link was generated without including the `callbackURL` parameter value.
+
+## How to resolve
+
+* Include `callbackURL` when building the reset link
+* Check for URL rewriting

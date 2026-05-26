@@ -50,13 +50,10 @@ export const requestPasswordReset = createAuthEndpoint(
 			 * error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?
 			 * token=VALID_TOKEN
 			 */
-			redirectTo: z
-				.string()
-				.meta({
-					description:
-						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
-				})
-				.optional(),
+			redirectTo: z.string().meta({
+				description:
+					"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
+			}),
 		}),
 		metadata: {
 			openapi: {
@@ -207,11 +204,25 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		const { callbackURL } = ctx.query;
-		if (!token || !callbackURL) {
+
+		if (!token && !callbackURL) {
+			throw ctx.redirect(
+				redirectError(ctx.context, undefined, {
+					error: "INVALID_TOKEN_AND_CALLBACK_URL",
+				}),
+			);
+		} else if (!token && callbackURL) {
 			throw ctx.redirect(
 				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
 			);
+		} else if (token && !callbackURL) {
+			throw ctx.redirect(
+				redirectError(ctx.context, undefined, {
+					error: "CALLBACK_URL_REQUIRED",
+				}),
+			);
 		}
+
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
