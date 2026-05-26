@@ -10,6 +10,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
+import { getCookie } from "../src/cookies";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
@@ -2221,5 +2222,45 @@ describe("Electron", () => {
 				expect(result).not.toBeNull();
 			});
 		});
+	});
+});
+
+describe("cookies getCookie", () => {
+	it("serializes stored cookies into a Cookie header string", () => {
+		const stored = JSON.stringify({
+			"better-auth.session_token": { value: "abc", expires: null },
+		});
+		expect(getCookie(stored)).toBe("better-auth.session_token=abc");
+	});
+
+	it("joins multiple stored cookies with `; ` without a leading separator", () => {
+		const stored = JSON.stringify({
+			a: { value: "1", expires: null },
+			b: { value: "2", expires: null },
+		});
+		expect(getCookie(stored)).toBe("a=1; b=2");
+	});
+
+	it("percent-encodes stored values containing reserved cookie-octet bytes", () => {
+		const stored = JSON.stringify({
+			session: { value: "safe", expires: null },
+			pref: { value: "foo;bar=baz", expires: null },
+		});
+		expect(getCookie(stored)).toBe("session=safe; pref=foo%3Bbar%3Dbaz");
+	});
+
+	it("skips stored entries whose name violates the cookie-name token", () => {
+		const stored = JSON.stringify({
+			session: { value: "safe", expires: null },
+			"bad name": { value: "x", expires: null },
+		});
+		expect(getCookie(stored)).toBe("session=safe");
+	});
+
+	it("skips expired entries", () => {
+		const stored = JSON.stringify({
+			session: { value: "abc", expires: new Date(0).toISOString() },
+		});
+		expect(getCookie(stored)).toBe("");
 	});
 });

@@ -1,4 +1,7 @@
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	DiscordProfile,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -53,7 +56,7 @@ describe("oauth2 - email verification on link", async () => {
 
 	const ctx = await auth.$context;
 
-	async function linkGoogleAccount() {
+	async function linkGoogleAccount(): Promise<{ redirectLocation: string }> {
 		server.use(
 			http.post("https://oauth2.googleapis.com/token", async () => {
 				const profile: GoogleProfile = {
@@ -91,18 +94,24 @@ describe("oauth2 - email verification on link", async () => {
 			},
 		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
 			headers: oAuthHeaders,
 			onError(context) {
 				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
 			},
 		});
+		return { redirectLocation };
 	}
 
-	it("should update emailVerified when linking account with verified email", async () => {
-		const testEmail = "test@example.com";
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
+	 */
+	it("should reject implicit link when local user is unverified, even if provider email is verified", async () => {
+		const testEmail = "unverified-local@example.com";
 
 		// Create user with unverified email
 		mockEmail = testEmail;
@@ -116,23 +125,74 @@ describe("oauth2 - email verification on link", async () => {
 
 		const userId = signUpRes.data!.user.id;
 
-		// Verify initial state
+		// Initial state: local row is unverified
 		let user = await ctx.adapter.findOne<User>({
 			model: "user",
 			where: [{ field: "id", value: userId }],
 		});
 		expect(user?.emailVerified).toBe(false);
 
-		// Link with Google account that has verified email
+		// Attempt to link with Google account that has verified email
 		mockEmailVerified = true;
-		await linkGoogleAccount();
+		const { redirectLocation } = await linkGoogleAccount();
 
-		// Verify email is now verified
+		// Callback redirects with the documented account_not_linked error code so
+		// the test can't pass on an unrelated redirect (e.g. server-side failure).
+		expect(redirectLocation).toContain("error=account_not_linked");
+
+		// Link is rejected: no Google account row, local emailVerified untouched
+		const accounts = await ctx.adapter.findMany<{
+			providerId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeUndefined();
+
 		user = await ctx.adapter.findOne<User>({
 			model: "user",
 			where: [{ field: "id", value: userId }],
 		});
+		expect(user?.emailVerified).toBe(false);
+	});
+
+	it("should link account and preserve emailVerified when local user is already verified", async () => {
+		const testEmail = "verified-local@example.com";
+
+		mockEmail = testEmail;
+		mockEmailVerified = true;
+
+		const signUpRes = await client.signUp.email({
+			email: testEmail,
+			password: "password123",
+			name: "Test User",
+		});
+
+		const userId = signUpRes.data!.user.id;
+
+		// Pre-verify the local user (e.g. via email-otp or verification token)
+		await ctx.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+			update: { emailVerified: true },
+		});
+
+		await linkGoogleAccount();
+
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
 		expect(user?.emailVerified).toBe(true);
+
+		const accounts = await ctx.adapter.findMany<{
+			providerId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accounts.find((a) => a.providerId === "google")).toBeDefined();
 	});
 
 	it("should not update emailVerified when provider reports unverified", async () => {
@@ -494,7 +554,7 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 		expect(googleAccount).toBeUndefined();
 	});
 
-	it("should allow account linking when email is verified by provider", async () => {
+	it("should allow account linking when email is verified by provider and local user", async () => {
 		const testEmail = "verified-provider@example.com";
 
 		await ctx.adapter.create({
@@ -503,7 +563,7 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 				id: "existing-user-verified",
 				email: testEmail,
 				name: "Existing User",
-				emailVerified: false,
+				emailVerified: true,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			},
@@ -822,7 +882,7 @@ describe("oauth2 - override user info on sign-in", async () => {
 			data: {
 				email: testEmail,
 				name: "Initial Name",
-				emailVerified: false,
+				emailVerified: true,
 			},
 		});
 
@@ -1056,5 +1116,325 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9124
+ */
+describe("oauth2 - providers without email", async () => {
+	const discordTokenResponse = {
+		access_token: "discord-access-token",
+		refresh_token: "discord-refresh-token",
+		token_type: "Bearer",
+		expires_in: 3600,
+		scope: "identify email",
+	};
+
+	function mockDiscordToken(
+		id: string,
+		username: string,
+		email: string | null = null,
+	) {
+		server.use(
+			http.post("https://discord.com/api/oauth2/token", async () =>
+				HttpResponse.json(discordTokenResponse),
+			),
+			http.get("https://discord.com/api/users/*", async () =>
+				HttpResponse.json({
+					id,
+					username,
+					discriminator: "0",
+					global_name: username,
+					avatar: null,
+					mfa_enabled: false,
+					banner: null,
+					accent_color: null,
+					locale: "en-US",
+					verified: email !== null,
+					email,
+					flags: 0,
+					premium_type: 0,
+					public_flags: 0,
+					display_name: username,
+					avatar_decoration: null,
+					banner_color: null,
+				} satisfies Omit<DiscordProfile, "image_url">),
+			),
+		);
+	}
+
+	describe("with mapProfileToUser omitting provider id", async () => {
+		const missingProviderId = undefined as unknown as string;
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser: () => ({ id: missingProviderId }),
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9454
+		 */
+		it("rejects provider user info with a missing id before creating an account", async () => {
+			const email = "missing-id@example.com";
+			mockDiscordToken("920138789012345000", "missing-id", email);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=unable_to_get_user_info");
+
+			const account = await ctx.adapter.findOne<{
+				accountId: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [
+					{ field: "accountId", value: "undefined" },
+					{ field: "providerId", value: "discord" },
+				],
+			});
+			expect(account).toBeNull();
+
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: email }],
+			});
+			expect(user).toBeNull();
+		});
+	});
+
+	// Preserve existing coverage for custom profile mapping that only augments
+	// optional fields without removing the provider account identifier.
+	describe("with mapProfileToUser synthesizing email", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser: (profile) => ({
+						email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+					}),
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		it("signs in a Discord phone-only user with a synthesized email", async () => {
+			const discordId = "920138789012345001";
+			mockDiscordToken(discordId, "phoneonly");
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+					cookieSetter(oAuthHeaders)(context as any);
+				},
+			});
+
+			expect(redirectLocation).not.toContain("error");
+
+			const synthesizedEmail = `${discordId}@discord.placeholder.local`;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: synthesizedEmail }],
+			});
+			expect(user).toBeTruthy();
+			expect(user?.email).toBe(synthesizedEmail);
+
+			const accounts = await ctx.adapter.findMany<{
+				providerId: string;
+				accountId: string;
+			}>({
+				model: "account",
+				where: [{ field: "userId", value: user!.id }],
+			});
+			const discordAccount = accounts.find((a) => a.providerId === "discord");
+			expect(discordAccount).toBeTruthy();
+			expect(discordAccount?.accountId).toBe(discordId);
+		});
+	});
+
+	describe("without mapProfileToUser", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		it("rejects sign-in with email_not_found when the provider returns a null email", async () => {
+			mockDiscordToken("920138789012345002", "phoneonly2");
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=email_not_found");
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
+ */
+describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: { enabled: true },
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+				requireLocalEmailVerified: false,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+
+	async function linkGoogleAccount() {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: mockEmail,
+					email_verified: mockEmailVerified,
+					name: "Test User",
+					picture: "",
+					exp: 1,
+					sub: "google_opt_out_sub",
+					iat: 1,
+					aud: "test",
+					azp: "test",
+					nbf: 1,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "t",
+					refresh_token: "r",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				// The callback ends in a 302 to the callbackURL on success; the
+				// HTTP client surfaces that as an error path. Ignore the redirect
+				// so the test reaches the post-callback adapter assertions.
+				expect(context.response.status).toBe(302);
+			},
+		});
+	}
+
+	it("links the account when local user is unverified and the option opts out", async () => {
+		mockEmail = "opt-out@example.com";
+		mockEmailVerified = true;
+		const signUpRes = await client.signUp.email({
+			email: mockEmail,
+			password: "password123",
+			name: "Opt Out User",
+		});
+		const userId = signUpRes.data!.user.id;
+
+		await linkGoogleAccount();
+
+		const accounts = await ctx.adapter.findMany<{
+			providerId: string;
+			userId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accounts.some((a) => a.providerId === "google")).toBe(true);
+
+		// The legacy emailVerified-promotion path is reachable when the gate is
+		// opted out, so the IdP's verified email lifts the local row.
+		const promoted = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(promoted?.emailVerified).toBe(true);
 	});
 });

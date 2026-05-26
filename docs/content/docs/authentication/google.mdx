@@ -113,6 +113,38 @@ const data = await authClient.signIn.social({
   Plugin](/docs/plugins/one-tap) guide.
 </Callout>
 
+### Cross-Platform Sign In (Web, iOS, Android)
+
+Google issues a separate Client ID per platform in the same Google Cloud project. Pass an array to `clientId` to accept ID tokens from any of them. See [clientId](/docs/concepts/oauth#clientid) for the shared provider-option semantics.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: [ // [!code highlight]
+            process.env.GOOGLE_WEB_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_IOS_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_ANDROID_CLIENT_ID as string, // [!code highlight]
+        ], // [!code highlight]
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```
+
+Your mobile app signs in with the native Google SDK and forwards the ID token:
+
+```ts title="Mobile app"
+const { idToken, accessToken } = await GoogleSignin.signIn();
+
+await authClient.signIn.social({
+    provider: "google",
+    idToken: { token: idToken, accessToken },
+});
+```
+
+<Callout type="info">
+  The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `clientSecret` and `redirectURI`, so those cannot vary per platform within one provider block.
+</Callout>
+
 ### Always ask to select an account
 
 If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.
