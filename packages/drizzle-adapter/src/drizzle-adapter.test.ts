@@ -204,4 +204,105 @@ describe("drizzle-adapter", () => {
 			).rejects.toThrow(/Schema not found/);
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8655
+	 */
+	describe("supportsJSON / supportsArrays override", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+
+		function createCaptureDb(schema: Record<string, Record<string, any>>) {
+			const captured: { values?: unknown } = {};
+			const db = {
+				_: { fullSchema: schema },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockImplementation((value: unknown) => {
+						captured.values = value;
+						return {
+							returning: vi.fn().mockResolvedValue([{ id: "1" }]),
+						};
+					}),
+				}),
+			} as any;
+			return { db, captured };
+		}
+
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+			tags: { name: "tags" },
+		};
+
+		const userWithArrayField = {
+			user: {
+				additionalFields: {
+					tags: { type: "string[]" as const, required: false },
+				},
+			},
+		};
+
+		it("stringifies array fields on sqlite by default", async () => {
+			const { db, captured } = createCaptureDb({ user: userTable });
+			const factory = drizzleAdapter(db, { provider: "sqlite" });
+			const adapter = factory({ secret: defaultSecret, ...userWithArrayField });
+
+			await adapter.create({
+				model: "user",
+				data: {
+					name: "Test",
+					email: "test@example.com",
+					tags: ["a", "b"],
+				},
+			});
+
+			expect(typeof (captured.values as any)?.tags).toBe("string");
+			expect((captured.values as any)?.tags).toBe(JSON.stringify(["a", "b"]));
+		});
+
+		it("passes array fields through when supportsArrays override is true", async () => {
+			const { db, captured } = createCaptureDb({ user: userTable });
+			const factory = drizzleAdapter(db, {
+				provider: "sqlite",
+				supportsArrays: true,
+			});
+			const adapter = factory({ secret: defaultSecret, ...userWithArrayField });
+
+			await adapter.create({
+				model: "user",
+				data: {
+					name: "Test",
+					email: "test@example.com",
+					tags: ["a", "b"],
+				},
+			});
+
+			// With the override, Drizzle's own `mode: "json"` column handling
+			// stringifies the value on insert — the adapter must not double-encode.
+			expect(Array.isArray((captured.values as any)?.tags)).toBe(true);
+			expect((captured.values as any)?.tags).toEqual(["a", "b"]);
+		});
+
+		it("keeps default Postgres behavior when override is not provided", async () => {
+			const { db, captured } = createCaptureDb({ user: userTable });
+			const factory = drizzleAdapter(db, { provider: "pg" });
+			const adapter = factory({ secret: defaultSecret, ...userWithArrayField });
+
+			await adapter.create({
+				model: "user",
+				data: {
+					name: "Test",
+					email: "test@example.com",
+					tags: ["a", "b"],
+				},
+			});
+
+			// Postgres has native arrays — the adapter must not stringify.
+			expect(Array.isArray((captured.values as any)?.tags)).toBe(true);
+		});
+	});
 });

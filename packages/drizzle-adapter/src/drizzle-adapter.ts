@@ -77,6 +77,33 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Override whether the adapter pre-stringifies JSON fields before passing
+	 * them to Drizzle. By default only Postgres is treated as a JSON-capable
+	 * provider — MySQL and SQLite get a JSON.stringify on the way in.
+	 *
+	 * Set this to `true` for SQLite/D1 deployments whose Drizzle schema declares
+	 * JSON columns (e.g. `text("col", { mode: "json" })`). Drizzle's own JSON
+	 * column handling already stringifies on insert and parses on select, so
+	 * letting the adapter stringify on top produces a double-encoded value
+	 * that round-trips through better-auth but breaks plain Drizzle queries.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8655
+	 * @default `provider === "pg"`
+	 */
+	supportsJSON?: boolean | undefined;
+	/**
+	 * Override whether the adapter passes array values to Drizzle as-is.
+	 * Defaults to `provider === "pg"` since only Postgres has native array
+	 * columns; MySQL and SQLite get arrays JSON-stringified.
+	 *
+	 * Set this to `true` for SQLite/D1 deployments using JSON-mode columns
+	 * to store array fields, for the same reason as `supportsJSON`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8655
+	 * @default `provider === "pg"`
+	 */
+	supportsArrays?: boolean | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -981,11 +1008,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
-			supportsJSON:
-				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
-					? true
-					: false,
-			supportsArrays: config.provider === "pg" ? true : false,
+			// even though mysql also supports JSON, mysql requires to pass stringified json anyway.
+			// Allow callers to override (e.g. SQLite/D1 with `mode: "json"` columns where
+			// Drizzle already stringifies on insert) so we don't double-encode the value.
+			supportsJSON: config.supportsJSON ?? config.provider === "pg",
+			supportsArrays: config.supportsArrays ?? config.provider === "pg",
 			customTransformOutput: ({ data, fieldAttributes }) => {
 				// not all providers support dates
 				// one such example case is https://github.com/better-auth/better-auth/issues/7819
