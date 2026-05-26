@@ -769,6 +769,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-declaration:
     dependencies:
+      '@better-auth/api-key':
+        specifier: workspace:*
+        version: link:../../../../../packages/api-key
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../../../packages/oauth-provider
