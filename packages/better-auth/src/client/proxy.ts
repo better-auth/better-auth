@@ -8,21 +8,30 @@ import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
 
+function isRawBody(value: unknown) {
+	return (
+		(typeof FormData !== "undefined" && value instanceof FormData) ||
+		(typeof Blob !== "undefined" && value instanceof Blob) ||
+		(typeof File !== "undefined" && value instanceof File)
+	);
+}
+
 function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
-	args:
-		| {
-				fetchOptions?: ClientFetchOption | undefined;
-				query?: Record<string, any> | undefined;
-		  }
-		| undefined,
+	args: unknown,
 ) {
 	const method = knownPathMethods[path];
-	const { fetchOptions, query: _query, ...body } = args || {};
+
 	if (method) {
 		return method;
 	}
+
+	if (isRawBody(args)) {
+		return "POST";
+	}
+	const { fetchOptions, query: _query, ...body } = (args || {}) as ProxyRequest;
+
 	if (fetchOptions?.method) {
 		return fetchOptions.method;
 	}
@@ -74,9 +83,57 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
 						)
 						.join("/");
-				const arg = (args[0] || {}) as ProxyRequest;
+				const arg = args[0];
 				const fetchOptions = (args[1] || {}) as ClientFetchOption;
-				const { query, fetchOptions: argFetchOptions, ...body } = arg;
+
+				if (isRawBody(arg)) {
+					const options = {
+						...fetchOptions,
+					} as ClientFetchOption;
+
+					const method = getMethod(routePath, knownPathMethods, arg);
+
+					return await client(routePath, {
+						...options,
+						body: arg,
+						method,
+						async onSuccess(context) {
+							await options?.onSuccess?.(context);
+
+							if (!atomListeners || options.disableSignal) return;
+
+							const matches = atomListeners.filter((s) => s.matcher(routePath));
+
+							if (!matches.length) return;
+
+							const visited = new Set<ClientAtomListener["signal"]>();
+
+							for (const match of matches) {
+								const signal = atoms[match.signal as any];
+
+								if (!signal) return;
+
+								if (visited.has(match.signal)) {
+									continue;
+								}
+
+								visited.add(match.signal);
+
+								const val = signal.get();
+
+								setTimeout(() => {
+									//@ts-expect-error
+									signal.set(!val);
+								}, 10);
+
+								match.callback?.(routePath);
+							}
+						},
+					});
+				}
+
+				const request = (arg || {}) as ProxyRequest;
+				const { query, fetchOptions: argFetchOptions, ...body } = request;
 				const options = {
 					...fetchOptions,
 					...argFetchOptions,
