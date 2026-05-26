@@ -25,6 +25,19 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+const convertOrgDateFields = (org: any) => {
+	return {
+		...org,
+		createdAt:
+			org.createdAt instanceof Date ? org.createdAt : new Date(org.createdAt),
+		updatedAt: org.updatedAt
+			? org.updatedAt instanceof Date
+				? org.updatedAt
+				: new Date(org.updatedAt)
+			: undefined,
+	};
+};
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
@@ -49,8 +62,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			if (!organization) {
+				return null;
+			}
+			const converted = convertOrgDateFields(organization);
 			return filterOutputFields(
-				organization,
+				converted,
 				orgAdditionalFields,
 			) as InferOrganization<O> | null;
 		},
@@ -75,11 +92,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 
 			const result = {
-				...organization,
+				...convertOrgDateFields(organization),
 				metadata:
 					organization.metadata && typeof organization.metadata === "string"
 						? JSON.parse(organization.metadata)
-						: undefined,
+						: organization.metadata,
 			};
 			return filterOutputFields(
 				result,
@@ -402,7 +419,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return null;
 			}
 			const result = {
-				...organization,
+				...convertOrgDateFields(organization),
 				metadata: organization.metadata
 					? parseJSON<Record<string, any>>(organization.metadata)
 					: undefined,
@@ -471,8 +488,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			if (!organization) {
+				return null;
+			}
+			const converted = convertOrgDateFields(organization);
 			return filterOutputFields(
-				organization,
+				converted,
 				orgAdditionalFields,
 			) as InferOrganization<O> | null;
 		},
@@ -575,7 +596,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			});
 
-			const filteredOrg = filterOutputFields(org, orgAdditionalFields);
+			const convertedOrg = convertOrgDateFields(org);
+			const filteredOrg = filterOutputFields(convertedOrg, orgAdditionalFields);
 			const filteredInvitations = invitations.map((inv) =>
 				filterOutputFields(inv, invitationAdditionalFields),
 			);
@@ -613,13 +635,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return [];
 			}
 
-			const organizations = result.map(
-				(member) =>
-					filterOutputFields(
-						member.organization,
-						orgAdditionalFields,
-					) as InferOrganization<O>,
-			);
+			const organizations = result.map((member) => {
+				const converted = convertOrgDateFields(member.organization);
+				return filterOutputFields(
+					converted,
+					orgAdditionalFields,
+				) as InferOrganization<O>;
+			});
 
 			return organizations;
 		},
