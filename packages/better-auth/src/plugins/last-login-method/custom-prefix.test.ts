@@ -33,8 +33,8 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 			},
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
-		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		// Uses the configured Better Auth cookie prefix by default
+		expect(cookies.get("custom-auth.last_used_login_method")).toBe("email");
 	});
 
 	it("should work with custom cookie name and prefix", async () => {
@@ -130,9 +130,8 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 					const setCookie = context.response.headers.get("set-cookie");
 					expect(setCookie).toContain("Domain=example.com");
 					expect(setCookie).toContain("SameSite=Lax");
-					// Uses exact cookie name from config, not affected by cookiePrefix
 					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
+						"custom-auth.last_used_login_method=email",
 					);
 				},
 			},

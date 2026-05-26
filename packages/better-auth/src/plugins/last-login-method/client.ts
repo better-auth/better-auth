@@ -7,10 +7,17 @@ import { PACKAGE_VERSION } from "../../version";
  */
 export interface LastLoginMethodClientConfig {
 	/**
-	 * Name of the cookie to read the last login method from
+	 * Name of the cookie to read the last login method from. Defaults to
+	 * `${cookiePrefix}.last_used_login_method`.
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
+	/**
+	 * Cookie prefix configured on the server via `advanced.cookiePrefix`.
+	 * Ignored when `cookieName` is provided.
+	 * @default "better-auth"
+	 */
+	cookiePrefix?: string | undefined;
 }
 
 function getCookieValue(name: string): string | null {
@@ -26,7 +33,8 @@ function getCookieValue(name: string): string | null {
 export const lastLoginMethodClient = (
 	config: LastLoginMethodClientConfig = {},
 ) => {
-	const cookieName = config.cookieName || "better-auth.last_used_login_method";
+	const cookieName = `${config.cookiePrefix || "better-auth"}.last_used_login_method`;
+	const resolvedCookieName = config.cookieName || cookieName;
 
 	return {
 		id: "last-login-method-client",
@@ -38,7 +46,7 @@ export const lastLoginMethodClient = (
 				 * @returns The last used login method or null if not found
 				 */
 				getLastUsedLoginMethod: (): string | null => {
-					return getCookieValue(cookieName);
+					return getCookieValue(resolvedCookieName);
 				},
 				/**
 				 * Clear the last used login method cookie
@@ -46,7 +54,7 @@ export const lastLoginMethodClient = (
 				 */
 				clearLastUsedLoginMethod: (): void => {
 					if (typeof document !== "undefined") {
-						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+						document.cookie = `${resolvedCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
 					}
 				},
 				/**
@@ -55,7 +63,7 @@ export const lastLoginMethodClient = (
 				 * @returns True if the method was the last used, false otherwise
 				 */
 				isLastUsedLoginMethod: (method: string): boolean => {
-					const lastMethod = getCookieValue(cookieName);
+					const lastMethod = getCookieValue(resolvedCookieName);
 					return lastMethod === method;
 				},
 			};

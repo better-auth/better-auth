@@ -17,7 +17,8 @@ declare module "@better-auth/core" {
  */
 export interface LastLoginMethodOptions {
 	/**
-	 * Name of the cookie to store the last login method
+	 * Name of the cookie to store the last login method. Defaults to
+	 * `${advanced.cookiePrefix}.last_used_login_method`.
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
@@ -89,10 +90,16 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	};
 
 	const config = {
-		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
+
+	const getCookieName = (ctx: GenericEndpointContext) => {
+		return (
+			config.cookieName ||
+			`${ctx.context.options.advanced?.cookiePrefix || "better-auth"}.last_used_login_method`
+		);
+	};
 
 	return {
 		id: "last-login-method",
@@ -169,7 +176,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								};
 
 								ctx.setCookie(
-									config.cookieName,
+									getCookieName(ctx),
 									lastUsedLoginMethod,
 									cookieAttributes,
 								);
