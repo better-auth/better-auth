@@ -846,15 +846,12 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260525.1
-        version: 7.0.0-dev.20260525.1
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/better-auth:
     dependencies:
@@ -996,7 +993,7 @@ importers:
         version: 1.9.11
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1099,7 +1096,7 @@ importers:
         version: 4.56.10(tslib@2.8.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -1154,7 +1151,7 @@ importers:
         version: 1.1.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/drizzle-adapter:
     devDependencies:
@@ -1169,7 +1166,7 @@ importers:
         version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(kysely@0.28.17)(mysql2@3.18.2(@types/node@25.9.1))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1209,7 +1206,7 @@ importers:
         version: 41.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/expo:
     dependencies:
@@ -1246,7 +1243,7 @@ importers:
         version: 0.84.1(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/i18n:
     devDependencies:
@@ -1258,7 +1255,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/kysely-adapter:
     devDependencies:
@@ -1276,7 +1273,7 @@ importers:
         version: 0.28.17
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1291,7 +1288,7 @@ importers:
         version: 0.4.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1309,7 +1306,7 @@ importers:
         version: 7.1.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1346,7 +1343,7 @@ importers:
         version: 1.9.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/passkey:
     dependencies:
@@ -1380,7 +1377,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/prisma-adapter:
     dependencies:
@@ -1399,7 +1396,7 @@ importers:
         version: 0.4.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1417,7 +1414,7 @@ importers:
         version: 5.9.3
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1448,7 +1445,7 @@ importers:
         version: link:../sso
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/sso:
     dependencies:
@@ -1500,7 +1497,7 @@ importers:
         version: 8.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/stripe:
     dependencies:
@@ -1525,7 +1522,7 @@ importers:
         version: 22.0.1(@types/node@25.9.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
 
   packages/telemetry:
     dependencies:
@@ -1541,7 +1538,7 @@ importers:
         version: link:../core
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1556,7 +1553,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       vitest:
         specifier: catalog:vitest
         version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.9.1)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.9.1)(typescript@5.9.3))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
@@ -7041,53 +7038,6 @@ packages:
 
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
-
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-x0ClBYc6xQDLXvpRn/zg6SViX/r1F8LXHyfSHmKx4ieiaZiVvGsEww/qzdHind+Y62MIUN3e/XfDFrpRxWDv0g==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-CSHbx6HfM+xXqceGFtG4kcqqoQ5xjT1BHO0bqLfLeQtKlMlze59dIV2DbOb5Aj6wm2ACTKU4K9aurJDdHARx1g==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-0DFKd3EuZ/Z0/mB114mATrlRxQUo7rcpXYgd5CJN7y1dbIgkavbjVamzzJKt3s42tkJGfdys83w6aIHDu6fykw==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [linux]
-
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-hY2EVAaGc1bsaxthJiNUbzn6ESkMSLBiWRCNhQl8XdhDWew8KhKCjw4DHe0lAYSdxLJBe6fCPpcFjDnoSowBxA==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm]
-    os: [linux]
-
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-GhC0kXeYxn55Rk3klmWET/Y033AHeMzLBMO58yP7R8m5ZdGiBisejDZnvttzczYJtgT42LNOtVmbtsG/+R8XWw==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [linux]
-
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-L2+bsx73FyuEzLNgybtIxhnT9lYYAh9rTRFWZ4wZlJg44DGstjgz4FBKVHBO/cm3Hz7YNWeJESrB9ROUNbffPg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-xJCdFz9smVQVpXYW0vZZJsM0GIANPqSt8eMDRYfDY6M/BcXNXYOAt7tsxnSRyYWnFf9Ci7wKNRZaihZrDJ2m6A==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@typescript/native-preview@7.0.0-dev.20260525.1':
-    resolution: {integrity: sha512-hZ3BSv2Q45UZPC8mi7YIWNRirdT99eipknsgigp7GfczYisSjfn6/XERgUfspHDWI7k4zM/KK4j/peHWtpqcmg==}
-    engines: {node: '>=16.20.0'}
-    hasBin: true
 
   '@typespec/ts-http-runtime@0.3.3':
     resolution: {integrity: sha512-91fp6CAAJSRtH5ja95T1FHSKa8aPW9/Zw6cta81jlZTUw/+Vq8jM/AfF/14h2b71wwR84JUTW/3Y8QPhDAawFA==}
@@ -20375,37 +20325,6 @@ snapshots:
       '@types/node': 25.6.0
     optional: true
 
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260525.1':
-    optional: true
-
-  '@typescript/native-preview@7.0.0-dev.20260525.1':
-    optionalDependencies:
-      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260525.1
-      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260525.1
-
   '@typespec/ts-http-runtime@0.3.3':
     dependencies:
       http-proxy-agent: 7.0.2
@@ -27376,7 +27295,7 @@ snapshots:
 
   robust-predicates@3.0.3: {}
 
-  rolldown-plugin-dts@0.22.4(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.2
       '@babel/helper-validator-identifier': 8.0.0-rc.2
@@ -27389,7 +27308,6 @@ snapshots:
       obug: 2.1.1
       rolldown: 1.0.0-rc.8
     optionalDependencies:
-      '@typescript/native-preview': 7.0.0-dev.20260525.1
       typescript: 5.9.3
     transitivePeerDependencies:
       - oxc-resolver
@@ -28322,7 +28240,7 @@ snapshots:
       '@ts-morph/common': 0.28.1
       code-block-writer: 13.0.3
 
-  tsdown@0.21.1(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3):
+  tsdown@0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -28333,7 +28251,7 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.4
       rolldown: 1.0.0-rc.8
-      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260525.1)(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15

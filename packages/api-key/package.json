@@ -70,7 +70,6 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@typescript/native-preview": "7.0.0-dev.20260525.1",
     "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },
