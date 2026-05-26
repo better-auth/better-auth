@@ -306,6 +306,15 @@ export const changePassword = createAuthEndpoint(
 			token = newSession.token;
 		}
 
+		if (ctx.context.options.emailAndPassword?.onPasswordChanged) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.emailAndPassword.onPasswordChanged(
+					{ user: session.user },
+					ctx.request,
+				),
+			);
+		}
+
 		return ctx.json({
 			token,
 			user: parseUserOutput(ctx.context.options, session.user),

@@ -143,6 +143,22 @@ export interface PasskeyOptions {
 	 * Authentication behavior overrides
 	 */
 	authentication?: PasskeyAuthenticationOptions | undefined;
+	/**
+	 * A callback function that is triggered when a user
+	 * adds a new passkey.
+	 */
+	onPasskeyAdded?: (
+		data: { userId: string; passkey: Passkey },
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A callback function that is triggered when a user
+	 * deletes a passkey.
+	 */
+	onPasskeyDeleted?: (
+		data: { userId: string; passkeyId: string },
+		request?: Request,
+	) => Promise<void>;
 }
 
 export type Passkey = {
