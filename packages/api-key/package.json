@@ -70,12 +70,14 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@typescript/native-preview": "7.0.0-dev.20260525.1",
     "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:",
     "better-auth": "workspace:^",
-    "@better-auth/utils": "catalog:"
+    "better-call": "catalog:"
   }
 }
