@@ -23,6 +23,7 @@ import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
+	cancelEmailChange,
 	changeEmail,
 	changePassword,
 	deleteUser,
@@ -51,6 +52,7 @@ import {
 	updateSession,
 	updateUser,
 	verifyEmail,
+	verifyEmailChange,
 	verifyPassword,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -239,6 +241,8 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
+		cancelEmailChange,
+		verifyEmailChange,
 		changePassword,
 		setPassword,
 		updateSession: updateSession<Option>(),
