@@ -87,4 +87,49 @@ describe("refreshAccessToken", () => {
 
 		expect(tokens.refreshTokenExpiresAt).toBeUndefined();
 	});
+
+	it("should handle scope as an array", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "new-access-token",
+				refresh_token: "new-refresh-token",
+				expires_in: 3600,
+				token_type: "Bearer",
+				scope: ["channel:read:subscriptions", "channel:manage:polls"],
+			},
+			error: null,
+		});
+
+		const tokens = await refreshAccessToken({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			tokenEndpoint: "https://example.com/token",
+		});
+
+		expect(tokens.scopes).toEqual([
+			"channel:read:subscriptions",
+			"channel:manage:polls",
+		]);
+	});
+
+	it("should handle scope as a space-delimited string", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "new-access-token",
+				refresh_token: "new-refresh-token",
+				expires_in: 3600,
+				token_type: "Bearer",
+				scope: "read write profile",
+			},
+			error: null,
+		});
+
+		const tokens = await refreshAccessToken({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			tokenEndpoint: "https://example.com/token",
+		});
+
+		expect(tokens.scopes).toEqual(["read", "write", "profile"]);
+	});
 });

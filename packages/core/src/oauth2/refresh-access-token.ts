@@ -121,7 +121,7 @@ export async function refreshAccessToken({
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
-		scope?: string | undefined;
+		scope?: string | string[] | undefined;
 		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
@@ -135,7 +135,7 @@ export async function refreshAccessToken({
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
 		tokenType: data.token_type,
-		scopes: data.scope?.split(" "),
+		scopes: typeof data.scope === "string" ? data.scope.split(" ") : data.scope,
 		idToken: data.id_token,
 	};
 
