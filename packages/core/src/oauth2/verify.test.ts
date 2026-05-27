@@ -1,6 +1,11 @@
 import { APIError } from "better-call";
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import {
+	exportJWK,
+	generateKeyPair,
+	errors as joseErrors,
+	SignJWT,
+} from "jose";
 import {
 	afterAll,
 	afterEach,
@@ -48,31 +53,41 @@ describe("verifyAccessToken", () => {
 
 	async function createSignedToken(
 		privateKey: CryptoKey,
-		kid: string,
+		kid: string | undefined,
 		payload: Record<string, unknown> = {},
+		expirationTime: string | number | Date = "1h",
 	) {
+		const protectedHeader = kid ? { alg: "RS256", kid } : { alg: "RS256" };
+
 		return await new SignJWT({
 			sub: "user-123",
 			iss: issuer,
 			aud: audience,
 			...payload,
 		})
-			.setProtectedHeader({ alg: "RS256", kid })
+			.setProtectedHeader(protectedHeader)
 			.setIssuedAt()
-			.setExpirationTime("1h")
+			.setExpirationTime(expirationTime)
 			.sign(privateKey);
 	}
 
 	function mockJWKSResponse(...publicJWKs: JWK[]) {
+		mockJSONResponse({ keys: publicJWKs });
+	}
+
+	function mockJSONResponse(body: unknown) {
 		mockedFetch.mockResolvedValueOnce(
-			new Response(JSON.stringify({ keys: publicJWKs }), {
+			new Response(JSON.stringify(body), {
 				status: 200,
 				headers: { "content-type": "application/json" },
 			}),
 		);
 	}
 
-	async function expectTokenInvalid(promise: Promise<unknown>) {
+	async function expectUnauthorized(
+		promise: Promise<unknown>,
+		message = "invalid access token",
+	) {
 		try {
 			await promise;
 			expect.unreachable();
@@ -81,9 +96,9 @@ describe("verifyAccessToken", () => {
 			expect(error).toMatchObject({
 				status: "UNAUTHORIZED",
 				statusCode: 401,
-				message: "token invalid",
+				message,
 				body: {
-					message: "token invalid",
+					message,
 				},
 			});
 		}
@@ -99,7 +114,7 @@ describe("verifyAccessToken", () => {
 		});
 		mockJWKSResponse(publicJWK);
 
-		await expectTokenInvalid(
+		await expectUnauthorized(
 			verifyAccessToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
@@ -123,7 +138,7 @@ describe("verifyAccessToken", () => {
 		};
 		mockJWKSResponse(publicJWKWithMatchingKid);
 
-		await expectTokenInvalid(
+		await expectUnauthorized(
 			verifyAccessToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
@@ -143,11 +158,65 @@ describe("verifyAccessToken", () => {
 		);
 		mockJWKSResponse(unrelatedKey.publicJWK);
 
-		await expectTokenInvalid(
+		await expectUnauthorized(
 			verifyAccessToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9654
+	 */
+	it("should translate missing kid failures to unauthorized API errors", async () => {
+		const { privateKey } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, undefined);
+
+		await expectUnauthorized(
+			verifyAccessToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		);
+		expect(mockedFetch).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9654
+	 */
+	it("should keep expired token failures as expired unauthorized API errors", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(
+			privateKey,
+			kid,
+			{},
+			Math.floor(Date.now() / 1000) - 60,
+		);
+		mockJWKSResponse(publicJWK);
+
+		await expectUnauthorized(
+			verifyAccessToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+			"token expired",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9654
+	 */
+	it("should leave JWKS infrastructure failures as jose errors", async () => {
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockJSONResponse({ keys: {} });
+
+		await expect(
+			verifyAccessToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toBeInstanceOf(joseErrors.JWKSInvalid);
 	});
 });
