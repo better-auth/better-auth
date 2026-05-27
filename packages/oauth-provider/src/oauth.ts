@@ -177,7 +177,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const handleIssuerMetadataRequest: NonNullable<
 		BetterAuthPlugin["onRequest"]
 	> = async (request, ctx) => {
-		const requestPath = new URL(request.url).pathname.replace(/\/$/, "") || "/";
+		const requestPathname = new URL(request.url).pathname;
+		const requestPath = ctx.options.advanced?.skipTrailingSlashes
+			? requestPathname.replace(/\/+$/, "") || "/"
+			: requestPathname;
 		const issuer = opts.disableJwtPlugin
 			? ctx.baseURL
 			: (getJwtPlugin(ctx)?.options?.jwt?.issuer ?? ctx.baseURL);
@@ -189,38 +192,60 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 
 		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		const authServerMetadataPath = `/.well-known/oauth-authorization-server${issuerPath}`;
+		const openIdConfigPath = `${issuerPath}/.well-known/openid-configuration`;
+		const isAuthServerMetadataRequest = requestPath === authServerMetadataPath;
+		const isOpenIdConfigRequest =
+			opts.scopes?.includes("openid") && requestPath === openIdConfigPath;
+		const createMetadataResponse = (metadata: unknown) => {
+			const response = metadataResponse(metadata);
+			if (request.method === "HEAD") {
+				return new Response(null, {
+					status: response.status,
+					headers: response.headers,
+				});
+			}
+			return response;
+		};
+		if (isAuthServerMetadataRequest || isOpenIdConfigRequest) {
+			if (request.method !== "GET" && request.method !== "HEAD") {
+				return {
+					response: new Response(null, {
+						status: 405,
+						headers: {
+							Allow: "GET, HEAD",
+						},
+					}),
+				};
+			}
+		}
 
-		if (
-			requestPath === `${issuerPath}/.well-known/oauth-authorization-server`
-		) {
+		if (isAuthServerMetadataRequest) {
 			if (opts.scopes?.includes("openid")) {
 				return {
-					response: metadataResponse(oidcServerMetadata(endpointCtx, opts)),
+					response: createMetadataResponse(
+						oidcServerMetadata(endpointCtx, opts),
+					),
 				};
 			}
 			const jwtPluginOptions = opts.disableJwtPlugin
 				? undefined
 				: getJwtPlugin(ctx)?.options;
+			const metadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
+				scopes_supported:
+					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+				public_client_supported: opts.allowUnauthenticatedClientRegistration,
+				grant_types_supported: opts.grantTypes,
+				jwt_disabled: opts.disableJwtPlugin,
+			});
 			return {
-				response: metadataResponse(
-					authServerMetadata(endpointCtx, jwtPluginOptions, {
-						scopes_supported:
-							opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-						public_client_supported:
-							opts.allowUnauthenticatedClientRegistration,
-						grant_types_supported: opts.grantTypes,
-						jwt_disabled: opts.disableJwtPlugin,
-					}),
-				),
+				response: createMetadataResponse(metadata),
 			};
 		}
 
-		if (
-			opts.scopes?.includes("openid") &&
-			requestPath === `${issuerPath}/.well-known/openid-configuration`
-		) {
+		if (isOpenIdConfigRequest) {
 			return {
-				response: metadataResponse(oidcServerMetadata(endpointCtx, opts)),
+				response: createMetadataResponse(oidcServerMetadata(endpointCtx, opts)),
 			};
 		}
 	};
