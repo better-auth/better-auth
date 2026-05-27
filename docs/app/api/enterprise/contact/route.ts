@@ -33,7 +33,8 @@ function escapeHtml(text: string): string {
 }
 
 function getFirstName(fullName: string): string {
-	return fullName.trim().split(/\s+/)[0] ?? fullName;
+	const firstName = fullName.trim().split(/\s+/)[0];
+	return firstName || "there";
 }
 
 export async function POST(request: Request) {
