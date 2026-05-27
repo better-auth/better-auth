@@ -201,6 +201,25 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				ipAddressHeaders?: string[];
 				/**
+				 * Custom client IP resolver. Runs before `ipAddressHeaders` on every
+				 * IP lookup (rate limiting, session tracking, captcha, etc.).
+				 *
+				 * Return a string to use as the client IP (still validated and
+				 * normalized; invalid values fall through to `ipAddressHeaders`), or
+				 * `null`/`undefined` to fall through. Use this to delegate to a
+				 * framework that has already applied trust-proxy validation (e.g.
+				 * Fastify's `req.ip`) or to apply custom parsing.
+				 *
+				 * @example
+				 * ```ts
+				 * // Attach the framework request via a symbol on the Web Request,
+				 * // then read its already-trust-proxied IP here.
+				 * const FASTIFY_RAW = Symbol.for("my-app.fastify-raw");
+				 * getClientIp: (req) => (req as any)[FASTIFY_RAW]?.ip ?? null,
+				 * ```
+				 */
+				getClientIp?: (request: Request | Headers) => string | null | undefined;
+				/**
 				 * Disable ip tracking
 				 *
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
