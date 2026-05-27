@@ -1546,6 +1546,23 @@ describe("internal adapter test", async () => {
 			expect(result).toBeNull();
 		});
 
+		it("returns null when the row exists but has already expired", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:expired",
+				value: "user-expired",
+				expiresAt: new Date(Date.now() - 1_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:expired");
+			expect(result).toBeNull();
+
+			// The expired row must still be invalidated so a later replay cannot
+			// consume it after a cleanup pass.
+			const replay = await adapter.findVerificationValue("consume:expired");
+			expect(replay).toBeNull();
+		});
+
 		it("aborts the consume when a delete.before hook returns false", async () => {
 			const veto = vi.fn().mockReturnValue(false);
 			const adapter = await makeAdapter({
@@ -1676,6 +1693,113 @@ describe("internal adapter test", async () => {
 				"verification:consume:secondary",
 			);
 			expect(store.has("verification:consume:secondary")).toBe(false);
+		});
+
+		it("returns null when the secondary storage row has already expired", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			// Bypass `createVerificationValue`'s TTL gate by writing directly
+			// with an `expiresAt` already in the past. This mirrors a row that
+			// was valid when written but reached the consume call after expiry.
+			store.set(
+				"verification:consume:secondary-expired",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-expired",
+					value: "secondary-expired-user",
+					expiresAt: new Date(Date.now() - 1_000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-expired",
+			);
+			expect(result).toBeNull();
+			// The expired row is still consumed (deleted) so it cannot be
+			// replayed later.
+			expect(store.has("verification:consume:secondary-expired")).toBe(false);
+		});
+
+		it("rehydrates string `expiresAt` from secondary storage JSON", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary-hydrate",
+				value: "hydrate-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-hydrate",
+			);
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("hydrate-user");
+			expect(result!.expiresAt).toBeInstanceOf(Date);
+			expect(result!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+		});
+
+		it("returns null when secondary storage `expiresAt` cannot be parsed", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			store.set(
+				"verification:consume:secondary-invalid-date",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-invalid-date",
+					value: "bad-row",
+					expiresAt: "not-a-date",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-invalid-date",
+			);
+			expect(result).toBeNull();
 		});
 
 		it("serializes the secondary storage compatibility fallback within one process", async () => {

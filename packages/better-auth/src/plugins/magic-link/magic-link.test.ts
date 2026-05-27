@@ -119,7 +119,7 @@ describe("magic link", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=EXPIRED_TOKEN");
+					expect(location).toContain("?error=INVALID_TOKEN");
 				},
 			},
 		);
@@ -555,7 +555,7 @@ describe("magic link storeToken", async () => {
  * Magic-link tokens are consumed atomically on the first verification call that
  * finds the token: the row is deleted before any subsequent success checks
  * (signup gates, session creation, etc.), so even a verify that ends in
- * `EXPIRED_TOKEN`, `new_user_signup_disabled`, or `failed_to_create_session`
+ * `INVALID_TOKEN`, `new_user_signup_disabled`, or `failed_to_create_session`
  * still burns the token. `allowedAttempts` is retained on the options type for
  * backward compatibility but does not multiply redemptions; a token mints at
  * most one session regardless of the value.

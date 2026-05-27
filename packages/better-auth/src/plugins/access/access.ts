@@ -28,22 +28,33 @@ export function role<
 			)) {
 				const allowedActions = statements[requestedResource];
 				if (!allowedActions) {
-					return {
-						success: false,
-						error: `You are not allowed to access resource: ${requestedResource}`,
-					};
+					if (connector === "AND") {
+						return {
+							success: false,
+							error: `You are not allowed to access resource: ${requestedResource}`,
+						};
+					}
+					success = false;
+					continue;
 				}
 				if (Array.isArray(requestedActions)) {
-					success = (requestedActions as string[]).every((requestedAction) =>
-						allowedActions.includes(requestedAction),
-					);
+					success =
+						requestedActions.length > 0 &&
+						(requestedActions as string[]).every((requestedAction) =>
+							allowedActions.includes(requestedAction),
+						);
 				} else {
 					if (typeof requestedActions === "object") {
 						const actions = requestedActions as {
 							actions: string[];
 							connector: "OR" | "AND";
 						};
-						if (actions.connector === "OR") {
+						if (
+							!Array.isArray(actions.actions) ||
+							actions.actions.length === 0
+						) {
+							success = false;
+						} else if (actions.connector === "OR") {
 							success = actions.actions.some((requestedAction) =>
 								allowedActions.includes(requestedAction),
 							);
