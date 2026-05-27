@@ -1,11 +1,6 @@
 import { APIError } from "better-call";
 import type { JWK } from "jose";
-import {
-	exportJWK,
-	generateKeyPair,
-	errors as joseErrors,
-	SignJWT,
-} from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	afterAll,
 	afterEach,
@@ -208,15 +203,23 @@ describe("verifyAccessToken", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
 	it("should leave JWKS infrastructure failures as jose errors", async () => {
+		vi.resetModules();
+		const { errors: isolatedJoseErrors } = await import("jose");
+		const { verifyAccessToken: verifyAccessTokenWithIsolatedJwksCache } =
+			await import("./verify");
 		const { privateKey, kid } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, kid);
 		mockJSONResponse({ keys: {} });
 
-		await expect(
-			verifyAccessToken(token, {
-				jwksUrl,
-				verifyOptions: { issuer, audience },
-			}),
-		).rejects.toBeInstanceOf(joseErrors.JWKSInvalid);
+		try {
+			await expect(
+				verifyAccessTokenWithIsolatedJwksCache(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toBeInstanceOf(isolatedJoseErrors.JWKSInvalid);
+		} finally {
+			vi.resetModules();
+		}
 	});
 });
