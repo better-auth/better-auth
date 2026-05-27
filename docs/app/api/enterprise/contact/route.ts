@@ -143,14 +143,23 @@ Ravi`,
 			}),
 		]);
 
-		if (internalResult.error || acknowledgementResult.error) {
-			console.error("Resend email failed", {
-				internal: internalResult.error,
-				acknowledgement: acknowledgementResult.error,
-			});
+		if (internalResult.error) {
+			console.error(
+				"Resend internal email failed (email=%s)",
+				email,
+				internalResult.error,
+			);
 			return NextResponse.json(
 				{ message: "Something went wrong. Please try again." },
 				{ status: 500 },
+			);
+		}
+
+		if (acknowledgementResult.error) {
+			console.error(
+				"Resend acknowledgement email failed (email=%s)",
+				email,
+				acknowledgementResult.error,
 			);
 		}
 
