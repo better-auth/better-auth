@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
@@ -103,6 +103,66 @@ describe("phone-number", async () => {
 			code: otp,
 		});
 		expect(res.error?.status).toBe(400);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9754
+ */
+describe("consume phone-number OTP", async () => {
+	let otp = "";
+	const callbackOnVerification = vi.fn();
+	const { auth, client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					callbackOnVerification,
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("consumes an OTP server-side without creating a user or session", async () => {
+		const phoneNumber = "+251911121301";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+
+		const result = await auth.api.consumePhoneNumberOTP({
+			body: { phoneNumber, code: otp },
+		});
+
+		expect(result).toEqual({ status: true });
+		expect(callbackOnVerification).not.toHaveBeenCalled();
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumber }],
+			}),
+		).toHaveLength(0);
+		expect(
+			await (await auth.$context).internalAdapter.findVerificationValue(
+				phoneNumber,
+			),
+		).toBeNull();
+	});
+
+	it("is exposed through the server API only", async () => {
+		expectTypeOf<typeof auth.api>().toHaveProperty("consumePhoneNumberOTP");
+		expectTypeOf<typeof client.phoneNumber>().not.toHaveProperty("consumeOtp");
+
+		const response = await client.$fetch("/phone-number/consume-otp", {
+			method: "POST",
+			body: { phoneNumber: "+251911121302", code: "123456" },
+		});
+		expect(response.error?.status).toBe(404);
 	});
 });
 
@@ -1035,7 +1095,7 @@ describe("signUpOnVerification with additionalFields", async () => {
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -1167,5 +1227,29 @@ describe("custom verifyOTP", async () => {
 		});
 		expect(user.data?.user.phoneNumber).toBe(updatedPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9754
+	 */
+	it("should delegate server-side consumption to custom verifyOTP without an internal record", async () => {
+		const externalPhoneNumber = "+12223334444";
+		mockVerifyOTP.mockResolvedValueOnce(true);
+
+		const result = await auth.api.consumePhoneNumberOTP({
+			body: {
+				phoneNumber: externalPhoneNumber,
+				code: "external-code",
+			},
+		});
+
+		expect(result).toEqual({ status: true });
+		expect(mockVerifyOTP).toHaveBeenCalledWith(
+			{
+				phoneNumber: externalPhoneNumber,
+				code: "external-code",
+			},
+			expect.anything(),
+		);
 	});
 });
