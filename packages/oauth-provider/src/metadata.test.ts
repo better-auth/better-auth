@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import type { JwtOptions } from "better-auth/plugins/jwt";
@@ -39,9 +40,11 @@ describe("oauth metadata", async () => {
 			"loginPage" | "consentPage"
 		>;
 		jwtConfig?: JwtOptions;
+		advanced?: BetterAuthOptions["advanced"];
 	}) {
 		const { auth, customFetchImpl } = await getTestInstance({
 			baseURL: authServerBaseUrl,
+			...(opts?.advanced ? { advanced: opts.advanced } : {}),
 			plugins: [
 				oauthProvider({
 					loginPage: "/login",
@@ -69,6 +72,7 @@ describe("oauth metadata", async () => {
 		return {
 			auth,
 			client: unauthenticatedClient,
+			customFetchImpl,
 		};
 	}
 
@@ -121,6 +125,100 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8343
+	 */
+	it("should serve authorization server metadata at the issuer-appended well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should serve authorization server metadata at the RFC 8414 path-insertion URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should serve OIDC metadata at the direct issuer well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/openid-configuration`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should restrict direct metadata requests to GET and HEAD", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const issuerAppendedAuthServerMetadataURL = `${baseURL}/.well-known/oauth-authorization-server`;
+		const pathInsertionAuthServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`;
+		const openIdConfigURL = `${baseURL}/.well-known/openid-configuration`;
+
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+		]) {
+			const headResponse = await customFetchImpl(url, {
+				method: "HEAD",
+			});
+			expect(headResponse.status).toBe(200);
+			expect(await headResponse.text()).toBe("");
+		}
+
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+			openIdConfigURL,
+		]) {
+			const response = await customFetchImpl(url, { method: "POST" });
+			expect(response.status).toBe(405);
+			expect(response.headers.get("Allow")).toBe("GET, HEAD");
+		}
+	});
+
+	it("should only skip trailing slashes when configured", async () => {
+		const authServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth/`;
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(authServerMetadataURL, {
+			method: "GET",
+		});
+
+		expect(response.status).toBe(404);
+
+		const { customFetchImpl: customFetchImplWithSkipTrailingSlashes } =
+			await createTestInstance({
+				advanced: {
+					skipTrailingSlashes: true,
+				},
+			});
+		const skipTrailingSlashesResponse =
+			await customFetchImplWithSkipTrailingSlashes(authServerMetadataURL, {
+				method: "GET",
+			});
+
+		expect(skipTrailingSlashesResponse.status).toBe(200);
+		const metadata = (await skipTrailingSlashesResponse.json()) as {
+			issuer: string;
+		};
+		expect(metadata.issuer).toBe(baseURL);
 	});
 
 	it("should not have an openid-configuration, has auth server configuration", async () => {
