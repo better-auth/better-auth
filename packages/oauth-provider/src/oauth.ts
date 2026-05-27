@@ -192,9 +192,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 
 		const endpointCtx = { context: ctx } as GenericEndpointContext;
-		const authServerMetadataPath = `/.well-known/oauth-authorization-server${issuerPath}`;
+		// RFC 8414 uses path insertion; some clients derive discovery from the
+		// issuer URL directly, so keep both public aliases equivalent.
+		const authServerMetadataPaths = new Set([
+			`/.well-known/oauth-authorization-server${issuerPath}`,
+			`${issuerPath}/.well-known/oauth-authorization-server`,
+		]);
 		const openIdConfigPath = `${issuerPath}/.well-known/openid-configuration`;
-		const isAuthServerMetadataRequest = requestPath === authServerMetadataPath;
+		const isAuthServerMetadataRequest =
+			authServerMetadataPaths.has(requestPath);
 		const isOpenIdConfigRequest =
 			opts.scopes?.includes("openid") && requestPath === openIdConfigPath;
 		const createMetadataResponse = (metadata: unknown) => {

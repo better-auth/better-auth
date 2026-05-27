@@ -130,7 +130,19 @@ describe("oauth metadata", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8343
 	 */
-	it("should serve authorization server metadata at the direct issuer well-known URL", async () => {
+	it("should serve authorization server metadata at the issuer-appended well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should serve authorization server metadata at the RFC 8414 path-insertion URL", async () => {
 		const { customFetchImpl } = await createTestInstance();
 		const response = await customFetchImpl(
 			`${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`,
@@ -156,16 +168,26 @@ describe("oauth metadata", async () => {
 
 	it("should restrict direct metadata requests to GET and HEAD", async () => {
 		const { customFetchImpl } = await createTestInstance();
-		const authServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`;
+		const issuerAppendedAuthServerMetadataURL = `${baseURL}/.well-known/oauth-authorization-server`;
+		const pathInsertionAuthServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`;
 		const openIdConfigURL = `${baseURL}/.well-known/openid-configuration`;
 
-		const headResponse = await customFetchImpl(authServerMetadataURL, {
-			method: "HEAD",
-		});
-		expect(headResponse.status).toBe(200);
-		expect(await headResponse.text()).toBe("");
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+		]) {
+			const headResponse = await customFetchImpl(url, {
+				method: "HEAD",
+			});
+			expect(headResponse.status).toBe(200);
+			expect(await headResponse.text()).toBe("");
+		}
 
-		for (const url of [authServerMetadataURL, openIdConfigURL]) {
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+			openIdConfigURL,
+		]) {
 			const response = await customFetchImpl(url, { method: "POST" });
 			expect(response.status).toBe(405);
 			expect(response.headers.get("Allow")).toBe("GET, HEAD");
