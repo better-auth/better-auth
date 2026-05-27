@@ -411,6 +411,18 @@ describe("cookie-utils setRequestCookie", () => {
 			"valid=1; locale=en; better-auth.session_token=abc",
 		);
 	});
+
+	it("percent-encodes reserved cookie-octet bytes when serializing", () => {
+		const headers = new Headers({ cookie: "locale=en" });
+		setRequestCookie(headers, "session", "foo;bar=baz");
+		expect(headers.get("cookie")).toBe("locale=en; session=foo%3Bbar%3Dbaz");
+	});
+
+	it("treats input as semantic and percent-encodes literal double-quotes", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "token", '"abc"');
+		expect(headers.get("cookie")).toBe("token=%22abc%22");
+	});
 });
 
 describe("getSessionCookie", async () => {
@@ -1574,6 +1586,18 @@ describe("applySetCookies", () => {
 		applySetCookies(headers, ["a=new; Path=/"]);
 		expect(headers.get("cookie")).toBe("a=new; b=keep");
 	});
+
+	it("re-encodes Set-Cookie values containing reserved bytes on wire join", () => {
+		const headers = new Headers({ cookie: "session=safe" });
+		applySetCookies(headers, ["pref=foo%3Bbar=hello; Path=/"]);
+		expect(headers.get("cookie")).toBe("session=safe; pref=foo%3Bbar%3Dhello");
+	});
+
+	it("strips RFC 6265 quoted-string wrapping from Set-Cookie values", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ['token="abc"; Path=/']);
+		expect(headers.get("cookie")).toBe("token=abc");
+	});
 });
 
 describe("expireCookie", () => {
@@ -1591,5 +1615,48 @@ describe("expireCookie", () => {
 			httpOnly: true,
 			maxAge: 0,
 		});
+	});
+
+	it("scrubs collapsed Set-Cookie headers when getSetCookie is unavailable", () => {
+		const responseHeaders = new Headers();
+		responseHeaders.append("set-cookie", "keep=1; Path=/");
+		responseHeaders.append("set-cookie", "target=valid; Path=/");
+		responseHeaders.append("set-cookie", "target.0=chunk; Path=/");
+		Object.defineProperty(responseHeaders, "getSetCookie", {
+			value: undefined,
+		});
+
+		const setCookie = vi.fn(
+			(
+				name: string,
+				value: string,
+				options: { maxAge: number; path: string },
+			) => {
+				responseHeaders.append(
+					"set-cookie",
+					`${name}=${value}; Path=${options.path}; Max-Age=${options.maxAge}`,
+				);
+			},
+		);
+
+		expireCookie(
+			{
+				responseHeaders,
+				context: { responseHeaders },
+				setCookie,
+			} as any,
+			{
+				name: "target",
+				attributes: {
+					path: "/",
+				},
+			},
+		);
+
+		const setCookieHeader = responseHeaders.get("set-cookie") || "";
+		expect(setCookieHeader).toContain("keep=1");
+		expect(setCookieHeader).not.toContain("target=valid");
+		expect(setCookieHeader).not.toContain("target.0=chunk");
+		expect(setCookieHeader).toContain("target=; Path=/; Max-Age=0");
 	});
 });
