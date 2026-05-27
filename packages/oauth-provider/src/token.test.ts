@@ -432,7 +432,9 @@ describe("oauth token - authorization_code", async () => {
 		expect(failures).toHaveLength(1);
 		expect(successes[0]?.data?.access_token).toBeDefined();
 		expect(successes[0]?.data?.id_token).toBeDefined();
-		expect(failures[0]?.error?.error).toBe("invalid_grant");
+		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
 	});
 });
 

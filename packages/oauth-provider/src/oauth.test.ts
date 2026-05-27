@@ -411,10 +411,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -967,10 +972,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackURL = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(ctx) {
