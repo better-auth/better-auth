@@ -15,6 +15,7 @@ export function authServerMetadata(
 	opts?: JwtOptions,
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
+		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
@@ -30,7 +31,9 @@ export function authServerMetadata(
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
 				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
-		registration_endpoint: `${baseURL}/oauth2/register`,
+		registration_endpoint: overrides?.dynamic_client_registration_supported
+			? `${baseURL}/oauth2/register`
+			: undefined,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported:
@@ -75,6 +78,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		public_client_supported: opts.allowUnauthenticatedClientRegistration,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
