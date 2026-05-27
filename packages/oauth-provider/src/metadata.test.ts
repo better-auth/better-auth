@@ -155,6 +155,25 @@ describe("oauth metadata", async () => {
 		expect(metadata.issuer).toBe(baseURL);
 	});
 
+	it("should advertise dynamic client registration from direct OAuth metadata when enabled", async () => {
+		const { customFetchImpl } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: ["create:test"],
+				allowDynamicClientRegistration: true,
+			},
+		});
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as {
+			registration_endpoint?: string;
+		};
+		expect(metadata.registration_endpoint).toBe(`${baseURL}/oauth2/register`);
+	});
+
 	it("should serve OIDC metadata at the direct issuer well-known URL", async () => {
 		const { customFetchImpl } = await createTestInstance();
 		const response = await customFetchImpl(
