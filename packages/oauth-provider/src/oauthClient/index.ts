@@ -47,8 +47,10 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.optional(),
 				jwks: z
 					.union([
-						z.array(z.record(z.string(), z.unknown())),
-						z.object({ keys: z.array(z.record(z.string(), z.unknown())) }),
+						z.array(z.record(z.string(), z.unknown())).min(1),
+						z.object({
+							keys: z.array(z.record(z.string(), z.unknown())).min(1),
+						}),
 					])
 					.optional(),
 				jwks_uri: z.string().optional(),
@@ -274,8 +276,10 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.optional(),
 				jwks: z
 					.union([
-						z.array(z.record(z.string(), z.unknown())),
-						z.object({ keys: z.array(z.record(z.string(), z.unknown())) }),
+						z.array(z.record(z.string(), z.unknown())).min(1),
+						z.object({
+							keys: z.array(z.record(z.string(), z.unknown())).min(1),
+						}),
 					])
 					.optional(),
 				jwks_uri: z.string().optional(),

@@ -13,7 +13,6 @@ export * from "../../plugins/anonymous/client";
 export * from "../../plugins/custom-session/client";
 export * from "../../plugins/device-authorization/client";
 export * from "../../plugins/email-otp/client";
-export * from "../../plugins/generic-oauth/client";
 export * from "../../plugins/jwt/client";
 export * from "../../plugins/last-login-method/client";
 export * from "../../plugins/magic-link/client";

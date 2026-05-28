@@ -42,6 +42,7 @@ export const paybin = (options: PaybinOptions) => {
 			codeVerifier,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
@@ -67,6 +68,7 @@ export const paybin = (options: PaybinOptions) => {
 				redirectURI,
 				prompt: options.prompt,
 				loginHint,
+				additionalParams,
 			});
 			return url;
 		},
