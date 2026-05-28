@@ -282,6 +282,44 @@ describe("Social Providers", async (c) => {
 		});
 	});
 
+	/**
+	 * When OAuth state validation fails, the redirect must honor the per-flow
+	 * `errorCallbackURL` the caller passed at sign-in, not the default error
+	 * page. The error URL is recoverable from the parsed state even when the
+	 * state-cookie check fails, and it was already origin-validated at sign-in.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 */
+	it("redirects to the per-flow errorCallbackURL when state validation fails", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		// Omit the state cookie so the signed-cookie check fails
+		// (state_security_mismatch) while the verification record still parses.
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("/oauth-error");
+				expect(location).toContain("error=state_mismatch");
+				expect(location).not.toContain("/api/auth/error");
+			},
+		});
+	});
+
 	it("should be able to sign in with async social provider", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
