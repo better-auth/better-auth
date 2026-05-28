@@ -642,7 +642,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					publicKey: pubKey,
 					counter: credential.counter,
 					deviceType: credentialDeviceType,
-					transports: resp.response.transports.join(","),
+					transports: resp.response.transports?.join(",") ?? "",
 					backedUp: credentialBackedUp,
 					createdAt: new Date(),
 					aaguid: aaguid,
