@@ -353,6 +353,37 @@ describe("base context creation", () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9297
+		 */
+		it("should not warn about refreshCache when secondaryStorage is configured with cookieCache disabled", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+				session: {
+					cookieCache: {
+						enabled: false,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).not.toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
 		it("should disable cookieRefreshCache and warn when secondaryStorage is configured with refreshCache=true", async () => {
 			const log = vi.fn();
 			const res = await initBase({

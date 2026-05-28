@@ -95,7 +95,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	getDatabaseType: (database: Options["database"]) => string,
 ): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
-	if (!options.database) {
+	if (!options.database && !options.secondaryStorage) {
 		options = defu(options, {
 			session: {
 				cookieCache: {
