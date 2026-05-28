@@ -93,4 +93,27 @@ describe("parseState error mapping", () => {
 			"https://example.com/error?foo=bar&error=state_invalid",
 		);
 	});
+
+	/**
+	 * The per-flow `errorCallbackURL` recovered from the state takes precedence
+	 * over the default error page, and the error parameter is appended with the
+	 * correct separator when that URL already carries a query string.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 */
+	it("prefers the recovered per-flow errorURL and appends with & when it has a query", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("State mismatch", {
+			code: "state_security_mismatch",
+			errorURL: "/oauth-error?source=expo",
+		});
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext();
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe(
+			"/oauth-error?source=expo&error=state_mismatch",
+		);
+	});
 });
