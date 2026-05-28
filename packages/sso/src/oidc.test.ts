@@ -1,3 +1,4 @@
+import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
@@ -587,7 +588,10 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain("/api/auth/error?error=signup disabled");
+		expect(callbackURL).not.toContain("error=signup disabled");
+		const url = new URL(callbackURL);
+		expect(url.pathname).toBe("/api/auth/error");
+		expect(url.searchParams.get("error")).toBe("signup disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
@@ -1835,5 +1839,127 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 
 			expect(updated.providerId).toBe("ssrf-update-trusted");
 		});
+	});
+});
+
+describe("SSO OIDC hook rejection redirect", async () => {
+	const hookServer = new OAuth2Server();
+
+	beforeAll(async () => {
+		await hookServer.issuer.keys.generate("RS256");
+		await hookServer.start(8090, "localhost");
+	});
+
+	afterAll(async () => {
+		await hookServer.stop().catch(() => {});
+	});
+
+	hookServer.service.on("beforeUserinfo", (userInfoResponse) => {
+		userInfoResponse.body = {
+			email: "rejected@test.com",
+			name: "Rejected User",
+			sub: "rejected-sub",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	});
+
+	hookServer.service.on("beforeTokenSigning", (token) => {
+		token.payload.email = "rejected@test.com";
+		token.payload.email_verified = true;
+	});
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8090", "https://frontend.example.com"],
+			plugins: [sso()],
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session, ctx) => {
+							if (!ctx) return;
+							const user = await ctx.context.internalAdapter.findUserById(
+								session.userId,
+							);
+							if (user?.email === "rejected@test.com") {
+								throw APIError.from("FORBIDDEN", {
+									code: "HOOK_REJECTED",
+									message: "SSO hook rejected this user",
+								});
+							}
+						},
+					},
+				},
+			},
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: hookServer.issuer.url!,
+				domain: "hook-reject.com",
+				providerId: "hook-reject",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${hookServer.issuer.url}/authorize`,
+					tokenEndpoint: `${hookServer.issuer.url}/token`,
+					jwksEndpoint: `${hookServer.issuer.url}/jwks`,
+					discoveryEndpoint: `${hookServer.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+					},
+				},
+			},
+			headers: adminHeaders,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "hook-reject",
+			callbackURL: "https://frontend.example.com/dashboard",
+			errorCallbackURL: "https://frontend.example.com/auth-error",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		let callbackURL = "";
+		await betterFetch(location!, {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+			},
+		});
+
+		const url = new URL(callbackURL);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
+		expect(url.searchParams.get("error_description")).toBe(
+			"SSO hook rejected this user",
+		);
 	});
 });
