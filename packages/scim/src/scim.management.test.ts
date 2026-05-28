@@ -168,6 +168,105 @@ describe("SCIM provider management", () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2g28-66mv-wghh
+		 */
+		it("rejects providerId values that collide with built-in account providers", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const headers = await getAuthCookieHeaders();
+			const generateSCIMToken = (providerId: string) =>
+				auth.api.generateSCIMToken({ body: { providerId }, headers });
+
+			for (const reserved of [
+				"credential",
+				"email-otp",
+				"magic-link",
+				"phone-number",
+				"anonymous",
+				"siwe",
+			]) {
+				await expect(generateSCIMToken(reserved)).rejects.toThrowError(
+					expect.objectContaining({
+						message:
+							"Provider id collides with a built-in account provider and cannot be used for SCIM",
+					}),
+				);
+			}
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2g28-66mv-wghh
+		 */
+		it("rejects providerId values that collide with configured social providers", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+				scimProvider: [],
+				organization: [],
+				member: [],
+			};
+			const memory = memoryAdapter(data);
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				socialProviders: {
+					google: {
+						clientId: "google-client-id",
+						clientSecret: "google-client-secret",
+						enabled: true,
+					},
+					github: {
+						clientId: "github-client-id",
+						clientSecret: "github-client-secret",
+						enabled: true,
+					},
+					// Disabled providers must still be rejected: a previously
+					// enabled provider can have leftover account rows in the DB.
+					discord: {
+						clientId: "discord-client-id",
+						clientSecret: "discord-client-secret",
+						enabled: false,
+					},
+				},
+				plugins: [scim()],
+			});
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), scimClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "social@email.com",
+				password: "password",
+				name: "Social User",
+			});
+			await authClient.signIn.email(
+				{ email: "social@email.com", password: "password" },
+				{ throw: true, onSuccess: setCookieToHeader(headers) },
+			);
+			for (const reserved of ["google", "github", "discord"]) {
+				await expect(
+					auth.api.generateSCIMToken({
+						body: { providerId: reserved },
+						headers,
+					}),
+				).rejects.toThrowError(
+					expect.objectContaining({
+						message:
+							"Provider id collides with a built-in account provider and cannot be used for SCIM",
+					}),
+				);
+			}
+		});
+
 		it("should generate a new scim token (client)", async () => {
 			const { auth, authClient, getAuthCookieHeaders } = createTestInstance();
 

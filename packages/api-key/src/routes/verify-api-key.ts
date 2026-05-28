@@ -38,6 +38,10 @@ export async function validateApiKey({
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
+	if (apiKey.configId !== (opts.configId ?? "default")) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+
 	if (apiKey.enabled === false) {
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
 	}
@@ -153,7 +157,7 @@ export async function validateApiKey({
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
 	if (success === false) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("TOO_MANY_REQUESTS", {
 			message: message ?? undefined,
 			code: "RATE_LIMITED" as const,
 			details: {

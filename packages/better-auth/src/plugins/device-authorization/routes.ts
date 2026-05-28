@@ -146,6 +146,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
+					userId: null,
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -555,6 +556,27 @@ export const deviceVerify = createAuthEndpoint(
 			});
 		}
 
+		const session = await getSessionFromCtx(ctx);
+		if (
+			session?.user?.id &&
+			!deviceCodeRecord.userId &&
+			deviceCodeRecord.status === "pending"
+		) {
+			const claimedDeviceCodeRecord =
+				await ctx.context.adapter.update<DeviceCode>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "status", value: "pending" },
+						{ field: "userId", operator: "eq", value: null },
+					],
+					update: { userId: session.user.id },
+				});
+			if (claimedDeviceCodeRecord) {
+				deviceCodeRecord.userId = session.user.id;
+			}
+		}
+
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
@@ -659,11 +681,15 @@ export const deviceApprove = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -788,11 +814,15 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -800,7 +830,6 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Update device code with denied status and userId if not already set
 		await ctx.context.adapter.update({
 			model: "deviceCode",
 			where: [
@@ -811,7 +840,7 @@ export const deviceDeny = createAuthEndpoint(
 			],
 			update: {
 				status: "denied",
-				userId: deviceCodeRecord.userId || session.user.id,
+				userId: session.user.id,
 			},
 		});
 

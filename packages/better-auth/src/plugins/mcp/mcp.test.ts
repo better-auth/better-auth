@@ -1,5 +1,5 @@
 import { listen } from "listhen";
-import { afterAll, describe, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -8,6 +8,18 @@ import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
 import { mcp, withMcpAuth } from ".";
+
+// Pre-verifies any user the RP creates via OAuth signup so the existing-user
+// path on the RP side does not trip the local-emailVerified gate.
+const autoVerifyUserHook = {
+	user: {
+		create: {
+			before: async (user: Record<string, unknown>) => ({
+				data: { ...user, emailVerified: true },
+			}),
+		},
+	},
+} as const;
 
 describe("mcp", async () => {
 	// Start server on ephemeral port first to get available port
@@ -168,6 +180,7 @@ describe("mcp", async () => {
 						trustedProviders: ["test-public"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -264,6 +277,7 @@ describe("mcp", async () => {
 						trustedProviders: ["test-confidential"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -324,6 +338,92 @@ describe("mcp", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	// FIXME(mcp-race-coverage): write a `/mcp/token` race-redemption
+	// regression test once the consent + PKCE harness here can hand us a code
+	// without going through genericOAuth. The `/mcp/token` handler calls the
+	// same `internalAdapter.consumeVerificationValue` primitive that
+	// `@better-auth/oauth-provider` and `better-auth`'s `oidc-provider` plugin
+	// use, both of which already carry the race regression test, so a
+	// regression in the primitive surfaces in those tests today.
+	it.skip("rejects concurrent redemption of the same authorization code", async ({
+		expect,
+	}) => {
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-confidential"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-confidential",
+								clientId: confidentialClient.clientId,
+								clientSecret: confidentialClient.clientSecret || "",
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								// Confidential client authenticates via client_secret;
+								// no PKCE so we can replay the issued code at the
+								// token endpoint without a stored verifier.
+								pkce: false,
+							},
+						],
+					}),
+				],
+			});
+		const oAuthHeaders = new Headers();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5004",
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const data = await client.signIn.oauth2(
+			{ providerId: "test-confidential", callbackURL: "/dashboard" },
+			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
+		);
+
+		let redirectURI = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context: any) {
+				redirectURI = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(redirectURI).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		// `redirect_uri` matches what the auth-code flow recorded for the
+		// client; PKCE is verified server-side from the stored verifier.
+		const redirectUri = confidentialClient.redirectUrls[0]!;
+		const exchange = () =>
+			serverClient.$fetch<{ access_token?: string; error?: string }>(
+				"/mcp/token",
+				{
+					method: "POST",
+					body: {
+						grant_type: "authorization_code",
+						client_id: confidentialClient.clientId,
+						client_secret: confidentialClient.clientSecret,
+						code,
+						redirect_uri: redirectUri,
+					},
+				},
+			);
+
+		const [first, second] = await Promise.all([exchange(), exchange()]);
+		const successes = [first, second].filter(
+			(r) => (r.data as any)?.access_token != null,
+		);
+		const failures = [first, second].filter((r) => r.error != null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect((failures[0]!.error as any).error).toBe("invalid_grant");
+	});
+
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
 		const metadata = await serverClient.$fetch(
 			"/.well-known/oauth-authorization-server",
@@ -341,7 +441,7 @@ describe("mcp", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256", "none"],
+			id_token_signing_alg_values_supported: ["RS256"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -375,7 +475,7 @@ describe("mcp", async () => {
 			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
-			resource_signing_alg_values_supported: ["RS256", "none"],
+			resource_signing_alg_values_supported: ["RS256"],
 		});
 	});
 
@@ -445,6 +545,7 @@ describe("mcp", async () => {
 					trustedProviders: ["test-userinfo"],
 				},
 			},
+			databaseHooks: autoVerifyUserHook,
 			plugins: [
 				genericOAuth({
 					config: [
@@ -849,5 +950,266 @@ describe("mcp", async () => {
 
 			expect(shouldHaveValidRedirect).toBe(true);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
+ */
+describe("mcp refresh_token grant client authentication", () => {
+	const REFRESH_TOKEN = "pw9m-mcp-test-refresh-token";
+	const CLIENT_ID = "pw9m-mcp-confidential-test-client";
+	const CLIENT_SECRET = "pw9m-mcp-secret-only-the-client-knows";
+
+	async function seedConfidentialClientAndToken(
+		db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+		userId: string,
+	) {
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				type: "web",
+				name: "Confidential Test Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: "stale-access-token-not-used",
+				refreshToken: REFRESH_TOKEN,
+				accessTokenExpiresAt: new Date(Date.now() - 60 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: CLIENT_ID,
+				userId,
+				scopes: "openid profile email offline_access",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+	}
+
+	it("should reject refresh_token grant on confidential client without client_secret", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+
+	it("should reject refresh_token grant on confidential client with wrong client_secret", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+					client_secret: "wrong-secret",
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+
+	it("should accept refresh_token grant when client_secret comes via Authorization: Basic", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(200);
+		expect(body?.access_token).toBeDefined();
+		expect(body?.refresh_token).toBeDefined();
+	});
+
+	it("should accept refresh_token grant when Authorization: Basic and matching client_id is in body", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(200);
+		expect(body?.access_token).toBeDefined();
+	});
+
+	it("should reject refresh_token grant when body client_id does not match Authorization: Basic", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+
+		const basic = `Basic ${Buffer.from(
+			`${CLIENT_ID}:${CLIENT_SECRET}`,
+		).toString("base64")}`;
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: basic,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: "different-client-id",
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+	});
+
+	it("should reject refresh_token grant when the confidential client is disabled", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedConfidentialClientAndToken(db, user.id);
+		await db.update<{ disabled: boolean }>({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: CLIENT_ID }],
+			update: { disabled: true },
+		});
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: REFRESH_TOKEN,
+					client_id: CLIENT_ID,
+					client_secret: CLIENT_SECRET,
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_client");
+		expect(body?.access_token).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+ */
+describe("mcp discovery metadata (security)", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [mcp({ loginPage: "/login" })],
+	});
+
+	it("/.well-known/oauth-authorization-server must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-authorization-server",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			id_token_signing_alg_values_supported: string[];
+		};
+		expect(body.id_token_signing_alg_values_supported).not.toContain("none");
+	});
+
+	it("/.well-known/oauth-protected-resource must not advertise alg=none", async () => {
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/.well-known/oauth-protected-resource",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			resource_signing_alg_values_supported: string[];
+		};
+		expect(body.resource_signing_alg_values_supported).not.toContain("none");
 	});
 });
