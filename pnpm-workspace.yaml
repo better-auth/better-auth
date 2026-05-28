@@ -93,6 +93,8 @@ linkWorkspacePackages: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@better-auth/*'
+  - '@better-fetch/fetch'
+  - 'better-call'
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch
