@@ -373,6 +373,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						code,
 						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
+						callbackURL: ctx.request?.url,
 					});
 				} else {
 					// Standard token exchange with tokenUrlParams support

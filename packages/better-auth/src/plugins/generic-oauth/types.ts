@@ -111,6 +111,7 @@ export interface GenericOAuthConfig {
 				redirectURI: string;
 				codeVerifier?: string | undefined;
 				deviceId?: string | undefined;
+				callbackURL?: string | undefined;
 		  }) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
