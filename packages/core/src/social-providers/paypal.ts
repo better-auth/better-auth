@@ -77,6 +77,7 @@ export const paypal = (options: PayPalOptions) => {
 
 	return {
 		id: "paypal",
+		callbackPath: "/callback/paypal",
 		name: "PayPal",
 		async createAuthorizationURL({
 			state,

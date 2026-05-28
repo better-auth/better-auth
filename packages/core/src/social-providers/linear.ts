@@ -30,6 +30,7 @@ export const linear = (options: LinearOptions) => {
 	const tokenEndpoint = "https://api.linear.app/oauth/token";
 	return {
 		id: "linear",
+		callbackPath: "/callback/linear",
 		name: "Linear",
 		createAuthorizationURL({
 			state,

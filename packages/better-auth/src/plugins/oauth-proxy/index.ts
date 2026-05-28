@@ -436,7 +436,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
+								redirectURI: `${ctx.context.baseURL}${provider.callbackPath}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(

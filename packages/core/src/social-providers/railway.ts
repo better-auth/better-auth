@@ -28,6 +28,7 @@ export interface RailwayOptions extends ProviderOptions<RailwayProfile> {
 export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
+		callbackPath: "/callback/railway",
 		name: "Railway",
 		createAuthorizationURL({
 			state,

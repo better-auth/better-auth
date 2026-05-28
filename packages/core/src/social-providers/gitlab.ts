@@ -80,6 +80,7 @@ export const gitlab = (options: GitlabOptions) => {
 	const issuerName = "Gitlab";
 	return {
 		id: issuerId,
+		callbackPath: `/callback/${issuerId}`,
 		name: issuerName,
 		createAuthorizationURL: async ({
 			state,

@@ -28,6 +28,17 @@ export interface OAuthProvider<
 	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
+	/**
+	 * Path under the resolved per-request `baseURL` where this provider's
+	 * OAuth callback handler is mounted. Endpoints compose
+	 * `redirectURI = ctx.context.baseURL + callbackPath` per request, so the
+	 * provider must not hardcode an origin or `baseURL` here.
+	 *
+	 * Built-in social providers use `/callback/<id>`. Plugin-provided OAuth
+	 * providers (e.g. generic-oauth) use their plugin's own lane, such as
+	 * `/oauth2/callback/<id>`.
+	 */
+	callbackPath: string;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;

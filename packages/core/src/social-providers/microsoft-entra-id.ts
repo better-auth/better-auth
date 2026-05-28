@@ -148,6 +148,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
 	return {
 		id: "microsoft",
+		callbackPath: "/callback/microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
