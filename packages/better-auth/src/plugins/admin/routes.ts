@@ -3,6 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -526,6 +527,34 @@ const listUsersWhereValueSchema = z.union([
 	z.array(z.number()),
 ]);
 
+const getListUsersAllowedFields = (
+	options: Parameters<typeof getAuthTables>[0],
+) => {
+	const fields = getAuthTables(options).user?.fields ?? {};
+	const allowedFields = new Set(["id", "_id"]);
+	for (const [fieldName, field] of Object.entries(fields)) {
+		allowedFields.add(fieldName);
+		if (field.fieldName) {
+			allowedFields.add(field.fieldName);
+		}
+	}
+	return allowedFields;
+};
+
+const validateListUsersField = (
+	field: string | undefined,
+	allowedFields: Set<string>,
+) => {
+	if (!field || allowedFields.has(field)) {
+		return;
+	}
+
+	throw APIError.from(
+		"BAD_REQUEST",
+		ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD,
+	);
+};
+
 const listUsersSearchSchema = z.object({
 	field: z.string().meta({
 		description: 'The field to search in. Eg: "email", "name", "username"',
@@ -706,6 +735,17 @@ export const listUsers = (opts: AdminOptions) =>
 				...(ctx.query ?? {}),
 				...(ctx.body ?? {}),
 			};
+			const allowedFields = getListUsersAllowedFields(ctx.context.options);
+
+			if (ctx.body?.search) {
+				for (const search of ctx.body.search) {
+					validateListUsersField(search.field, allowedFields);
+				}
+			}
+
+			validateListUsersField(input.filterField, allowedFields);
+			validateListUsersField(input.sortBy, allowedFields);
+
 			const where: Where[] = [];
 
 			if (ctx.body && "search" in ctx.body) {
@@ -751,11 +791,14 @@ export const listUsers = (opts: AdminOptions) =>
 					limit,
 					offset,
 				});
-			} catch {
-				return ctx.json({
-					users: [] as UserWithRole[],
-					total: 0,
-				});
+			} catch (error) {
+				if (error instanceof APIError) {
+					throw error;
+				}
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD,
+				);
 			}
 		},
 	);

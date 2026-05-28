@@ -640,6 +640,85 @@ describe("Admin plugin", async () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users search fields", async () => {
+		const res = await client.admin.listUsers({
+			search: [
+				{
+					field: "notAUserField",
+					operator: "eq",
+					value: "test",
+				},
+			],
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users filter fields", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+				filterValue: "test",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users sort fields", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				sortBy: "notAUserField",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject non-admin list users requests before validating fields", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+				filterValue: "test",
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{
@@ -1498,6 +1577,56 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
+	});
+});
+
+describe("admin list users custom field names", async () => {
+	const { signInWithTestUser, auth } = await getTestInstance(
+		{
+			plugins: [admin()],
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+				email: "admin-field-name@test.com",
+			},
+		},
+	);
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow list users filters using configured field names", async () => {
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "email_address",
+				filterOperator: "eq",
+				filterValue: "admin-field-name@test.com",
+			},
+		});
+
+		expect(res.total).toBe(1);
+		expect(res.users[0]?.email).toBe("admin-field-name@test.com");
 	});
 });
 
