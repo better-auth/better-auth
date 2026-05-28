@@ -549,10 +549,10 @@ const validateListUsersField = (
 		return;
 	}
 
-	throw APIError.from(
-		"BAD_REQUEST",
-		ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD,
-	);
+	throw APIError.from("BAD_REQUEST", {
+		...BASE_ERROR_CODES.VALIDATION_ERROR,
+		message: "Invalid list users field",
+	});
 };
 
 const listUsersSearchSchema = z.object({
@@ -743,7 +743,6 @@ export const listUsers = (opts: AdminOptions) =>
 				}
 			}
 
-			validateListUsersField(input.filterField, allowedFields);
 			validateListUsersField(input.sortBy, allowedFields);
 
 			const where: Where[] = [];
@@ -759,6 +758,7 @@ export const listUsers = (opts: AdminOptions) =>
 			}
 
 			if (input.filterValue !== undefined) {
+				validateListUsersField(input.filterField, allowedFields);
 				where.push({
 					field: input.filterField || "email",
 					operator: input.filterOperator || "eq",
@@ -766,40 +766,30 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			try {
-				const limit = Number(input.limit) || undefined;
-				const offset = Number(input.offset) || undefined;
-				const users = await ctx.context.internalAdapter.listUsers(
-					limit,
-					offset,
-					input.sortBy
-						? {
-								field: input.sortBy,
-								direction: input.sortDirection || "asc",
-							}
-						: undefined,
-					where.length ? where : undefined,
-				);
-				const total = await ctx.context.internalAdapter.countTotalUsers(
-					where.length ? where : undefined,
-				);
-				return ctx.json({
-					users: users.map((user) =>
-						parseUserOutput(ctx.context.options, user),
-					) as UserWithRole[],
-					total: total,
-					limit,
-					offset,
-				});
-			} catch (error) {
-				if (error instanceof APIError) {
-					throw error;
-				}
-				throw APIError.from(
-					"BAD_REQUEST",
-					ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD,
-				);
-			}
+			const limit = Number(input.limit) || undefined;
+			const offset = Number(input.offset) || undefined;
+			const users = await ctx.context.internalAdapter.listUsers(
+				limit,
+				offset,
+				input.sortBy
+					? {
+							field: input.sortBy,
+							direction: input.sortDirection || "asc",
+						}
+					: undefined,
+				where.length ? where : undefined,
+			);
+			const total = await ctx.context.internalAdapter.countTotalUsers(
+				where.length ? where : undefined,
+			);
+			return ctx.json({
+				users: users.map((user) =>
+					parseUserOutput(ctx.context.options, user),
+				) as UserWithRole[],
+				total: total,
+				limit,
+				offset,
+			});
 		},
 	);
 

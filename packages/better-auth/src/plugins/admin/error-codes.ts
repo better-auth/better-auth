@@ -29,5 +29,4 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to set a non-existent role value",
 	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
 	INVALID_ROLE_TYPE: "Invalid role type",
-	INVALID_LIST_USERS_FIELD: "Invalid list users field",
 });

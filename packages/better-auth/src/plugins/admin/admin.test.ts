@@ -1,4 +1,4 @@
-import { BetterAuthError } from "@better-auth/core/error";
+import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -658,15 +658,14 @@ describe("Admin plugin", async () => {
 		});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe(
-			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
-		);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/5990
 	 */
-	it("should reject invalid list users filter fields", async () => {
+	it("should reject invalid list users filter fields when filter value is provided", async () => {
 		const res = await client.admin.listUsers({
 			query: {
 				filterField: "notAUserField",
@@ -678,9 +677,25 @@ describe("Admin plugin", async () => {
 		});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe(
-			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
-		);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should ignore list users filter field when filter value is undefined", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.total).toBeGreaterThan(0);
 	});
 
 	/**
@@ -697,9 +712,8 @@ describe("Admin plugin", async () => {
 		});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe(
-			ADMIN_ERROR_CODES.INVALID_LIST_USERS_FIELD.code,
-		);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
 	});
 
 	/**
