@@ -15,6 +15,7 @@ import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
@@ -22,12 +23,7 @@ import type { Account, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
-import {
-	checkSkipProxy,
-	redirectOnError,
-	resolveCurrentURL,
-	stripTrailingSlash,
-} from "./utils";
+import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
