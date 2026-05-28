@@ -6,7 +6,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { defu } from "defu";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
-import { redirectPlugin } from "./fetch-plugins";
+import { redirectPlugin, vercelSkewProtectionPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
@@ -87,6 +87,9 @@ export const getClientConfig = (
 			lifeCyclePlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
+			...(options?.disableDefaultFetchPlugins || options?.disableSkewProtection
+				? []
+				: [vercelSkewProtectionPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});

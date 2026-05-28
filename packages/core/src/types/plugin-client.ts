@@ -72,7 +72,20 @@ export interface BetterAuthClientOptions {
 	plugins?: BetterAuthClientPlugin[] | undefined;
 	baseURL?: string | undefined;
 	basePath?: string | undefined;
+	/**
+	 * When `true`, disables all built-in fetch plugins (redirect and Vercel skew protection).
+	 *
+	 * @default false
+	 */
 	disableDefaultFetchPlugins?: boolean | undefined;
+	/**
+	 * When `true`, skips the default fetch plugin that adds `x-deployment-id` for
+	 * [Vercel Skew Protection](https://vercel.com/docs/skew-protection) during rolling releases.
+	 * Ignored when `disableDefaultFetchPlugins` is `true`.
+	 *
+	 * @default false
+	 */
+	disableSkewProtection?: boolean | undefined;
 	$InferAuth?: BetterAuthOptions | undefined;
 	sessionOptions?: RevalidateOptions | undefined;
 }

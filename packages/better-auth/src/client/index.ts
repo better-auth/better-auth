@@ -7,6 +7,10 @@ import { PACKAGE_VERSION } from "../version";
 
 export * from "./broadcast-channel";
 export {
+	resolveDeploymentIdForSkewProtection,
+	vercelSkewProtectionPlugin,
+} from "./fetch-plugins";
+export {
 	type FocusListener,
 	type FocusManager,
 	kFocusManager,
