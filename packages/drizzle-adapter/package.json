@@ -45,7 +45,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2 || ^1.0.0-rc"
   },
   "peerDependenciesMeta": {
     "drizzle-orm": {
@@ -55,7 +55,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.2 || ^1.0.0-rc",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

@@ -1,0 +1,143 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  mssqlTable,
+  varchar,
+  datetime2,
+  bit,
+  int,
+  index,
+} from "drizzle-orm/mssql-core";
+
+export const user = mssqlTable("user", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  emailVerified: bit("email_verified").default(false).notNull(),
+  image: varchar("image", { length: "max" }),
+  createdAt: datetime2("created_at", { precision: 3 })
+    .default(sql`SYSUTCDATETIME()`)
+    .notNull(),
+  updatedAt: datetime2("updated_at", { precision: 3 })
+    .default(sql`SYSUTCDATETIME()`)
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const session = mssqlTable(
+  "session",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    expiresAt: datetime2("expires_at", { precision: 3 }).notNull(),
+    token: varchar("token", { length: 255 }).notNull().unique(),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    ipAddress: varchar("ip_address", { length: "max" }),
+    userAgent: varchar("user_agent", { length: "max" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("session_userId_idx").on(table.userId)],
+);
+
+export const account = mssqlTable(
+  "account",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    accountId: varchar("account_id", { length: "max" }).notNull(),
+    providerId: varchar("provider_id", { length: "max" }).notNull(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: varchar("access_token", { length: "max" }),
+    refreshToken: varchar("refresh_token", { length: "max" }),
+    idToken: varchar("id_token", { length: "max" }),
+    accessTokenExpiresAt: datetime2("access_token_expires_at", {
+      precision: 3,
+    }),
+    refreshTokenExpiresAt: datetime2("refresh_token_expires_at", {
+      precision: 3,
+    }),
+    scope: varchar("scope", { length: "max" }),
+    password: varchar("password", { length: "max" }),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("account_userId_idx").on(table.userId)],
+);
+
+export const verification = mssqlTable(
+  "verification",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    identifier: varchar("identifier", { length: 255 }).notNull(),
+    value: varchar("value", { length: "max" }).notNull(),
+    expiresAt: datetime2("expires_at", { precision: 3 }).notNull(),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+export const passkey = mssqlTable(
+  "passkey",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    name: varchar("name", { length: "max" }),
+    publicKey: varchar("public_key", { length: "max" }).notNull(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: varchar("credential_id", { length: 255 }).notNull(),
+    counter: int("counter").notNull(),
+    deviceType: varchar("device_type", { length: "max" }).notNull(),
+    backedUp: bit("backed_up").notNull(),
+    transports: varchar("transports", { length: "max" }),
+    createdAt: datetime2("created_at", { precision: 3 }),
+    aaguid: varchar("aaguid", { length: "max" }),
+  },
+  (table) => [
+    index("passkey_userId_idx").on(table.userId),
+    index("passkey_credentialID_idx").on(table.credentialID),
+  ],
+);
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+  passkeys: many(passkey),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));

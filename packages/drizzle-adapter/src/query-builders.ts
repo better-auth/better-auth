@@ -3,7 +3,7 @@ import { ilike, sql } from "drizzle-orm";
 
 type DrizzleColumn = Parameters<typeof ilike>[0];
 
-type DrizzleProvider = "pg" | "mysql" | "sqlite";
+type DrizzleProvider = "pg" | "mysql" | "sqlite" | "mssql";
 
 /**
  * Case-insensitive LIKE/ILIKE for pattern matching.

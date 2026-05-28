@@ -27,7 +27,6 @@ import {
 	ne,
 	notInArray,
 	or,
-	sql,
 } from "drizzle-orm";
 import {
 	insensitiveEq,
@@ -49,7 +48,7 @@ export interface DrizzleAdapterConfig {
 	/**
 	 * The database provider
 	 */
-	provider: "pg" | "mysql" | "sqlite";
+	provider: "pg" | "mysql" | "sqlite" | "mssql";
 	/**
 	 * If the table names in the schema are plural
 	 * set this to true. For example, if the schema
@@ -105,12 +104,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				data: Record<string, any>,
 				where?: Where[] | undefined,
 			) => {
-				if (config.provider !== "mysql") {
+				if (config.provider !== "mysql" && config.provider !== "mssql") {
 					const c = await builder.returning();
 					return c[0];
 				}
+				// MySQL and MSSQL do not support .returning() in the same shape:
+				// MySQL has no RETURNING clause; MSSQL uses OUTPUT but with a
+				// different builder shape (.output() before .values()). Both fall
+				// back to executing the write, then re-selecting the affected row.
 				await builder.execute();
 				const schemaModel = getSchema(model);
+				// MSSQL's drizzle select builder has no .limit(); use TOP(N)
+				// chained on the pre-from builder instead. These two helpers
+				// keep the rest of the code shape-agnostic across providers.
+				const selectFirst = () =>
+					config.provider === "mssql"
+						? db.select().top(1).from(schemaModel)
+						: db.select().from(schemaModel);
+				const finishFirst = (b: any) =>
+					config.provider === "mssql" ? b : b.limit(1);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
 					// If we're updating a field that's in the where clause, use the new value
@@ -129,30 +141,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(...clause);
 					return res[0];
 				} else if (builderVal && builderVal[0]?.id?.value) {
-					let tId = builderVal[0]?.id?.value;
-					if (!tId) {
-						//get last inserted id
-						const lastInsertId = await db
-							.select({ id: sql`LAST_INSERT_ID()` })
-							.from(schemaModel)
-							.orderBy(desc(schemaModel.id))
-							.limit(1);
-						tId = lastInsertId[0].id;
-					}
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(eq(schemaModel.id, tId))
-						.limit(1)
-						.execute();
+					const tId = builderVal[0].id.value;
+					const res = await finishFirst(
+						selectFirst().where(eq(schemaModel.id, tId)),
+					).execute();
 					return res[0];
 				} else if (data.id) {
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(eq(schemaModel.id, data.id))
-						.limit(1)
-						.execute();
+					const res = await finishFirst(
+						selectFirst().where(eq(schemaModel.id, data.id)),
+					).execute();
 					return res[0];
 				} else {
 					// If the user doesn't have `id` as a field, then this will fail.
@@ -162,12 +159,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
 						);
 					}
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.orderBy(desc(schemaModel.id))
-						.limit(1)
-						.execute();
+					const res = await finishFirst(
+						selectFirst().orderBy(desc(schemaModel.id)),
+					).execute();
 					return res[0];
 				}
 			};
@@ -746,37 +740,82 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					let builder = db
-						.select(
-							select?.length && select.length > 0
-								? select.reduce((acc, field) => {
+					const selectShape =
+						select?.length && select.length > 0
+							? select.reduce(
+									(acc, field) => {
 										const fieldName = getFieldName({ model, field });
 										return {
 											...acc,
 											[fieldName]: schemaModel[fieldName],
 										};
-									}, {})
-								: undefined,
-						)
-						.from(schemaModel);
+									},
+									{} as Record<string, unknown>,
+								)
+							: undefined;
+					const baseSelect = selectShape ? db.select(selectShape) : db.select();
 
 					const effectiveLimit = limit;
 					const effectiveOffset = offset;
+					const sortByField = sortBy?.field;
 
-					if (typeof effectiveLimit !== "undefined") {
-						builder = builder.limit(effectiveLimit);
-					}
+					let builder: any;
+					if (config.provider === "mssql") {
+						// MSSQL select builder has no .limit() or .offset() chain.
+						// Two paths exist: TOP(N) (must precede .from()) for the
+						// simple "limit only, no offset, no sort" case, and
+						// OFFSET/FETCH (after ORDER BY) for everything else.
+						// SQL Server requires an ORDER BY when OFFSET/FETCH is used,
+						// so when the caller hasn't supplied one we fall back to
+						// ascending id ordering, which is deterministic and matches
+						// what the existing pg/mysql/sqlite paths effectively do
+						// when no sort is requested.
+						const useTopOnly =
+							typeof effectiveLimit !== "undefined" &&
+							typeof effectiveOffset === "undefined" &&
+							!sortByField;
+						builder = useTopOnly
+							? baseSelect.top(effectiveLimit).from(schemaModel)
+							: baseSelect.from(schemaModel);
 
-					if (typeof effectiveOffset !== "undefined") {
-						builder = builder.offset(effectiveOffset);
-					}
+						if (sortByField) {
+							builder = builder.orderBy(
+								sortFn(
+									schemaModel[getFieldName({ model, field: sortByField })],
+								),
+							);
+						}
 
-					if (sortBy?.field) {
-						builder = builder.orderBy(
-							sortFn(
-								schemaModel[getFieldName({ model, field: sortBy?.field })],
-							),
-						);
+						const needsOffsetFetch =
+							typeof effectiveOffset !== "undefined" ||
+							(typeof effectiveLimit !== "undefined" && !useTopOnly);
+						if (needsOffsetFetch) {
+							if (!sortByField) {
+								builder = builder.orderBy(asc(schemaModel.id));
+							}
+							builder = builder.offset(effectiveOffset ?? 0);
+							if (typeof effectiveLimit !== "undefined") {
+								builder = builder.fetch(effectiveLimit);
+							}
+						}
+					} else {
+						builder = baseSelect.from(schemaModel);
+
+						if (typeof effectiveLimit !== "undefined") {
+							builder = builder.limit(effectiveLimit);
+						}
+
+						if (typeof effectiveOffset !== "undefined") {
+							builder = builder.offset(effectiveOffset);
+						}
+
+						if (sortByField) {
+							builder = builder.orderBy(
+								sortFn(
+									schemaModel[getFieldName({ model, field: sortByField })],
+								),
+							);
+						}
 					}
 
 					const res = await builder.where(...clause);
@@ -826,8 +865,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					else if (
 						res &&
 						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					) {
+						const raw = res.affectedRows ?? res.rowsAffected ?? res.changes;
+						// MSSQL driver returns rowsAffected as number[] (one entry per batch statement)
+						count = Array.isArray(raw)
+							? raw.reduce((sum, n) => sum + n, 0)
+							: raw;
+					}
 					if (typeof count !== "number") {
 						logger.error(
 							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
