@@ -60,13 +60,15 @@ export async function parseState(c: GenericEndpointContext) {
 		c.context.logger.error("Failed to parse state", error);
 
 		let code = "internal_server_error";
+		let redirectErrorURL = errorURL;
 		if (error instanceof StateError) {
 			code =
 				error.code === "state_security_mismatch"
 					? "state_mismatch"
 					: error.code;
+			redirectErrorURL = error.errorURL ?? errorURL;
 		}
-		redirectOnError(c, errorURL, code);
+		redirectOnError(c, redirectErrorURL, code);
 	}
 
 	if (!parsedData.errorURL) {
