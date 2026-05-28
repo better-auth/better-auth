@@ -136,6 +136,7 @@ describe("base context creation", () => {
 	it("should properly pass modified context from one plugin to another", async () => {
 		const mockProvider = {
 			id: "test-oauth-provider",
+			callbackPath: "/callback/test-oauth-provider",
 			name: "Test OAuth Provider",
 			createAuthorizationURL: vi.fn(),
 			validateAuthorizationCode: vi.fn(),
