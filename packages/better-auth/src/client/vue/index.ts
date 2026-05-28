@@ -70,9 +70,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	}
 		? Res extends BetterFetchResponse<infer S>
 			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
+			: Res
 		: never;
 
 	function useSession(): DeepReadonly<
