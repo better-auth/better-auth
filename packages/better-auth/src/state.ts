@@ -32,6 +32,7 @@ export type StateData = z.infer<typeof stateDataSchema>;
 
 export type StateErrorCode =
 	| "state_generation_error"
+	| "state_not_found"
 	| "state_invalid"
 	| "state_mismatch"
 	| "state_security_mismatch";
@@ -137,9 +138,15 @@ export async function generateGenericState(
 
 export async function parseGenericState(
 	c: GenericEndpointContext,
-	state: string,
+	state: string | undefined,
 	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
 ) {
+	if (!state) {
+		throw new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+	}
+
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 

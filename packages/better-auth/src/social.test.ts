@@ -260,6 +260,28 @@ describe("Social Providers", async (c) => {
 		});
 	});
 
+	/**
+	 * A built-in social callback that arrives without a `state` parameter must
+	 * redirect to the error page using the `error` query parameter the page
+	 * reads, not a `state` parameter the page ignores.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9215
+	 */
+	it("redirects a built-in callback with no state to error=state_not_found", async () => {
+		await client.$fetch("/callback/google", {
+			query: {
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("error=state_not_found");
+				expect(location).not.toContain("state=state_not_found");
+			},
+		});
+	});
+
 	it("should be able to sign in with async social provider", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
