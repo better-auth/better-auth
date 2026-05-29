@@ -19,6 +19,7 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
+	resolvedSubjectClaim,
 	resolveSubjectIdentifier,
 	validateClientCredentials,
 } from "./utils";
@@ -225,6 +226,18 @@ async function validateOpaqueAccessToken(
 			})
 		: {};
 
+	// Resolve the presentation subject from the stored referenceId so the raw
+	// reference never leaves the server. Stripped by resolveIntrospectionSub.
+	const presentationSub =
+		user && client && opts.getSubject
+			? await resolveSubjectIdentifier(
+					user.id,
+					client,
+					opts,
+					accessToken.referenceId,
+				)
+			: undefined;
+
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	const jwtPlugin = opts.disableJwtPlugin
@@ -238,6 +251,9 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
+		...(presentationSub && presentationSub !== user?.id
+			? { [resolvedSubjectClaim]: presentationSub }
+			: {}),
 		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
 		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
@@ -374,24 +390,27 @@ export async function validateAccessToken(
 }
 
 /**
- * Resolves pairwise sub on an introspection payload.
- * Applied at the presentation layer so internal validation functions
- * keep real user.id (needed for user lookup in /userinfo).
+ * Resolves the presentation subject on an introspection payload, using an
+ * already-resolved subject when present and recomputing otherwise (pairwise).
+ * The internal claim is stripped so it never reaches the response.
  */
 async function resolveIntrospectionSub(
 	opts: OAuthOptions<Scope[]>,
 	payload: JWTPayload,
 	client: SchemaClient<Scope[]>,
 ): Promise<JWTPayload> {
-	if (payload.active && payload.sub) {
-		const resolvedSub = await resolveSubjectIdentifier(
-			payload.sub as string,
-			client,
-			opts,
-		);
-		return { ...payload, sub: resolvedSub };
+	if (!payload.active || !payload.sub) {
+		return payload;
 	}
-	return payload;
+	// `rest` drops the carrier in every branch so it never reaches a response.
+	// It is only authoritative when a getSubject hook is configured — its sole
+	// producer — so a same-named dev claim can't be mistaken for a subject.
+	const { [resolvedSubjectClaim]: embedded, ...rest } = payload;
+	if (opts.getSubject && typeof embedded === "string") {
+		return { ...rest, sub: embedded };
+	}
+	const resolvedSub = await resolveSubjectIdentifier(payload.sub, client, opts);
+	return { ...rest, sub: resolvedSub };
 }
 
 export async function introspectEndpoint(

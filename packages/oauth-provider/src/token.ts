@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
@@ -25,11 +26,18 @@ import {
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	resolvedSubjectClaim,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
+
+/**
+ * Client ids already warned about pairwise + JWT access tokens, so the warning
+ * fires once per client per process instead of on every issuance.
+ */
+const warnedPairwiseJwtClients = new Set<string>();
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -88,11 +96,38 @@ async function createJwtAccessToken(
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
+	// A JWT access token's `sub` is the raw user.id and the token is readable by
+	// the client, so a pairwise client can decode it and correlate users with
+	// colluding clients. Pairwise/external clients should receive opaque access
+	// tokens (introspection returns the pairwise subject) instead.
+	if (
+		user &&
+		client.subjectType === "pairwise" &&
+		!opts.silenceWarnings?.pairwiseJwtAccessToken &&
+		!warnedPairwiseJwtClients.has(client.clientId)
+	) {
+		warnedPairwiseJwtClients.add(client.clientId);
+		logger.warn(
+			`Pairwise client "${client.clientId}" was issued a JWT access token whose \`sub\` is the raw user id; colluding clients can use it to correlate users. Issue opaque access tokens to pairwise clients instead. Silence with silenceWarnings.pairwiseJwtAccessToken.`,
+		);
+	}
+
+	// Stateless JWT access tokens can't re-run getSubject later, so embed the
+	// resolved subject for /userinfo and /introspect. The `sub` below stays the
+	// raw user.id (the /userinfo lookup key).
+	const presentationSub =
+		user && opts.getSubject
+			? await resolveSubjectIdentifier(user.id, client, opts, referenceId)
+			: undefined;
+
 	// Sign token
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
+			...(presentationSub && presentationSub !== user?.id
+				? { [resolvedSubjectClaim]: presentationSub }
+				: {}),
 			sub: user?.id,
 			aud:
 				typeof audience === "string"
@@ -149,11 +184,17 @@ async function createIdToken(
 	sessionId?: string,
 	authTime?: Date,
 	accessToken?: string,
+	referenceId?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
-	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+	const resolvedSub = await resolveSubjectIdentifier(
+		user.id,
+		client,
+		opts,
+		referenceId,
+	);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
@@ -569,6 +610,7 @@ async function createUserTokens(
 				sessionId,
 				authTime,
 				accessToken,
+				referenceId,
 			)
 		: undefined;
 
