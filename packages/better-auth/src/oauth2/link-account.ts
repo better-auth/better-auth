@@ -4,6 +4,7 @@ import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -34,7 +35,7 @@ export async function handleOAuthUserInfo(
 			);
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
