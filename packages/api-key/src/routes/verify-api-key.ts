@@ -17,20 +17,32 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+import { configIdMatches, resolveConfiguration } from ".";
 
 export async function validateApiKey({
+	key,
 	hashedKey,
 	ctx,
 	opts,
+	configurations,
 	schema,
 	permissions,
+	expectedConfigId,
+	runCustomValidator,
 }: {
+	key: string;
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
+	expectedConfigId?: string | undefined;
+	/**
+	 * Run the key's own `customAPIKeyValidator`. Callers that already ran it
+	 * against the correct config leave this off to avoid running it twice.
+	 */
+	runCustomValidator?: boolean | undefined;
 }) {
 	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
@@ -38,8 +50,22 @@ export async function validateApiKey({
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
-	if (apiKey.configId !== (opts.configId ?? "default")) {
+	if (
+		expectedConfigId !== undefined &&
+		!configIdMatches(apiKey.configId, expectedConfigId)
+	) {
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+
+	// Resolve the key's own config. The lookup used the caller's config, so an
+	// unscoped verify cannot find keys that use a different storage or hashing.
+	opts = resolveConfiguration(ctx.context, configurations, apiKey.configId);
+
+	if (runCustomValidator && opts.customAPIKeyValidator) {
+		const isValid = await opts.customAPIKeyValidator({ ctx, key });
+		if (!isValid) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
+		}
 	}
 
 	if (apiKey.enabled === false) {
@@ -227,7 +253,7 @@ const verifyApiKeyBodySchema = z.object({
 		.string()
 		.meta({
 			description:
-				"The configuration ID to use for verification. If not provided, the default configuration will be used.",
+				"Configuration ID to scope verification to. When omitted, the key is validated against its own configuration.",
 		})
 		.optional(),
 	key: z.string().meta({
@@ -268,7 +294,9 @@ export function verifyApiKey({
 				configId,
 			);
 
-			if (lookupOpts.customAPIKeyValidator) {
+			// Scoped: lookup config is the key's config, so run the validator now.
+			// Unscoped runs it inside validateApiKey once the key's config is known.
+			if (configId !== undefined && lookupOpts.customAPIKeyValidator) {
 				const isValid = await lookupOpts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
 					return ctx.json({
@@ -290,11 +318,16 @@ export function verifyApiKey({
 
 			try {
 				apiKey = await validateApiKey({
+					key,
 					hashedKey: hashed,
 					permissions: ctx.body.permissions,
 					ctx,
 					opts: lookupOpts,
+					configurations,
 					schema,
+					expectedConfigId: configId,
+					// Scoped calls already ran the validator above with the right config.
+					runCustomValidator: configId === undefined,
 				});
 
 				// Resolve the correct config based on the API key's configId

@@ -205,10 +205,13 @@ export function apiKey(
 							: await defaultKeyHasher(key);
 
 						const apiKey = await validateApiKey({
+							key,
 							hashedKey: hashed,
 							ctx,
 							opts: config,
+							configurations,
 							schema,
+							expectedConfigId: config.configId,
 						});
 
 						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
