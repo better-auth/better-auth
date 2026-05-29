@@ -549,43 +549,44 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						// Recover the plaintext OAuth state for the configured strategy.
-						// Production receives it re-encrypted under `getEncryptionKey`
-						// (the shared/proxy secret) below, since production does not have
-						// this environment's `BETTER_AUTH_SECRET`.
-						let plaintextState: string | undefined;
-						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
-							// Cookie mode: the `oauth_state` cookie is encrypted with this
-							// environment's secret, so decrypt it locally to recover the state.
-							const setCookieHeader =
-								ctx.context.responseHeaders?.get("set-cookie");
-							if (setCookieHeader) {
-								const oauthStateCookie =
-									ctx.context.createAuthCookie("oauth_state");
-								const encryptedCookieValue = parseSetCookieHeader(
-									setCookieHeader,
-								).get(oauthStateCookie.name)?.value;
-								if (encryptedCookieValue) {
-									plaintextState = await symmetricDecrypt({
-										key: ctx.context.secretConfig,
-										data: encryptedCookieValue,
-									});
-								}
-							}
-						} else {
-							// Database mode: the verification value is already plaintext JSON.
-							const verification =
-								await ctx.context.internalAdapter.findVerificationValue(
-									originalState,
-								);
-							plaintextState = verification?.value;
-						}
-						if (!plaintextState) {
-							ctx.context.logger.warn("No OAuth state found for proxy");
-							return;
-						}
-
+						// Recover the plaintext OAuth state for the configured strategy,
+						// then re-encrypt it under `getEncryptionKey` (the shared/proxy
+						// secret) so production can read it back; production does not have
+						// this environment's `BETTER_AUTH_SECRET`. Any failure (malformed
+						// cookie, decrypt, or encrypt) falls back to a non-proxied flow.
 						try {
+							let plaintextState: string | undefined;
+							if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+								// Cookie mode: the `oauth_state` cookie is encrypted with this
+								// environment's secret, so decrypt it locally to recover the state.
+								const setCookieHeader =
+									ctx.context.responseHeaders?.get("set-cookie");
+								if (setCookieHeader) {
+									const oauthStateCookie =
+										ctx.context.createAuthCookie("oauth_state");
+									const encryptedCookieValue = parseSetCookieHeader(
+										setCookieHeader,
+									).get(oauthStateCookie.name)?.value;
+									if (encryptedCookieValue) {
+										plaintextState = await symmetricDecrypt({
+											key: ctx.context.secretConfig,
+											data: encryptedCookieValue,
+										});
+									}
+								}
+							} else {
+								// Database mode: the verification value is already plaintext JSON.
+								const verification =
+									await ctx.context.internalAdapter.findVerificationValue(
+										originalState,
+									);
+								plaintextState = verification?.value;
+							}
+							if (!plaintextState) {
+								ctx.context.logger.warn("No OAuth state found for proxy");
+								return;
+							}
+
 							// Re-encrypt the state under the proxy key, then wrap it in the
 							// package production reads back with that same key.
 							const stateCookie = await symmetricEncrypt({
