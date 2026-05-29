@@ -673,7 +673,7 @@ describe("oauth2", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9752
 	 */
-	it("should pass callbackURL to custom getToken including extra provider-appended params", async () => {
+	it("should pass requestURL to custom getToken including extra provider-appended params", async () => {
 		let capturedCallbackURL: string | undefined;
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -699,9 +699,9 @@ describe("oauth2", async () => {
 								code,
 								redirectURI,
 								codeVerifier,
-								callbackURL,
+								requestURL,
 							}) => {
-								capturedCallbackURL = callbackURL;
+								capturedCallbackURL = requestURL;
 								return { accessToken: "test-access-token" };
 							},
 							getUserInfo: async () => ({
