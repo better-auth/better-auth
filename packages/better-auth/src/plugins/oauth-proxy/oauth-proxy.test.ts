@@ -505,6 +505,58 @@ describe("oauth-proxy", async () => {
 			expect(payload.timestamp).toBeDefined();
 		});
 
+		/**
+		 * Cookie strategy with a dedicated proxy `secret` that differs from
+		 * `BETTER_AUTH_SECRET`. The `oauth_state` cookie is encrypted with the
+		 * environment secret, so the proxy must re-encrypt it with the proxy key
+		 * for the production callback to recover the inner state. Without that,
+		 * the callback fails to decrypt the state package and produces no
+		 * passthrough profile.
+		 *
+		 * @see https://github.com/better-auth/better-auth/pull/9385
+		 */
+		it("recovers cookie-strategy state when the proxy secret differs from the env secret", async () => {
+			const { client } = await getTestInstance({
+				secret: "env-secret-not-shared",
+				account: { storeStateStrategy: "cookie" },
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+						secret: "shared-proxy-secret",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (location?.includes("profile=")) {
+						encryptedProfile = new URL(location).searchParams.get("profile");
+					}
+				},
+			});
+
+			expect(encryptedProfile).toBeTruthy();
+		});
+
 		it("should create user/session on preview from profile data", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
