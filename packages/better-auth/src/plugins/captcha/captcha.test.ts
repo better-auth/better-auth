@@ -1,6 +1,8 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { emailOTP } from "../email-otp";
+import { emailOTPClient } from "../email-otp/client";
 import { captcha } from ".";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -437,6 +439,83 @@ describe("captcha", async () => {
 			});
 
 			expect(res.error?.status).toBe(403);
+		});
+	});
+
+	describe("exempt paths", () => {
+		it("should not apply captcha to /sign-in/email-otp with default endpoints", async () => {
+			let capturedOtp = "";
+
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+						}),
+						emailOTP({
+							async sendVerificationOTP({ otp }) {
+								capturedOtp = otp;
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const send = await client.emailOtp.sendVerificationOtp({
+				email: "test@test.com",
+				type: "sign-in",
+			});
+			expect(send.data?.success).toBe(true);
+			expect(capturedOtp).toHaveLength(6);
+
+			const res = await client.signIn.emailOtp({
+				email: "test@test.com",
+				otp: capturedOtp,
+			});
+
+			// Captcha must be bypassed; the sign-in flow completes and yields a session.
+			expect(res.error).toBeNull();
+			expect(res.data?.token).toEqual(expect.any(String));
+			expect(res.data?.user?.email).toBe("test@test.com");
+		});
+
+		it("should still apply captcha when /sign-in/email-otp is explicitly opted in", async () => {
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+							endpoints: ["/sign-in/email-otp"],
+						}),
+						emailOTP({
+							sendVerificationOTP: async () => {},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const res = await client.signIn.emailOtp({
+				email: "test@test.com",
+				otp: "000000",
+			});
+
+			// Captcha middleware must short-circuit before the OTP is consulted.
+			expect(res.error).toMatchObject({
+				status: 400,
+				code: "MISSING_RESPONSE",
+			});
 		});
 	});
 });

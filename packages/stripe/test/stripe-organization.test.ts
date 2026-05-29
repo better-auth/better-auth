@@ -2,97 +2,78 @@ import { organizationClient } from "better-auth/client/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import {
+	createPrice,
+	createSubscriptionEvent,
+	createSubscriptionItem,
+} from "./_factories";
+import type { StripeMock } from "./_fixtures";
+import {
+	test as baseTest,
+	createStripeMock,
+	TEST_LOOKUP_KEYS,
+	TEST_PRICES,
+	TEST_WEBHOOK_SECRET,
+} from "./_fixtures";
+
+const test = baseTest.extend<{
+	stripeMock: ReturnType<typeof createStripeMock>;
+}>({
+	stripeMock: async ({}, use) => {
+		await use(
+			createStripeMock({
+				customerId: "cus_org_mock123",
+				customerEmail: "org@email.com",
+				checkoutSessionId: "cs_mock123",
+			}),
+		);
+	},
+});
+
+const buildOrgStripeOptions = (mock: StripeMock) =>
+	({
+		stripeClient: mock as unknown as Stripe,
+		stripeWebhookSecret: TEST_WEBHOOK_SECRET,
+		createCustomerOnSignUp: false,
+		organization: { enabled: true as const },
+		subscription: {
+			enabled: true as const,
+			plans: [
+				{
+					priceId: TEST_PRICES.starter,
+					name: "starter",
+					lookupKey: TEST_LOOKUP_KEYS.starter,
+				},
+				{
+					priceId: TEST_PRICES.premium,
+					name: "premium",
+					lookupKey: TEST_LOOKUP_KEYS.premium,
+				},
+			],
+			authorizeReference: async () => true,
+		},
+	}) satisfies StripeOptions;
 
 describe("stripe - organization customer", () => {
-	const mockStripeOrg = {
-		prices: {
-			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
-			retrieve: vi.fn().mockImplementation((priceId: string) =>
-				Promise.resolve({
-					id: priceId,
-					recurring: { usage_type: "licensed", interval: "month" },
-				}),
-			),
-		},
-		customers: {
-			create: vi.fn().mockResolvedValue({ id: "cus_org_mock123" }),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			search: vi.fn().mockResolvedValue({ data: [] }),
-			retrieve: vi.fn().mockResolvedValue({
-				id: "cus_org_mock123",
-				email: "org@email.com",
-				deleted: false,
-			}),
-			update: vi.fn().mockResolvedValue({
-				id: "cus_org_mock123",
-				email: "org@email.com",
-			}),
-		},
-		checkout: {
-			sessions: {
-				create: vi.fn().mockResolvedValue({
-					url: "https://checkout.stripe.com/mock",
-					id: "cs_mock123",
-				}),
-			},
-		},
-		billingPortal: {
-			sessions: {
-				create: vi
-					.fn()
-					.mockResolvedValue({ url: "https://billing.stripe.com/mock" }),
-			},
-		},
-		subscriptions: {
-			retrieve: vi.fn(),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			update: vi.fn(),
-		},
-		webhooks: {
-			constructEventAsync: vi.fn(),
-		},
-	};
 	const testUser = {
 		email: "test@email.com",
 		password: "password",
 		name: "Test User",
 	};
-	const _stripeOrg = mockStripeOrg as unknown as Stripe;
-	const baseOrgStripeOptions = {
-		stripeClient: _stripeOrg,
-		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-		createCustomerOnSignUp: false, // Disable for org tests
-		organization: {
-			enabled: true,
-		},
-		subscription: {
-			enabled: true,
-			plans: [
-				{
-					priceId: process.env.STRIPE_PRICE_ID_1!,
-					name: "starter",
-					lookupKey: "lookup_key_123",
-				},
-				{
-					priceId: process.env.STRIPE_PRICE_ID_2!,
-					name: "premium",
-					lookupKey: "lookup_key_234",
-				},
-			],
-			authorizeReference: async () => true,
-		},
-	} satisfies StripeOptions;
 
-	it("should create a Stripe customer for organization when upgrading subscription", async () => {
+	test("should create a Stripe customer for organization when upgrading subscription", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const onCustomerCreate = vi.fn();
 		const stripeOptionsWithOrgCallback: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			organization: {
-				...baseOrgStripeOptions.organization,
+				...orgStripeOptions.organization,
 				onCustomerCreate,
 			},
 		};
@@ -144,7 +125,7 @@ describe("stripe - organization customer", () => {
 		expect(res.data?.url).toBeDefined();
 
 		// Verify Stripe customer was created for org
-		expect(mockStripeOrg.customers.create).toHaveBeenCalledWith(
+		expect(stripeMock.customers.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: "Test Organization",
 				metadata: expect.objectContaining({
@@ -177,10 +158,13 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should use existing Stripe customer ID from organization", async () => {
+	test("should use existing Stripe customer ID from organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -229,10 +213,10 @@ describe("stripe - organization customer", () => {
 		});
 
 		// Should NOT create a new Stripe customer
-		expect(mockStripeOrg.customers.create).not.toHaveBeenCalled();
+		expect(stripeMock.customers.create).not.toHaveBeenCalled();
 
 		// Should use existing customer ID in checkout
-		expect(mockStripeOrg.checkout.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_existing_org_123",
 			}),
@@ -240,16 +224,19 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should call getCustomerCreateParams when creating org customer", async () => {
+	test("should call getCustomerCreateParams when creating org customer", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const getCustomerCreateParams = vi.fn().mockResolvedValue({
 			email: "billing@org.com",
 			description: "Custom org description",
 		});
 
 		const stripeOptionsWithParams: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			organization: {
-				...baseOrgStripeOptions.organization,
+				...orgStripeOptions.organization,
 				getCustomerCreateParams,
 			},
 		};
@@ -301,7 +288,7 @@ describe("stripe - organization customer", () => {
 		expect(callArgs[0]).toMatchObject({ id: orgId });
 
 		// Verify custom params were passed to Stripe
-		expect(mockStripeOrg.customers.create).toHaveBeenCalledWith(
+		expect(stripeMock.customers.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				email: "billing@org.com",
 				description: "Custom org description",
@@ -309,10 +296,13 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should create billing portal for organization", async () => {
+	test("should create billing portal for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -371,15 +361,18 @@ describe("stripe - organization customer", () => {
 		});
 
 		expect(res.data?.url).toBe("https://billing.stripe.com/mock");
-		expect(mockStripeOrg.billingPortal.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_portal_org_123",
 			}),
 		);
 	});
 
-	it("should cancel subscription for organization", async () => {
-		mockStripeOrg.subscriptions.list.mockResolvedValueOnce({
+	test("should cancel subscription for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_org_cancel_123",
@@ -391,7 +384,7 @@ describe("stripe - organization customer", () => {
 
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -450,7 +443,7 @@ describe("stripe - organization customer", () => {
 		});
 
 		expect(res.data?.url).toBeDefined();
-		expect(mockStripeOrg.billingPortal.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_cancel_org_123",
 				flow_data: expect.objectContaining({
@@ -463,8 +456,11 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should restore subscription for organization", async () => {
-		mockStripeOrg.subscriptions.list.mockResolvedValueOnce({
+	test("should restore subscription for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_org_restore_123",
@@ -474,7 +470,7 @@ describe("stripe - organization customer", () => {
 				},
 			],
 		});
-		mockStripeOrg.subscriptions.update.mockResolvedValueOnce({
+		stripeMock.subscriptions.update.mockResolvedValueOnce({
 			id: "sub_org_restore_123",
 			status: "active",
 			cancel_at_period_end: false,
@@ -482,7 +478,7 @@ describe("stripe - organization customer", () => {
 
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -543,7 +539,7 @@ describe("stripe - organization customer", () => {
 
 		expect(res.data).toBeDefined();
 		// Note: Stripe API doesn't accept both cancel_at and cancel_at_period_end simultaneously
-		expect(mockStripeOrg.subscriptions.update).toHaveBeenCalledWith(
+		expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
 			"sub_org_restore_123",
 			expect.objectContaining({
 				cancel_at: "",
@@ -559,10 +555,11 @@ describe("stripe - organization customer", () => {
 		expect(updatedSub?.canceledAt).toBeNull();
 	});
 
-	it("should list subscriptions for organization", async () => {
+	test("should list subscriptions for organization", async ({ stripeMock }) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -630,42 +627,38 @@ describe("stripe - organization customer", () => {
 		});
 	});
 
-	it("should handle webhook for organization subscription created from dashboard", async () => {
-		const mockEvent = {
-			type: "customer.subscription.created",
-			data: {
-				object: {
-					id: "sub_org_webhook_123",
-					customer: "cus_org_webhook_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-				},
+	test("should handle webhook for organization subscription created from dashboard", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
+		const mockEvent = createSubscriptionEvent("customer.subscription.created", {
+			id: "sub_org_webhook_123",
+			customer: "cus_org_webhook_123",
+			items: {
+				object: "list",
+				data: [
+					createSubscriptionItem({
+						price: createPrice({
+							id: TEST_PRICES.starter,
+							lookup_key: null,
+						}),
+						quantity: 5,
+					}),
+				],
+				has_more: false,
+				url: "/v1/subscription_items",
 			},
-		};
+		});
 
 		const stripeForOrgWebhook = {
-			...mockStripeOrg,
+			...stripeMock,
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
 			},
 		};
 
 		const testOrgWebhookOptions: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: stripeForOrgWebhook as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
 		};
@@ -740,7 +733,10 @@ describe("stripe - organization customer", () => {
 		expect(subscription?.seats).toBe(5);
 	});
 
-	it("should not allow cross-organization subscription operations", async () => {
+	test("should not allow cross-organization subscription operations", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		// Track which org is being accessed
 		let otherOrgIdForCheck: string = "";
 
@@ -749,9 +745,9 @@ describe("stripe - organization customer", () => {
 				plugins: [
 					organization(),
 					stripe({
-						...baseOrgStripeOptions,
+						...orgStripeOptions,
 						subscription: {
-							...baseOrgStripeOptions.subscription,
+							...orgStripeOptions.subscription,
 							authorizeReference: async ({ referenceId }) => {
 								// Simulate member check: only allow if user is member of org
 								// For test, we'll return false for the "other" org
@@ -834,12 +830,15 @@ describe("stripe - organization customer", () => {
 		expect(cancelRes.error?.code).toBe("UNAUTHORIZED");
 	});
 
-	it("should reject organization subscription when authorizeReference is not configured", async () => {
+	test("should reject organization subscription when authorizeReference is not configured", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const stripeOptionsWithoutOrg: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			organization: undefined, // Disable organization support
 			subscription: {
-				...baseOrgStripeOptions.subscription,
+				...orgStripeOptions.subscription,
 				// Remove authorizeReference so middleware can check organization.enabled
 				authorizeReference: undefined,
 			},
@@ -883,10 +882,13 @@ describe("stripe - organization customer", () => {
 		expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 	});
 
-	it("should keep user and organization subscriptions separate", async () => {
+	test("should keep user and organization subscriptions separate", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -973,52 +975,48 @@ describe("stripe - organization customer", () => {
 		expect(orgSubs.data?.[0]?.referenceId).toBe(orgId);
 	});
 
-	it("should handle customer.subscription.updated webhook for organization", async () => {
+	test("should handle customer.subscription.updated webhook for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const onSubscriptionUpdate = vi.fn();
 		const onSubscriptionCancel = vi.fn();
 
-		const mockUpdateEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: "sub_org_update_123",
-					customer: "cus_org_update_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: "price_premium_123", // Different price ID
-									lookup_key: "lookup_key_234", // Matches premium plan
-								},
-								quantity: 10,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-					cancel_at: null,
-					canceled_at: null,
-					ended_at: null,
+		const mockUpdateEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_org_update_123",
+				customer: "cus_org_update_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: createPrice({
+								id: "price_premium_123", // Different price ID
+								lookup_key: TEST_LOOKUP_KEYS.premium, // Matches premium plan
+							}),
+							quantity: 10,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const stripeForOrgUpdateWebhook = {
-			...mockStripeOrg,
+			...stripeMock,
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(mockUpdateEvent),
 			},
 		};
 
 		const testOrgUpdateWebhookOptions: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: stripeForOrgUpdateWebhook as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
 			subscription: {
-				...baseOrgStripeOptions.subscription,
+				...orgStripeOptions.subscription,
 				onSubscriptionUpdate,
 				onSubscriptionCancel,
 			},
@@ -1115,55 +1113,57 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should handle customer.subscription.updated webhook with cancellation for organization", async () => {
+	test("should handle customer.subscription.updated webhook with cancellation for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const onSubscriptionCancel = vi.fn();
 
 		const cancelAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
-		const mockCancelEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: "sub_org_cancel_webhook_123",
-					customer: "cus_org_cancel_webhook_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end: cancelAt,
-							},
-						],
-					},
-					cancel_at_period_end: true,
-					cancel_at: cancelAt,
-					canceled_at: Math.floor(Date.now() / 1000),
-					ended_at: null,
-					cancellation_details: {
-						reason: "cancellation_requested",
-						comment: "User requested cancellation",
-					},
+		const mockCancelEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_org_cancel_webhook_123",
+				customer: "cus_org_cancel_webhook_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: createPrice({
+								id: TEST_PRICES.starter,
+								lookup_key: null,
+							}),
+							quantity: 5,
+							current_period_end: cancelAt,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
+				},
+				cancel_at_period_end: true,
+				cancel_at: cancelAt,
+				canceled_at: Math.floor(Date.now() / 1000),
+				cancellation_details: {
+					reason: "cancellation_requested",
+					comment: "User requested cancellation",
+					feedback: null,
 				},
 			},
-		};
+		);
 
 		const stripeForOrgCancelWebhook = {
-			...mockStripeOrg,
+			...stripeMock,
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(mockCancelEvent),
 			},
 		};
 
 		const testOrgCancelWebhookOptions: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: stripeForOrgCancelWebhook as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
 			subscription: {
-				...baseOrgStripeOptions.subscription,
+				...orgStripeOptions.subscription,
 				onSubscriptionCancel,
 			},
 		};
@@ -1260,37 +1260,37 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should handle customer.subscription.deleted webhook for organization", async () => {
+	test("should handle customer.subscription.deleted webhook for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const onSubscriptionDeleted = vi.fn();
 
-		const mockDeleteEvent = {
-			type: "customer.subscription.deleted",
-			data: {
-				object: {
-					id: "sub_org_delete_123",
-					customer: "cus_org_delete_123",
-					status: "canceled",
-					cancel_at_period_end: false,
-					cancel_at: null,
-					canceled_at: Math.floor(Date.now() / 1000),
-					ended_at: Math.floor(Date.now() / 1000),
-				},
+		const now = Math.floor(Date.now() / 1000);
+		const mockDeleteEvent = createSubscriptionEvent(
+			"customer.subscription.deleted",
+			{
+				id: "sub_org_delete_123",
+				customer: "cus_org_delete_123",
+				status: "canceled",
+				canceled_at: now,
+				ended_at: now,
 			},
-		};
+		);
 
 		const stripeForOrgDeleteWebhook = {
-			...mockStripeOrg,
+			...stripeMock,
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(mockDeleteEvent),
 			},
 		};
 
 		const testOrgDeleteWebhookOptions: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: stripeForOrgDeleteWebhook as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
 			subscription: {
-				...baseOrgStripeOptions.subscription,
+				...orgStripeOptions.subscription,
 				onSubscriptionDeleted,
 			},
 		};
@@ -1386,10 +1386,13 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should return ORGANIZATION_NOT_FOUND when upgrading for non-existent organization", async () => {
+	test("should return ORGANIZATION_NOT_FOUND when upgrading for non-existent organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const { client, sessionSetter } = await getTestInstance(
 			{
-				plugins: [organization(), stripe(baseOrgStripeOptions)],
+				plugins: [organization(), stripe(orgStripeOptions)],
 			},
 			{
 				disableTestUser: true,
@@ -1424,17 +1427,20 @@ describe("stripe - organization customer", () => {
 		expect(res.error?.code).toBe("ORGANIZATION_NOT_FOUND");
 	});
 
-	it("should return error when Stripe customer creation fails for organization", async () => {
+	test("should return error when Stripe customer creation fails for organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const mockStripeOrgFail = {
-			...mockStripeOrg,
+			...stripeMock,
 			customers: {
-				...mockStripeOrg.customers,
+				...stripeMock.customers,
 				create: vi.fn().mockRejectedValue(new Error("Stripe API error")),
 			},
 		};
 
 		const stripeOptionsWithFailingStripe: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: mockStripeOrgFail as unknown as Stripe,
 		};
 
@@ -1482,11 +1488,14 @@ describe("stripe - organization customer", () => {
 		expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
 	});
 
-	it("should return error when getCustomerCreateParams callback throws", async () => {
+	test("should return error when getCustomerCreateParams callback throws", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const stripeOptionsWithThrowingCallback: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			organization: {
-				...baseOrgStripeOptions.organization,
+				...orgStripeOptions.organization,
 				getCustomerCreateParams: async () => {
 					throw new Error("Callback error");
 				},
@@ -1536,50 +1545,47 @@ describe("stripe - organization customer", () => {
 		expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
 	});
 
-	it("should call onSubscriptionCreated callback for organization subscription from dashboard", async () => {
+	test("should call onSubscriptionCreated callback for organization subscription from dashboard", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const onSubscriptionCreated = vi.fn();
 
-		const mockCreateEvent = {
-			type: "customer.subscription.created",
-			data: {
-				object: {
-					id: "sub_org_created_callback_123",
-					customer: "cus_org_created_callback_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-					trial_start: null,
-					trial_end: null,
+		const mockCreateEvent = createSubscriptionEvent(
+			"customer.subscription.created",
+			{
+				id: "sub_org_created_callback_123",
+				customer: "cus_org_created_callback_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: createPrice({
+								id: TEST_PRICES.starter,
+								lookup_key: null,
+							}),
+							quantity: 5,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const stripeForCreatedCallback = {
-			...mockStripeOrg,
+			...stripeMock,
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(mockCreateEvent),
 			},
 		};
 
 		const testCreatedCallbackOptions: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: stripeForCreatedCallback as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
 			subscription: {
-				...baseOrgStripeOptions.subscription,
+				...orgStripeOptions.subscription,
 				onSubscriptionCreated,
 			},
 		};
@@ -1671,7 +1677,10 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
-	it("should not match user customer with organizationId in metadata during org customer lookup", async () => {
+	test("should not match user customer with organizationId in metadata during org customer lookup", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
 		const userCustomerId = "cus_user_with_org_metadata";
 		const orgCustomerId = "cus_org_new";
 
@@ -1716,7 +1725,7 @@ describe("stripe - organization customer", () => {
 		};
 
 		const stripeOptionsCustomerType: StripeOptions = {
-			...baseOrgStripeOptions,
+			...orgStripeOptions,
 			stripeClient: mockStripeCustomerType as unknown as Stripe,
 		};
 
@@ -1838,329 +1847,301 @@ describe("stripe - organization customer", () => {
 	});
 });
 
-describe("stripe - organizationHooks integration", () => {
-	const mockStripeHooks = {
-		prices: {
-			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
-			retrieve: vi.fn().mockImplementation((priceId: string) =>
-				Promise.resolve({
-					id: priceId,
-					recurring: { usage_type: "licensed", interval: "month" },
-				}),
-			),
-		},
-		customers: {
-			create: vi.fn().mockResolvedValue({ id: "cus_org_hooks_123" }),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			retrieve: vi.fn().mockResolvedValue({
-				id: "cus_org_hooks_123",
-				name: "Old Org Name",
-				deleted: false,
+const testHooks = baseTest.extend<{
+	stripeMock: ReturnType<typeof createStripeMock>;
+}>({
+	stripeMock: async ({}, use) => {
+		await use(
+			createStripeMock({
+				customerId: "cus_org_hooks_123",
+				checkoutSessionId: "cs_mock123",
 			}),
-			update: vi.fn().mockResolvedValue({
-				id: "cus_org_hooks_123",
-				name: "Updated Org Name",
-			}),
-			del: vi
-				.fn()
-				.mockResolvedValue({ id: "cus_org_hooks_123", deleted: true }),
-		},
-		checkout: {
-			sessions: {
-				create: vi.fn().mockResolvedValue({
-					url: "https://checkout.stripe.com/mock",
-					id: "cs_mock123",
-				}),
-			},
-		},
-		billingPortal: {
-			sessions: {
-				create: vi
-					.fn()
-					.mockResolvedValue({ url: "https://billing.stripe.com/mock" }),
-			},
-		},
-		subscriptions: {
-			retrieve: vi.fn(),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			update: vi.fn(),
-		},
-		webhooks: {
-			constructEventAsync: vi.fn(),
-		},
-	};
+		);
+	},
+});
 
-	const baseHooksStripeOptions: StripeOptions = {
-		stripeClient: mockStripeHooks as unknown as Stripe,
-		stripeWebhookSecret: "test_secret",
+const buildHooksStripeOptions = (mock: StripeMock) =>
+	({
+		stripeClient: mock as unknown as Stripe,
+		stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 		createCustomerOnSignUp: false,
-		organization: {
-			enabled: true,
-		},
+		organization: { enabled: true as const },
 		subscription: {
-			enabled: true,
-			plans: [
-				{
-					priceId: "price_starter_123",
-					name: "starter",
-				},
-			],
+			enabled: true as const,
+			plans: [{ priceId: "price_starter_123", name: "starter" }],
 			authorizeReference: async () => true,
 		},
-	};
+	}) satisfies StripeOptions;
 
-	beforeEach(() => {
-		mockStripeHooks.subscriptions.list.mockResolvedValue({ data: [] });
-		mockStripeHooks.customers.list.mockResolvedValue({ data: [] });
-	});
-
-	it("should sync organization name to Stripe customer on update", async () => {
-		const { client, sessionSetter, auth } = await getTestInstance(
-			{
-				plugins: [organization(), stripe(baseHooksStripeOptions)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [organizationClient(), stripeClient({ subscription: true })],
+describe("stripe - organizationHooks integration", () => {
+	testHooks(
+		"should sync organization name to Stripe customer on update",
+		async ({ stripeMock }) => {
+			const hooksStripeOptions = buildHooksStripeOptions(stripeMock);
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(hooksStripeOptions)],
 				},
-			},
-		);
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
 
-		// Sign up and sign in
-		await client.signUp.email({
-			email: "org-hook-test@example.com",
-			password: "password123",
-			name: "Org Hook Test User",
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{
+			// Sign up and sign in
+			await client.signUp.email({
 				email: "org-hook-test@example.com",
 				password: "password123",
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-
-		// Create organization via client
-		const org = await client.organization.create({
-			name: "Old Org Name",
-			slug: "sync-test-org",
-			fetchOptions: { headers },
-		});
-		const orgId = org.data?.id as string;
-		expect(orgId).toBeDefined();
-
-		// Set stripeCustomerId on organization
-		const ctx = await auth.$context;
-		await ctx.adapter.update({
-			model: "organization",
-			update: { stripeCustomerId: "cus_sync_test_123" },
-			where: [{ field: "id", value: orgId }],
-		});
-
-		// Mock Stripe customer retrieve to return old name
-		mockStripeHooks.customers.retrieve.mockResolvedValueOnce({
-			id: "cus_sync_test_123",
-			name: "Old Org Name",
-			deleted: false,
-		});
-
-		// Update organization name
-		const updateResult = await client.organization.update({
-			organizationId: orgId,
-			data: { name: "New Org Name" },
-			fetchOptions: { headers },
-		});
-		expect(updateResult.error).toBeNull();
-
-		// Verify Stripe customer was updated with new name
-		expect(mockStripeHooks.customers.update).toHaveBeenCalledWith(
-			"cus_sync_test_123",
-			expect.objectContaining({ name: "New Org Name" }),
-		);
-	});
-
-	it("should block organization deletion when active subscription exists", async () => {
-		const { client, sessionSetter, auth } = await getTestInstance(
-			{
-				plugins: [organization(), stripe(baseHooksStripeOptions)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				name: "Org Hook Test User",
+			});
+			const headers = new Headers();
+			await client.signIn.email(
+				{
+					email: "org-hook-test@example.com",
+					password: "password123",
 				},
-			},
-		);
+				{
+					onSuccess: sessionSetter(headers),
+				},
+			);
 
-		// Sign up and sign in
-		await client.signUp.email({
-			email: "org-block-test@example.com",
-			password: "password123",
-			name: "Block Test User",
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{
+			// Create organization via client
+			const org = await client.organization.create({
+				name: "Old Org Name",
+				slug: "sync-test-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+			expect(orgId).toBeDefined();
+
+			// Set stripeCustomerId on organization
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_sync_test_123" },
+				where: [{ field: "id", value: orgId }],
+			});
+
+			// Mock Stripe customer retrieve to return old name
+			stripeMock.customers.retrieve.mockResolvedValueOnce({
+				id: "cus_sync_test_123",
+				name: "Old Org Name",
+				deleted: false,
+			});
+
+			// Update organization name
+			const updateResult = await client.organization.update({
+				organizationId: orgId,
+				data: { name: "New Org Name" },
+				fetchOptions: { headers },
+			});
+			expect(updateResult.error).toBeNull();
+
+			// Verify Stripe customer was updated with new name
+			expect(stripeMock.customers.update).toHaveBeenCalledWith(
+				"cus_sync_test_123",
+				expect.objectContaining({ name: "New Org Name" }),
+			);
+		},
+	);
+
+	testHooks(
+		"should block organization deletion when active subscription exists",
+		async ({ stripeMock }) => {
+			const hooksStripeOptions = buildHooksStripeOptions(stripeMock);
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(hooksStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+
+			// Sign up and sign in
+			await client.signUp.email({
 				email: "org-block-test@example.com",
 				password: "password123",
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-
-		// Create organization via client
-		const org = await client.organization.create({
-			name: "Delete Block Test Org",
-			slug: "delete-block-test-org",
-			fetchOptions: { headers },
-		});
-		const orgId = org.data?.id as string;
-
-		// Update org with stripeCustomerId via adapter
-		const ctx = await auth.$context;
-		await ctx.adapter.update({
-			model: "organization",
-			update: { stripeCustomerId: "cus_delete_block_123" },
-			where: [{ field: "id", value: orgId }],
-		});
-
-		// Create active subscription for the org in DB
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: orgId,
-				stripeCustomerId: "cus_delete_block_123",
-				stripeSubscriptionId: "sub_active_123",
-				status: "active",
-				plan: "starter",
-			},
-		});
-
-		// Mock Stripe API to return an active subscription
-		mockStripeHooks.subscriptions.list.mockResolvedValueOnce({
-			data: [
+				name: "Block Test User",
+			});
+			const headers = new Headers();
+			await client.signIn.email(
 				{
-					id: "sub_active_123",
+					email: "org-block-test@example.com",
+					password: "password123",
+				},
+				{
+					onSuccess: sessionSetter(headers),
+				},
+			);
+
+			// Create organization via client
+			const org = await client.organization.create({
+				name: "Delete Block Test Org",
+				slug: "delete-block-test-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			// Update org with stripeCustomerId via adapter
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_delete_block_123" },
+				where: [{ field: "id", value: orgId }],
+			});
+
+			// Create active subscription for the org in DB
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_delete_block_123",
+					stripeSubscriptionId: "sub_active_123",
 					status: "active",
-					customer: "cus_delete_block_123",
+					plan: "starter",
 				},
-			],
-		});
+			});
 
-		// Attempt to delete the organization
-		const deleteResult = await client.organization.delete({
-			organizationId: orgId,
-			fetchOptions: { headers },
-		});
+			// Mock Stripe API to return an active subscription
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_active_123",
+						status: "active",
+						customer: "cus_delete_block_123",
+					},
+				],
+			});
 
-		// Verify deletion was blocked with expected error
-		expect(deleteResult.error).toBeDefined();
-		expect(deleteResult.error?.code).toBe(
-			"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
-		);
+			// Attempt to delete the organization
+			const deleteResult = await client.organization.delete({
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
 
-		// Verify organization still exists
-		const orgAfterDelete = await ctx.adapter.findOne({
-			model: "organization",
-			where: [{ field: "id", value: orgId }],
-		});
-		expect(orgAfterDelete).not.toBeNull();
-	});
+			// Verify deletion was blocked with expected error
+			expect(deleteResult.error).toBeDefined();
+			expect(deleteResult.error?.code).toBe(
+				"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
+			);
 
-	it("should allow organization deletion when no active subscription", async () => {
-		const { client, sessionSetter, auth } = await getTestInstance(
-			{
-				plugins: [organization(), stripe(baseHooksStripeOptions)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [organizationClient(), stripeClient({ subscription: true })],
+			// Verify organization still exists
+			const orgAfterDelete = await ctx.adapter.findOne({
+				model: "organization",
+				where: [{ field: "id", value: orgId }],
+			});
+			expect(orgAfterDelete).not.toBeNull();
+		},
+	);
+
+	testHooks(
+		"should allow organization deletion when no active subscription",
+		async ({ stripeMock }) => {
+			const hooksStripeOptions = buildHooksStripeOptions(stripeMock);
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(hooksStripeOptions)],
 				},
-			},
-		);
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
 
-		// Sign up and sign in
-		await client.signUp.email({
-			email: "org-allow-test@example.com",
-			password: "password123",
-			name: "Allow Test User",
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{
+			// Sign up and sign in
+			await client.signUp.email({
 				email: "org-allow-test@example.com",
 				password: "password123",
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-
-		// Create organization via client
-		const org = await client.organization.create({
-			name: "Delete Allow Test Org",
-			slug: "delete-allow-test-org",
-			fetchOptions: { headers },
-		});
-		const orgId = org.data?.id as string;
-
-		// Update org with stripeCustomerId via adapter
-		const ctx = await auth.$context;
-		await ctx.adapter.update({
-			model: "organization",
-			update: { stripeCustomerId: "cus_delete_allow_123" },
-			where: [{ field: "id", value: orgId }],
-		});
-
-		// Create canceled subscription for the org
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: orgId,
-				stripeCustomerId: "cus_delete_allow_123",
-				stripeSubscriptionId: "sub_canceled_123",
-				status: "canceled",
-				plan: "starter",
-			},
-		});
-
-		// Verify the subscription is canceled in DB
-		const subscription = await ctx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
-		});
-		expect(subscription).toBeDefined();
-		expect(subscription?.status).toBe("canceled");
-
-		// Mock Stripe API to return only canceled subscriptions
-		mockStripeHooks.subscriptions.list.mockResolvedValueOnce({
-			data: [
+				name: "Allow Test User",
+			});
+			const headers = new Headers();
+			await client.signIn.email(
 				{
-					id: "sub_canceled_123",
-					status: "canceled",
-					customer: "cus_delete_allow_123",
+					email: "org-allow-test@example.com",
+					password: "password123",
 				},
-			],
-		});
+				{
+					onSuccess: sessionSetter(headers),
+				},
+			);
 
-		// Actually delete the organization and verify it succeeds
-		const deleteResult = await client.organization.delete({
-			organizationId: orgId,
-			fetchOptions: { headers },
-		});
-		expect(deleteResult.error).toBeNull();
+			// Create organization via client
+			const org = await client.organization.create({
+				name: "Delete Allow Test Org",
+				slug: "delete-allow-test-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
 
-		// Verify organization is deleted
-		const deletedOrg = await ctx.adapter.findOne({
-			model: "organization",
-			where: [{ field: "id", value: orgId }],
-		});
-		expect(deletedOrg).toBeNull();
-	});
+			// Update org with stripeCustomerId via adapter
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_delete_allow_123" },
+				where: [{ field: "id", value: orgId }],
+			});
+
+			// Create canceled subscription for the org
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_delete_allow_123",
+					stripeSubscriptionId: "sub_canceled_123",
+					status: "canceled",
+					plan: "starter",
+				},
+			});
+
+			// Verify the subscription is canceled in DB
+			const subscription = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: orgId }],
+			});
+			expect(subscription).toBeDefined();
+			expect(subscription?.status).toBe("canceled");
+
+			// Mock Stripe API to return only canceled subscriptions
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_canceled_123",
+						status: "canceled",
+						customer: "cus_delete_allow_123",
+					},
+				],
+			});
+
+			// Actually delete the organization and verify it succeeds
+			const deleteResult = await client.organization.delete({
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+			expect(deleteResult.error).toBeNull();
+
+			// Verify organization is deleted
+			const deletedOrg = await ctx.adapter.findOne({
+				model: "organization",
+				where: [{ field: "id", value: orgId }],
+			});
+			expect(deletedOrg).toBeNull();
+		},
+	);
 });

@@ -1,11 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
+import { symmetricDecodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
@@ -28,6 +30,15 @@ describe("oauth2", async () => {
 	});
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 		plugins: [
 			genericOAuth({
 				config: [
@@ -207,6 +218,170 @@ describe("oauth2", async () => {
 		});
 	});
 
+	/**
+	 * The verify-email link sent to a new, unverified OAuth user must keep the
+	 * caller's `callbackURL` intact. A raw interpolation truncates any value
+	 * containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link for a new unverified OAuth user", async () => {
+		let capturedUrl = "";
+		const { customFetchImpl: localFetch } = await getTestInstance({
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail({ url }) {
+					capturedUrl = url;
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-encode-callback",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: localFetch },
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "encode-callback@test.com",
+				name: "Encode Callback",
+				sub: "encode-callback",
+				email_verified: false,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const callbackURL = "http://localhost:3000/welcome?ref=oauth&plan=pro";
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test-encode-callback",
+			callbackURL,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9375
+	 */
+	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
+		const { customFetchImpl, auth } = await getTestInstance({
+			advanced: {
+				useSecureCookies: true,
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-store-account",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const newAuthClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const newUserEmail = "first-time-generic-oauth@test.com";
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: newUserEmail,
+				name: "First Time SSO",
+				sub: "first-time-sso",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const headers = new Headers();
+		const signInRes = await newAuthClient.signIn.oauth2({
+			providerId: "test-store-account",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { headers: postCallbackHeaders, setCookieHeader } =
+			await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const accountDataCookie = cookies.get(accountDataCookieName);
+		expect(accountDataCookie).toBeDefined();
+		expect(accountDataCookie?.value).toBeTruthy();
+		expect(accountDataCookie!.value!.startsWith("ey")).toBe(true);
+		expect(accountDataCookie!.httponly).toBe(true);
+		expect(accountDataCookie!.secure).toBe(true);
+		expect(accountDataCookie!.samesite).toBe("lax");
+		expect(accountDataCookie!["max-age"]).toBeGreaterThan(0);
+
+		await expect(
+			symmetricDecodeJWT(
+				accountDataCookie!.value!,
+				ctx.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			providerId: "test-store-account",
+			accessToken: expect.any(String),
+		});
+
+		const accessTokenRes = await newAuthClient.getAccessToken(
+			{ providerId: "test-store-account" },
+			{ headers: postCallbackHeaders },
+		);
+		expect(accessTokenRes.error).toBeNull();
+		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
 	it("should redirect to the provider and handle the response after linked", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
@@ -372,6 +547,82 @@ describe("oauth2", async () => {
 		);
 		expect(callbackURL).toBe(
 			"http://localhost:3000/error?error=signup_disabled",
+		);
+	});
+
+	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "hook-reject@test.com",
+				name: "Hook Reject User",
+				sub: "hook-reject",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance(
+			{
+				trustedOrigins: ["https://frontend.example.com"],
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-hook-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+					session: {
+						create: {
+							before: async () => {
+								throw APIError.from("FORBIDDEN", {
+									code: "HOOK_REJECTED",
+									message: "Session hook rejected this user",
+								});
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-hook-reject",
+			callbackURL: "https://frontend.example.com/dashboard",
+			errorCallbackURL: "https://frontend.example.com/auth-error",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		const url = new URL(callbackURL);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Session hook rejected this user",
 		);
 	});
 
@@ -1114,7 +1365,10 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("error=state_not_found");
+		expect(res.headers.get("location")).not.toContain(
+			"please_restart_the_process",
+		);
 	});
 
 	it("should await async mapProfileToUser", async () => {

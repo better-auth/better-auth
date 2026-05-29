@@ -151,6 +151,28 @@ describe("IP Normalization", () => {
 				"192.168.1.1",
 			);
 		});
+
+		it("should accept any integer prefix length, not just 32 | 48 | 64 | 128", () => {
+			// /56 (residential ISP allocation): zero out the last 72 bits.
+			expect(
+				normalizeIP("2001:db8:abcd:ef00:1111:2222:3333:4444", {
+					ipv6Subnet: 56,
+				}),
+			).toBe("2001:0db8:abcd:ef00:0000:0000:0000:0000");
+
+			// /40 (cloud-style allocation): zero out everything after the first 40 bits.
+			expect(
+				normalizeIP("2001:db8:ab00:1234:5678:9abc:def0:1234", {
+					ipv6Subnet: 40,
+				}),
+			).toBe("2001:0db8:ab00:0000:0000:0000:0000:0000");
+		});
+
+		it("should honour an explicit /0 prefix instead of falling back to the default", () => {
+			expect(normalizeIP("2001:db8::1", { ipv6Subnet: 0 })).toBe(
+				"0000:0000:0000:0000:0000:0000:0000:0000",
+			);
+		});
 	});
 
 	describe("Rate Limit Key Creation", () => {

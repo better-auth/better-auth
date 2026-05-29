@@ -560,7 +560,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					verificationToken,
 				);
 			if (!data) {
@@ -642,7 +642,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					publicKey: pubKey,
 					counter: credential.counter,
 					deviceType: credentialDeviceType,
-					transports: resp.response.transports.join(","),
+					transports: resp.response.transports?.join(",") ?? "",
 					backedUp: credentialBackedUp,
 					createdAt: new Date(),
 					aaguid: aaguid,
@@ -654,13 +654,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					model: "passkey",
 					data: newPasskey,
 				});
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					verificationToken,
-				);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
 			} catch (e) {
+				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify registration", e);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -736,7 +734,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					verificationToken,
 				);
 			if (!data) {
@@ -831,9 +829,6 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					verificationToken,
-				);
 
 				return ctx.json(
 					{
@@ -845,6 +840,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					},
 				);
 			} catch (e) {
+				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
 					"BAD_REQUEST",

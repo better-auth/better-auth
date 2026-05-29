@@ -4,6 +4,7 @@ import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -34,7 +35,7 @@ export async function handleOAuthUserInfo(
 			);
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
@@ -52,8 +53,13 @@ export async function handleOAuthUserInfo(
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
 				c.context.trustedProviders.includes(account.providerId);
+			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
+			// the gate unconditional.
+			const requireLocalEmailVerified =
+				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
 				accountLinking?.enabled === false ||
 				accountLinking?.disableImplicitLinking === true
 			) {
@@ -87,6 +93,10 @@ export async function handleOAuthUserInfo(
 				};
 			}
 
+			// Reachable only when `requireLocalEmailVerified: false` lets the link
+			// proceed for an unverified local row. The IdP's verified email is
+			// promoted to the local row so subsequent flows treat it as verified.
+			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
@@ -194,7 +204,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					callbackURL || "/",
+				)}`;
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
