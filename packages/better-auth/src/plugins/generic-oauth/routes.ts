@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
@@ -395,6 +396,10 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						additionalParams,
 					});
 				}
+				tokens = applyDefaultAccessTokenExpiry(
+					tokens,
+					providerConfig.accessTokenExpiresIn,
+				);
 			} catch (e) {
 				ctx.context.logger.error(
 					e && typeof e === "object" && "name" in e ? (e.name as string) : "",
