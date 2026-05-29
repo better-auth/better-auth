@@ -96,10 +96,10 @@ async function createJwtAccessToken(
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
-	// A JWT access token's `sub` is the raw user.id and the token is readable by
-	// the client, so a pairwise client can decode it and correlate users with
-	// colluding clients. Pairwise/external clients should receive opaque access
-	// tokens (introspection returns the pairwise subject) instead.
+	// A JWT access token is readable by the client and its `sub` is the raw
+	// user.id, so issuing one to a pairwise client does not preserve pairwise
+	// subject isolation. Pairwise clients should receive opaque access tokens
+	// (introspection returns the pairwise subject) instead.
 	if (
 		user &&
 		client.subjectType === "pairwise" &&
@@ -108,7 +108,7 @@ async function createJwtAccessToken(
 	) {
 		warnedPairwiseJwtClients.add(client.clientId);
 		logger.warn(
-			`Pairwise client "${client.clientId}" was issued a JWT access token whose \`sub\` is the raw user id; colluding clients can use it to correlate users. Issue opaque access tokens to pairwise clients instead. Silence with silenceWarnings.pairwiseJwtAccessToken.`,
+			`Pairwise client "${client.clientId}" was issued a JWT access token; its \`sub\` is the raw user id, which does not preserve pairwise subject isolation. Issue opaque access tokens to pairwise clients instead. Silence with silenceWarnings.pairwiseJwtAccessToken.`,
 		);
 	}
 

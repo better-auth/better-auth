@@ -716,7 +716,7 @@ export interface OAuthOptions<
 		openidConfig?: boolean;
 		/**
 		 * Warning emitted when a `pairwise` client is issued a JWT access token,
-		 * whose raw `sub` colluding clients can use to correlate users. Silence
+		 * whose raw `sub` does not preserve pairwise subject isolation. Silence
 		 * once pairwise clients are configured to receive opaque access tokens.
 		 *
 		 * @default false

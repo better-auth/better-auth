@@ -473,7 +473,7 @@ describe("custom subject composes with pairwise", async () => {
 		expect(sub1).not.toBe(sub2);
 	});
 
-	it("keeps the pairwise sub consistent for a JWT access token without leaking the base", async () => {
+	it("embeds the per-RP pairwise sub, not the base reference, for a JWT access token", async () => {
 		currentReferenceId = "WS-1";
 		const tokens = await getTokensForClient(
 			deps,
@@ -487,7 +487,7 @@ describe("custom subject composes with pairwise", async () => {
 		const accessToken = decodeJwt(tokens.data!.access_token!);
 
 		// The embedded claim carries the per-RP pairwise sub — never the raw base
-		// reference — so colluding pairwise clients cannot correlate on it.
+		// reference — so pairwise subject isolation is preserved.
 		expect(accessToken[resolvedSubjectClaim]).toBe(pairwiseSub);
 		expect(accessToken[resolvedSubjectClaim]).not.toBe("WS-1");
 		expect(accessToken.sub).not.toBe(pairwiseSub);
