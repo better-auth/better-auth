@@ -372,6 +372,33 @@ describe("custom subject (getSubject)", async () => {
 		});
 		expect(userinfo.data?.sub).toBe("mem-AAA");
 	});
+
+	it("leaves client_credentials tokens untouched (no user to resolve)", async () => {
+		// client_credentials has no user, so getSubject must never fire: no
+		// presentation sub is computed and the internal claim is never embedded.
+		currentReferenceId = "AAA";
+		// OIDC scopes aren't requestable via client_credentials; `resource`
+		// alone forces a JWT access token we can decode and inspect.
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient!.client_id,
+				client_secret: oauthClient!.client_secret,
+				resource: validAudience,
+			},
+			{
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(tokens.data?.access_token).toBeDefined();
+		const accessToken = decodeJwt(tokens.data!.access_token!);
+		expect(accessToken.sub).toBeUndefined();
+		expect(accessToken.sub).not.toBe("mem-AAA");
+		expect(accessToken).not.toHaveProperty(resolvedSubjectClaim);
+	});
 });
 
 describe("custom subject composes with pairwise", async () => {

@@ -797,6 +797,12 @@ export interface OAuthOptions<
 	 * multi-tenant issuer return a per-(user, workspace) `sub` (pairwise hashing
 	 * still applies on top).
 	 *
+	 * Must be deterministic for a given `(userId, client, referenceId)` and must
+	 * return a stable, non-empty subject. It is invoked only for user-bound flows
+	 * (skipped for `client_credentials`), and it must not throw — a thrown error
+	 * fails the token, `/userinfo`, and `/introspect` request rather than falling
+	 * back to a different identity.
+	 *
 	 * @example
 	 * getSubject: ({ userId, referenceId }) => referenceId ?? userId
 	 */
