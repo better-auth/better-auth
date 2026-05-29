@@ -192,6 +192,11 @@ const pluginMeta: Record<
 		icon: "CreemIcon",
 		tagline: "Creem payment processing for your app",
 	},
+	commet: {
+		category: "Payments",
+		icon: "CommetIcon",
+		tagline: "Commet billing, subscriptions and usage-based pricing",
+	},
 	chargebee: {
 		category: "Payments",
 		icon: "ChargebeeIcon",
