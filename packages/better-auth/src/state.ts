@@ -149,7 +149,7 @@ export async function generateGenericState(
 export async function parseGenericState(
 	c: GenericEndpointContext,
 	state: string | undefined,
-	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
+	settings?: { cookieName?: string; skipStateCookieCheck?: boolean },
 ) {
 	if (!state) {
 		throw new StateError("State not found in OAuth callback", {
