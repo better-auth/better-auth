@@ -21,9 +21,8 @@ import { configIdMatches, resolveConfiguration } from ".";
 
 export async function validateApiKey({
 	key,
-	hashedKey,
 	ctx,
-	opts,
+	lookupOpts,
 	configurations,
 	schema,
 	permissions,
@@ -31,8 +30,7 @@ export async function validateApiKey({
 	runCustomValidator,
 }: {
 	key: string;
-	hashedKey: string;
-	opts: PredefinedApiKeyOptions;
+	lookupOpts: PredefinedApiKeyOptions;
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	permissions?: Record<string, string[]> | undefined;
@@ -44,7 +42,10 @@ export async function validateApiKey({
 	 */
 	runCustomValidator?: boolean | undefined;
 }) {
-	const apiKey = await getApiKey(ctx, hashedKey, opts);
+	const hashedKey = lookupOpts.disableKeyHashing
+		? key
+		: await defaultKeyHasher(key);
+	const apiKey = await getApiKey(ctx, hashedKey, lookupOpts);
 
 	if (!apiKey) {
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
@@ -57,9 +58,14 @@ export async function validateApiKey({
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
-	// Resolve the key's own config. The lookup used the caller's config, so an
-	// unscoped verify cannot find keys that use a different storage or hashing.
-	opts = resolveConfiguration(ctx.context, configurations, apiKey.configId);
+	// Switch from the caller's lookup config to the key's own config for
+	// validation and updates. An unscoped verify cannot find keys that use a
+	// different storage or hashing than the lookup config.
+	const opts = resolveConfiguration(
+		ctx.context,
+		configurations,
+		apiKey.configId,
+	);
 
 	if (runCustomValidator && opts.customAPIKeyValidator) {
 		const isValid = await opts.customAPIKeyValidator({ ctx, key });
@@ -245,7 +251,7 @@ export async function validateApiKey({
 		}
 	}
 
-	return newApiKey;
+	return { apiKey: newApiKey, opts };
 }
 
 const verifyApiKeyBodySchema = z.object({
@@ -310,30 +316,23 @@ export function verifyApiKey({
 				}
 			}
 
-			const hashed = lookupOpts.disableKeyHashing
-				? key
-				: await defaultKeyHasher(key);
-
 			let apiKey: ApiKey | null = null;
+			let opts: PredefinedApiKeyOptions;
 
 			try {
-				apiKey = await validateApiKey({
+				const result = await validateApiKey({
 					key,
-					hashedKey: hashed,
 					permissions: ctx.body.permissions,
 					ctx,
-					opts: lookupOpts,
+					lookupOpts,
 					configurations,
 					schema,
 					expectedConfigId: configId,
 					// Scoped calls already ran the validator above with the right config.
 					runCustomValidator: configId === undefined,
 				});
-
-				// Resolve the correct config based on the API key's configId
-				const opts = apiKey
-					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
-					: lookupOpts;
+				apiKey = result.apiKey;
+				opts = result.opts;
 
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
@@ -373,11 +372,6 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
-
-			// Resolve the correct config for metadata migration
-			const opts = apiKey
-				? resolveConfiguration(ctx.context, configurations, apiKey.configId)
-				: lookupOpts;
 
 			// Migrate legacy double-stringified metadata if needed
 			let migratedMetadata: Record<string, any> | null = null;

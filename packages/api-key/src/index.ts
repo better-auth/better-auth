@@ -200,15 +200,10 @@ export function apiKey(
 							}
 						}
 
-						const hashed = config.disableKeyHashing
-							? key
-							: await defaultKeyHasher(key);
-
-						const apiKey = await validateApiKey({
+						const { apiKey } = await validateApiKey({
 							key,
-							hashedKey: hashed,
 							ctx,
-							opts: config,
+							lookupOpts: config,
 							configurations,
 							schema,
 							expectedConfigId: config.configId,
