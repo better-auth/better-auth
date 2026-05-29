@@ -219,6 +219,69 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * The verify-email link sent to a new, unverified OAuth user must keep the
+	 * caller's `callbackURL` intact. A raw interpolation truncates any value
+	 * containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link for a new unverified OAuth user", async () => {
+		let capturedUrl = "";
+		const { customFetchImpl: localFetch } = await getTestInstance({
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail({ url }) {
+					capturedUrl = url;
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-encode-callback",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: localFetch },
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "encode-callback@test.com",
+				name: "Encode Callback",
+				sub: "encode-callback",
+				email_verified: false,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const callbackURL = "http://localhost:3000/welcome?ref=oauth&plan=pro";
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test-encode-callback",
+			callbackURL,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9375
 	 */
 	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
@@ -1302,7 +1365,10 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("error=state_not_found");
+		expect(res.headers.get("location")).not.toContain(
+			"please_restart_the_process",
+		);
 	});
 
 	it("should await async mapProfileToUser", async () => {
