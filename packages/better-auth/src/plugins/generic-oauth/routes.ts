@@ -12,7 +12,7 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { sanitizeErrorCode } from "../../api/routes/callback";
 import { setSessionCookie } from "../../cookies";
-import { missingEmailLogMessage } from "../../oauth2/errors";
+import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -284,8 +284,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				ctx.context.options.onAPIError?.errorURL ||
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
-				throw ctx.redirect(
-					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
+				redirectOnError(
+					ctx,
+					defaultErrorURL,
+					ctx.query.error || "oAuth_code_missing",
+					ctx.query.error_description || undefined,
 				);
 			}
 			const providerId = ctx.params?.providerId;
@@ -317,16 +320,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			} = parsedState;
 			const code = ctx.query.code;
 
-			function redirectOnError(error: string, description?: string) {
-				const defaultErrorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
-				const baseURL = errorURL || defaultErrorURL;
-				const params = new URLSearchParams({ error });
-				if (description) params.set("error_description", description);
-				const sep = baseURL.includes("?") ? "&" : "?";
-				throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
-			}
+			const resolvedErrorURL = errorURL || defaultErrorURL;
 
 			let finalTokenUrl = providerConfig.tokenUrl;
 			let finalUserInfoUrl = providerConfig.userInfoUrl;
@@ -357,13 +351,13 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							expected: expectedIssuer,
 							received: ctx.query.iss,
 						});
-						return redirectOnError("issuer_mismatch");
+						redirectOnError(ctx, resolvedErrorURL, "issuer_mismatch");
 					}
 				} else if (providerConfig.requireIssuerValidation) {
 					ctx.context.logger.error("OAuth issuer parameter missing", {
 						expected: expectedIssuer,
 					});
-					return redirectOnError("issuer_missing");
+					redirectOnError(ctx, resolvedErrorURL, "issuer_missing");
 				}
 			}
 
@@ -407,7 +401,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 					e,
 				);
-				throw redirectOnError("oauth_code_verification_failed");
+				redirectOnError(
+					ctx,
+					resolvedErrorURL,
+					"oauth_code_verification_failed",
+				);
 			}
 			if (!tokens) {
 				throw APIError.from(
@@ -423,7 +421,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as OAuth2UserInfo | null;
 					if (!userInfo) {
-						throw redirectOnError("user_info_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
 					}
 					const mapUser = providerConfig.mapProfileToUser
 						? await providerConfig.mapProfileToUser(userInfo)
@@ -438,13 +436,13 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							}),
 							userInfo,
 						);
-						throw redirectOnError("email_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
 					}
 					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
 					const name = mapUser.name ? mapUser.name : userInfo.name;
 					if (!name) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("name_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "name_is_missing");
 					}
 					return {
 						...userInfo,
@@ -460,7 +458,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						true &&
 					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
-					return redirectOnError("email_doesn't_match");
+					redirectOnError(ctx, resolvedErrorURL, "email_doesn't_match");
 				}
 				const existingAccount =
 					await ctx.context.internalAdapter.findAccountByProviderId(
@@ -469,7 +467,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					);
 				if (existingAccount) {
 					if (existingAccount.userId !== link.userId) {
-						return redirectOnError("account_already_linked_to_different_user");
+						redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"account_already_linked_to_different_user",
+						);
 					}
 					const updateData = Object.fromEntries(
 						Object.entries({
@@ -501,7 +503,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						idToken: tokens.idToken,
 					});
 					if (!newAccount) {
-						return redirectOnError("unable_to_link_account");
+						redirectOnError(ctx, resolvedErrorURL, "unable_to_link_account");
 					}
 				}
 				let toRedirectTo: string;
@@ -532,17 +534,19 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				});
 			} catch (e) {
 				if (isAPIError(e) && e.body?.code) {
-					return redirectOnError(e.body.code, e.body.message);
+					redirectOnError(ctx, resolvedErrorURL, e.body.code, e.body.message);
 				}
 				throw e;
 			}
 
 			if (result.error || !result.data) {
-				return redirectOnError(
+				redirectOnError(
+					ctx,
+					resolvedErrorURL,
 					sanitizeErrorCode(result.error || "unable_to_create_user"),
 				);
 			}
-			const { session, user } = result.data;
+			const { session, user } = result.data!;
 			await setSessionCookie(ctx, {
 				session,
 				user,
