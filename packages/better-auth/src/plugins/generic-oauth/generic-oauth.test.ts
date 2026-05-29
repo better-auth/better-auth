@@ -382,6 +382,264 @@ describe("oauth2", async () => {
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
 	});
 
+	/**
+	 * A provider that omits `expires_in` leaves the access token's expiry unknown,
+	 * so `getAccessToken` can never tell it lapsed and never refreshes it. Setting
+	 * `accessTokenExpiresIn` synthesizes the expiry so the existing refresh path
+	 * runs once the window passes.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("refreshes once the accessTokenExpiresIn window passes when the provider omits expires_in", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				// Simulate a provider that never returns `expires_in`.
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-fallback@test.com",
+				name: "Expires In Fallback",
+				sub: "exp-fallback",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-fallback",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-fallback",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// Within the synthesized window: no premature refresh.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-fallback" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBeTruthy();
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: the refresh that never used to fire now does.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-fallback" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * Opt-in: without `accessTokenExpiresIn`, a provider that omits `expires_in`
+	 * keeps the prior behavior. The expiry stays unknown and `getAccessToken` does
+	 * not refresh, so nothing churns for tokens that may never expire.
+	 */
+	it("does not refresh a provider that omits expires_in when accessTokenExpiresIn is unset", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-none@test.com",
+				name: "No Fallback",
+				sub: "exp-none",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-none",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-none",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const res = await client.getAccessToken(
+					{ providerId: "exp-none" },
+					{ headers: postCallbackHeaders },
+				);
+				// Expiry stays unknown: the stored token is returned as-is, no refresh.
+				expect(res.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(0);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * The `getToken` escape hatch returns tokens directly, bypassing the standard
+	 * exchange. `accessTokenExpiresIn` must still apply to its result, or a
+	 * `getToken` provider that omits the expiry hits the same no-refresh bug.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("applies accessTokenExpiresIn to a custom getToken result", async () => {
+		let refreshCount = 0;
+		const countRefresh = (_response: any, req: any) => {
+			if (req.body?.grant_type === "refresh_token") refreshCount++;
+		};
+		server.service.on("beforeResponse", countRefresh);
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-gettoken",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+								// Custom exchange that omits the expiry.
+								getToken: async () => ({
+									accessToken: "gettoken-initial",
+									refreshToken: "gettoken-refresh",
+								}),
+								getUserInfo: async () => ({
+									id: "exp-gettoken-user",
+									email: "exp-gettoken@test.com",
+									name: "GetToken User",
+									emailVerified: true,
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-gettoken",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// getToken omitted the expiry; the fallback synthesized it, so within
+			// the window the stored token is returned without refreshing.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-gettoken" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBe("gettoken-initial");
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: refresh fires. Without the fallback on the
+			// getToken result, no expiry would be stored and this never happens.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-gettoken" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", countRefresh);
+		}
+	});
+
 	it("should redirect to the provider and handle the response after linked", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
