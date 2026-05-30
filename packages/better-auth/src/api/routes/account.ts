@@ -13,6 +13,7 @@ import {
 } from "../../cookies/session-store";
 import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -338,18 +339,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			if (
-				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
-			) {
-				try {
-					await c.context.internalAdapter.updateUser(session.user.id, {
-						name: linkingUserInfo.user?.name,
-						image: linkingUserInfo.user?.image,
-					});
-				} catch (e: any) {
-					console.warn("Could not update user - " + e.toString());
-				}
-			}
+			await applyUpdateUserInfoOnLink(c, session.user.id, linkingUserInfo.user);
 
 			return c.json({
 				url: "", // this is for type inference

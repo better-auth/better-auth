@@ -1093,7 +1093,11 @@ export type BetterAuthOptions = {
 					 */
 					allowUnlinkingAll?: boolean;
 					/**
-					 * If enabled (true), this will update the user information based on the newly linked account
+					 * When enabled, linking an account copies the provider's profile onto
+					 * the local user, matching the fields persisted on sign-up (`name`,
+					 * `image`, and any `mapProfileToUser` fields). The local `email` and
+					 * `emailVerified` are never changed, so a link cannot rebind the
+					 * account's identity.
 					 *
 					 * @default false
 					 */

@@ -5,7 +5,10 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	applyUpdateUserInfoOnLink,
+	handleOAuthUserInfo,
+} from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -220,6 +223,9 @@ export const callbackOAuth = createAuthEndpoint(
 					redirectOnError(c, resolvedErrorURL, "unable_to_link_account");
 				}
 			}
+
+			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
+
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
