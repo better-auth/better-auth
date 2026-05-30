@@ -13,7 +13,10 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	applyUpdateUserInfoOnLink,
+	handleOAuthUserInfo,
+} from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
@@ -511,19 +514,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					}
 				}
 
-				if (
-					ctx.context.options.account?.accountLinking?.updateUserInfoOnLink ===
-					true
-				) {
-					try {
-						await ctx.context.internalAdapter.updateUser(link.userId, {
-							name: userInfo.name,
-							image: userInfo.image,
-						});
-					} catch (e) {
-						ctx.context.logger.warn("Could not update user", e);
-					}
-				}
+				await applyUpdateUserInfoOnLink(ctx, link.userId, userInfo);
 
 				let toRedirectTo: string;
 				try {

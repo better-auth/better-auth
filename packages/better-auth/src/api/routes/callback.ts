@@ -5,7 +5,10 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	applyUpdateUserInfoOnLink,
+	handleOAuthUserInfo,
+} from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -221,18 +224,7 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 			}
 
-			if (
-				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
-			) {
-				try {
-					await c.context.internalAdapter.updateUser(link.userId, {
-						name: userInfo.name,
-						image: userInfo.image,
-					});
-				} catch (e) {
-					c.context.logger.warn("Could not update user", e);
-				}
-			}
+			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
 
 			let toRedirectTo: string;
 			try {

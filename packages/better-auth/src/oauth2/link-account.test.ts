@@ -1063,6 +1063,119 @@ describe("oauth2 - updateUserInfoOnLink via callback", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8742
+ *
+ * Implicit linking (an existing user signs in with a social provider whose
+ * email matches) updated the user row but returned the pre-update user, so the
+ * freshly issued session and its cookie cache served the stale name/image until
+ * the cache expired. These assert the returned session reflects the update, and
+ * that the synced field set is the full mapped profile, not just name/image.
+ */
+describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		user: {
+			additionalFields: {
+				googleSub: { type: "string", required: false },
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				mapProfileToUser(profile: GoogleProfile) {
+					return { googleSub: profile.sub };
+				},
+			},
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+				updateUserInfoOnLink: true,
+			},
+		},
+		session: {
+			cookieCache: { enabled: true, maxAge: 300 },
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	async function signInAndLink(email: string, sub: string) {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub,
+					email,
+					email_verified: true,
+					name: "Updated Name From Google",
+					picture: "https://example.com/avatar.jpg",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
+		return oAuthHeaders;
+	}
+
+	it("returns the freshly linked name and image in the new session", async () => {
+		const testEmail = "implicit-link@example.com";
+		await ctx.adapter.create({
+			model: "user",
+			data: { email: testEmail, name: "Original Name", emailVerified: true },
+		});
+
+		const oAuthHeaders = await signInAndLink(testEmail, "google_implicit_name");
+
+		// The cookie cache is seeded from the value handleOAuthUserInfo returns,
+		// and getSession serves it without a database read, so a stale return
+		// would surface right here.
+		const session = await client.getSession({
+			fetchOptions: { headers: oAuthHeaders },
+		});
+		expect(session.data?.user.name).toBe("Updated Name From Google");
+		expect(session.data?.user.image).toBe("https://example.com/avatar.jpg");
+	});
+
+	it("syncs mapProfileToUser fields on link, not only name and image", async () => {
+		const testEmail = "implicit-link-mapped@example.com";
+		await ctx.adapter.create({
+			model: "user",
+			data: { email: testEmail, name: "Original Name", emailVerified: true },
+		});
+
+		await signInAndLink(testEmail, "google_implicit_mapped");
+
+		const user = await ctx.adapter.findOne<User & { googleSub?: string }>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user?.googleSub).toBe("google_implicit_mapped");
+	});
+});
+
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
