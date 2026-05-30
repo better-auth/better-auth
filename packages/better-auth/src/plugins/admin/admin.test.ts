@@ -707,6 +707,58 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9800
+	 */
+	it("should return 404 from unbanUser when the target user does not exist", async () => {
+		const res = await client.admin.unbanUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9800
+	 */
+	it("should return 404 from setRole when the target user does not exist", async () => {
+		const res = await client.admin.setRole(
+			{
+				userId: "nonexistent-user-id",
+				role: "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9800
+	 *
+	 * Regression coverage for the existing banUser guard so the three admin
+	 * endpoints (banUser, unbanUser, setRole) stay consistent.
+	 */
+	it("should return 404 from banUser when the target user does not exist", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should allow admin to list user sessions", async () => {
 		const res = await client.admin.listUserSessions(
 			{
