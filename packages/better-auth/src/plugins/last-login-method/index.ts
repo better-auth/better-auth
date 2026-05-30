@@ -4,6 +4,7 @@ import type {
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { PACKAGE_VERSION } from "../../version";
+import { LAST_USED_LOGIN_METHOD_COOKIE_NAME } from "./constant";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -17,8 +18,9 @@ declare module "@better-auth/core" {
  */
 export interface LastLoginMethodOptions {
 	/**
-	 * Name of the cookie to store the last login method
-	 * @default "better-auth.last_used_login_method"
+	 * Full literal cookie name. Left unset, the name composes
+	 * `advanced.cookiePrefix` like every other cookie. Set this, and the matching
+	 * client `cookieName`, to use a custom name on both sides.
 	 */
 	cookieName?: string | undefined;
 	/**
@@ -89,7 +91,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	};
 
 	const config = {
-		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
@@ -160,18 +161,18 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								cookie.includes(sessionTokenName),
 							);
 							if (hasSessionToken) {
-								// Inherit cookie attributes from Better Auth's centralized cookie system
-								// This ensures consistency with cross-origin, cross-subdomain, and security settings
-								const cookieAttributes = {
-									...ctx.context.authCookies.sessionToken.attributes,
-									maxAge: config.maxAge,
-									httpOnly: false, // Override: plugin cookies are not httpOnly
-								};
+								const { name, attributes } = ctx.context.createAuthCookie(
+									LAST_USED_LOGIN_METHOD_COOKIE_NAME,
+									{
+										maxAge: config.maxAge,
+										httpOnly: false, // plugin cookies are not httpOnly
+									},
+								);
 
 								ctx.setCookie(
-									config.cookieName,
+									userConfig?.cookieName ?? name,
 									lastUsedLoginMethod,
-									cookieAttributes,
+									attributes,
 								);
 							}
 						}
