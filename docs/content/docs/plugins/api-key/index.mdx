@@ -179,7 +179,7 @@ Otherwise if it throws, it will throw an `APIError`.
 
   type verifyApiKey = {
       /**
-       * The configuration ID to use for verification. If not provided, the default configuration is used.
+       * Configuration ID to scope verification to. When omitted, the key is validated against its own configuration.
        */
       configId?: string
       /**

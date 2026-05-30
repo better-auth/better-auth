@@ -20,9 +20,9 @@ export function isFreeEmail(email: string): boolean {
 }
 
 export const contactSchema = z.object({
-	fullName: z.string().min(1, "Full name is required"),
-	company: z.string().min(1, "Company is required"),
+	fullName: z.string().trim().min(1, "Full name is required"),
+	company: z.string().trim().min(1, "Company is required"),
 	email: z.email("Please enter a valid email address"),
 	companySize: z.string().optional(),
-	description: z.string().min(1, "Please describe your needs"),
+	description: z.string().trim().min(1, "Please describe your needs"),
 });

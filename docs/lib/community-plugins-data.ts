@@ -281,4 +281,14 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/elliotBraem.png",
 		},
 	},
+	{
+		name: "ton-better-auth",
+		url: "https://github.com/mhbdev/ton-better-auth",
+		description: "Sign in with Ton Connect",
+		author: {
+			name: "mhbdev",
+			github: "mhbdev",
+			avatar: "https://github.com/mhbdev.png",
+		},
+	},
 ];

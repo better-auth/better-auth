@@ -82,16 +82,16 @@ Additionally, IPv4-mapped IPv6 addresses (e.g., `::ffff:192.0.2.1`) are automati
 
 #### IPv6 Subnet Rate Limiting
 
-By default, IPv6 addresses are rate limited individually (using the full /128 address). However, since IPv6 typically allocates large address blocks to single users, attackers could potentially bypass rate limits by rotating through multiple IPv6 addresses from their allocation.
+By default, IPv6 addresses are rate limited per `/64` subnet, not per individual address. ISPs and cloud providers assign IPv6 prefixes (typically `/64` for residential users per [RFC 6177](https://datatracker.ietf.org/doc/html/rfc6177)) rather than single addresses, so any per-address counter would let one client rotate through 2^64 source addresses without exhausting the limit.
 
-To prevent this, you can configure rate limiting to apply to IPv6 subnets instead of individual addresses:
+You can override the prefix length via the `ipv6Subnet` option if your deployment needs a different allocation boundary:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
     //...other options
     advanced: {
         ipAddress: {
-            ipv6Subnet: 64, // Rate limit by /64 subnet instead of individual addresses
+            ipv6Subnet: 56, // Rate limit by /56 subnet (residential ISP allocation)
         },
     },
     rateLimit: {
@@ -102,12 +102,15 @@ export const auth = betterAuth({
 })
 ```
 
-Common IPv6 subnet prefix lengths:
+Common IPv6 prefix lengths:
 
-* `128` (default): Individual IPv6 address - most restrictive
-* `64`: /64 subnet - typical home/business allocation
-* `48`: /48 subnet - larger network allocation
-* `32`: /32 subnet - ISP-level allocation
+* `128`: Individual IPv6 address. Most restrictive. Only safe when you control the network and trust that each address maps to a distinct client.
+* `64` (default): /64 subnet. Typical home or business allocation.
+* `56`: /56 subnet. Residential ISP allocation per [RFC 6177](https://datatracker.ietf.org/doc/html/rfc6177).
+* `48`: /48 subnet. Larger network allocation.
+* `32`: /32 subnet. ISP-level allocation.
+
+Any integer prefix length from `0` to `128` is accepted; the values above are the most common.
 
 <Callout type="info">
   IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.

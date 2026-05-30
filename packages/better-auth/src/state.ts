@@ -32,6 +32,7 @@ export type StateData = z.infer<typeof stateDataSchema>;
 
 export type StateErrorCode =
 	| "state_generation_error"
+	| "state_not_found"
 	| "state_invalid"
 	| "state_mismatch"
 	| "state_security_mismatch";
@@ -39,17 +40,27 @@ export type StateErrorCode =
 export class StateError extends BetterAuthError {
 	code: string;
 	details?: Record<string, any>;
+	/**
+	 * The per-flow `errorCallbackURL` recovered from the parsed state, when the
+	 * failure happened after the state was successfully parsed (for example a
+	 * nonce or state-cookie mismatch). It was origin-validated at sign-in, so
+	 * the callback can safely redirect there instead of the default error page.
+	 * Absent when the state could not be parsed at all.
+	 */
+	errorURL?: string;
 
 	constructor(
 		message: string,
 		options: ErrorOptions & {
 			code: StateErrorCode;
 			details?: Record<string, any>;
+			errorURL?: string;
 		},
 	) {
 		super(message, options);
 		this.code = options.code;
 		this.details = options.details;
+		this.errorURL = options.errorURL;
 	}
 }
 
@@ -137,9 +148,15 @@ export async function generateGenericState(
 
 export async function parseGenericState(
 	c: GenericEndpointContext,
-	state: string,
-	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
+	state: string | undefined,
+	settings?: { cookieName?: string; skipStateCookieCheck?: boolean },
 ) {
+	if (!state) {
+		throw new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+	}
+
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 
@@ -181,6 +198,7 @@ export async function parseGenericState(
 				{
 					code: "state_security_mismatch",
 					details: { state },
+					errorURL: parsedData.errorURL,
 				},
 			);
 		}
@@ -208,6 +226,7 @@ export async function parseGenericState(
 				{
 					code: "state_security_mismatch",
 					details: { state },
+					errorURL: parsedData.errorURL,
 				},
 			);
 		}
@@ -240,6 +259,7 @@ export async function parseGenericState(
 			throw new StateError("State mismatch: State not persisted correctly", {
 				code: "state_security_mismatch",
 				details: { state },
+				errorURL: parsedData.errorURL,
 			});
 		}
 
@@ -256,6 +276,7 @@ export async function parseGenericState(
 			details: {
 				expiresAt: parsedData.expiresAt,
 			},
+			errorURL: parsedData.errorURL,
 		});
 	}
 

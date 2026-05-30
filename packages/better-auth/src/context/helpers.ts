@@ -113,10 +113,13 @@ export async function getTrustedOrigins(
 
 	if (isDynamicBaseURLConfig(options.baseURL)) {
 		const allowedHosts = options.baseURL.allowedHosts;
+		const proto = options.baseURL.protocol;
 		for (const host of allowedHosts) {
 			if (!host.includes("://")) {
-				trustedOrigins.push(`https://${host}`);
-				if (isLoopbackHost(host)) {
+				if (!proto || proto === "https" || proto === "auto") {
+					trustedOrigins.push(`https://${host}`);
+				}
+				if (proto === "http" || proto === "auto" || isLoopbackHost(host)) {
 					trustedOrigins.push(`http://${host}`);
 				}
 			} else {

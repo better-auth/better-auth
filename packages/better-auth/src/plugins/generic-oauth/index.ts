@@ -6,6 +6,7 @@ import type {
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
@@ -291,7 +292,10 @@ export const genericOAuth = <const ID extends string>(
 					},
 					async validateAuthorizationCode(data) {
 						if (c.getToken) {
-							return c.getToken(data);
+							return applyDefaultAccessTokenExpiry(
+								await c.getToken(data),
+								c.accessTokenExpiresIn,
+							);
 						}
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -299,7 +303,7 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return validateAuthorizationCode({
+						const tokens = await validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
@@ -314,6 +318,10 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpointAuth,
 							additionalParams: c.tokenUrlParams,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async getUserInfo(tokens) {
 						const raw = c.getUserInfo
@@ -350,7 +358,7 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return refreshAccessToken({
+						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
 								clientId: c.clientId,
@@ -360,6 +368,10 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					disableImplicitSignUp: c.disableImplicitSignUp,
 					disableSignUp: c.disableSignUp,

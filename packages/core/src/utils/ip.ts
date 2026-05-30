@@ -12,12 +12,13 @@ import * as z from "zod";
 
 interface NormalizeIPOptions {
 	/**
-	 * For IPv6 addresses, extract the subnet prefix instead of full address.
-	 * Common values: 32, 48, 64, 128 (default: 128 = full address)
+	 * Prefix length used to collapse IPv6 addresses before keying.
+	 * Any integer from 0 to 128 is accepted. Common values: 32, 48, 56, 64, 128.
+	 * Values outside 0-128 are clamped.
 	 *
-	 * @default 128
+	 * @default 64
 	 */
-	ipv6Subnet?: 128 | 64 | 48 | 32;
+	ipv6Subnet?: number;
 }
 
 /**
@@ -117,15 +118,13 @@ function expandIPv6(ipv6: string): string[] {
  * Normalizes an IPv6 address to canonical form
  * e.g., "2001:DB8::1" -> "2001:0db8:0000:0000:0000:0000:0000:0001"
  */
-function normalizeIPv6(
-	ipv6: string,
-	subnetPrefix?: 128 | 32 | 48 | 64,
-): string {
+function normalizeIPv6(ipv6: string, subnetPrefix?: number): string {
 	const groups = expandIPv6(ipv6);
 
-	if (subnetPrefix && subnetPrefix < 128) {
-		// Apply subnet mask
-		const prefix = subnetPrefix;
+	if (subnetPrefix !== undefined && subnetPrefix < 128) {
+		// Clamp to a valid bit range so out-of-spec inputs degrade safely:
+		// negative or fractional values would otherwise produce malformed masks.
+		const prefix = Math.max(0, Math.floor(subnetPrefix));
 		let bitsRemaining: number = prefix;
 
 		const maskedGroups = groups.map((group) => {
@@ -191,8 +190,8 @@ export function normalizeIP(
 		return ipv4.toLowerCase();
 	}
 
-	// Normalize IPv6
-	const subnetPrefix = options.ipv6Subnet || 64;
+	// Normalize IPv6. Use ?? so an explicit 0 (mask-all) is honoured.
+	const subnetPrefix = options.ipv6Subnet ?? 64;
 	return normalizeIPv6(ip, subnetPrefix);
 }
 

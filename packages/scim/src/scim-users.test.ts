@@ -655,6 +655,101 @@ describe("SCIM", () => {
 				}),
 			);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
+		 */
+		it("should clear secondary storage sessions when deleting a user via SCIM", async () => {
+			const store = new Map<string, string>();
+			const adminUser = {
+				email: "scim-admin@test.com",
+				password: "password",
+				name: "SCIM Admin",
+			};
+			const victimUser = {
+				email: "scim-victim@test.com",
+				password: "password",
+				name: "SCIM Victim",
+			};
+
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+				scimProvider: [],
+				organization: [],
+				member: [],
+			};
+			const memory = memoryAdapter(data);
+
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [scim(), organization()],
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), scimClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+
+			await authClient.signUp.email(adminUser);
+			const adminHeaders = new Headers();
+			await authClient.signIn.email(adminUser, {
+				throw: true,
+				onSuccess: setCookieToHeader(adminHeaders),
+			});
+
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: { providerId: "the-saml-provider-1" },
+				headers: adminHeaders,
+			});
+
+			await authClient.signUp.email(victimUser);
+			await auth.api.createSCIMUser({
+				body: { userName: victimUser.email },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const victimHeaders = new Headers();
+			await authClient.signIn.email(victimUser, {
+				throw: true,
+				onSuccess: setCookieToHeader(victimHeaders),
+			});
+
+			const { data: victimSession } = await authClient.getSession({
+				fetchOptions: { headers: victimHeaders },
+			});
+			expect(victimSession).not.toBeNull();
+			const victimToken = victimSession!.session.token;
+			const victimId = victimSession!.user.id;
+			expect(store.has(victimToken)).toBe(true);
+
+			await auth.api.deleteSCIMUser({
+				params: { userId: victimId },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			expect(store.has(victimToken)).toBe(false);
+		});
 	});
 
 	describe("Default SCIM provider", () => {

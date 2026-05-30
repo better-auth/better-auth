@@ -500,4 +500,190 @@ describe("index generation for columns added to existing tables", () => {
 		expect(sql).toContain("create index");
 		expect(sql).not.toContain("add index");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9689
+	 */
+	it("should execute runMigrations without error when adding indexed columns to existing tables", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		config.plugins = [
+			{
+				id: "test-index",
+				schema: {
+					user: {
+						fields: {
+							externalId: {
+								type: "string",
+								index: true,
+								required: false,
+							},
+						},
+					},
+				},
+			},
+		];
+
+		const { runMigrations } = await getMigrations(config);
+		await expect(runMigrations()).resolves.not.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9689
+	 */
+	it("should execute runMigrations when adding a new table with indexed columns to an existing database", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		config.plugins = [
+			{
+				id: "test-new-table",
+				schema: {
+					apikey: {
+						fields: {
+							configId: {
+								type: "string",
+								required: true,
+								index: true,
+							},
+							referenceId: {
+								type: "string",
+								required: true,
+								index: true,
+							},
+							key: {
+								type: "string",
+								required: true,
+								index: true,
+							},
+							createdAt: {
+								type: "date",
+								required: true,
+							},
+							updatedAt: {
+								type: "date",
+								required: true,
+							},
+						},
+					},
+				},
+			},
+		];
+
+		const { runMigrations } = await getMigrations(config);
+		await expect(runMigrations()).resolves.not.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9689
+	 */
+	it("should execute runMigrations when upgrading an existing table with new indexed columns (simulates 1.4.x -> latest)", async () => {
+		const db = new DatabaseSync(":memory:");
+
+		const baseConfig: BetterAuthOptions = {
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				{
+					id: "old-apikey",
+					schema: {
+						apikey: {
+							fields: {
+								key: {
+									type: "string",
+									required: true,
+								},
+								userId: {
+									type: "string",
+									required: true,
+								},
+								createdAt: {
+									type: "date",
+									required: true,
+								},
+								updatedAt: {
+									type: "date",
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const initial = await getMigrations(baseConfig);
+		await initial.runMigrations();
+
+		const upgradedConfig: BetterAuthOptions = {
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				{
+					id: "new-apikey",
+					schema: {
+						apikey: {
+							fields: {
+								configId: {
+									type: "string",
+									required: true,
+									index: true,
+								},
+								referenceId: {
+									type: "string",
+									required: true,
+									index: true,
+								},
+								key: {
+									type: "string",
+									required: true,
+									index: true,
+								},
+								userId: {
+									type: "string",
+									required: true,
+								},
+								createdAt: {
+									type: "date",
+									required: true,
+								},
+								updatedAt: {
+									type: "date",
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const { runMigrations, toBeAdded } = await getMigrations(upgradedConfig);
+		expect(toBeAdded.length).toBeGreaterThan(0);
+		const apikeyAdded = toBeAdded.find((t) => t.table === "apikey");
+		expect(apikeyAdded).toBeDefined();
+		expect(apikeyAdded!.fields).toHaveProperty("configId");
+		expect(apikeyAdded!.fields).toHaveProperty("referenceId");
+
+		await expect(runMigrations()).resolves.not.toThrow();
+	});
 });

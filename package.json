@@ -2,7 +2,7 @@
   "name": "@better-auth/root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.30.2",
+  "packageManager": "pnpm@11.1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git"
@@ -50,7 +50,7 @@
     "lefthook": "^2.1.4",
     "nyc": "^17.1.0",
     "publint": "^0.3.17",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.14",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }

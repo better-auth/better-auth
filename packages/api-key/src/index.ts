@@ -200,15 +200,13 @@ export function apiKey(
 							}
 						}
 
-						const hashed = config.disableKeyHashing
-							? key
-							: await defaultKeyHasher(key);
-
-						const apiKey = await validateApiKey({
-							hashedKey: hashed,
+						const { apiKey } = await validateApiKey({
+							key,
 							ctx,
-							opts: config,
+							lookupOpts: config,
+							configurations,
 							schema,
+							expectedConfigId: config.configId,
 						});
 
 						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(

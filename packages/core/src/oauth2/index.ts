@@ -42,6 +42,7 @@ export type {
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 export {
+	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,

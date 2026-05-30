@@ -9,10 +9,21 @@ import type {
 import {
 	createLocalJWKSet,
 	decodeProtectedHeader,
+	errors as joseErrors,
 	jwtVerify,
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+
+const joseInfrastructureErrorCodes = new Set([
+	joseErrors.JWKSTimeout.code,
+	joseErrors.JWKSInvalid.code,
+	joseErrors.JWKSMultipleMatchingKeys.code,
+]);
+
+function isJoseInfrastructureError(error: joseErrors.JOSEError) {
+	return joseInfrastructureErrorCodes.has(error.code);
+}
 
 /** Last fetched jwks used locally in getJwks @internal */
 let jwks: JSONWebKeySet | undefined;
@@ -82,7 +93,9 @@ export async function getJwks(
 		throw new Error(error as unknown as string);
 	}
 
-	if (!jwtHeaders.kid) throw new Error("Missing jwt kid");
+	if (!jwtHeaders.kid) {
+		throw new APIError("UNAUTHORIZED", { message: "invalid access token" });
+	}
 
 	// Fetch jwks if not set or has a different kid than the one stored
 	if (!jwks || !jwks.keys.find((jwk) => jwk.kid === jwtHeaders.kid)) {
@@ -137,13 +150,16 @@ export async function verifyAccessToken(
 			if (error instanceof Error) {
 				if (error.name === "TypeError" || error.name === "JWSInvalid") {
 					// likely an opaque token (continue)
-				} else if (error.name === "JWTExpired") {
+				} else if (error instanceof joseErrors.JWTExpired) {
 					throw new APIError("UNAUTHORIZED", {
 						message: "token expired",
 					});
-				} else if (error.name === "JWTInvalid") {
+				} else if (error instanceof joseErrors.JOSEError) {
+					if (isJoseInfrastructureError(error)) {
+						throw error;
+					}
 					throw new APIError("UNAUTHORIZED", {
-						message: "token invalid",
+						message: "invalid access token",
 					});
 				} else {
 					throw error;
