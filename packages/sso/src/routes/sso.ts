@@ -28,6 +28,7 @@ import {
 } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -51,7 +52,11 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	domainMatches,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
@@ -2081,17 +2086,17 @@ async function handleLogoutRequest(
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
