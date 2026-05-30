@@ -321,7 +321,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
