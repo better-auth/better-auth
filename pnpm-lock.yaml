@@ -65,7 +65,7 @@ overrides:
   h3-v2: npm:h3@^2.0.1-rc.15
   brace-expansion@<2: 1.1.13
   brace-expansion@>=2 <4: 2.0.3
-  brace-expansion@>=4: 5.0.5
+  brace-expansion@>=4: 5.0.6
   cookie@<0.7.0: '>=0.7.2 <0.8'
   '@xmldom/xmldom@<0.8.13': '>=0.8.13 <0.9'
   devalue@>=5.6.3 <=5.8.0: 5.8.1
@@ -99,6 +99,10 @@ overrides:
   yaml: ^2.9.0
   express-rate-limit@<8.2.2: '>=8.2.2 <9'
   effect@<3.20.0: '>=3.20.0 <4'
+  js-cookie@<3.0.7: '>=3.0.7 <4'
+  qs@<6.15.2: '>=6.15.2 <7'
+  ws@>=8 <8.20.1: '>=8.20.1 <9'
+  uuid@<11.1.1: '>=11.1.1 <12'
 
 patchedDependencies:
   '@changesets/assemble-release-plan': 0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f
@@ -7681,8 +7685,8 @@ packages:
   brace-expansion@2.0.3:
     resolution: {integrity: sha512-MCV/fYJEbqx68aE58kv2cA/kiky1G8vux3OR6/jbS+jIMe/6fJWa0DTzJU7dqijOWYwHi1t29FlfYI9uytqlpA==}
 
-  brace-expansion@5.0.5:
-    resolution: {integrity: sha512-VZznLgtwhn+Mact9tfiwx64fA9erHH/MCXEUfB/0bX/6Fz6ny5EGTXYltMocqg4xFAQZtnO3DHWWXi8RiuN7cQ==}
+  brace-expansion@5.0.6:
+    resolution: {integrity: sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==}
     engines: {node: 18 || 20 || >=22}
 
   braces@3.0.3:
@@ -10249,9 +10253,8 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  js-cookie@3.0.5:
-    resolution: {integrity: sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw==}
-    engines: {node: '>=14'}
+  js-cookie@3.0.8:
+    resolution: {integrity: sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw==}
 
   js-md4@0.3.2:
     resolution: {integrity: sha512-/GDnfQYsltsjRswQhN9fhv3EMw2sCpUdrdxyWDOUK7eyD++r3gRhzgiQgc/x4MAv2i1iuQ4lxO5mvqM3vj4bwA==}
@@ -12056,8 +12059,8 @@ packages:
     resolution: {integrity: sha512-Uu7ii+FQy4Qf82G4xu7ShHhjhGahEpCWc3x8UavY3CTcWV+ufmmCtwkr7ZKsX42jdL0kr1B5FKUeqJvAn51jzQ==}
     hasBin: true
 
-  qs@6.15.0:
-    resolution: {integrity: sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ==}
+  qs@6.15.2:
+    resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
     engines: {node: '>=0.6'}
 
   quansync@0.2.11:
@@ -13844,23 +13847,8 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
-  uuid@14.0.0:
-    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
-    hasBin: true
-
-  uuid@7.0.3:
-    resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
     hasBin: true
 
   valibot@1.2.0:
@@ -14283,30 +14271,6 @@ packages:
     peerDependencies:
       bufferutil: ^4.0.1
       utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.18.0:
-    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.20.0:
-    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
     peerDependenciesMeta:
       bufferutil:
         optional: true
@@ -14744,7 +14708,7 @@ snapshots:
     dependencies:
       '@azure/msal-common': 15.15.0
       jsonwebtoken: 9.0.3
-      uuid: 8.3.2
+      uuid: 11.1.1
 
   '@babel/code-frame@7.10.4':
     dependencies:
@@ -21112,7 +21076,7 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       on-finished: 2.4.1
-      qs: 6.15.0
+      qs: 6.15.2
       raw-body: 3.0.2
       type-is: 2.0.1
     transitivePeerDependencies:
@@ -21155,7 +21119,7 @@ snapshots:
     dependencies:
       balanced-match: 1.0.2
 
-  brace-expansion@5.0.5:
+  brace-expansion@5.0.6:
     dependencies:
       balanced-match: 4.0.4
 
@@ -22785,7 +22749,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.15.0
+      qs: 6.15.2
       range-parser: 1.2.1
       router: 2.2.0
       send: 1.2.1
@@ -23354,7 +23318,7 @@ snapshots:
       '@types/ws': 8.18.1
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.20.0
+      ws: 8.20.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -23864,7 +23828,7 @@ snapshots:
       istanbul-lib-coverage: 3.2.2
       p-map: 3.0.0
       rimraf: 3.0.2
-      uuid: 8.3.2
+      uuid: 11.1.1
 
   istanbul-lib-report@3.0.1:
     dependencies:
@@ -23978,10 +23942,10 @@ snapshots:
       config-chain: 1.1.13
       editorconfig: 1.0.4
       glob: 10.5.0
-      js-cookie: 3.0.5
+      js-cookie: 3.0.8
       nopt: 7.2.1
 
-  js-cookie@3.0.5: {}
+  js-cookie@3.0.8: {}
 
   js-md4@0.3.2: {}
 
@@ -24722,7 +24686,7 @@ snapshots:
       roughjs: 4.6.6
       stylis: 4.4.0
       ts-dedent: 2.2.0
-      uuid: 14.0.0
+      uuid: 11.1.1
 
   metro-babel-transformer@0.83.3:
     dependencies:
@@ -25383,7 +25347,7 @@ snapshots:
       sharp: 0.34.5
       undici: 7.24.1
       workerd: 1.20260124.0
-      ws: 8.18.0
+      ws: 8.20.1
       youch: 4.1.0-beta.10
     transitivePeerDependencies:
       - bufferutil
@@ -25395,7 +25359,7 @@ snapshots:
       sharp: 0.34.5
       undici: 7.24.1
       workerd: 1.20260305.0
-      ws: 8.18.0
+      ws: 8.20.1
       youch: 4.1.0-beta.10
     transitivePeerDependencies:
       - bufferutil
@@ -25403,7 +25367,7 @@ snapshots:
 
   minimatch@10.2.4:
     dependencies:
-      brace-expansion: 5.0.5
+      brace-expansion: 5.0.6
 
   minimatch@3.1.5:
     dependencies:
@@ -26415,7 +26379,7 @@ snapshots:
 
   qrcode-terminal@0.11.0: {}
 
-  qs@6.15.0:
+  qs@6.15.2:
     dependencies:
       side-channel: 1.1.0
 
@@ -27458,7 +27422,7 @@ snapshots:
       node-forge: 1.4.0
       node-rsa: 1.1.1
       pako: 1.0.11
-      uuid: 8.3.2
+      uuid: 11.1.1
       xml: 1.0.1
       xml-crypto: 6.1.2
       xml-escape: 1.1.0
@@ -28030,7 +27994,7 @@ snapshots:
   svix@1.84.1:
     dependencies:
       standardwebhooks: 1.0.0
-      uuid: 10.0.0
+      uuid: 11.1.1
 
   swr@2.4.0(react@19.2.4):
     dependencies:
@@ -28686,13 +28650,7 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
-  uuid@10.0.0: {}
-
-  uuid@14.0.0: {}
-
-  uuid@7.0.3: {}
-
-  uuid@8.3.2: {}
+  uuid@11.1.1: {}
 
   valibot@1.2.0(typescript@5.9.3):
     optionalDependencies:
@@ -29277,10 +29235,6 @@ snapshots:
 
   ws@7.5.10: {}
 
-  ws@8.18.0: {}
-
-  ws@8.20.0: {}
-
   ws@8.20.1: {}
 
   wsl-utils@0.1.0:
@@ -29295,7 +29249,7 @@ snapshots:
   xcode@3.0.1:
     dependencies:
       simple-plist: 1.3.1
-      uuid: 7.0.3
+      uuid: 11.1.1
 
   xdg-basedir@5.1.0: {}
 
