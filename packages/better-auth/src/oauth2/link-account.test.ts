@@ -946,8 +946,8 @@ describe("oauth2 - override user info on sign-in", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8906
  *
- * Regression: linkSocial callback used findAccount(accountId) without
- * filtering by providerId. When two different providers share the same
+ * Regression: linkSocial callback looked up the account by accountId
+ * alone, without filtering by providerId. When two different providers share the same
  * numeric account ID, the wrong account could be matched, causing a
  * spurious "account_already_linked_to_different_user" error or silently
  * updating the wrong account record.
@@ -1059,7 +1059,7 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		);
 
 		// User B tries to link GitHub — GitHub returns the SAME accountId
-		// as User A's Google account. Without the fix, findAccount(SHARED_ACCOUNT_ID)
+		// as User A's Google account. Without the fix, an accountId-only lookup
 		// would find User A's Google account and return "account_already_linked_to_different_user".
 		mockGithubToken("user-b-gh", Number(SHARED_ACCOUNT_ID), userBEmail);
 
