@@ -369,18 +369,17 @@ describe("mcp", async () => {
 			});
 		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5004",
 			fetchOptions: { customFetchImpl: customFetchImplRP },
 		});
 
-		const data = await client.signIn.oauth2(
-			{ providerId: "test-confidential", callbackURL: "/dashboard" },
+		const data = await client.signIn.social(
+			{ provider: "test-confidential", callbackURL: "/dashboard" },
 			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
 		);
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
