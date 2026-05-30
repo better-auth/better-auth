@@ -20,6 +20,7 @@ export function authServerMetadata(
 	opts?: JwtOptions,
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
+		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
@@ -35,7 +36,9 @@ export function authServerMetadata(
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
 				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
-		registration_endpoint: `${baseURL}/oauth2/register`,
+		registration_endpoint: overrides?.dynamic_client_registration_supported
+			? `${baseURL}/oauth2/register`
+			: undefined,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported:
@@ -92,6 +95,8 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported:
+			opts.allowDynamicClientRegistration,
 		// `public_client_supported` flips `"none"` into the advertised auth
 		// methods. Any configured `clientDiscovery` implicitly produces public
 		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
@@ -141,7 +146,10 @@ export function oidcServerMetadata(
 const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
 
-function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+export function metadataResponse(
+	body: unknown,
+	extraHeaders?: HeadersInit,
+): Response {
 	const headers = new Headers(extraHeaders);
 	if (!headers.has("Cache-Control")) {
 		headers.set("Cache-Control", METADATA_CACHE_CONTROL);
