@@ -20,6 +20,7 @@ import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -45,7 +46,12 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	domainMatches,
+	normalizePem,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
@@ -1291,9 +1297,10 @@ export const signInSSO = (options?: SSOOptions) => {
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
-					privateKey:
+					privateKey: normalizePem(
 						parsedSamlConfig.spMetadata?.privateKey ||
-						parsedSamlConfig.privateKey,
+							parsedSamlConfig.privateKey,
+					),
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 					relayState,
 				});
@@ -1313,16 +1320,16 @@ export const signInSSO = (options?: SSOOptions) => {
 						wantAuthnRequestsSigned:
 							parsedSamlConfig.authnRequestsSigned || false,
 						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: idpData?.encPrivateKey,
+						encPrivateKey: normalizePem(idpData?.encPrivateKey),
 						encPrivateKeyPass: idpData?.encPrivateKeyPass,
 					});
 				} else {
 					idp = saml.IdentityProvider({
 						metadata: idpData.metadata,
-						privateKey: idpData.privateKey,
+						privateKey: normalizePem(idpData.privateKey),
 						privateKeyPass: idpData.privateKeyPass,
 						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: idpData.encPrivateKey,
+						encPrivateKey: normalizePem(idpData.encPrivateKey),
 						encPrivateKeyPass: idpData.encPrivateKeyPass,
 					});
 				}
@@ -2235,17 +2242,17 @@ async function handleLogoutRequest(
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
