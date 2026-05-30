@@ -24,7 +24,7 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import { parseCookies, SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
 	createAccountStore,
 	createSessionStore,
@@ -354,17 +354,6 @@ export function deleteSessionCookie(
 	if (!skipDontRememberMe) {
 		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
-}
-
-export function parseCookies(cookieHeader: string) {
-	const cookies = cookieHeader.split("; ");
-	const cookieMap = new Map<string, string>();
-
-	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split(/=(.*)/s);
-		cookieMap.set(name!, value!);
-	});
-	return cookieMap;
 }
 
 export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
