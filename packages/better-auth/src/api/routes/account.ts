@@ -246,7 +246,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			const { token, nonce } = c.body.idToken;
 			const valid = await provider.verifyIdToken(token, nonce);
 			if (!valid) {
-				c.context.logger.error("Invalid id token", {
+				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,
 				});
 				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);

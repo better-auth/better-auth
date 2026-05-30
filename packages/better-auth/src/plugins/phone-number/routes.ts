@@ -148,9 +148,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				(a) => a.providerId === "credential",
 			);
 			if (!credentialAccount) {
-				ctx.context.logger.error("Credential account not found", {
-					phoneNumber,
-				});
+				ctx.context.logger.warn("Credential account not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
@@ -158,7 +156,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			const currentPassword = credentialAccount?.password;
 			if (!currentPassword) {
-				ctx.context.logger.error("Password not found", { phoneNumber });
+				ctx.context.logger.warn("Password not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
@@ -169,7 +167,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				password,
 			});
 			if (!validPassword) {
-				ctx.context.logger.error("Invalid password");
+				ctx.context.logger.warn("Invalid password");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,

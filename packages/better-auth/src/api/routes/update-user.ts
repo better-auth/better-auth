@@ -252,14 +252,14 @@ export const changePassword = createAuthEndpoint(
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
+			ctx.context.logger.warn("Password is too short");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
+			ctx.context.logger.warn("Password is too long");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
@@ -331,14 +331,14 @@ export const setPassword = createAuthEndpoint(
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
+			ctx.context.logger.warn("Password is too short");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
+			ctx.context.logger.warn("Password is too long");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
@@ -726,7 +726,7 @@ export const changeEmail = createAuthEndpoint(
 		const newEmail = ctx.body.newEmail.toLowerCase();
 
 		if (newEmail === ctx.context.session.user.email) {
-			ctx.context.logger.error("Email is the same");
+			ctx.context.logger.warn("Email is the same");
 			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Email is the same",
 			});

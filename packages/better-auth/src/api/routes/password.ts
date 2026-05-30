@@ -110,7 +110,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			await ctx.context.internalAdapter.findVerificationValue(
 				"dummy-verification-token",
 			);
-			ctx.context.logger.error("Reset Password: User not found", { email });
+			ctx.context.logger.warn("Reset Password: User not found");
 			return ctx.json({
 				status: true,
 				message:
