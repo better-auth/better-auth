@@ -405,7 +405,7 @@ describe("account", async () => {
 			});
 
 			expect(ambiguousInfo.error?.message).toBe(
-				BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+				"Multiple accounts share this account ID. Pass a providerId to disambiguate.",
 			);
 			expect(googleGetUserInfoMock).not.toHaveBeenCalled();
 			expect(githubGetUserInfoMock).not.toHaveBeenCalled();
@@ -430,6 +430,124 @@ describe("account", async () => {
 			});
 			expect(githubGetUserInfoMock).toHaveBeenCalledWith(
 				expect.objectContaining({ accessToken: "github-access-token" }),
+			);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should disambiguate by providerId on the server-side userId path without a session", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+				github: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const githubProvider = ctx.socialProviders.find((v) => v.id === "github")!;
+		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
+		const sharedAccountId = "shared-server-side-account-id";
+
+		const user = await ctx.internalAdapter.createUser({
+			name: "Server Side User",
+			email: "server-side-disambiguate@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "google-access-token",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId: sharedAccountId,
+			accessToken: "github-access-token",
+		});
+
+		githubGetUserInfoMock.mockResolvedValueOnce({
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				emailVerified: user.emailVerified,
+			},
+			data: { source: "github" },
+		});
+
+		// No headers: the trusted server-side caller names the user via userId,
+		// and providerId disambiguates the colliding accountId.
+		const info = await auth.api.accountInfo({
+			query: {
+				accountId: sharedAccountId,
+				userId: user.id,
+				providerId: "github",
+			},
+		});
+
+		expect(info).toMatchObject({ data: { source: "github" } });
+		expect(githubGetUserInfoMock).toHaveBeenCalledWith(
+			expect.objectContaining({ accessToken: "github-access-token" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should not find an account when providerId matches none of the user's accounts", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+				github: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const accountId = "github-only-account-id";
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId,
+			accessToken: "github-access-token",
+		});
+
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId, providerId: "google" },
+				method: "GET",
+			});
+
+			expect(info.error?.message).toBe(
+				BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+			);
+		});
+	});
+
+	it("should reject account info for a non-social (credential) account", async () => {
+		// A credential account stores its accountId as the user id. Asking for its
+		// provider info is a client error (400), not a server error (500).
+		const { runWithUser, user } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: user.id },
+				method: "GET",
+			});
+
+			expect(info.error?.status).toBe(400);
+			expect(info.error?.message).toBe(
+				"Account is not associated with a configured social provider.",
 			);
 		});
 	});
