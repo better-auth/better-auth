@@ -867,6 +867,28 @@ describe("base context creation", () => {
 			});
 			expect(res.oauthConfig.storeStateStrategy).toBe("database");
 		});
+
+		/**
+		 * Regression: secondaryStorage stores sessions and verification, not
+		 * account records, so a secondaryStorage-only setup must keep the account
+		 * cookie. Otherwise OAuth tokens have no durable home and getAccessToken
+		 * fails with ACCOUNT_NOT_FOUND on the next stateless invocation.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/9581
+		 */
+		it("should keep storeAccountCookie enabled when only secondaryStorage is configured", async () => {
+			const res = await initBase({
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+			});
+			expect(
+				(res.options as { account?: { storeAccountCookie?: boolean } }).account
+					?.storeAccountCookie,
+			).toBe(true);
+		});
 	});
 
 	describe("app name", () => {
