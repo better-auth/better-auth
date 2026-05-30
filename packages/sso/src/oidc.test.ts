@@ -2279,7 +2279,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(res.status).toBe(302);
 		const location = res.headers.get("location") || "";
 		expect(location).not.toContain("http://localhost:8080/authorize");
-		expect(location).toContain("please_restart_the_process");
+		expect(location).toContain("state_not_found");
 	});
 
 	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
@@ -2329,6 +2329,6 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("state_not_found");
 	});
 });
