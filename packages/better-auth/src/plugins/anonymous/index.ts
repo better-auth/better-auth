@@ -219,7 +219,9 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					}
 
 					try {
-						await ctx.context.internalAdapter.deleteSessions(session.user.id);
+						await ctx.context.internalAdapter.deleteUserSessions(
+							session.user.id,
+						);
 					} catch (error) {
 						ctx.context.logger.error(
 							"Failed to delete anonymous user sessions",
@@ -337,7 +339,9 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 						try {
-							await ctx.context.internalAdapter.deleteSessions(session.user.id);
+							await ctx.context.internalAdapter.deleteUserSessions(
+								session.user.id,
+							);
 							await ctx.context.internalAdapter.deleteUser(session.user.id);
 						} catch (error) {
 							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`

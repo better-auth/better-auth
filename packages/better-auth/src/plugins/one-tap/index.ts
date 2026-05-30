@@ -5,6 +5,7 @@ import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 
@@ -117,88 +118,41 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					}
 					const email = rawEmail.toLowerCase();
 
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						if (options?.disableSignup) {
-							throw new APIError("BAD_GATEWAY", {
-								message: "User not found",
-							});
-						}
-						const newUser = await ctx.context.internalAdapter.createOAuthUser(
-							{
-								email,
-								emailVerified:
-									typeof email_verified === "boolean"
-										? email_verified
-										: toBoolean(email_verified),
-								name,
-								image: picture,
-							},
-							{
-								providerId: "google",
-								accountId: sub,
-							},
-						);
-						if (!newUser) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: "Could not create user",
-							});
-						}
-						const session = await ctx.context.internalAdapter.createSession(
-							newUser.user.id,
-						);
-						await setSessionCookie(ctx, {
-							user: newUser.user,
-							session,
-						});
-						return ctx.json({
-							token: session.token,
-							user: parseUserOutput(ctx.context.options, newUser.user),
-						});
-					}
-					const account = await ctx.context.internalAdapter.findAccount(sub);
-					if (!account) {
-						const accountLinking = ctx.context.options.account?.accountLinking;
-						const providerEmailVerified =
-							typeof email_verified === "boolean"
-								? email_verified
-								: toBoolean(email_verified);
-						// FIXME(next-minor): drop `requireLocalEmailVerified` option and
-						// make the gate unconditional.
-						const requireLocalEmailVerified =
-							accountLinking?.requireLocalEmailVerified ?? true;
-						const shouldLinkAccount =
-							accountLinking?.enabled !== false &&
-							accountLinking?.disableImplicitLinking !== true &&
-							(!requireLocalEmailVerified || user.user.emailVerified) &&
-							(ctx.context.trustedProviders.includes("google") ||
-								providerEmailVerified);
-						if (shouldLinkAccount) {
-							await ctx.context.internalAdapter.linkAccount({
-								userId: user.user.id,
-								providerId: "google",
-								accountId: sub,
-								scope: "openid,profile,email",
-								idToken,
-							});
-						} else {
-							throw new APIError("UNAUTHORIZED", {
-								message:
-									"Google identity cannot be linked: implicit account-linking is disabled, the local email is not verified, or the Google email_verified claim is false and Google is not a trusted provider",
-							});
-						}
-					}
-					const session = await ctx.context.internalAdapter.createSession(
-						user.user.id,
-					);
+					const emailVerified =
+						typeof email_verified === "boolean"
+							? email_verified
+							: toBoolean(email_verified);
 
-					await setSessionCookie(ctx, {
-						user: user.user,
-						session,
+					// Resolve identity through the shared OAuth path so One Tap matches
+					// the redirect and `signIn.social` flows: the account that owns the
+					// Google `sub` wins, never whichever local user happens to share the
+					// token's email.
+					const result = await handleOAuthUserInfo(ctx, {
+						userInfo: {
+							id: sub,
+							email,
+							emailVerified,
+							name: name ?? "",
+							image: picture,
+						},
+						account: {
+							providerId: "google",
+							accountId: sub,
+							idToken,
+							scope: "openid,profile,email",
+						},
+						disableSignUp: options?.disableSignup,
 					});
+					if (result.error) {
+						throw new APIError("UNAUTHORIZED", {
+							message: result.error,
+						});
+					}
+
+					await setSessionCookie(ctx, result.data!);
 					return ctx.json({
-						token: session.token,
-						user: parseUserOutput(ctx.context.options, user.user),
+						token: result.data!.session.token,
+						user: parseUserOutput(ctx.context.options, result.data!.user),
 					});
 				},
 			),

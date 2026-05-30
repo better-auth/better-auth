@@ -721,12 +721,18 @@ describe("internal adapter test", async () => {
 			accountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccount(account.accountId);
+		let foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccount(account.accountId);
+		foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeNull();
 	});
 

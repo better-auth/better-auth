@@ -476,7 +476,18 @@ async function getValidAccessToken(
 		resolvedUserId,
 		providerId,
 		accountId,
-	}: { resolvedUserId: string; providerId: string; accountId?: string },
+		account: resolvedAccount,
+	}: {
+		resolvedUserId: string;
+		providerId: string;
+		accountId?: string;
+		/**
+		 * An already-resolved account. When provided, skips the cookie and
+		 * database lookup so a caller that has the account in hand does not
+		 * re-query for it.
+		 */
+		account?: Account;
+	},
 ) {
 	const provider = await getAwaitableValue(ctx.context.socialProviders, {
 		value: providerId,
@@ -487,23 +498,25 @@ async function getValidAccessToken(
 			code: "PROVIDER_NOT_SUPPORTED",
 		});
 	}
-	const accountData = await getAccountCookie(ctx);
-	let account: Account | undefined = undefined;
-	if (
-		accountData &&
-		accountData.userId === resolvedUserId &&
-		providerId === accountData.providerId &&
-		(!accountId || accountData.accountId === accountId)
-	) {
-		account = accountData;
-	} else {
-		const accounts =
-			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-		account = accounts.find((acc) =>
-			accountId
-				? acc.accountId === accountId && acc.providerId === providerId
-				: acc.providerId === providerId,
-		);
+	let account: Account | undefined = resolvedAccount;
+	if (!account) {
+		const accountData = await getAccountCookie(ctx);
+		if (
+			accountData &&
+			accountData.userId === resolvedUserId &&
+			providerId === accountData.providerId &&
+			(!accountId || accountData.accountId === accountId)
+		) {
+			account = accountData;
+		} else {
+			const accounts =
+				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+			account = accounts.find((acc) =>
+				accountId
+					? acc.accountId === accountId && acc.providerId === providerId
+					: acc.providerId === providerId,
+			);
+		}
 	}
 
 	if (!account) {
@@ -843,6 +856,13 @@ const accountInfoQuerySchema = z.optional(
 					"The provider given account id for which to get the account info",
 			})
 			.optional(),
+		providerId: z
+			.string()
+			.meta({
+				description:
+					"The provider ID to disambiguate provider-issued account IDs",
+			})
+			.optional(),
 		userId: z
 			.string()
 			.meta({
@@ -906,7 +926,11 @@ export const accountInfo = createAuthEndpoint(
 		query: accountInfoQuerySchema,
 	},
 	async (ctx) => {
-		const { accountId: providedAccountId, userId } = ctx.query || {};
+		const {
+			accountId: providedAccountId,
+			providerId: providedProviderId,
+			userId,
+		} = ctx.query || {};
 		const resolvedUserId = await resolveUserId(ctx, userId);
 
 		let account: Account | undefined = undefined;
@@ -918,11 +942,21 @@ export const accountInfo = createAuthEndpoint(
 				}
 			}
 		} else {
-			const accountData =
-				await ctx.context.internalAdapter.findAccount(providedAccountId);
-			if (accountData) {
-				account = accountData;
+			const accounts =
+				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+			const matchingAccounts = accounts.filter(
+				(acc) =>
+					acc.accountId === providedAccountId &&
+					(!providedProviderId || acc.providerId === providedProviderId),
+			);
+			if (matchingAccounts.length > 1) {
+				throw APIError.from("BAD_REQUEST", {
+					message:
+						"Multiple accounts share this account ID. Pass a providerId to disambiguate.",
+					code: "AMBIGUOUS_ACCOUNT",
+				});
 			}
+			account = matchingAccounts[0];
 		}
 
 		if (!account || account.userId !== resolvedUserId) {
@@ -934,8 +968,8 @@ export const accountInfo = createAuthEndpoint(
 		});
 
 		if (!provider) {
-			throw APIError.from("INTERNAL_SERVER_ERROR", {
-				message: `Provider account provider is ${account.providerId} but it is not configured`,
+			throw APIError.from("BAD_REQUEST", {
+				message: "Account is not associated with a configured social provider.",
 				code: "PROVIDER_NOT_CONFIGURED",
 			});
 		}
@@ -943,6 +977,7 @@ export const accountInfo = createAuthEndpoint(
 			resolvedUserId,
 			providerId: account.providerId,
 			accountId: account.accountId,
+			account,
 		});
 		if (!tokens.accessToken) {
 			throw APIError.from("BAD_REQUEST", {

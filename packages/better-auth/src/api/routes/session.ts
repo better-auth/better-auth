@@ -824,7 +824,7 @@ export const revokeSessions = createAuthEndpoint(
 	},
 	async (ctx) => {
 		try {
-			await ctx.context.internalAdapter.deleteSessions(
+			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {
