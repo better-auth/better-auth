@@ -303,9 +303,11 @@ export function storageAdapter(storage: {
 		},
 		/**
 		 * Stores `value`, splitting it across chunk keys when it exceeds the
-		 * per-write limit. Data chunks are written before the base-key marker, so an
-		 * interrupted write leaves the previous value readable. Failures are logged,
-		 * not thrown: persistence is best-effort and must not break the request.
+		 * per-write limit. The base key is cleared before the chunks are rewritten
+		 * and set to the marker last, as the commit point, so a write interrupted
+		 * partway through reads as absent rather than a mix of old and new chunks.
+		 * Failures are logged, not thrown: persistence is best-effort and must not
+		 * break the request.
 		 */
 		setItem: async (name: string, value: string): Promise<void> => {
 			const key = normalizeCookieName(name);
@@ -314,6 +316,10 @@ export function storageAdapter(storage: {
 					await storage.setItem(key, value);
 					return;
 				}
+				// Drop the marker first: chunks are overwritten in place below, so
+				// without this an interrupted rewrite would leave the old marker
+				// pointing at a mix of new and stale chunks.
+				await storage.setItem(key, "");
 				const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
 				for (let i = 0; i < count; i++) {
 					const start = i * STORAGE_VALUE_LIMIT;

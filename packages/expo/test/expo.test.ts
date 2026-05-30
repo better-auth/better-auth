@@ -906,6 +906,37 @@ describe("expo with cookieCache", async () => {
 		expect(storage.getItem("better-auth_cookie")).toBeNull();
 	});
 
+	it("should not return mixed old/new data when a chunked overwrite is interrupted", async () => {
+		const map = new Map<string, string>();
+		let failAfter = Number.POSITIVE_INFINITY;
+		let writes = 0;
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => {
+				if (writes++ >= failAfter) {
+					throw new Error("interrupted");
+				}
+				map.set(name, value);
+			},
+		});
+
+		const oldValue = "a".repeat(5_000);
+		await storage.setItem("better-auth_cookie", oldValue);
+		expect(storage.getItem("better-auth_cookie")).toBe(oldValue);
+
+		// Overwrite with another large value, failing after the marker clear and
+		// the first chunk so the remaining chunks keep their old data.
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		writes = 0;
+		failAfter = 2;
+		await storage.setItem("better-auth_cookie", "b".repeat(5_000));
+		error.mockRestore();
+
+		// The reassembled value must never splice old "a" chunks into the new write.
+		const result = storage.getItem("better-auth_cookie");
+		expect(result ?? "").not.toContain("a");
+	});
+
 	it("should shrink from chunked to a single value without bleeding stale chunks", async () => {
 		const map = new Map<string, string>();
 		const storage = storageAdapter({
