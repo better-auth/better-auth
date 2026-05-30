@@ -20,11 +20,13 @@ import type {
 } from "kysely";
 import {
 	CompiledQuery,
-	DEFAULT_MIGRATION_LOCK_TABLE,
-	DEFAULT_MIGRATION_TABLE,
 	DefaultQueryCompiler,
 	sql,
 } from "kysely";
+import {
+	DEFAULT_MIGRATION_LOCK_TABLE,
+	DEFAULT_MIGRATION_TABLE,
+} from "kysely/migration";
 
 class BunSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
