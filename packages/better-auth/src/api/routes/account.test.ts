@@ -227,6 +227,68 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8350
+	 */
+	it("should get account info server-side using userId without session headers", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+		});
+
+		const headers = new Headers();
+		email = "account-info-server-side@test.com";
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const accounts = await auth.api.listUserAccounts({ headers });
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+
+		// No headers: the server-side caller identifies the user via userId.
+		const info = await auth.api.accountInfo({
+			query: {
+				accountId: googleAccount!.accountId,
+				userId: googleAccount!.userId,
+			},
+		});
+
+		expect(info).toMatchObject({
+			user: expect.objectContaining({
+				id: expect.any(String),
+				email: expect.any(String),
+			}),
+			data: expect.any(Object),
+		});
+	});
+
+	it("should reject account info over HTTP without a session even when userId is passed", async () => {
+		const { user } = await signInWithTestUser();
+		// Top-level $fetch carries no session; a passed userId must not bypass auth.
+		const info = await client.$fetch("/account-info", {
+			query: { accountId: "any-account-id", userId: user.id },
+			method: "GET",
+		});
+		expect(info.data).toBeNull();
+		expect(info.error?.status).toBe(401);
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
