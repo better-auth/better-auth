@@ -32,9 +32,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-  TURBO_CACHE: remote:rw
   BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
 
 jobs:
@@ -64,13 +61,13 @@ jobs:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
           node-version-file: '.nvmrc'
-          cache: pnpm
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
 
       - run: pnpm install --frozen-lockfile
 
@@ -103,7 +100,7 @@ jobs:
       - name: Create Release Pull Request or Publish
         id: changesets
         if: steps.guard.outputs.skip != 'true'
-        uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
+        uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1.4.9
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
@@ -148,9 +145,11 @@ jobs:
             -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
             .github/prompts/release-notes-rewrite.md)
           EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
-          echo "prompt<<${EOF_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$PROMPT" >> "$GITHUB_OUTPUT"
-          echo "${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "prompt<<${EOF_DELIM}"
+            echo "$PROMPT"
+            echo "${EOF_DELIM}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Rewrite release notes with AI
         id: ai-notes
@@ -177,9 +176,9 @@ jobs:
           fi
 
           # Count PR links in both files
-          RAW_COUNT=$(grep -coP '\[#\d+\]' "$RAW_PATH" 2>/dev/null || true)
+          RAW_COUNT=$(grep -coP "\\[#\\d+\\]" "$RAW_PATH" 2>/dev/null || true)
           RAW_COUNT=${RAW_COUNT:-0}
-          FINAL_COUNT=$(grep -coP '\[#\d+\]' "$FINAL" 2>/dev/null || true)
+          FINAL_COUNT=$(grep -coP "\\[#\\d+\\]" "$FINAL" 2>/dev/null || true)
           FINAL_COUNT=${FINAL_COUNT:-0}
 
           if [ "$FINAL_COUNT" -lt "$RAW_COUNT" ]; then
@@ -195,7 +194,7 @@ jobs:
               echo "::warning::Missing package heading: $heading"
               MISSING=$((MISSING + 1))
             fi
-          done < <(grep -oP '## `[^`]+`' "$RAW_PATH")
+          done < <(grep -oP "## \`[^\`]+\`" "$RAW_PATH")
 
           if [ "$MISSING" -gt 0 ]; then
             echo "::warning::AI output is missing $MISSING package heading(s). Falling back to raw notes."
@@ -321,13 +320,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
+          package-manager-cache: false
 
       - run: pnpm install --frozen-lockfile
 
@@ -383,6 +382,7 @@ jobs:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
           node-version-file: '.nvmrc'
+          package-manager-cache: false
 
       - name: Validate inputs
         env:
@@ -422,9 +422,11 @@ jobs:
             -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
             .github/prompts/release-notes-rewrite.md)
           EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
-          echo "prompt<<${EOF_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$PROMPT" >> "$GITHUB_OUTPUT"
-          echo "${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "prompt<<${EOF_DELIM}"
+            echo "$PROMPT"
+            echo "${EOF_DELIM}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Rewrite release notes with AI
         id: ai-notes

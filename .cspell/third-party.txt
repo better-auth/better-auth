@@ -38,6 +38,7 @@ WorkOS
 authjs
 vite
 electronjs
+nextjs
 wagmi
 tldts
 headimgurl

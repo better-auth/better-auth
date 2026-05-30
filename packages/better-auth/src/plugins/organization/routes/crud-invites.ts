@@ -404,6 +404,23 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			if (
+				ctx.context.orgOptions.teams?.enabled &&
+				"teamId" in ctx.body &&
+				ctx.body.teamId
+			) {
+				const requestedTeamIds =
+					typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId]
+						: (ctx.body.teamId as string[]);
+				if (requestedTeamIds.some((id) => id.includes(","))) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TEAM_ID,
+					);
+				}
+			}
+
+			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
 				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
@@ -598,8 +615,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// Email-string equality is not ownership proof: a session whose user.email
+			// matches the invitation but has not been verified must not be treated as
+			// the invitation recipient. Gate is on by default; apps that intentionally
+			// allow unverified accept can opt out with `requireEmailVerificationOnInvitation: false`.
+			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -796,8 +818,9 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1060,6 +1083,16 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				);
 			}
+			// FIXME(next-minor): drop the option and make the gate unconditional.
+			if (
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				!session.user.emailVerified
+			) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
+			}
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -1238,6 +1271,21 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "User email cannot be passed for client side API calls.",
 				});
+			}
+
+			// When the caller has a session, require an ownership signal stronger
+			// than the email string before enumerating invitations targeted at it.
+			// Server-side SDK calls without a session are trusted and skip the gate.
+			// FIXME(next-minor): drop the option and make the gate unconditional.
+			if (
+				session &&
+				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				!session.user.emailVerified
+			) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
 			}
 
 			const userEmail = session?.user.email || ctx.query?.email;
