@@ -220,6 +220,98 @@ describe("one-tap implicit linking gate", async () => {
 		expect(googleAccounts).toHaveLength(1);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("does not duplicate the Google account when the same user signs in again", async () => {
+		verifiedPayload.email = "one-tap-returning-user@example.com";
+		verifiedPayload.sub = "returning-user-google-sub";
+
+		const { auth, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+		const ctx = await auth.$context;
+
+		const callOneTap = () =>
+			client.$fetch<{ token?: string }>("/one-tap/callback", {
+				method: "POST",
+				body: { idToken: "stub-id-token" },
+			});
+
+		const first = await callOneTap();
+		expect(first.error).toBeFalsy();
+		expect(first.data?.token).toBeTruthy();
+
+		// Second sign-in finds the user's own Google account and skips re-linking.
+		const second = await callOneTap();
+		expect(second.error).toBeFalsy();
+		expect(second.data?.token).toBeTruthy();
+
+		const googleAccounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "google" },
+				{ field: "accountId", value: verifiedPayload.sub },
+			],
+		});
+		expect(googleAccounts).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 *
+	 * Identity must resolve by the Google `sub`, not the token email. A Google
+	 * credential already linked to user A must sign in A, even when the token's
+	 * email matches a different local user B.
+	 */
+	it("signs in the account that owns the Google sub, not the email-matched user", async () => {
+		const sharedSub = "one-tap-sub-owned-by-user-a";
+		verifiedPayload.email = "one-tap-email-collision-b@example.com";
+		verifiedPayload.sub = sharedSub;
+
+		const { auth, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+		const ctx = await auth.$context;
+
+		const userA = await ctx.internalAdapter.createUser({
+			name: "Sub Owner A",
+			email: "one-tap-sub-owner-a@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: userA.id,
+			providerId: "google",
+			accountId: sharedSub,
+		});
+		const userB = await ctx.internalAdapter.createUser({
+			name: "Email Match B",
+			email: verifiedPayload.email,
+		});
+
+		const res = await client.$fetch<{ user?: { id: string } }>(
+			"/one-tap/callback",
+			{ method: "POST", body: { idToken: "stub-id-token" } },
+		);
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.id).toBe(userA.id);
+		expect(res.data?.user?.id).not.toBe(userB.id);
+	});
+
 	it("honors accountLinking.disableImplicitLinking even when the local user is verified", async () => {
 		const { auth, client } = await getTestInstance({
 			socialProviders: {
