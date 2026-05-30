@@ -331,11 +331,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				const minInterval = deviceCodeRecord.pollingInterval;
 
 				if (timeSinceLastPoll < minInterval) {
-					throw new APIError("BAD_REQUEST", {
-						error: "slow_down",
-						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
-					});
+					return ctx.json(
+						{
+							error: "slow_down",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+						},
+						{ status: 400 },
+					);
 				}
 			}
 
@@ -363,19 +366,25 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						},
 					],
 				});
-				throw new APIError("BAD_REQUEST", {
-					error: "expired_token",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
-				});
+				return ctx.json(
+					{
+						error: "expired_token",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+					},
+					{ status: 400 },
+				);
 			}
 
 			if (deviceCodeRecord.status === "pending") {
-				throw new APIError("BAD_REQUEST", {
-					error: "authorization_pending",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
-				});
+				return ctx.json(
+					{
+						error: "authorization_pending",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
+					},
+					{ status: 400 },
+				);
 			}
 
 			if (deviceCodeRecord.status === "denied") {
@@ -388,11 +397,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						},
 					],
 				});
-				throw new APIError("BAD_REQUEST", {
-					error: "access_denied",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
-				});
+				return ctx.json(
+					{
+						error: "access_denied",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
+					},
+					{ status: 400 },
+				);
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {

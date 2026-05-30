@@ -196,11 +196,9 @@ describe("device authorization flow", async () => {
 						client_id: "test-client",
 					},
 				}),
-			).rejects.toMatchObject({
-				body: {
-					error: "authorization_pending",
-					error_description: "Authorization pending",
-				},
+			).resolves.toMatchObject({
+				error: "authorization_pending",
+				error_description: "Authorization pending",
 			});
 		});
 
@@ -223,11 +221,9 @@ describe("device authorization flow", async () => {
 						client_id: "test-client",
 					},
 				}),
-			).rejects.toMatchObject({
-				body: {
-					error: "expired_token",
-					error_description: "Device code has expired",
-				},
+			).resolves.toMatchObject({
+				error: "expired_token",
+				error_description: "Device code has expired",
 			});
 
 			vi.useRealTimers();
@@ -357,11 +353,9 @@ describe("device authorization flow", async () => {
 						client_id: "test-client",
 					},
 				}),
-			).rejects.toMatchObject({
-				body: {
-					error: "access_denied",
-					error_description: "Access denied",
-				},
+			).resolves.toMatchObject({
+				error: "access_denied",
+				error_description: "Access denied",
 			});
 		});
 
@@ -392,18 +386,13 @@ describe("device authorization flow", async () => {
 				},
 			});
 
-			await auth.api
-				.deviceToken({
-					body: {
-						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-						device_code: device_code,
-						client_id: "test-client",
-					},
-				})
-				.catch(
-					// ignore the error
-					() => {},
-				);
+			await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: device_code,
+					client_id: "test-client",
+				},
+			});
 
 			await expect(
 				auth.api.deviceToken({
@@ -413,11 +402,9 @@ describe("device authorization flow", async () => {
 						client_id: "test-client",
 					},
 				}),
-			).rejects.toMatchObject({
-				body: {
-					error: "slow_down",
-					error_description: "Polling too frequently",
-				},
+			).resolves.toMatchObject({
+				error: "slow_down",
+				error_description: "Polling too frequently",
 			});
 		});
 	});
@@ -637,8 +624,8 @@ describe("device authorization ownership gate", () => {
 					client_id: "test-client",
 				},
 			}),
-		).rejects.toMatchObject({
-			body: { error: "authorization_pending" },
+		).resolves.toMatchObject({
+			error: "authorization_pending",
 		});
 	});
 
