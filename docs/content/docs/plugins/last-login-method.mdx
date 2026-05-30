@@ -269,7 +269,7 @@ export const auth = betterAuth({
 
 * Full literal cookie name. By default the cookie name composes `advanced.cookiePrefix` like other Better Auth cookies (e.g. `my-app.last_used_login_method`).
 * To use a custom name, set this and the matching client-side `cookieName` to the same value.
-* **Note**: This cookie is `httpOnly: false` to allow client-side JavaScript access for UI features
+* **Note**: By default this cookie is `httpOnly: false` so client-side JavaScript can read it for UI features. Overriding it to `true` via `advanced.cookies.last_used_login_method.attributes` breaks the client helper methods.
 
 **maxAge**: `number`
 

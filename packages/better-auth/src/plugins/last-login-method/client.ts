@@ -18,26 +18,32 @@ function findLastLoginCookie(
 	if (typeof document === "undefined") return null;
 
 	const parsed = parseCookies(document.cookie);
+	// A __Secure- cookie is only present in a secure context, so when both it and
+	// a non-secure leftover (e.g. from before an upgrade) exist, the __Secure- one
+	// is the current cookie. Prefer it in both lookup paths.
 	if (explicitName) {
 		for (const name of [
-			explicitName,
 			`${SECURE_COOKIE_PREFIX}${explicitName}`,
+			explicitName,
 		]) {
 			const value = parsed.get(name);
 			if (value !== undefined) return { name, value };
 		}
 		return null;
 	}
+	let plainMatch: { name: string; value: string } | null = null;
 	for (const [name, value] of parsed) {
 		const base = stripSecureCookiePrefix(name);
 		if (
 			base === LAST_USED_LOGIN_METHOD_COOKIE_NAME ||
 			base.endsWith(`.${LAST_USED_LOGIN_METHOD_COOKIE_NAME}`)
 		) {
-			return { name, value };
+			// Same-domain multi-instance collisions still need an explicit cookieName.
+			if (name.startsWith(SECURE_COOKIE_PREFIX)) return { name, value };
+			if (!plainMatch) plainMatch = { name, value };
 		}
 	}
-	return null;
+	return plainMatch;
 }
 
 /**

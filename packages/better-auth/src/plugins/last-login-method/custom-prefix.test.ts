@@ -278,6 +278,18 @@ describe("lastLoginMethod client read", () => {
 		expect(client.getLastUsedLoginMethod()).toBe("email");
 	});
 
+	it("prefers the __Secure- cookie over a leftover non-secure one", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [lastLoginMethod()] },
+			{ clientOptions: { plugins: [lastLoginMethodClient()] } },
+		);
+		vi.stubGlobal("document", {
+			cookie:
+				"my-app.last_used_login_method=google; __Secure-my-app.last_used_login_method=email",
+		});
+		expect(client.getLastUsedLoginMethod()).toBe("email");
+	});
+
 	it("does not resolve a fully custom name without a client cookieName", async () => {
 		const { client } = await getTestInstance(
 			{ plugins: [lastLoginMethod()] },
