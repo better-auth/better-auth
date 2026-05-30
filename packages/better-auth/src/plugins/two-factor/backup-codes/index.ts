@@ -507,9 +507,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				},
 			),
 			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/view-backup-codes`
+			 * A server-only function that returns a user's decrypted two-factor
+			 * backup codes. It is not exposed over HTTP and has no client method;
+			 * call it from trusted server code with a `userId` taken from an
+			 * authenticated session.
 			 *
 			 * ### API Methods
 			 *
