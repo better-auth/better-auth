@@ -92,7 +92,7 @@ The plugin has a secured configuration by default providing ease to users unfami
 
     Better Auth serves the OAuth Authorization Server metadata and OpenID Connect discovery metadata from the auth handler automatically. If your framework only forwards requests under a catch-all auth route, make sure the issuer metadata URLs reach `auth.handler`.
 
-    * OAuth Authorization Server metadata is available at both `{issuer}/.well-known/oauth-authorization-server` and `/.well-known/oauth-authorization-server[issuer-path]`.
+    * OAuth Authorization Server metadata is available at both `{issuer}/.well-known/oauth-authorization-server` and `/.well-known/oauth-authorization-server/[issuer-path]`.
     * OpenID Connect discovery metadata is available at `{issuer}/.well-known/openid-configuration` when you use the `openid` scope.
     * If you are using the resource server (for example, for MCP), add the OAuth Protected Resource metadata endpoint to the API that receives access tokens.
   </Step>
@@ -646,7 +646,7 @@ Provides [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)-compliant met
 The OAuth Provider plugin serves both path-prefixed issuer aliases automatically from the Better Auth handler:
 
 * `{issuer}/.well-known/oauth-authorization-server`
-* `/.well-known/oauth-authorization-server[issuer-path]`
+* `/.well-known/oauth-authorization-server/[issuer-path]`
 
 For example, issuer `https://example.com/api/auth` can use `/api/auth/.well-known/oauth-authorization-server` or `/.well-known/oauth-authorization-server/api/auth`. Both return the same metadata when the request reaches `auth.handler`.
 
