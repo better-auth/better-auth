@@ -108,7 +108,7 @@ export const callbackOAuth = createAuthEndpoint(
 		if (!state) {
 			c.context.logger.error("State not found", error);
 			const sep = defaultErrorURL.includes("?") ? "&" : "?";
-			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			const url = `${defaultErrorURL}${sep}error=state_not_found`;
 			throw c.redirect(url);
 		}
 
