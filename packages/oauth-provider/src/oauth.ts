@@ -31,6 +31,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
+import type { GrantHandler, OAuthContributions } from "./types/contributions";
 import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -271,6 +272,54 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
 		init: (ctx) => {
+			// Aggregate contributions from plugins that target this host. Read once
+			// at init (static, order-independent) and expose on the context so the
+			// token endpoint, discovery, and minting can consume them at request time.
+			const contributions = ctx.getContributions("oauth-provider");
+			const oauthGrantHandlers: Record<string, GrantHandler> = {};
+			const extensionGrantURIs: string[] = [];
+			const oauthMetadataContributors: NonNullable<
+				OAuthContributions["metadata"]
+			>[] = [];
+			const oauthExtraAuthMethods: string[] = [];
+			const oauthClaimContributors: NonNullable<
+				OAuthContributions["tokenClaims"]
+			>[] = [];
+			for (const contribution of contributions) {
+				if (contribution.grantTypes) {
+					Object.assign(oauthGrantHandlers, contribution.grantTypes);
+				}
+				if (contribution.grantTypeURIs) {
+					extensionGrantURIs.push(...contribution.grantTypeURIs);
+				}
+				if (contribution.metadata) {
+					oauthMetadataContributors.push(contribution.metadata);
+				}
+				if (contribution.tokenEndpointAuthMethods) {
+					oauthExtraAuthMethods.push(...contribution.tokenEndpointAuthMethods);
+				}
+				if (contribution.tokenClaims) {
+					oauthClaimContributors.push(contribution.tokenClaims);
+				}
+			}
+			// Allow contributed grant URIs through the token-endpoint allowlist.
+			if (extensionGrantURIs.length > 0) {
+				opts.grantTypes = [
+					...(opts.grantTypes ?? [
+						"authorization_code",
+						"client_credentials",
+						"refresh_token",
+					]),
+					...extensionGrantURIs,
+				];
+			}
+			const pluginContext = {
+				oauthGrantHandlers,
+				oauthMetadataContributors,
+				oauthExtraAuthMethods,
+				oauthClaimContributors,
+			};
+
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
 			if (
@@ -300,7 +349,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				} catch (error) {
 					// baseURL may not be available during init when using dynamic baseURL config
 					if (isDynamicBaseURLInit && issuer === "") {
-						return;
+						return { context: pluginContext };
 					}
 					throw error;
 				}
@@ -324,6 +373,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+			return { context: pluginContext };
 		},
 		hooks: {
 			before: [
@@ -748,29 +798,28 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.object({
-						grant_type: z
-							.string()
-							.pipe(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							),
-						client_id: z.string().optional(),
-						client_secret: z.string().optional(),
-						client_assertion: z.string().optional(),
-						client_assertion_type: z.string().optional(),
-						code: z.string().optional(),
-						code_verifier: z.string().optional(),
-						redirect_uri: SafeUrlSchema.optional(),
-						refresh_token: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						scope: z.string().optional(),
-					}),
+					// Open `grant_type` to any non-empty string so plugin-contributed
+					// extension grants reach the dispatcher; the allowlist + the token
+					// endpoint's `default` case still reject unregistered URIs with
+					// `unsupported_grant_type`. `.passthrough()` keeps extension body
+					// params (e.g. `subject_token`, `auth_req_id`) for the grant handler.
+					body: z
+						.object({
+							grant_type: z.string().trim().min(1),
+							client_id: z.string().optional(),
+							client_secret: z.string().optional(),
+							client_assertion: z.string().optional(),
+							client_assertion_type: z.string().optional(),
+							code: z.string().optional(),
+							code_verifier: z.string().optional(),
+							redirect_uri: SafeUrlSchema.optional(),
+							refresh_token: z.string().optional(),
+							resource: z
+								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+								.optional(),
+							scope: z.string().optional(),
+						})
+						.passthrough(),
 					errorCodesByField: {
 						grant_type: {
 							missing: "invalid_request",
@@ -791,12 +840,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											properties: {
 												grant_type: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
-													description: "OAuth2 grant type",
+													description:
+														"OAuth2 grant type. Built-ins: authorization_code, client_credentials, refresh_token. Plugins may register extension grant URIs (e.g. CIBA, token-exchange).",
 												},
 												client_id: {
 													type: "string",

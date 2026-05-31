@@ -13,6 +13,11 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
+import type {
+	GrantHandler,
+	OAuthContributions,
+	TokenClaimInfo,
+} from "./types/contributions";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
@@ -58,11 +63,50 @@ export async function tokenEndpoint(
 			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
+		default: {
+			// Extension grants registered by plugins via OAuthContributions.grantTypes.
+			// The allowlist check above already rejected unknown grant_type values, so
+			// reaching here means the URI was allowed; dispatch to its handler.
+			const handlers = (ctx.context as Record<string, unknown>)
+				.oauthGrantHandlers as Record<string, GrantHandler> | undefined;
+			const handler = handlers?.[grantType];
+			if (handler) {
+				return handler(ctx, opts);
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: `unsupported grant_type ${grantType}`,
+				error: "unsupported_grant_type",
+			});
+		}
 	}
 }
 
 // User Jwt SHALL follow oAuth 2
 // NOTE: Requires jwt plugin (assert !opts.disableJwtPlugin)
+/**
+ * Collects extra claims from plugin-contributed `tokenClaims` contributors for
+ * the given token kind. Returns the merged claims, applied before the
+ * consumer's `customAccessTokenClaims`/`customIdTokenClaims` and never over the
+ * pinned security claims set by the caller.
+ */
+async function collectExtensionClaims(
+	ctx: GenericEndpointContext,
+	kind: "access" | "id",
+	info: TokenClaimInfo,
+): Promise<Record<string, unknown>> {
+	const contributors = (ctx.context as Record<string, unknown>)
+		.oauthClaimContributors as
+		| NonNullable<OAuthContributions["tokenClaims"]>[]
+		| undefined;
+	if (!contributors?.length) return {};
+	const claims: Record<string, unknown> = {};
+	for (const contributor of contributors) {
+		const fn = contributor[kind];
+		if (fn) Object.assign(claims, await fn(info));
+	}
+	return claims;
+}
+
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -80,6 +124,14 @@ async function createJwtAccessToken(
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const extensionClaims = await collectExtensionClaims(ctx, "access", {
+		user,
+		scopes,
+		client,
+		referenceId,
+		sessionId: overrides?.sid,
+		resources,
+	});
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
@@ -96,6 +148,7 @@ async function createJwtAccessToken(
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
 		payload: {
+			...extensionClaims,
 			...customClaims,
 			sub: user?.id,
 			aud: toAudienceClaim(audience),
@@ -148,6 +201,7 @@ async function createIdToken(
 	sessionId?: string,
 	authTime?: Date,
 	accessToken?: string,
+	referenceId?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -160,6 +214,13 @@ async function createIdToken(
 	// - silver : mfa
 	const acr = "urn:mace:incommon:iap:bronze";
 
+	const extensionClaims = await collectExtensionClaims(ctx, "id", {
+		user,
+		scopes,
+		client,
+		sessionId,
+		referenceId,
+	});
 	const customClaims = opts.customIdTokenClaims
 		? await opts.customIdTokenClaims({
 				user,
@@ -190,6 +251,7 @@ async function createIdToken(
 		...userClaims,
 		auth_time: authTimeSec,
 		acr,
+		...extensionClaims,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -482,7 +544,7 @@ interface CreateUserTokensParams {
 	originalResources?: string[];
 }
 
-async function createUserTokens(
+export async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: CreateUserTokensParams,
@@ -644,6 +706,7 @@ async function createUserTokens(
 				sessionId,
 				authTime,
 				accessToken,
+				referenceId,
 			)
 		: undefined;
 

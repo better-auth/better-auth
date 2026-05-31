@@ -6,6 +6,11 @@ import type { Awaitable } from "./helpers";
 import type { GrantType } from "./oauth";
 
 export type {
+	GrantHandler,
+	OAuthContributions,
+	TokenClaimInfo,
+} from "./contributions";
+export type {
 	AuthMethod,
 	AuthServerMetadata,
 	BearerMethodsSupported,

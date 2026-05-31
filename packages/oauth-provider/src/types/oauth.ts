@@ -10,10 +10,12 @@ export type GrantType =
 	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
 	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
 	| "client_credentials"
-	| "refresh_token";
-// | "urn:ietf:params:oauth:grant-type:device_code"  // specified in oAuth2.1 but not yet implemented
-// | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
-// | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
+	| "refresh_token"
+	// Extension grant URIs (CIBA, pre-authorized_code, token-exchange, device_code,
+	// ...) are registered by plugins via `OAuthContributions.grantTypes`. The
+	// `(string & {})` member accepts those custom URIs while preserving literal
+	// autocomplete for the built-ins above.
+	| (string & {});
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header

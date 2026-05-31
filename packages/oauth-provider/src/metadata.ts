@@ -15,6 +15,44 @@ import {
 	toClientDiscoveryArray,
 } from "./utils";
 
+/**
+ * Folds plugin-contributed discovery into the metadata document: appends
+ * contributed token-endpoint auth methods and adds contributed fields. Core
+ * fields are never overridden — a contributor can only add new keys.
+ */
+function applyMetadataContributions(
+	ctx: GenericEndpointContext,
+	metadata: AuthServerMetadata,
+): void {
+	const extraAuthMethods = (ctx.context as Record<string, unknown>)
+		.oauthExtraAuthMethods as string[] | undefined;
+	if (extraAuthMethods?.length) {
+		const methods = metadata.token_endpoint_auth_methods_supported ?? [];
+		for (const method of extraAuthMethods) {
+			if (!methods.includes(method as TokenEndpointAuthMethod)) {
+				methods.push(method as TokenEndpointAuthMethod);
+			}
+		}
+		metadata.token_endpoint_auth_methods_supported = methods;
+	}
+	const contributors = (ctx.context as Record<string, unknown>)
+		.oauthMetadataContributors as
+		| ((c: { baseURL: string }) => Record<string, unknown>)[]
+		| undefined;
+	if (contributors?.length) {
+		const target = metadata as Record<string, unknown>;
+		for (const contribute of contributors) {
+			for (const [key, value] of Object.entries(
+				contribute({ baseURL: ctx.context.baseURL }),
+			)) {
+				if (target[key] == null) {
+					target[key] = value;
+				}
+			}
+		}
+	}
+}
+
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
 	opts?: JwtOptions,
@@ -82,6 +120,7 @@ export function authServerMetadata(
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
 	};
+	applyMetadataContributions(ctx, metadata);
 	return metadata;
 }
 

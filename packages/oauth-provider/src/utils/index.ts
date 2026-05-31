@@ -487,7 +487,7 @@ export async function getStoredToken(
 // spaces aren't rejected before reaching the spec-correct decoder.
 const BASIC_SCHEME_PREFIX = /^Basic +/i;
 
-function basicToClientCredentials(authorization: string) {
+export function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
 	}
