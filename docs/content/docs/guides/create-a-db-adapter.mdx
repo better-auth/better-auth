@@ -187,7 +187,7 @@ parameters:
 * `where`: The `where` clause to update the record by.
 * `update`: The data to update the record with.
 
-**Returns** `Promise<T | null>`: the updated row, including any fields that were not updated, or `null` if no row matched.
+**Returns** `Promise<T | null>`: the updated row, or `null` if no row matched. With multiple `where` clauses, some adapters cannot return it.
 
 ```ts title="Example"
 update: async ({ model, where, update }) => {
