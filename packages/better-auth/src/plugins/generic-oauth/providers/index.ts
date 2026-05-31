@@ -37,6 +37,7 @@
  */
 
 export { type Auth0Options, auth0 } from "./auth0";
+export { type FortyTwoOptions, fortytwo } from "./fortytwo";
 export { type GumroadOptions, gumroad } from "./gumroad";
 export { type HubSpotOptions, hubspot } from "./hubspot";
 export { type KeycloakOptions, keycloak } from "./keycloak";
