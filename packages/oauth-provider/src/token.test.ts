@@ -1044,7 +1044,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		async function refresh(refreshToken: string) {
-			const { body, headers } = createRefreshAccessTokenRequest({
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
@@ -1102,7 +1102,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		async function refresh(refreshToken: string) {
-			const { body, headers } = createRefreshAccessTokenRequest({
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
@@ -1180,7 +1180,7 @@ describe("oauth token - refresh_token", async () => {
 		// Reusing the revoked refresh token must trip the family-invalidation
 		// guard in handleRefreshTokenGrant (revoked flag → invalidate family).
 		const { body: replayBody, headers: replayHeaders } =
-			createRefreshAccessTokenRequest({
+			await refreshAccessTokenRequest({
 				refreshToken: tokens!.refresh_token!,
 				options: {
 					clientId: oauthClient.client_id,
@@ -1218,8 +1218,8 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 		const parentToken = tokens!.refresh_token!;
 
-		const refresh = () => {
-			const { body, headers } = createRefreshAccessTokenRequest({
+		const refresh = async () => {
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: parentToken,
 				options: {
 					clientId: oauthClient!.client_id,
