@@ -1452,7 +1452,7 @@ describe("oidc token response format", async () => {
 				body: JSON.stringify({
 					grant_type: "authorization_code",
 					code,
-					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					redirect_uri: "http://localhost:3000/api/auth/callback/test",
 					client_id: application.clientId,
 					client_secret: application.clientSecret,
 				}),
