@@ -8,7 +8,12 @@ import type { OAuthOptions, SchemaClient, Scope } from "./index";
  *
  * It receives the endpoint context and the resolved oauth-provider options and
  * returns the full token-endpoint response (the same shape the built-in grant
- * handlers produce). Use the exported `createUserTokens` helper to mint tokens.
+ * handlers produce). Use the exported `createUserTokens` helper to mint tokens;
+ * it already sets the required headers.
+ *
+ * RFC 6749 §5.1: a token-endpoint response MUST carry `Cache-Control: no-store`
+ * and `Pragma: no-cache`. When returning a response directly, set them via
+ * `ctx.json(body, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } })`.
  */
 export type GrantHandler = (
 	ctx: GenericEndpointContext,
@@ -85,8 +90,14 @@ export interface OAuthContributions {
 	tokenEndpointAuthMethods?: string[];
 	/**
 	 * Claim contributors merged into issued tokens. Extension claims are applied
-	 * before the consumer's `customAccessTokenClaims`/`customIdTokenClaims` and
-	 * never override pinned security claims (`sub`, `iss`, `aud`, `iat`, `exp`).
+	 * first and can never override a claim the host owns. For access tokens the
+	 * host owns `sub`, `aud`, `azp`, `scope`, `sid`, `iss`, `iat`, `exp`; for ID
+	 * tokens it owns `auth_time`, `acr`, `at_hash`, `iss`, `sub`, `aud`, `nonce`,
+	 * `iat`, `exp`, `sid`.
+	 *
+	 * Contributed claim keys SHOULD be namespaced (e.g. a URI or vendor prefix).
+	 * Across contributors, colliding keys resolve last-writer-wins by registration
+	 * order, so unprefixed keys are not safe to depend on.
 	 */
 	tokenClaims?: {
 		access?: (info: TokenClaimInfo) => Awaitable<Record<string, unknown>>;

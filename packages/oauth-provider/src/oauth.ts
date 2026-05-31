@@ -28,6 +28,8 @@ import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
 import { revokeEndpoint } from "./revoke";
+import type { OAuthProviderRuntime } from "./runtime";
+import { withOAuthRuntime } from "./runtime";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
@@ -61,6 +63,19 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+
+/**
+ * RFC 6749 §4.5: extension grant types are identified by absolute URIs. A bare
+ * token (e.g. `foo`) is reserved for the spec's own grant names, so a contributed
+ * grant must parse as an absolute URI with a scheme.
+ */
+function isAbsoluteUri(value: string): boolean {
+	try {
+		return Boolean(new URL(value).protocol);
+	} catch {
+		return false;
+	}
+}
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -276,48 +291,87 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// at init (static, order-independent) and expose on the context so the
 			// token endpoint, discovery, and minting can consume them at request time.
 			const contributions = ctx.getContributions("oauth-provider");
-			const oauthGrantHandlers: Record<string, GrantHandler> = {};
-			const extensionGrantURIs: string[] = [];
-			const oauthMetadataContributors: NonNullable<
+			const grantHandlers: Record<string, GrantHandler> = {};
+			const grantURIs = new Set<string>();
+			const metadataContributors: NonNullable<
 				OAuthContributions["metadata"]
 			>[] = [];
-			const oauthExtraAuthMethods: string[] = [];
-			const oauthClaimContributors: NonNullable<
+			const extraAuthMethods = new Set<string>();
+			const claimContributors: NonNullable<
 				OAuthContributions["tokenClaims"]
 			>[] = [];
 			for (const contribution of contributions) {
 				if (contribution.grantTypes) {
-					Object.assign(oauthGrantHandlers, contribution.grantTypes);
+					for (const [uri, handler] of Object.entries(
+						contribution.grantTypes,
+					)) {
+						if (grantHandlers[uri]) {
+							throw new BetterAuthError(
+								`Conflicting grant type "${uri}": two plugins registered a handler for it. Each extension grant URI must be unique.`,
+							);
+						}
+						grantHandlers[uri] = handler;
+					}
 				}
 				if (contribution.grantTypeURIs) {
-					extensionGrantURIs.push(...contribution.grantTypeURIs);
+					for (const uri of contribution.grantTypeURIs) grantURIs.add(uri);
 				}
 				if (contribution.metadata) {
-					oauthMetadataContributors.push(contribution.metadata);
+					metadataContributors.push(contribution.metadata);
 				}
 				if (contribution.tokenEndpointAuthMethods) {
-					oauthExtraAuthMethods.push(...contribution.tokenEndpointAuthMethods);
+					for (const method of contribution.tokenEndpointAuthMethods) {
+						extraAuthMethods.add(method);
+					}
 				}
 				if (contribution.tokenClaims) {
-					oauthClaimContributors.push(contribution.tokenClaims);
+					claimContributors.push(contribution.tokenClaims);
 				}
 			}
-			// Allow contributed grant URIs through the token-endpoint allowlist.
-			if (extensionGrantURIs.length > 0) {
+
+			// Fail fast on a mismatch a request would otherwise hit at runtime: an
+			// advertised grant URI with no handler (discovery over-advertises) or a
+			// handler that is not advertised (unreachable, never in discovery).
+			for (const uri of grantURIs) {
+				if (!grantHandlers[uri]) {
+					throw new BetterAuthError(
+						`Grant type "${uri}" is listed in grantTypeURIs but has no handler in grantTypes.`,
+					);
+				}
+			}
+			for (const uri of Object.keys(grantHandlers)) {
+				if (!grantURIs.has(uri)) {
+					throw new BetterAuthError(
+						`Grant type "${uri}" has a handler but is missing from grantTypeURIs, so it would not be advertised in discovery.`,
+					);
+				}
+				if (!isAbsoluteUri(uri)) {
+					throw new BetterAuthError(
+						`Extension grant type "${uri}" must be an absolute URI (RFC 6749 §4.5).`,
+					);
+				}
+			}
+
+			// Fold contributed grant URIs into the token-endpoint allowlist. The Set
+			// deduplicates and makes a repeated init idempotent instead of appending
+			// duplicates to the shared options array.
+			if (grantURIs.size > 0) {
 				opts.grantTypes = [
-					...(opts.grantTypes ?? [
-						"authorization_code",
-						"client_credentials",
-						"refresh_token",
+					...new Set([
+						...(opts.grantTypes ?? [
+							"authorization_code",
+							"client_credentials",
+							"refresh_token",
+						]),
+						...grantURIs,
 					]),
-					...extensionGrantURIs,
 				];
 			}
-			const pluginContext = {
-				oauthGrantHandlers,
-				oauthMetadataContributors,
-				oauthExtraAuthMethods,
-				oauthClaimContributors,
+			const runtime: OAuthProviderRuntime = {
+				grantHandlers,
+				metadataContributors,
+				extraAuthMethods: [...extraAuthMethods],
+				claimContributors,
 			};
 
 			// OAuth provider performs adapter-level session lookups by id, so it
@@ -349,7 +403,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				} catch (error) {
 					// baseURL may not be available during init when using dynamic baseURL config
 					if (isDynamicBaseURLInit && issuer === "") {
-						return { context: pluginContext };
+						return { context: withOAuthRuntime(runtime) };
 					}
 					throw error;
 				}
@@ -373,7 +427,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
-			return { context: pluginContext };
+			return { context: withOAuthRuntime(runtime) };
 		},
 		hooks: {
 			before: [
@@ -1384,6 +1438,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							])
 							.optional(),
 						jwks_uri: z.string().optional(),
+						// TODO(rfc7591-extension-dcr): discovery advertises contributed
+						// extension grant types and token-endpoint auth methods, but
+						// dynamic client registration still pins these to the built-in
+						// enums, so a client cannot register an advertised extension
+						// value (RFC 7591/8414 asymmetry). Opening these to strings means
+						// moving the supported-set check ahead of authorization to keep
+						// the schema-layer `invalid_client_metadata` envelope; deferred.
 						grant_types: z
 							.array(
 								z.enum([

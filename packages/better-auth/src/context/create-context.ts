@@ -1,6 +1,7 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	ContributionContracts,
 	SecretConfig,
 } from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
@@ -262,12 +263,12 @@ Most of the features of Better Auth will not work correctly.`,
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
-	const getContributionsFn = (hostId: string) =>
+	const getContributionsFn = <ID extends keyof ContributionContracts>(
+		hostId: ID,
+	): ContributionContracts[ID][] =>
 		(options.plugins ?? [])
-			.map(
-				(p) => (p.contributes as Record<string, unknown> | undefined)?.[hostId],
-			)
-			.filter((c): c is NonNullable<typeof c> => c != null);
+			.map((p) => p.contributes?.[hostId])
+			.filter((c): c is ContributionContracts[ID] => c != null);
 
 	const trustedOrigins = await getTrustedOrigins(options);
 	const trustedProviders = await getTrustedProviders(options);
@@ -419,7 +420,7 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		getPlugin: getPluginFn,
 		hasPlugin: hasPluginFn as never,
-		getContributions: getContributionsFn as never,
+		getContributions: getContributionsFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

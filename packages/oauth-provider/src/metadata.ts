@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
+import { getOAuthRuntime } from "./runtime";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -24,9 +25,10 @@ function applyMetadataContributions(
 	ctx: GenericEndpointContext,
 	metadata: AuthServerMetadata,
 ): void {
-	const extraAuthMethods = (ctx.context as Record<string, unknown>)
-		.oauthExtraAuthMethods as string[] | undefined;
-	if (extraAuthMethods?.length) {
+	const runtime = getOAuthRuntime(ctx);
+	if (!runtime) return;
+	const { extraAuthMethods, metadataContributors } = runtime;
+	if (extraAuthMethods.length) {
 		const methods = metadata.token_endpoint_auth_methods_supported ?? [];
 		for (const method of extraAuthMethods) {
 			if (!methods.includes(method as TokenEndpointAuthMethod)) {
@@ -35,13 +37,9 @@ function applyMetadataContributions(
 		}
 		metadata.token_endpoint_auth_methods_supported = methods;
 	}
-	const contributors = (ctx.context as Record<string, unknown>)
-		.oauthMetadataContributors as
-		| ((c: { baseURL: string }) => Record<string, unknown>)[]
-		| undefined;
-	if (contributors?.length) {
+	if (metadataContributors.length) {
 		const target = metadata as Record<string, unknown>;
-		for (const contribute of contributors) {
+		for (const contribute of metadataContributors) {
 			for (const [key, value] of Object.entries(
 				contribute({ baseURL: ctx.context.baseURL }),
 			)) {

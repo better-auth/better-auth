@@ -6,6 +6,7 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import { collectExtensionClaims, getOAuthRuntime } from "./runtime";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -13,11 +14,6 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import type {
-	GrantHandler,
-	OAuthContributions,
-	TokenClaimInfo,
-} from "./types/contributions";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
@@ -67,9 +63,7 @@ export async function tokenEndpoint(
 			// Extension grants registered by plugins via OAuthContributions.grantTypes.
 			// The allowlist check above already rejected unknown grant_type values, so
 			// reaching here means the URI was allowed; dispatch to its handler.
-			const handlers = (ctx.context as Record<string, unknown>)
-				.oauthGrantHandlers as Record<string, GrantHandler> | undefined;
-			const handler = handlers?.[grantType];
+			const handler = getOAuthRuntime(ctx)?.grantHandlers[grantType];
 			if (handler) {
 				return handler(ctx, opts);
 			}
@@ -83,30 +77,6 @@ export async function tokenEndpoint(
 
 // User Jwt SHALL follow oAuth 2
 // NOTE: Requires jwt plugin (assert !opts.disableJwtPlugin)
-/**
- * Collects extra claims from plugin-contributed `tokenClaims` contributors for
- * the given token kind. Returns the merged claims, applied before the
- * consumer's `customAccessTokenClaims`/`customIdTokenClaims` and never over the
- * pinned security claims set by the caller.
- */
-async function collectExtensionClaims(
-	ctx: GenericEndpointContext,
-	kind: "access" | "id",
-	info: TokenClaimInfo,
-): Promise<Record<string, unknown>> {
-	const contributors = (ctx.context as Record<string, unknown>)
-		.oauthClaimContributors as
-		| NonNullable<OAuthContributions["tokenClaims"]>[]
-		| undefined;
-	if (!contributors?.length) return {};
-	const claims: Record<string, unknown> = {};
-	for (const contributor of contributors) {
-		const fn = contributor[kind];
-		if (fn) Object.assign(claims, await fn(info));
-	}
-	return claims;
-}
-
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -249,10 +219,19 @@ async function createIdToken(
 
 	const payload: JWTPayload = {
 		...userClaims,
+		// Plugin-contributed claims first: they can never redefine any claim the
+		// host sets below, including the authentication-context claims.
+		...extensionClaims,
+		// Host defaults for the OIDC authentication-context claims. Spread after
+		// extension claims so a third-party plugin cannot silently redefine acr
+		// (step-up/assurance) or auth_time (max_age/freshness) per OIDC Core §2,
+		// but before customClaims so the first-party consumer hook may still set
+		// them (e.g. raise acr after its own MFA step).
 		auth_time: authTimeSec,
 		acr,
-		...extensionClaims,
 		...customClaims,
+		// Hard-pinned registered claims: neither a contributor nor the consumer
+		// hook can override these.
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: resolvedSub,

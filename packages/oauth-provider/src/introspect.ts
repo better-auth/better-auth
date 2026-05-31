@@ -4,6 +4,7 @@ import { verifyJwsAccessToken } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { collectExtensionClaims } from "./runtime";
 import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -226,6 +227,21 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
+	// Plugin-contributed access-token claims. The JWT path applies these at mint
+	// time; an opaque token stores none, so re-derive them here. Without this a
+	// resource server reading an opaque token via introspection would get a
+	// claim set missing every contributed claim.
+	const extensionClaims = client
+		? await collectExtensionClaims(ctx, "access", {
+				user: user ?? undefined,
+				scopes: accessToken.scopes ?? [],
+				client,
+				referenceId: accessToken.referenceId ?? undefined,
+				sessionId,
+				resources,
+			})
+		: {};
+
 	// Add Custom Claims
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
@@ -244,6 +260,7 @@ async function validateOpaqueAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
+		...extensionClaims,
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
