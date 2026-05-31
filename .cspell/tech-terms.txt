@@ -70,3 +70,4 @@ jfif
 pcss
 pjpeg
 styl
+vbscript
