@@ -5,6 +5,8 @@ packages:
   - test
 
 overrides:
+  kysely: 0.28.17
+  zod@>=4: 4.3.6
   axios: '>=1.15.2 <2'
   node-forge: '>=1.4.0 <2'
   h3@<2: '>=1.15.9'
