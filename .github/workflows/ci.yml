@@ -20,7 +20,7 @@ env:
 
 jobs:
   lint:
-    runs-on: ${{ github.repository == 'better-auth/better-auth' && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     concurrency:
@@ -91,7 +91,7 @@ jobs:
         run: pnpm lint:types
 
   typecheck:
-    runs-on: ${{ github.repository == 'better-auth/better-auth' && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     concurrency:
@@ -132,7 +132,7 @@ jobs:
         run: pnpm typecheck:dist
 
   test:
-    runs-on: ${{ github.repository == 'better-auth/better-auth' && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     timeout-minutes: 30
@@ -171,14 +171,24 @@ jobs:
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
       - name: Start Docker Containers
         run: docker compose up -d --wait --wait-timeout 60
 
       - name: Test
         run: pnpm coverage
 
+      - name: Docker Compose Diagnostics
+        if: failure() && hashFiles('docker-compose.yml') != ''
+        run: |
+          docker compose ps --all || true
+          docker compose logs --no-color mssql || true
+
       - name: Stop Docker Containers
-        run: docker compose down
+        if: always() && hashFiles('docker-compose.yml') != ''
+        run: docker compose down --volumes --remove-orphans
 
   ci:
     runs-on: ubuntu-latest
