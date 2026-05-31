@@ -1,25 +1,21 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { emailOTP } from "../plugins/email-otp";
 import { jwt } from "../plugins/jwt";
 import { organization } from "../plugins/organization";
 import { twoFactor } from "../plugins/two-factor";
 import { getTestInstance } from "../test-utils/test-instance";
+import { createAuthEndpoint } from "./index";
+
+const BASE = "http://localhost:3000/api/auth";
 
 /**
- * Server-only endpoints are callable through `auth.api.*` from trusted server
- * code but are never registered on the HTTP router. They carry no client method
- * and run no authorization of their own: their safety depends entirely on
- * staying off the HTTP surface. `createAuthEndpoint.serverOnly` enforces that by
- * setting `metadata.SERVER_ONLY`, so an accidentally-added path cannot expose
- * them (better-call's router skips an endpoint when its path is missing *or*
- * when `SERVER_ONLY` is set).
- *
- * This is the canonical registry of those endpoints. Adding a server-only
- * endpoint means adding it here; this test then guarantees it can never leak
- * onto the HTTP router. Removing an entry's `SERVER_ONLY` marker, or giving it a
- * routable path without the marker, fails the test loudly.
+ * Endpoints callable through `auth.api.*` from trusted server code that must
+ * never be reachable over HTTP. They are kept off the router by carrying no
+ * routable path. This list is the source of truth: register a new server-only
+ * endpoint here so the tests below fail if one ever gains an HTTP route.
  */
-const EXPECTED_SERVER_ONLY = [
+const SERVER_ONLY_ENDPOINTS = [
 	"setPassword",
 	"addMember",
 	"viewBackupCodes",
@@ -30,23 +26,10 @@ const EXPECTED_SERVER_ONLY = [
 	"verifyJWT",
 ] as const;
 
-type RegisteredEndpoint = {
-	path?: string;
-	options?: {
-		method?: string | string[];
-		metadata?: { SERVER_ONLY?: boolean };
-	};
-};
+type RegisteredEndpoint = { path?: string };
 
-/** Mirrors better-call's router gate (`!endpoint.path || SERVER_ONLY` ⇒ skip). */
-function isHttpReachable(endpoint: RegisteredEndpoint): boolean {
-	return (
-		Boolean(endpoint.path) && endpoint.options?.metadata?.SERVER_ONLY !== true
-	);
-}
-
-async function getInstance() {
-	return getTestInstance({
+describe("server-only endpoints", async () => {
+	const { auth } = await getTestInstance({
 		plugins: [
 			organization(),
 			twoFactor(),
@@ -56,64 +39,76 @@ async function getInstance() {
 			jwt(),
 		],
 	});
-}
+	const api = auth.api as unknown as Record<string, RegisteredEndpoint>;
 
-describe("server-only endpoints", () => {
-	it("registers them on auth.api but keeps them off the HTTP router", async () => {
-		const { auth } = await getInstance();
-		const api = auth.api as unknown as Record<string, RegisteredEndpoint>;
-
-		for (const name of EXPECTED_SERVER_ONLY) {
-			const endpoint = api[name];
-			expect(endpoint, `${name} should be registered on auth.api`).toBeTypeOf(
-				"function",
-			);
-			if (!endpoint) continue;
-			expect(
-				endpoint.options?.metadata?.SERVER_ONLY,
-				`${name} must set metadata.SERVER_ONLY (use createAuthEndpoint.serverOnly)`,
-			).toBe(true);
-			expect(
-				isHttpReachable(endpoint),
-				`${name} must not be reachable over HTTP`,
-			).toBe(false);
-		}
+	it.each(
+		SERVER_ONLY_ENDPOINTS,
+	)("registers %s on auth.api with no HTTP route", (name) => {
+		expect(api[name], `${name} should be registered on auth.api`).toBeTypeOf(
+			"function",
+		);
+		expect(
+			api[name]?.path,
+			`${name} must not carry a routable path`,
+		).toBeFalsy();
 	});
 
-	it("snapshots the HTTP-reachable surface so accidental exposure is a loud diff", async () => {
-		const { auth } = await getInstance();
-		const api = auth.api as unknown as Record<string, RegisteredEndpoint>;
+	it("keeps an endpoint off the router when it is marked SERVER_ONLY despite a path", async () => {
+		const probe = {
+			id: "server-only-probe",
+			endpoints: {
+				// The case path omission alone cannot guard: a server-only endpoint
+				// that also declares a routable path. The SERVER_ONLY marker must
+				// still keep it off the router.
+				marked: createAuthEndpoint(
+					"/server-only-probe/marked",
+					{
+						method: "POST",
+						metadata: { SERVER_ONLY: true },
+					},
+					async (c) => c.json({ reached: true }),
+				),
+				// Same plugin, no marker: proves the harness mounts path-bearing
+				// endpoints, so the 404 below is the marker and not a setup quirk.
+				routable: createAuthEndpoint(
+					"/server-only-probe/routable",
+					{ method: "POST" },
+					async (c) => c.json({ reached: true }),
+				),
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth: probeAuth } = await getTestInstance({ plugins: [probe] });
 
-		const routes = Object.values(api)
-			.filter(isHttpReachable)
-			.flatMap((endpoint) => {
-				const method = endpoint.options?.method ?? "*";
-				const methods = Array.isArray(method) ? method : [method];
-				return methods.map((m) => `${m} ${endpoint.path}`);
-			})
-			.sort();
+		const marked = await probeAuth.handler(
+			new Request(`${BASE}/server-only-probe/marked`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: "{}",
+			}),
+		);
+		expect(marked.status).toBe(404);
 
-		// A diff here means the HTTP surface changed. If a server-only endpoint
-		// (e.g. POST /organization/add-member) appears, it just leaked onto the
-		// router; the test above names exactly which one.
-		expect(routes).toMatchSnapshot();
+		const routable = await probeAuth.handler(
+			new Request(`${BASE}/server-only-probe/routable`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: "{}",
+			}),
+		);
+		expect(routable.status).not.toBe(404);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-3vf6-4wr3-c35q
 	 *
-	 * `add-member` is a server-only endpoint, not an HTTP route. An
-	 * unauthenticated request to its documented path must 404 (no such route),
-	 * not reach the handler. The `remove-member` control is a real HTTP route and
-	 * must 401, proving the harness exercises the router and that the 404 means
-	 * the route is absent, not that the request was rejected.
+	 * `addMember` is server-only. An unauthenticated request to its documented
+	 * path must 404 (no such route), not reach the handler. The `removeMember`
+	 * control is a real route and must 401, proving the 404 means the route is
+	 * absent rather than the request being rejected.
 	 */
-	it("does not expose POST /organization/add-member over HTTP", async () => {
-		const { auth } = await getInstance();
-		const base = "http://localhost:3000/api/auth";
-
+	it("does not route POST /organization/add-member", async () => {
 		const addMember = await auth.handler(
-			new Request(`${base}/organization/add-member`, {
+			new Request(`${BASE}/organization/add-member`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
@@ -126,12 +121,23 @@ describe("server-only endpoints", () => {
 		expect(addMember.status).toBe(404);
 
 		const removeMember = await auth.handler(
-			new Request(`${base}/organization/remove-member`, {
+			new Request(`${BASE}/organization/remove-member`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ memberIdOrEmail: "victim-member-id" }),
 			}),
 		);
 		expect(removeMember.status).toBe(401);
+	});
+
+	it("does not route POST /two-factor/view-backup-codes", async () => {
+		const response = await auth.handler(
+			new Request(`${BASE}/two-factor/view-backup-codes`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ userId: "victim-user-id" }),
+			}),
+		);
+		expect(response.status).toBe(404);
 	});
 });
