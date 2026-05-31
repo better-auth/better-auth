@@ -189,7 +189,7 @@ describe("verifyProviderIdToken", () => {
 			const provider = facebook({ clientId: "c", clientSecret: "s" });
 			expect(supportsIdTokenSignIn(provider)).toBe(true);
 			expect(
-				await verifyProviderIdToken(provider, "EAAGopaqueGraphAccessToken"),
+				await verifyProviderIdToken(provider, "opaque-graph-access-token"),
 			).toBe(true);
 		});
 	});
