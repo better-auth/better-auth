@@ -25,13 +25,6 @@ import {
 } from "./query-builders";
 import type { KyselyDatabaseType } from "./types";
 
-// Inlined locally to avoid relying on the `@better-auth/core/utils/*`
-// wildcard subpath export. When users have a stale `@better-auth/cli@1.4.x`
-// installed, package managers can hoist `@better-auth/core@1.4.x` (which
-// only exposes `./utils`, not `./utils/*`) to the top of `node_modules`,
-// shadowing the newer core that this adapter was built against and
-// breaking subpath imports at bundle/resolve time.
-// @see https://github.com/better-auth/better-auth/issues/9767
 function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
