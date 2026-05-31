@@ -36,16 +36,27 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 		| undefined;
 }
 
+const ROBLOX_DEFAULT_SCOPES = ["openid", "profile"];
+
 export const roblox = (options: RobloxOptions) => {
 	const tokenEndpoint = "https://apis.roblox.com/oauth/v1/token";
 	return {
 		id: "roblox",
 		name: "Roblox",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
+		defaultScopes: ROBLOX_DEFAULT_SCOPES,
+		callbackPath: "/callback/roblox",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...ROBLOX_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "roblox",
 				options,
 				authorizationEndpoint: "https://apis.roblox.com/oauth/v1/authorize",
@@ -55,6 +66,7 @@ export const roblox = (options: RobloxOptions) => {
 				prompt: options.prompt || "select_account consent",
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

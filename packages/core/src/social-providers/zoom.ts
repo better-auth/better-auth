@@ -143,6 +143,8 @@ export interface ZoomOptions extends ProviderOptions<ZoomProfile> {
 	pkce?: boolean | undefined;
 }
 
+const ZOOM_DEFAULT_SCOPES: string[] = [];
+
 export const zoom = (userOptions: ZoomOptions) => {
 	const options = {
 		pkce: true,
@@ -152,21 +154,34 @@ export const zoom = (userOptions: ZoomOptions) => {
 	return {
 		id: "zoom",
 		name: "Zoom",
+		defaultScopes: ZOOM_DEFAULT_SCOPES,
+		callbackPath: "/callback/zoom",
 		createAuthorizationURL: async ({
 			state,
+			scopes,
 			redirectURI,
 			codeVerifier,
 			additionalParams,
-		}) =>
-			createAuthorizationURL({
+		}) => {
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...ZOOM_DEFAULT_SCOPES];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+
+			const { url } = await createAuthorizationURL({
 				id: "zoom",
 				options,
 				authorizationEndpoint: "https://zoom.us/oauth/authorize",
+				scopes: _scopes,
 				state,
 				redirectURI,
 				codeVerifier: options.pkce ? codeVerifier : undefined,
 				additionalParams,
-			}),
+			});
+
+			return { url, requestedScopes: _scopes };
+		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
 				code,

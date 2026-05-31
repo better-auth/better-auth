@@ -6,12 +6,10 @@ import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
 import { missingEmailLogMessage } from "../../oauth2/errors";
-import {
-	applyUpdateUserInfoOnLink,
-	handleOAuthUserInfo,
-} from "../../oauth2/link-account";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { persistOAuthAccount } from "../../oauth2/persist-account";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
 import { generateState, parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 
@@ -96,7 +94,7 @@ export const callbackOAuth = createAuthEndpoint(
 					undefined,
 					undefined,
 				);
-				const authUrl = await provider.createAuthorizationURL({
+				const { url: authUrl } = await provider.createAuthorizationURL({
 					state: freshState,
 					codeVerifier,
 					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
@@ -119,6 +117,7 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			requestedScopes,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string | undefined) {
@@ -242,42 +241,30 @@ export const callbackOAuth = createAuthEndpoint(
 					provider.id,
 				);
 
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
-					);
-				}
-				const updateData = Object.fromEntries(
-					Object.entries({
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: tokens.scopes?.join(","),
-					}).filter(([_, value]) => value !== undefined),
+			if (
+				existingAccount &&
+				existingAccount.userId.toString() !== link.userId.toString()
+			) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
-				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: providerAccountId,
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
-					);
-				}
 			}
+
+			const linkedAccount = await persistOAuthAccount(c, {
+				userId: link.userId,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				mode: "link",
+				resync: provider.reportsFullGrant,
+			});
+			if (!linkedAccount) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
+			}
+
 			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
 			let toRedirectTo: string;
 			try {
@@ -293,12 +280,6 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		const accountData = {
-			providerId: provider.id,
-			accountId: providerAccountId,
-			...tokens,
-			scope: tokens.scopes?.join(","),
-		};
 		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 		try {
 			result = await handleOAuthUserInfo(c, {
@@ -308,12 +289,16 @@ export const callbackOAuth = createAuthEndpoint(
 					email: userInfo.email,
 					name: userInfo.name || "",
 				},
-				account: accountData,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
 				callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				resync: provider.reportsFullGrant,
 			});
 		} catch (e) {
 			// A before-callback hook (for example the admin plugin's banned-user

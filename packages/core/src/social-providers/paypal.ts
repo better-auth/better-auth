@@ -78,6 +78,8 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
+		defaultScopes: [],
+		callbackPath: "/callback/paypal",
 		async createAuthorizationURL({
 			state,
 			codeVerifier,
@@ -99,7 +101,7 @@ export const paypal = (options: PayPalOptions) => {
 
 			const _scopes: string[] = [];
 
-			const url = await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "paypal",
 				options,
 				authorizationEndpoint,
@@ -110,7 +112,7 @@ export const paypal = (options: PayPalOptions) => {
 				prompt: options.prompt,
 				additionalParams,
 			});
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

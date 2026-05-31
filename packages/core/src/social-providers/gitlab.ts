@@ -73,6 +73,8 @@ const issuerToEndpoints = (issuer?: string | undefined) => {
 	};
 };
 
+const GITLAB_DEFAULT_SCOPES = ["read_user"];
+
 export const gitlab = (options: GitlabOptions) => {
 	const { authorizationEndpoint, tokenEndpoint, userinfoEndpoint } =
 		issuerToEndpoints(options.issuer);
@@ -81,6 +83,8 @@ export const gitlab = (options: GitlabOptions) => {
 	return {
 		id: issuerId,
 		name: issuerName,
+		defaultScopes: GITLAB_DEFAULT_SCOPES,
+		callbackPath: "/callback/gitlab",
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -89,10 +93,12 @@ export const gitlab = (options: GitlabOptions) => {
 			redirectURI,
 			additionalParams,
 		}) => {
-			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...GITLAB_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: issuerId,
 				options,
 				authorizationEndpoint,
@@ -103,6 +109,7 @@ export const gitlab = (options: GitlabOptions) => {
 				loginHint,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({

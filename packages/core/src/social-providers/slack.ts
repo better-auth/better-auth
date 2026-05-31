@@ -41,18 +41,27 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 	clientId: string;
 }
 
+const SLACK_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 export const slack = (options: SlackOptions) => {
 	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
 	return {
 		id: "slack",
 		name: "Slack",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+		defaultScopes: SLACK_DEFAULT_SCOPES,
+		callbackPath: "/callback/slack",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email"];
+				: [...SLACK_DEFAULT_SCOPES];
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "slack",
 				options,
 				authorizationEndpoint: "https://slack.com/openid/connect/authorize",
@@ -61,6 +70,7 @@ export const slack = (options: SlackOptions) => {
 				redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

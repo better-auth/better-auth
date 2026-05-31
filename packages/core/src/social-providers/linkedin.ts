@@ -24,6 +24,8 @@ export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {
 	clientId: string;
 }
 
+const LINKEDIN_DEFAULT_SCOPES = ["profile", "email", "openid"];
+
 export const linkedin = (options: LinkedInOptions) => {
 	const authorizationEndpoint =
 		"https://www.linkedin.com/oauth/v2/authorization";
@@ -32,6 +34,8 @@ export const linkedin = (options: LinkedInOptions) => {
 	return {
 		id: "linkedin",
 		name: "Linkedin",
+		defaultScopes: LINKEDIN_DEFAULT_SCOPES,
+		callbackPath: "/callback/linkedin",
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -41,10 +45,10 @@ export const linkedin = (options: LinkedInOptions) => {
 		}) => {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["profile", "email", "openid"];
+				: [...LINKEDIN_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "linkedin",
 				options,
 				authorizationEndpoint,
@@ -54,6 +58,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return await validateAuthorizationCode({

@@ -32,12 +32,16 @@ export interface PolarProfile {
 
 export interface PolarOptions extends ProviderOptions<PolarProfile> {}
 
+const POLAR_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 export const polar = (options: PolarOptions) => {
 	const tokenEndpoint = "https://api.polar.sh/v1/oauth2/token";
 	return {
 		id: "polar",
 		name: "Polar",
-		createAuthorizationURL({
+		defaultScopes: POLAR_DEFAULT_SCOPES,
+		callbackPath: "/callback/polar",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -46,10 +50,10 @@ export const polar = (options: PolarOptions) => {
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email"];
+				: [...POLAR_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "polar",
 				options,
 				authorizationEndpoint: "https://polar.sh/oauth2/authorize",
@@ -60,6 +64,7 @@ export const polar = (options: PolarOptions) => {
 				prompt: options.prompt,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

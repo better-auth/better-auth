@@ -29,11 +29,15 @@ export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {
 	clientId: string;
 }
 
+const ATLASSIAN_DEFAULT_SCOPES = ["read:jira-user", "offline_access"];
+
 export const atlassian = (options: AtlassianOptions) => {
 	const tokenEndpoint = "https://auth.atlassian.com/oauth/token";
 	return {
 		id: "atlassian",
 		name: "Atlassian",
+		defaultScopes: ATLASSIAN_DEFAULT_SCOPES,
+		callbackPath: "/callback/atlassian",
 
 		async createAuthorizationURL({
 			state,
@@ -52,11 +56,11 @@ export const atlassian = (options: AtlassianOptions) => {
 
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["read:jira-user", "offline_access"];
+				: [...ATLASSIAN_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "atlassian",
 				options,
 				authorizationEndpoint: "https://auth.atlassian.com/authorize",
@@ -70,6 +74,7 @@ export const atlassian = (options: AtlassianOptions) => {
 				},
 				prompt: options.prompt,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

@@ -23,11 +23,42 @@ export type OAuth2UserInfo = {
 	emailVerified: boolean;
 };
 
+/**
+ * The result of building a provider authorization URL.
+ *
+ * `requestedScopes` is the effective set of scopes encoded in the URL
+ * (provider `defaultScopes` + configured `options.scope` + per-request
+ * `scopes`). Callers persist it so the callback can fall back to the request
+ * when the provider omits `scope` from its token response (RFC 6749 §5.1).
+ */
+export interface AuthorizationURLResult {
+	url: URL;
+	requestedScopes: string[];
+}
+
 export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
 	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
+	/**
+	 * The provider's built-in default scopes, requested on every flow unless
+	 * `options.disableDefaultScope` is set.
+	 */
+	defaultScopes: string[];
+	/**
+	 * The path the provider redirects back to, relative to the app base URL,
+	 * e.g. `/callback/google`.
+	 */
+	callbackPath: string;
+	/**
+	 * Whether the provider's token-response `scope` reports the user's full,
+	 * current grant. When `true`, the persistence seam resyncs
+	 * `account.grantedScopes` to the echoed set instead of unioning.
+	 *
+	 * @default false
+	 */
+	reportsFullGrant?: boolean | undefined;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;
@@ -42,7 +73,7 @@ export interface OAuthProvider<
 		 * before applying them.
 		 */
 		additionalParams?: Record<string, string> | undefined;
-	}) => Awaitable<URL>;
+	}) => Awaitable<AuthorizationURLResult>;
 	name: string;
 	validateAuthorizationCode: (data: {
 		code: string;

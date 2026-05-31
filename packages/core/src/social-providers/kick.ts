@@ -29,22 +29,28 @@ export interface KickOptions extends ProviderOptions<KickProfile> {
 	clientId: string;
 }
 
+const KICK_DEFAULT_SCOPES = ["user:read"];
+
 export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
-		createAuthorizationURL({
+		defaultScopes: KICK_DEFAULT_SCOPES,
+		callbackPath: "/callback/kick",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			redirectURI,
 			codeVerifier,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope ? [] : ["user:read"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...KICK_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "kick",
 				redirectURI,
 				options,
@@ -54,6 +60,7 @@ export const kick = (options: KickOptions) => {
 				state,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		async validateAuthorizationCode({ code, redirectURI, codeVerifier }) {
 			return validateAuthorizationCode({

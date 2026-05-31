@@ -58,12 +58,16 @@ export interface GithubProfile {
 export interface GithubOptions extends ProviderOptions<GithubProfile> {
 	clientId: string;
 }
+const GITHUB_DEFAULT_SCOPES = ["read:user", "user:email"];
+
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
 		name: "GitHub",
-		createAuthorizationURL({
+		defaultScopes: GITHUB_DEFAULT_SCOPES,
+		callbackPath: "/callback/github",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
@@ -73,10 +77,10 @@ export const github = (options: GithubOptions) => {
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["read:user", "user:email"];
+				: [...GITHUB_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "github",
 				options,
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
@@ -88,6 +92,7 @@ export const github = (options: GithubOptions) => {
 				prompt: options.prompt,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			const { body, headers: requestHeaders } = await authorizationCodeRequest({

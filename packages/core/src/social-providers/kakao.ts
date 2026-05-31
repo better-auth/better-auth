@@ -101,18 +101,31 @@ export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
 	clientId: string;
 }
 
+const KAKAO_DEFAULT_SCOPES = [
+	"account_email",
+	"profile_image",
+	"profile_nickname",
+];
+
 export const kakao = (options: KakaoOptions) => {
 	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
 	return {
 		id: "kakao",
 		name: "Kakao",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+		defaultScopes: KAKAO_DEFAULT_SCOPES,
+		callbackPath: "/callback/kakao",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["account_email", "profile_image", "profile_nickname"];
+				: [...KAKAO_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "kakao",
 				options,
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
@@ -121,6 +134,7 @@ export const kakao = (options: KakaoOptions) => {
 				redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

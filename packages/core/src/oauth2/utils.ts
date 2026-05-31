@@ -1,6 +1,22 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { OAuth2Tokens } from "./oauth-provider";
 
+/**
+ * Parse a provider's `scope` token-response field into a string array.
+ *
+ * RFC 6749 §3.3 defines `scope` as a space-delimited string, but providers
+ * vary: some (e.g. Twitch) return an already-split array. Accept both, plus the
+ * omitted/empty case, without ever calling `.split` on a non-string. Returns
+ * `[]` when no scope is present.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/9076
+ */
+function parseScopeField(scope: unknown): string[] {
+	if (Array.isArray(scope)) return scope;
+	if (typeof scope === "string") return scope.split(" ").filter(Boolean);
+	return [];
+}
+
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	const getDate = (seconds: number) => {
 		const now = new Date();
@@ -17,15 +33,74 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		refreshTokenExpiresAt: data.refresh_token_expires_in
 			? getDate(data.refresh_token_expires_in)
 			: undefined,
-		scopes: data?.scope
-			? typeof data.scope === "string"
-				? data.scope.split(" ")
-				: data.scope
-			: [],
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 		// Preserve the raw token response for provider-specific fields
 		raw: data,
 	};
+}
+
+/**
+ * Union two scope sets into a single normalized array.
+ *
+ * Scope order is insignificant per RFC 6749 §3.3, so normalize for idempotent
+ * writes and trivial comparisons: trim each token, drop empties, dedupe, and
+ * sort ascending. Returns `[]` when the union is empty.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
+ */
+export function mergeScopes(
+	stored: string[] | null | undefined,
+	incoming: string[] | undefined,
+): string[] {
+	const normalized = new Set<string>();
+	for (const scope of [...(stored ?? []), ...(incoming ?? [])]) {
+		const trimmed = scope.trim();
+		if (trimmed) normalized.add(trimmed);
+	}
+	return [...normalized].sort();
+}
+
+/**
+ * Accumulate the durable granted-scope set after an authorization or token
+ * exchange.
+ *
+ * The provider's echoed `scope` is authoritative when present. RFC 6749 §3.3
+ * and §5.1 say an omitted or empty echo means the grant equals what was
+ * requested, so fall back to `requested` in that case. The result unions onto
+ * the stored grant (never narrows on a normal write) and is normalized per
+ * {@link mergeScopes}.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-5.1
+ */
+export function accumulateGrantedScopes(
+	stored: string[] | null | undefined,
+	echoed: string[] | undefined,
+	requested: string[] | undefined,
+): string[] {
+	const granted = echoed?.length ? echoed : requested;
+	return mergeScopes(stored, granted);
+}
+
+/**
+ * Test whether a granted-scope set contains a specific scope.
+ *
+ * Accepts the normalized `account.grantedScopes` array, or a single
+ * space/comma-delimited string for convenience (e.g. a raw provider `scope`
+ * value). Matching is exact and case-sensitive per RFC 6749 §3.3.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
+ */
+export function hasGrantedScope(
+	granted: string[] | string | null | undefined,
+	scope: string,
+): boolean {
+	if (!granted) return false;
+	const scopes = Array.isArray(granted)
+		? granted
+		: granted.split(/[\s,]+/).filter(Boolean);
+	return scopes.includes(scope);
 }
 
 /**

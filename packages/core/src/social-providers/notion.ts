@@ -23,22 +23,28 @@ export interface NotionOptions extends ProviderOptions<NotionProfile> {
 	clientId: string;
 }
 
+const NOTION_DEFAULT_SCOPES: string[] = [];
+
 export const notion = (options: NotionOptions) => {
 	const tokenEndpoint = "https://api.notion.com/v1/oauth/token";
 	return {
 		id: "notion",
 		name: "Notion",
-		createAuthorizationURL({
+		defaultScopes: NOTION_DEFAULT_SCOPES,
+		callbackPath: "/callback/notion",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes: string[] = options.disableDefaultScope ? [] : [];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...NOTION_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "notion",
 				options,
 				authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
@@ -51,6 +57,7 @@ export const notion = (options: NotionOptions) => {
 					owner: "user",
 				},
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

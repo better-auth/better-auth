@@ -25,12 +25,16 @@ export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
 	accessType?: ("offline" | "online" | "legacy") | undefined;
 }
 
+const DROPBOX_DEFAULT_SCOPES = ["account_info.read"];
+
 export const dropbox = (options: DropboxOptions) => {
 	const tokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
 
 	return {
 		id: "dropbox",
 		name: "Dropbox",
+		defaultScopes: DROPBOX_DEFAULT_SCOPES,
+		callbackPath: "/callback/dropbox",
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -38,10 +42,12 @@ export const dropbox = (options: DropboxOptions) => {
 			redirectURI,
 			additionalParams,
 		}) => {
-			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...DROPBOX_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "dropbox",
 				options,
 				authorizationEndpoint: "https://www.dropbox.com/oauth2/authorize",
@@ -56,6 +62,7 @@ export const dropbox = (options: DropboxOptions) => {
 					...(additionalParams ?? {}),
 				},
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return await validateAuthorizationCode({

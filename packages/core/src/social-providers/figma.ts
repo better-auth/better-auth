@@ -19,11 +19,15 @@ export interface FigmaOptions extends ProviderOptions<FigmaProfile> {
 	clientId: string;
 }
 
+const FIGMA_DEFAULT_SCOPES = ["current_user:read"];
+
 export const figma = (options: FigmaOptions) => {
 	const tokenEndpoint = "https://api.figma.com/v1/oauth/token";
 	return {
 		id: "figma",
 		name: "Figma",
+		defaultScopes: FIGMA_DEFAULT_SCOPES,
+		callbackPath: "/callback/figma",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -41,11 +45,13 @@ export const figma = (options: FigmaOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Figma");
 			}
 
-			const _scopes = options.disableDefaultScope ? [] : ["current_user:read"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...FIGMA_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 
-			const url = await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "figma",
 				options,
 				authorizationEndpoint: "https://www.figma.com/oauth",
@@ -56,7 +62,7 @@ export const figma = (options: FigmaOptions) => {
 				additionalParams,
 			});
 
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

@@ -51,12 +51,25 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * The hosted domain of the user
 	 */
 	hd?: string | undefined;
+	/**
+	 * Enable incremental authorization via Google's `include_granted_scopes`
+	 * parameter. When enabled, Google reports the user's full granted scope set
+	 * in the token response.
+	 *
+	 * @default true
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
+
+const GOOGLE_DEFAULT_SCOPES = ["email", "profile", "openid"];
 
 export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
+		defaultScopes: GOOGLE_DEFAULT_SCOPES,
+		callbackPath: "/callback/google",
+		reportsFullGrant: options.includeGrantedScopes !== false,
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -77,10 +90,10 @@ export const google = (options: GoogleOptions) => {
 			}
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["email", "profile", "openid"];
+				: [...GOOGLE_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const url = await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "google",
 				options,
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -93,12 +106,15 @@ export const google = (options: GoogleOptions) => {
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,
-				additionalParams: {
-					include_granted_scopes: "true",
-					...(additionalParams ?? {}),
-				},
+				additionalParams:
+					options.includeGrantedScopes === false
+						? { ...(additionalParams ?? {}) }
+						: {
+								include_granted_scopes: "true",
+								...(additionalParams ?? {}),
+							},
 			});
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

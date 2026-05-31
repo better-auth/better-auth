@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { accumulateGrantedScopes } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -246,11 +247,38 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.warn("Failed to clean up OAuth state", e);
 					}
 
+					// The granted-scope set was already accumulated on the production
+					// side (RFC 6749 §5.1 fallback applied there); pass it as both the
+					// echoed and requested set so the seam re-resolves to the same value.
+					const grantedScopes = payload.account.grantedScopes ?? undefined;
+					const tokens: OAuth2Tokens = {
+						accessToken: payload.account.accessToken ?? undefined,
+						refreshToken: payload.account.refreshToken ?? undefined,
+						idToken: payload.account.idToken ?? undefined,
+						accessTokenExpiresAt:
+							payload.account.accessTokenExpiresAt ?? undefined,
+						refreshTokenExpiresAt:
+							payload.account.refreshTokenExpiresAt ?? undefined,
+						scopes: grantedScopes,
+					};
+
+					// Match the direct callback: when the provider reports the full
+					// grant, the relayed set is authoritative, so resync lets a scope
+					// revoked at the provider shrink the stored grant on a proxied
+					// sign-in too.
+					const provider = ctx.context.socialProviders.find(
+						(p) => p.id === payload.account.providerId,
+					);
+
 					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 					try {
 						result = await handleOAuthUserInfo(ctx, {
 							userInfo: payload.userInfo,
-							account: payload.account,
+							providerId: payload.account.providerId,
+							accountId: payload.account.accountId,
+							tokens,
+							requestedScopes: grantedScopes,
+							resync: provider?.reportsFullGrant,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
 						});
@@ -485,7 +513,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								idToken: tokens.idToken,
 								accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-								scope: tokens.scopes?.join(","),
+								grantedScopes: accumulateGrantedScopes(
+									undefined,
+									tokens.scopes,
+									stateData.requestedScopes,
+								),
 							},
 							state: statePackage.state,
 							callbackURL: finalCallbackURL,

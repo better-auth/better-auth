@@ -28,6 +28,8 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 	issuer?: string | undefined;
 }
 
+const PAYBIN_DEFAULT_SCOPES = ["openid", "email", "profile"];
+
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
 	const authorizationEndpoint = `${issuer}/oauth2/authorize`;
@@ -36,6 +38,8 @@ export const paybin = (options: PaybinOptions) => {
 	return {
 		id: "paybin",
 		name: "Paybin",
+		defaultScopes: PAYBIN_DEFAULT_SCOPES,
+		callbackPath: "/callback/paybin",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -55,10 +59,10 @@ export const paybin = (options: PaybinOptions) => {
 			}
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "email", "profile"];
+				: [...PAYBIN_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const url = await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "paybin",
 				options,
 				authorizationEndpoint,
@@ -70,7 +74,7 @@ export const paybin = (options: PaybinOptions) => {
 				loginHint,
 				additionalParams,
 			});
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

@@ -27,6 +27,7 @@ export {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
 } from "./create-authorization-url";
 export type {
+	AuthorizationURLResult,
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthProvider,
@@ -42,10 +43,13 @@ export type {
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 export {
+	accumulateGrantedScopes,
 	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
+	hasGrantedScope,
+	mergeScopes,
 } from "./utils";
 export {
 	authorizationCodeRequest,

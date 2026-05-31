@@ -32,6 +32,8 @@ export interface LineOptions
 	clientId: string;
 }
 
+const LINE_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 /**
  * LINE Login v2.1
  * - Authorization endpoint: https://access.line.me/oauth2/v2.1/authorize
@@ -50,6 +52,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
+		defaultScopes: LINE_DEFAULT_SCOPES,
+		callbackPath: "/callback/line",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -60,10 +64,10 @@ export const line = (options: LineOptions) => {
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email"];
+				: [...LINE_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "line",
 				options,
 				authorizationEndpoint,
@@ -74,6 +78,7 @@ export const line = (options: LineOptions) => {
 				loginHint,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

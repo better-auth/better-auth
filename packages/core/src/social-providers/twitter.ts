@@ -103,18 +103,27 @@ export interface TwitterOption extends ProviderOptions<TwitterProfile> {
 	clientId: string;
 }
 
+const TWITTER_DEFAULT_SCOPES = [
+	"users.read",
+	"tweet.read",
+	"offline.access",
+	"users.email",
+];
+
 export const twitter = (options: TwitterOption) => {
 	const tokenEndpoint = "https://api.x.com/2/oauth2/token";
 	return {
 		id: "twitter",
 		name: "Twitter",
-		createAuthorizationURL(data) {
+		defaultScopes: TWITTER_DEFAULT_SCOPES,
+		callbackPath: "/callback/twitter",
+		async createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["users.read", "tweet.read", "offline.access", "users.email"];
+				: [...TWITTER_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (data.scopes) _scopes.push(...data.scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "twitter",
 				options,
 				authorizationEndpoint: "https://x.com/i/oauth2/authorize",
@@ -124,6 +133,7 @@ export const twitter = (options: TwitterOption) => {
 				redirectURI: data.redirectURI,
 				additionalParams: data.additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

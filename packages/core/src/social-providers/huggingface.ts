@@ -42,12 +42,16 @@ export interface HuggingFaceOptions
 	clientId: string;
 }
 
+const HUGGINGFACE_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 export const huggingface = (options: HuggingFaceOptions) => {
 	const tokenEndpoint = "https://huggingface.co/oauth/token";
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
-		createAuthorizationURL({
+		defaultScopes: HUGGINGFACE_DEFAULT_SCOPES,
+		callbackPath: "/callback/huggingface",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -56,7 +60,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email"];
+				: [...HUGGINGFACE_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({

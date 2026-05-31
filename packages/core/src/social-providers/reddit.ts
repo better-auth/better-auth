@@ -21,15 +21,26 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 	duration?: string | undefined;
 }
 
+const REDDIT_DEFAULT_SCOPES = ["identity"];
+
 export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
 		name: "Reddit",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["identity"];
+		defaultScopes: REDDIT_DEFAULT_SCOPES,
+		callbackPath: "/callback/reddit",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...REDDIT_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "reddit",
 				options,
 				authorizationEndpoint: "https://www.reddit.com/api/v1/authorize",
@@ -39,6 +50,7 @@ export const reddit = (options: RedditOptions) => {
 				duration: options.duration,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			const body = new URLSearchParams({

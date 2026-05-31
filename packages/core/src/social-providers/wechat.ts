@@ -55,12 +55,18 @@ export interface WeChatOptions extends ProviderOptions<WeChatProfile> {
 	lang?: "cn" | "en";
 }
 
+const WECHAT_DEFAULT_SCOPES = ["snsapi_login"];
+
 export const wechat = (options: WeChatOptions) => {
 	return {
 		id: "wechat",
 		name: "WeChat",
+		defaultScopes: WECHAT_DEFAULT_SCOPES,
+		callbackPath: "/callback/wechat",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["snsapi_login"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...WECHAT_DEFAULT_SCOPES];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 
@@ -82,7 +88,7 @@ export const wechat = (options: WeChatOptions) => {
 			}
 			url.hash = "wechat_redirect";
 
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 
 		// WeChat uses non-standard token exchange (appid/secret instead of

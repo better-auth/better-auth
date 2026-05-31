@@ -75,11 +75,13 @@ await auth.api.linkSocialAccount({
 To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.
 
 ```ts
-const { accessToken } = await authClient.getAccessToken({
+const { accessToken, grantedScopes } = await authClient.getAccessToken({
   providerId: "google", // or any other provider id
   accountId: "accountId", // optional, if you want to get the access token for a specific account
 })
 ```
+
+The response includes `grantedScopes` (a `string[]`) holding the account's accumulated granted scopes. The `/list-accounts`, `/get-access-token`, and `/refresh-token` endpoints all return this field.
 
 server-side usage:
 
@@ -134,6 +136,32 @@ const requestAdditionalScopes = async () => {
 <Callout>
   Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
 </Callout>
+
+The `scopes` you pass to `signIn.social` or `linkSocial` are **additive**: they are appended to the provider's default scopes rather than replacing them. (To start from an empty set instead, use [`disableDefaultScope`](#disabledefaultscope) on the provider.)
+
+#### How granted scopes accumulate
+
+Each account stores the user's accumulated granted scopes in `account.grantedScopes` (a `string[]`). Incremental authorization through `linkSocial` unions the newly granted scopes into this set. Whether a later sign-in can shrink the stored grant depends on the provider:
+
+* **Union-only providers** (generic OAuth, most social providers, and Google with [`includeGrantedScopes: false`](#includegrantedscopes)) only ever grow the set. A sign-in or refresh that returns a narrower scope list leaves the recorded scopes intact, so once a scope is granted it stays recorded until the account is unlinked.
+* **Google with the default [`includeGrantedScopes: true`](#includegrantedscopes)** treats its token response as the authoritative combined grant for the project, so each sign-in resyncs `account.grantedScopes` to match it. A scope the user revoked at Google therefore drops from the stored grant on the next sign-in.
+
+Token refresh never changes the grant for any provider ([RFC 6749 §6](https://datatracker.ietf.org/doc/html/rfc6749#section-6)).
+
+To check whether an account already holds a scope, use the `hasGrantedScope` helper instead of inspecting the raw array:
+
+```ts
+import { hasGrantedScope } from "better-auth/oauth2";
+
+const accounts = await auth.api.listUserAccounts({
+  headers: await headers(),
+});
+const google = accounts.find((account) => account.providerId === "google");
+
+if (google && !hasGrantedScope(google.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
+  // prompt the user to grant Drive access via linkSocial
+}
+```
 
 ### Customizing the Authorization URL
 
@@ -386,7 +414,7 @@ All Client IDs must live in the same provider project so consent is shared. For 
 
 ### scope
 
-The scope of the access request. For example, `email` or `profile`.
+The default scopes requested for this provider, for example `email` or `profile`. Scopes passed per request through `signIn.social({ scopes })` or `linkSocial({ scopes })` are added to these defaults rather than replacing them. To start from an empty set, use [`disableDefaultScope`](#disabledefaultscope).
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -621,6 +649,25 @@ export const auth = betterAuth({
       clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
       disableDefaultScope: true,
       scope: ["https://www.googleapis.com/auth/userinfo.email"], // Only this scope will be used
+    },
+  },
+});
+```
+
+### includeGrantedScopes
+
+Google-specific. Controls Google's server-side [incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) via the `include_granted_scopes` parameter. Defaults to `true`, so an authorization returns a token covering the user's accumulated grant for the project. Set it to `false` to authorize only the scopes requested by the current flow.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    google: {
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+      includeGrantedScopes: false,
     },
   },
 });

@@ -26,22 +26,28 @@ export interface LinearOptions extends ProviderOptions<LinearUser> {
 	clientId: string;
 }
 
+const LINEAR_DEFAULT_SCOPES = ["read"];
+
 export const linear = (options: LinearOptions) => {
 	const tokenEndpoint = "https://api.linear.app/oauth/token";
 	return {
 		id: "linear",
 		name: "Linear",
-		createAuthorizationURL({
+		defaultScopes: LINEAR_DEFAULT_SCOPES,
+		callbackPath: "/callback/linear",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope ? [] : ["read"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...LINEAR_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "linear",
 				options,
 				authorizationEndpoint: "https://linear.app/oauth/authorize",
@@ -51,6 +57,7 @@ export const linear = (options: LinearOptions) => {
 				loginHint,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

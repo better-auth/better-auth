@@ -39,16 +39,27 @@ export interface NaverOptions extends ProviderOptions<NaverProfile> {
 	clientId: string;
 }
 
+const NAVER_DEFAULT_SCOPES = ["profile", "email"];
+
 export const naver = (options: NaverOptions) => {
 	const tokenEndpoint = "https://nid.naver.com/oauth2.0/token";
 	return {
 		id: "naver",
 		name: "Naver",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["profile", "email"];
+		defaultScopes: NAVER_DEFAULT_SCOPES,
+		callbackPath: "/callback/naver",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...NAVER_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "naver",
 				options,
 				authorizationEndpoint: "https://nid.naver.com/oauth2.0/authorize",
@@ -57,6 +68,7 @@ export const naver = (options: NaverOptions) => {
 				redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

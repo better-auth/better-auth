@@ -126,7 +126,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the
 					// Google `sub` wins, never whichever local user happens to share the
-					// token's email.
+					// token's email. One Tap is a fixed-grant credential flow, so the
+					// recorded grant is the ID token's openid/profile/email.
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: {
 							id: sub,
@@ -135,12 +136,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							name: name ?? "",
 							image: picture,
 						},
-						account: {
-							providerId: "google",
-							accountId: sub,
-							idToken,
-							scope: "openid,profile,email",
-						},
+						providerId: "google",
+						accountId: sub,
+						tokens: { idToken, scopes: ["openid", "profile", "email"] },
 						disableSignUp: options?.disableSignup,
 					});
 					if (result.error) {

@@ -25,11 +25,15 @@ export interface RailwayOptions extends ProviderOptions<RailwayProfile> {
 	clientId: string;
 }
 
+const RAILWAY_DEFAULT_SCOPES = ["openid", "email", "profile"];
+
 export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		createAuthorizationURL({
+		defaultScopes: RAILWAY_DEFAULT_SCOPES,
+		callbackPath: "/callback/railway",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -38,10 +42,10 @@ export const railway = (options: RailwayOptions) => {
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "email", "profile"];
+				: [...RAILWAY_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "railway",
 				options,
 				authorizationEndpoint,
@@ -51,6 +55,7 @@ export const railway = (options: RailwayOptions) => {
 				redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

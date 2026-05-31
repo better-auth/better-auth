@@ -1,248 +1,119 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { isDevelopment, logger } from "@better-auth/core/env";
+import { runWithTransaction } from "@better-auth/core/context";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
-import { setAccountCookie } from "../cookies/session-store";
-import type { Account, User } from "../types";
+import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
-import { redirectOnError } from "./errors";
-import { setTokenUtil } from "./utils";
+import { persistOAuthAccount } from "./persist-account";
+import type {
+	ResolvedOAuthUser,
+	ResolveOAuthUserError,
+} from "./resolve-account";
+import { resolveOAuthUser } from "./resolve-account";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
 // call below needs null-safety, and `findOAuthUser` must accept a nullable email.
+
+/**
+ * Resolve an OAuth identity into a local session: resolve-or-create the user,
+ * persist the provider account's tokens and granted scopes through the single
+ * write seam, then issue a session and (for a brand-new user) the
+ * verification email.
+ *
+ * Composes {@link resolveOAuthUser} (identity + linking policy) and
+ * {@link persistOAuthAccount} (token encryption + grant accumulation), so no
+ * caller re-implements either. Callers pass tokens in plaintext and the
+ * effective `requestedScopes`; the seam owns encryption and the RFC 6749 §5.1
+ * scope fallback.
+ */
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+		providerId: string;
+		accountId: string;
+		tokens: OAuth2Tokens;
+		requestedScopes?: string[] | undefined;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
+		/**
+		 * Replace the stored grant with the provider's echoed scopes (the only
+		 * path that may shrink it). Set when the provider reports the full grant,
+		 * e.g. Google with `include_granted_scopes`. @see OAuthProvider.reportsFullGrant
+		 */
+		resync?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
-	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(
-			userInfo.email.toLowerCase(),
-			account.accountId,
-			account.providerId,
-		)
-		.catch((e) => {
-			logger.error(
-				"Better auth was unable to query your database.\nError: ",
-				e,
-			);
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			redirectOnError(c, errorURL, "internal_server_error");
-		});
-	let user = dbUser?.user;
-	const isRegister = !user;
+	const {
+		userInfo,
+		providerId,
+		accountId,
+		tokens,
+		requestedScopes,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+		isTrustedProvider,
+		resync,
+	} = opts;
 
-	if (dbUser) {
-		const linkedAccount =
-			dbUser.linkedAccount ??
-			dbUser.accounts.find(
-				(acc) =>
-					acc.providerId === account.providerId &&
-					acc.accountId === account.accountId,
-			);
-		if (!linkedAccount) {
-			const accountLinking = c.context.options.account?.accountLinking;
-			const isTrustedProvider =
-				opts.isTrustedProvider ||
-				c.context.trustedProviders.includes(account.providerId);
-			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
-			// the gate unconditional.
-			const requireLocalEmailVerified =
-				accountLinking?.requireLocalEmailVerified ?? true;
-			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
-				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
-				accountLinking?.enabled === false ||
-				accountLinking?.disableImplicitLinking === true
-			) {
-				if (isDevelopment()) {
-					logger.warn(
-						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
-					);
-				}
-				return {
-					error: "account not linked",
-					data: null,
-				};
-			}
-			try {
-				await c.context.internalAdapter.linkAccount({
-					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
-					userId: dbUser.user.id,
-					accessToken: await setTokenUtil(account.accessToken, c.context),
-					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				});
-			} catch (e) {
-				logger.error("Unable to link account", e);
-				return {
-					error: "unable to link account",
-					data: null,
-				};
-			}
-
-			// Reachable only when `requireLocalEmailVerified: false` lets the link
-			// proceed for an unverified local row. The IdP's verified email is
-			// promoted to the local row so subsequent flows treat it as verified.
-			// FIXME(next-minor): unreachable once the gate becomes unconditional.
-			if (
-				userInfo.emailVerified &&
-				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
-			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
-					emailVerified: true,
-				});
-			}
-
-			user =
-				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
-		} else {
-			const freshTokens =
-				c.context.options.account?.updateAccountOnSignIn !== false
-					? Object.fromEntries(
-							Object.entries({
-								idToken: account.idToken,
-								accessToken: await setTokenUtil(account.accessToken, c.context),
-								refreshToken: await setTokenUtil(
-									account.refreshToken,
-									c.context,
-								),
-								accessTokenExpiresAt: account.accessTokenExpiresAt,
-								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-								scope: account.scope,
-							}).filter(([_, value]) => value !== undefined),
-						)
-					: {};
-
-			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, {
-					...linkedAccount,
-					...freshTokens,
-				});
-			}
-
-			if (Object.keys(freshTokens).length > 0) {
-				await c.context.internalAdapter.updateAccount(
-					linkedAccount.id,
-					freshTokens,
-				);
-			}
-
-			if (
-				userInfo.emailVerified &&
-				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
-			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
-					emailVerified: true,
-				});
-			}
-		}
-		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
-			// update user info from the provider if overrideUserInfo is true
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
+	// Resolve-or-create the user and persist the account in one transaction, so a
+	// failed account write rolls back a freshly created user instead of orphaning
+	// it. The session and verification email are post-commit concerns and stay
+	// outside the transaction.
+	let resolved: ResolvedOAuthUser | ResolveOAuthUserError;
+	let isRegister = false;
+	try {
+		resolved = await runWithTransaction(c.context.adapter, async () => {
+			const r = await resolveOAuthUser(c, {
+				userInfo,
+				providerId,
+				linkPolicy: { isTrustedProvider, disableSignUp, overrideUserInfo },
 			});
-		}
-	} else {
-		if (disableSignUp) {
-			return {
-				error: "signup disabled",
-				data: null,
-				isRegister: false,
-			};
-		}
-		try {
-			const { id: _, ...restUserInfo } = userInfo;
-			const accountData = {
-				accessToken: await setTokenUtil(account.accessToken, c.context),
-				refreshToken: await setTokenUtil(account.refreshToken, c.context),
-				idToken: account.idToken,
-				accessTokenExpiresAt: account.accessTokenExpiresAt,
-				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-				scope: account.scope,
-				providerId: account.providerId,
-				accountId: userInfo.id.toString(),
-			};
-			const { user: createdUser, account: createdAccount } =
-				await c.context.internalAdapter.createOAuthUser(
-					{
-						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
-					},
-					accountData,
-				);
-			user = createdUser;
-			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, createdAccount);
+			// Resolution failed (sign-up disabled, linking gate rejected, or the
+			// user create threw): nothing was written, so there is no account to
+			// persist and nothing to roll back.
+			if (!r.user) {
+				return r;
 			}
-			if (
-				!userInfo.emailVerified &&
-				user &&
-				c.context.options.emailVerification?.sendOnSignUp &&
-				c.context.options.emailVerification?.sendVerificationEmail
-			) {
-				const token = await createEmailVerificationToken(
-					c.context.secret,
-					user.email,
-					undefined,
-					c.context.options.emailVerification?.expiresIn,
-				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-					callbackURL || "/",
-				)}`;
-				await c.context.runInBackgroundOrAwait(
-					c.context.options.emailVerification.sendVerificationEmail(
-						{
-							user,
-							url,
-							token,
-						},
-						c.request,
-					),
-				);
-			}
-		} catch (e: any) {
-			logger.error(e);
-			if (isAPIError(e)) {
-				return {
-					error: e.message,
-					data: null,
-					isRegister: false,
-				};
-			}
-			return {
-				error: "unable to create user",
-				data: null,
-				isRegister: false,
-			};
+			isRegister = r.isRegister;
+			await persistOAuthAccount(c, {
+				userId: r.user.id,
+				providerId,
+				accountId,
+				tokens,
+				requestedScopes,
+				mode: "signin",
+				resync,
+			});
+			return r;
+		});
+	} catch (e) {
+		c.context.logger.error("Unable to persist OAuth account", e);
+		if (isAPIError(e)) {
+			return { error: e.message, data: null, isRegister };
 		}
-	}
-	if (!user) {
 		return {
-			error: "unable to create user",
+			error: isRegister ? "unable to create user" : "unable to link account",
+			data: null,
+			isRegister,
+		};
+	}
+
+	if (!resolved.user) {
+		return {
+			error: resolved.error,
 			data: null,
 			isRegister: false,
 		};
+	}
+
+	const { user } = resolved;
+
+	if (isRegister) {
+		await sendSignUpVerificationEmail(c, user, callbackURL);
 	}
 
 	const session = await c.context.internalAdapter.createSession(user.id);
@@ -250,7 +121,7 @@ export async function handleOAuthUserInfo(
 		return {
 			error: "unable to create session",
 			data: null,
-			isRegister: false,
+			isRegister,
 		};
 	}
 
@@ -265,51 +136,39 @@ export async function handleOAuthUserInfo(
 }
 
 /**
- * Provider profile a freshly linked account may copy onto the local user.
- * `id` is the provider's account id (never the local user id), and `email`/
- * `emailVerified` are identity anchors; all three are stripped before the
- * remaining fields are written.
+ * Fire the sign-up verification email when the provider did not vouch for the
+ * email and the option is enabled. Runs in the background; a failure must not
+ * abort the sign-in.
  */
-type LinkedProviderProfile = {
-	id: string | number;
-	name?: string | undefined;
-	email?: string | null | undefined;
-	emailVerified?: boolean | undefined;
-	image?: string | null | undefined;
-};
-
-/**
- * Apply the `account.accountLinking.updateUserInfoOnLink` policy: when enabled,
- * copy the freshly linked provider's profile onto the local user, matching the
- * field set persisted on sign-up. The local `email` and `emailVerified` are
- * never changed, so a link can't rebind the account's identity, and
- * `updateUser` drops `undefined` fields, so a provider that omits one leaves
- * the existing column intact.
- *
- * Returns the updated user so a caller that issues a session can seed the
- * cookie cache with the fresh row. Returns `undefined` when the policy is
- * disabled or the update fails: a failed profile sync must not abort the link.
- */
-export async function applyUpdateUserInfoOnLink(
+async function sendSignUpVerificationEmail(
 	c: GenericEndpointContext,
-	userId: string,
-	userInfo: LinkedProviderProfile,
-): Promise<User | undefined> {
+	user: User,
+	callbackURL: string | undefined,
+) {
 	if (
-		c.context.options.account?.accountLinking?.updateUserInfoOnLink !== true
+		user.emailVerified ||
+		!c.context.options.emailVerification?.sendOnSignUp ||
+		!c.context.options.emailVerification?.sendVerificationEmail
 	) {
-		return undefined;
+		return;
 	}
-	const {
-		id: _id,
-		email: _email,
-		emailVerified: _emailVerified,
-		...profile
-	} = userInfo;
-	try {
-		return await c.context.internalAdapter.updateUser(userId, profile);
-	} catch (e) {
-		c.context.logger.warn("Could not update user info on account link", e);
-		return undefined;
-	}
+	const token = await createEmailVerificationToken(
+		c.context.secret,
+		user.email,
+		undefined,
+		c.context.options.emailVerification.expiresIn,
+	);
+	const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+		callbackURL || "/",
+	)}`;
+	await c.context.runInBackgroundOrAwait(
+		c.context.options.emailVerification.sendVerificationEmail(
+			{
+				user,
+				url,
+				token,
+			},
+			c.request,
+		),
+	);
 }

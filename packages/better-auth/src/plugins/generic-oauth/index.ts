@@ -252,6 +252,8 @@ export const genericOAuth = <const ID extends string>(
 				genericProviders.push({
 					id: c.providerId,
 					name: c.name ?? c.providerId,
+					defaultScopes: c.scopes ?? [],
+					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {

@@ -25,11 +25,15 @@ export interface VkOption extends ProviderOptions {
 	scheme?: ("light" | "dark") | undefined;
 }
 
+const VK_DEFAULT_SCOPES = ["email", "phone"];
+
 export const vk = (options: VkOption) => {
 	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
 	return {
 		id: "vk",
 		name: "VK",
+		defaultScopes: VK_DEFAULT_SCOPES,
+		callbackPath: "/callback/vk",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -37,12 +41,12 @@ export const vk = (options: VkOption) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
+			const _scopes = options.disableDefaultScope ? [] : [...VK_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			const authorizationEndpoint = "https://id.vk.com/authorize";
 
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "vk",
 				options,
 				authorizationEndpoint,
@@ -52,6 +56,7 @@ export const vk = (options: VkOption) => {
 				codeVerifier,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({
 			code,

@@ -130,13 +130,19 @@ export interface TiktokOptions extends ProviderOptions {
 	clientKey: string;
 }
 
+const TIKTOK_DEFAULT_SCOPES = ["user.info.profile"];
+
 export const tiktok = (options: TiktokOptions) => {
 	const tokenEndpoint = "https://open.tiktokapis.com/v2/oauth/token/";
 	return {
 		id: "tiktok",
 		name: "TikTok",
+		defaultScopes: TIKTOK_DEFAULT_SCOPES,
+		callbackPath: "/callback/tiktok",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...TIKTOK_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			// TikTok uses `client_key` instead of the standard `client_id`, so the
@@ -154,7 +160,7 @@ export const tiktok = (options: TiktokOptions) => {
 					url.searchParams.set(key, value);
 				}
 			}
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

@@ -37,18 +37,27 @@ export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	clientId: string;
 	claims?: string[] | undefined;
 }
+const TWITCH_DEFAULT_SCOPES = ["user:read:email", "openid"];
+
 export const twitch = (options: TwitchOptions) => {
 	const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
 	return {
 		id: "twitch",
 		name: "Twitch",
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+		defaultScopes: TWITCH_DEFAULT_SCOPES,
+		callbackPath: "/callback/twitch",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["user:read:email", "openid"];
+				: [...TWITCH_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "twitch",
 				redirectURI,
 				options,
@@ -63,6 +72,7 @@ export const twitch = (options: TwitchOptions) => {
 				],
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

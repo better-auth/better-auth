@@ -95,11 +95,15 @@ async function nonceMatches(jwtNonce: unknown, nonce: string) {
 	return jwtNonce === (await sha256Hex(nonce));
 }
 
+const APPLE_DEFAULT_SCOPES = ["email", "name"];
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
 		id: "apple",
 		name: "Apple",
+		defaultScopes: APPLE_DEFAULT_SCOPES,
+		callbackPath: "/callback/apple",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -112,21 +116,23 @@ export const apple = (options: AppleOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
-			if (options.scope) _scope.push(...options.scope);
-			if (scopes) _scope.push(...scopes);
-			const url = await createAuthorizationURL({
+			const _scopes = options.disableDefaultScope
+				? []
+				: [...APPLE_DEFAULT_SCOPES];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			const { url } = await createAuthorizationURL({
 				id: "apple",
 				options,
 				authorizationEndpoint: "https://appleid.apple.com/auth/authorize",
-				scopes: _scope,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				responseMode: "form_post",
 				responseType: "code id_token",
 				additionalParams,
 			});
-			return url;
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({

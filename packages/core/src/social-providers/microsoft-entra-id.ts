@@ -141,6 +141,14 @@ export interface MicrosoftOptions
 	disableProfilePhoto?: boolean | undefined;
 }
 
+const MICROSOFT_ENTRA_ID_DEFAULT_SCOPES = [
+	"openid",
+	"profile",
+	"email",
+	"User.Read",
+	"offline_access",
+];
+
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
 	const authority = options.authority || "https://login.microsoftonline.com";
@@ -149,7 +157,9 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
-		createAuthorizationURL(data) {
+		defaultScopes: MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
+		callbackPath: "/callback/microsoft-entra-id",
+		async createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
 			// See https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow
@@ -159,23 +169,24 @@ export const microsoft = (options: MicrosoftOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const scopes = options.disableDefaultScope
+			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "profile", "email", "User.Read", "offline_access"];
-			if (options.scope) scopes.push(...options.scope);
-			if (data.scopes) scopes.push(...data.scopes);
-			return createAuthorizationURL({
+				: [...MICROSOFT_ENTRA_ID_DEFAULT_SCOPES];
+			if (options.scope) _scopes.push(...options.scope);
+			if (data.scopes) _scopes.push(...data.scopes);
+			const { url } = await createAuthorizationURL({
 				id: "microsoft",
 				options,
 				authorizationEndpoint,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
-				scopes,
+				scopes: _scopes,
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
 				additionalParams: data.additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
 			return validateAuthorizationCode({

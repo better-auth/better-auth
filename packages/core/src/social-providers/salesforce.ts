@@ -39,6 +39,8 @@ export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
 	redirectURI?: string | undefined;
 }
 
+const SALESFORCE_DEFAULT_SCOPES = ["openid", "email", "profile"];
+
 export const salesforce = (options: SalesforceOptions) => {
 	const environment = options.environment ?? "production";
 	const isSandbox = environment === "sandbox";
@@ -63,6 +65,8 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
+		defaultScopes: SALESFORCE_DEFAULT_SCOPES,
+		callbackPath: "/callback/salesforce",
 
 		async createAuthorizationURL({
 			state,
@@ -83,11 +87,11 @@ export const salesforce = (options: SalesforceOptions) => {
 
 			const _scopes = options.disableDefaultScope
 				? []
-				: ["openid", "email", "profile"];
+				: [...SALESFORCE_DEFAULT_SCOPES];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 
-			return createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "salesforce",
 				options,
 				authorizationEndpoint,
@@ -97,6 +101,7 @@ export const salesforce = (options: SalesforceOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				additionalParams,
 			});
+			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
