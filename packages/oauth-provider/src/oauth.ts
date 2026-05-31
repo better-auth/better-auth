@@ -33,7 +33,11 @@ import { withOAuthRuntime } from "./runtime";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import type { GrantHandler, OAuthContributions } from "./types/contributions";
+import type {
+	ClientAuthStrategy,
+	GrantHandler,
+	OAuthContributions,
+} from "./types/contributions";
 import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -300,6 +304,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			const claimContributors: NonNullable<
 				OAuthContributions["tokenClaims"]
 			>[] = [];
+			const clientAuthStrategies: Record<string, ClientAuthStrategy> = {};
 			for (const contribution of contributions) {
 				if (contribution.grantTypes) {
 					for (const [uri, handler] of Object.entries(
@@ -326,6 +331,18 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				}
 				if (contribution.tokenClaims) {
 					claimContributors.push(contribution.tokenClaims);
+				}
+				if (contribution.clientAuthStrategies) {
+					for (const [assertionType, strategy] of Object.entries(
+						contribution.clientAuthStrategies,
+					)) {
+						if (clientAuthStrategies[assertionType]) {
+							throw new BetterAuthError(
+								`Conflicting client authentication strategy "${assertionType}": two plugins registered a verifier for it.`,
+							);
+						}
+						clientAuthStrategies[assertionType] = strategy;
+					}
 				}
 			}
 
@@ -372,6 +389,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				metadataContributors,
 				extraAuthMethods: [...extraAuthMethods],
 				claimContributors,
+				clientAuthStrategies,
 			};
 
 			// OAuth provider performs adapter-level session lookups by id, so it

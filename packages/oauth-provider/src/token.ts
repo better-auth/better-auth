@@ -90,6 +90,8 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/** Per-request claims from a custom grant handler (see CreateUserTokensParams.extra). */
+		extraClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -119,6 +121,7 @@ async function createJwtAccessToken(
 		options: jwtPluginOptions,
 		payload: {
 			...extensionClaims,
+			...overrides?.extraClaims,
 			...customClaims,
 			sub: user?.id,
 			aud: toAudienceClaim(audience),
@@ -506,7 +509,7 @@ async function createRefreshToken(
 	};
 }
 
-interface CreateUserTokensParams {
+export interface CreateUserTokensParams {
 	client: SchemaClient<Scope[]>;
 	scopes: string[];
 	grantType: GrantType;
@@ -521,6 +524,18 @@ interface CreateUserTokensParams {
 	/** Full original authorized resources for the grant, used to seed the refresh token
 	 * when the token request narrows the resource (RFC 8707 §2.2). */
 	originalResources?: string[];
+	/**
+	 * Per-request additions a custom grant handler injects for the token it is
+	 * minting. `accessTokenClaims` are merged into the JWT access-token payload
+	 * (applied before the consumer's `customAccessTokenClaims`, never over the
+	 * host-pinned claims); `tokenResponse` fields are merged into the token
+	 * response body under the standard OAuth fields. `accessTokenClaims` reach
+	 * the JWT access token only; opaque access tokens carry no claims.
+	 */
+	extra?: {
+		accessTokenClaims?: Record<string, unknown>;
+		tokenResponse?: Record<string, unknown>;
+	};
 }
 
 export async function createUserTokens(
@@ -634,6 +649,7 @@ export async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
+						extraClaims: params.extra?.accessTokenClaims,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -692,6 +708,7 @@ export async function createUserTokens(
 	return ctx.json(
 		{
 			...customFields,
+			...params.extra?.tokenResponse,
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,

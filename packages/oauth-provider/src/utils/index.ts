@@ -12,6 +12,7 @@ import {
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
+import { getOAuthRuntime } from "../runtime";
 import type {
 	ClientDiscovery,
 	OAuthOptions,
@@ -614,7 +615,11 @@ export type ExtractedCredentials =
 			clientSecret: string;
 	  }
 	| {
-			method: "private_key_jwt";
+			// Pre-verified, assertion-based methods: the built-in private_key_jwt plus
+			// any plugin-contributed clientAuthStrategies, keyed by client_assertion_type.
+			// The string member carries the contributed method id (= the advertised
+			// token_endpoint_auth_method).
+			method: "private_key_jwt" | (string & {});
 			clientId: string;
 			client: SchemaClient<Scope[]>;
 	  }
@@ -630,14 +635,11 @@ export function destructureCredentials(
 	return {
 		clientId: credentials?.clientId,
 		clientSecret:
-			credentials?.method === "client_secret_basic" ||
-			credentials?.method === "client_secret_post"
+			credentials && "clientSecret" in credentials
 				? credentials.clientSecret
 				: undefined,
 		preVerifiedClient:
-			credentials?.method === "private_key_jwt"
-				? credentials.client
-				: undefined,
+			credentials && "client" in credentials ? credentials.client : undefined,
 	};
 }
 
@@ -668,6 +670,21 @@ export async function extractClientCredentials(
 					"client_assertion cannot be combined with client_secret or Basic auth",
 				error: "invalid_client",
 			});
+		}
+		// A plugin-contributed strategy for this assertion type takes precedence
+		// over the built-in private_key_jwt (jwt-bearer) verifier. It verifies the
+		// credential and returns the authenticated client.
+		const strategy =
+			getOAuthRuntime(ctx)?.clientAuthStrategies?.[
+				body.client_assertion_type as string
+			];
+		if (strategy) {
+			const result = await strategy(ctx, opts);
+			return {
+				method: body.client_assertion_type as string,
+				clientId: result.clientId,
+				client: result.client,
+			};
 		}
 		const { verifyClientAssertion: verify } = await import(
 			"./client-assertion"

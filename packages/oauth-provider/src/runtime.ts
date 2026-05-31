@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type {
+	ClientAuthStrategy,
 	GrantHandler,
 	OAuthContributions,
 	TokenClaimInfo,
@@ -22,6 +23,8 @@ export interface OAuthProviderRuntime {
 	extraAuthMethods: string[];
 	/** Token-claim contributors merged into minted access and ID tokens. */
 	claimContributors: NonNullable<OAuthContributions["tokenClaims"]>[];
+	/** Client-authentication strategies keyed by `client_assertion_type`. */
+	clientAuthStrategies: Record<string, ClientAuthStrategy>;
 }
 
 const RUNTIME_KEY = "oauthProviderRuntime";

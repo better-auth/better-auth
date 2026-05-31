@@ -15,6 +15,7 @@ export type {
 	OAuthRedirectOnError,
 } from "./oauth-endpoint";
 export { checkOAuthClient, oauthToSchema } from "./register";
+export type { CreateUserTokensParams } from "./token";
 // Grant-author toolkit: helpers a contributed grant handler reuses to mint
 // tokens and authenticate the client instead of reimplementing them.
 export { createUserTokens } from "./token";

@@ -8,10 +8,15 @@ import {
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
+import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
-import { createUserTokens } from "./index";
+import {
+	createUserTokens,
+	getClient,
+	validateClientCredentials,
+} from "./index";
 import { oauthProvider } from "./oauth";
 import type { OAuthContributions } from "./types/contributions";
 
@@ -20,6 +25,11 @@ const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const INTROSPECT_URL = `${BASE_URL}/api/auth/oauth2/introspect`;
 const METADATA_URL = `${BASE_URL}/api/auth/.well-known/oauth-authorization-server`;
 const CUSTOM_GRANT = "urn:better-auth:test:custom-grant";
+// A custom grant whose handler reuses the exported createUserTokens to mint, and
+// injects per-request claims/response fields via CreateUserTokensParams.extra.
+const CLAIMS_GRANT = "urn:better-auth:test:claims-grant";
+// A custom token-endpoint client-auth method backed by a contributed verifier.
+const ASSERTION_TYPE = "urn:better-auth:test:assertion";
 const RESOURCE = "https://api.test";
 
 /**
@@ -51,12 +61,51 @@ function contributionProbe() {
 								},
 							},
 						),
+					// Reuses the exported createUserTokens to mint, injecting per-request
+					// claims and response fields through CreateUserTokensParams.extra.
+					[CLAIMS_GRANT]: async (ctx, opts) => {
+						const client = await validateClientCredentials(
+							ctx,
+							opts,
+							ctx.body.client_id as string,
+							ctx.body.client_secret as string | undefined,
+							["openid"],
+						);
+						return createUserTokens(ctx, opts, {
+							client,
+							scopes: ["openid"],
+							grantType: CLAIMS_GRANT,
+							resources: [RESOURCE],
+							extra: {
+								accessTokenClaims: { probe_extra: "yes" },
+								tokenResponse: { probe_response: "ok" },
+							},
+						});
+					},
 				},
-				grantTypeURIs: [CUSTOM_GRANT],
+				grantTypeURIs: [CUSTOM_GRANT, CLAIMS_GRANT],
 				metadata: ({ baseURL }) => ({
 					test_probe_endpoint: `${baseURL}/probe`,
 				}),
-				tokenEndpointAuthMethods: ["urn:better-auth:test:auth"],
+				tokenEndpointAuthMethods: ["urn:better-auth:test:auth", ASSERTION_TYPE],
+				// A contributed verifier for ASSERTION_TYPE: it authenticates the client
+				// by a fixed assertion value and returns the registered client record.
+				clientAuthStrategies: {
+					[ASSERTION_TYPE]: async (ctx, opts) => {
+						if (ctx.body.client_assertion !== "valid-attestation") {
+							throw new APIError("UNAUTHORIZED", { error: "invalid_client" });
+						}
+						const client = await getClient(
+							ctx,
+							opts,
+							ctx.body.client_id as string,
+						);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", { error: "invalid_client" });
+						}
+						return { clientId: client.clientId, client };
+					},
+				},
 				tokenClaims: {
 					access: () => ({ probe_claim: "present" }),
 					// Returns a namespaced claim plus an attempt to override the
@@ -289,6 +338,85 @@ describe("oauth-provider contribution surface", () => {
 
 	it("exports the grant-author token-minting helper", () => {
 		expect(typeof createUserTokens).toBe("function");
+	});
+
+	it("lets a custom grant inject per-request claims and response fields via createUserTokens", async () => {
+		const { auth, signInWithTestUser } = await setup();
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: ["http://localhost:3000/cb"], skip_consent: true },
+		});
+		const response = await auth.handler(
+			new Request(TOKEN_URL, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: CLAIMS_GRANT,
+					client_id: client!.client_id,
+					client_secret: client!.client_secret!,
+					resource: RESOURCE,
+				}).toString(),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			access_token?: string;
+			probe_response?: string;
+		};
+		expect(body.probe_response).toBe("ok");
+		expect(decodeJwt(body.access_token!).probe_extra).toBe("yes");
+	});
+
+	it("authenticates the client through a contributed client-auth strategy", async () => {
+		const { auth, signInWithTestUser } = await setup();
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: ["http://localhost:3000/cb"], skip_consent: true },
+		});
+		const response = await auth.handler(
+			new Request(TOKEN_URL, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client!.client_id,
+					client_assertion_type: ASSERTION_TYPE,
+					client_assertion: "valid-attestation",
+					resource: RESOURCE,
+				}).toString(),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { access_token?: string };
+		expect(body.access_token).toBeDefined();
+	});
+
+	it("rejects a contributed client-auth strategy when the assertion is invalid", async () => {
+		const { auth, signInWithTestUser } = await setup();
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: ["http://localhost:3000/cb"], skip_consent: true },
+		});
+		const response = await auth.handler(
+			new Request(TOKEN_URL, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client!.client_id,
+					client_assertion_type: ASSERTION_TYPE,
+					client_assertion: "forged",
+					resource: RESOURCE,
+				}).toString(),
+			}),
+		);
+		expect(response.status).toBe(401);
+		expect(((await response.json()) as { error?: string }).error).toBe(
+			"invalid_client",
+		);
 	});
 });
 

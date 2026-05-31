@@ -39,6 +39,25 @@ export interface TokenClaimInfo {
 	resources?: string[];
 }
 
+/** A client authenticated by a {@link ClientAuthStrategy}. */
+export interface ClientAuthResult {
+	clientId: string;
+	client: SchemaClient<Scope[]>;
+}
+
+/**
+ * A token-endpoint client-authentication strategy, registered under the
+ * `client_assertion_type` it verifies. The token endpoint dispatches to it when
+ * a request presents that assertion type; the strategy reads the credential from
+ * `ctx.body` / `ctx.request`, verifies it, and returns the authenticated client
+ * (look it up with the exported `getClient(ctx, opts, clientId)`). Advertise the
+ * method via `tokenEndpointAuthMethods`. Mirrors `GrantHandler`'s `(ctx, opts)` shape.
+ */
+export type ClientAuthStrategy = (
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) => Awaitable<ClientAuthResult>;
+
 /**
  * What a plugin can contribute to the `oauth-provider` host through its
  * `contributes` field. The host collects these at init via
@@ -103,6 +122,15 @@ export interface OAuthContributions {
 		access?: (info: TokenClaimInfo) => Awaitable<Record<string, unknown>>;
 		id?: (info: TokenClaimInfo) => Awaitable<Record<string, unknown>>;
 	};
+	/**
+	 * Token-endpoint client-authentication strategies keyed by the
+	 * `client_assertion_type` they verify (e.g. a wallet-attestation URN). When a
+	 * token request presents that assertion type, the endpoint dispatches to the
+	 * strategy, which verifies the credential and returns the authenticated
+	 * client. Pair with `tokenEndpointAuthMethods` to advertise the method in
+	 * discovery.
+	 */
+	clientAuthStrategies?: Record<string, ClientAuthStrategy>;
 }
 
 declare module "@better-auth/core" {
