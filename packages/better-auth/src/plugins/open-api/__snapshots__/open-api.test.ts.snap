@@ -22,7 +22,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "grantedScopes": {
-            "type": "string[]",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
           },
           "id": {
             "type": "string",

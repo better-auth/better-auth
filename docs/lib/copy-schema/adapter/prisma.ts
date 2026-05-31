@@ -50,8 +50,10 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					date: `DateTime${field.required === false ? "?" : ""}`,
 					json: `Json${field.required === false ? "?" : ""}`,
 					id,
-					"string[]": `String[]${field.required === false ? "?" : ""}`,
-					"number[]": `${field.bigint ? "BigInt" : "Int"}[]${field.required === false ? "?" : ""}`,
+					// Prisma scalar lists cannot be nullable (`String[]?` is invalid);
+					// they default to an empty list, so optionality is implicit.
+					"string[]": "String[]",
+					"number[]": `${field.bigint ? "BigInt" : "Int"}[]`,
 					foreignKeyId,
 				};
 			});

@@ -82,7 +82,11 @@ export function matchType(
 		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
-		return columnDataType.toLowerCase().includes("json");
+		// Kysely stores array fields as jsonb, but a column created by another
+		// generator (e.g. Drizzle uses Postgres `text[]`) is still a valid match.
+		// pg introspection reports array columns as "ARRAY" or "_text"/"_int".
+		const col = columnDataType.toLowerCase();
+		return col.includes("json") || col.includes("[]") || col.startsWith("_");
 	}
 	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
