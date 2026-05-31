@@ -165,14 +165,15 @@ export async function resolveOAuthUser(
 
 	if (linkPolicy.overrideUserInfo) {
 		const { id: _id, ...restUserInfo } = userInfo;
-		user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-			...restUserInfo,
-			email: userInfo.email.toLowerCase(),
-			emailVerified:
-				userInfo.email.toLowerCase() === dbUser.user.email
-					? dbUser.user.emailVerified || userInfo.emailVerified
-					: userInfo.emailVerified,
-		});
+		user =
+			(await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				...restUserInfo,
+				email: userInfo.email.toLowerCase(),
+				emailVerified:
+					userInfo.email.toLowerCase() === dbUser.user.email
+						? dbUser.user.emailVerified || userInfo.emailVerified
+						: userInfo.emailVerified,
+			})) ?? user;
 	}
 
 	return {
