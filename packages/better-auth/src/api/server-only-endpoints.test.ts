@@ -99,8 +99,6 @@ describe("server-only endpoints", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-3vf6-4wr3-c35q
-	 *
 	 * `addMember` is server-only. An unauthenticated request to its documented
 	 * path must 404 (no such route), not reach the handler. The `removeMember`
 	 * control is a real route and must 401, proving the 404 means the route is
