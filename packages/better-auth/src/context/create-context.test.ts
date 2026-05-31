@@ -1254,6 +1254,56 @@ describe("base context creation", () => {
 		});
 	});
 
+	describe("plugin contributions", () => {
+		it("collects contributions from every plugin targeting a host", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{ id: "guest-a", contributes: { "test-host": { value: "a" } } },
+					{ id: "guest-b", contributes: { "test-host": { value: "b" } } },
+					{ id: "unrelated" },
+				],
+			});
+			expect(ctx.getContributions("test-host" as never)).toEqual([
+				{ value: "a" },
+				{ value: "b" },
+			]);
+		});
+
+		it("returns an empty array when no plugin contributes to the host", async () => {
+			const ctx = await initBase({ plugins: [{ id: "guest" }] });
+			expect(ctx.getContributions("test-host" as never)).toEqual([]);
+		});
+
+		it("ignores plugins that contribute to a different host", async () => {
+			const ctx = await initBase({
+				plugins: [{ id: "guest", contributes: { "other-host": { v: 1 } } }],
+			});
+			expect(ctx.getContributions("test-host" as never)).toEqual([]);
+		});
+	});
+
+	describe("plugin requires", () => {
+		it("throws when a required plugin is missing", async () => {
+			await expect(
+				initBase({
+					plugins: [{ id: "dependent", requires: ["missing-host"] }],
+				}),
+			).rejects.toThrow('requires plugin "missing-host"');
+		});
+
+		it("passes when every required plugin is present", async () => {
+			const ctx = await initBase({
+				plugins: [{ id: "host" }, { id: "dependent", requires: ["host"] }],
+			});
+			expect(ctx.hasPlugin("dependent")).toBe(true);
+		});
+
+		it("ignores an empty requires array", async () => {
+			const ctx = await initBase({ plugins: [{ id: "solo", requires: [] }] });
+			expect(ctx.hasPlugin("solo")).toBe(true);
+		});
+	});
+
 	describe("adapter and internal adapter", () => {
 		it("should set both adapter and internalAdapter", async () => {
 			const ctx = await initBase({});

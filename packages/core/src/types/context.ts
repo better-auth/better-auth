@@ -78,6 +78,30 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown
 >;
 
+/**
+ * Typed contracts for plugin-to-plugin contributions.
+ *
+ * Host plugins augment this interface via `declare module "@better-auth/core"`
+ * to declare what contributions they accept. A contributing plugin then provides
+ * matching values through its `contributes` field, and the host collects them
+ * with `ctx.getContributions(hostId)` in its `init`.
+ *
+ * Keyed by host plugin id and empty by default; each host augments it from its
+ * own package, so a new host (or a new contributor) needs no change to
+ * `@better-auth/core`.
+ *
+ * @example
+ * ```ts
+ * // In the host package:
+ * declare module "@better-auth/core" {
+ *   interface ContributionContracts {
+ *     "oauth-provider": OAuthProviderExtension;
+ *   }
+ * }
+ * ```
+ */
+export interface ContributionContracts {}
+
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
@@ -288,6 +312,28 @@ export type PluginContext<Options extends BetterAuthOptions> = {
 	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
 	) => ID extends InferPluginID<Options> ? true : boolean;
+	/**
+	 * Collects every contribution targeting a host plugin.
+	 *
+	 * A host calls this in its `init` to gather what other installed plugins
+	 * declared via their `contributes` field under the host's id. It reads the
+	 * static declarations off the plugin array, so the result does not depend on
+	 * plugin registration order.
+	 *
+	 * @param hostId - The host plugin id (a key of `ContributionContracts`)
+	 * @returns The contributions from all plugins targeting the host
+	 *
+	 * @example
+	 * ```ts
+	 * const contributions = ctx.getContributions("oauth-provider");
+	 * for (const c of contributions) {
+	 *   if (c.grantTypes) Object.assign(handlers, c.grantTypes);
+	 * }
+	 * ```
+	 */
+	getContributions: <ID extends keyof ContributionContracts>(
+		hostId: ID,
+	) => ContributionContracts[ID][];
 };
 
 export type InfoContext = {

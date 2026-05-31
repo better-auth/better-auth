@@ -8,7 +8,7 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
+import type { AuthContext, ContributionContracts } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -160,4 +160,35 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * Typed contributions to host plugins.
+	 *
+	 * Each key is a host plugin id registered in `ContributionContracts`; the
+	 * value must satisfy the host's contract. The host collects these with
+	 * `ctx.getContributions(hostId)` in its `init`, so a plugin can extend a host
+	 * (custom grant types, discovery metadata, token claims, ...) without the
+	 * host knowing about it.
+	 *
+	 * @example
+	 * ```ts
+	 * contributes: {
+	 *   "oauth-provider": {
+	 *     grantTypes: { "urn:custom:grant": myHandler },
+	 *   },
+	 * }
+	 * ```
+	 */
+	contributes?:
+		| {
+				[K in keyof ContributionContracts]?: ContributionContracts[K];
+		  }
+		| undefined;
+	/**
+	 * Plugin ids this plugin requires to be present.
+	 *
+	 * Validated at startup before any `init` runs; a missing entry throws with a
+	 * descriptive error. This is a presence check only, not an ordering or
+	 * version constraint.
+	 */
+	requires?: readonly string[] | undefined;
 };

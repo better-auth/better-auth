@@ -3,6 +3,7 @@ export type {
 	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	ContributionContracts,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,

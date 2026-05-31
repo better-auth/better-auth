@@ -23,6 +23,18 @@ import {
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];
+
+	const pluginIds = new Set(plugins.map((p) => p.id));
+	for (const plugin of plugins) {
+		for (const dep of plugin.requires ?? []) {
+			if (!pluginIds.has(dep)) {
+				throw new BetterAuthError(
+					`Plugin "${plugin.id}" requires plugin "${dep}" which is not installed. Add it to your plugins array.`,
+				);
+			}
+		}
+	}
+
 	const pluginTrustedOrigins: NonNullable<
 		BetterAuthOptions["trustedOrigins"]
 	>[] = [];
