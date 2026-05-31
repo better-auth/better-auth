@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { Kysely, SqliteDialect } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import { kyselyAdapter } from "./kysely-adapter";
@@ -59,5 +61,30 @@ describe("kysely-adapter", () => {
 			selectQuery,
 		);
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * Stale installs of `@better-auth/cli@1.4.x` pin `@better-auth/core@1.4.x`
+	 * as a regular dependency, so package managers can hoist that older core
+	 * to the top of `node_modules` and shadow the newer core this adapter is
+	 * compiled against. The 1.4.x core only exposes `./utils` (no wildcard),
+	 * so any `@better-auth/core/utils/<name>` subpath import here will throw
+	 * `ERR_PACKAGE_PATH_NOT_EXPORTED` at bundle/resolve time. Keep this
+	 * adapter free of `@better-auth/core/utils/*` imports.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9767
+	 */
+	it("does not import from @better-auth/core/utils/* subpaths", () => {
+		const source = readFileSync(
+			path.join(__dirname, "kysely-adapter.ts"),
+			"utf8",
+		);
+		const importLines = source
+			.split("\n")
+			.filter((line) => /^\s*import\b/.test(line));
+		const offenders = importLines.filter((line) =>
+			/@better-auth\/core\/utils\//.test(line),
+		);
+		expect(offenders).toEqual([]);
 	});
 });
