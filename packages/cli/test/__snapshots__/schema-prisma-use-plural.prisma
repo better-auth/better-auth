@@ -50,7 +50,7 @@ model Accounts {
   idToken               String?
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  grantedScopes         String[]
+  grantedScopes         String[]  @default([])
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

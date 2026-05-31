@@ -50,10 +50,18 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					date: `DateTime${field.required === false ? "?" : ""}`,
 					json: `Json${field.required === false ? "?" : ""}`,
 					id,
-					// Prisma scalar lists cannot be nullable (`String[]?` is invalid);
-					// they default to an empty list, so optionality is implicit.
-					"string[]": "String[]",
-					"number[]": `${field.bigint ? "BigInt" : "Int"}[]`,
+					// Prisma scalar lists cannot be nullable (`String[]?` is invalid) and
+					// default to an empty list; `@default([])` is emitted to match the
+					// generated schema. SQLite and MySQL have no array type, so the
+					// adapter stores these as a JSON string in a plain `String` column.
+					"string[]":
+						provider === "sqlite" || provider === "mysql"
+							? "String"
+							: "String[] @default([])",
+					"number[]":
+						provider === "sqlite" || provider === "mysql"
+							? "String"
+							: `${field.bigint ? "BigInt" : "Int"}[] @default([])`,
 					foreignKeyId,
 				};
 			});
