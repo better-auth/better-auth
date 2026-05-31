@@ -38,7 +38,7 @@ const baseOrganizationSchema = z.object({
 		.meta({
 			description: "The logo of the organization",
 		})
-		.optional(),
+		.nullish(),
 	metadata: z
 		.record(z.string(), z.any())
 		.meta({
@@ -353,7 +353,7 @@ const baseUpdateOrganizationSchema = z.object({
 		.meta({
 			description: "The logo of the organization",
 		})
-		.optional(),
+		.nullish(),
 	metadata: z
 		.record(z.string(), z.any())
 		.meta({
@@ -373,7 +373,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 		data: {
 			name?: string | undefined;
 			slug?: string | undefined;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId?: string | undefined;
