@@ -47,7 +47,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		fields: option?.schema?.member?.additionalFields || {},
 		isClientSide: true,
 	});
-	return createAuthEndpoint(
+	return createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: z.object({
