@@ -7,6 +7,7 @@ import { DANGEROUS_URL_SCHEMES } from "./url";
  * server stores and later hands back to a browser.
  *
  * - Rejects dangerous schemes (`javascript:`, `data:`, `vbscript:`).
+ * - Rejects URIs with a fragment component (`#...`) per RFC 6749 §3.1.2.
  * - Requires HTTPS, except for loopback hosts (`127.0.0.0/8`, `[::1]`,
  *   `*.localhost` per RFC 6761), where HTTP is allowed for local development.
  * - Allows custom schemes for mobile apps (e.g. `myapp://callback`).
@@ -16,7 +17,10 @@ import { DANGEROUS_URL_SCHEMES } from "./url";
  * rather than re-implementing the scheme policy per plugin.
  */
 export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
-	if (!URL.canParse(val)) {
+	let u: URL;
+	try {
+		u = new URL(val);
+	} catch {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL must be parseable",
@@ -25,14 +29,19 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 		return z.NEVER;
 	}
 
-	const u = new URL(val);
-
 	if (DANGEROUS_URL_SCHEMES.includes(u.protocol)) {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL cannot use javascript:, data:, or vbscript: scheme",
 		});
 		return;
+	}
+
+	if (val.includes("#")) {
+		ctx.addIssue({
+			code: "custom",
+			message: "Redirect URI must not contain a fragment component",
+		});
 	}
 
 	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
