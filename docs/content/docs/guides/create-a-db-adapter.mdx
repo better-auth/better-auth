@@ -11,10 +11,6 @@ Our hope is to allow you to focus on writing database logic, and not have to wor
 Anything from custom schema configurations, custom ID generation, safe JSON parsing, key mapping, joins, and more is handled by the `createAdapterFactory` function.
 All you need to do is provide the database logic, and the `createAdapterFactory` function will handle the rest.
 
-<Callout type="info">
-  When using your custom adapter, import `betterAuth` from `better-auth/minimal` instead of `better-auth`. The minimal export excludes Kysely and reduces bundle size. See [Bundle Size Optimization](/docs/guides/optimizing-for-performance#bundle-size-optimization) for details.
-</Callout>
-
 ## Quick Start
 
 <Steps>
