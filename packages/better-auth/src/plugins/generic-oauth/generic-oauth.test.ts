@@ -2845,7 +2845,7 @@ describe("oauth2", async () => {
 			);
 
 			expect(res.status).toBe(302);
-			expect(res.headers.get("location")).toContain("state=state_not_found");
+			expect(res.headers.get("location")).toContain("error=state_not_found");
 		});
 
 		it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
@@ -2873,7 +2873,7 @@ describe("oauth2", async () => {
 			expect(res.status).toBe(302);
 			const location = res.headers.get("location") || "";
 			expect(location).not.toContain(`http://localhost:${port}/authorize`);
-			expect(location).toContain("state=state_not_found");
+			expect(location).toContain("error=state_not_found");
 		});
 
 		it("should not bounce when state is present even if allowIdpInitiated is on", async () => {
