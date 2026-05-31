@@ -60,9 +60,12 @@ export const DANGEROUS_URL_SCHEMES = ["javascript:", "data:", "vbscript:"];
  * execution schemes without rejecting relative paths or mobile deep links.
  */
 export function isSafeUrlScheme(value: string): boolean {
-	if (!URL.canParse(value)) {
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
 		// Relative URLs carry no scheme to abuse.
 		return true;
 	}
-	return !DANGEROUS_URL_SCHEMES.includes(new URL(value).protocol);
+	return !DANGEROUS_URL_SCHEMES.includes(parsed.protocol);
 }
