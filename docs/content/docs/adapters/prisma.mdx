@@ -20,7 +20,7 @@ To use the Prisma adapter, you need to install the `@better-auth/prisma-adapter`
 You can use the Prisma adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal"; // [!code highlight]
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 
@@ -90,7 +90,16 @@ export const auth = betterAuth({
   or run our latest CLI version `npx auth@latest generate` to generate a new Prisma schema with the relations.
 </Callout>
 
+## Bundle Size Optimization
+
+When using the Prisma adapter, import `betterAuth` from `better-auth/minimal` instead of `better-auth`. The minimal export excludes Kysely, which is only needed for direct database connections. This can significantly reduce your bundle size in serverless and edge environments.
+
+<Callout type="info">
+  Use `better-auth` (full) instead if you need built-in Kysely migrations via `runMigrations()` or `npx auth@latest migrate`. See the [bundle size optimization guide](/docs/guides/optimizing-for-performance#bundle-size-optimization) for more details.
+</Callout>
+
 ## Additional Information
 
+* We recommend using `better-auth/minimal` with the Prisma adapter to reduce bundle size. See [Bundle Size Optimization](#bundle-size-optimization) above.
 * If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
 * [How to use Prisma ORM with Better Auth and Next.js](https://www.prisma.io/docs/guides/betterauth-nextjs)

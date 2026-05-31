@@ -20,7 +20,7 @@ To use the Drizzle adapter, you need to install the `@better-auth/drizzle-adapte
 You can use the Drizzle adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal"; // [!code highlight]
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { db } from "./database.ts";
 
@@ -174,6 +174,15 @@ export const auth = betterAuth({
 });
 ```
 
+## Bundle Size Optimization
+
+When using the Drizzle adapter, import `betterAuth` from `better-auth/minimal` instead of `better-auth`. The minimal export excludes Kysely, which is only needed for direct database connections. This can significantly reduce your bundle size in serverless and edge environments.
+
+<Callout type="info">
+  Use `better-auth` (full) instead if you need built-in Kysely migrations via `runMigrations()` or `npx auth@latest migrate`. See the [bundle size optimization guide](/docs/guides/optimizing-for-performance#bundle-size-optimization) for more details.
+</Callout>
+
 ## Additional Information
 
+* We recommend using `better-auth/minimal` with the Drizzle adapter to reduce bundle size. See [Bundle Size Optimization](#bundle-size-optimization) above.
 * If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
