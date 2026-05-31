@@ -95,8 +95,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		dynamic_client_registration_supported:
-			opts.allowDynamicClientRegistration,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		// `public_client_supported` flips `"none"` into the advertised auth
 		// methods. Any configured `clientDiscovery` implicitly produces public
 		// clients (CIMD, wallet attestation, etc.), so the flag must reflect

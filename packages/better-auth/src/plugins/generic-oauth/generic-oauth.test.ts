@@ -2,11 +2,11 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
-import {
-	OAuth2Server,
-	type MutableResponse,
-	type TokenRequestIncomingMessage,
+import type {
+	MutableResponse,
+	TokenRequestIncomingMessage,
 } from "oauth2-mock-server";
+import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
