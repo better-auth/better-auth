@@ -120,7 +120,7 @@ description: Learn how to configure Better Auth in your project.
     <Tabs items={["drizzle", "prisma", "mongodb"]}>
       <Tab value="drizzle">
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+        import { betterAuth } from "better-auth";
         import { drizzleAdapter } from "better-auth/adapters/drizzle";
         import { db } from "@/db"; // your drizzle instance
 
@@ -134,7 +134,7 @@ description: Learn how to configure Better Auth in your project.
 
       <Tab value="prisma">
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+        import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
         // If your Prisma file is located elsewhere, you can change the path
         import { PrismaClient } from "@/generated/prisma/client";
@@ -150,7 +150,7 @@ description: Learn how to configure Better Auth in your project.
 
       <Tab value="mongodb">
         ```ts title="auth.ts"
-        import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+        import { betterAuth } from "better-auth";
         import { mongodbAdapter } from "better-auth/adapters/mongodb";
         import { client } from "@/db"; // your mongodb client
 
