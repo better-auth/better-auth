@@ -1391,6 +1391,12 @@ export const createAdapterFactory =
 										},
 									],
 								});
+								// A non-numeric count coerces to a false miss, so fail loud.
+								if (typeof deleted !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from deleteMany during the consumeOne fallback. Return the number of deleted rows, or implement a native consumeOne for atomic single-use consumption.`,
+									);
+								}
 								return deleted > 0 ? (target as T) : null;
 							}),
 					);
