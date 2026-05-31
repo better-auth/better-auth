@@ -71,7 +71,7 @@ export async function sendVerificationEmailFn(
 				url,
 				token,
 			},
-			ctx.request,
+			ctx.request?.clone(),
 		),
 	);
 }
@@ -80,6 +80,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		operationId: "sendVerificationEmail",
+		cloneRequest: true,
 		body: z.object({
 			email: z.email().meta({
 				description: "The email to send the verification email to",
@@ -338,7 +339,7 @@ export const verifyEmail = createAuthEndpoint(
 									url,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}
@@ -437,7 +438,7 @@ export const verifyEmail = createAuthEndpoint(
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}

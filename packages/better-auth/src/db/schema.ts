@@ -60,6 +60,53 @@ export function parseUserOutput<T extends User>(
 	return filterOutputFields(user, schema);
 }
 
+/**
+ * Builds a synthetic user object that matches the shape of a real user
+ * returned from the database. This ensures enumeration protection works
+ * correctly by making synthetic and real user responses indistinguishable.
+ *
+ * The function iterates over the user output schema and:
+ * - Includes all fields that should be returned (returned !== false)
+ * - Uses provided values when available
+ * - Sets optional fields to null when no value is provided
+ * - Applies default values where defined
+ * - Always includes the 'id' field (not part of schema but always present)
+ */
+export function buildSyntheticUserOutput(
+	options: BetterAuthOptions,
+	data: Record<string, unknown>,
+): Record<string, unknown> {
+	const schema = getFields(options, "user", "output");
+	const result: Record<string, unknown> = {};
+
+	for (const key in schema) {
+		const fieldAttr = schema[key]!;
+
+		if (fieldAttr.returned === false) {
+			continue;
+		}
+
+		if (key in data && data[key] !== undefined) {
+			result[key] = data[key];
+		} else if (fieldAttr.defaultValue !== undefined) {
+			result[key] =
+				typeof fieldAttr.defaultValue === "function"
+					? fieldAttr.defaultValue()
+					: fieldAttr.defaultValue;
+		} else if (!fieldAttr.required) {
+			result[key] = null;
+		}
+	}
+
+	// The 'id' field is not part of the schema fields but is always present
+	// in user output, so we need to include it explicitly
+	if ("id" in data) {
+		result.id = data.id;
+	}
+
+	return result;
+}
+
 export function parseSessionOutput<T extends Session>(
 	options: BetterAuthOptions,
 	session: T,

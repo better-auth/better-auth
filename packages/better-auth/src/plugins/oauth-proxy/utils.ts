@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin } from "../../utils/url";
+import { getOrigin, trimTrailingSlashes } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
 /**
@@ -8,7 +8,7 @@ import type { OAuthProxyOptions } from "./index";
  */
 export function stripTrailingSlash(url: string | undefined): string {
 	if (!url) return "";
-	return url.replace(/\/+$/, "");
+	return trimTrailingSlashes(url);
 }
 
 /**
@@ -70,16 +70,4 @@ export function checkSkipProxy(
 	const currentOrigin = getOrigin(currentURL);
 
 	return productionOrigin === currentOrigin;
-}
-
-/**
- * Redirect to error URL with error code
- */
-export function redirectOnError(
-	ctx: GenericEndpointContext,
-	errorURL: string,
-	error: string,
-): never {
-	const sep = errorURL.includes("?") ? "&" : "?";
-	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
 }

@@ -288,7 +288,7 @@ export const changePassword = createAuthEndpoint(
 		});
 		let token = null;
 		if (revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
 			);
@@ -549,7 +549,7 @@ export const deleteUser = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -640,7 +640,7 @@ export const deleteUserCallback = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			`delete-account-${ctx.query.token}`,
@@ -717,9 +717,10 @@ export const changeEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Change email is disabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED,
+			);
 		}
 
 		const newEmail = ctx.body.newEmail.toLowerCase();
@@ -740,11 +741,12 @@ export const changeEmail = createAuthEndpoint(
 		const canUpdateWithoutVerification =
 			ctx.context.session.user.emailVerified !== true &&
 			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
-		const canSendConfirmation =
-			ctx.context.session.user.emailVerified &&
-			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 		const canSendVerification =
 			ctx.context.options.emailVerification?.sendVerificationEmail;
+		const canSendConfirmation =
+			canSendVerification &&
+			ctx.context.session.user.emailVerified &&
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (
 			!canUpdateWithoutVerification &&
@@ -799,9 +801,9 @@ export const changeEmail = createAuthEndpoint(
 				);
 				const url = `${
 					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					ctx.body.callbackURL || "/",
+				)}`;
 				await ctx.context.runInBackgroundOrAwait(
 					canSendVerification(
 						{
@@ -837,7 +839,9 @@ export const changeEmail = createAuthEndpoint(
 			);
 			const url = `${
 				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+			}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				canSendConfirmation(
 					{
@@ -872,7 +876,9 @@ export const changeEmail = createAuthEndpoint(
 		);
 		const url = `${
 			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			ctx.body.callbackURL || "/",
+		)}`;
 		await ctx.context.runInBackgroundOrAwait(
 			canSendVerification(
 				{

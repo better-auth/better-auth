@@ -982,7 +982,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteSessions(user.user.id);
+				await ctx.context.internalAdapter.deleteUserSessions(user.user.id);
 			}
 			return ctx.json({
 				success: true,

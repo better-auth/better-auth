@@ -197,23 +197,49 @@ export async function authorize(
 		);
 	}
 
-	if (!query.code_challenge_method) {
-		query.code_challenge_method = "plain";
-	}
-
-	if (
-		![
-			"s256",
-			options.allowPlainCodeChallengeMethod ? "plain" : "s256",
-		].includes(query.code_challenge_method?.toLowerCase() || "")
-	) {
+	if (query.code_challenge_method && !query.code_challenge) {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
-				"invalid code_challenge method",
+				"code_challenge_method requires code_challenge",
 			),
 		);
+	}
+
+	if (query.code_challenge) {
+		const allowedCodeChallengeMethods = options.allowPlainCodeChallengeMethod
+			? ["s256", "plain"]
+			: ["s256"];
+		let codeChallengeMethod: AuthorizationQuery["code_challenge_method"] =
+			query.code_challenge_method?.toLowerCase() as AuthorizationQuery["code_challenge_method"];
+		// Backward-compat: callers who explicitly opt into plain PKCE retain the
+		// legacy "default missing method to `plain`" behavior. The secure default
+		// (`allowPlainCodeChallengeMethod: false`) still rejects a missing method
+		// as `invalid_request`. The whole branch should be removed once the next
+		// minor drops the `plain` PKCE allowlist entry (see FIXME below).
+		// FIXME(legacy-plain-pkce-removal): remove this fallback on next; require
+		// callers to send `code_challenge_method` explicitly.
+		if (!codeChallengeMethod && options.allowPlainCodeChallengeMethod) {
+			codeChallengeMethod = "plain";
+		}
+		if (
+			!codeChallengeMethod ||
+			!allowedCodeChallengeMethods.includes(codeChallengeMethod)
+		) {
+			return handleRedirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method",
+				),
+			);
+		}
+		// Persist the normalized value back so the verification record stores the
+		// lowercased and (optionally) fallback-resolved method. The token endpoint
+		// compares against `"plain"` exactly, so casing variations or a missing
+		// method on the opt-in path would otherwise break PKCE verification.
+		query.code_challenge_method = codeChallengeMethod;
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");

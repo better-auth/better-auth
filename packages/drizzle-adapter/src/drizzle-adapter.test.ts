@@ -15,6 +15,79 @@ describe("drizzle-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("should use unique column fallback for MySQL creates without an id", async () => {
+		const userRow = {
+			id: 42,
+			name: "Test",
+			email: "test@example.com",
+			emailVerified: false,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+
+		const selectFromWhere = vi.fn().mockReturnValue({
+			limit: vi.fn().mockReturnValue({
+				execute: vi.fn().mockResolvedValue([userRow]),
+			}),
+		});
+		const selectFrom = vi.fn().mockReturnValue({
+			from: vi.fn().mockReturnValue({
+				where: selectFromWhere,
+			}),
+		});
+
+		const txProxy = new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					if (prop === "select") return selectFrom;
+					return undefined;
+				},
+			},
+		);
+
+		const db = {
+			_: { fullSchema: { user: userTable } },
+			insert: vi.fn().mockReturnValue({
+				values: vi.fn().mockReturnValue({
+					config: { values: [{ name: { value: "Test" } }] },
+					execute: vi.fn().mockResolvedValue(undefined),
+				}),
+			}),
+			transaction: vi.fn().mockImplementation((fn: any) => fn(txProxy)),
+		} as any;
+		const factory = drizzleAdapter(db, { provider: "mysql" });
+		const adapter = factory({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: {
+				database: {
+					generateId: false,
+				},
+			},
+		});
+
+		const result = await adapter.create({
+			model: "user",
+			data: {
+				name: "Test",
+				email: "test@example.com",
+			},
+		});
+
+		expect(result).toBeDefined();
+		expect(db.transaction).toHaveBeenCalled();
+	});
+
 	describe("checkMissingFields", () => {
 		function createMockDb(schema: Record<string, Record<string, any>>) {
 			return {

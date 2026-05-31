@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { ContributorInfo } from "@/lib/community-stats";
 import { cn } from "@/lib/utils";
+import { Icons } from "../icons";
 import {
 	DatabaseSection,
 	IntegrationsSection,
@@ -909,21 +910,7 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 							rel="noopener noreferrer"
 						>
 							<div className="flex items-center gap-1.5 px-2.5 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="11"
-									height="11"
-									viewBox="0 0 128 128"
-								>
-									<path
-										fill="#cb3837"
-										d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
-									/>
-									<path
-										fill="#fff"
-										d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
-									/>
-								</svg>
+								<Icons.npm className="size-[11px] -translate-y-px" />
 								<span className="text-xs font-mono">
 									{formatCount(stats.npmDownloads)} / week
 								</span>
@@ -947,6 +934,7 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 									strokeWidth="2"
 									strokeLinecap="round"
 									strokeLinejoin="round"
+									className="size-[11px] -translate-y-px"
 								>
 									<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
 								</svg>

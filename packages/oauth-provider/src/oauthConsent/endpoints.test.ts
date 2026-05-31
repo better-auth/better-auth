@@ -169,6 +169,32 @@ describe("oauthConsent", async () => {
 		consent1 = consent.data!;
 	});
 
+	it("should reject updates to a consent owned by another user", async () => {
+		const otherUser = await auth.api.signUpEmail({
+			body: {
+				email: "other-consent-owner@test.com",
+				password: "password123",
+				name: "Other Consent Owner",
+			},
+		});
+
+		const otherConsent = await auth.api.testerCreateConsent({
+			headers,
+			body: {
+				clientId: oauthClient1.client_id,
+				userId: otherUser.user.id,
+				scopes: oauthClient1Scopes,
+			},
+		});
+
+		const res = await authClient.oauth2.updateConsent({
+			id: otherConsent.id,
+			update: { scopes: oauthClient1Scopes },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
 	it("should delete the consent", async () => {
 		const consent = await authClient.oauth2.deleteConsent({
 			id: consent1.id,

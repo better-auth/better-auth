@@ -2,21 +2,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
-
-/**
- * Normalizes a PEM string by trimming leading/trailing whitespace from each
- * line. Native `crypto.createPrivateKey` (used by samlify 2.12+) rejects PEM
- * blocks with leading whitespace, which is common when keys are stored in
- * indented config files, environment variables, or JSON.
- */
-function normalizePem(pem: string | undefined): string | undefined {
-	if (!pem) return pem;
-	return pem
-		.split("\n")
-		.map((line) => line.trim())
-		.join("\n");
-}
+import { normalizePem, safeJsonParse } from "../utils";
 
 /**
  * Same as `normalizePem`, but applied across the resolved list of IdP signing
