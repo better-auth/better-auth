@@ -10,10 +10,6 @@ Better Auth connects to a database to store data. The database will be used to s
 You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
 
 <Callout type="info">
-  If you're using any database adapter (official or community), import `betterAuth` from `better-auth/minimal` instead of `better-auth`. The minimal export excludes Kysely and reduces bundle size. Direct database connections and built-in migrations require the full `better-auth` import. See [Bundle Size Optimization](/docs/guides/optimizing-for-performance#bundle-size-optimization) for details.
-</Callout>
-
-<Callout type="info">
   Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
 </Callout>
 
