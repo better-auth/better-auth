@@ -4,6 +4,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -89,15 +90,21 @@ export const callbackOAuth = createAuthEndpoint(
 				value: c.params.id,
 			});
 			if (provider?.allowIdpInitiated) {
-				const { state: freshState, codeVerifier } = await generateState(
-					c,
-					undefined,
-					undefined,
-				);
-				const { url: authUrl } = await provider.createAuthorizationURL({
-					state: freshState,
+				// Build the URL first so the effective requested scopes can be
+				// persisted into state, then write state once via `precomputed`
+				// (same ordering as the normal sign-in flow). Without this the
+				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
+				const state = generateRandomString(32);
+				const codeVerifier = generateRandomString(128);
+				const { url: authUrl, requestedScopes } =
+					await provider.createAuthorizationURL({
+						state,
+						codeVerifier,
+						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+					});
+				await generateState(c, undefined, undefined, requestedScopes, {
+					state,
 					codeVerifier,
-					redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 				});
 				throw c.redirect(authUrl.toString());
 			}
