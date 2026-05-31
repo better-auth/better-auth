@@ -5,6 +5,7 @@ import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import type { OAuthClient } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
+import { assertClientPrivileges } from "./privileges";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },
@@ -317,25 +318,4 @@ export async function rotateClientSecretEndpoint(
 		...updatedClient,
 		clientSecret: (opts.prefix?.clientSecret ?? "") + clientSecret,
 	});
-}
-
-export async function assertClientPrivileges(
-	ctx: GenericEndpointContext,
-	session: Awaited<ReturnType<typeof getSessionFromCtx>>,
-	opts: OAuthOptions<Scope[]>,
-	action: "create" | "read" | "update" | "delete" | "list" | "rotate",
-) {
-	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action,
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 }

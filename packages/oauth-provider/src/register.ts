@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import { assertClientPrivileges } from "./oauthClient/privileges";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
@@ -204,6 +205,21 @@ export async function createOAuthClientEndpoint(
 ) {
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
+
+	// Single authorization chokepoint for OAuth client creation. Every creation
+	// route reaches this function, so the create gate lives here rather than in
+	// each caller. Dynamic registration may be anonymous when
+	// allowUnauthenticatedClientRegistration is enabled, and registerEndpoint
+	// constrains that path to public clients, so it is authorized only when a
+	// session is present. Every other creation route requires an authorized
+	// session; assertClientPrivileges throws when none is present.
+	if (settings.isRegister) {
+		if (session) {
+			await assertClientPrivileges(ctx, session, opts, "create");
+		}
+	} else {
+		await assertClientPrivileges(ctx, session, opts, "create");
+	}
 
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
