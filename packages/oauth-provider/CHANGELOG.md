@@ -1,5 +1,19 @@
 # @better-auth/oauth-provider
 
+## 1.6.13
+
+### Patch Changes
+
+- [#9837](https://github.com/better-auth/better-auth/pull/9837) [`17ab66c`](https://github.com/better-auth/better-auth/commit/17ab66c3a4beef72c3a4ac82ce7aca21650e8462) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Enforce the `clientPrivileges` create check on dynamic client registration.
+
+  `POST /oauth2/register` reached OAuth client persistence without the create gate that `/oauth2/create-client` and `/admin/oauth2/create-client` enforced. A deployment that restricted client creation through `clientPrivileges` could still let any authenticated user register a confidential client and receive a `client_secret`. The create check now runs at the single client-creation chokepoint, so every registration route enforces it by construction.
+
+  Unauthenticated public-client registration through `allowUnauthenticatedClientRegistration` is unchanged.
+
+- Updated dependencies [[`d3919dc`](https://github.com/better-auth/better-auth/commit/d3919dc1a560625d8f09161d64701e257452940f), [`5f282bd`](https://github.com/better-auth/better-auth/commit/5f282bd382d694f6834b1d0f8f694f737f223811), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`be32012`](https://github.com/better-auth/better-auth/commit/be32012ca3507a62371d1baa09cdacd5123a99bf), [`87c1a0c`](https://github.com/better-auth/better-auth/commit/87c1a0cab274b574592922ccc2454b0bd510a81f), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066), [`9c8ded6`](https://github.com/better-auth/better-auth/commit/9c8ded67b192997b6c02150c3423bbc99d9bdb6b), [`23d7cbf`](https://github.com/better-auth/better-auth/commit/23d7cbfa793ca69b733f98334bd12962cad61646)]:
+  - better-auth@1.6.13
+  - @better-auth/core@1.6.13
+
 ## 1.6.12
 
 ### Patch Changes
