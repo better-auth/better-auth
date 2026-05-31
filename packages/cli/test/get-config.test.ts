@@ -1719,6 +1719,43 @@ describe("SvelteKit virtual modules and Vite asset imports (user-reported scenar
 	);
 
 	/**
+	 * `$app/stores` exposes Svelte stores, including `updated.check()`, so a
+	 * config touching them at load time must not crash.
+	 */
+	tmpdirTest(
+		"resolves $app/stores with store-shaped exports",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { getStores, page, updated } from "$app/stores";
+					export const auth = betterAuth({
+						appName:
+							typeof page.subscribe === "function" &&
+							typeof updated.check === "function" &&
+							typeof getStores === "function"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
 	 * A Vite `?inline` query import reached through a custom `kit.alias`. The
 	 * alias resolves to a real file, but the `?inline` suffix means there is no
 	 * literal file on disk for jiti to load.

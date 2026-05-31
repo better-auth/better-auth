@@ -28,6 +28,10 @@
 
 export function addSvelteKitVirtualModules(aliases: Record<string, string>) {
 	// `$env/*` carry real values (the process env), unlike the inert `$app/*`.
+	// Public/private split assumes SvelteKit's default `PUBLIC_` prefix; a custom
+	// `kit.env.publicPrefix`/`privatePrefix` is not read here (it would require
+	// parsing svelte.config). The values do not affect schema generation, so a
+	// custom prefix only changes which `env.*` reads resolve, not the output.
 	aliases["$env/dynamic/private"] = createStubModule(
 		createDynamicEnvModule("private"),
 	);
@@ -99,10 +103,10 @@ export const navigating = {};
 export const updated = { check() { return Promise.resolve(false); } };
 `,
 	"$app/stores": `
-export function getStores() { return {}; }
-export const page = {};
-export const navigating = {};
-export const updated = {};
+export const page = { subscribe() { return () => {}; } };
+export const navigating = { subscribe() { return () => {}; } };
+export const updated = { subscribe() { return () => {}; }, check() { return Promise.resolve(false); } };
+export function getStores() { return { page, navigating, updated }; }
 `,
 	"$app/forms": `
 export function applyAction() {}
