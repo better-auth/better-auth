@@ -33,9 +33,6 @@ describe("toZodSchema", () => {
 		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9829
-	 */
 	describe("required: false field nullability", () => {
 		it("should accept null, undefined, and a value for an optional field", () => {
 			const schema = toZodSchema({
