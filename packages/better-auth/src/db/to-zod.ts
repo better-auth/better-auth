@@ -36,7 +36,7 @@ export function toZodSchema<
 		}
 
 		if (field?.required === false) {
-			schema = schema.optional();
+			schema = schema.nullish();
 		}
 		if (!isClientSide && field?.returned === false) {
 			return acc;
@@ -82,7 +82,7 @@ type GetRequired<
 	required: true;
 }
 	? Schema
-	: z.ZodOptional<Schema>;
+	: z.ZodOptional<z.ZodNullable<Schema>>;
 
 type GetInput<
 	isClientSide extends boolean,
