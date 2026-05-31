@@ -1391,13 +1391,18 @@ export const createAdapterFactory =
 										},
 									],
 								});
-								// `deleteMany` is typed `Promise<number>`, but a misbehaving
-								// custom adapter could return NaN or Infinity. `NaN > 0` is
-								// false and `Infinity > 0` is true, so a bare `deleted > 0`
-								// would misclassify both. Only a finite positive count proves
-								// we won the delete race; any other value fails closed
-								// (returns null) so a single-use row is never reported
-								// consumed without proof.
+								// `deleteMany` is typed `Promise<number>`. A non-number breaks
+								// the contract, so fail loud. A finite-number check then closes
+								// the NaN/Infinity hole: `NaN > 0` is false and `Infinity > 0`
+								// is true, so a bare `deleted > 0` would misclassify both. Only
+								// a finite positive count proves we won the delete race; any
+								// other value fails closed (returns null) so a single-use row
+								// is never reported consumed without proof.
+								if (typeof deleted !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from deleteMany during the consumeOne fallback. Return the number of deleted rows, or implement a native consumeOne for atomic single-use consumption.`,
+									);
+								}
 								return Number.isFinite(deleted) && deleted > 0
 									? (target as T)
 									: null;
