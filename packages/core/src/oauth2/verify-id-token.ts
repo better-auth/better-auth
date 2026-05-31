@@ -76,14 +76,14 @@ export async function verifyProviderIdToken(
 		return config.allowOpaqueToken === true;
 	}
 	try {
-		const header = decodeProtectedHeader(token);
-		if (!header.kid || !header.alg) {
-			return false;
-		}
+		// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
+		// key selection is left to config.jwks. The token's `alg` only seeds the default
+		// allowed-algorithms list when the provider does not pin one.
+		const { alg } = decodeProtectedHeader(token);
 		const { payload } = await jwtVerify(token, config.jwks, {
 			issuer: config.issuer,
 			audience: config.audience,
-			algorithms: config.algorithms ?? [header.alg],
+			algorithms: config.algorithms ?? (alg ? [alg] : undefined),
 			maxTokenAge: config.maxTokenAge,
 		});
 		if (

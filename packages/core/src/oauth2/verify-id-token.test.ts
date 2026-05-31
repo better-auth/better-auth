@@ -30,7 +30,7 @@ async function makeKeyset() {
 			.setIssuedAt()
 			.setExpirationTime("1h")
 			.sign(key);
-	return { jwks, sign };
+	return { jwks, sign, privateKey };
 }
 
 function providerWith(
@@ -49,6 +49,19 @@ describe("verifyProviderIdToken", () => {
 		const token = await sign({ sub: "u1", nonce: "n1" });
 		const provider = providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE });
 		expect(await verifyProviderIdToken(provider, token, "n1")).toBe(true);
+	});
+
+	it("accepts a signed token without a kid header when the JWKS resolves it", async () => {
+		const { jwks, privateKey } = await makeKeyset();
+		const token = await new SignJWT({ sub: "u1" })
+			.setProtectedHeader({ alg: "RS256" })
+			.setIssuer(ISSUER)
+			.setAudience(AUDIENCE)
+			.setIssuedAt()
+			.setExpirationTime("1h")
+			.sign(privateKey);
+		const provider = providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE });
+		expect(await verifyProviderIdToken(provider, token)).toBe(true);
 	});
 
 	it("rejects a token signed by a different key (forgery)", async () => {
