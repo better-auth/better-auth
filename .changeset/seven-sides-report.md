@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-fix(client): preserve null in useSession().data type with throw:true
+Fixes an issue where `useSession({ throw: true })` incorrectly excluded `null` from its `data` type.
