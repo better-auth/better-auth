@@ -31,7 +31,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { SafeUrlSchema } from "./types/zod";
+import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
@@ -503,7 +503,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						nonce: z.string().optional(),
 						resource: z
-							.union([SafeUrlSchema, z.array(SafeUrlSchema).min(1)])
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 							.optional(),
 						prompt: z
 							.string()
@@ -767,7 +767,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						redirect_uri: SafeUrlSchema.optional(),
 						refresh_token: z.string().optional(),
 						resource: z
-							.union([SafeUrlSchema, z.array(SafeUrlSchema).min(1)])
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 							.optional(),
 						scope: z.string().optional(),
 					}),

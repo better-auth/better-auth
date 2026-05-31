@@ -672,7 +672,9 @@ export async function authorizeEndpoint(
 				"End-User consent is required",
 			);
 		}
-		return redirectWithPromptCode(ctx, opts, "consent");
+		return redirectWithPromptCode(ctx, opts, "consent", {
+			sessionId: session.session.id,
+		});
 	}
 
 	return redirectWithAuthorizationCode(ctx, opts, {

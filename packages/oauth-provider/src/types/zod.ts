@@ -64,8 +64,9 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 
 	const u = new URL(val);
 
-	// Disallow URL fragments
-	if (u.hash && u.hash.length > 0) {
+	// Disallow URL fragments. Check the raw value so a bare trailing "#"
+	// (which parses to an empty `hash`) is also rejected.
+	if (val.includes("#")) {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL must not contain a fragment",
@@ -86,6 +87,37 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 			code: "custom",
 			message:
 				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+		});
+	}
+});
+
+/**
+ * Validates an RFC 8707 resource indicator. The value must be an absolute URI
+ * with no fragment (RFC 8707 §2). Unlike a redirect URI it is not restricted to
+ * HTTPS, because a resource server identifier may use any absolute URI scheme;
+ * the configured `validAudiences` allowlist is the authoritative control over
+ * which resources a token may target.
+ */
+export const ResourceUriSchema = z.string().superRefine((val, ctx) => {
+	if (!URL.canParse(val)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "resource must be an absolute URI",
+			fatal: true,
+		});
+		return z.NEVER;
+	}
+	if (val.includes("#")) {
+		ctx.addIssue({
+			code: "custom",
+			message: "resource must not contain a fragment",
+		});
+		return;
+	}
+	if (DANGEROUS_SCHEMES.includes(new URL(val).protocol)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "resource cannot use javascript:, data:, or vbscript: scheme",
 		});
 	}
 });

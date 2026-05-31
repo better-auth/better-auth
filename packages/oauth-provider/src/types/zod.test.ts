@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SafeUrlSchema } from "./zod";
+import { ResourceUriSchema, SafeUrlSchema } from "./zod";
 
 describe("SafeUrlSchema", () => {
 	describe("HTTPS enforcement", () => {
@@ -84,6 +84,11 @@ describe("SafeUrlSchema", () => {
 			expect(result.success).toBe(false);
 		});
 
+		it("should reject URLs with a bare trailing fragment marker", () => {
+			const result = SafeUrlSchema.safeParse("https://api.example.com/cb#");
+			expect(result.success).toBe(false);
+		});
+
 		it("should reject invalid URLs", () => {
 			const result = SafeUrlSchema.safeParse("not-a-valid-url");
 			expect(result.success).toBe(false);
@@ -93,5 +98,42 @@ describe("SafeUrlSchema", () => {
 			const result = SafeUrlSchema.safeParse("");
 			expect(result.success).toBe(false);
 		});
+	});
+});
+
+describe("ResourceUriSchema (RFC 8707 resource indicator)", () => {
+	it("accepts an HTTPS absolute URI", () => {
+		expect(ResourceUriSchema.safeParse("https://api.example.com").success).toBe(
+			true,
+		);
+	});
+
+	it("accepts a non-loopback HTTP absolute URI (not HTTPS-restricted)", () => {
+		expect(ResourceUriSchema.safeParse("http://internal.svc/api").success).toBe(
+			true,
+		);
+	});
+
+	it("accepts a urn resource identifier", () => {
+		expect(ResourceUriSchema.safeParse("urn:example:api").success).toBe(true);
+	});
+
+	it("rejects a fragment, including a bare trailing marker", () => {
+		expect(
+			ResourceUriSchema.safeParse("https://api.example.com#x").success,
+		).toBe(false);
+		expect(
+			ResourceUriSchema.safeParse("https://api.example.com#").success,
+		).toBe(false);
+	});
+
+	it("rejects a relative (non-absolute) URI", () => {
+		expect(ResourceUriSchema.safeParse("/api").success).toBe(false);
+	});
+
+	it("rejects dangerous schemes", () => {
+		expect(ResourceUriSchema.safeParse("javascript:alert(1)").success).toBe(
+			false,
+		);
 	});
 });
