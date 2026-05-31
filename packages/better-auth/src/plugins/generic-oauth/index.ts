@@ -3,7 +3,7 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	UpstreamProvider,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
@@ -185,7 +185,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: OAuthProvider[] = [];
+			const genericProviders: UpstreamProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -252,7 +252,6 @@ export const genericOAuth = <const ID extends string>(
 				genericProviders.push({
 					id: c.providerId,
 					name: c.name ?? c.providerId,
-					defaultScopes: c.scopes ?? [],
 					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					allowIdpInitiated: c.allowIdpInitiated,
@@ -381,7 +380,7 @@ export const genericOAuth = <const ID extends string>(
 						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
-				} satisfies OAuthProvider);
+				} satisfies UpstreamProvider);
 			}
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

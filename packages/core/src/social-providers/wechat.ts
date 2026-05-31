@@ -1,6 +1,13 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
-import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
+import type {
+	OAuth2Tokens,
+	ProviderOptions,
+	UpstreamProvider,
+} from "../oauth2";
+import {
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+	resolveRequestedScopes,
+} from "../oauth2";
 
 /**
  * WeChat user profile information
@@ -61,19 +68,18 @@ export const wechat = (options: WeChatOptions) => {
 	return {
 		id: "wechat",
 		name: "WeChat",
-		defaultScopes: WECHAT_DEFAULT_SCOPES,
 		callbackPath: "/callback/wechat",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...WECHAT_DEFAULT_SCOPES];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				WECHAT_DEFAULT_SCOPES,
+				scopes,
+			);
 
 			// WeChat uses non-standard OAuth2 parameters (appid instead of client_id)
 			// and requires a fragment (#wechat_redirect), so we construct the URL manually.
 			const url = new URL("https://open.weixin.qq.com/connect/qrconnect");
-			url.searchParams.set("scope", _scopes.join(","));
+			url.searchParams.set("scope", requestedScopes.join(","));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("appid", options.clientId);
 			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
@@ -88,7 +94,7 @@ export const wechat = (options: WeChatOptions) => {
 			}
 			url.hash = "wechat_redirect";
 
-			return { url, requestedScopes: _scopes };
+			return { url, requestedScopes };
 		},
 
 		// WeChat uses non-standard token exchange (appid/secret instead of
@@ -223,5 +229,5 @@ export const wechat = (options: WeChatOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<WeChatProfile, WeChatOptions>;
+	} satisfies UpstreamProvider<WeChatProfile, WeChatOptions>;
 };

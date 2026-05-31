@@ -10,7 +10,7 @@ import type {
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
-import type { OAuthProvider } from "../oauth2";
+import type { UpstreamProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
@@ -345,7 +345,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: OAuthProvider[];
+			socialProviders: UpstreamProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {

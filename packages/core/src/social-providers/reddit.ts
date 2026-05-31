@@ -1,10 +1,11 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
+	resolveRequestedScopes,
 } from "../oauth2";
 
 export interface RedditProfile {
@@ -27,7 +28,6 @@ export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
 		name: "Reddit",
-		defaultScopes: REDDIT_DEFAULT_SCOPES,
 		callbackPath: "/callback/reddit",
 		async createAuthorizationURL({
 			state,
@@ -35,22 +35,21 @@ export const reddit = (options: RedditOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...REDDIT_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				REDDIT_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "reddit",
 				options,
 				authorizationEndpoint: "https://www.reddit.com/api/v1/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				duration: options.duration,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			const body = new URLSearchParams({
@@ -131,5 +130,5 @@ export const reddit = (options: RedditOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<RedditProfile>;
+	} satisfies UpstreamProvider<RedditProfile>;
 };

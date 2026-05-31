@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -36,7 +37,6 @@ export const atlassian = (options: AtlassianOptions) => {
 	return {
 		id: "atlassian",
 		name: "Atlassian",
-		defaultScopes: ATLASSIAN_DEFAULT_SCOPES,
 		callbackPath: "/callback/atlassian",
 
 		async createAuthorizationURL({
@@ -54,17 +54,17 @@ export const atlassian = (options: AtlassianOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Atlassian");
 			}
 
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...ATLASSIAN_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				ATLASSIAN_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const { url } = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "atlassian",
 				options,
 				authorizationEndpoint: "https://auth.atlassian.com/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -74,7 +74,6 @@ export const atlassian = (options: AtlassianOptions) => {
 				},
 				prompt: options.prompt,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -141,5 +140,5 @@ export const atlassian = (options: AtlassianOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<AtlassianProfile>;
+	} satisfies UpstreamProvider<AtlassianProfile>;
 };

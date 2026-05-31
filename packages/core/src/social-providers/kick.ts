@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -35,32 +36,29 @@ export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
-		defaultScopes: KICK_DEFAULT_SCOPES,
 		callbackPath: "/callback/kick",
-		async createAuthorizationURL({
+		createAuthorizationURL({
 			state,
 			scopes,
 			redirectURI,
 			codeVerifier,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...KICK_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				KICK_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "kick",
 				redirectURI,
 				options,
 				authorizationEndpoint: "https://id.kick.com/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				codeVerifier,
 				state,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		async validateAuthorizationCode({ code, redirectURI, codeVerifier }) {
 			return validateAuthorizationCode({
@@ -119,5 +117,5 @@ export const kick = (options: KickOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<KickProfile>;
+	} satisfies UpstreamProvider<KickProfile>;
 };

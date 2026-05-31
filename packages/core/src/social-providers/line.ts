@@ -1,9 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -52,9 +53,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		defaultScopes: LINE_DEFAULT_SCOPES,
 		callbackPath: "/callback/line",
-		async createAuthorizationURL({
+		createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -62,23 +62,22 @@ export const line = (options: LineOptions) => {
 			loginHint,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...LINE_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				LINE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "line",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				loginHint,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -172,5 +171,5 @@ export const line = (options: LineOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
+	} satisfies UpstreamProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
 };

@@ -8,7 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { accumulateGrantedScopes } from "@better-auth/core/oauth2";
+import { unionGrantedScopes } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -17,7 +17,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -262,23 +262,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						scopes: grantedScopes,
 					};
 
-					// Match the direct callback: when the provider reports the full
-					// grant, the relayed set is authoritative, so resync lets a scope
+					// Match the direct callback: when the provider declares full-grant
+					// authority, the relayed set is authoritative, so it lets a scope
 					// revoked at the provider shrink the stored grant on a proxied
 					// sign-in too.
 					const provider = ctx.context.socialProviders.find(
 						(p) => p.id === payload.account.providerId,
 					);
 
-					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+					let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
 					try {
-						result = await handleOAuthUserInfo(ctx, {
+						result = await signInWithOAuthIdentity(ctx, {
 							userInfo: payload.userInfo,
 							providerId: payload.account.providerId,
 							accountId: payload.account.accountId,
 							tokens,
 							requestedScopes: grantedScopes,
-							resync: provider?.reportsFullGrant,
+							grantAuthority: provider?.grantAuthority,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
 						});
@@ -513,7 +513,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								idToken: tokens.idToken,
 								accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-								grantedScopes: accumulateGrantedScopes(
+								grantedScopes: unionGrantedScopes(
 									undefined,
 									tokens.scopes,
 									stateData.requestedScopes,

@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
-import { hasGrantedScope, refreshAccessToken } from "@better-auth/core/oauth2";
+import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
@@ -2771,24 +2771,13 @@ describe("grantedScopes path-dependent semantics", async () => {
 /**
  * The legacy `account.scope` column was a comma-joined string; `grantedScopes`
  * is a normalized array. The migration splits the legacy string on "," into the
- * array, and `hasGrantedScope` reads a legacy string for callers querying a row
- * the migration has not yet rewritten. Once stored as an array, the seam unions
- * subsequent grants onto it.
+ * array. Once stored as an array, the seam unions subsequent grants onto it.
  *
  * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
  */
 describe("grantedScopes legacy migration", async () => {
 	const { auth } = await getTestInstance({}, { disableTestUser: true });
 	const ctx = await auth.$context;
-
-	it("reads a legacy comma-joined scope string as a grant via hasGrantedScope", () => {
-		const legacy = "openid,email,profile";
-		expect(hasGrantedScope(legacy, "openid")).toBe(true);
-		expect(hasGrantedScope(legacy, "profile")).toBe(true);
-		expect(
-			hasGrantedScope(legacy, "https://www.googleapis.com/auth/drive"),
-		).toBe(false);
-	});
 
 	it("normalizes the migrated array and unions later grants through the seam", async () => {
 		const user = await ctx.internalAdapter.createUser({
@@ -2824,7 +2813,7 @@ describe("grantedScopes legacy migration", async () => {
 						refreshToken: "refresh",
 						scopes: ["email", "https://www.googleapis.com/auth/drive.readonly"],
 					},
-					mode: "signin",
+					mode: "sign-in",
 				}),
 		);
 
@@ -2891,7 +2880,7 @@ describe("grantedScopes resync", async () => {
 						refreshToken: "refresh",
 						scopes: ["openid", "email"],
 					},
-					mode: "signin",
+					mode: "sign-in",
 				}),
 		);
 
@@ -2924,8 +2913,8 @@ describe("grantedScopes resync", async () => {
 						refreshToken: "refresh",
 						scopes: ["openid", "email"],
 					},
-					mode: "signin",
-					resync: true,
+					mode: "sign-in",
+					grantAuthority: "full-grant",
 				}),
 		);
 
@@ -2961,8 +2950,8 @@ describe("grantedScopes resync", async () => {
 					tokens: {
 						accessToken: "a",
 					},
-					mode: "signin",
-					resync: true,
+					mode: "sign-in",
+					grantAuthority: "full-grant",
 				}),
 		);
 

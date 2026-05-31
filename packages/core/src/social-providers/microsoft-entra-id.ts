@@ -3,11 +3,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -157,9 +158,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
-		defaultScopes: MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
 		callbackPath: "/callback/microsoft",
-		async createAuthorizationURL(data) {
+		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
 			// See https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow
@@ -169,24 +169,23 @@ export const microsoft = (options: MicrosoftOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...MICROSOFT_ENTRA_ID_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (data.scopes) _scopes.push(...data.scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
+				data.scopes,
+			);
+			return createAuthorizationURL({
 				id: "microsoft",
 				options,
 				authorizationEndpoint,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
 				additionalParams: data.additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
 			return validateAuthorizationCode({
@@ -328,7 +327,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					});
 				},
 		options,
-	} satisfies OAuthProvider;
+	} satisfies UpstreamProvider;
 };
 
 export const getMicrosoftPublicKey = async (

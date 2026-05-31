@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -46,29 +47,22 @@ export const naver = (options: NaverOptions) => {
 	return {
 		id: "naver",
 		name: "Naver",
-		defaultScopes: NAVER_DEFAULT_SCOPES,
 		callbackPath: "/callback/naver",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-			additionalParams,
-		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...NAVER_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				NAVER_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "naver",
 				options,
 				authorizationEndpoint: "https://nid.naver.com/oauth2.0/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -122,5 +116,5 @@ export const naver = (options: NaverOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<NaverProfile>;
+	} satisfies UpstreamProvider<NaverProfile>;
 };

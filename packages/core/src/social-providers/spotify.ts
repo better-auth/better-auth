@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,7 +27,6 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
-		defaultScopes: SPOTIFY_DEFAULT_SCOPES,
 		callbackPath: "/callback/spotify",
 		async createAuthorizationURL({
 			state,
@@ -35,22 +35,21 @@ export const spotify = (options: SpotifyOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...SPOTIFY_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				SPOTIFY_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "spotify",
 				options,
 				authorizationEndpoint: "https://accounts.spotify.com/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -104,5 +103,5 @@ export const spotify = (options: SpotifyOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<SpotifyProfile>;
+	} satisfies UpstreamProvider<SpotifyProfile>;
 };

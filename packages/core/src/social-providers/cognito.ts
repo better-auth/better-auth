@@ -2,11 +2,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -75,7 +76,6 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		defaultScopes: COGNITO_DEFAULT_SCOPES,
 		callbackPath: "/callback/cognito",
 		async createAuthorizationURL({
 			state,
@@ -97,11 +97,11 @@ export const cognito = (options: CognitoOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_SECRET_REQUIRED");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...COGNITO_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				COGNITO_DEFAULT_SCOPES,
+				scopes,
+			);
 
 			const { url } = await createAuthorizationURL({
 				id: "cognito",
@@ -109,7 +109,7 @@ export const cognito = (options: CognitoOptions) => {
 					...options,
 				},
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -132,10 +132,10 @@ export const cognito = (options: CognitoOptions) => {
 				const separator = urlString.includes("?") ? "&" : "?";
 				return {
 					url: new URL(`${urlString}${separator}scope=${encodedScope}`),
-					requestedScopes: _scopes,
+					requestedScopes,
 				};
 			}
-			return { url, requestedScopes: _scopes };
+			return { url, requestedScopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -272,7 +272,7 @@ export const cognito = (options: CognitoOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<CognitoProfile>;
+	} satisfies UpstreamProvider<CognitoProfile>;
 };
 
 export const getCognitoPublicKey = async (

@@ -28,28 +28,35 @@ export {
 } from "./create-authorization-url";
 export type {
 	AuthorizationURLResult,
+	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	ProviderGrantAuthority,
 	ProviderOptions,
+	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
+export {
+	includesGrantedScope,
+	normalizeScopes,
+	parseScopeField,
+	readGrantedScopes,
+	resolveRequestedScopes,
+	unionGrantedScopes,
+} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 export {
-	accumulateGrantedScopes,
 	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
-	hasGrantedScope,
-	mergeScopes,
 } from "./utils";
 export {
 	authorizationCodeRequest,

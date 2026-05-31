@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -154,33 +155,30 @@ export const zoom = (userOptions: ZoomOptions) => {
 	return {
 		id: "zoom",
 		name: "Zoom",
-		defaultScopes: ZOOM_DEFAULT_SCOPES,
 		callbackPath: "/callback/zoom",
-		createAuthorizationURL: async ({
+		createAuthorizationURL: ({
 			state,
 			scopes,
 			redirectURI,
 			codeVerifier,
 			additionalParams,
 		}) => {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...ZOOM_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				ZOOM_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const { url } = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "zoom",
 				options,
 				authorizationEndpoint: "https://zoom.us/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				codeVerifier: options.pkce ? codeVerifier : undefined,
 				additionalParams,
 			});
-
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
@@ -237,5 +235,5 @@ export const zoom = (userOptions: ZoomOptions) => {
 				},
 			};
 		},
-	} satisfies OAuthProvider<ZoomProfile>;
+	} satisfies UpstreamProvider<ZoomProfile>;
 };

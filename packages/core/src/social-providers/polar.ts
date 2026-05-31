@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -39,32 +40,30 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
-		defaultScopes: POLAR_DEFAULT_SCOPES,
 		callbackPath: "/callback/polar",
-		async createAuthorizationURL({
+		createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...POLAR_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				POLAR_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "polar",
 				options,
 				authorizationEndpoint: "https://polar.sh/oauth2/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -119,5 +118,5 @@ export const polar = (options: PolarOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<PolarProfile>;
+	} satisfies UpstreamProvider<PolarProfile>;
 };

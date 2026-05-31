@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,7 +27,6 @@ export const figma = (options: FigmaOptions) => {
 	return {
 		id: "figma",
 		name: "Figma",
-		defaultScopes: FIGMA_DEFAULT_SCOPES,
 		callbackPath: "/callback/figma",
 		async createAuthorizationURL({
 			state,
@@ -45,24 +45,22 @@ export const figma = (options: FigmaOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Figma");
 			}
 
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...FIGMA_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				FIGMA_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const { url } = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "figma",
 				options,
 				authorizationEndpoint: "https://www.figma.com/oauth",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				additionalParams,
 			});
-
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -127,5 +125,5 @@ export const figma = (options: FigmaOptions) => {
 			}
 		},
 		options,
-	} satisfies OAuthProvider<FigmaProfile>;
+	} satisfies UpstreamProvider<FigmaProfile>;
 };

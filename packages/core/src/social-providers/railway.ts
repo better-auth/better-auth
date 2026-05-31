@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -31,7 +32,6 @@ export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		defaultScopes: RAILWAY_DEFAULT_SCOPES,
 		callbackPath: "/callback/railway",
 		async createAuthorizationURL({
 			state,
@@ -40,22 +40,21 @@ export const railway = (options: RailwayOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...RAILWAY_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				RAILWAY_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "railway",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -108,5 +107,5 @@ export const railway = (options: RailwayOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<RailwayProfile>;
+	} satisfies UpstreamProvider<RailwayProfile>;
 };

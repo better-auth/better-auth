@@ -24,7 +24,7 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
-	handleOAuthUserInfo,
+	signInWithOAuthIdentity,
 } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
@@ -1038,14 +1038,12 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 				const requestedScopes = ctx.body.scopes ||
 					config.scopes || ["openid", "email", "profile", "offline_access"];
-				const state = await generateState(
-					ctx,
-					undefined,
-					options?.redirectURI?.trim()
+				const state = await generateState(ctx, {
+					additionalData: options?.redirectURI?.trim()
 						? { ssoProviderId: provider.providerId }
 						: false,
 					requestedScopes,
-				);
+				});
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1469,9 +1467,9 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	let linked: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
 	try {
-		linked = await handleOAuthUserInfo(ctx, {
+		linked = await signInWithOAuthIdentity(ctx, {
 			userInfo: {
 				email: userInfo.email,
 				name: userInfo.name || "",
@@ -1640,14 +1638,17 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
-	const state = await generateState(
-		ctx,
-		undefined,
-		options?.redirectURI?.trim()
+	const state = await generateState(ctx, {
+		additionalData: options?.redirectURI?.trim()
 			? { ssoProviderId: provider.providerId }
 			: false,
-		config.scopes || ["openid", "email", "profile", "offline_access"],
-	);
+		requestedScopes: config.scopes || [
+			"openid",
+			"email",
+			"profile",
+			"offline_access",
+		],
+	});
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,

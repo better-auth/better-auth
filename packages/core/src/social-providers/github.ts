@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
+	resolveRequestedScopes,
 } from "../oauth2";
 import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
@@ -65,9 +66,8 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
-		defaultScopes: GITHUB_DEFAULT_SCOPES,
 		callbackPath: "/callback/github",
-		async createAuthorizationURL({
+		createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
@@ -75,16 +75,16 @@ export const github = (options: GithubOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...GITHUB_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				GITHUB_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "github",
 				options,
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -92,7 +92,6 @@ export const github = (options: GithubOptions) => {
 				prompt: options.prompt,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			const { body, headers: requestHeaders } = await authorizationCodeRequest({
@@ -187,5 +186,5 @@ export const github = (options: GithubOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<GithubProfile>;
+	} satisfies UpstreamProvider<GithubProfile>;
 };

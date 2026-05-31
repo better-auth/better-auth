@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -115,25 +116,23 @@ export const twitter = (options: TwitterOption) => {
 	return {
 		id: "twitter",
 		name: "Twitter",
-		defaultScopes: TWITTER_DEFAULT_SCOPES,
 		callbackPath: "/callback/twitter",
-		async createAuthorizationURL(data) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...TWITTER_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (data.scopes) _scopes.push(...data.scopes);
-			const { url } = await createAuthorizationURL({
+		createAuthorizationURL(data) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				TWITTER_DEFAULT_SCOPES,
+				data.scopes,
+			);
+			return createAuthorizationURL({
 				id: "twitter",
 				options,
 				authorizationEndpoint: "https://x.com/i/oauth2/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
 				additionalParams: data.additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -206,5 +205,5 @@ export const twitter = (options: TwitterOption) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<TwitterProfile>;
+	} satisfies UpstreamProvider<TwitterProfile>;
 };

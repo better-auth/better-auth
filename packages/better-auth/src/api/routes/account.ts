@@ -3,7 +3,10 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	readGrantedScopes,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
@@ -15,7 +18,7 @@ import { missingEmailLogMessage } from "../../oauth2/errors";
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
 import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken } from "../../oauth2/utils";
+import { decryptOAuthToken } from "../../oauth2/token-encryption";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -99,7 +102,7 @@ export const listUserAccounts = createAuthEndpoint(
 				);
 				return {
 					...parsed,
-					grantedScopes: grantedScopes ?? [],
+					grantedScopes: readGrantedScopes(grantedScopes),
 				};
 			}),
 		);
@@ -381,16 +384,16 @@ export const linkSocialAccount = createAuthEndpoint(
 			loginHint: c.body.loginHint,
 			additionalParams: c.body.additionalParams,
 		});
-		await generateState(
-			c,
-			{
+		await generateState(c, {
+			link: {
 				userId: session.user.id,
 				email: session.user.email,
 			},
-			c.body.additionalData,
+			additionalData: c.body.additionalData,
 			requestedScopes,
-			{ state: stateNonce, codeVerifier },
-		);
+			state: stateNonce,
+			codeVerifier,
+		});
 
 		if (!c.body.disableRedirect) {
 			c.setHeader("Location", url.toString());
@@ -522,7 +525,7 @@ async function getValidAccessToken(
 	if (!provider) {
 		throw APIError.from("BAD_REQUEST", {
 			message: `Provider ${providerId} is not supported.`,
-			code: "PROVIDER_NOT_SUPPORTED",
+			code: BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED.code,
 		});
 	}
 	let account: Account | undefined = resolvedAccount;
@@ -599,14 +602,18 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			grantedScopes: account.grantedScopes ?? [],
+			grantedScopes: readGrantedScopes(account.grantedScopes),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
-	} catch (_error) {
-		throw APIError.from("BAD_REQUEST", {
-			message: "Failed to get a valid access token",
-			code: "FAILED_TO_GET_ACCESS_TOKEN",
-		});
+	} catch (error) {
+		// Surface the failure code, but log the underlying cause instead of
+		// discarding it: a swallowed refresh/decrypt error left the real problem
+		// invisible.
+		ctx.context.logger.error("Failed to get a valid access token", error);
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.FAILED_TO_GET_ACCESS_TOKEN,
+		);
 	}
 }
 
@@ -758,13 +765,13 @@ export const refreshToken = createAuthEndpoint(
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
-				code: "PROVIDER_NOT_SUPPORTED",
+				code: BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED.code,
 			});
 		}
 		if (!provider.refreshAccessToken) {
 			throw APIError.from("BAD_REQUEST", {
 				message: `Provider ${providerId} does not support token refreshing.`,
-				code: "TOKEN_REFRESH_NOT_SUPPORTED",
+				code: BASE_ERROR_CODES.TOKEN_REFRESH_NOT_SUPPORTED.code,
 			});
 		}
 
@@ -799,10 +806,10 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		if (!refreshToken) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Refresh token not found",
-				code: "REFRESH_TOKEN_NOT_FOUND",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.REFRESH_TOKEN_NOT_FOUND,
+			);
 		}
 
 		try {
@@ -832,16 +839,19 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt:
 					tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				grantedScopes: account.grantedScopes ?? [],
+				grantedScopes: readGrantedScopes(account.grantedScopes),
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.accountId,
 			});
-		} catch (_error) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Failed to refresh access token",
-				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
-			});
+		} catch (error) {
+			// Surface the failure code, but log the underlying cause instead of
+			// discarding it.
+			ctx.context.logger.error("Failed to refresh access token", error);
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.FAILED_TO_REFRESH_ACCESS_TOKEN,
+			);
 		}
 	},
 );

@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import type {
+	OAuth2Tokens,
+	ProviderGrantAuthority,
+} from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
 import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
@@ -26,7 +29,7 @@ import { resolveOAuthUser } from "./resolve-account";
  * effective `requestedScopes`; the seam owns encryption and the RFC 6749 §5.1
  * scope fallback.
  */
-export async function handleOAuthUserInfo(
+export async function signInWithOAuthIdentity(
 	c: GenericEndpointContext,
 	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
@@ -39,11 +42,11 @@ export async function handleOAuthUserInfo(
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
 		/**
-		 * Replace the stored grant with the provider's echoed scopes (the only
-		 * path that may shrink it). Set when the provider reports the full grant,
-		 * e.g. Google with `include_granted_scopes`. @see OAuthProvider.reportsFullGrant
+		 * The provider's declared {@link GrantAuthority}; `"full-grant"` lets a
+		 * non-empty echo replace the stored grant (the only narrowing path).
+		 * @see UpstreamProvider.grantAuthority
 		 */
-		resync?: boolean | undefined;
+		grantAuthority?: ProviderGrantAuthority | undefined;
 	},
 ) {
 	const {
@@ -56,7 +59,7 @@ export async function handleOAuthUserInfo(
 		disableSignUp,
 		overrideUserInfo,
 		isTrustedProvider,
-		resync,
+		grantAuthority,
 	} = opts;
 
 	// Resolve-or-create the user and persist the account in one transaction, so a
@@ -85,8 +88,8 @@ export async function handleOAuthUserInfo(
 				accountId,
 				tokens,
 				requestedScopes,
-				mode: "signin",
-				resync,
+				mode: "sign-in",
+				grantAuthority,
 			});
 			return r;
 		});

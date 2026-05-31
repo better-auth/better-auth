@@ -3,11 +3,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface AppleProfile {
@@ -102,7 +103,6 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		defaultScopes: APPLE_DEFAULT_SCOPES,
 		callbackPath: "/callback/apple",
 		async createAuthorizationURL({
 			state,
@@ -116,23 +116,22 @@ export const apple = (options: AppleOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...APPLE_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				APPLE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "apple",
 				options,
 				authorizationEndpoint: "https://appleid.apple.com/auth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				responseMode: "form_post",
 				responseType: "code id_token",
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -232,7 +231,7 @@ export const apple = (options: AppleOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<AppleProfile>;
+	} satisfies UpstreamProvider<AppleProfile>;
 };
 
 export const getApplePublicKey = async (kid: string) => {

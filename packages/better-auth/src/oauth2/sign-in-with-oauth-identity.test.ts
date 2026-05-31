@@ -1149,7 +1149,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 
 		const oAuthHeaders = await signInAndLink(testEmail, "google_implicit_name");
 
-		// The cookie cache is seeded from the value handleOAuthUserInfo returns,
+		// The cookie cache is seeded from the value signInWithOAuthIdentity returns,
 		// and getSession serves it without a database read, so a stale return
 		// would surface right here.
 		const session = await client.getSession({

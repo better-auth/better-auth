@@ -5,11 +5,13 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
-import { missingEmailLogMessage } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { generateState, parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
@@ -91,7 +93,7 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 			if (provider?.allowIdpInitiated) {
 				// Build the URL first so the effective requested scopes can be
-				// persisted into state, then write state once via `precomputed`
+				// persisted into state, then write state once with the same nonces
 				// (same ordering as the normal sign-in flow). Without this the
 				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
 				const state = generateRandomString(32);
@@ -102,10 +104,7 @@ export const callbackOAuth = createAuthEndpoint(
 						codeVerifier,
 						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 					});
-				await generateState(c, undefined, undefined, requestedScopes, {
-					state,
-					codeVerifier,
-				});
+				await generateState(c, { requestedScopes, state, codeVerifier });
 				throw c.redirect(authUrl.toString());
 			}
 		}
@@ -264,7 +263,7 @@ export const callbackOAuth = createAuthEndpoint(
 				tokens,
 				requestedScopes,
 				mode: "link",
-				resync: provider.reportsFullGrant,
+				grantAuthority: provider.grantAuthority,
 			});
 			if (!linkedAccount) {
 				return redirectOnError(
@@ -287,9 +286,9 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+		let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
 		try {
-			result = await handleOAuthUserInfo(c, {
+			result = await signInWithOAuthIdentity(c, {
 				userInfo: {
 					...userInfo,
 					id: providerAccountId,
@@ -305,7 +304,7 @@ export const callbackOAuth = createAuthEndpoint(
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
-				resync: provider.reportsFullGrant,
+				grantAuthority: provider.grantAuthority,
 			});
 		} catch (e) {
 			// A before-callback hook (for example the admin plugin's banned-user

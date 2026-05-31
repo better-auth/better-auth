@@ -1,15 +1,23 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { accumulateGrantedScopes } from "@better-auth/core/oauth2";
+import type {
+	GrantAuthority,
+	OAuth2Tokens,
+	ProviderGrantAuthority,
+} from "@better-auth/core/oauth2";
+import {
+	normalizeScopes,
+	readGrantedScopes,
+	unionGrantedScopes,
+} from "@better-auth/core/oauth2";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account } from "../types";
-import { setTokenUtil } from "./utils";
+import { setTokenUtil } from "./token-encryption";
 
 /**
  * How {@link persistOAuthAccount} treats an account that already exists.
  *
- * - `signin`: a sign-in (or re-authentication) to an existing identity. When
+ * - `sign-in`: a sign-in (or re-authentication) to an existing identity. When
  *   the account is already linked, tokens are refreshed only if
  *   `account.updateAccountOnSignIn` is not `false`; the grant is never
  *   narrowed.
@@ -21,7 +29,7 @@ import { setTokenUtil } from "./utils";
  *   projection, not a grant change). Never creates an account: if none exists,
  *   {@link persistOAuthAccount} returns `undefined`.
  */
-export type PersistOAuthAccountMode = "signin" | "link" | "refresh";
+export type PersistOAuthAccountMode = "sign-in" | "link" | "refresh";
 
 export interface PersistOAuthAccountParams {
 	/** Local user the provider identity belongs to. */
@@ -43,21 +51,15 @@ export interface PersistOAuthAccountParams {
 	requestedScopes?: string[] | undefined;
 	mode: PersistOAuthAccountMode;
 	/**
-	 * Treat the observed scopes as the authoritative, complete grant and
-	 * **replace** the stored `grantedScopes` with them instead of unioning. This
-	 * is the only path allowed to narrow the grant.
+	 * The provider's declared {@link GrantAuthority} for its echoed token-response
+	 * `scope`. `"full-grant"` lets a non-empty echo replace the stored grant (the
+	 * only path that may narrow it); anything else unions. An omitted/empty echo
+	 * is always treated as `"absent-echo"` regardless of this value, so a silent
+	 * provider can never shrink the grant (RFC 6749 §3.3/§5.1).
 	 *
-	 * Use it only when the provider reports the full combined grant rather than a
-	 * per-request projection: Google's `include_granted_scopes` token response,
-	 * an explicit re-consent, or a token-introspection read. Honored only when the
-	 * provider actually echoed scopes; an omitted/empty echo is treated as
-	 * non-authoritative and falls back to a union, so resync can never shrink the
-	 * grant to this flow's request. Without it, writes are union-only and never
-	 * shrink (RFC 6749 §3.3/§5.1).
-	 *
-	 * @default false
+	 * @default "projection"
 	 */
-	resync?: boolean | undefined;
+	grantAuthority?: ProviderGrantAuthority | undefined;
 }
 
 /**
@@ -65,22 +67,22 @@ export interface PersistOAuthAccountParams {
  *
  * Owns, so no caller re-implements them:
  * - token encryption via {@link setTokenUtil} (never a caller duty);
- * - grant accumulation via {@link accumulateGrantedScopes}
+ * - grant accumulation via {@link unionGrantedScopes}
  *   (`union(existing, echoed-else-requested)`, RFC 6749 §3.3/§5.1);
  * - find-update-or-create against `findAccountByProviderId`;
  * - account-cookie seeding when `account.storeAccountCookie` is enabled.
  *
- * Grant semantics (never shrinks unless `resync` is set):
+ * Grant semantics (never shrinks unless the provider declares `"full-grant"`):
  * - create / link / new identity: `grantedScopes = union(existing, granted)`;
- * - re-authentication of an already-linked account (`mode: "signin"`, account
+ * - re-authentication of an already-linked account (`mode: "sign-in"`, account
  *   exists): tokens refresh but the grant is carried through unchanged (still a
  *   union, so it can grow but never narrow);
  * - `refresh` (RFC 6749 §6): tokens rotate on the existing row, the grant is
  *   carried through verbatim (the response `scope` is ignored entirely);
- * - `resync`: replace the stored grant with the freshly observed set, the only
- *   path that may narrow it (see {@link PersistOAuthAccountParams.resync}).
+ * - `grantAuthority: "full-grant"` with a non-empty echo: replace the stored
+ *   grant with the freshly observed set, the only path that may narrow it.
  *
- * @returns the persisted account. On a `signin` re-auth with
+ * @returns the persisted account. On a `sign-in` re-auth with
  * `updateAccountOnSignIn` disabled the stored tokens are left untouched, but the
  * existing account is still returned (and its cookie re-seeded). `undefined`
  * when the underlying create yields no row, or in `refresh` mode when no
@@ -97,7 +99,7 @@ export async function persistOAuthAccount(
 		tokens,
 		requestedScopes,
 		mode,
-		resync,
+		grantAuthority,
 	} = params;
 
 	const existing = await c.context.internalAdapter.findAccountByProviderId(
@@ -111,22 +113,37 @@ export async function persistOAuthAccount(
 		return undefined;
 	}
 
-	// A resync drops the stored grant from the union so the observed set wins
-	// outright (the only path that may narrow). It is honored ONLY when the
-	// provider actually echoed scopes: an omitted/empty echo is not an
-	// authoritative full grant, and replacing with the request fallback would
-	// wrongly shrink the grant to this flow's request. A refresh ignores the
-	// echoed scope entirely and carries the stored grant through; a normal write
-	// unions so the result can only grow.
-	const replaceGrant = resync === true && (tokens.scopes?.length ?? 0) > 0;
+	// Resolve how much to trust this token response's echoed scope. An
+	// omitted/empty echo is always `absent-echo` (the grant equals what was
+	// requested, §5.1), regardless of what the provider declared, so a silent
+	// provider can never shrink the grant.
+	const echoedScopes = tokens.scopes;
+	const authority: GrantAuthority = !echoedScopes?.length
+		? "absent-echo"
+		: grantAuthority === "full-grant"
+			? "full-grant"
+			: "projection";
+
+	// full-grant: the echo is the complete grant, so replace (the only narrowing
+	// path). absent-echo: union the requested set (§5.1). projection: union the
+	// echoed subset onto the stored grant. refresh (§6): carry the stored grant
+	// through verbatim, ignoring the echoed scope entirely.
 	const grantedScopes =
 		mode === "refresh"
-			? (existing?.grantedScopes ?? [])
-			: accumulateGrantedScopes(
-					replaceGrant ? undefined : existing?.grantedScopes,
-					tokens.scopes,
-					requestedScopes,
-				);
+			? readGrantedScopes(existing?.grantedScopes)
+			: authority === "full-grant"
+				? normalizeScopes(echoedScopes)
+				: authority === "absent-echo"
+					? unionGrantedScopes(
+							existing?.grantedScopes,
+							undefined,
+							requestedScopes,
+						)
+					: unionGrantedScopes(
+							existing?.grantedScopes,
+							echoedScopes,
+							undefined,
+						);
 
 	if (existing) {
 		// A provider identity belongs to exactly one user. Writing tokens or the
@@ -144,7 +161,7 @@ export async function persistOAuthAccount(
 		// gate: it still unions (it can grow from a freshly-consented scope) and is
 		// persisted so the database and cookie agree, but it never narrows.
 		if (
-			mode === "signin" &&
+			mode === "sign-in" &&
 			c.context.options.account?.updateAccountOnSignIn === false
 		) {
 			const updated = await c.context.internalAdapter.updateAccount(

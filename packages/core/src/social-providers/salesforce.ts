@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -65,7 +66,6 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
-		defaultScopes: SALESFORCE_DEFAULT_SCOPES,
 		callbackPath: "/callback/salesforce",
 
 		async createAuthorizationURL({
@@ -85,23 +85,22 @@ export const salesforce = (options: SalesforceOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Salesforce");
 			}
 
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...SALESFORCE_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				SALESFORCE_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const { url } = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "salesforce",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
 				additionalParams,
 			});
-			return { url, requestedScopes: _scopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -167,5 +166,5 @@ export const salesforce = (options: SalesforceOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<SalesforceProfile>;
+	} satisfies UpstreamProvider<SalesforceProfile>;
 };

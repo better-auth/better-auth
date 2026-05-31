@@ -26,39 +26,61 @@ export type OAuth2UserInfo = {
 /**
  * The result of building a provider authorization URL.
  *
- * `requestedScopes` is the effective set of scopes encoded in the URL
- * (provider `defaultScopes` + configured `options.scope` + per-request
- * `scopes`). Callers persist it so the callback can fall back to the request
- * when the provider omits `scope` from its token response (RFC 6749 §5.1).
+ * `requestedScopes` is the effective set of scopes encoded in the URL (the
+ * provider's built-in defaults + configured `options.scope` + per-request
+ * `scopes`, composed by `resolveRequestedScopes`). Callers persist it so the
+ * callback can fall back to the request when the provider omits `scope` from
+ * its token response (RFC 6749 §5.1).
  */
 export interface AuthorizationURLResult {
 	url: URL;
 	requestedScopes: string[];
 }
 
-export interface OAuthProvider<
+/**
+ * How much an RP trusts a provider's echoed token-response `scope` when
+ * persisting `account.grantedScopes`.
+ *
+ * - `"full-grant"`: the echo is the user's complete current grant, so the seam
+ *   replaces the stored grant with it. This is the only path that may narrow
+ *   the grant. Declare it only for providers whose token response reports the
+ *   full combined grant, e.g. Google with `include_granted_scopes`.
+ * - `"projection"`: the echo is this request's subset, so the seam unions it
+ *   onto the stored grant. The safe default for every provider.
+ * - `"absent-echo"`: the provider omitted `scope`, so the grant equals what was
+ *   requested (RFC 6749 §5.1) and the seam unions the requested set. Resolved
+ *   at runtime by the persistence seam, never declared by a provider.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-5.1
+ */
+export type GrantAuthority = "full-grant" | "projection" | "absent-echo";
+
+/**
+ * The authority a provider may declare for its own echoed scope. `"absent-echo"`
+ * is excluded because it is a runtime condition (an omitted echo), not a
+ * provider trait.
+ */
+export type ProviderGrantAuthority = Exclude<GrantAuthority, "absent-echo">;
+
+export interface UpstreamProvider<
 	T extends Record<string, any> = Record<string, any>,
 	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
-	/**
-	 * The provider's built-in default scopes, requested on every flow unless
-	 * `options.disableDefaultScope` is set.
-	 */
-	defaultScopes: string[];
 	/**
 	 * The path the provider redirects back to, relative to the app base URL,
 	 * e.g. `/callback/google`.
 	 */
 	callbackPath: string;
 	/**
-	 * Whether the provider's token-response `scope` reports the user's full,
-	 * current grant. When `true`, the persistence seam resyncs
-	 * `account.grantedScopes` to the echoed set instead of unioning.
+	 * How the persistence seam treats this provider's echoed token-response
+	 * `scope`. Declare `"full-grant"` only when the echo is the user's complete
+	 * current grant (e.g. Google with `include_granted_scopes`); otherwise the
+	 * echo is unioned onto the stored grant.
 	 *
-	 * @default false
+	 * @default "projection"
 	 */
-	reportsFullGrant?: boolean | undefined;
+	grantAuthority?: ProviderGrantAuthority | undefined;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;
@@ -107,7 +129,6 @@ export interface OAuthProvider<
 	refreshAccessToken?:
 		| ((refreshToken: string) => Promise<OAuth2Tokens>)
 		| undefined;
-	revokeToken?: ((token: string) => Promise<void>) | undefined;
 	/**
 	 * Verify the id token
 	 * @param token - The id token
@@ -211,6 +232,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 					emailVerified: boolean;
 					[key: string]: any;
 				};
+				// TODO: type as `Profile` once provider getUserInfo paths that return a
+				// narrower data shape than their declared profile are reconciled; today
+				// `any` is load-bearing for those (e.g. facebook) and tightening it ripples
+				// across ~10 providers, out of scope for the grant refactor.
 				data: any;
 		  } | null>)
 		| undefined;

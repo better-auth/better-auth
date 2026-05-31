@@ -10,7 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -314,7 +314,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
-				const data = await handleOAuthUserInfo(c, {
+				const data = await signInWithOAuthIdentity(c, {
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
@@ -364,16 +364,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				loginHint: c.body.loginHint,
 				additionalParams: c.body.additionalParams,
 			});
-			await generateState(
-				c,
-				undefined,
-				c.body.additionalData,
+			await generateState(c, {
+				additionalData: c.body.additionalData,
 				requestedScopes,
-				{
-					state,
-					codeVerifier,
-				},
-			);
+				state,
+				codeVerifier,
+			});
 
 			if (!c.body.disableRedirect) {
 				c.setHeader("Location", url.toString());

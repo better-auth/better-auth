@@ -2,11 +2,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface FacebookProfile {
@@ -45,7 +46,6 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		defaultScopes: FACEBOOK_DEFAULT_SCOPES,
 		callbackPath: "/callback/facebook",
 		async createAuthorizationURL({
 			state,
@@ -60,16 +60,16 @@ export const facebook = (options: FacebookOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: [...FACEBOOK_DEFAULT_SCOPES];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const { url } = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				FACEBOOK_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "facebook",
 				options,
 				authorizationEndpoint: "https://www.facebook.com/v24.0/dialog/oauth",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				loginHint,
@@ -78,7 +78,6 @@ export const facebook = (options: FacebookOptions) => {
 					...(additionalParams ?? {}),
 				},
 			});
-			return { url, requestedScopes: _scopes };
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -221,5 +220,5 @@ export const facebook = (options: FacebookOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<FacebookProfile>;
+	} satisfies UpstreamProvider<FacebookProfile>;
 };
