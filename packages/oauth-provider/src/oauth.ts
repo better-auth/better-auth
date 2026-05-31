@@ -291,9 +291,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
 		init: (ctx) => {
-			// Aggregate contributions from plugins that target this host. Read once
-			// at init (static, order-independent) and expose on the context so the
-			// token endpoint, discovery, and minting can consume them at request time.
+			// Aggregate contributions from plugins that target this host. A host sees
+			// every contributing plugin regardless of its own position in the array;
+			// the collected lists preserve registration order, which the merges below
+			// (e.g. last-writer-wins claim contributors) rely on. Exposed on the
+			// context so the token endpoint, discovery, and minting read them at
+			// request time.
 			const contributions = ctx.getContributions("oauth-provider");
 			const grantHandlers: Record<string, GrantHandler> = {};
 			const grantURIs = new Set<string>();

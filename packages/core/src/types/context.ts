@@ -317,8 +317,10 @@ export type PluginContext<Options extends BetterAuthOptions> = {
 	 *
 	 * A host calls this in its `init` to gather what other installed plugins
 	 * declared via their `contributes` field under the host's id. It reads the
-	 * static declarations off the plugin array, so the result does not depend on
-	 * plugin registration order.
+	 * static `contributes` declarations off the plugin array, so a host sees every
+	 * contributing plugin no matter where the host itself sits in the array. The
+	 * returned array preserves plugin registration order, which order-sensitive
+	 * merges (such as last-writer-wins claim contributors) rely on.
 	 *
 	 * @param hostId - The host plugin id (a key of `ContributionContracts`)
 	 * @returns The contributions from all plugins targeting the host
