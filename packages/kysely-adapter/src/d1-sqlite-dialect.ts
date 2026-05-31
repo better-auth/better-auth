@@ -3,7 +3,6 @@ import type {
 	CompiledQuery,
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
@@ -14,10 +13,7 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
-import {
-	SqliteAdapter,
-	SqliteQueryCompiler,
-} from "kysely";
+import { SqliteAdapter, SqliteQueryCompiler } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
@@ -196,6 +192,7 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			return {
 				name: table.name,
 				isView: table.type === "view",
+				isForeign: false,
 				columns: columnInfo.map((col) => ({
 					name: col.name,
 					dataType: col.type,
@@ -205,14 +202,6 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 				})),
 			};
 		});
-	}
-
-	async getMetadata(
-		options?: DatabaseMetadataOptions,
-	): Promise<DatabaseMetadata> {
-		return {
-			tables: await this.getTables(options),
-		};
 	}
 }
 
