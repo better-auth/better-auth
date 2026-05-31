@@ -148,17 +148,17 @@ Each account stores the user's accumulated granted scopes in `account.grantedSco
 
 Token refresh never changes the grant for any provider ([RFC 6749 §6](https://datatracker.ietf.org/doc/html/rfc6749#section-6)).
 
-To check whether an account already holds a scope, use the `hasGrantedScope` helper instead of inspecting the raw array:
+To check whether an account already holds a scope, use the `includesGrantedScope` helper instead of inspecting the raw array:
 
 ```ts
-import { hasGrantedScope } from "better-auth/oauth2";
+import { includesGrantedScope } from "better-auth/oauth2";
 
 const accounts = await auth.api.listUserAccounts({
   headers: await headers(),
 });
 const google = accounts.find((account) => account.providerId === "google");
 
-if (google && !hasGrantedScope(google.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
+if (google && !includesGrantedScope(google.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
   // prompt the user to grant Drive access via linkSocial
 }
 ```

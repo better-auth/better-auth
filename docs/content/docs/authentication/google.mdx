@@ -196,15 +196,15 @@ const { idToken } = await authClient.linkSocial({
   The account's accumulated grant is stored as `grantedScopes`, a `string[]`, not the scopes echoed by the most recent token. The `list-accounts`, `get-access-token`, and `refresh-token` endpoints all return this `grantedScopes` array. With the default `includeGrantedScopes: true`, each Google sign-in resyncs the array to Google's authoritative combined grant; with `includeGrantedScopes: false` it is the union of every scope the user has granted this account over time.
 </Callout>
 
-To check whether an account already holds a scope before triggering another flow, use the `hasGrantedScope` helper:
+To check whether an account already holds a scope before triggering another flow, use the `includesGrantedScope` helper:
 
 ```ts title="auth.ts"
-import { hasGrantedScope } from "better-auth/oauth2";
+import { includesGrantedScope } from "better-auth/oauth2";
 
 const accounts = await auth.api.listUserAccounts({ headers });
 const google = accounts.find((account) => account.providerId === "google");
 
-if (!hasGrantedScope(google?.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
+if (!includesGrantedScope(google?.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
     // prompt the user to grant Drive access via linkSocial
 }
 ```

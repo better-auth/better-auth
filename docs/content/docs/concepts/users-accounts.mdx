@@ -379,13 +379,13 @@ const accounts = await authClient.listAccounts();
 
 Each account exposes a `grantedScopes` field: a `string[]` of the OAuth scopes the user has **accumulated** for that provider over time. It is not the latest token's `scope` claim. Every API that surfaces scopes returns this same array shape, including `listAccounts`, `getAccessToken`, and `refreshToken`.
 
-To check whether an account holds a particular scope, use the `hasGrantedScope` helper instead of inspecting the array yourself:
+To check whether an account holds a particular scope, use the `includesGrantedScope` helper instead of inspecting the array yourself:
 
 ```ts
-import { hasGrantedScope } from "better-auth/oauth2";
+import { includesGrantedScope } from "better-auth/oauth2";
 
 const google = accounts.find((account) => account.providerId === "google");
-const canReadDrive = hasGrantedScope(
+const canReadDrive = includesGrantedScope(
     google?.grantedScopes,
     "https://www.googleapis.com/auth/drive.readonly",
 );
