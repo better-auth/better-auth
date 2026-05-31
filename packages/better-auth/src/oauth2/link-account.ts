@@ -4,6 +4,7 @@ import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -34,7 +35,7 @@ export async function handleOAuthUserInfo(
 			);
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
@@ -105,6 +106,9 @@ export async function handleOAuthUserInfo(
 					emailVerified: true,
 				});
 			}
+
+			user =
+				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
 		} else {
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
@@ -203,7 +207,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					callbackURL || "/",
+				)}`;
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
@@ -256,4 +262,54 @@ export async function handleOAuthUserInfo(
 		error: null,
 		isRegister,
 	};
+}
+
+/**
+ * Provider profile a freshly linked account may copy onto the local user.
+ * `id` is the provider's account id (never the local user id), and `email`/
+ * `emailVerified` are identity anchors; all three are stripped before the
+ * remaining fields are written.
+ */
+type LinkedProviderProfile = {
+	id: string | number;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	emailVerified?: boolean | undefined;
+	image?: string | null | undefined;
+};
+
+/**
+ * Apply the `account.accountLinking.updateUserInfoOnLink` policy: when enabled,
+ * copy the freshly linked provider's profile onto the local user, matching the
+ * field set persisted on sign-up. The local `email` and `emailVerified` are
+ * never changed, so a link can't rebind the account's identity, and
+ * `updateUser` drops `undefined` fields, so a provider that omits one leaves
+ * the existing column intact.
+ *
+ * Returns the updated user so a caller that issues a session can seed the
+ * cookie cache with the fresh row. Returns `undefined` when the policy is
+ * disabled or the update fails: a failed profile sync must not abort the link.
+ */
+export async function applyUpdateUserInfoOnLink(
+	c: GenericEndpointContext,
+	userId: string,
+	userInfo: LinkedProviderProfile,
+): Promise<User | undefined> {
+	if (
+		c.context.options.account?.accountLinking?.updateUserInfoOnLink !== true
+	) {
+		return undefined;
+	}
+	const {
+		id: _id,
+		email: _email,
+		emailVerified: _emailVerified,
+		...profile
+	} = userInfo;
+	try {
+		return await c.context.internalAdapter.updateUser(userId, profile);
+	} catch (e) {
+		c.context.logger.warn("Could not update user info on account link", e);
+		return undefined;
+	}
 }

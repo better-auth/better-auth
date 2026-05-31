@@ -385,7 +385,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -416,7 +416,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -426,7 +426,7 @@ export interface OrganizationOptions {
 					data: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};

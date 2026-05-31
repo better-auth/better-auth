@@ -158,7 +158,15 @@ export interface InternalAdapter<
 	 */
 	deleteAccount(id: string): Promise<void>;
 
-	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
+	/**
+	 * Delete every session belonging to a user.
+	 */
+	deleteUserSessions(userId: string): Promise<void>;
+
+	/**
+	 * Delete sessions by their session tokens.
+	 */
+	deleteSessions(sessionTokens: string[]): Promise<void>;
 
 	findOAuthUser(
 		email: string,
@@ -195,8 +203,6 @@ export interface InternalAdapter<
 	updatePassword(userId: string, password: string): Promise<void>;
 
 	findAccounts(userId: string): Promise<Account[]>;
-
-	findAccount(accountId: string): Promise<Account | null>;
 
 	findAccountByProviderId(
 		accountId: string,
@@ -321,7 +327,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
