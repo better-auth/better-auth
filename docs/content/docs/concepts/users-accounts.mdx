@@ -384,9 +384,9 @@ To check whether an account holds a particular scope, use the `hasGrantedScope` 
 ```ts
 import { hasGrantedScope } from "better-auth/oauth2";
 
-const [google] = accounts.filter((account) => account.providerId === "google");
+const google = accounts.find((account) => account.providerId === "google");
 const canReadDrive = hasGrantedScope(
-    google.grantedScopes,
+    google?.grantedScopes,
     "https://www.googleapis.com/auth/drive.readonly",
 );
 ```

@@ -69,15 +69,22 @@ export async function resolveOAuthUser(
 ): Promise<ResolvedOAuthUser | ResolveOAuthUserError> {
 	const { userInfo, providerId, linkPolicy } = params;
 
-	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(userInfo.email.toLowerCase(), userInfo.id, providerId)
-		.catch((e) => {
-			logger.error(
-				"Better auth was unable to query your database.\nError: ",
-				e,
-			);
-			return null;
-		});
+	let dbUser: Awaited<
+		ReturnType<typeof c.context.internalAdapter.findOAuthUser>
+	>;
+	try {
+		dbUser = await c.context.internalAdapter.findOAuthUser(
+			userInfo.email.toLowerCase(),
+			userInfo.id,
+			providerId,
+		);
+	} catch (e) {
+		// A failed lookup must abort the flow. Treating a transient DB error as
+		// "no user found" would fall through to sign-up and create a duplicate
+		// user/account, bypassing the existing-account checks.
+		logger.error("Better auth was unable to query your database.\nError: ", e);
+		return { error: "unable to query database", user: null };
+	}
 
 	if (!dbUser?.user) {
 		if (linkPolicy.disableSignUp) {
@@ -137,9 +144,10 @@ export async function resolveOAuthUser(
 			!dbUser.user.emailVerified &&
 			userInfo.email.toLowerCase() === dbUser.user.email
 		) {
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				emailVerified: true,
-			});
+			user =
+				(await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				})) ?? user;
 		}
 
 		user =
@@ -149,9 +157,10 @@ export async function resolveOAuthUser(
 		!dbUser.user.emailVerified &&
 		userInfo.email.toLowerCase() === dbUser.user.email
 	) {
-		await c.context.internalAdapter.updateUser(dbUser.user.id, {
-			emailVerified: true,
-		});
+		user =
+			(await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				emailVerified: true,
+			})) ?? user;
 	}
 
 	if (linkPolicy.overrideUserInfo) {

@@ -65,3 +65,8 @@ Oligo
 febf
 fdff
 fffe
+resync
+resynced
+resyncs
+unioned
+unioning

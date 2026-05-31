@@ -97,7 +97,7 @@ export const callbackOAuth = createAuthEndpoint(
 				const { url: authUrl } = await provider.createAuthorizationURL({
 					state: freshState,
 					codeVerifier,
-					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+					redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 				});
 				throw c.redirect(authUrl.toString());
 			}
@@ -171,7 +171,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

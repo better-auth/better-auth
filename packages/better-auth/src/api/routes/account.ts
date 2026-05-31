@@ -376,7 +376,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		const { url, requestedScopes } = await provider.createAuthorizationURL({
 			state: stateNonce,
 			codeVerifier,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
 			additionalParams: c.body.additionalParams,

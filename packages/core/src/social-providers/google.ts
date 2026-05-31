@@ -110,8 +110,11 @@ export const google = (options: GoogleOptions) => {
 					options.includeGrantedScopes === false
 						? { ...(additionalParams ?? {}) }
 						: {
-								include_granted_scopes: "true",
 								...(additionalParams ?? {}),
+								// Not caller-overridable: the emitted param must stay in
+								// lockstep with `reportsFullGrant` (driven by the option), or
+								// the callback would resync to a non-authoritative grant.
+								include_granted_scopes: "true",
 							},
 			});
 			return { url, requestedScopes: _scopes };

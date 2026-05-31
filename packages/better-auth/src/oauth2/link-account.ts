@@ -152,23 +152,30 @@ async function sendSignUpVerificationEmail(
 	) {
 		return;
 	}
-	const token = await createEmailVerificationToken(
-		c.context.secret,
-		user.email,
-		undefined,
-		c.context.options.emailVerification.expiresIn,
-	);
-	const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-		callbackURL || "/",
-	)}`;
-	await c.context.runInBackgroundOrAwait(
-		c.context.options.emailVerification.sendVerificationEmail(
-			{
-				user,
-				url,
-				token,
-			},
-			c.request,
-		),
-	);
+	// The user and account are already committed by the time this runs, so a
+	// verification-email failure (token mint or send) must not abort the
+	// sign-in. Token creation is awaited inline, so guard the whole block.
+	try {
+		const token = await createEmailVerificationToken(
+			c.context.secret,
+			user.email,
+			undefined,
+			c.context.options.emailVerification.expiresIn,
+		);
+		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			callbackURL || "/",
+		)}`;
+		await c.context.runInBackgroundOrAwait(
+			c.context.options.emailVerification.sendVerificationEmail(
+				{
+					user,
+					url,
+					token,
+				},
+				c.request,
+			),
+		);
+	} catch (e) {
+		c.context.logger.error("Failed to send sign-up verification email", e);
+	}
 }

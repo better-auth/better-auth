@@ -158,7 +158,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		defaultScopes: MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
-		callbackPath: "/callback/microsoft-entra-id",
+		callbackPath: "/callback/microsoft",
 		async createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
