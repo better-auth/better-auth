@@ -38,12 +38,19 @@ function applyMetadataContributions(
 		metadata.token_endpoint_auth_methods_supported = methods;
 	}
 	if (metadataContributors.length) {
-		const target = metadata as Record<string, unknown>;
+		// AuthServerMetadata has no index signature, so widen through `unknown` to
+		// write dynamic contributed keys (the direct cast is rejected by the
+		// stricter dist typecheck, TS2352).
+		const target = metadata as unknown as Record<string, unknown>;
 		for (const contribute of metadataContributors) {
 			for (const [key, value] of Object.entries(
 				contribute({ baseURL: ctx.context.baseURL }),
 			)) {
-				if (target[key] == null) {
+				// Add-only: never overwrite a core field, including one the host
+				// intentionally left undefined (e.g. `jwks_uri` when JWT is disabled,
+				// `registration_endpoint` when DCR is off). `in` distinguishes an
+				// absent key from a present-but-undefined one, which `== null` cannot.
+				if (!(key in target)) {
 					target[key] = value;
 				}
 			}

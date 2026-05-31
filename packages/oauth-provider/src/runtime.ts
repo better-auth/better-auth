@@ -30,10 +30,15 @@ const RUNTIME_KEY = "oauthProviderRuntime";
  * Wraps the aggregated runtime for the plugin `init` return so it lands on the
  * shared context under {@link RUNTIME_KEY}. Keeping the key in one place lets
  * every reader go through {@link getOAuthRuntime} instead of restating it.
+ *
+ * The return is widened to `Record<string, unknown>` so the internal
+ * `OAuthProviderRuntime` name never leaks into the plugin's emitted declaration
+ * (TS4023 "cannot be named" under the dist typecheck). The input stays typed, so
+ * construction is fully checked; readers recover the type via {@link getOAuthRuntime}.
  */
-export function withOAuthRuntime(runtime: OAuthProviderRuntime): {
-	oauthProviderRuntime: OAuthProviderRuntime;
-} {
+export function withOAuthRuntime(
+	runtime: OAuthProviderRuntime,
+): Record<string, unknown> {
 	return { [RUNTIME_KEY]: runtime };
 }
 
