@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
+import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
@@ -102,6 +103,8 @@ export interface OAuthOptions<
 	/**
 	 * List of valid audiences if there are multiple.
 	 *
+	 * @deprecated Use {@link OAuthOptions.audiences} instead.
+	 *
 	 * @default baseURL
 	 * @example [
 	 * 	"https://api.example.com",
@@ -109,6 +112,116 @@ export interface OAuthOptions<
 	 * ]
 	 */
 	validAudiences?: string[];
+	/**
+	 * Audiences (resource servers) the AS issues tokens for. Promotes the
+	 * previously-static {@link OAuthOptions.validAudiences} into a first-class
+	 * persisted entity with per-audience token policy.
+	 *
+	 * - String form: equivalent to the deprecated `validAudiences` (each string
+	 *   becomes an `oauthAudience` row using plugin-level defaults).
+	 * - Object form: explicit per-audience policy (TTL, signing alg, scope
+	 *   allowlist, custom claims, sender-constraint requirements).
+	 *
+	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
+	 * {@link OAuthOptions.audienceSeedMode}.
+	 *
+	 * @see RFC 8707 — `identifier` is the `resource` parameter value
+	 * @see RFC 9728 — projected to the published metadata endpoint when opt-in
+	 *
+	 * @example
+	 * ```ts
+	 * audiences: [
+	 *   { identifier: "https://api.example.com/admin", accessTokenTtl: 300,
+	 *     allowedScopes: ["admin:read", "admin:write"] },
+	 *   "https://api.example.com/public",
+	 * ]
+	 * ```
+	 */
+	audiences?: Array<string | OAuthAudienceInput>;
+	/**
+	 * Controls whether boot-time `audiences` config overwrites DB-edited rows.
+	 *
+	 * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
+	 *   not already present. Existing rows are untouched — admin edits via CRUD
+	 *   are never reverted on restart.
+	 * - `"merge"`: inserts missing rows; updates only fields present in the
+	 *   config object for existing rows.
+	 * - `"overwrite"`: inserts missing rows; replaces existing rows with the
+	 *   config values. Use only when the config is the source of truth.
+	 *
+	 * Defaults to the safe option to prevent accidental policy reverts in
+	 * production deployments.
+	 *
+	 * @default "insertOnly"
+	 */
+	audienceSeedMode?: "insertOnly" | "merge" | "overwrite";
+	/**
+	 * Opt-in cache membership for audiences by `identifier`. Mirrors the
+	 * {@link OAuthOptions.cachedTrustedClients} pattern.
+	 *
+	 * Cached audiences are invalidated on every CRUD write. Audiences not in
+	 * this set are looked up from the DB on every request — the safe default
+	 * when admins edit rows through external tooling.
+	 */
+	cachedAudiences?: Set<string>;
+	/**
+	 * When true, `/oauth2/token` and `/oauth2/authorize` require the client to be
+	 * linked to every requested audience via `oauthClientAudience`. When false,
+	 * clients implicitly have access to all enabled audiences (preserves
+	 * pre-entity behavior).
+	 *
+	 * **Smart default when undefined**:
+	 * - {@link OAuthOptions.validAudiences} is set (legacy path) → resolves to
+	 *   `false`. Existing deployments don't suddenly start rejecting unlinked
+	 *   clients on upgrade.
+	 * - Otherwise (new path: {@link OAuthOptions.audiences} is set, or no
+	 *   audience config at all) → resolves to `true`. Per-client validation per
+	 *   RFC 8707 §3 — the secure default for new deployments.
+	 * - An explicit `true | false` always wins over the smart default.
+	 *
+	 * The resolved value is logged at plugin init so admins see which default
+	 * applied.
+	 */
+	enforcePerClientAudiences?: boolean;
+	/**
+	 * When true, publishes per-audience metadata at
+	 * `/.well-known/oauth-protected-resource/{identifier}` (RFC 9728). Aligns
+	 * with the MCP authorization spec direction. Opt-in to avoid exposing
+	 * audience identifiers on deployments that have not opted into publishing.
+	 *
+	 * @default false
+	 * @see RFC 9728
+	 */
+	publishProtectedResourceMetadata?: boolean;
+	/**
+	 * Customize how an audience `identifier` is validated when audiences are
+	 * created via CRUD or DCR. The default rejects non-URI identifiers per
+	 * RFC 8707 §2 (absolute URI, no fragment). Override only for trusted
+	 * internal use cases.
+	 *
+	 * @default RFC 8707 strict URI validator
+	 */
+	identifierValidator?: (identifier: string) => Awaitable<boolean>;
+	/**
+	 * RBAC on OAuth Audiences. Mirrors {@link OAuthOptions.clientPrivileges}.
+	 *
+	 * Gates the admin audience CRUD endpoints. Return `false` (or `undefined`)
+	 * to deny the action.
+	 */
+	audiencePrivileges?: (context: {
+		headers: Headers;
+		action:
+			| "create"
+			| "read"
+			| "update"
+			| "delete"
+			| "list"
+			| "link"
+			| "unlink";
+		user?: User & Record<string, unknown>;
+		session?: Session & Record<string, unknown>;
+		audienceId?: string;
+	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Automatically cache trusted clients by client_id.
 	 * Clients are cached at request.
@@ -917,6 +1030,87 @@ export interface OAuthAuthorizationQuery {
 	 * Resource parameter as specified by [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)
 	 */
 	resource?: string | string[];
+}
+
+/**
+ * A persisted resource server (audience) row as stored in `oauthAudience`.
+ *
+ * `null` on any policy column means "inherit the plugin-level default at
+ * token issuance time" — admins can later override without re-seeding.
+ */
+export interface OAuthAudience {
+	/** Auto-generated primary key */
+	id: string;
+	/**
+	 * Business key used in the `aud` claim and as the RFC 8707 `resource` value.
+	 */
+	identifier: string;
+	/** Human-friendly label for admin UIs */
+	name: string;
+	/** Access token TTL in seconds; null inherits {@link OAuthOptions.accessTokenExpiresIn} */
+	accessTokenTtl?: number | null;
+	/** Refresh token TTL in seconds; null inherits {@link OAuthOptions.refreshTokenExpiresIn} */
+	refreshTokenTtl?: number | null;
+	/** When set, overrides the JWT plugin's getLatestKey() default at signing time. */
+	signingAlgorithm?: JWSAlgorithms | null;
+	signingKeyId?: string | null;
+	/**
+	 * When non-null, requested scopes must intersect this set or the request is
+	 * rejected with `invalid_scope`.
+	 */
+	allowedScopes?: string[] | null;
+	/**
+	 * Per-audience claims merged into the access token JWT payload. Reserved
+	 * RFC 9068 claim names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`,
+	 * `client_id`, `scope`, `auth_time`, `acr`, `amr`) are stripped at issuance
+	 * with a warning log — never silently dropped.
+	 */
+	customClaims?: Record<string, unknown> | null;
+	/**
+	 * Disabled → no new issuance for this audience; existing tokens still verify
+	 * until natural expiry. Compare to delete, which hard-rejects existing tokens.
+	 */
+	disabled: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+	/**
+	 * Forward-migration anchor. Lets the runtime branch behavior when claim
+	 * emission or validation semantics change in a future PR without forcing
+	 * every row to migrate. PR 1 ships with `policyVersion = 1`.
+	 */
+	policyVersion: number;
+	/** Open-ended extension data — not yet promoted to columns. */
+	metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Plugin-config input for {@link OAuthOptions.audiences}. A subset of the
+ * persisted {@link OAuthAudience} — only `identifier` is required; the rest
+ * fall back to plugin defaults when omitted.
+ */
+export interface OAuthAudienceInput {
+	identifier: string;
+	name?: string;
+	accessTokenTtl?: number;
+	refreshTokenTtl?: number;
+	signingAlgorithm?: JWSAlgorithms;
+	signingKeyId?: string;
+	allowedScopes?: string[];
+	customClaims?: Record<string, unknown>;
+	disabled?: boolean;
+	metadata?: Record<string, unknown>;
+}
+
+/**
+ * A row of `oauthClientAudience` linking a client to an audience.
+ *
+ * Authoritative only when {@link OAuthOptions.enforcePerClientAudiences} is true.
+ */
+export interface OAuthClientAudience {
+	clientId: string;
+	audienceId: string;
+	metadata?: Record<string, unknown> | null;
+	createdAt: Date;
 }
 
 /**

@@ -5,6 +5,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { resolveAudiencePolicy } from "./audiences";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
@@ -17,7 +18,6 @@ import type {
 import { authorizationQuerySchema } from "./types/zod";
 
 import {
-	checkResource,
 	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
@@ -480,6 +480,39 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
+	// Validate `resource` (RFC 8707 §2) against the configured audience
+	// entities — fail-fast at /authorize so clients see misconfigured
+	// resources before consent UI. Re-validated at /oauth2/token because
+	// clients typically re-supply the parameter there.
+	if (query.resource !== undefined) {
+		try {
+			await resolveAudiencePolicy(ctx, opts, {
+				resource: query.resource,
+				clientId: client.clientId,
+				requestedScopes,
+			});
+		} catch (err) {
+			if (err instanceof APIError) {
+				const error =
+					(err.body as { error?: string })?.error ?? "invalid_target";
+				const description =
+					(err.body as { error_description?: string })?.error_description ??
+					"requested resource invalid";
+				return handleRedirect(
+					ctx,
+					formatErrorURL(
+						query.redirect_uri,
+						error,
+						description,
+						query.state,
+						getIssuer(ctx, opts),
+					),
+				);
+			}
+			throw err;
+		}
+	}
+
 	// Check if PKCE is required for this client and scope
 	const pkceRequired = isPKCERequired(client, requestedScopes);
 
@@ -531,27 +564,9 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	// Validate the resource sent to the authorize endpoint
-	const resource = query.resource;
-	const resourceResult = await checkResource(
-		ctx,
-		opts,
-		resource,
-		requestedScopes,
-	);
-	if (!resourceResult.success) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_target",
-				"requested resource invalid",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
-	}
-	const requestedResources = toResourceList(resource) ?? [];
+	// `resource` was already validated above via resolveAudiencePolicy (entity
+	// + legacy fallback aware). Just normalize it for downstream consent/binding.
+	const requestedResources = toResourceList(query.resource) ?? [];
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);

@@ -6,6 +6,8 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import type { ResolvedAudiencePolicy } from "./audiences";
+import { resolveAudiencePolicy, stripReservedClaims } from "./audiences";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -17,7 +19,6 @@ import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
-	checkResource,
 	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
@@ -77,11 +78,19 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/**
+		 * Per-audience signing config resolved by {@link resolveAudiencePolicy}.
+		 * `null` falls back to the JWT plugin's primary key.
+		 */
+		signingAlgorithm?: ResolvedAudiencePolicy["signingAlgorithm"];
+		signingKeyId?: ResolvedAudiencePolicy["signingKeyId"];
+		/** Per-audience custom claims (already reserved-claim-stripped). */
+		audienceCustomClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
-	const customClaims = opts.customAccessTokenClaims
+	const pluginCustomClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes,
@@ -91,21 +100,42 @@ async function createJwtAccessToken(
 			})
 		: {};
 
+	// Reserved-claim stripping is server-enforced for BOTH the audience-level
+	// customClaims (already stripped during policy resolution) AND the legacy
+	// plugin-level `customAccessTokenClaims` callback. The AS owns RFC 9068
+	// reserved names regardless of which extension surface tries to set them.
+	const safePluginClaims = stripReservedClaims(pluginCustomClaims);
+	const safeAudienceClaims = overrides?.audienceCustomClaims ?? {};
+
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
-	// Sign token
+	// Sign token — pass per-audience signing config if set; otherwise fall
+	// back to the JWT plugin's default.
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
+		signingKeyId: overrides?.signingKeyId ?? undefined,
+		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
-			...customClaims,
+			...safePluginClaims,
+			...safeAudienceClaims,
 			sub: user?.id,
 			aud: toAudienceClaim(audience),
+			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
+			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
+			// with introspection flows that key on it. The AS owns this value;
+			// `stripReservedClaims` removes any `client_id` from custom claims so
+			// audience/plugin extensions can't override it.
+			client_id: client.clientId,
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
+			// RFC 9068 §2.2.4: `jti` SHOULD be present. Emit a 128-bit random ID
+			// so audit trails and (future) revocation lookups can reference
+			// individual tokens.
+			jti: generateRandomString(32),
 		},
 	});
 }
@@ -509,7 +539,7 @@ async function createUserTokens(
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
 	const defaultExp = iat + baseExpiry;
-	const exp = opts.scopeExpirations
+	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
 					opts.scopeExpirations?.[sc]
@@ -521,20 +551,41 @@ async function createUserTokens(
 				}, defaultExp)
 		: defaultExp;
 
-	// Check requested audience if sent as the resource parameter
-	const resourceResult = await checkResource(
+	// Resolve per-audience policy from the request's resource set. Replaces the
+	// legacy static-`validAudiences` check: looks up `oauthAudience` rows and
+	// derives the `aud` claim, per-audience TTLs, the scope-allowlist
+	// intersection, the signing pin, and merged custom claims. Missing or
+	// disabled audiences (or, when `enforcePerClientAudiences`, unlinked ones)
+	// throw `invalid_target`; an empty scope intersection throws `invalid_scope`.
+	const audiencePolicy: ResolvedAudiencePolicy = await resolveAudiencePolicy(
 		ctx,
 		opts,
-		params?.resources,
-		scopes,
+		{
+			resource: params?.resources,
+			clientId: client.clientId,
+			requestedScopes: scopes,
+		},
 	);
-	if (!resourceResult.success) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "requested resource invalid",
-			error: "invalid_target",
-		});
-	}
-	const audience = resourceResult.audience;
+	const audience = audiencePolicy.audience;
+	// Scopes narrowed to the audience allowlist intersection (RFC 6749 §3.3
+	// narrow-but-don't-widen). Equals `scopes` when no allowlist applies.
+	const effectiveScopes = audiencePolicy.effectiveScopes;
+	// Effective access-token expiry: min(per-scope, per-audience). OAuth 2.1 §1.5
+	// most-restrictive-wins for bounded blast radius.
+	const audienceExp =
+		audiencePolicy.accessTokenTtl !== null
+			? iat + audiencePolicy.accessTokenTtl
+			: scopeExp;
+	const exp = Math.min(scopeExp, audienceExp);
+	// Effective refresh-token expiry — same most-restrictive rule, floored
+	// against the plugin default so a permissive audience can't extend the
+	// AS-wide refresh lifetime.
+	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592000;
+	const refreshTokenTtl =
+		audiencePolicy.refreshTokenTtl !== null
+			? Math.min(audiencePolicy.refreshTokenTtl, refreshTokenDefaultTtl)
+			: refreshTokenDefaultTtl;
+	const refreshTokenExp = iat + refreshTokenTtl;
 	// Only mint a refresh token when the client may use refresh tokens.
 	// Otherwise an `offline_access` scope alone would hand a refresh token to a
 	// pure machine-to-machine client that was never authorized for one.
@@ -551,7 +602,7 @@ async function createUserTokens(
 		? await opts.customTokenResponseFields({
 				grantType,
 				user,
-				scopes,
+				scopes: effectiveScopes,
 				metadata: parseClientMetadata(client.metadata),
 				verificationValue,
 			})
@@ -573,10 +624,10 @@ async function createUserTokens(
 					user,
 					referenceId,
 					client,
-					scopes,
+					effectiveScopes,
 					{
 						iat,
-						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+						exp: refreshTokenExp,
 						sid: sessionId,
 					},
 					existingRefreshToken,
@@ -594,13 +645,16 @@ async function createUserTokens(
 					user,
 					client,
 					audience,
-					scopes,
+					effectiveScopes,
 					params?.resources,
 					referenceId,
 					{
 						iat,
 						exp,
 						sid: sessionId,
+						signingAlgorithm: audiencePolicy.signingAlgorithm,
+						signingKeyId: audiencePolicy.signingKeyId,
+						audienceCustomClaims: audiencePolicy.customClaims,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -608,7 +662,7 @@ async function createUserTokens(
 					opts,
 					user,
 					client,
-					scopes,
+					effectiveScopes,
 					{
 						iat,
 						exp,
@@ -627,10 +681,10 @@ async function createUserTokens(
 						user,
 						referenceId,
 						client,
-						scopes,
+						effectiveScopes,
 						{
 							iat,
-							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+							exp: refreshTokenExp,
 							sid: sessionId,
 						},
 						existingRefreshToken,

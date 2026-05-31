@@ -4,7 +4,7 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertClientPrivileges } from "./oauthClient/privileges";
-import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import type { OAuthAudience, OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
@@ -41,7 +41,7 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient;
+	const body = ctx.body as OAuthClient & { audiences?: string[] };
 	const session = await getSessionFromCtx(ctx);
 
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
@@ -71,8 +71,42 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §2 extension: clients may declare which audiences they need.
+	// Validate up front so the registration fails before we issue a clientId.
+	// Linking happens inside createOAuthClientEndpoint so the response shape
+	// stays type-stable for existing DCR consumers (the audiences are echoed
+	// as an added field, not via a separate Response wrapper).
+	const requestedAudiences = Array.isArray(body.audiences)
+		? body.audiences.filter(
+				(a): a is string => typeof a === "string" && a.length > 0,
+			)
+		: [];
+	if (requestedAudiences.length > 0) {
+		const audienceModel =
+			opts.schema?.oauthAudience?.modelName ?? "oauthAudience";
+		for (const identifier of requestedAudiences) {
+			const row = await ctx.context.adapter.findOne<OAuthAudience>({
+				model: audienceModel,
+				where: [{ field: "identifier", value: identifier }],
+			});
+			if (!row) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested audience ${identifier} does not exist`,
+				});
+			}
+			if (row.disabled) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested audience ${identifier} is disabled`,
+				});
+			}
+		}
+	}
+
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
+		audiences: requestedAudiences.length > 0 ? requestedAudiences : undefined,
 	});
 }
 
@@ -330,6 +364,13 @@ export async function createOAuthClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings: {
 		isRegister: boolean;
+		/**
+		 * Pre-validated audience identifiers to link the new client to. Used
+		 * by the DCR registration path (RFC 7591 §2 extension). Validation
+		 * (existence, disabled) is the caller's responsibility — this branch
+		 * only writes the link rows and echoes the field in the response.
+		 */
+		audiences?: string[] | undefined;
 	},
 ) {
 	const body = ctx.body as OAuthClient;
@@ -406,22 +447,46 @@ export async function createOAuthClientEndpoint(
 			updatedAt: new Date(iat * 1000),
 		},
 	});
-	// Format the response according to RFC7591
-	return ctx.json(
-		schemaToOAuth({
-			...client,
-			clientSecret: clientSecret
-				? (opts.prefix?.clientSecret ?? "") + clientSecret
-				: undefined,
-		}),
-		{
-			status: 201,
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
+
+	// DCR audience linkage (RFC 7591 §2 extension). The caller pre-validated
+	// each identifier; here we just write the join rows so the new client
+	// passes `enforcePerClientAudiences` checks immediately.
+	if (settings.audiences && settings.audiences.length > 0) {
+		const linkModel =
+			opts.schema?.oauthClientAudience?.modelName ?? "oauthClientAudience";
+		const now = new Date();
+		for (const audienceId of settings.audiences) {
+			await ctx.context.adapter.create({
+				model: linkModel,
+				data: {
+					clientId,
+					audienceId,
+					createdAt: now,
+				} as never,
+			});
+		}
+	}
+
+	// Format the response according to RFC7591. When audiences were linked
+	// during registration, echo them back per RFC 7591 §3 server response
+	// conventions — clients can verify the registration succeeded.
+	const responseBody = schemaToOAuth({
+		...client,
+		clientSecret: clientSecret
+			? (opts.prefix?.clientSecret ?? "") + clientSecret
+			: undefined,
+	});
+	if (settings.audiences && settings.audiences.length > 0) {
+		(responseBody as OAuthClient & { audiences?: string[] }).audiences =
+			settings.audiences;
+	}
+	return ctx.json(responseBody, {
+		status: 201,
+		headers: {
+			"Cache-Control": "no-store",
+			Pragma: "no-cache",
 		},
-	);
+	});
 }
 
 /**

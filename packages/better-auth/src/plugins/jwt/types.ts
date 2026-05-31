@@ -23,6 +23,33 @@ export interface JwtOptions {
 				 */
 				keyPairConfig?: JWKOptions | undefined;
 				/**
+				 * Additional key pair configurations to provision so per-audience
+				 * `signingAlgorithm` overrides (see the OAuth provider plugin's
+				 * audience entity) can resolve a key for algorithms other than
+				 * {@link keyPairConfig}.
+				 *
+				 * Lazily minted: the first `signJWT` call that pins an algorithm
+				 * present here mints the row on demand. Subsequent calls reuse it.
+				 * This avoids needing to coordinate with migration ordering at
+				 * plugin init — entries here are only materialized after the
+				 * `jwks` table exists.
+				 *
+				 * Algorithms not present in either {@link keyPairConfig} or this
+				 * list will throw with a descriptive error message identifying
+				 * the configured default, so misconfiguration is diagnosable.
+				 *
+				 * @example
+				 * ```ts
+				 * jwt({
+				 *   jwks: {
+				 *     keyPairConfig: { alg: "EdDSA" },
+				 *     keyPairConfigs: [{ alg: "ES256" }, { alg: "RS256" }],
+				 *   },
+				 * })
+				 * ```
+				 */
+				keyPairConfigs?: readonly JWKOptions[] | undefined;
+				/**
 				 * Disable private key encryption
 				 * @description Disable the encryption of the private key in the database
 				 *
@@ -115,6 +142,12 @@ export interface JwtOptions {
 				 * OIDC Back-Channel Logout). Merge them into the signed header so
 				 * such profiles stay conformant; `alg`/`kid` remain yours to set.
 				 *
+				 * The optional `signingConfig` third argument carries the
+				 * per-call signing overrides (e.g. an OAuth audience pinned
+				 * to a specific kid/alg). Implementations are free to ignore
+				 * it for backward compatibility, but remote KMS integrations
+				 * SHOULD honor it so per-audience pinning works end-to-end.
+				 *
 				 * @requires jwks.remoteUrl
 				 * @invalidates other jwt.* options
 				 */
@@ -122,6 +155,10 @@ export interface JwtOptions {
 					| ((
 							payload: JWTPayload,
 							header?: { typ?: string; cty?: string },
+							signingConfig?: {
+								signingKeyId?: string | undefined;
+								signingAlgorithm?: JWSAlgorithms | undefined;
+							},
 					  ) => Awaitable<string>)
 					| undefined;
 		  }

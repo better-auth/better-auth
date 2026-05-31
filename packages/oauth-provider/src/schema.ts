@@ -153,6 +153,150 @@ export const schema = {
 		},
 	},
 	/**
+	 * A resource server (audience) the AS issues tokens for.
+	 *
+	 * Promotes the previously-static `validAudiences: string[]` config into a
+	 * first-class persisted entity with per-audience token policy. A null value
+	 * on any policy column means "inherit the plugin-level default at token
+	 * issuance time" — admins can later override without re-seeding.
+	 *
+	 * @see RFC 8707 (Resource Indicators) — `identifier` is the `resource` parameter value
+	 * @see RFC 9068 §2.2 — `customClaims` cannot override reserved JWT claims (enforced server-side)
+	 * @see RFC 9728 — projected to the published metadata endpoint when opt-in
+	 */
+	oauthAudience: {
+		modelName: "oauthAudience",
+		fields: {
+			// Business key used in the `aud` claim and as the RFC 8707 `resource` value.
+			identifier: {
+				type: "string",
+				required: true,
+				unique: true,
+			},
+			// Human-friendly label for admin UIs.
+			name: {
+				type: "string",
+				required: true,
+			},
+			// Token policy — null means "inherit plugin default at issuance time".
+			accessTokenTtl: {
+				type: "number",
+				required: false,
+			},
+			refreshTokenTtl: {
+				type: "number",
+				required: false,
+			},
+			// Signing — when set, overrides the JWT plugin's getLatestKey() default.
+			signingAlgorithm: {
+				type: "string",
+				required: false,
+			},
+			signingKeyId: {
+				type: "string",
+				required: false,
+			},
+			// Scope allowlist — when non-null, requested scopes must intersect.
+			allowedScopes: {
+				type: "string[]",
+				required: false,
+			},
+			// Per-audience custom claims. Reserved RFC 9068 claim names are stripped at
+			// issuance with a warning log (never silently dropped).
+			customClaims: {
+				type: "json",
+				required: false,
+			},
+			// Lifecycle: disabled → no new issuance, existing tokens still verify.
+			disabled: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
+			createdAt: {
+				type: "date",
+				required: false,
+			},
+			updatedAt: {
+				type: "date",
+				required: false,
+			},
+			// Forward-migration anchor — lets the runtime branch behavior if claim
+			// emission or validation semantics change without forcing every row to
+			// migrate. This PR ships with policyVersion = 1.
+			policyVersion: {
+				type: "number",
+				required: false,
+				defaultValue: 1,
+			},
+			// Open-ended extension data for fields not yet promoted to columns
+			// (e.g. RFC 9728 non-standard metadata).
+			metadata: {
+				type: "json",
+				required: false,
+			},
+		},
+	},
+	/**
+	 * Join table — which clients are allowed to request which audiences.
+	 *
+	 * Authoritative only when `enforcePerClientAudiences: true` on plugin options.
+	 * When the flag is off, clients implicitly have access to all enabled audiences
+	 * (preserves pre-entity behavior).
+	 *
+	 * Composite uniqueness on `(clientId, audienceId)` is load-bearing — the
+	 * `enforcePerClientAudiences` linkage check assumes one row per pair.
+	 *
+	 * Better Auth's schema layer doesn't expose composite-UNIQUE syntax (no
+	 * way to declare `UNIQUE(clientId, audienceId)` at the column level). To
+	 * enforce it at the database level for free, we set the row's `id` to a
+	 * deterministic `${clientId}::${audienceId}` value at write time and let
+	 * the implicit `UNIQUE` constraint on the primary key catch duplicates
+	 * (see `buildClientAudienceLinkId` and the `forceAllowId: true` flag on
+	 * the `adapter.create` call in `oauthAudience/endpoints.ts`). The double
+	 * colon separator is chosen because `::` cannot appear in either a
+	 * client_id (URL-safe random string) or an audience identifier (RFC 8707
+	 * absolute URI — `::` would be an IPv6 form rejected by the validator),
+	 * so the encoding is collision-free.
+	 *
+	 * Concurrent inserts of the same pair surface as a UNIQUE-constraint
+	 * error which the endpoint catches and converts to a 200 "alreadyLinked"
+	 * response (idempotency).
+	 */
+	oauthClientAudience: {
+		modelName: "oauthClientAudience",
+		fields: {
+			clientId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "oauthClient",
+					field: "clientId",
+					onDelete: "cascade",
+				},
+				index: true,
+			},
+			audienceId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "oauthAudience",
+					field: "identifier",
+					onDelete: "cascade",
+				},
+				index: true,
+			},
+			metadata: {
+				type: "json",
+				required: false,
+			},
+			createdAt: {
+				type: "date",
+				required: false,
+			},
+		},
+	},
+	/**
 	 * An opaque refresh token created with "offline_access"
 	 *
 	 * Refresh tokens are linked to a session.

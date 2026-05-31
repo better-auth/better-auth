@@ -35,4 +35,8 @@ Vercel
 rgba
 idtoken
 HIBP
-cimd
+dpop
+mtls
+jkt
+reissuance
+TOCTOU
