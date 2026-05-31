@@ -354,7 +354,10 @@ export const linkSocialAccount = createAuthEndpoint(
 						refreshToken: c.body.idToken.refreshToken,
 						idToken: token,
 					},
-					requestedScopes: c.body.idToken.scopes,
+					// No `requestedScopes`: an id_token link never built a server-side
+					// authorization URL, so there is no provider-verified requested set
+					// to fall back to. The caller-supplied `idToken.scopes` are not
+					// recorded as granted (they are unverified).
 					mode: "link",
 				});
 			} catch (_e: any) {

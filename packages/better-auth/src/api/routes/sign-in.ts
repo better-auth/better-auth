@@ -330,7 +330,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						accessToken: c.body.idToken.accessToken,
 						refreshToken: c.body.idToken.refreshToken,
 					},
-					requestedScopes: c.body.idToken.scopes,
+					// No `requestedScopes`: an id_token flow never built a server-side
+					// authorization URL, so there is no provider-verified requested set
+					// to fall back to (RFC 6749 §5.1). Recording the caller-supplied
+					// `idToken.scopes` would inflate `grantedScopes` with unverified scopes.
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||

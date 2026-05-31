@@ -11,7 +11,8 @@ import type { ProviderOptions } from "./oauth-provider";
  * @see https://github.com/better-auth/better-auth/issues/9076
  */
 export function parseScopeField(scope: unknown): string[] {
-	if (Array.isArray(scope)) return scope;
+	if (Array.isArray(scope))
+		return scope.filter((s): s is string => typeof s === "string" && s !== "");
 	if (typeof scope === "string") return scope.split(" ").filter(Boolean);
 	return [];
 }

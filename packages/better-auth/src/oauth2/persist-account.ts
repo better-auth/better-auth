@@ -128,22 +128,18 @@ export async function persistOAuthAccount(
 	// path). absent-echo: union the requested set (§5.1). projection: union the
 	// echoed subset onto the stored grant. refresh (§6): carry the stored grant
 	// through verbatim, ignoring the echoed scope entirely.
-	const grantedScopes =
-		mode === "refresh"
-			? readGrantedScopes(existing?.grantedScopes)
-			: authority === "full-grant"
-				? normalizeScopes(echoedScopes)
-				: authority === "absent-echo"
-					? unionGrantedScopes(
-							existing?.grantedScopes,
-							undefined,
-							requestedScopes,
-						)
-					: unionGrantedScopes(
-							existing?.grantedScopes,
-							echoedScopes,
-							undefined,
-						);
+	const grantedScopes = ((): string[] => {
+		if (mode === "refresh") return readGrantedScopes(existing?.grantedScopes);
+		if (authority === "full-grant") return normalizeScopes(echoedScopes);
+		if (authority === "absent-echo") {
+			return unionGrantedScopes(
+				existing?.grantedScopes,
+				undefined,
+				requestedScopes,
+			);
+		}
+		return unionGrantedScopes(existing?.grantedScopes, echoedScopes, undefined);
+	})();
 
 	if (existing) {
 		// A provider identity belongs to exactly one user. Writing tokens or the
@@ -158,8 +154,9 @@ export async function persistOAuthAccount(
 
 		// A re-auth to an already-linked account must not overwrite tokens when
 		// `updateAccountOnSignIn` is disabled. The grant is independent of that
-		// gate: it still unions (it can grow from a freshly-consented scope) and is
-		// persisted so the database and cookie agree, but it never narrows.
+		// gate: it is still persisted so the database and cookie agree. It only
+		// grows (a freshly-consented scope), except for a `full-grant` provider
+		// whose authoritative echo resyncs the grant and may narrow it here too.
 		if (
 			mode === "sign-in" &&
 			c.context.options.account?.updateAccountOnSignIn === false
