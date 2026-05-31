@@ -46,4 +46,16 @@ describe("SafeUrlSchema", () => {
 		);
 		expect(SafeUrlSchema.safeParse("http://127.0.0.1/cb").success).toBe(true);
 	});
+
+	it("rejects redirect URIs with a fragment component", () => {
+		expect(
+			SafeUrlSchema.safeParse("https://example.com/cb#token").success,
+		).toBe(false);
+		expect(SafeUrlSchema.safeParse("https://example.com/cb#").success).toBe(
+			false,
+		);
+		expect(SafeUrlSchema.safeParse("https://example.com/cb").success).toBe(
+			true,
+		);
+	});
 });
