@@ -52,11 +52,7 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import {
-	domainMatches,
-	safeJsonParse,
-	validateEmailDomain,
-} from "../utils";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
