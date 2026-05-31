@@ -1,7 +1,4 @@
-import { isLoopbackHost } from "@better-auth/core/utils/host";
 import * as z from "zod";
-
-const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
 /**
  * Runtime schema for OAuthAuthorizationQuery.
@@ -45,36 +42,7 @@ export const verificationValueSchema = z
 	.passthrough();
 
 /**
- * Reusable URL validation for OAuth redirect URIs.
- * - Blocks dangerous schemes (javascript:, data:, vbscript:)
- * - For http/https: requires HTTPS (HTTP allowed only for loopback hosts: 127.0.0.0/8, [::1], *.localhost per RFC 6761)
- * - Allows custom schemes for mobile apps (e.g., myapp://callback)
+ * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
+ * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
-	if (!URL.canParse(val)) {
-		ctx.addIssue({
-			code: "custom",
-			message: "URL must be parseable",
-			fatal: true,
-		});
-		return z.NEVER;
-	}
-
-	const u = new URL(val);
-
-	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
-		ctx.addIssue({
-			code: "custom",
-			message: "URL cannot use javascript:, data:, or vbscript: scheme",
-		});
-		return;
-	}
-
-	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
-		ctx.addIssue({
-			code: "custom",
-			message:
-				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
-		});
-	}
-});
+export { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";

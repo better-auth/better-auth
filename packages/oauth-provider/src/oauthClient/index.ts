@@ -1,15 +1,10 @@
-import {
-	createAuthEndpoint,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "better-auth/api";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { publicSessionMiddleware } from "../middleware";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import { SafeUrlSchema } from "../types/zod";
 import {
-	assertClientPrivileges,
 	deleteClientEndpoint,
 	getClientEndpoint,
 	getClientPublicEndpoint,
@@ -238,8 +233,6 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
-			await assertClientPrivileges(ctx, session, opts, "create");
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
@@ -450,8 +443,6 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
-			await assertClientPrivileges(ctx, session, opts, "create");
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
