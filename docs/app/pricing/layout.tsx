@@ -31,7 +31,7 @@ export default function PricingLayout({
 								<div className="border-t border-foreground/10 pt-4 space-y-0">
 									{[
 										{ label: "Starter", value: "Free" },
-										{ label: "Pro", value: "$20/mo" },
+										{ label: "Pro", value: "$20/month" },
 										{ label: "Enterprise", value: "Custom" },
 									].map((item) => (
 										<div

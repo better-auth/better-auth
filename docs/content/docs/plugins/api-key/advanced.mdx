@@ -154,8 +154,9 @@ const secretKey = await auth.api.createApiKey({
 ```
 
 <Callout type="warn">
-  Note that when creating a key under a specific configId,
-  the `get`, `update`, `delete` and `verify` operations must also specify the `configId` parameter.
+  `get`, `update`, and `delete` must pass the same `configId` the key was created with.
+  `verify` resolves the key's own configuration, so it only needs `configId` when a
+  configuration differs from the default in storage or hashing.
 </Callout>
 
 ### Using configId for API Key Operations

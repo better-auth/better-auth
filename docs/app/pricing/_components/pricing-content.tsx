@@ -60,7 +60,10 @@ const tiers: readonly Tier[] = [
 			"Unlimited seats",
 			["20,000 audit logs / month", "then $0.0001 per event"],
 			["10,000 security detections / month", "then $0.001 per event"],
-			["Self-service SSO & Directory Sync", "1 connection, then $50 each"],
+			[
+				"Self-service SSO & Directory Sync",
+				"1 connection, then $50/month per connection",
+			],
 			["Transactional email & SMS", "$0.001 per email, $0.09 per SMS"],
 			"Email templates & abuse protection",
 			"Email support",
@@ -118,8 +121,8 @@ const compareSections: readonly CompareSection[] = [
 			{
 				label: "Audit log",
 				values: [
-					"10,000 / mo",
-					["20,000 / mo", "then $0.0001 / event"],
+					"10,000 / month",
+					["20,000 / month", "then $0.0001 / event"],
 					"Custom",
 				],
 			},
@@ -127,8 +130,8 @@ const compareSections: readonly CompareSection[] = [
 			{
 				label: "Security detection",
 				values: [
-					"1,000 / mo",
-					["10,000 / mo", "then $0.001 / event"],
+					"1,000 / month",
+					["10,000 / month", "then $0.001 / event"],
 					"Custom",
 				],
 			},
@@ -144,11 +147,19 @@ const compareSections: readonly CompareSection[] = [
 			},
 			{
 				label: "Self-service SSO",
-				values: [false, ["1 connection", "then $50 / connection"], "Custom"],
+				values: [
+					false,
+					["1 connection", "then $50/month per connection"],
+					"Custom",
+				],
 			},
 			{
 				label: "Directory Sync",
-				values: [false, ["1 connection", "then $50 / connection"], "Custom"],
+				values: [
+					false,
+					["1 connection", "then $50/month per connection"],
+					"Custom",
+				],
 			},
 		],
 	},
@@ -167,9 +178,9 @@ const compareSections: readonly CompareSection[] = [
 			{ label: "Dashboard RBAC", values: [false, true, true] },
 			{
 				label: "Custom domain for Dashboard",
-				values: [false, { addon: "$25 / mo" }, true],
+				values: [false, { addon: "$25 / month" }, true],
 			},
-			{ label: "Log drain", values: [false, { addon: "$25 / mo" }, true] },
+			{ label: "Log drain", values: [false, { addon: "$25 / month" }, true] },
 		],
 	},
 	{

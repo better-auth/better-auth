@@ -124,6 +124,7 @@ describe("private_key_jwt e2e", async () => {
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
+					requireLocalEmailVerified: false,
 				},
 			},
 			plugins: [
@@ -265,6 +266,7 @@ describe("private_key_jwt e2e", async () => {
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
+					requireLocalEmailVerified: false,
 				},
 			},
 			plugins: [

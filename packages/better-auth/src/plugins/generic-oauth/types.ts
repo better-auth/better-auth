@@ -103,6 +103,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	accessType?: string | undefined;
 	/**
+	 * Fallback access-token lifetime, in seconds, used only when the provider's
+	 * token response omits `expires_in`. Set this so `getAccessToken` can track
+	 * expiry and refresh the token; leave unset if the provider returns
+	 * `expires_in`.
+	 */
+	accessTokenExpiresIn?: number | undefined;
+	/**
 	 * Custom function to exchange authorization code for tokens.
 	 * If provided, this function will be used instead of the default token exchange logic.
 	 * This is useful for providers with non-standard token endpoints.

@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -27,6 +28,7 @@ import {
 } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -36,12 +38,14 @@ import {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
 } from "../oidc";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLConfig,
 	SAMLSessionRecord,
@@ -56,6 +60,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 import { registerSSOProviderBodySchema } from "./schemas";
 
@@ -386,7 +391,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -399,9 +404,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
+					});
+				}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
 			}
@@ -423,6 +434,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "SSO provider with this providerId already exists",
 				});
+			}
+
+			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
 			}
 
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
@@ -1442,33 +1466,48 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	const linked = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
-			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
-				: false,
-		},
-		account: {
-			idToken: tokenResponse.idToken,
-			accessToken: tokenResponse.accessToken,
-			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
-			providerId: provider.providerId,
-			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-			scope: tokenResponse.scopes?.join(","),
-		},
-		callbackURL,
-		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-		overrideUserInfo: config.overrideUserInfo,
-		isTrustedProvider,
-	});
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		linked = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email,
+				name: userInfo.name || "",
+				id: userInfo.id,
+				image: userInfo.image,
+				emailVerified: options?.trustEmailVerified
+					? userInfo.emailVerified || false
+					: false,
+			},
+			account: {
+				idToken: tokenResponse.idToken,
+				accessToken: tokenResponse.accessToken,
+				refreshToken: tokenResponse.refreshToken,
+				accountId: userInfo.id,
+				providerId: provider.providerId,
+				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+				scope: tokenResponse.scopes?.join(","),
+			},
+			callbackURL,
+			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+			overrideUserInfo: config.overrideUserInfo,
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({ error: linked.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
 	const { session, user } = linked.data!;
 
@@ -1997,7 +2036,7 @@ async function handleLogoutRequest(
 				sessionIndex === data.sessionIndex
 			) {
 				await ctx.context.internalAdapter
-					.deleteSession(data.sessionId)
+					.deleteSession(data.sessionToken)
 					.catch((e: unknown) =>
 						ctx.context.logger.warn("Failed to delete session during SLO", {
 							error: e,
@@ -2036,22 +2075,24 @@ async function handleLogoutRequest(
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
-		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
+		await ctx.context.internalAdapter.deleteSession(
+			currentSession.session.token,
+		);
 	}
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
@@ -2179,7 +2220,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					),
 				);
 
-			await ctx.context.internalAdapter.deleteSession(session.session.id);
+			await ctx.context.internalAdapter.deleteSession(session.session.token);
 
 			deleteSessionCookie(ctx);
 

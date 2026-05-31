@@ -373,6 +373,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "signInEmail",
 			use: [formCsrfMiddleware],
+			cloneRequest: true,
 			body: z.object({
 				/**
 				 * Email of the user
@@ -564,7 +565,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request,
+							ctx.request?.clone(),
 						),
 					);
 				}

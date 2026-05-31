@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -333,6 +334,13 @@ export async function processSAMLResponse(
 	const attributes = extract.attributes || {};
 	const mapping = parsedSamlConfig.mapping ?? {};
 
+	// samlify >= 2.13 types attribute values as `string | string[]` to support
+	// multi-valued attributes. The identity fields below are single-valued.
+	const attr = (key: string): string | undefined => {
+		const value = attributes[key];
+		return Array.isArray(value) ? value[0] : value;
+	};
+
 	const userInfo = {
 		...Object.fromEntries(
 			Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -340,24 +348,24 @@ export async function processSAMLResponse(
 				attributes[value as string],
 			]),
 		),
-		id: attributes[mapping.id || "nameID"] || extract.nameID,
+		id: attr(mapping.id || "nameID") || extract.nameID,
 		email: (
-			attributes[mapping.email || "email"] ||
+			attr(mapping.email || "email") ||
 			extract.nameID ||
 			""
 		).toLowerCase(),
 		name:
 			[
-				attributes[mapping.firstName || "givenName"],
-				attributes[mapping.lastName || "surname"],
+				attr(mapping.firstName || "givenName"),
+				attr(mapping.lastName || "surname"),
 			]
 				.filter(Boolean)
 				.join(" ") ||
-			attributes[mapping.name || "displayName"] ||
+			attr(mapping.name || "displayName") ||
 			extract.nameID,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? ((attributes[mapping.emailVerified] || false) as boolean)
+				? ((attr(mapping.emailVerified) || false) as boolean)
 				: false,
 	};
 	if (!userInfo.id || !userInfo.email) {
@@ -380,24 +388,36 @@ export async function processSAMLResponse(
 			validateEmailDomain(userInfo.email as string, provider.domain));
 
 	const postAuthRedirect = relayState?.callbackURL || ctx.context.baseURL;
+	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
-	const result = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email as string,
-			name: (userInfo.name || userInfo.email) as string,
-			id: userInfo.id as string,
-			emailVerified: Boolean(userInfo.emailVerified),
-		},
-		account: {
-			providerId,
-			accountId: userInfo.id as string,
-			accessToken: "",
-			refreshToken: "",
-		},
-		callbackURL: postAuthRedirect,
-		disableSignUp: options?.disableImplicitSignUp,
-		isTrustedProvider,
-	});
+	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		result = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email as string,
+				name: (userInfo.name || userInfo.email) as string,
+				id: userInfo.id as string,
+				emailVerified: Boolean(userInfo.emailVerified),
+			},
+			account: {
+				providerId,
+				accountId: userInfo.id as string,
+				accessToken: "",
+				refreshToken: "",
+			},
+			callbackURL: postAuthRedirect,
+			disableSignUp: options?.disableImplicitSignUp,
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = errorUrl.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${errorUrl}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 
 	if (result.error) {
 		throw ctx.redirect(
@@ -442,6 +462,7 @@ export async function processSAMLResponse(
 		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 		const samlSessionData: SAMLSessionRecord = {
 			sessionId: session.id,
+			sessionToken: session.token,
 			providerId,
 			nameID: extract.nameID,
 			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex
