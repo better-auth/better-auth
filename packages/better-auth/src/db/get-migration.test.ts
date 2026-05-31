@@ -23,5 +23,7 @@ describe("matchType array fields", () => {
 		// A number column must not satisfy string[], nor a text column number[].
 		expect(matchType("_int4", "string[]", "postgres")).toBe(false);
 		expect(matchType("_text", "number[]", "postgres")).toBe(false);
+		// Element types are matched exactly, so `interval` is not a number type.
+		expect(matchType("_interval", "number[]", "postgres")).toBe(false);
 	});
 });

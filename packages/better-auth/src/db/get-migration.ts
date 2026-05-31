@@ -92,30 +92,46 @@ export function matchType(
 		}
 		// Postgres can also use a real array column (e.g. a Drizzle-created
 		// `text[]`/`int[]`). pg introspection reports the element type prefixed
-		// with "_" ("_text", "_int4") or as "<element>[]"; match it against the
-		// field's element type so a string[] field is not satisfied by a
-		// number[] column or vice versa.
+		// with "_" ("_text", "_int4") or as "<element>[]"; match it exactly
+		// against the field's element type so a string[] field is not satisfied
+		// by a number[] column (and a type like `interval` does not pass as a
+		// number by prefix).
 		if (dbType === "postgres") {
 			const element = columnDataType
 				.toLowerCase()
 				.replace(/^_/, "")
 				.replace(/\[\]$/, "")
 				.trim();
-			const elementTypes =
-				fieldType === "string[]"
-					? ["text", "varchar", "char", "bpchar", "name", "uuid", "citext"]
-					: [
-							"int",
-							"numeric",
-							"decimal",
-							"smallint",
-							"bigint",
-							"real",
-							"float",
-							"double",
-							"money",
-						];
-			return elementTypes.some((t) => element.startsWith(t));
+			const stringElements = new Set([
+				"text",
+				"varchar",
+				"character varying",
+				"char",
+				"character",
+				"bpchar",
+				"name",
+				"uuid",
+				"citext",
+			]);
+			const numberElements = new Set([
+				"int",
+				"int2",
+				"int4",
+				"int8",
+				"integer",
+				"smallint",
+				"bigint",
+				"numeric",
+				"decimal",
+				"real",
+				"float4",
+				"float8",
+				"double precision",
+				"money",
+			]);
+			return (fieldType === "string[]" ? stringElements : numberElements).has(
+				element,
+			);
 		}
 		return false;
 	}
