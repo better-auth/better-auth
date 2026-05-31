@@ -311,6 +311,18 @@ export interface SecondaryStorage {
 	 * @returns - Value of the key
 	 */
 	get: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically get a value and delete it from storage.
+	 *
+	 * This is optional for backwards compatibility with existing secondary
+	 * storage implementations. Single-use credential consumers use it when
+	 * present to avoid a read-then-delete race.
+	 *
+	 * TODO(secondary-storage-atomic-consume): make this required in the next
+	 * breaking release, or require database-backed verification storage for
+	 * security-sensitive consume paths.
+	 */
+	getAndDelete?: (key: string) => Awaitable<unknown>;
 	set: (
 		/**
 		 * Key to store
