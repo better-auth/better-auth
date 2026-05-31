@@ -160,4 +160,70 @@ describe("next-js integration", () => {
 
 		expect(session).not.toBeNull();
 	});
+
+	/**
+	 * When Next.js middleware is present (even a pass-through `NextResponse.next()`),
+	 * it strips internal routing headers (RSC, next-action, etc.) before forwarding
+	 * to the app router. The nextCookiesMiddleware() helper maps them to custom
+	 * x-better-auth-* headers that survive the middleware→app transition.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9776
+	 */
+	it("should skip refresh when x-better-auth-is-rsc header is set (middleware scenario)", async () => {
+		// Simulates a request that went through nextCookiesMiddleware():
+		// RSC header was stripped by Next.js but x-better-auth-is-rsc was forwarded.
+		const { cookiesMock, headersMock, session } =
+			await getSessionWithNextHeaders({
+				"x-better-auth-is-rsc": "1",
+			});
+
+		expect(headersMock).toHaveBeenCalledTimes(1);
+		expect(cookiesMock).not.toHaveBeenCalled();
+		expect(session).not.toBeNull();
+		expect(session?.needsRefresh).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9776
+	 */
+	it("should not skip refresh when x-better-auth-is-server-action is set (middleware + server action scenario)", async () => {
+		const { session } = await getSessionWithNextHeaders({
+			"x-better-auth-is-rsc": "1",
+			"x-better-auth-is-server-action": "1",
+		});
+
+		expect(session).not.toBeNull();
+		expect(session?.needsRefresh).toBe(true);
+	});
+
+	describe("nextCookiesMiddleware", () => {
+		it("should map RSC header to x-better-auth-is-rsc", async () => {
+			const { nextCookiesMiddleware } = await import("./next-js");
+			const request = { headers: new Headers({ RSC: "1" }) };
+			const result = nextCookiesMiddleware(request);
+			expect(result.request.headers.get("x-better-auth-is-rsc")).toBe("1");
+		});
+
+		it("should map next-action header to x-better-auth-is-server-action", async () => {
+			const { nextCookiesMiddleware } = await import("./next-js");
+			const request = {
+				headers: new Headers({ RSC: "1", "next-action": "abc123" }),
+			};
+			const result = nextCookiesMiddleware(request);
+			expect(result.request.headers.get("x-better-auth-is-rsc")).toBe("1");
+			expect(result.request.headers.get("x-better-auth-is-server-action")).toBe(
+				"1",
+			);
+		});
+
+		it("should not set custom headers when RSC headers are absent", async () => {
+			const { nextCookiesMiddleware } = await import("./next-js");
+			const request = { headers: new Headers({}) };
+			const result = nextCookiesMiddleware(request);
+			expect(result.request.headers.get("x-better-auth-is-rsc")).toBeNull();
+			expect(
+				result.request.headers.get("x-better-auth-is-server-action"),
+			).toBeNull();
+		});
+	});
 });

@@ -5,6 +5,41 @@ import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
+/**
+ * Returns Next.js middleware request options that forward RSC context headers.
+ *
+ * Next.js middleware strips internal routing headers (`RSC`, `next-action`,
+ * etc.) before forwarding requests to the app router. Without these headers,
+ * the `nextCookies()` plugin cannot detect RSC navigation and will perform
+ * unnecessary session refreshes (extra DB writes) that cannot be reflected
+ * back in cookies.
+ *
+ * Pass the return value to `NextResponse.next()` in your middleware:
+ *
+ * @example
+ * ```ts
+ * import { NextResponse } from "next/server";
+ * import type { NextRequest } from "next/server";
+ * import { nextCookiesMiddleware } from "better-auth/next-js";
+ *
+ * export function middleware(request: NextRequest) {
+ *   return NextResponse.next(nextCookiesMiddleware(request));
+ * }
+ * ```
+ */
+export function nextCookiesMiddleware(request: { headers: Headers }): {
+	request: { headers: Headers };
+} {
+	const headers = new Headers(request.headers);
+	if (headers.get("RSC") === "1") {
+		headers.set("x-better-auth-is-rsc", "1");
+	}
+	if (headers.has("next-action")) {
+		headers.set("x-better-auth-is-server-action", "1");
+	}
+	return { request: { headers } };
+}
+
 export function toNextJsHandler(
 	auth:
 		| {
@@ -66,8 +101,15 @@ export const nextCookies = () => {
 						 *
 						 * @see https://github.com/vercel/next.js/blob/8c5af211d580/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts#L112-L157
 						 */
-						const isRSC = headersStore.get("RSC") === "1";
-						const isServerAction = !!headersStore.get("next-action");
+						// Also check x-better-auth-is-rsc / x-better-auth-is-server-action
+						// for apps using nextCookiesMiddleware() — Next.js strips the
+						// native RSC/next-action headers during the middleware→app transition.
+						const isRSC =
+							headersStore.get("RSC") === "1" ||
+							headersStore.get("x-better-auth-is-rsc") === "1";
+						const isServerAction =
+							!!headersStore.get("next-action") ||
+							!!headersStore.get("x-better-auth-is-server-action");
 						if (isRSC && !isServerAction) {
 							await setShouldSkipSessionRefresh(true);
 						}
