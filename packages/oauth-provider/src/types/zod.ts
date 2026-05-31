@@ -25,6 +25,7 @@ const oauthAuthorizationQuerySchema = z
 		code_challenge: z.string().optional(),
 		code_challenge_method: z.literal("S256").optional(),
 		nonce: z.string().optional(),
+		resource: z.union([z.string(), z.array(z.string())]).optional(),
 	})
 	.passthrough();
 
@@ -41,6 +42,7 @@ export const verificationValueSchema = z
 		userId: z.string(),
 		referenceId: z.string().optional(),
 		authTime: z.number().optional(),
+		resource: z.array(z.string()).optional(),
 	})
 	.passthrough();
 
@@ -61,6 +63,15 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 	}
 
 	const u = new URL(val);
+
+	// Disallow URL fragments
+	if (u.hash && u.hash.length > 0) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL must not contain a fragment",
+		});
+		return;
+	}
 
 	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
 		ctx.addIssue({
