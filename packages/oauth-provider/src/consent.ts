@@ -108,12 +108,14 @@ export async function consentEndpoint(
 		},
 	);
 	const iat = Math.floor(Date.now() / 1000);
+	const resource = query.getAll("resource");
 	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
 		userId: session?.user.id!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
+		resources: resource.length ? resource : undefined,
 		referenceId,
 	};
 	foundConsent?.id
@@ -126,6 +128,7 @@ export async function consentEndpoint(
 					},
 				],
 				update: {
+					resources: consent.resources,
 					scopes: consent.scopes,
 					updatedAt: new Date(iat * 1000),
 				},
