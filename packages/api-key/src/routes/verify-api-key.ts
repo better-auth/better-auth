@@ -125,7 +125,7 @@ export async function validateApiKey({
 		}
 		const r = role(apiKeyPermissions as any);
 		const result = r.authorize(permissions);
-		if (!result.success) {
+		if (result.error !== null) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 	}

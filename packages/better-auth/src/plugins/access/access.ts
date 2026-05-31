@@ -7,9 +7,7 @@ import type {
 	Statements,
 } from "./types";
 
-export type AuthorizeResponse =
-	| { success: false; error: string }
-	| { success: true; error?: never | undefined };
+export type AuthorizeResponse = { error: string | null };
 
 export function role<
 	const TRoleStatements extends Statements,
@@ -30,7 +28,6 @@ export function role<
 				if (!allowedActions) {
 					if (connector === "AND") {
 						return {
-							success: false,
 							error: `You are not allowed to access resource: ${requestedResource}`,
 						};
 					}
@@ -68,22 +65,18 @@ export function role<
 					}
 				}
 				if (success && connector === "OR") {
-					return { success };
+					return { error: null };
 				}
 				if (!success && connector === "AND") {
 					return {
-						success: false,
 						error: `unauthorized to access resource "${requestedResource}"`,
 					};
 				}
 			}
 			if (success) {
-				return {
-					success,
-				};
+				return { error: null };
 			}
 			return {
-				success: false,
 				error: "Not authorized",
 			};
 		},
