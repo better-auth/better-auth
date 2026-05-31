@@ -8,6 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { deprecate } from "@better-auth/core/utils/deprecate";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
@@ -144,10 +145,22 @@ const oAuthConsentBodySchema = z.object({
 const oAuth2TokenBodySchema = z.record(z.any(), z.any());
 
 const registerOAuthApplicationBodySchema = z.object({
-	redirect_uris: z.array(z.string()).meta({
-		description:
-			'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-	}),
+	// This plugin is deprecated and removed in the next major. It gets only the
+	// non-breaking guard that rejects code-execution schemes (javascript:, data:,
+	// vbscript:). The stricter https-or-loopback policy lives in
+	// @better-auth/oauth-provider via SafeUrlSchema; migrating there is the path to
+	// full parity, so we do not tighten this plugin further.
+	redirect_uris: z
+		.array(
+			z.string().refine(isSafeUrlScheme, {
+				message:
+					"redirect_uri cannot use a javascript:, data:, or vbscript: scheme",
+			}),
+		)
+		.meta({
+			description:
+				'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+		}),
 	token_endpoint_auth_method: z
 		.enum(["none", "client_secret_basic", "client_secret_post"])
 		.meta({
