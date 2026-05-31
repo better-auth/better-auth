@@ -122,6 +122,38 @@ const signIn = async () => {
 }
 ```
 
+### Usage with Next.js Middleware
+
+When your app includes Next.js middleware (even a minimal pass-through), Next.js strips internal routing headers (`RSC`, `next-action`, etc.) before forwarding requests to the app router. This prevents `nextCookies()` from detecting RSC navigation, causing unnecessary session refreshes that cannot be reflected back in cookies.
+
+To fix this, use the `nextCookiesMiddleware` helper in your middleware to forward the necessary context headers:
+
+```ts title="middleware.ts"
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { nextCookiesMiddleware } from "better-auth/next-js";
+
+export function middleware(request: NextRequest) {
+    // ... your middleware logic
+    return NextResponse.next(nextCookiesMiddleware(request));
+}
+```
+
+If you need to combine it with other response options, spread the result:
+
+```ts title="middleware.ts"
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { nextCookiesMiddleware } from "better-auth/next-js";
+
+export function middleware(request: NextRequest) {
+    return NextResponse.next({
+        ...nextCookiesMiddleware(request),
+        // other NextResponse.next() options...
+    });
+}
+```
+
 ## Auth Protection
 
 In Next.js proxy/middleware, it's recommended to only check for the existence of a session cookie to handle redirection to avoid blocking requests by making API or database calls.
