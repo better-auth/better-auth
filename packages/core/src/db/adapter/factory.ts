@@ -1391,7 +1391,16 @@ export const createAdapterFactory =
 										},
 									],
 								});
-								return deleted > 0 ? (target as T) : null;
+								// `deleteMany` is typed `Promise<number>`, but a misbehaving
+								// custom adapter could return NaN or Infinity. `NaN > 0` is
+								// false and `Infinity > 0` is true, so a bare `deleted > 0`
+								// would misclassify both. Only a finite positive count proves
+								// we won the delete race; any other value fails closed
+								// (returns null) so a single-use row is never reported
+								// consumed without proof.
+								return Number.isFinite(deleted) && deleted > 0
+									? (target as T)
+									: null;
 							}),
 					);
 					resultNeedsOutputTransform = false;
