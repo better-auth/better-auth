@@ -2961,4 +2961,64 @@ describe("stripe subscription", () => {
 		// Should still proceed with the upgrade via billing portal
 		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
 	});
+
+	describe("cancel stripe subscription", () => {
+		test("should pass locale when canceling", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(testUser, {
+				throw: true,
+			});
+
+			const headers = new Headers();
+			await client.signIn.email(testUser, {
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			});
+
+			const subscriptionId = "sub_delete_test";
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+			await ctx.adapter.update({
+				model: "subscription",
+				update: { status: "active", stripeSubscriptionId: subscriptionId },
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+
+			stripeMock.subscriptions.list.mockResolvedValue({
+				data: [{ id: subscriptionId, status: "active" }],
+			});
+
+			const locale = "fr";
+
+			await client.subscription.cancel({
+				locale: locale,
+				fetchOptions: { headers },
+				referenceId: userRes.user.id,
+				returnUrl: "",
+			});
+
+			expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({ locale: locale }),
+			);
+		});
+	});
 });
