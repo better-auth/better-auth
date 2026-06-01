@@ -776,28 +776,44 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
+		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				if (typeof userIdOrSessionTokens === "string") {
-					const activeSession = await secondaryStorage.get(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-					const sessions = activeSession
-						? safeJSONParse<{ token: string }[]>(activeSession)
-						: [];
-					if (!sessions) return;
-					for (const session of sessions) {
-						await secondaryStorage.delete(session.token);
-					}
-					await secondaryStorage.delete(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-				} else {
-					for (const sessionToken of userIdOrSessionTokens) {
-						const session = await secondaryStorage.get(sessionToken);
-						if (session) {
-							await secondaryStorage.delete(sessionToken);
-						}
+				const activeSession = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+				const sessions = activeSession
+					? safeJSONParse<{ token: string }[]>(activeSession)
+					: [];
+				if (!sessions) return;
+				for (const session of sessions) {
+					await secondaryStorage.delete(session.token);
+				}
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
+				}
+			}
+			await deleteManyWithHooks(
+				[
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+				"session",
+				undefined,
+			);
+		},
+		deleteSessions: async (sessionTokens: string[]) => {
+			if (secondaryStorage) {
+				for (const sessionToken of sessionTokens) {
+					const session = await secondaryStorage.get(sessionToken);
+					if (session) {
+						await secondaryStorage.delete(sessionToken);
 					}
 				}
 
@@ -811,9 +827,9 @@ export const createInternalAdapter = (
 			await deleteManyWithHooks(
 				[
 					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						field: "token",
+						value: sessionTokens,
+						operator: "in",
 					},
 				],
 				"session",
@@ -1031,20 +1047,6 @@ export const createInternalAdapter = (
 				],
 			});
 			return accounts;
-		},
-		findAccount: async (accountId: string) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
 		},
 		findAccountByProviderId: async (accountId: string, providerId: string) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
