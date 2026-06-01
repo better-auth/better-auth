@@ -449,7 +449,7 @@ export const getSessionCookie = (
 		parsedCookie.get(name);
 
 	const sessionToken =
-		getCookie(`${cookiePrefix}.${cookieName}`) ??
+		getCookie(`${cookiePrefix}.${cookieName}`) ||
 		getCookie(`${cookiePrefix}-${cookieName}`);
 	if (sessionToken) {
 		return sessionToken;
