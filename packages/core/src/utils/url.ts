@@ -41,3 +41,31 @@ export function normalizePathname(
 
 	return pathname;
 }
+
+/**
+ * Schemes that execute or embed code when navigated to or accepted as a
+ * redirect target. These are never safe as an OAuth `redirect_uri` or as a
+ * client-side navigation target (`window.location.href`, `location.assign`, ...).
+ */
+export const DANGEROUS_URL_SCHEMES = ["javascript:", "data:", "vbscript:"];
+
+/**
+ * Returns `false` only when `value` is an absolute URL using a dangerous scheme
+ * (`javascript:`, `data:`, `vbscript:`). Relative URLs (e.g. `/dashboard`) and
+ * safe absolute schemes (`http`, `https`, custom app schemes such as
+ * `myapp://`) return `true`.
+ *
+ * Use this to guard browser navigation sinks and any redirect target that may
+ * originate from untrusted input. It is intentionally narrow: it blocks code
+ * execution schemes without rejecting relative paths or mobile deep links.
+ */
+export function isSafeUrlScheme(value: string): boolean {
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		// Relative URLs carry no scheme to abuse.
+		return true;
+	}
+	return !DANGEROUS_URL_SCHEMES.includes(parsed.protocol);
+}

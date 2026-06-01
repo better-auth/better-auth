@@ -74,6 +74,23 @@ export function parseCertificate(certPem: string) {
 	};
 }
 
+/**
+ * samlify >= 2.11 parses private keys with Node's native crypto (OpenSSL 3),
+ * which rejects PEM blocks carrying leading indentation that the previous
+ * node-forge implementation tolerated. Trim each line so keys pasted with
+ * surrounding whitespace (e.g. indented YAML/JSON config) still load.
+ */
+export function normalizePem(key: string): string;
+export function normalizePem(key: string | undefined): string | undefined;
+export function normalizePem(key: string | undefined): string | undefined {
+	if (!key) return key;
+	return `${key
+		.split("\n")
+		.map((line) => line.trim())
+		.join("\n")
+		.trim()}\n`;
+}
+
 export function getHostnameFromDomain(domain: string): string | null {
 	return getHostname(domain) || null;
 }

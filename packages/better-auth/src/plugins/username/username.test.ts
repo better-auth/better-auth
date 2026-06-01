@@ -655,3 +655,52 @@ describe("username email verification flow (no info leak)", async () => {
 		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
 	});
 });
+
+describe("username sign-in verify-email callbackURL", async () => {
+	/**
+	 * The verify-email link sent on username sign-in for an unverified user must
+	 * keep the caller's `callbackURL` intact. A raw interpolation truncates any
+	 * value containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link on username sign-in", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignIn: true,
+					async sendVerificationEmail({ url }) {
+						capturedUrl = url;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: {
+					plugins: [usernameClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "encode-username@example.com",
+			username: "encode_username",
+			password: "correct-password",
+			name: "Encode Username",
+		});
+
+		const callbackURL = "/welcome?ref=username&plan=pro";
+		await client.signIn.username({
+			username: "encode_username",
+			password: "correct-password",
+			callbackURL,
+		});
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+});
