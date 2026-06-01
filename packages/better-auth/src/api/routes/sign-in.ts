@@ -304,6 +304,32 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
+				if (provider.options?.validateUser) {
+					const validateUser = provider.options.validateUser;
+					let validation: { error?: string; errorDescription?: string } | void =
+						undefined;
+					try {
+						validation = await validateUser({
+							user: userInfo.user,
+							profile: userInfo.data,
+						});
+					} catch (error) {
+						c.context.logger.error("validateUser callback failed", error);
+						throw APIError.from("UNAUTHORIZED", {
+							message: "User validation failed",
+							code: "VALIDATION_FAILED",
+						});
+					}
+					if (validation?.error || validation?.errorDescription) {
+						throw APIError.from("UNAUTHORIZED", {
+							message:
+								validation.errorDescription ||
+								validation.error ||
+								"User validation failed",
+							code: validation.error || "VALIDATION_FAILED",
+						});
+					}
+				}
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,

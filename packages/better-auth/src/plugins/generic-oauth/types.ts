@@ -143,6 +143,27 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
+	 * Validate the user before sign-in.
+	 *
+	 * Runs after `mapProfileToUser` but before user creation. Return `void` to
+	 * allow the sign-in. Return an object with `error` or `errorDescription`
+	 * to reject. Redirect-based OAuth callbacks send the rejection to the error
+	 * URL; API-based flows such as ID-token sign-in return a 401 API error.
+	 *
+	 * The `user` argument contains the mapped user data. The `profile` argument
+	 * contains the raw OAuth user info from the provider, allowing access to
+	 * provider-specific fields for custom validation logic.
+	 */
+	validateUser?:
+		| ((data: {
+				user: OAuth2UserInfo;
+				profile: OAuth2UserInfo & Record<string, unknown>;
+		  }) =>
+				| void
+				| { error?: string; errorDescription?: string }
+				| Promise<void | { error?: string; errorDescription?: string }>)
+		| undefined;
+	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */

@@ -213,6 +213,24 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 				  }>)
 		| undefined;
 	/**
+	 * Validate the user before sign-in.
+	 *
+	 * Runs after `mapProfileToUser` but before user creation. Return `void` to
+	 * allow the sign-in. Return an object with `error` or `errorDescription`
+	 * to reject. Redirect-based OAuth callbacks send the rejection to the error
+	 * URL; API-based flows such as ID-token sign-in return a 401 API error.
+	 *
+	 * The `user` argument contains the mapped user data. The `profile` argument
+	 * contains the raw provider profile, allowing access to provider-specific
+	 * fields for custom validation logic (e.g. domain whitelisting).
+	 */
+	validateUser?:
+		| ((data: {
+				user: OAuth2UserInfo;
+				profile: Profile;
+		  }) => Awaitable<void | { error?: string; errorDescription?: string }>)
+		| undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */

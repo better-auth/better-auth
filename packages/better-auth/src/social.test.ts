@@ -13,7 +13,15 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
@@ -2472,5 +2480,324 @@ describe("Railway Provider", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
+	});
+});
+
+describe("validateUser callback", async () => {
+	it("should allow sign-in when validateUser returns void", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser() {
+							// allow
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(session.data?.user.email).toBe("user@email.com");
+	});
+	it("should work in stateless mode (no database)", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database: undefined,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser({ user }) {
+							if (!user.email?.endsWith("@allowed.com")) {
+								return {
+									error: "email_not_allowed",
+									errorDescription: "Only allowed.com emails are permitted",
+								};
+							}
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=email_not_allowed");
+	});
+	it("should provide raw profile data to validateUser", async () => {
+		let capturedProfile: unknown;
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser({ profile }) {
+							capturedProfile = profile;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		expect(capturedProfile).toBeDefined();
+		expect(typeof (capturedProfile as Record<string, unknown>).email).toBe(
+			"string",
+		);
+		expect((capturedProfile as Record<string, unknown>).sub).toBeDefined();
+	});
+	it("should reject sign-in when validateUser returns error", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const data = {
+					email: "user@blocked.com",
+					email_verified: true,
+					name: "Blocked User",
+					picture: "https://test.com/picture.png",
+					sub: "blocked-user-id",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					azp: "test",
+					iss: "test",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test",
+					id_token: testIdToken,
+				});
+			}),
+		);
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser({ user }) {
+							if (user.email?.endsWith("@blocked.com")) {
+								return {
+									error: "domain_blocked",
+									errorDescription: "This email domain is not allowed",
+								};
+							}
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=domain_blocked");
+		expect(redirectLocation).toContain(
+			"error_description=This+email+domain+is+not+allowed",
+		);
+	});
+	it("should redirect with custom error code and description", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const data = {
+					email: "user@blocked.com",
+					email_verified: true,
+					name: "Blocked User",
+					picture: "https://test.com/picture.png",
+					sub: "blocked-user-id",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					azp: "test",
+					iss: "test",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test",
+					id_token: testIdToken,
+				});
+			}),
+		);
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser({ user }) {
+							if (user.email?.endsWith("@blocked.com")) {
+								return {
+									error: "domain_blocked",
+									errorDescription: "Only company emails are allowed",
+								};
+							}
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=domain_blocked");
+		expect(redirectLocation).toContain(
+			"error_description=Only+company+emails+are+allowed",
+		);
+	});
+	it("should reject idToken sign-in when validateUser returns error", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const data = {
+					email: "blocked@email.com",
+					email_verified: true,
+					name: "Blocked User",
+					picture: "https://test.com/picture.png",
+					sub: "blocked-id",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					azp: "test",
+					iss: "test",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test",
+					id_token: testIdToken,
+				});
+			}),
+		);
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						validateUser() {
+							return { error: "user_blocked" };
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((p) => p.id === "google")!;
+		const verifyIdTokenSpy = vi.spyOn(googleProvider, "verifyIdToken");
+		verifyIdTokenSpy.mockResolvedValue(true);
+
+		const idToken = await signJWT(
+			{
+				email: "blocked@email.com",
+				email_verified: true,
+				name: "Blocked User",
+				sub: "blocked-id",
+			},
+			DEFAULT_SECRET,
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(401);
 	});
 });

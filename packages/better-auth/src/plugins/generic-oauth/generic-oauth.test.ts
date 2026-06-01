@@ -2905,4 +2905,288 @@ describe("oauth2", async () => {
 			expect(location).not.toContain("please_restart_the_process");
 		});
 	});
+
+	describe("validateUser callback", () => {
+		it("should allow sign-in when validateUser returns void", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "valid@test.com",
+					name: "Valid User",
+					sub: "valid-oauth",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-allow",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								validateUser() {
+									// allow
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-allow",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		});
+
+		it("should reject sign-in when validateUser returns error", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "rejected@blocked.com",
+					name: "Blocked User",
+					sub: "blocked-oauth",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								validateUser({ user }) {
+									if (user.email?.endsWith("@blocked.com")) {
+										return {
+											error: "domain_blocked",
+										};
+									}
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-reject",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=domain_blocked");
+		});
+
+		it("should redirect with custom error code and description", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "bad@blocked.com",
+					name: "Bad User",
+					sub: "bad-oauth",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-desc",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								validateUser({ user }) {
+									if (user.email?.endsWith("@blocked.com")) {
+										return {
+											error: "domain_blocked",
+											errorDescription:
+												"Only company emails are allowed for this provider",
+										};
+									}
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-desc",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=domain_blocked");
+			expect(callbackURL).toContain(
+				"error_description=Only+company+emails+are+allowed+for+this+provider",
+			);
+		});
+
+		it("should provide raw profile data to validateUser", async () => {
+			let capturedProfile: unknown;
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "profile@test.com",
+					name: "Profile User",
+					sub: "profile-oauth",
+					picture: "https://test.com/pic.png",
+					email_verified: true,
+					custom_field: "custom-value",
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-profile",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								validateUser({ profile }) {
+									capturedProfile = profile;
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-profile",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+
+			expect(capturedProfile).toBeDefined();
+			expect((capturedProfile as Record<string, unknown>).email).toBe(
+				"profile@test.com",
+			);
+			expect((capturedProfile as Record<string, unknown>).custom_field).toBe(
+				"custom-value",
+			);
+		});
+
+		it("should work in stateless mode (no database)", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "stateless@blocked.com",
+					name: "Stateless User",
+					sub: "stateless-oauth",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				database: undefined,
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-stateless",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								validateUser({ user }) {
+									if (user.email?.endsWith("@blocked.com")) {
+										return {
+											error: "stateless_blocked",
+											errorDescription: "Stateless rejection test",
+										};
+									}
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-stateless",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=stateless_blocked");
+			expect(callbackURL).toContain(
+				"error_description=Stateless+rejection+test",
+			);
+		});
+	});
 });

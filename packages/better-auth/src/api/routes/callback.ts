@@ -191,28 +191,50 @@ export const callbackOAuth = createAuthEndpoint(
 				}>(userData)
 			: null;
 
-		const userInfo = await provider
-			.getUserInfo({
-				...tokens,
-				/**
-				 * The user object from the provider
-				 * This is only available for some providers like Apple
-				 */
-				user: parsedUserData ?? undefined,
-			})
-			.then((res) => res?.user);
-
-		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
+		const providerResult = await provider.getUserInfo({
+			...tokens,
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user: parsedUserData ?? undefined,
+		});
+		if (
+			!providerResult?.user ||
+			providerResult.user.id === undefined ||
+			providerResult.user.id === null
+		) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
+		const userInfo = providerResult.user;
 		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
+		}
+		if (provider.options?.validateUser) {
+			const validateUser = provider.options.validateUser;
+			let validation: { error?: string; errorDescription?: string } | void =
+				undefined;
+			try {
+				validation = await validateUser({
+					user: userInfo,
+					profile: providerResult.data,
+				});
+			} catch (error) {
+				c.context.logger.error("validateUser callback failed", error);
+				redirectOnError("validation_failed", "User validation failed");
+			}
+			if (validation?.error || validation?.errorDescription) {
+				redirectOnError(
+					validation.error || "validation_failed",
+					validation.errorDescription,
+				);
+			}
 		}
 
 		if (link) {

@@ -85,6 +85,40 @@ The plugin uses the core OAuth callback route at `/callback/:providerId`. This m
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
 
+## Validate OAuth Users
+
+You can use `validateUser` on a Generic OAuth provider to reject a user before Better Auth creates a user, links an account, or creates a session. The callback receives the mapped `user` and the raw OAuth `profile`, which is useful for email/domain allowlists or provider-specific profile checks.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        {
+          providerId: "company-oauth",
+          clientId: process.env.COMPANY_OAUTH_CLIENT_ID!,
+          clientSecret: process.env.COMPANY_OAUTH_CLIENT_SECRET!,
+          discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+          validateUser: ({ user }) => {
+            if (!user.email?.endsWith("@example.com")) {
+              return {
+                error: "email_not_allowed",
+                errorDescription: "Use your example.com email to sign in",
+              };
+            }
+          },
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Return nothing to allow the OAuth flow. Return an object with `error` or `errorDescription` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while API-based flows such as ID-token sign-in return a 401 API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+
 ## Pre-configured Provider Helpers
 
 Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
