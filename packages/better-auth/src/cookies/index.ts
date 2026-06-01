@@ -443,9 +443,10 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
 	const parsedCookie = parseCookies(cookies);
+	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
 	const getCookie = (name: string) =>
-		parsedCookie.get(name) ||
-		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
+		parsedCookie.get(name);
 
 	const sessionToken =
 		getCookie(`${cookiePrefix}.${cookieName}`) ||

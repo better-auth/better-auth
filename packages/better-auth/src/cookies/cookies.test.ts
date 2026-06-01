@@ -538,6 +538,30 @@ describe("getSessionCookie", async () => {
 		});
 	});
 
+	it("prefers the __Secure- cookie when a non-secure leftover is also present", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=current",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBe("current");
+	});
+
+	it("does not fall back to a non-secure cookie when the __Secure- value is empty", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBeNull();
+	});
+
 	it("should allow override cookie prefix with secure cookies", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
