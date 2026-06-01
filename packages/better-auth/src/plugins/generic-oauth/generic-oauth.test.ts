@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -218,6 +219,69 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * The verify-email link sent to a new, unverified OAuth user must keep the
+	 * caller's `callbackURL` intact. A raw interpolation truncates any value
+	 * containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link for a new unverified OAuth user", async () => {
+		let capturedUrl = "";
+		const { customFetchImpl: localFetch } = await getTestInstance({
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail({ url }) {
+					capturedUrl = url;
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-encode-callback",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: localFetch },
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "encode-callback@test.com",
+				name: "Encode Callback",
+				sub: "encode-callback",
+				email_verified: false,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const callbackURL = "http://localhost:3000/welcome?ref=oauth&plan=pro";
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test-encode-callback",
+			callbackURL,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9375
 	 */
 	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
@@ -316,6 +380,264 @@ describe("oauth2", async () => {
 		);
 		expect(accessTokenRes.error).toBeNull();
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
+	/**
+	 * A provider that omits `expires_in` leaves the access token's expiry unknown,
+	 * so `getAccessToken` can never tell it lapsed and never refreshes it. Setting
+	 * `accessTokenExpiresIn` synthesizes the expiry so the existing refresh path
+	 * runs once the window passes.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("refreshes once the accessTokenExpiresIn window passes when the provider omits expires_in", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				// Simulate a provider that never returns `expires_in`.
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-fallback@test.com",
+				name: "Expires In Fallback",
+				sub: "exp-fallback",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-fallback",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-fallback",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// Within the synthesized window: no premature refresh.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-fallback" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBeTruthy();
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: the refresh that never used to fire now does.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-fallback" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * Opt-in: without `accessTokenExpiresIn`, a provider that omits `expires_in`
+	 * keeps the prior behavior. The expiry stays unknown and `getAccessToken` does
+	 * not refresh, so nothing churns for tokens that may never expire.
+	 */
+	it("does not refresh a provider that omits expires_in when accessTokenExpiresIn is unset", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-none@test.com",
+				name: "No Fallback",
+				sub: "exp-none",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-none",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-none",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const res = await client.getAccessToken(
+					{ providerId: "exp-none" },
+					{ headers: postCallbackHeaders },
+				);
+				// Expiry stays unknown: the stored token is returned as-is, no refresh.
+				expect(res.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(0);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * The `getToken` escape hatch returns tokens directly, bypassing the standard
+	 * exchange. `accessTokenExpiresIn` must still apply to its result, or a
+	 * `getToken` provider that omits the expiry hits the same no-refresh bug.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("applies accessTokenExpiresIn to a custom getToken result", async () => {
+		let refreshCount = 0;
+		const countRefresh = (_response: any, req: any) => {
+			if (req.body?.grant_type === "refresh_token") refreshCount++;
+		};
+		server.service.on("beforeResponse", countRefresh);
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-gettoken",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+								// Custom exchange that omits the expiry.
+								getToken: async () => ({
+									accessToken: "gettoken-initial",
+									refreshToken: "gettoken-refresh",
+								}),
+								getUserInfo: async () => ({
+									id: "exp-gettoken-user",
+									email: "exp-gettoken@test.com",
+									name: "GetToken User",
+									emailVerified: true,
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-gettoken",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// getToken omitted the expiry; the fallback synthesized it, so within
+			// the window the stored token is returned without refreshing.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-gettoken" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBe("gettoken-initial");
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: refresh fires. Without the fallback on the
+			// getToken result, no expiry would be stored and this never happens.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-gettoken" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", countRefresh);
+		}
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
@@ -483,6 +805,82 @@ describe("oauth2", async () => {
 		);
 		expect(callbackURL).toBe(
 			"http://localhost:3000/error?error=signup_disabled",
+		);
+	});
+
+	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "hook-reject@test.com",
+				name: "Hook Reject User",
+				sub: "hook-reject",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance(
+			{
+				trustedOrigins: ["https://frontend.example.com"],
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-hook-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+					session: {
+						create: {
+							before: async () => {
+								throw APIError.from("FORBIDDEN", {
+									code: "HOOK_REJECTED",
+									message: "Session hook rejected this user",
+								});
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-hook-reject",
+			callbackURL: "https://frontend.example.com/dashboard",
+			errorCallbackURL: "https://frontend.example.com/auth-error",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		const url = new URL(callbackURL);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Session hook rejected this user",
 		);
 	});
 
@@ -1225,7 +1623,10 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("error=state_not_found");
+		expect(res.headers.get("location")).not.toContain(
+			"please_restart_the_process",
+		);
 	});
 
 	it("should await async mapProfileToUser", async () => {

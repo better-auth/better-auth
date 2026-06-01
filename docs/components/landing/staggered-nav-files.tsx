@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
+import { Icons } from "../icons";
 import { BetterAuthWordmark } from "../icons/logo";
 import { contents } from "../sidebar-content";
 import {
@@ -43,6 +44,7 @@ interface ProductItem {
 	tagline: string;
 	description: string;
 	href: string;
+	activatesTab?: boolean;
 	Icon: React.ComponentType<{ className?: string }>;
 	Pattern?: React.FC<{ className?: string }>;
 	patternClassName?: string;
@@ -305,6 +307,7 @@ const products: ProductItem[] = [
 		description:
 			"The TypeScript auth library. Plugins, adapters, and 20+ social providers.",
 		href: "/docs/introduction",
+		activatesTab: false,
 		Icon: FrameworkLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -316,6 +319,7 @@ const products: ProductItem[] = [
 		description:
 			"Dashboard, audit logs, security detection, SSO, and abuse protection.",
 		href: "/pricing",
+		activatesTab: true,
 		Icon: InfraLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -439,6 +443,11 @@ export function StaggeredNavFiles() {
 	);
 	const isDocs = pathname.startsWith("/docs");
 	const isPricingPage = pathname === "/pricing";
+	const isProductsPage = products.some(
+		(p) =>
+			p.activatesTab &&
+			(pathname === p.href || pathname.startsWith(`${p.href}/`)),
+	);
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
@@ -447,6 +456,7 @@ export function StaggeredNavFiles() {
 		isActive("/") ||
 		isDocs ||
 		isPricingPage ||
+		isProductsPage ||
 		isResourcePage ||
 		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
@@ -652,16 +662,20 @@ export function StaggeredNavFiles() {
 					>
 						<div
 							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
-								productsOpen
-									? "bg-foreground/[0.04]"
-									: "hover:bg-foreground/[0.03]"
+								isProductsPage
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: productsOpen
+										? "bg-foreground/4"
+										: "hover:bg-foreground/3"
 							}`}
 						>
 							<span
 								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									productsOpen
-										? "text-foreground/80"
-										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+									isProductsPage
+										? "text-foreground"
+										: productsOpen
+											? "text-foreground/80"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 								}`}
 							>
 								products
@@ -950,21 +964,7 @@ export function StaggeredNavFiles() {
 											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 128 128"
-											>
-												<path
-													fill="#cb3837"
-													d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
-												/>
-												<path
-													fill="#fff"
-													d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
-												/>
-											</svg>
+											<Icons.npm className="size-3.5" />
 										</a>
 									</div>
 								</motion.div>

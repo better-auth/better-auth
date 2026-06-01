@@ -2,6 +2,7 @@ import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
@@ -131,7 +132,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}) {
 						// Use custom getToken if provided
 						if (c.getToken) {
-							return c.getToken(data);
+							return applyDefaultAccessTokenExpiry(
+								await c.getToken(data),
+								c.accessTokenExpiresIn,
+							);
 						}
 
 						// Standard token exchange flow
@@ -155,7 +159,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return validateAuthorizationCode({
+						const tokens = await validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
@@ -168,6 +172,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async refreshAccessToken(
 						refreshToken: string,
@@ -190,7 +198,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return refreshAccessToken({
+						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
 								clientId: c.clientId,
@@ -199,6 +207,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {
 						const userInfo = c.getUserInfo
