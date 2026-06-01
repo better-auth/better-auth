@@ -189,7 +189,7 @@ export async function processSAMLResponse(
 
 	// 7. SP/IdP construction via helpers
 	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
-		clockSkew: options?.saml?.clockSkew
+		clockSkew: options?.saml?.clockSkew,
 	});
 	const idp = createIdP(parsedSamlConfig);
 
