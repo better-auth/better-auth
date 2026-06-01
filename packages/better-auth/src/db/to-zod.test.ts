@@ -43,7 +43,8 @@ describe("toZodSchema", () => {
 			});
 
 			expect(schema.parse({ logo: null })).toEqual({ logo: null });
-			expect(schema.parse({ logo: undefined })).toEqual({});
+			expect(schema.safeParse({ logo: undefined }).success).toBe(true);
+			expect(schema.parse({})).toEqual({});
 			expect(schema.parse({ logo: "value" })).toEqual({ logo: "value" });
 		});
 

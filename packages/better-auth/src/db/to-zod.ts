@@ -78,11 +78,9 @@ type GetType<F extends DBFieldAttribute> = F extends {
 type GetRequired<
 	F extends DBFieldAttribute,
 	Schema extends z.core.SomeType,
-> = F extends {
-	required: true;
-}
-	? Schema
-	: z.ZodOptional<z.ZodNullable<Schema>>;
+> = F extends { required: false }
+	? z.ZodOptional<z.ZodNullable<Schema>>
+	: Schema;
 
 type GetInput<
 	isClientSide extends boolean,
