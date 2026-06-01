@@ -263,6 +263,10 @@ Changes the password of a user.
        * The user id which you want to set the password for.
        */
       userId: string = 'user-id'
+      /**
+      * Whether to revoke all user sessions after setting the password. Defaults to `true`.
+      */
+      revokeSessions?: boolean = true
   }
   ```
 </APIMethod>
