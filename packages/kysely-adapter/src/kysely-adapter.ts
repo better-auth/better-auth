@@ -9,6 +9,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -51,6 +52,36 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+}
+
+function transformPostgresArrayInput(
+	data: unknown,
+	fieldType: "string[]" | "number[]",
+) {
+	if (typeof data === "string") {
+		return safeJSONParse<unknown[]>(data) ?? data;
+	}
+	if (fieldType === "number[]" && Array.isArray(data)) {
+		return data.map((value) =>
+			value === null ? null : typeof value === "number" ? value : Number(value),
+		);
+	}
+	return data;
+}
+
+function transformPostgresArrayOutput(
+	data: unknown,
+	fieldType: "string[]" | "number[]",
+) {
+	if (typeof data === "string") {
+		return safeJSONParse<unknown[]>(data) ?? data;
+	}
+	if (fieldType === "number[]" && Array.isArray(data)) {
+		return data.map((value) =>
+			value === null ? null : typeof value === "number" ? value : Number(value),
+		);
+	}
+	return data;
 }
 
 export const kyselyAdapter = (
@@ -818,6 +849,7 @@ export const kyselyAdapter = (
 		};
 	};
 	let adapterOptions: AdapterFactoryOptions | null = null;
+	const isPostgres = config?.type === "postgres";
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",
@@ -839,8 +871,30 @@ export const kyselyAdapter = (
 				config?.type === "postgres"
 					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
 					: false,
-			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
-			supportsUUIDs: config?.type === "postgres" ? true : false,
+			supportsArrays: isPostgres,
+			customTransformInput: isPostgres
+				? ({ data, fieldAttributes }) => {
+						if (
+							fieldAttributes.type === "string[]" ||
+							fieldAttributes.type === "number[]"
+						) {
+							return transformPostgresArrayInput(data, fieldAttributes.type);
+						}
+						return data;
+					}
+				: undefined,
+			customTransformOutput: isPostgres
+				? ({ data, fieldAttributes }) => {
+						if (
+							fieldAttributes.type === "string[]" ||
+							fieldAttributes.type === "number[]"
+						) {
+							return transformPostgresArrayOutput(data, fieldAttributes.type);
+						}
+						return data;
+					}
+				: undefined,
+			supportsUUIDs: isPostgres,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {
