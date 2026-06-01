@@ -244,9 +244,16 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (isAlreadyExist) {
 						if (fieldType) {
 							const fieldTypeParts = getFieldTypeParts(fieldType);
+							const existingFieldTypeParts = getFieldTypeParts(
+								isAlreadyExist.fieldType,
+							);
+							const isExistingNumericField =
+								existingFieldTypeParts.fieldType === "Int" ||
+								existingFieldTypeParts.fieldType === "BigInt";
 							if (
-								fieldTypeParts.fieldType === "Int" ||
-								fieldTypeParts.fieldType === "BigInt"
+								isExistingNumericField &&
+								(fieldTypeParts.fieldType === "Int" ||
+									fieldTypeParts.fieldType === "BigInt")
 							) {
 								isAlreadyExist.fieldType = fieldTypeParts.fieldType;
 								isAlreadyExist.optional =

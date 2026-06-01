@@ -105,6 +105,54 @@ describe("generate", async () => {
 	it("should update an existing prisma int number field to bigint", () =>
 		runBigintToggleTest(false, true));
 
+	it("should not update existing prisma uuid id fields to serial ids", async () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-uuid-id-"));
+		const schemaPath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), schemaPath);
+		try {
+			const generate = (generateId: "uuid" | "serial") =>
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "postgresql",
+							},
+						),
+						plugins: [twoFactor(), username()],
+						advanced: {
+							database: {
+								generateId,
+							},
+						},
+					},
+				});
+
+			const first = await generate("uuid");
+			expect(first.code).toBeDefined();
+			fs.writeFileSync(schemaPath, first.code!);
+
+			const updated = await generate("serial");
+			const updatedSchema =
+				updated.code || fs.readFileSync(schemaPath, "utf-8");
+			expect(updatedSchema).toMatch(
+				/id\s+String\s+@id\s+@default\(dbgenerated\("pg_catalog\.gen_random_uuid\(\)"\)\)\s+@db\.Uuid/,
+			);
+			expect(updatedSchema).toMatch(/userId\s+String\s+@db\.Uuid/);
+			expect(updatedSchema).not.toMatch(/id\s+Int\s+@id.*@db\.Uuid/);
+			expect(updatedSchema).not.toMatch(/userId\s+Int\s+@db\.Uuid/);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+
 	it("should generate prisma schema with number id", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
