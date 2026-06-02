@@ -714,9 +714,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					const user =
 						await ctx.context.internalAdapter.findUserById(targetUserId);
 					if (!user) {
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: "User not found",
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							PASSKEY_ERROR_CODES.USER_NOT_FOUND,
+						);
 					}
 					const session =
 						await ctx.context.internalAdapter.createSession(targetUserId);
