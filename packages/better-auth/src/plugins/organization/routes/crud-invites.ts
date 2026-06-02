@@ -79,6 +79,10 @@ type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
 
+const shouldRequireEmailVerificationForInvitationById = (
+	options: OrganizationOptions,
+) => options.requireEmailVerificationOnInvitation === true;
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -615,13 +619,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			// Email-string equality is not ownership proof: a session whose user.email
-			// matches the invitation but has not been verified must not be treated as
-			// the invitation recipient. Gate is on by default; apps that intentionally
-			// allow unverified accept can opt out with `requireEmailVerificationOnInvitation: false`.
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireEmailVerificationForInvitationById(
+					ctx.context.orgOptions,
+				) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -818,9 +819,10 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireEmailVerificationForInvitationById(
+					ctx.context.orgOptions,
+				) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1083,9 +1085,10 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				);
 			}
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireEmailVerificationForInvitationById(
+					ctx.context.orgOptions,
+				) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1276,12 +1279,7 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			// When the caller has a session, require an ownership signal stronger
 			// than the email string before enumerating invitations targeted at it.
 			// Server-side SDK calls without a session are trusted and skip the gate.
-			// FIXME(next-minor): drop the option and make the gate unconditional.
-			if (
-				session &&
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
-				!session.user.emailVerified
-			) {
+			if (session && !session.user.emailVerified) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,

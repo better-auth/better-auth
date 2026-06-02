@@ -205,19 +205,17 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
-	 * Require email verification on session-authenticated recipient invitation
-	 * calls (accept, reject, get, list). Defaults to `true` so unverified
-	 * accounts registered against a victim's email cannot accept, read, or
-	 * enumerate invitations targeted at that email. Server-side
-	 * `listUserInvitations` calls without a session (caller passes
+	 * Require email verification before session-authenticated recipient
+	 * invitation calls that carry an invitation ID (accept, reject, get).
+	 * Defaults to `false` so the emailed invitation link can remain the
+	 * ownership signal for normal invite flows. Client-side
+	 * `listUserInvitations` calls always require a verified session email
+	 * because they enumerate invitation IDs from `session.user.email`.
+	 * Server-side `listUserInvitations` calls without a session (caller passes
 	 * `ctx.query.email`) continue to bypass the gate because the caller is
-	 * trusted. Set to `false` for backward compatibility on apps that do not
-	 * require email verification; understand the takeover risk before doing so.
+	 * trusted.
 	 *
-	 * @default true
-	 *
-	 * @deprecated The option will be removed on the next minor; the gate will
-	 * become unconditional. Plan to verify emails before invitation acceptance.
+	 * @default false
 	 */
 	requireEmailVerificationOnInvitation?: boolean | undefined;
 	/**
