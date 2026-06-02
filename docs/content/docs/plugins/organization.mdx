@@ -924,7 +924,9 @@ Make sure to call the `acceptInvitation` function after the user is logged in.
 
 #### Email Verification Requirement
 
-By default, accepting an invitation requires the invitation ID from the email link and a logged-in session whose email matches the invitation. When Better Auth uses built-in opaque invitation IDs, including the default generator or `advanced.database.generateId: "uuid"`, that is enough for the normal emailed-invitation flow. If invitation IDs are externally controlled or predictable, such as `advanced.database.generateId: "serial"` / `false` or a custom `advanced.generateId` function, Better Auth also requires verified email unless you explicitly set `requireEmailVerificationOnInvitation` to `false`. Set the option to `true` to always require verified email before accepting invitations.
+By default, accepting an invitation requires the invitation ID from the email link and a logged-in session whose email matches the invitation. When Better Auth uses built-in opaque invitation IDs, including the default generator or `advanced.database.generateId: "uuid"`, that remains enough for the normal emailed-invitation flow. If invitation IDs are externally controlled or predictable, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation, Better Auth also requires verified email unless you explicitly set `requireEmailVerificationOnInvitation` to `false`.
+
+Set `requireEmailVerificationOnInvitation` to `true` for the stricter posture. This is recommended when invitation IDs can be visible outside the invited user's mailbox, when your app exposes organization invitation lists to members, when you use custom invitation delivery, or when unverified email/password sessions are allowed and organization membership is sensitive. Requiring verified email before sign-in provides the same ownership proof earlier in the flow.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -1013,6 +1015,8 @@ To list all invitations for a given organization you can use the `listInvitation
   }
   ```
 </APIMethod>
+
+The response includes invitation IDs. Treat those IDs as action-capable invitation links. If users who can list organization invitations should not be able to use those IDs with unverified recipient sessions, enable `requireEmailVerificationOnInvitation` or add app-level permission checks around this endpoint.
 
 ### List user invitations
 
@@ -2520,4 +2524,4 @@ await client.organization.create({
 
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
 
-**requireEmailVerificationOnInvitation**: `boolean | undefined` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth requires verification for externally controlled or predictable invitation IDs, such as `advanced.database.generateId: "serial"` / `false` or a custom `advanced.generateId` function, and skips it for built-in opaque invitation IDs so emailed invitation links can remain the ownership signal. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.
+**requireEmailVerificationOnInvitation**: `boolean | undefined` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth preserves the normal emailed-invitation flow for built-in opaque invitation IDs, including the default generator and `advanced.database.generateId: "uuid"`. It requires verification for externally controlled or predictable invitation IDs, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation. Set this option to `true` when invitation IDs may be visible outside the invited user's mailbox, when organization invitation lists are exposed to members, or when you want verified email to be the ownership proof for by-ID invitation actions. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.
