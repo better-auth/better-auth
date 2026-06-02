@@ -924,7 +924,7 @@ Make sure to call the `acceptInvitation` function after the user is logged in.
 
 #### Email Verification Requirement
 
-By default, accepting an invitation requires the invitation ID from the email link and a logged-in session whose email matches the invitation. If you enable `requireEmailVerificationOnInvitation`, users must also verify their email address before they can accept invitations.
+By default, accepting an invitation requires the invitation ID from the email link and a logged-in session whose email matches the invitation. When Better Auth generates built-in opaque invitation IDs, that is enough for the normal emailed-invitation flow. If invitation IDs are database-generated or custom-generated, Better Auth also requires verified email unless you explicitly set `requireEmailVerificationOnInvitation` to `false`. Set the option to `true` to always require verified email before accepting invitations.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -975,10 +975,8 @@ If this user has received an invitation, but wants to decline it, this method wi
 </APIMethod>
 
 <Callout type="info">
-  Like accepting invitations, rejecting invitations also requires email
-  verification when the `requireEmailVerificationOnInvitation` option is
-  enabled. Users with unverified emails will receive an error when attempting to
-  reject invitations.
+  Rejecting invitations follows the same email-verification policy as accepting
+  invitations by ID.
 </Callout>
 
 ### Get Invitation
@@ -997,9 +995,8 @@ To get an invitation you can use the `organization.getInvitation` function provi
 </APIMethod>
 
 <Callout type="info">
-  Like accepting and rejecting invitations, getting an invitation by ID requires
-  email verification when the `requireEmailVerificationOnInvitation` option is
-  enabled.
+  Getting an invitation by ID follows the same email-verification policy as
+  accepting invitations by ID.
 </Callout>
 
 ### List Invitations
@@ -2523,4 +2520,4 @@ await client.organization.create({
 
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
 
-**requireEmailVerificationOnInvitation**: `boolean` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth requires verification for database-generated or custom-generated invitation IDs and skips it for built-in opaque invitation IDs so emailed invitation links can remain the ownership signal. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.
+**requireEmailVerificationOnInvitation**: `boolean | undefined` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth requires verification for database-generated or custom-generated invitation IDs and skips it for built-in opaque invitation IDs so emailed invitation links can remain the ownership signal. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.

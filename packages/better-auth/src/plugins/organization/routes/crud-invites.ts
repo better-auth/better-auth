@@ -79,28 +79,52 @@ type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
 
-type DatabaseGenerateIdOption =
+type ConfiguredGenerateIdOption =
 	| GenerateIdFn
 	| false
 	| "serial"
 	| "uuid"
 	| undefined;
 
-const hasBuiltInOpaqueInvitationIdGeneration = (
-	databaseGenerateId: DatabaseGenerateIdOption,
-) => databaseGenerateId === undefined || databaseGenerateId === "uuid";
+const getAdvancedGenerateId = (
+	advancedOptions: unknown,
+): GenerateIdFn | undefined => {
+	if (typeof advancedOptions !== "object" || advancedOptions === null) {
+		return undefined;
+	}
+	const generateId = (advancedOptions as { generateId?: unknown }).generateId;
+	if (typeof generateId !== "function") {
+		return undefined;
+	}
+	return generateId as GenerateIdFn;
+};
+
+const hasBuiltInOpaqueInvitationIdGeneration = ({
+	advancedGenerateId,
+	databaseGenerateId,
+}: {
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
+}) =>
+	advancedGenerateId === undefined &&
+	(databaseGenerateId === undefined || databaseGenerateId === "uuid");
 
 const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	organizationOptions,
+	advancedGenerateId,
 	databaseGenerateId,
 }: {
 	organizationOptions: OrganizationOptions;
-	databaseGenerateId: DatabaseGenerateIdOption;
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
 }) => {
 	if (organizationOptions.requireEmailVerificationOnInvitation !== undefined) {
 		return organizationOptions.requireEmailVerificationOnInvitation;
 	}
-	return !hasBuiltInOpaqueInvitationIdGeneration(databaseGenerateId);
+	return !hasBuiltInOpaqueInvitationIdGeneration({
+		advancedGenerateId,
+		databaseGenerateId,
+	});
 };
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
@@ -642,6 +666,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (
 				shouldRequireVerifiedEmailForInvitationIdAction({
 					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
 				}) &&
@@ -844,6 +871,9 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (
 				shouldRequireVerifiedEmailForInvitationIdAction({
 					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
 				}) &&
@@ -1112,6 +1142,9 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (
 				shouldRequireVerifiedEmailForInvitationIdAction({
 					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
 				}) &&

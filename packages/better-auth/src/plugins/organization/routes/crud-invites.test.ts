@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, GenerateIdFn } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
@@ -17,6 +17,12 @@ describe("organization invitation recipient ownership gates", async () => {
 		organizationOptions?: OrganizationOptions;
 	};
 
+	type AuthOptionsWithAdvancedGenerateId = Partial<BetterAuthOptions> & {
+		advanced: NonNullable<Partial<BetterAuthOptions>["advanced"]> & {
+			generateId: GenerateIdFn;
+		};
+	};
+
 	const databaseOwnedIdAuthOptions = {
 		advanced: {
 			database: {
@@ -24,6 +30,14 @@ describe("organization invitation recipient ownership gates", async () => {
 			},
 		},
 	} satisfies Partial<BetterAuthOptions>;
+
+	let customIdSequence = 0;
+	const customAdvancedIdAuthOptions = {
+		advanced: {
+			cookies: {},
+			generateId: ({ model }) => `${model}-custom-id-${customIdSequence++}`,
+		},
+	} satisfies AuthOptionsWithAdvancedGenerateId;
 
 	async function setupInvite({
 		authOptions,
@@ -104,7 +118,7 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(memberEmails).toContain(VICTIM_EMAIL);
 	});
 
-	it("rejects an invitation by ID from an unverified matching session by default", async () => {
+	it("marks an invitation rejected by ID from an unverified matching session by default", async () => {
 		const { client, signInWithUser, invitationId } = await setupInvite();
 		const recipientHeaders = await signUpUnverifiedRecipient(
 			client,
@@ -264,6 +278,24 @@ describe("organization invitation recipient ownership gates", async () => {
 		});
 		expect(reject.data).toBeNull();
 		expect(reject.error?.status).toBe(403);
+	});
+
+	it("requires verified email for invitation ID calls when advanced generateId is custom", async () => {
+		const { client, signInWithUser, invitationId } = await setupInvite({
+			authOptions: customAdvancedIdAuthOptions,
+		});
+		const recipientHeaders = await signUpUnverifiedRecipient(
+			client,
+			signInWithUser,
+		);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: recipientHeaders },
+		});
+
+		expect(accept.data).toBeNull();
+		expect(accept.error?.status).toBe(403);
 	});
 
 	it("accepts an invitation by ID with database-owned IDs when verification is explicitly disabled", async () => {
