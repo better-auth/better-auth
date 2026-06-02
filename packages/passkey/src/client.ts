@@ -235,7 +235,7 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
-			if ("session" in verified.data) {
+			if (verified.data.session) {
 				$store.notify("$sessionSignal");
 			}
 			if (opts?.returnWebAuthnResponse) {
