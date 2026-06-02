@@ -34,7 +34,7 @@ export const nextCookies = () => {
 		// refresh would only drift the DB ahead of the stale cookie. The client
 		// re-issues the refresh as a POST, where cookies are writable. The RSC
 		// context cannot be detected from request headers.
-		// @see .postmortem/rsc-header-detection.md
+		// @see https://github.com/better-auth/better-auth/issues/9776
 		init() {
 			// `defu` preserves an explicit user value, so this applies only when
 			// `deferSessionRefresh` is unset. Escape hatch: set it to `false`.
