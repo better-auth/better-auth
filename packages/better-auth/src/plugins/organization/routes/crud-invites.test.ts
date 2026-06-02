@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
@@ -11,9 +12,31 @@ describe("organization invitation recipient ownership gates", async () => {
 	const VICTIM_EMAIL = "victim@target.example";
 	const ATTACKER_PASSWORD = "attacker-password-123";
 
-	async function setupInvite(organizationOptions?: OrganizationOptions) {
+	type SetupInviteOptions = {
+		authOptions?: Partial<BetterAuthOptions>;
+		organizationOptions?: OrganizationOptions;
+	};
+
+	const databaseOwnedIdAuthOptions = {
+		advanced: {
+			database: {
+				generateId: "serial",
+			},
+		},
+	} satisfies Partial<BetterAuthOptions>;
+
+	async function setupInvite({
+		authOptions,
+		organizationOptions,
+	}: SetupInviteOptions = {}) {
 		const helpers = await getTestInstance(
-			{ plugins: [organization(organizationOptions)] },
+			{
+				...authOptions,
+				plugins: [
+					organization(organizationOptions),
+					...(authOptions?.plugins ?? []),
+				],
+			},
 			{ clientOptions: { plugins: [organizationClient()] } },
 		);
 		const { client, signInWithTestUser, cookieSetter } = helpers;
@@ -36,7 +59,7 @@ describe("organization invitation recipient ownership gates", async () => {
 			...helpers,
 			adminHeaders,
 			orgId: org.data!.id,
-			invitationId: invite.data!.id!,
+			invitationId: String(invite.data!.id!),
 		};
 	}
 
@@ -58,7 +81,7 @@ describe("organization invitation recipient ownership gates", async () => {
 		return headers;
 	}
 
-	it("accepts acceptInvitation by invitationId from an unverified matching session by default", async () => {
+	it("accepts an invitation by ID from an unverified matching session by default", async () => {
 		const { client, signInWithUser, invitationId, auth, adminHeaders } =
 			await setupInvite();
 		const recipientHeaders = await signUpUnverifiedRecipient(
@@ -81,7 +104,7 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(memberEmails).toContain(VICTIM_EMAIL);
 	});
 
-	it("accepts rejectInvitation by invitationId from an unverified matching session by default", async () => {
+	it("rejects an invitation by ID from an unverified matching session by default", async () => {
 		const { client, signInWithUser, invitationId } = await setupInvite();
 		const recipientHeaders = await signUpUnverifiedRecipient(
 			client,
@@ -96,7 +119,7 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(reject.error).toBeNull();
 	});
 
-	it("accepts getInvitation by invitationId from an unverified matching session by default", async () => {
+	it("gets an invitation by ID from an unverified matching session by default", async () => {
 		const { client, signInWithUser, invitationId } = await setupInvite();
 		const recipientHeaders = await signUpUnverifiedRecipient(
 			client,
@@ -130,9 +153,11 @@ describe("organization invitation recipient ownership gates", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3
 	 */
-	it("keeps listUserInvitations gated when token-bearing verification is disabled", async () => {
+	it("keeps listUserInvitations gated when invitation ID verification is disabled", async () => {
 		const { client, signInWithUser } = await setupInvite({
-			requireEmailVerificationOnInvitation: false,
+			organizationOptions: {
+				requireEmailVerificationOnInvitation: false,
+			},
 		});
 		const attackerHeaders = await signUpUnverifiedRecipient(
 			client,
@@ -147,9 +172,11 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(list.error?.status).toBe(403);
 	});
 
-	it("requires verified email for token-bearing calls when explicitly enabled", async () => {
+	it("requires verified email for invitation ID calls when explicitly enabled", async () => {
 		const acceptSetup = await setupInvite({
-			requireEmailVerificationOnInvitation: true,
+			organizationOptions: {
+				requireEmailVerificationOnInvitation: true,
+			},
 		});
 		const acceptHeaders = await signUpUnverifiedRecipient(
 			acceptSetup.client,
@@ -163,7 +190,9 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(accept.error?.status).toBe(403);
 
 		const getSetup = await setupInvite({
-			requireEmailVerificationOnInvitation: true,
+			organizationOptions: {
+				requireEmailVerificationOnInvitation: true,
+			},
 		});
 		const getHeaders = await signUpUnverifiedRecipient(
 			getSetup.client,
@@ -177,7 +206,9 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(got.error?.status).toBe(403);
 
 		const rejectSetup = await setupInvite({
-			requireEmailVerificationOnInvitation: true,
+			organizationOptions: {
+				requireEmailVerificationOnInvitation: true,
+			},
 		});
 		const rejectHeaders = await signUpUnverifiedRecipient(
 			rejectSetup.client,
@@ -191,9 +222,85 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(reject.error?.status).toBe(403);
 	});
 
+	it("requires verified email for invitation ID calls when the database owns IDs", async () => {
+		const acceptSetup = await setupInvite({
+			authOptions: databaseOwnedIdAuthOptions,
+		});
+		const acceptHeaders = await signUpUnverifiedRecipient(
+			acceptSetup.client,
+			acceptSetup.signInWithUser,
+		);
+		const accept = await acceptSetup.client.organization.acceptInvitation({
+			invitationId: acceptSetup.invitationId,
+			fetchOptions: { headers: acceptHeaders },
+		});
+		expect(accept.data).toBeNull();
+		expect(accept.error?.status).toBe(403);
+
+		const getSetup = await setupInvite({
+			authOptions: databaseOwnedIdAuthOptions,
+		});
+		const getHeaders = await signUpUnverifiedRecipient(
+			getSetup.client,
+			getSetup.signInWithUser,
+		);
+		const got = await getSetup.client.organization.getInvitation({
+			query: { id: getSetup.invitationId },
+			fetchOptions: { headers: getHeaders },
+		});
+		expect(got.data).toBeNull();
+		expect(got.error?.status).toBe(403);
+
+		const rejectSetup = await setupInvite({
+			authOptions: databaseOwnedIdAuthOptions,
+		});
+		const rejectHeaders = await signUpUnverifiedRecipient(
+			rejectSetup.client,
+			rejectSetup.signInWithUser,
+		);
+		const reject = await rejectSetup.client.organization.rejectInvitation({
+			invitationId: rejectSetup.invitationId,
+			fetchOptions: { headers: rejectHeaders },
+		});
+		expect(reject.data).toBeNull();
+		expect(reject.error?.status).toBe(403);
+	});
+
+	it("accepts an invitation by ID with database-owned IDs when verification is explicitly disabled", async () => {
+		const { client, signInWithUser, invitationId, auth, adminHeaders } =
+			await setupInvite({
+				authOptions: databaseOwnedIdAuthOptions,
+				organizationOptions: {
+					requireEmailVerificationOnInvitation: false,
+				},
+			});
+		const recipientHeaders = await signUpUnverifiedRecipient(
+			client,
+			signInWithUser,
+		);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: recipientHeaders },
+		});
+
+		expect(accept.error).toBeNull();
+		expect(accept.data?.invitation?.status).toBe("accepted");
+
+		const orgAfter = await auth.api.getFullOrganization({
+			headers: adminHeaders,
+		});
+		const memberEmails = (orgAfter?.members ?? []).map((m) => m.user.email);
+		expect(memberEmails).toContain(VICTIM_EMAIL);
+	});
+
 	it("accepts the invitation once the recipient verifies their email when verification is required", async () => {
 		const { client, signInWithUser, invitationId, auth, adminHeaders } =
-			await setupInvite({ requireEmailVerificationOnInvitation: true });
+			await setupInvite({
+				organizationOptions: {
+					requireEmailVerificationOnInvitation: true,
+				},
+			});
 		await client.signUp.email({
 			email: VICTIM_EMAIL,
 			password: ATTACKER_PASSWORD,

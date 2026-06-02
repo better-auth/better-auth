@@ -1,4 +1,4 @@
-import type { LiteralString } from "@better-auth/core";
+import type { GenerateIdFn, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -79,9 +79,29 @@ type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
 
-const shouldRequireEmailVerificationForInvitationById = (
-	options: OrganizationOptions,
-) => options.requireEmailVerificationOnInvitation === true;
+type DatabaseGenerateIdOption =
+	| GenerateIdFn
+	| false
+	| "serial"
+	| "uuid"
+	| undefined;
+
+const hasBuiltInOpaqueInvitationIdGeneration = (
+	databaseGenerateId: DatabaseGenerateIdOption,
+) => databaseGenerateId === undefined || databaseGenerateId === "uuid";
+
+const shouldRequireVerifiedEmailForInvitationIdAction = ({
+	organizationOptions,
+	databaseGenerateId,
+}: {
+	organizationOptions: OrganizationOptions;
+	databaseGenerateId: DatabaseGenerateIdOption;
+}) => {
+	if (organizationOptions.requireEmailVerificationOnInvitation !== undefined) {
+		return organizationOptions.requireEmailVerificationOnInvitation;
+	}
+	return !hasBuiltInOpaqueInvitationIdGeneration(databaseGenerateId);
+};
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -620,9 +640,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
-				shouldRequireEmailVerificationForInvitationById(
-					ctx.context.orgOptions,
-				) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -820,9 +842,11 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
-				shouldRequireEmailVerificationForInvitationById(
-					ctx.context.orgOptions,
-				) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1086,9 +1110,11 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			if (
-				shouldRequireEmailVerificationForInvitationById(
-					ctx.context.orgOptions,
-				) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
