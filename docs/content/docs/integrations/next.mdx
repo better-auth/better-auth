@@ -122,6 +122,12 @@ const signIn = async () => {
 }
 ```
 
+<Callout type="info">
+  `nextCookies()` auto-enables [`deferSessionRefresh`](/docs/concepts/session-management), so `GET` session reads stay write-free and RSC navigation never drifts the database session ahead of the cookie. The client re-issues the refresh as a writable `POST`.
+
+  Reading the session only on the server (no `createAuthClient`)? Set `session: { deferSessionRefresh: false }` to keep refreshing on `GET`.
+</Callout>
+
 ## Auth Protection
 
 In Next.js proxy/middleware, it's recommended to only check for the existence of a session cookie to handle redirection to avoid blocking requests by making API or database calls.
