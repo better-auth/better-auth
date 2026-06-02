@@ -74,10 +74,8 @@ export const i18n = <Locales extends string[]>(
 		availableLocales.includes(options.defaultLocale)
 	) {
 		defaultLocale = options.defaultLocale;
-	} else if (availableLocales.includes("en")) {
+	} else if (availableLocales.includes("en") || availableLocales.length > 0) {
 		defaultLocale = "en" as Locales[number];
-	} else if (availableLocales.length > 0) {
-		defaultLocale = availableLocales[0] as Locales[number];
 	} else {
 		throw new Error(
 			"i18n plugin: translations object is empty. At least one locale must be provided.",
