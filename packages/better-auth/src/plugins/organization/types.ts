@@ -207,11 +207,12 @@ export interface OrganizationOptions {
 	/**
 	 * Require email verification before session-authenticated recipient
 	 * invitation calls that carry an invitation ID (accept, reject, get).
-	 * When unset, Better Auth requires verification for database-generated or
-	 * custom-generated invitation IDs and skips it for built-in opaque
-	 * invitation IDs so emailed invitation links can remain the ownership
-	 * signal. Client-side `listUserInvitations` calls always require a verified
-	 * session email because they enumerate invitation IDs from
+	 * When unset, Better Auth requires verification for externally controlled or
+	 * predictable invitation IDs, such as `advanced.database.generateId:
+	 * "serial"` / `false` or a custom `advanced.generateId` function. Built-in
+	 * opaque invitation IDs can remain the ownership signal for emailed
+	 * invitation links. Client-side `listUserInvitations` calls always require a
+	 * verified session email because they enumerate invitation IDs from
 	 * `session.user.email`. Server-side `listUserInvitations` calls without a
 	 * session (caller passes `ctx.query.email`) continue to bypass the gate
 	 * because the caller is trusted.
