@@ -191,7 +191,72 @@ function getRequestBody(options: EndpointOptions): any {
 			},
 		};
 	}
+	if (options.body instanceof z.ZodIntersection) {
+		const { properties, required, additionalProperties } =
+			resolveIntersectionSchema(options.body);
+		return {
+			required: true,
+			content: {
+				"application/json": {
+					schema: {
+						type: "object",
+						properties,
+						required,
+						...(additionalProperties ? { additionalProperties: true } : {}),
+					},
+				},
+			},
+		};
+	}
 	return undefined;
+}
+
+/**
+ * Resolves a `ZodIntersection` body schema (e.g. `z.object({...}).and(z.record(...))`)
+ * into a flat object schema. The object members are merged into `properties`, while a
+ * record member (catch-all) is represented as `additionalProperties`. Without this the
+ * generator would skip the `requestBody` entirely for endpoints using intersections.
+ */
+function resolveIntersectionSchema(zodType: z.ZodType<any>): {
+	properties: Record<string, any>;
+	required: string[];
+	additionalProperties: boolean;
+} {
+	const result = {
+		properties: {} as Record<string, any>,
+		required: [] as string[],
+		additionalProperties: false,
+	};
+	const merge = (schema: z.ZodType<any>) => {
+		if (schema instanceof z.ZodOptional) {
+			merge(schema.unwrap() as z.ZodType<any>);
+			return;
+		}
+		if (schema instanceof z.ZodIntersection) {
+			const def = (schema as any)._def;
+			merge(def.left);
+			merge(def.right);
+			return;
+		}
+		if (schema instanceof z.ZodRecord) {
+			result.additionalProperties = true;
+			return;
+		}
+		if (schema instanceof z.ZodObject) {
+			const shape = (schema as any).shape;
+			if (!shape) return;
+			Object.entries(shape).forEach(([key, value]) => {
+				if (value instanceof z.ZodType) {
+					result.properties[key] = processZodType(value as z.ZodType<any>);
+					if (!(value instanceof z.ZodOptional)) {
+						result.required.push(key);
+					}
+				}
+			});
+		}
+	};
+	merge(zodType);
+	return result;
 }
 
 function processZodType(zodType: z.ZodType<any>): any {

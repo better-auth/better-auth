@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { emailOTP } from "../email-otp";
 import { openAPI } from ".";
 
 describe("open-api", async () => {
@@ -314,5 +315,45 @@ describe("open-api", async () => {
 		expect(signUpProps.rememberMe).toBeDefined();
 		const baseTypes = getBaseType(signUpProps.rememberMe.type);
 		expect(baseTypes).toContain("boolean");
+	});
+});
+
+describe("open-api request body for intersection schemas", async () => {
+	const { auth } = await getTestInstance({
+		plugins: [
+			openAPI(),
+			emailOTP({
+				async sendVerificationOTP() {},
+			}),
+		],
+	});
+
+	/**
+	 * Endpoints whose body uses `z.object({...}).and(z.record(...))` (a `ZodIntersection`)
+	 * used to be skipped by the generator, leaving the operation without a `requestBody`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9679
+	 */
+	it("should generate a requestBody for endpoints using intersection body schemas", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const signInEmailOTP = paths["/sign-in/email-otp"];
+		expect(signInEmailOTP).toBeDefined();
+
+		const requestBody = signInEmailOTP.post.requestBody;
+		expect(requestBody).toBeDefined();
+
+		const bodySchema = requestBody.content["application/json"].schema;
+		expect(bodySchema.type).toBe("object");
+		// Defined members of the intersected object are exposed as properties.
+		expect(bodySchema.properties.email).toBeDefined();
+		expect(bodySchema.properties.otp).toBeDefined();
+		expect(bodySchema.required).toContain("email");
+		expect(bodySchema.required).toContain("otp");
+		// Optional members are not required.
+		expect(bodySchema.required).not.toContain("name");
+		// The `z.record(...)` catch-all is represented as additionalProperties.
+		expect(bodySchema.additionalProperties).toBe(true);
 	});
 });
