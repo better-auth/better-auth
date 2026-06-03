@@ -2,12 +2,24 @@ import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
-import { createAuthMiddleware } from "@better-auth/core/api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import * as z from "zod";
+import { setOAuthState } from "../../api/state/oauth";
+import { getAwaitableValue } from "../../context/helpers";
 import {
 	expireCookie,
 	parseSetCookieHeader,
 	toCookieOptions,
 } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import type { StateData } from "../../state";
+import { generateGenericState } from "../../state";
+import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { PACKAGE_VERSION } from "../../version";
 import {
 	OAUTH_POPUP_DATA_ELEMENT_ID,
@@ -122,47 +134,99 @@ function renderCompletion(
 }
 
 /**
- * Server plugin for popup-based OAuth. On sign-in it records the opener origin;
- * on the OAuth callback it replaces the redirect with a page that posts the
- * session token back. Pair with the `bearer` plugin and `oauthPopupClient`.
+ * Starts the OAuth flow for a popup. The popup navigates here (top-level, so it
+ * is first-party to the auth origin even when the app is on another origin),
+ * the server sets the state + opener-marker cookies in the right partition, then
+ * redirects to the provider. The callback then renders the completion page.
+ */
+const oauthPopupStart = createAuthEndpoint(
+	"/oauth-popup/start",
+	{
+		method: "GET",
+		query: z.object({
+			provider: z.string(),
+			popupOrigin: z.string(),
+			popupNonce: z.string().optional(),
+			callbackURL: z.string().optional(),
+			errorCallbackURL: z.string().optional(),
+			newUserCallbackURL: z.string().optional(),
+			scopes: z.string().optional(),
+			requestSignUp: z.string().optional(),
+			additionalData: z.string().optional(),
+		}),
+		metadata: HIDE_METADATA,
+	},
+	async (c) => {
+		const { popupOrigin } = c.query;
+		if (
+			!c.context.isTrustedOrigin(popupOrigin, { allowRelativePaths: false })
+		) {
+			c.context.logger.error(
+				`OAuth popup origin is not a trusted origin. Add ${popupOrigin} to trustedOrigins.`,
+			);
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+		}
+
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.query.provider,
+		});
+		if (!provider) {
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
+		}
+
+		const callbackURL = c.query.callbackURL || c.context.baseURL;
+
+		const codeVerifier = generateRandomString(128);
+		const stateData: StateData = {
+			...(c.query.additionalData
+				? (safeJSONParse<Record<string, unknown>>(c.query.additionalData) ?? {})
+				: {}),
+			callbackURL,
+			codeVerifier,
+			errorURL: c.query.errorCallbackURL,
+			newUserURL: c.query.newUserCallbackURL,
+			requestSignUp: c.query.requestSignUp === "true" ? true : undefined,
+			expiresAt: Date.now() + 10 * 60 * 1000,
+		};
+		await setOAuthState(stateData);
+		const { state } = await generateGenericState(c, stateData);
+
+		// Remember the opener so the callback's completion page can post to it.
+		const marker = c.context.createAuthCookie(POPUP_MARKER_COOKIE, {
+			maxAge: 10 * 60,
+		});
+		await c.setSignedCookie(
+			marker.name,
+			JSON.stringify({ popupOrigin, popupNonce: c.query.popupNonce ?? "" }),
+			c.context.secret,
+			marker.attributes,
+		);
+
+		const url = await provider.createAuthorizationURL({
+			state,
+			codeVerifier,
+			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
+		});
+
+		throw c.redirect(url.toString());
+	},
+);
+
+/**
+ * Server plugin for popup-based OAuth. `signIn.popup` navigates the popup to
+ * `/oauth-popup/start`; on the OAuth callback this plugin swaps the redirect for
+ * a page that posts the session token (or error) back to the opener. Pair with
+ * the `bearer` plugin and `oauthPopupClient`.
  */
 export const oauthPopup = () => {
 	return {
 		id: "oauth-popup",
 		version: PACKAGE_VERSION,
 		$ERROR_CODES: OAUTH_POPUP_ERROR_CODES,
+		endpoints: { oauthPopupStart },
 		hooks: {
 			after: [
-				{
-					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
-					},
-					handler: createAuthMiddleware(async (c) => {
-						const additionalData = c.body?.additionalData;
-						const popupOrigin = additionalData?.popupOrigin;
-						if (typeof popupOrigin !== "string" || !popupOrigin) {
-							return;
-						}
-						const popupNonce =
-							typeof additionalData?.popupNonce === "string"
-								? additionalData.popupNonce
-								: "";
-
-						const cookie = c.context.createAuthCookie(POPUP_MARKER_COOKIE, {
-							maxAge: 10 * 60,
-						});
-						await c.setSignedCookie(
-							cookie.name,
-							JSON.stringify({ popupOrigin, popupNonce }),
-							c.context.secret,
-							cookie.attributes,
-						);
-					}),
-				},
-
 				{
 					matcher(context) {
 						return !!(

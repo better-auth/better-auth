@@ -236,7 +236,11 @@ export function createSignInPopup({
 			additionalData,
 			windowFeatures,
 			timeoutMs = DEFAULT_TIMEOUT_MS,
-			...signInBody
+			callbackURL,
+			errorCallbackURL,
+			newUserCallbackURL,
+			scopes,
+			requestSignUp,
 		} = opts;
 
 		if (!provider && !providerId) {
@@ -248,9 +252,35 @@ export function createSignInPopup({
 			return popupError("POPUP_SIGN_IN_FAILED");
 		}
 
+		const nonce = randomNonce();
+		const authUrl = resolveAuthURL(options);
+		const authOrigin = authUrl.origin;
+
+		// Navigate the popup straight to the server start endpoint on the auth
+		// origin, so it is first-party there and the state/marker cookies land in
+		// the right partition even when the app is on a different origin.
+		const startUrl = new URL(
+			`${authUrl.href.replace(/\/$/, "")}/oauth-popup/start`,
+		);
+		startUrl.searchParams.set("provider", (provider ?? providerId) as string);
+		startUrl.searchParams.set("popupOrigin", window.location.origin);
+		startUrl.searchParams.set("popupNonce", nonce);
+		if (callbackURL) startUrl.searchParams.set("callbackURL", callbackURL);
+		if (errorCallbackURL)
+			startUrl.searchParams.set("errorCallbackURL", errorCallbackURL);
+		if (newUserCallbackURL)
+			startUrl.searchParams.set("newUserCallbackURL", newUserCallbackURL);
+		if (scopes?.length) startUrl.searchParams.set("scopes", scopes.join(","));
+		if (requestSignUp) startUrl.searchParams.set("requestSignUp", "true");
+		if (additionalData)
+			startUrl.searchParams.set(
+				"additionalData",
+				JSON.stringify(additionalData),
+			);
+
 		// Open synchronously in the user gesture so the browser doesn't block it.
 		const popup = window.open(
-			"about:blank",
+			startUrl.toString(),
 			POPUP_NAME,
 			windowFeatures ?? centeredFeatures(),
 		);
@@ -258,45 +288,6 @@ export function createSignInPopup({
 			return popupError("POPUP_BLOCKED");
 		}
 		activePopup = popup;
-
-		const nonce = randomNonce();
-		const authUrl = resolveAuthURL(options);
-		const authOrigin = authUrl.origin;
-		const signInPath = providerId ? "sign-in/oauth2" : "sign-in/social";
-		const signInUrl = `${authUrl.href.replace(/\/$/, "")}/${signInPath}`;
-
-		// `popup.fetch` so the state cookie lands in the popup's partition.
-		let authorizationUrl: string | undefined;
-		try {
-			const response = await popup.fetch(signInUrl, {
-				method: "POST",
-				credentials: "include",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({
-					...signInBody,
-					...(provider ? { provider } : { providerId }),
-					disableRedirect: true,
-					additionalData: {
-						...additionalData,
-						popupOrigin: window.location.origin,
-						popupNonce: nonce,
-					},
-				}),
-			});
-			authorizationUrl = ((await response.json()) as { url?: string })?.url;
-		} catch {
-			authorizationUrl = undefined;
-		}
-
-		if (!authorizationUrl) {
-			activePopup = null;
-			try {
-				popup.close();
-			} catch {}
-			return popupError("POPUP_SIGN_IN_FAILED");
-		}
-
-		popup.location.href = authorizationUrl;
 
 		const outcome = await waitForPopupResult(
 			popup,
