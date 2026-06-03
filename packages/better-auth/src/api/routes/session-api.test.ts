@@ -126,6 +126,53 @@ describe("session", async () => {
 		});
 	});
 
+	it("should require a fresh session to list sessions", async () => {
+		vi.useFakeTimers();
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		vi.setSystemTime(now);
+
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			session: {
+				freshAge: 60,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(now.getTime() - 5 * 60 * 1000),
+				updatedAt: now,
+			},
+		});
+
+		const response = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(response.data).toBeNull();
+		expect(response.error).toMatchObject({
+			status: 403,
+			statusText: "FORBIDDEN",
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
 	it("should update session when update age is reached", async () => {
 		const { client, testUser } = await getTestInstance({
 			session: {
