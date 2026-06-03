@@ -58,6 +58,7 @@ export const OAUTH_POPUP_COMPLETE_SCRIPT = `(function () {
 					nonce: payload.nonce,
 					token: payload.token,
 					redirectTo: payload.redirectTo,
+					error: payload.error,
 				},
 				payload.targetOrigin,
 			);
@@ -71,23 +72,17 @@ export const OAUTH_POPUP_COMPLETE_SCRIPT = `(function () {
  * sha256 of `OAUTH_POPUP_COMPLETE_SCRIPT`, pinned in the completion CSP.
  */
 export const OAUTH_POPUP_SCRIPT_CSP_HASH =
-	"sha256-YeEJFsSmAzlAW+CfCmaOYDwHrN9yQQbZcM8sn8dK/aA=";
+	"sha256-tIo2K8VBC9SnhvdZ+9GsGkQoZm+jm/JcxL+d+i8b8KQ=";
 
 /**
- * Renders the page that posts the session token to the opener.
+ * Renders the page that posts the outcome (token or error) to the opener.
  * Returns `null` for an untrusted origin -> the caller keeps the redirect.
  */
 function renderCompletion(
 	c: GenericEndpointContext,
-	options: {
-		popupOrigin: string;
-		popupNonce: string;
-		redirectTo: string;
-		token: string;
-	},
+	popupOrigin: string,
+	message: Omit<OAuthPopupData, "type" | "targetOrigin">,
 ): Response | null {
-	const { popupOrigin, popupNonce, redirectTo, token } = options;
-
 	if (!c.context.isTrustedOrigin(popupOrigin, { allowRelativePaths: false })) {
 		c.context.logger.error(
 			`OAuth popup origin is not a trusted origin. Add ${popupOrigin} to trustedOrigins.`,
@@ -95,7 +90,7 @@ function renderCompletion(
 		return null;
 	}
 
-	if (!warnedMissingBearer && !c.context.hasPlugin("bearer")) {
+	if (message.token && !warnedMissingBearer && !c.context.hasPlugin("bearer")) {
 		warnedMissingBearer = true;
 		c.context.logger.warn(
 			"OAuth popup hands the session token back via postMessage, but the `bearer` plugin is not registered, so an embedded (cross-site iframe) app cannot authenticate with it. Add bearer() to your auth `plugins`.",
@@ -104,10 +99,8 @@ function renderCompletion(
 
 	const data: OAuthPopupData = {
 		type: OAUTH_POPUP_MESSAGE_TYPE,
-		nonce: popupNonce,
-		token,
-		redirectTo,
 		targetOrigin: popupOrigin,
+		...message,
 	};
 
 	const html = `<!doctype html>
@@ -204,28 +197,46 @@ export const oauthPopup = () => {
 							return;
 						}
 
-						// The session token is the value `setSessionCookie` just wrote
-						// -> the same value the bearer plugin exposes and accepts.
-						const setCookie = c.context.responseHeaders?.get("set-cookie");
-						if (!setCookie) return;
+						// On success the session token is the value `setSessionCookie`
+						// just wrote (the same value the bearer plugin accepts); on
+						// failure the callback redirects to the error URL with no token.
+						const setCookie =
+							c.context.responseHeaders?.get("set-cookie") ?? "";
 						const token = parseSetCookieHeader(setCookie).get(
 							c.context.authCookies.sessionToken.name,
 						)?.value;
-						if (!token) return;
 
-						const response = renderCompletion(c, {
-							popupOrigin,
-							popupNonce,
-							redirectTo,
-							token,
-						});
-						if (!response) return; // untrusted origin -> keep the redirect
-
-						// `setSessionCookie` wrote the session cookies to the handler response scope,
-						// which overriding the response would drop -> re-set them on this hook scope.
-						for (const [name, attrs] of parseSetCookieHeader(setCookie)) {
-							c.setCookie(name, attrs.value ?? "", toCookieOptions(attrs));
+						let response: Response | null;
+						if (token) {
+							response = renderCompletion(c, popupOrigin, {
+								nonce: popupNonce,
+								token,
+								redirectTo,
+							});
+							// `setSessionCookie` wrote the session cookies to the handler
+							// response scope, which overriding the response would drop, so
+							// re-set them on this hook's scope.
+							for (const [name, attrs] of parseSetCookieHeader(setCookie)) {
+								c.setCookie(name, attrs.value ?? "", toCookieOptions(attrs));
+							}
+						} else {
+							const error = new URL(
+								redirectTo,
+								c.context.baseURL,
+							).searchParams.get("error");
+							if (!error) return; // unrecognized outcome -> keep the redirect
+							response = renderCompletion(c, popupOrigin, {
+								nonce: popupNonce,
+								error: {
+									code: error,
+									description:
+										new URL(redirectTo, c.context.baseURL).searchParams.get(
+											"error_description",
+										) ?? undefined,
+								},
+							});
 						}
+						if (!response) return; // untrusted origin -> keep the redirect
 
 						// replace the thrown redirect with the completion page.
 						c.context.returned = response;

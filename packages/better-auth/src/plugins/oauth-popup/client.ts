@@ -9,6 +9,7 @@ import { PACKAGE_VERSION } from "../../version";
 import type { oauthPopup } from ".";
 import { OAUTH_POPUP_MESSAGE_TYPE, POPUP_TOKEN_STORAGE_KEY } from "./constants";
 import { OAUTH_POPUP_ERROR_CODES } from "./error-codes";
+import type { OAuthPopupError } from "./types";
 
 /** Inputs for `authClient.signIn.popup`; mirror the redirect sign-in. */
 export interface SignInPopupOptions {
@@ -82,9 +83,8 @@ function clearPopupToken(): void {
 }
 
 /**
- * Attaches the popup token as a bearer header, but only inside a cross-site
- * iframe where the session cookie is partitioned away. At top level the cookie
- * works, so nothing is attached and a stale token can't shadow it.
+ * Attaches the popup token as a bearer header when embedded (where the cookie is
+ * partitioned), and clears it once the session ends so it can't be reused.
  */
 export const popupBearerFetchPlugin: BetterFetchPlugin = {
 	id: "better-auth-popup-bearer",
@@ -101,6 +101,19 @@ export const popupBearerFetchPlugin: BetterFetchPlugin = {
 				headers.set("authorization", `Bearer ${token}`);
 			}
 			return { ...context, headers };
+		},
+		onSuccess(context) {
+			// Clear the stored token once the session ends
+			const path = new URL(context.request.url).pathname;
+			if (
+				path.endsWith("/sign-out") ||
+				path.endsWith("/revoke-session") ||
+				path.endsWith("/revoke-sessions") ||
+				path.endsWith("/revoke-other-sessions") ||
+				path.endsWith("/delete-user")
+			) {
+				clearPopupToken();
+			}
 		},
 	},
 };
@@ -134,13 +147,17 @@ function randomNonce(): string {
 	return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-type PopupOutcome = { token: string } | { reason: "cancelled" | "timeout" };
+type PopupOutcome =
+	| { status: "success"; token: string }
+	| { status: "error"; error: OAuthPopupError }
+	| { status: "cancelled" }
+	| { status: "timeout" };
 
 /**
- * Resolves with the token once the completion page posts it back,
- * gating on origin, type, and nonce.
+ * Resolves with the token (or relayed error) once the completion page posts
+ * back, gating on origin, type, and nonce.
  */
-function waitForPopupToken(
+function waitForPopupResult(
 	popup: Window,
 	expectedOrigin: string,
 	nonce: string,
@@ -164,13 +181,17 @@ function waitForPopupToken(
 			const data = event.data;
 			if (data?.type !== OAUTH_POPUP_MESSAGE_TYPE) return;
 			if (data.nonce !== nonce) return;
+			if (data.error) {
+				settle({ status: "error", error: data.error });
+				return;
+			}
 			if (typeof data.token !== "string" || !data.token) return;
-			settle({ token: data.token });
+			settle({ status: "success", token: data.token });
 		};
 		const closedPoll = setInterval(() => {
-			if (popup.closed) settle({ reason: "cancelled" });
+			if (popup.closed) settle({ status: "cancelled" });
 		}, CLOSED_POLL_MS);
-		const timeout = setTimeout(() => settle({ reason: "timeout" }), timeoutMs);
+		const timeout = setTimeout(() => settle({ status: "timeout" }), timeoutMs);
 		window.addEventListener("message", onMessage);
 	});
 }
@@ -277,17 +298,23 @@ export function createSignInPopup({
 
 		popup.location.href = authorizationUrl;
 
-		const outcome = await waitForPopupToken(
+		const outcome = await waitForPopupResult(
 			popup,
 			authOrigin,
 			nonce,
 			timeoutMs,
 		);
 		activePopup = null;
-		if (!("token" in outcome)) {
-			return outcome.reason === "timeout"
-				? popupError("POPUP_TIMEOUT")
-				: popupError("POPUP_CLOSED");
+		if (outcome.status === "timeout") return popupError("POPUP_TIMEOUT");
+		if (outcome.status === "cancelled") return popupError("POPUP_CLOSED");
+		if (outcome.status === "error") {
+			return {
+				data: null,
+				error: {
+					code: outcome.error.code,
+					message: outcome.error.description || outcome.error.code,
+				},
+			};
 		}
 
 		// Persist the token only when embedded (the bearer plugin reads it there).
