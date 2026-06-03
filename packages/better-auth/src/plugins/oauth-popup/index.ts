@@ -87,21 +87,15 @@ export const OAUTH_POPUP_SCRIPT_CSP_HASH =
 	"sha256-tIo2K8VBC9SnhvdZ+9GsGkQoZm+jm/JcxL+d+i8b8KQ=";
 
 /**
- * Renders the page that posts the outcome (token or error) to the opener.
- * Returns `null` for an untrusted origin -> the caller keeps the redirect.
+ * Renders the page that posts the outcome (token or error) to the opener. The
+ * caller must pass a trusted `popupOrigin` — validated at `/oauth-popup/start`
+ * and preserved in the signed marker cookie the callback reads.
  */
 function renderCompletion(
 	c: GenericEndpointContext,
 	popupOrigin: string,
 	message: Omit<OAuthPopupData, "type" | "targetOrigin">,
-): Response | null {
-	if (!c.context.isTrustedOrigin(popupOrigin, { allowRelativePaths: false })) {
-		c.context.logger.error(
-			`OAuth popup origin is not a trusted origin. Add ${popupOrigin} to trustedOrigins.`,
-		);
-		return null;
-	}
-
+): Response {
 	if (message.token && !warnedMissingBearer && !c.context.hasPlugin("bearer")) {
 		warnedMissingBearer = true;
 		c.context.logger.warn(
@@ -158,6 +152,8 @@ const oauthPopupStart = createAuthEndpoint(
 	},
 	async (c) => {
 		const { popupOrigin } = c.query;
+		// The opener must be trusted before we postMessage anything to it; if not,
+		// we can't safely relay, so reject hard.
 		if (
 			!c.context.isTrustedOrigin(popupOrigin, { allowRelativePaths: false })
 		) {
@@ -167,11 +163,49 @@ const oauthPopupStart = createAuthEndpoint(
 			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
 		}
 
+		// Once the opener is trusted, relay start-stage failures to it as a
+		// completion error page (so it isn't left waiting for a timeout).
+		const fail = (code: string, description?: string) =>
+			renderCompletion(c, popupOrigin, {
+				nonce: c.query.popupNonce ?? "",
+				error: { code, description },
+			});
+
+		// `originCheckMiddleware` skips GET, so mirror its trusted-origin check on
+		// the redirect URLs here, relaying the failure to the opener rather than
+		// throwing.
+		const validateRedirect = (url: string | undefined, code: string) => {
+			if (
+				!url ||
+				c.context.isTrustedOrigin(url, { allowRelativePaths: true })
+			) {
+				return undefined;
+			}
+			c.context.logger.error(`Invalid redirect URL: ${url}`);
+			return fail(code, `Untrusted URL: ${url}`);
+		};
+		const invalidRedirect =
+			validateRedirect(c.query.callbackURL, "invalid_callback_url") ??
+			validateRedirect(
+				c.query.errorCallbackURL,
+				"invalid_error_callback_url",
+			) ??
+			validateRedirect(
+				c.query.newUserCallbackURL,
+				"invalid_new_user_callback_url",
+			);
+		if (invalidRedirect) return invalidRedirect;
+
+		// `getAwaitableValue(socialProviders, ...)` resolves built-in social and
+		// generic-oauth providers alike (generic-oauth merges into socialProviders).
 		const provider = await getAwaitableValue(c.context.socialProviders, {
 			value: c.query.provider,
 		});
 		if (!provider) {
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
+			return fail(
+				"provider_not_found",
+				`Unknown provider: ${c.query.provider}`,
+			);
 		}
 
 		const callbackURL = c.query.callbackURL || c.context.baseURL;
@@ -270,7 +304,7 @@ export const oauthPopup = () => {
 							c.context.authCookies.sessionToken.name,
 						)?.value;
 
-						let response: Response | null;
+						let response: Response;
 						if (token) {
 							response = renderCompletion(c, popupOrigin, {
 								nonce: popupNonce,
@@ -300,7 +334,6 @@ export const oauthPopup = () => {
 								},
 							});
 						}
-						if (!response) return; // untrusted origin -> keep the redirect
 
 						// replace the thrown redirect with the completion page.
 						c.context.returned = response;
