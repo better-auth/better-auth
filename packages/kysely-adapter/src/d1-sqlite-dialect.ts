@@ -15,11 +15,14 @@ import type {
 	TableMetadata,
 } from "kysely";
 import {
+	CompiledQuery,
+	DefaultQueryCompiler,
+	sql,
+} from "kysely";
+import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	SqliteAdapter,
-	SqliteQueryCompiler,
-} from "kysely";
+} from "kysely/migration";
 
 class D1SqliteAdapter extends SqliteAdapter {}
 
