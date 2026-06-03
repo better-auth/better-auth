@@ -291,4 +291,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/mhbdev.png",
 		},
 	},
+	{
+		name: "@dbsc-toolkit/better-auth",
+		url: "https://www.npmjs.com/package/@dbsc-toolkit/better-auth",
+		description:
+			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+		author: {
+			name: "SulimanAbdulrazzaq",
+			github: "SulimanAbdulrazzaq",
+			avatar: "https://github.com/SulimanAbdulrazzaq.png",
+		},
+	},
 ];
