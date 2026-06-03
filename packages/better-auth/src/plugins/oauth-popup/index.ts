@@ -210,38 +210,45 @@ const oauthPopupStart = createAuthEndpoint(
 
 		const callbackURL = c.query.callbackURL || c.context.baseURL;
 
-		const codeVerifier = generateRandomString(128);
-		const stateData: StateData = {
-			...(c.query.additionalData
-				? (safeJSONParse<Record<string, unknown>>(c.query.additionalData) ?? {})
-				: {}),
-			callbackURL,
-			codeVerifier,
-			errorURL: c.query.errorCallbackURL,
-			newUserURL: c.query.newUserCallbackURL,
-			requestSignUp: c.query.requestSignUp === "true" ? true : undefined,
-			expiresAt: Date.now() + 10 * 60 * 1000,
-		};
-		await setOAuthState(stateData);
-		const { state } = await generateGenericState(c, stateData);
+		let url: URL;
+		try {
+			const codeVerifier = generateRandomString(128);
+			const stateData: StateData = {
+				...(c.query.additionalData
+					? (safeJSONParse<Record<string, unknown>>(c.query.additionalData) ??
+						{})
+					: {}),
+				callbackURL,
+				codeVerifier,
+				errorURL: c.query.errorCallbackURL,
+				newUserURL: c.query.newUserCallbackURL,
+				requestSignUp: c.query.requestSignUp === "true" ? true : undefined,
+				expiresAt: Date.now() + 10 * 60 * 1000,
+			};
+			await setOAuthState(stateData);
+			const { state } = await generateGenericState(c, stateData);
 
-		// Remember the opener so the callback's completion page can post to it.
-		const marker = c.context.createAuthCookie(POPUP_MARKER_COOKIE, {
-			maxAge: 10 * 60,
-		});
-		await c.setSignedCookie(
-			marker.name,
-			JSON.stringify({ popupOrigin, popupNonce: c.query.popupNonce ?? "" }),
-			c.context.secret,
-			marker.attributes,
-		);
+			// Remember the opener so the callback's completion page can post to it.
+			const marker = c.context.createAuthCookie(POPUP_MARKER_COOKIE, {
+				maxAge: 10 * 60,
+			});
+			await c.setSignedCookie(
+				marker.name,
+				JSON.stringify({ popupOrigin, popupNonce: c.query.popupNonce ?? "" }),
+				c.context.secret,
+				marker.attributes,
+			);
 
-		const url = await provider.createAuthorizationURL({
-			state,
-			codeVerifier,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
-			scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
-		});
+			url = await provider.createAuthorizationURL({
+				state,
+				codeVerifier,
+				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
+			});
+		} catch (error) {
+			c.context.logger.error("OAuth popup failed to start", error);
+			return fail("popup_sign_in_failed", "Failed to start the OAuth flow.");
+		}
 
 		throw c.redirect(url.toString());
 	},
