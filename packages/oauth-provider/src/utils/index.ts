@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
@@ -133,6 +134,71 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
 		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
 	);
+}
+
+/**
+ * Normalizes OAuth resource values into a non-empty string array.
+ */
+export function toResourceList(
+	value: string | string[] | undefined,
+): string[] | undefined {
+	if (typeof value === "string") return [value];
+	if (!value?.length) return undefined;
+	return value;
+}
+
+/**
+ * Normalizes audience values for JWT claims.
+ */
+export function toAudienceClaim(
+	audience: string | string[] | undefined,
+): string | string[] | undefined {
+	if (typeof audience === "string") return audience;
+	if (!audience?.length) return undefined;
+	return audience.length === 1 ? audience.at(0) : audience;
+}
+
+/**
+ * Checks the resource parameter, if provided,
+ * and returns either a valid audience or a tagged validation error.
+ */
+export async function checkResource(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	resource: string | string[] | undefined,
+	scopes: string[],
+) {
+	const normalizedResource = toResourceList(resource);
+	const audience = normalizedResource ? [...normalizedResource] : undefined;
+	if (audience) {
+		// Adds /userinfo to audience
+		const hasOpenId = scopes.includes("openid");
+		const baseUrl = ctx.context.baseURL;
+		const userInfoEndpoint = `${baseUrl}/oauth2/userinfo`;
+		if (hasOpenId && !audience.includes(userInfoEndpoint)) {
+			audience.push(userInfoEndpoint);
+		}
+		// Check valid audiences
+		const filteredValidAudiences = opts.validAudiences?.filter(
+			(aud) => aud.length,
+		);
+		const validAudiences = new Set(
+			filteredValidAudiences?.length ? filteredValidAudiences : [baseUrl],
+		);
+		if (hasOpenId) validAudiences.add(userInfoEndpoint);
+		for (const aud of audience) {
+			if (!validAudiences.has(aud)) {
+				return {
+					success: false,
+					error: "invalid_resource",
+				};
+			}
+		}
+	}
+	return {
+		success: true,
+		audience: toAudienceClaim(audience),
+	};
 }
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
@@ -416,27 +482,23 @@ export async function getStoredToken(
  *
  * @internal
  */
+// RFC 7235 §2.1: the auth scheme is case-insensitive and is followed by
+// one or more SP. Match liberally so requests using `basic` or extra
+// spaces aren't rejected before reaching the spec-correct decoder.
+const BASIC_SCHEME_PREFIX = /^Basic +/i;
+
 function basicToClientCredentials(authorization: string) {
-	if (authorization.startsWith("Basic ")) {
-		const encoded = authorization.replace("Basic ", "");
-		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		const [id, secret] = decoded.split(":", 2);
-		if (!id || !secret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		return {
-			client_id: id,
-			client_secret: secret,
-		};
+	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
+		return undefined;
+	}
+	try {
+		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
+		return { client_id: clientId, client_secret: clientSecret };
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid authorization header format",
+			error: "invalid_client",
+		});
 	}
 }
 
@@ -739,22 +801,28 @@ export function searchParamsToQuery(
 	return result;
 }
 
-/**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
- */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
+export const signedQueryIssuedAtParam = "ba_iat";
+export const postLoginClearedParam = "ba_pl";
+
+export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
+	if (!raw) return null;
+	const issuedAt = Number(raw);
+	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+	return new Date(issuedAt);
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return searchParamsToQuery(query);
+	return nextQuery;
 }
 
 enum PKCERequirementErrors {

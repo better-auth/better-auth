@@ -678,6 +678,7 @@ describe("private_key_jwt registration validation", async () => {
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
+				consentPage: "/consent",
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

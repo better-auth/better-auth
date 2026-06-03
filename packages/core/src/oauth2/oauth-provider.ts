@@ -35,6 +35,13 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string | undefined;
 		loginHint?: string | undefined;
+		/**
+		 * Extra query parameters to append to the authorization URL.
+		 * Providers forward these to the shared `createAuthorizationURL` helper,
+		 * which drops any keys present in `RESERVED_AUTHORIZATION_PARAMS`
+		 * before applying them.
+		 */
+		additionalParams?: Record<string, string> | undefined;
 	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {
@@ -95,6 +102,17 @@ export interface OAuthProvider<
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
+	 * Accept callbacks that arrive without a `state` parameter. When true,
+	 * the shared OAuth callback handler restarts the flow server-side with
+	 * fresh `state` and PKCE instead of rejecting the request. Intended for
+	 * providers that initiate OAuth without RP-side flow kickoff (e.g.
+	 * Clever). Leave unset for any provider that always initiates from the
+	 * RP.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
+	/**
 	 * Options for the provider
 	 */
 	options?: O | undefined;
@@ -104,9 +122,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
 	 * The client ID of your application.
 	 *
-	 * This is usually a string but can be any type depending on the provider.
+	 * Some providers accept multiple platform client IDs. The first entry is the
+	 * primary client ID used for token endpoint client authentication.
 	 */
-	clientId?: unknown | undefined;
+	clientId?: LiteralString | string[] | undefined;
 	/**
 	 * The client secret of your application
 	 */

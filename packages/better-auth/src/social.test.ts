@@ -229,6 +229,34 @@ describe("Social Providers", async (c) => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5441
+	 */
+	it("should forward additionalParams to the authorization URL", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				access_type: "offline",
+				hd: "example.com",
+			},
+		});
+		const url = new URL(signInRes.data!.url!);
+		expect(url.searchParams.get("access_type")).toBe("offline");
+		expect(url.searchParams.get("hd")).toBe("example.com");
+	});
+
+	it("should reject additionalParams that collide with reserved OAuth params", async () => {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				redirect_uri: "https://attacker.example/callback",
+			},
+		});
+		expect(signInRes.error?.status).toBe(400);
+	});
+
 	it("should be able to sign in with social providers", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
@@ -256,6 +284,66 @@ describe("Social Providers", async (c) => {
 					context.response.headers.get("set-cookie") || "",
 				);
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
+
+	/**
+	 * A built-in social callback that arrives without a `state` parameter must
+	 * redirect to the error page using the `error` query parameter the page
+	 * reads, not a `state` parameter the page ignores.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9215
+	 */
+	it("redirects a built-in callback with no state to error=state_not_found", async () => {
+		await client.$fetch("/callback/google", {
+			query: {
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("error=state_not_found");
+				expect(location).not.toContain("state=state_not_found");
+			},
+		});
+	});
+
+	/**
+	 * When OAuth state validation fails, the redirect must honor the per-flow
+	 * `errorCallbackURL` the caller passed at sign-in, not the default error
+	 * page. The error URL is recoverable from the parsed state even when the
+	 * state-cookie check fails, and it was already origin-validated at sign-in.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 */
+	it("redirects to the per-flow errorCallbackURL when state validation fails", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		// Omit the state cookie so the signed-cookie check fails
+		// (state_security_mismatch) while the verification record still parses.
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("/oauth-error");
+				expect(location).toContain("error=state_mismatch");
+				expect(location).not.toContain("/api/auth/error");
 			},
 		});
 	});

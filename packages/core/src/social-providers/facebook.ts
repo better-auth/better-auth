@@ -12,8 +12,8 @@ import {
 export interface FacebookProfile {
 	id: string;
 	name: string;
-	email: string;
-	email_verified: boolean;
+	email?: string;
+	email_verified?: boolean;
 	picture: {
 		data: {
 			height: number;
@@ -43,7 +43,13 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		async createAuthorizationURL({ state, scopes, redirectURI, loginHint }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			loginHint,
+			additionalParams,
+		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Facebook. Make sure to provide them in the options.",
@@ -63,11 +69,10 @@ export const facebook = (options: FacebookOptions) => {
 				state,
 				redirectURI,
 				loginHint,
-				additionalParams: options.configId
-					? {
-							config_id: options.configId,
-						}
-					: {},
+				additionalParams: {
+					...(options.configId ? { config_id: options.configId } : {}),
+					...(additionalParams ?? {}),
+				},
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -204,7 +209,7 @@ export const facebook = (options: FacebookOptions) => {
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture.data.url,
-					emailVerified: profile.email_verified,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

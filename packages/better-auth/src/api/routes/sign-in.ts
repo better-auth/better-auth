@@ -2,11 +2,13 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -165,6 +167,12 @@ const socialSignInBodySchema = z.object({
 		})
 		.optional(),
 	/**
+	 * Extra query parameters to append to the provider authorization URL.
+	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+	 * code_challenge, code_challenge_method, scope) are rejected.
+	 */
+	additionalParams: additionalAuthorizationParamsSchema,
+	/**
 	 * Additional data to be passed through the OAuth flow
 	 */
 	additionalData: z.record(z.string(), z.any()).optional().meta({
@@ -195,13 +203,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					responses: {
 						"200": {
 							description:
-								"Success - Returns either session details or redirect URL",
+								"Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
 							content: {
 								"application/json": {
 									schema: {
-										// todo: we need support for multiple schema
 										type: "object",
-										description: "Session response when idToken is provided",
+										description:
+											"Returns session details when idToken is provided, or an authorize URL otherwise",
 										properties: {
 											token: {
 												type: "string",
@@ -215,10 +223,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 											},
 											redirect: {
 												type: "boolean",
-												enum: [false],
 											},
 										},
-										required: ["redirect", "token", "user"],
+										required: ["redirect"],
 									},
 								},
 							},
@@ -288,9 +295,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				if (!userInfo.user.email) {
-					c.context.logger.error("User email not found", {
-						provider: c.body.provider,
-					});
+					c.context.logger.error(
+						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
+						{ provider: c.body.provider },
+					);
 					throw APIError.from(
 						"UNAUTHORIZED",
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
@@ -344,6 +352,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
+				additionalParams: c.body.additionalParams,
 			});
 
 			if (!c.body.disableRedirect) {
@@ -364,6 +373,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "signInEmail",
 			use: [formCsrfMiddleware],
+			cloneRequest: true,
 			body: z.object({
 				/**
 				 * Email of the user
@@ -555,7 +565,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request,
+							ctx.request?.clone(),
 						),
 					);
 				}

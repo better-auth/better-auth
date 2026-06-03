@@ -1,13 +1,15 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
-	AssertionSigningAlgorithm,
-	ClientAssertionConfig,
+	PrivateKeyJwtSigningAlgorithm,
+	TokenEndpointAuth,
 } from "better-auth";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	createAuthorizationURL,
+	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
 	HIDE_METADATA,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -20,9 +22,13 @@ import {
 } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { handleOAuthUserInfo } from "better-auth/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	handleOAuthUserInfo,
+} from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -32,12 +38,14 @@ import {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
 } from "../oidc";
-import { validateConfigAlgorithms } from "../saml";
+import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLConfig,
 	SAMLSessionRecord,
@@ -52,7 +60,9 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import { registerSSOProviderBodySchema } from "./schemas";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -103,25 +113,18 @@ export const spMetadata = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const provider = await ctx.context.adapter.findOne<{
-				id: string;
-				samlConfig: string;
-			}>({
-				model: "ssoProvider",
-				where: [
-					{
-						field: "providerId",
-						value: ctx.query.providerId,
-					},
-				],
-			});
+			const provider = await findSAMLProvider(
+				ctx.query.providerId,
+				options,
+				ctx.context.adapter,
+			);
 			if (!provider) {
 				throw new APIError("NOT_FOUND", {
 					message: "No provider found for the given providerId",
 				});
 			}
 
-			const parsedSamlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig);
+			const parsedSamlConfig = provider.samlConfig;
 			if (!parsedSamlConfig) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid SAML configuration",
@@ -151,220 +154,12 @@ export const spMetadata = (options?: SSOOptions) => {
 	);
 };
 
-const ssoProviderBodySchema = z.object({
-	providerId: z.string({}).meta({
-		description:
-			"The ID of the provider. This is used to identify the provider during login and callback",
-	}),
-	issuer: z.string({}).meta({
-		description: "The issuer of the provider",
-	}),
-	domain: z.string({}).meta({
-		description:
-			"The domain(s) of the provider. For enterprise multi-domain SSO where a single IdP serves multiple email domains, use comma-separated values (e.g., 'company.com,subsidiary.com,acquired-company.com')",
-	}),
-	oidcConfig: z
-		.object({
-			clientId: z.string({}).meta({
-				description: "The client ID",
-			}),
-			clientSecret: z.string({}).optional().meta({
-				description:
-					"The client secret. Required for client_secret_basic/client_secret_post. Optional for private_key_jwt.",
-			}),
-			authorizationEndpoint: z
-				.string({})
-				.meta({
-					description: "The authorization endpoint",
-				})
-				.optional(),
-			tokenEndpoint: z
-				.string({})
-				.meta({
-					description: "The token endpoint",
-				})
-				.optional(),
-			userInfoEndpoint: z
-				.string({})
-				.meta({
-					description: "The user info endpoint",
-				})
-				.optional(),
-			tokenEndpointAuthentication: z
-				.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
-				.optional(),
-			privateKeyId: z.string().optional(),
-			privateKeyAlgorithm: z.string().optional(),
-			jwksEndpoint: z
-				.string({})
-				.meta({
-					description: "The JWKS endpoint",
-				})
-				.optional(),
-			discoveryEndpoint: z.string().optional(),
-			skipDiscovery: z
-				.boolean()
-				.meta({
-					description:
-						"Skip OIDC discovery during registration. When true, you must provide authorizationEndpoint, tokenEndpoint, and jwksEndpoint manually.",
-				})
-				.optional(),
-			scopes: z
-				.array(z.string(), {})
-				.meta({
-					description:
-						"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
-				})
-				.optional(),
-			pkce: z
-				.boolean({})
-				.meta({
-					description: "Whether to use PKCE for the authorization flow",
-				})
-				.default(true)
-				.optional(),
-			mapping: z
-				.object({
-					id: z.string({}).meta({
-						description: "Field mapping for user ID (defaults to 'sub')",
-					}),
-					email: z.string({}).meta({
-						description: "Field mapping for email (defaults to 'email')",
-					}),
-					emailVerified: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for email verification (defaults to 'email_verified')",
-						})
-						.optional(),
-					name: z.string({}).meta({
-						description: "Field mapping for name (defaults to 'name')",
-					}),
-					image: z
-						.string({})
-						.meta({
-							description: "Field mapping for image (defaults to 'picture')",
-						})
-						.optional(),
-					extraFields: z.record(z.string(), z.any()).optional(),
-				})
-				.optional(),
-		})
-		.optional(),
-	samlConfig: z
-		.object({
-			entryPoint: z.string({}).meta({
-				description: "The entry point of the provider",
-			}),
-			cert: z.string({}).meta({
-				description: "The certificate of the provider",
-			}),
-			audience: z.string().optional(),
-			idpMetadata: z
-				.object({
-					metadata: z.string().optional(),
-					entityID: z.string().optional(),
-					cert: z.string().optional(),
-					privateKey: z.string().optional(),
-					privateKeyPass: z.string().optional(),
-					isAssertionEncrypted: z.boolean().optional(),
-					encPrivateKey: z.string().optional(),
-					encPrivateKeyPass: z.string().optional(),
-					singleSignOnService: z
-						.array(
-							z.object({
-								Binding: z.string().meta({
-									description: "The binding type for the SSO service",
-								}),
-								Location: z.string().meta({
-									description: "The URL for the SSO service",
-								}),
-							}),
-						)
-						.optional()
-						.meta({
-							description: "Single Sign-On service configuration",
-						}),
-				})
-				.optional(),
-			spMetadata: z
-				.object({
-					metadata: z.string().optional(),
-					entityID: z.string().optional(),
-					binding: z.string().optional(),
-					privateKey: z.string().optional(),
-					privateKeyPass: z.string().optional(),
-					isAssertionEncrypted: z.boolean().optional(),
-					encPrivateKey: z.string().optional(),
-					encPrivateKeyPass: z.string().optional(),
-				})
-				.optional(),
-			wantAssertionsSigned: z.boolean().optional(),
-			authnRequestsSigned: z.boolean().optional(),
-			signatureAlgorithm: z.string().optional(),
-			digestAlgorithm: z.string().optional(),
-			identifierFormat: z.string().optional(),
-			privateKey: z.string().optional(),
-			mapping: z
-				.object({
-					id: z.string({}).meta({
-						description: "Field mapping for user ID (defaults to 'nameID')",
-					}),
-					email: z.string({}).meta({
-						description: "Field mapping for email (defaults to 'email')",
-					}),
-					emailVerified: z
-						.string({})
-						.meta({
-							description: "Field mapping for email verification",
-						})
-						.optional(),
-					name: z.string({}).meta({
-						description: "Field mapping for name (defaults to 'displayName')",
-					}),
-					firstName: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for first name (defaults to 'givenName')",
-						})
-						.optional(),
-					lastName: z
-						.string({})
-						.meta({
-							description:
-								"Field mapping for last name (defaults to 'surname')",
-						})
-						.optional(),
-					extraFields: z.record(z.string(), z.any()).optional(),
-				})
-				.optional(),
-		})
-		.optional(),
-	organizationId: z
-		.string({})
-		.meta({
-			description:
-				"If organization plugin is enabled, the organization id to link the provider to",
-		})
-		.optional(),
-	overrideUserInfo: z
-		.boolean({})
-		.meta({
-			description:
-				"Override user info with the provider info. Defaults to false",
-		})
-		.default(false)
-		.optional(),
-});
-
 export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
 			method: "POST",
-			body: ssoProviderBodySchema,
+			body: registerSSOProviderBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -580,12 +375,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			const body = ctx.body;
-			const issuerValidator = z.string().url();
-			if (issuerValidator.safeParse(body.issuer).error) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid issuer. Must be a valid URL",
-				});
-			}
 
 			if (body.samlConfig?.idpMetadata?.metadata) {
 				const maxMetadataSize =
@@ -602,7 +391,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -615,9 +404,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
+					});
+				}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
 			}
@@ -639,6 +434,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "SSO provider with this providerId already exists",
 				});
+			}
+
+			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
 			}
 
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
@@ -728,6 +536,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					},
 					options?.saml?.algorithms,
 				);
+
+				validateCertSources(body.samlConfig);
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
@@ -872,41 +682,43 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+				"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 		})
 		.optional(),
 	organizationSlug: z
 		.string({})
 		.meta({
-			description: "The slug of the organization to sign in with",
+			description: "The slug of the organization to sign in with.",
 		})
 		.optional(),
 	providerId: z
 		.string({})
 		.meta({
 			description:
-				"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+				"The ID of the provider to sign in with. Can be provided instead of email.",
 		})
 		.optional(),
 	domain: z
 		.string({})
 		.meta({
-			description: "The domain of the provider.",
+			description:
+				"The email domain of the provider. Can be provided instead of email.",
 		})
 		.optional(),
 	callbackURL: z.string({}).meta({
-		description: "The URL to redirect to after login",
+		description: "The URL to redirect to after successful sign-in.",
 	}),
 	errorCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login",
+			description: "The URL to redirect to if the sign-in flow fails.",
 		})
 		.optional(),
 	newUserCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login if the user is new",
+			description:
+				"The URL to redirect to after sign-in if the user is newly registered.",
 		})
 		.optional(),
 	scopes: z
@@ -919,17 +731,23 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+				"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 		})
 		.optional(),
+	additionalParams: additionalAuthorizationParamsSchema,
 	requestSignUp: z
 		.boolean({})
 		.meta({
 			description:
-				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
 		})
 		.optional(),
-	providerType: z.enum(["oidc", "saml"]).optional(),
+	providerType: z
+		.enum(["oidc", "saml"])
+		.meta({
+			description: "The provider protocol to sign in with.",
+		})
+		.optional(),
 });
 
 export const signInSSO = (options?: SSOOptions) => {
@@ -953,35 +771,63 @@ export const signInSSO = (options?: SSOOptions) => {
 										email: {
 											type: "string",
 											description:
-												"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+												"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 										},
-										issuer: {
+										organizationSlug: {
 											type: "string",
 											description:
-												"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+												"The slug of the organization to sign in with.",
 										},
 										providerId: {
 											type: "string",
 											description:
-												"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+												"The ID of the provider to sign in with. Can be provided instead of email.",
+										},
+										domain: {
+											type: "string",
+											description:
+												"The email domain of the provider. Can be provided instead of email.",
 										},
 										callbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to after successful sign-in.",
 										},
 										errorCallbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to if the sign-in flow fails.",
 										},
 										newUserCallbackURL: {
 											type: "string",
 											description:
-												"The URL to redirect to after login if the user is new",
+												"The URL to redirect to after sign-in if the user is newly registered.",
+										},
+										scopes: {
+											type: "array",
+											items: { type: "string" },
+											description: "Scopes to request from the provider.",
 										},
 										loginHint: {
 											type: "string",
 											description:
 												"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
+										},
+										additionalParams: {
+											type: "object",
+											additionalProperties: { type: "string" },
+											description:
+												"Extra query parameters to append to the OIDC provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected. Not supported for SAML providers.",
+										},
+										requestSignUp: {
+											type: "boolean",
+											description:
+												"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
+										},
+										providerType: {
+											type: "string",
+											enum: ["oidc", "saml"],
+											description: "The provider protocol to sign in with.",
 										},
 									},
 									required: ["callbackURL"],
@@ -1215,6 +1061,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
+					additionalParams: ctx.body.additionalParams,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -1222,6 +1069,12 @@ export const signInSSO = (options?: SSOOptions) => {
 				});
 			}
 			if (provider.samlConfig) {
+				if (ctx.body.additionalParams) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"additionalParams is not supported for SAML providers; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters.",
+					});
+				}
 				const parsedSamlConfig =
 					typeof provider.samlConfig === "object"
 						? provider.samlConfig
@@ -1305,7 +1158,7 @@ export const signInSSO = (options?: SSOOptions) => {
 
 const callbackSSOQuerySchema = z.object({
 	code: z.string().optional(),
-	state: z.string(),
+	state: z.string().optional(),
 	error: z.string().optional(),
 	error_description: z.string().optional(),
 });
@@ -1342,43 +1195,7 @@ async function handleOIDCCallback(
 			}?error=${error}&error_description=${error_description}`,
 		);
 	}
-	let provider: SSOProvider<SSOOptions> | null = null;
-	if (options?.defaultSSO?.length) {
-		const matchingDefault = options.defaultSSO.find(
-			(defaultProvider) => defaultProvider.providerId === providerId,
-		);
-		if (matchingDefault) {
-			provider = {
-				...matchingDefault,
-				issuer: matchingDefault.oidcConfig?.issuer || "",
-				userId: "default",
-				...(options.domainVerification?.enabled
-					? { domainVerified: true }
-					: {}),
-			} as SSOProvider<SSOOptions>;
-		}
-	}
-	if (!provider) {
-		provider = await ctx.context.adapter
-			.findOne({
-				model: "ssoProvider",
-				where: [
-					{
-						field: "providerId",
-						value: providerId,
-					},
-				],
-			})
-			.then((res: { oidcConfig: string } | null) => {
-				if (!res) {
-					return null;
-				}
-				return {
-					...res,
-					oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-				} as SSOProvider<SSOOptions>;
-			});
-	}
+	const provider = await resolveOIDCProvider(ctx, options, providerId);
 	if (!provider) {
 		throw ctx.redirect(
 			`${
@@ -1439,15 +1256,12 @@ async function handleOIDCCallback(
 		);
 	}
 
-	let authMethod: "basic" | "post" | "private_key_jwt" = "basic";
-	if (config.tokenEndpointAuthentication === "client_secret_post") {
-		authMethod = "post";
-	} else if (config.tokenEndpointAuthentication === "private_key_jwt") {
-		authMethod = "private_key_jwt";
-	}
+	let tokenEndpointAuth: TokenEndpointAuth =
+		config.tokenEndpointAuthentication === "client_secret_post"
+			? { method: "client_secret_post" }
+			: { method: "client_secret_basic" };
 
-	let clientAssertionConfig: ClientAssertionConfig | undefined;
-	if (authMethod === "private_key_jwt") {
+	if (config.tokenEndpointAuthentication === "private_key_jwt") {
 		type PrivateKeyResult = {
 			privateKeyJwk?: JsonWebKey;
 			privateKeyPem?: string;
@@ -1474,7 +1288,7 @@ async function handleOIDCCallback(
 			});
 		}
 
-		if (!resolved) {
+		if (!resolved || (!resolved.privateKeyJwk && !resolved.privateKeyPem)) {
 			throw ctx.redirect(
 				`${
 					errorURL || callbackURL
@@ -1483,19 +1297,31 @@ async function handleOIDCCallback(
 		}
 
 		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm;
-		const algorithm: AssertionSigningAlgorithm | undefined =
+		const algorithm: PrivateKeyJwtSigningAlgorithm | undefined =
 			rawAlg &&
-			(ASSERTION_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
-				? (rawAlg as AssertionSigningAlgorithm)
+			(PRIVATE_KEY_JWT_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
+				? (rawAlg as PrivateKeyJwtSigningAlgorithm)
 				: undefined;
 
-		clientAssertionConfig = {
-			privateKeyJwk: resolved.privateKeyJwk,
-			privateKeyPem: resolved.privateKeyPem,
-			kid: config.privateKeyId ?? resolved.kid,
-			algorithm,
-			tokenEndpoint: config.tokenEndpoint,
+		tokenEndpointAuth = {
+			method: "private_key_jwt",
+			getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+				privateKeyJwk: resolved.privateKeyJwk,
+				privateKeyPem: resolved.privateKeyPem,
+				kid: config.privateKeyId ?? resolved.kid,
+				algorithm,
+			}),
 		};
+	}
+
+	const tokenRequestOptions: {
+		clientId: string;
+		clientSecret?: string | undefined;
+	} = {
+		clientId: config.clientId,
+	};
+	if (tokenEndpointAuth.method !== "private_key_jwt") {
+		tokenRequestOptions.clientSecret = config.clientSecret;
 	}
 
 	const tokenResponse = await validateAuthorizationCode({
@@ -1506,13 +1332,9 @@ async function handleOIDCCallback(
 			provider.providerId,
 			options,
 		),
-		options: {
-			clientId: config.clientId,
-			clientSecret: config.clientSecret,
-		},
+		options: tokenRequestOptions,
 		tokenEndpoint: config.tokenEndpoint,
-		authentication: authMethod,
-		clientAssertion: clientAssertionConfig,
+		tokenEndpointAuth,
 	}).catch((e) => {
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
@@ -1644,33 +1466,48 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	const linked = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
-			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
-				: false,
-		},
-		account: {
-			idToken: tokenResponse.idToken,
-			accessToken: tokenResponse.accessToken,
-			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
-			providerId: provider.providerId,
-			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-			scope: tokenResponse.scopes?.join(","),
-		},
-		callbackURL,
-		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-		overrideUserInfo: config.overrideUserInfo,
-		isTrustedProvider,
-	});
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		linked = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email,
+				name: userInfo.name || "",
+				id: userInfo.id,
+				image: userInfo.image,
+				emailVerified: options?.trustEmailVerified
+					? userInfo.emailVerified || false
+					: false,
+			},
+			account: {
+				idToken: tokenResponse.idToken,
+				accessToken: tokenResponse.accessToken,
+				refreshToken: tokenResponse.refreshToken,
+				accountId: userInfo.id,
+				providerId: provider.providerId,
+				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+				scope: tokenResponse.scopes?.join(","),
+			},
+			callbackURL,
+			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+			overrideUserInfo: config.overrideUserInfo,
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({ error: linked.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
 	const { session, user } = linked.data!;
 
@@ -1738,12 +1575,111 @@ const callbackSSOEndpointConfig = {
 	},
 };
 
+/**
+ * Resolves an SSO provider by `providerId`, first checking `options.defaultSSO`
+ * and falling back to the `ssoProvider` table. Returns `null` when no match is
+ * found so the caller can decide how to react (redirect, silently skip, etc.).
+ */
+async function resolveOIDCProvider(
+	ctx: any,
+	options: SSOOptions | undefined,
+	providerId: string,
+): Promise<SSOProvider<SSOOptions> | null> {
+	const matchingDefault = options?.defaultSSO?.find(
+		(defaultProvider) => defaultProvider.providerId === providerId,
+	);
+	if (matchingDefault) {
+		return {
+			...matchingDefault,
+			issuer: matchingDefault.oidcConfig?.issuer || "",
+			userId: "default",
+			...(options?.domainVerification?.enabled ? { domainVerified: true } : {}),
+		} as SSOProvider<SSOOptions>;
+	}
+	return ctx.context.adapter
+		.findOne({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		})
+		.then((res: { oidcConfig: string } | null) => {
+			if (!res) return null;
+			return {
+				...res,
+				oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
+			} as SSOProvider<SSOOptions>;
+		});
+}
+
+/**
+ * Restarts the OAuth flow server-side when a stateless callback arrives for
+ * an OIDC provider that opted into IDP-initiated flows. Silently returns
+ * otherwise, letting the normal handler produce its error redirect.
+ */
+async function bounceIfIdpInitiated(
+	ctx: any,
+	options: SSOOptions | undefined,
+	providerId: string,
+) {
+	const provider = await resolveOIDCProvider(ctx, options, providerId);
+	if (!provider?.oidcConfig?.allowIdpInitiated) return;
+
+	let config = provider.oidcConfig;
+	try {
+		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
+			ctx.context.isTrustedOrigin(url),
+		);
+	} catch (error) {
+		ctx.context.logger.error(
+			"IDP-initiated bounce skipped: OIDC discovery failed",
+			{ providerId: provider.providerId, issuer: provider.issuer, error },
+		);
+		return;
+	}
+	if (!config.authorizationEndpoint) {
+		ctx.context.logger.error(
+			"IDP-initiated bounce skipped: authorizationEndpoint missing after discovery",
+			{ providerId: provider.providerId, issuer: provider.issuer },
+		);
+		return;
+	}
+
+	const state = await generateState(
+		ctx,
+		undefined,
+		options?.redirectURI?.trim()
+			? { ssoProviderId: provider.providerId }
+			: false,
+	);
+	const redirectURI = getOIDCRedirectURI(
+		ctx.context.baseURL,
+		provider.providerId,
+		options,
+	);
+	const authorizationURL = await createAuthorizationURL({
+		id: provider.issuer,
+		options: {
+			clientId: config.clientId,
+			clientSecret: config.clientSecret,
+		},
+		redirectURI,
+		state: state.state,
+		codeVerifier: config.pkce ? state.codeVerifier : undefined,
+		scopes: config.scopes || ["openid", "email", "profile", "offline_access"],
+		authorizationEndpoint: config.authorizationEndpoint,
+	});
+	throw ctx.redirect(authorizationURL.toString());
+}
+
 export const callbackSSO = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		callbackSSOEndpointConfig,
 		async (ctx) => {
-			return handleOIDCCallback(ctx, options, ctx.params.providerId);
+			const providerId = ctx.params.providerId;
+			if (ctx.query.state === undefined && ctx.query.code) {
+				await bounceIfIdpInitiated(ctx, options, providerId);
+			}
+			return handleOIDCCallback(ctx, options, providerId);
 		},
 	);
 };
@@ -2100,7 +2036,7 @@ async function handleLogoutRequest(
 				sessionIndex === data.sessionIndex
 			) {
 				await ctx.context.internalAdapter
-					.deleteSession(data.sessionId)
+					.deleteSession(data.sessionToken)
 					.catch((e: unknown) =>
 						ctx.context.logger.warn("Failed to delete session during SLO", {
 							error: e,
@@ -2139,22 +2075,24 @@ async function handleLogoutRequest(
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
-		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
+		await ctx.context.internalAdapter.deleteSession(
+			currentSession.session.token,
+		);
 	}
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
@@ -2282,7 +2220,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					),
 				);
 
-			await ctx.context.internalAdapter.deleteSession(session.session.id);
+			await ctx.context.internalAdapter.deleteSession(session.session.token);
 
 			deleteSessionCookie(ctx);
 

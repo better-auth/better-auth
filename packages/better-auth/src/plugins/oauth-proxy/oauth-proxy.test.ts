@@ -505,6 +505,58 @@ describe("oauth-proxy", async () => {
 			expect(payload.timestamp).toBeDefined();
 		});
 
+		/**
+		 * Cookie strategy with a dedicated proxy `secret` that differs from
+		 * `BETTER_AUTH_SECRET`. The `oauth_state` cookie is encrypted with the
+		 * environment secret, so the proxy must re-encrypt it with the proxy key
+		 * for the production callback to recover the inner state. Without that,
+		 * the callback fails to decrypt the state package and produces no
+		 * passthrough profile.
+		 *
+		 * @see https://github.com/better-auth/better-auth/pull/9385
+		 */
+		it("recovers cookie-strategy state when the proxy secret differs from the env secret", async () => {
+			const { client } = await getTestInstance({
+				secret: "env-secret-not-shared",
+				account: { storeStateStrategy: "cookie" },
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+						secret: "shared-proxy-secret",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (location?.includes("profile=")) {
+						encryptedProfile = new URL(location).searchParams.get("profile");
+					}
+				},
+			});
+
+			expect(encryptedProfile).toBeTruthy();
+		});
+
 		it("should create user/session on preview from profile data", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
@@ -613,6 +665,79 @@ describe("oauth-proxy", async () => {
 				previewUsersAfter[0]!.id,
 			);
 			expect(previewSessions.length).toBe(1);
+		});
+
+		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							disableSignUp: true,
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+			expect(encryptedProfile).toBeTruthy();
+
+			let proxyRedirect: string | null = null;
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						proxyRedirect = context.response.headers.get("location");
+					},
+				},
+			);
+			expect(proxyRedirect).toBeTruthy();
+			const url = new URL(proxyRedirect!);
+			expect(url.searchParams.get("error")).toBe("signup_disabled");
 		});
 
 		it("should reject expired profile payloads", async () => {
@@ -1083,6 +1208,374 @@ describe("oauth-proxy", async () => {
 			);
 			expect(accounts.length).toBe(1);
 			expect(accounts[0]?.providerId).toBe("google");
+		});
+	});
+
+	/**
+	 *
+	 * Tests that oauth-proxy-callback correctly skips the state cookie check
+	 * when cleaning up OAuth state. In the proxy flow:
+	 * 1. User starts OAuth on preview - state cookie set on preview domain
+	 * 2. OAuth provider redirects to production
+	 * 3. Production redirects to preview's oauth-proxy-callback
+	 * 4. parseGenericState is called to clean up, but the state cookie
+	 *    may not be present (cross-origin redirect) or may not match
+	 *
+	 * The fix is to pass `skipStateCookieCheck: true` when calling parseGenericState
+	 * in the oauth-proxy-callback endpoint.
+	 */
+	describe("database mode state cleanup", () => {
+		it("should not fail when state cookie is missing during proxy callback cleanup", async () => {
+			// This test simulates the scenario where:
+			// - Both preview and production share the SAME database
+			// - State storage is "database" (default)
+			// - The state cookie was set on preview, but when oauth-proxy-callback
+			//   is called, the cookie may not be present
+
+			// Use a shared database for both instances
+			const { client: productionClient, auth: productionAuth } =
+				await getTestInstance(
+					{
+						baseURL: "http://localhost:3000",
+						plugins: [
+							oAuthProxy({
+								currentURL: "http://preview.example.com",
+								productionURL: "http://localhost:3000",
+							}),
+						],
+						socialProviders: {
+							google: {
+								clientId: "test",
+								clientSecret: "test",
+							},
+						},
+					},
+					{
+						disableTestUser: true,
+					},
+				);
+
+			// Step 1: Initiate OAuth flow
+			const res = await productionClient.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// Step 2: Complete OAuth callback to get encrypted profile
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await productionClient.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+			expect(callbackURL).toBeTruthy();
+
+			// Step 3: Call oauth-proxy-callback WITHOUT cookies (simulating cross-origin)
+			// This is the key: we explicitly DON'T pass any cookies/headers
+			// to simulate the state cookie not being present
+			const _response = await productionClient.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// The callback should succeed and redirect to dashboard
+						// NOT fail with state_mismatch error
+						expect(location).not.toContain("error=");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			// Verify user was created successfully
+			const ctx = await productionAuth.$context;
+			const users = await ctx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.email).toBe("user@email.com");
+		});
+
+		it("should handle state cleanup gracefully when verification is already deleted", async () => {
+			// This tests that parseGenericState errors are caught and don't break the flow
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const { secret, internalAdapter } = await auth.$context;
+
+			// Create a valid payload with a state that doesn't exist in DB
+			const payload = {
+				userInfo: {
+					id: "123",
+					email: "test@email.com",
+					name: "Test User",
+					emailVerified: true,
+				},
+				account: {
+					providerId: "google",
+					accountId: "123",
+					accessToken: "test",
+				},
+				state: "non-existent-state-id",
+				callbackURL: "/dashboard",
+				timestamp: Date.now(),
+			};
+
+			const encryptedProfile = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			// The callback should still succeed even if state cleanup fails
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=/dashboard&profile=${encodeURIComponent(encryptedProfile)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should redirect to dashboard, not error
+						expect(location).not.toContain("error=state_mismatch");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			// Verify user was created
+			const users = await internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+		});
+	});
+
+	/**
+	 * Tests for secret configuration across environments.
+	 * When production and preview have different BETTER_AUTH_SECRET values,
+	 * a shared `secret` must be configured in the oAuthProxy options.
+	 */
+	describe("secret configuration", () => {
+		/**
+		 * This test verifies that when production and preview have DIFFERENT secrets
+		 * (without a shared oAuthProxy secret configured), the callback fails because
+		 * the before hook can't decrypt the state package.
+		 *
+		 * This is the root cause of the issue where users see:
+		 * "ERROR [Better Auth]: Failed to parse state BetterAuthError: State mismatch: State not persisted correctly"
+		 */
+		it("should fail when preview and production have different secrets (no shared secret)", async () => {
+			// Preview instance with its own secret
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					secret: "preview-secret-key-that-is-different",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+							// Note: NO shared secret configured - this is the problem
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Production instance with a DIFFERENT secret
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					secret: "production-secret-key-that-is-different",
+					plugins: [
+						oAuthProxy({
+							// Note: NO shared secret configured
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Step 1: Start OAuth on preview
+			const res = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// The state is encrypted with preview's secret
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Step 2: OAuth callback arrives at production
+			// Production tries to decrypt with its own secret - THIS FAILS
+			// The before hook catches the error and returns early
+			// The regular callback handler runs and fails
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should fail with state error because regular callback runs
+						expect(location).toMatch(/error=.*state|please_restart/i);
+					},
+				},
+			);
+		});
+
+		/**
+		 * This test verifies the CORRECT configuration: using a shared secret
+		 * for the oauth-proxy plugin across all environments.
+		 */
+		it("should work correctly when a shared secret is configured", async () => {
+			const sharedProxySecret = "shared-oauth-proxy-secret-for-all-envs";
+
+			// Preview instance with shared proxy secret
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					secret: "preview-main-secret", // Main secret can be different
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+							secret: sharedProxySecret, // SHARED secret for proxy
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Production instance with the SAME shared proxy secret
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					secret: "production-main-secret", // Main secret can be different
+					plugins: [
+						oAuthProxy({
+							secret: sharedProxySecret, // SAME shared secret for proxy
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Step 1: Start OAuth on preview (the non-production environment)
+			const res = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Step 2: OAuth callback arrives at production
+			// Production can decrypt because it uses the same shared secret
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should redirect to preview's oauth-proxy-callback
+						expect(location).toContain("preview.example.com");
+						expect(location).toContain("/oauth-proxy-callback");
+
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			// Step 3: Preview receives the callback
+			// Preview can decrypt the profile because it uses the same shared secret
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should successfully redirect to dashboard
+						expect(location).not.toContain("error=");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			// Verify user was created on preview
+			const previewCtx = await preview.auth.$context;
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.email).toBe("user@email.com");
 		});
 	});
 

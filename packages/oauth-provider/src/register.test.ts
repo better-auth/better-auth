@@ -2,7 +2,7 @@ import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -249,6 +249,37 @@ describe("oauth register", async () => {
 		expect(response?.nested).toEqual({ key: "value" });
 	});
 
+	it("should reject registration with an empty jwks array", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: [] as Record<string, unknown>[],
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("should reject registration with an empty jwks.keys array", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: { keys: [] } as { keys: Record<string, unknown>[] },
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("should reject admin registration with an empty jwks array", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "private_key_jwt",
+					jwks: [] as Record<string, unknown>[],
+				},
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should register client with metadata and strip extra fields not in schema", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -486,7 +517,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 
 		// 5. Exchange code at token endpoint with PKCE (no client_secret)
 		const { body: tokenBody, headers: tokenHeaders } =
-			createAuthorizationCodeRequest({
+			await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI: redirectUri,

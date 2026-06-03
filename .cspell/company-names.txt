@@ -1,3 +1,4 @@
+anthropics
 creem
 incommon
 dyno
@@ -27,3 +28,6 @@ Razorpay
 razorpay
 payu
 PayU
+contoso
+Contoso
+Mikro

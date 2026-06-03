@@ -36,7 +36,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** The primary username that represents the user */
 	preferred_username: string;
 	/** User's email address */
-	email: string;
+	email?: string;
 	/** Human-readable value that identifies the subject of the token */
 	name: string;
 	/** Matches the parameter included in the original authorize request */
@@ -174,6 +174,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {

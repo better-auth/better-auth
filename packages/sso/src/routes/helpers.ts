@@ -1,20 +1,16 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
+import { normalizePem, safeJsonParse } from "../utils";
 
 /**
- * Normalizes a PEM string by trimming leading/trailing whitespace from each
- * line. Native `crypto.createPrivateKey` (used by samlify 2.12+) rejects PEM
- * blocks with leading whitespace, which is common when keys are stored in
- * indented config files, environment variables, or JSON.
+ * Same as `normalizePem`, but applied across the resolved list of IdP signing
+ * certificates so multi-cert rotation configs survive the line-trim step.
  */
-function normalizePem(pem: string | undefined): string | undefined {
-	if (!pem) return pem;
-	return pem
-		.split("\n")
-		.map((line) => line.trim())
-		.join("\n");
+function normalizePemList(certs: string[] | undefined): string[] | undefined {
+	if (!certs) return certs;
+	return certs.map((pem) => normalizePem(pem) ?? pem);
 }
 
 export async function findSAMLProvider(
@@ -139,7 +135,7 @@ export function createIdP(config: SAMLConfig) {
 			},
 		],
 		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: normalizePem(idpData?.cert || config.cert),
+		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
 		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
 		encPrivateKey: normalizePem(idpData?.encPrivateKey),

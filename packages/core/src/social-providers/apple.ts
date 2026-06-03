@@ -22,7 +22,7 @@ export interface AppleProfile {
 	 * The email address is either the user's real email address or the proxy
 	 * address, depending on their status private email relay service.
 	 */
-	email: string;
+	email?: string;
 	/**
 	 * A string or Boolean value that indicates whether the service verifies
 	 * the email. The value can either be a string ("true" or "false") or a
@@ -77,12 +77,35 @@ export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	audience?: (string | string[]) | undefined;
 }
 
+async function sha256Hex(value: string) {
+	const data = new TextEncoder().encode(value);
+	const digest = await crypto.subtle.digest("SHA-256", data);
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+async function nonceMatches(jwtNonce: unknown, nonce: string) {
+	if (typeof jwtNonce !== "string") {
+		return false;
+	}
+	if (jwtNonce === nonce) {
+		return true;
+	}
+	return jwtNonce === (await sha256Hex(nonce));
+}
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
@@ -101,6 +124,7 @@ export const apple = (options: AppleOptions) => {
 				redirectURI,
 				responseMode: "form_post",
 				responseType: "code id_token",
+				additionalParams,
 			});
 			return url;
 		},
@@ -141,7 +165,7 @@ export const apple = (options: AppleOptions) => {
 						jwtClaims[field] = Boolean(jwtClaims[field]);
 					}
 				});
-				if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && !(await nonceMatches(jwtClaims.nonce, nonce))) {
 					return false;
 				}
 				return !!jwtClaims;

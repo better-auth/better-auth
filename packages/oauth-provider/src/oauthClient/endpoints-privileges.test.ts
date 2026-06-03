@@ -352,4 +352,135 @@ describe("oauthClient", async () => {
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
 	});
+
+	it("should not create client via admin api without a session", async () => {
+		try {
+			await auth.api.adminCreateOAuthClient({
+				body: {
+					...testClientInput,
+					redirect_uris: [redirectUri],
+				},
+			});
+			throw new Error("should have thrown");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.statusCode).toBe(401);
+				expect(error.status).toBe("UNAUTHORIZED");
+			}
+		}
+	});
+});
+
+/**
+ * Dynamic Client Registration must enforce the same clientPrivileges "create"
+ * gate as the create-client endpoints. The gate lives in the shared creation
+ * chokepoint, so every creation route inherits it; a forbidden authenticated
+ * user cannot mint a client through registration, while the unauthenticated
+ * public-client path stays open and never consults the hook.
+ *
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-jmcv-4jfc-6qqj
+ */
+describe("oauthClient dynamic registration privileges", async () => {
+	const baseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/callback";
+	const allowedUser = {
+		email: "dcr-allowed@test.com",
+		password: "test123456",
+		name: "dcr allowed user",
+	};
+	const forbiddenUser = {
+		email: "dcr-forbidden@test.com",
+		password: "test123456",
+		name: "dcr forbidden user",
+	};
+	const clientPrivileges = vi.fn(({ user }) => {
+		if (user?.email === allowedUser.email) {
+			return true;
+		}
+		return false;
+	});
+	const { auth, customFetchImpl, signInWithUser } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				clientPrivileges,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	await auth.api.signUpEmail({ body: allowedUser });
+	await auth.api.signUpEmail({ body: forbiddenUser });
+	const { headers: allowedUserHeaders } = await signInWithUser(
+		allowedUser.email,
+		allowedUser.password,
+	);
+	const { headers: forbiddenUserHeaders } = await signInWithUser(
+		forbiddenUser.email,
+		forbiddenUser.password,
+	);
+
+	const allowedAuthClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl, headers: allowedUserHeaders },
+	});
+	const forbiddenAuthClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl, headers: forbiddenUserHeaders },
+	});
+	const unauthedAuthClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	beforeEach(() => {
+		clientPrivileges.mockClear();
+	});
+
+	it("should not register a client for a forbidden user", async () => {
+		const client = await forbiddenAuthClient.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+		expect(client.error).toMatchObject({
+			status: 401,
+			statusText: "UNAUTHORIZED",
+		});
+		expect(client.data?.client_secret).toBeUndefined();
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "create" }),
+		);
+	});
+
+	it("should register a client for an allowed user", async () => {
+		const client = await allowedAuthClient.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+		expect(client.data?.client_id).toBeDefined();
+		expect(client.data?.client_secret).toBeDefined();
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "create" }),
+		);
+	});
+
+	it("should allow unauthenticated public registration without invoking the gate", async () => {
+		const client = await unauthedAuthClient.oauth2.register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: [redirectUri],
+		});
+		expect(client.data?.client_id).toBeDefined();
+		expect(client.data?.client_secret).toBeUndefined();
+		expect(client.data?.public).toBe(true);
+		expect(clientPrivileges).not.toHaveBeenCalled();
+	});
 });

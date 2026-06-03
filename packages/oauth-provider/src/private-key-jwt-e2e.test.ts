@@ -1,11 +1,10 @@
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
-import { getTestInstance } from "better-auth/test";
+import { getHttpTestInstance, getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair } from "jose";
-import type { Listener } from "listhen";
-import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -16,15 +15,12 @@ import type { OAuthClient } from "./types/oauth";
  * across the entire stack.
  *
  * - Authorization server: oauthProvider plugin with a private_key_jwt client
- * - Relying party: genericOAuth plugin with authentication: "private_key_jwt"
+ * - Relying party: genericOAuth plugin with a private_key_jwt assertion provider
  * - Flow: RP → authorize → login → callback → token exchange (with JWT assertion) → session
  */
 describe("private_key_jwt e2e", async () => {
-	const port = 3002;
-	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
-	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	// Generate RSA key pair
 	const keyPair = await generateKeyPair("RS256", { extractable: true });
@@ -37,22 +33,40 @@ describe("private_key_jwt e2e", async () => {
 		customFetchImpl,
 		cookieSetter,
 		testUser,
-	} = await getTestInstance({
+		server,
 		baseURL: authServerBaseUrl,
-		trustedOrigins: ["https://trusted.example.com"],
-		plugins: [
-			jwt(),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				assertionMaxLifetime: 300,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
-			}),
-		],
-	});
+	} = await getHttpTestInstance(
+		{
+			trustedOrigins: ["https://trusted.example.com"],
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					assertionMaxLifetime: 300,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		},
+		{
+			handler: (auth) => {
+				const nodeHandler = toNodeHandler(auth.handler);
+				return async (req, res) => {
+					if (req.url === "/.well-known/openid-configuration") {
+						const config = await auth.api.getOpenIdConfig();
+						res.setHeader("Content-Type", "application/json");
+						res.end(JSON.stringify(config));
+						return;
+					}
+					await nodeHandler(req, res);
+				};
+			},
+		},
+	);
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	const authClient = createAuthClient({
 		plugins: [oauthProviderClient()],
@@ -60,25 +74,10 @@ describe("private_key_jwt e2e", async () => {
 		fetchOptions: { customFetchImpl },
 	});
 
-	let server: Listener;
 	let oauthClient: OAuthClient;
 	let oauthJwksUriClient: OAuthClient;
 
 	beforeAll(async () => {
-		// Start actual HTTP server for the authorization server
-		server = await listen(
-			async (req, res) => {
-				if (req.url === "/.well-known/openid-configuration") {
-					const config = await authorizationServer.api.getOpenIdConfig();
-					res.setHeader("Content-Type", "application/json");
-					res.end(JSON.stringify(config));
-				} else {
-					await toNodeHandler(authorizationServer.handler)(req, res);
-				}
-			},
-			{ port },
-		);
-
 		// Register a private_key_jwt client on the authorization server
 		const { headers } = await signInWithTestUser();
 		oauthClient = (await authorizationServer.api.adminCreateOAuthClient({
@@ -125,6 +124,7 @@ describe("private_key_jwt e2e", async () => {
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
+					requireLocalEmailVerified: false,
 				},
 			},
 			plugins: [
@@ -133,16 +133,17 @@ describe("private_key_jwt e2e", async () => {
 						{
 							providerId,
 							clientId: oauthClient.client_id,
-							clientSecret: "unused", // required by type but not used for private_key_jwt
 							redirectURI: redirectUri,
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							authentication: "private_key_jwt",
-							clientAssertion: {
-								privateKeyJwk: privateJwk,
-								kid: "e2e-key-1",
-								algorithm: "RS256",
+							tokenEndpointAuth: {
+								method: "private_key_jwt",
+								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+									privateKeyJwk: privateJwk,
+									kid: "e2e-key-1",
+									algorithm: "RS256",
+								}),
 							},
 						},
 					],
@@ -174,7 +175,7 @@ describe("private_key_jwt e2e", async () => {
 
 		// Step 2: Follow the authorize redirect → login page
 		let loginRedirectUri = "";
-		await authClient.$fetch(signInResult.url, {
+		await authClient.$fetch(signInResult.url!, {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -208,7 +209,7 @@ describe("private_key_jwt e2e", async () => {
 		// the authorization server's token endpoint, which verifies the JWT
 		// signature against the registered JWKS.
 		let callbackUrl = "";
-		await rpClient.$fetch(signInResponse.url, {
+		await rpClient.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers: rpHeaders,
 			onError(context) {
@@ -265,6 +266,7 @@ describe("private_key_jwt e2e", async () => {
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
+					requireLocalEmailVerified: false,
 				},
 			},
 			plugins: [
@@ -273,16 +275,17 @@ describe("private_key_jwt e2e", async () => {
 						{
 							providerId,
 							clientId: oauthJwksUriClient.client_id,
-							clientSecret: "unused",
 							redirectURI: redirectUri,
 							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
-							authentication: "private_key_jwt",
-							clientAssertion: {
-								privateKeyJwk: privateJwk,
-								kid: "e2e-key-1",
-								algorithm: "RS256",
+							tokenEndpointAuth: {
+								method: "private_key_jwt",
+								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+									privateKeyJwk: privateJwk,
+									kid: "e2e-key-1",
+									algorithm: "RS256",
+								}),
 							},
 						},
 					],
@@ -308,7 +311,7 @@ describe("private_key_jwt e2e", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(signInResult.url, {
+		await authClient.$fetch(signInResult.url!, {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -333,7 +336,7 @@ describe("private_key_jwt e2e", async () => {
 		expect(signInResponse.url).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await rpClient.$fetch(signInResponse.url, {
+		await rpClient.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers: rpHeaders,
 			onError(context) {

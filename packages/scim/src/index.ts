@@ -33,7 +33,6 @@ export const scim = (options?: SCIMOptions) => {
 		storeSCIMToken: "plain",
 		...options,
 	} satisfies SCIMOptions;
-	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
@@ -74,14 +73,10 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
-					...(providerOwnershipEnabled
-						? {
-								userId: {
-									type: "string",
-									required: false,
-								},
-							}
-						: {}),
+					userId: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 		},

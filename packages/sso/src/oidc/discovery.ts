@@ -8,6 +8,7 @@
  * @see https://openid.net/specs/openid-connect-discovery-1_0.html
  */
 
+import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import { betterFetch } from "@better-fetch/fetch";
 import type { OIDCConfig } from "../types";
 import type {
@@ -120,6 +121,77 @@ export function validateDiscoveryUrl(
 			`The main discovery endpoint "${discoveryEndpoint}" is not trusted by your trusted origins configuration.`,
 			{ url: discoveryEndpoint },
 		);
+	}
+}
+
+/**
+ * Validate that a user-supplied OIDC endpoint URL is safe to fetch.
+ *
+ * Layered checks (in order):
+ *   1. URL parsing + http(s) scheme            → discovery_invalid_url
+ *   2. Public-routable host (RFC 6890)         → allowed
+ *   3. Operator-allowlisted via trustedOrigins → allowed (opt-in for internal IdPs)
+ *   4. Otherwise                               → discovery_private_host
+ *
+ * Step 2 rejects loopback, RFC 1918, link-local, ULA, shared-address,
+ * cloud-metadata FQDNs (e.g. `169.254.169.254`, `metadata.google.internal`),
+ * multicast, and reserved ranges. See `isPublicRoutableHost` in
+ * `@better-auth/core/utils/host`.
+ *
+ * Step 3 is the documented escape hatch for customers whose IdP runs on a
+ * private network or behind a corporate VPN: they add the IdP origin to their
+ * `trustedOrigins` configuration.
+ *
+ * @param name - The endpoint field name, used in error messages
+ * @param endpoint - The URL to validate
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError(discovery_invalid_url)  — malformed URL or non-http(s) scheme
+ * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
+ */
+function validateSkipDiscoveryEndpoint(
+	name: string,
+	endpoint: string,
+	isTrustedOrigin: (url: string) => boolean,
+): void {
+	const parsed = parseURL(name, endpoint);
+	if (isPublicRoutableHost(parsed.hostname)) return;
+	if (isTrustedOrigin(parsed.toString())) return;
+	throw new DiscoveryError(
+		"discovery_private_host",
+		`The ${name} URL (${parsed.toString()}) is not publicly routable: ${parsed.hostname}. If this is an internal IdP, add its origin to trustedOrigins.`,
+		{ endpoint: name, url: endpoint, hostname: parsed.hostname },
+	);
+}
+
+/**
+ * Validate every present OIDC endpoint URL in a registration or update body.
+ *
+ * Each provided URL is checked with {@link validateSkipDiscoveryEndpoint}.
+ * Omitted (undefined / null / empty) fields are skipped.
+ *
+ * @param config - OIDC endpoint URLs from the request body
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError on the first invalid endpoint
+ */
+export function validateSkipDiscoveryEndpoints(
+	config: {
+		authorizationEndpoint?: string | null;
+		tokenEndpoint?: string | null;
+		userInfoEndpoint?: string | null;
+		jwksEndpoint?: string | null;
+		discoveryEndpoint?: string | null;
+	},
+	isTrustedOrigin: (url: string) => boolean,
+): void {
+	const fields: Array<[string, string | null | undefined]> = [
+		["authorizationEndpoint", config.authorizationEndpoint],
+		["tokenEndpoint", config.tokenEndpoint],
+		["userInfoEndpoint", config.userInfoEndpoint],
+		["jwksEndpoint", config.jwksEndpoint],
+		["discoveryEndpoint", config.discoveryEndpoint],
+	];
+	for (const [name, url] of fields) {
+		if (url) validateSkipDiscoveryEndpoint(name, url, isTrustedOrigin);
 	}
 }
 

@@ -175,9 +175,20 @@ export const memoryAdapter = (
 							case "lte":
 								return value != null && Boolean(record[field] <= value);
 							default:
-								return isInsensitive
-									? insensitiveCompare(record[field], value)
-									: record[field] === value;
+								if (isInsensitive) {
+									return insensitiveCompare(record[field], value);
+								}
+								// Treat undefined and null as equivalent for `eq null`
+								// predicates. Rows created without a nullable field
+								// (the adapter factory's `transformInput` skips
+								// `undefined`) store the field as `undefined`; a
+								// CAS-style `WHERE field IS NULL` predicate from
+								// caller code must match those rows, mirroring SQL
+								// `IS NULL` and Mongo's missing-or-null semantics.
+								if (value === null) {
+									return record[field] == null;
+								}
+								return record[field] === value;
 						}
 					};
 
@@ -385,6 +396,14 @@ export const memoryAdapter = (
 						return !res.includes(record);
 					});
 					return count;
+				},
+				consumeOne: async ({ model, where }) => {
+					const table = db[model]!;
+					const matches = convertWhereClause(where, model);
+					const target = matches[0];
+					if (!target) return null;
+					db[model] = table.filter((record) => record !== target);
+					return target as any;
 				},
 				updateMany({ model, where, update }) {
 					const res = convertWhereClause(where, model);

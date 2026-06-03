@@ -4,6 +4,7 @@ import type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
+import { toPascalCase } from "@better-auth/core/utils/string";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -225,6 +226,26 @@ function processZodType(zodType: z.ZodType<any>): any {
 			default: defaultValue,
 		};
 	}
+	// record: map to an open-ended object with typed values
+	if (zodType instanceof z.ZodRecord) {
+		const valueType = (zodType as any)._zod?.def?.valueType;
+		const additionalProperties =
+			valueType instanceof z.ZodType
+				? processZodType(valueType as z.ZodType<any>)
+				: {};
+		return {
+			type: "object",
+			additionalProperties,
+			description: (zodType as any).description,
+		};
+	}
+
+	// unconstrained value types: emit an empty schema so consumers don't
+	// infer a narrower shape than the runtime accepts
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
+		return { description: (zodType as any).description };
+	}
+
 	// object unwrapping
 	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape;
@@ -355,7 +376,7 @@ function getResponse(responses?: Record<string, any> | undefined) {
 			description:
 				"Internal Server Error. This is a problem with the server that you cannot fix.",
 		},
-		...responses,
+		...(responses ? structuredClone(responses) : {}),
 	} as any;
 }
 
@@ -419,6 +440,21 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
+	const seenOperationIds = new Set<string>();
+	const uniqueOperationId = (
+		operationId: string | undefined,
+		method: string,
+	) => {
+		if (!operationId) return undefined;
+		const base = seenOperationIds.has(operationId)
+			? `${operationId}${toPascalCase(method)}`
+			: operationId;
+		let result = base;
+		let n = 2;
+		while (seenOperationIds.has(result)) result = `${base}${n++}`;
+		seenOperationIds.add(result);
+		return result;
+	};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
@@ -434,7 +470,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: uniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -454,7 +493,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: uniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -519,7 +561,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: uniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+						),
 						security: [
 							{
 								bearerAuth: [],
@@ -540,7 +585,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: uniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+						),
 						security: [
 							{
 								bearerAuth: [],
