@@ -17,6 +17,14 @@ import {
 import { OAUTH_POPUP_ERROR_CODES } from "./error-codes";
 import type { OAuthPopupData } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"oauth-popup": {
+			creator: typeof oauthPopup;
+		};
+	}
+}
+
 let warnedMissingBearer = false;
 
 /**
