@@ -1,5 +1,83 @@
 # better-auth
 
+## 1.6.14
+
+### Patch Changes
+
+- [#9877](https://github.com/better-auth/better-auth/pull/9877) [`2d9781a`](https://github.com/better-auth/better-auth/commit/2d9781a83ddc7b51ecffbd7d24c28e4b917e2323) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Restore the normal emailed-invitation flow while documenting the stricter verification posture for organization invitations.
+
+  Client-side `listUserInvitations` now always requires a verified session email because it enumerates invitation IDs from `session.user.email`. The `requireEmailVerificationOnInvitation` option now controls recipient calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth keeps the emailed-invitation sign-up flow for built-in opaque invitation IDs, including the default generator or `advanced.database.generateId: "uuid"`, and requires verified email when invitation IDs are externally controlled or predictable, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation. Apps that expose invitation IDs outside the invited user's mailbox, expose organization invitation lists to members, or require stricter ownership proof should set `requireEmailVerificationOnInvitation: true` or require verified email before sign-in.
+
+- [#9841](https://github.com/better-auth/better-auth/pull/9841) [`5a2d642`](https://github.com/better-auth/better-auth/commit/5a2d642bc7d940f4242df9b304818a8653ea2a10) Thanks [@bytaesu](https://github.com/bytaesu)! - Optional fields (`required: false`) now accept `null`, not just omission. The
+  generated input validation previously rejected `null` even though the column is
+  nullable, so a nullable field could not be cleared by passing `null`.
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- [#9806](https://github.com/better-auth/better-auth/pull/9806) [`9d3450a`](https://github.com/better-auth/better-auth/commit/9d3450ae23e8387d24adfb7bb1cb24cc6965b6e3) Thanks [@bytaesu](https://github.com/bytaesu)! - `getSessionCookie` now prefers the `__Secure-` cookie when both it and a non-secure cookie are present, so the non-secure cookie no longer shadows the current session cookie.
+
+- Updated dependencies [[`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.6.14
+  - @better-auth/drizzle-adapter@1.6.14
+  - @better-auth/kysely-adapter@1.6.14
+  - @better-auth/memory-adapter@1.6.14
+  - @better-auth/mongo-adapter@1.6.14
+  - @better-auth/prisma-adapter@1.6.14
+  - @better-auth/telemetry@1.6.14
+
+## 1.6.13
+
+### Patch Changes
+
+- [#9813](https://github.com/better-auth/better-auth/pull/9813) [`d3919dc`](https://github.com/better-auth/better-auth/commit/d3919dc1a560625d8f09161d64701e257452940f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Support server-side `accountInfo` calls without session headers.
+
+  `auth.api.accountInfo` now accepts an optional `userId`, so a trusted server-side caller can read a user's provider profile without constructing session headers. This mirrors `getAccessToken` and `refreshToken`. HTTP callers still require a valid session, and a session always takes precedence over a supplied `userId`.
+
+  The shared "resolve the target user, then fetch a valid access token" logic behind these three endpoints now lives in one place. As part of that, a server-side call that supplies neither a session nor a `userId` reports `USER_ID_OR_SESSION_REQUIRED` (400) consistently, rather than `UNAUTHORIZED` on some endpoints.
+
+- [#9591](https://github.com/better-auth/better-auth/pull/9591) [`5f282bd`](https://github.com/better-auth/better-auth/commit/5f282bd382d694f6834b1d0f8f694f737f223811) Thanks [@Vishesh-Verma-07](https://github.com/Vishesh-Verma-07)! - When only `secondaryStorage` is configured (no primary database), `storeStateStrategy` now defaults to `"database"` instead of `"cookie"`, preventing oversized-cookie errors on platforms like AWS Lambda. The account cookie that holds OAuth tokens in database-less setups stays enabled, so `getAccessToken` keeps working.
+
+- [#9818](https://github.com/better-auth/better-auth/pull/9818) [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix two buggy `internalAdapter` helpers.
+
+  Remove `findAccount(accountId)`. It looked accounts up by account ID alone, which is unique neither across providers nor across users, so it returned a non-deterministic match. All callers now use a user-scoped or provider-scoped lookup.
+
+  Replace the ambiguous `deleteSessions(string | string[])` with two explicit methods. `deleteUserSessions(userId)` revokes every session for a user, and `deleteSessions(tokens)` revokes sessions by token. The old single-string overload silently treated its argument as a user ID, so a caller that meant to delete one session token could instead wipe all of a user's sessions or quietly match nothing.
+
+- [#9818](https://github.com/better-auth/better-auth/pull/9818) [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix Google One Tap signing in the wrong user when the presented Google account is already linked to someone else. One Tap now resolves identity through the shared OAuth path, so the user who owns the Google subject is signed in, matching the redirect and `signIn.social` flows. Previously it matched a local user by the token's email and used the subject only to decide linking, so a Google credential owned by one user could authenticate a different user who happened to share that email.
+
+  `/account-info` now resolves the account from the signed-in user's own linked accounts and accepts an optional `providerId` to disambiguate when two providers issue the same account ID. A colliding account ID returns a distinct `AMBIGUOUS_ACCOUNT` error instead of a misleading "not found", and an account with no configured social provider returns a 400 rather than a 500.
+
+- [#9838](https://github.com/better-auth/better-auth/pull/9838) [`be32012`](https://github.com/better-auth/better-auth/commit/be32012ca3507a62371d1baa09cdacd5123a99bf) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Validate the scheme of OAuth `redirect_uris` in the `oidc-provider` and `mcp` plugins.
+
+  Both plugins previously accepted any string as a `redirect_uri` at registration. They now reject the `javascript:`, `data:`, and `vbscript:` schemes, which are never valid OAuth redirect targets. The `@better-auth/oauth-provider` package already applied this check, so this change brings the two older plugins in line with it.
+
+  The redirect-URI scheme policy now lives in `@better-auth/core` as a single `SafeUrlSchema` and an `isSafeUrlScheme` helper, and the OAuth provider plugins share that one implementation. The client navigation helpers (`redirectPlugin`, one-tap, and two-factor) also skip navigation when the target uses one of these schemes.
+
+  The change is non-breaking. The `http`, `https`, loopback, and custom application schemes still register unchanged. Both `oidc-provider` and `mcp` are on the migration path to `@better-auth/oauth-provider`, which remains the route to its stricter HTTPS-or-loopback policy.
+
+- [#9842](https://github.com/better-auth/better-auth/pull/9842) [`87c1a0c`](https://github.com/better-auth/better-auth/commit/87c1a0cab274b574592922ccc2454b0bd510a81f) Thanks [@bytaesu](https://github.com/bytaesu)! - You can now clear an organization's logo by passing `logo: null` to `createOrganization` and `updateOrganization`. Previously only a string was accepted, so an existing logo could not be removed.
+
+- [#9822](https://github.com/better-auth/better-auth/pull/9822) [`9c8ded6`](https://github.com/better-auth/better-auth/commit/9c8ded67b192997b6c02150c3423bbc99d9bdb6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Document `viewBackupCodes` as a server-only function so its API comment no longer reads like an HTTP route.
+
+  The JSDoc above `auth.api.viewBackupCodes` advertised `POST /two-factor/view-backup-codes`, but the endpoint is server-only: it is not registered on the HTTP router and has no client method. The comment now states that it is callable only from trusted server code and that the `userId` should come from an authenticated session.
+
+- [#8758](https://github.com/better-auth/better-auth/pull/8758) [`23d7cbf`](https://github.com/better-auth/better-auth/commit/23d7cbfa793ca69b733f98334bd12962cad61646) Thanks [@bytaesu](https://github.com/bytaesu)! - Apply `accountLinking.updateUserInfoOnLink` across every OAuth link flow.
+
+  Enabling `updateUserInfoOnLink` only synced the user's profile when linking through a direct ID token. Linking through the standard OAuth redirect (`linkSocial`, the generic OAuth `oauth2.link` endpoint, and implicit linking on social sign-in) ignored the option, so the name and image never changed. Every link path now honors it.
+
+  The synced fields match the sign-up path: `name`, `image`, and any fields your `mapProfileToUser` adds. The local `email` and `emailVerified` are never changed on a link, so linking a provider cannot rebind the account's identity.
+
+  Implicit linking on social sign-in also returned the pre-update user, so the freshly issued session served stale profile data from its cookie cache until the cache expired. The new session now carries the updated profile.
+
+- Updated dependencies [[`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066)]:
+  - @better-auth/core@1.6.13
+  - @better-auth/drizzle-adapter@1.6.13
+  - @better-auth/kysely-adapter@1.6.13
+  - @better-auth/memory-adapter@1.6.13
+  - @better-auth/mongo-adapter@1.6.13
+  - @better-auth/prisma-adapter@1.6.13
+  - @better-auth/telemetry@1.6.13
+
 ## 1.6.12
 
 ### Patch Changes

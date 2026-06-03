@@ -1,5 +1,29 @@
 # @better-auth/sso
 
+## 1.6.14
+
+### Patch Changes
+
+- Updated dependencies [[`2d9781a`](https://github.com/better-auth/better-auth/commit/2d9781a83ddc7b51ecffbd7d24c28e4b917e2323), [`5a2d642`](https://github.com/better-auth/better-auth/commit/5a2d642bc7d940f4242df9b304818a8653ea2a10), [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f), [`9d3450a`](https://github.com/better-auth/better-auth/commit/9d3450ae23e8387d24adfb7bb1cb24cc6965b6e3)]:
+  - better-auth@1.6.14
+  - @better-auth/core@1.6.14
+
+## 1.6.13
+
+### Patch Changes
+
+- [#9818](https://github.com/better-auth/better-auth/pull/9818) [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix SAML Single Logout leaving the user signed in. The logout handlers passed the session row id to a delete that matches on the session token, so the session was never removed. The stored SAML session record now carries the session token, and all three logout paths revoke the session by token.
+
+- [#9821](https://github.com/better-auth/better-auth/pull/9821) [`4c3bbc4`](https://github.com/better-auth/better-auth/commit/4c3bbc4e56e5ae4ec4d780daaa71358d663cee06) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix a high-severity XML injection in signed SAML assertions (GHSA-34r5-q4jw-r36m) by updating `samlify` from 2.10.2 to 2.13.1. A crafted `AttributeValue` could escalate privileges.
+
+  samlify 2.11 replaced `node-forge` with Node's native crypto, which parses private keys through OpenSSL 3 and rejects PEM blocks that carry leading whitespace. SAML private keys are now normalized before they reach samlify, so a key pasted with indentation (for example from an indented YAML or JSON config) keeps loading.
+
+  IdP-initiated Single Logout now derives its response from the parsed logout request, which fixes response generation under samlify 2.13. When mapping SAML attributes to user fields, a multi-valued attribute is read by its first value.
+
+- Updated dependencies [[`d3919dc`](https://github.com/better-auth/better-auth/commit/d3919dc1a560625d8f09161d64701e257452940f), [`5f282bd`](https://github.com/better-auth/better-auth/commit/5f282bd382d694f6834b1d0f8f694f737f223811), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`be32012`](https://github.com/better-auth/better-auth/commit/be32012ca3507a62371d1baa09cdacd5123a99bf), [`87c1a0c`](https://github.com/better-auth/better-auth/commit/87c1a0cab274b574592922ccc2454b0bd510a81f), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066), [`9c8ded6`](https://github.com/better-auth/better-auth/commit/9c8ded67b192997b6c02150c3423bbc99d9bdb6b), [`23d7cbf`](https://github.com/better-auth/better-auth/commit/23d7cbfa793ca69b733f98334bd12962cad61646)]:
+  - better-auth@1.6.13
+  - @better-auth/core@1.6.13
+
 ## 1.6.12
 
 ### Patch Changes
