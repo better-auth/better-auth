@@ -1,5 +1,30 @@
 # @better-auth/drizzle-adapter
 
+## 1.6.14
+
+### Patch Changes
+
+- Updated dependencies [[`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.6.14
+
+## 1.6.13
+
+### Patch Changes
+
+- Updated dependencies [[`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066)]:
+  - @better-auth/core@1.6.13
+
+## 1.6.12
+
+### Patch Changes
+
+- [#9756](https://github.com/better-auth/better-auth/pull/9756) [`85ca603`](https://github.com/better-auth/better-auth/commit/85ca603eecaafa21d4950288b4d58d95c1b5b0b4) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: Drizzle adapter drops OR clauses when mixed with AND connectors in where conditions
+
+- [#9665](https://github.com/better-auth/better-auth/pull/9665) [`5190c26`](https://github.com/better-auth/better-auth/commit/5190c2658f0827b533e7006e95587317ea8cb0cc) Thanks [@kgarg2468](https://github.com/kgarg2468)! - Replace unsafe MySQL insert-return fallback with a robust cascading strategy (ID lookup, LAST_INSERT_ID for serial, unique column match, full-field match) wrapped in a transaction. Emits a one-time startup warning when MySQL is used with generateId: false.
+
+- Updated dependencies [[`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3), [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f), [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff), [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3), [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799)]:
+  - @better-auth/core@1.6.12
+
 ## 1.6.11
 
 ### Patch Changes

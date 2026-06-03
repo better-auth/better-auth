@@ -11,7 +11,7 @@ overrides:
   h3-v2: 'npm:h3@^2.0.1-rc.15'
   brace-expansion@<2: 1.1.13
   brace-expansion@>=2 <4: 2.0.3
-  brace-expansion@>=4: 5.0.5
+  brace-expansion@>=4: 5.0.6
   cookie@<0.7.0: '>=0.7.2 <0.8'
   '@xmldom/xmldom@<0.8.13': '>=0.8.13 <0.9'
   'devalue@>=5.6.3 <=5.8.0': 5.8.1
@@ -45,9 +45,13 @@ overrides:
   yaml: ^2.9.0
   express-rate-limit@<8.2.2: '>=8.2.2 <9'
   effect@<3.20.0: '>=3.20.0 <4'
+  js-cookie@<3.0.7: '>=3.0.7 <4'
+  qs@<6.15.2: '>=6.15.2 <7'
+  'ws@>=8 <8.20.1': '>=8.20.1 <9'
+  uuid@<11.1.1: '>=11.1.1 <12'
 
 catalog:
-  '@better-auth/utils': 0.4.0
+  '@better-auth/utils': 0.4.1
   '@better-fetch/fetch': 1.1.21
   better-call: 1.3.5
   kysely: ^0.28.17 || ^0.29.0
@@ -91,6 +95,10 @@ allowBuilds:
 linkWorkspacePackages: true
 
 minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@better-auth/*'
+  - '@better-fetch/fetch'
+  - 'better-call'
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch

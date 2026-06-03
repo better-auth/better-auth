@@ -959,12 +959,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
+			const invitationId = context.generateId({ model: "invitation" });
 			const invite = await adapter.create<
 				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
 				data: {
+					...(invitationId !== false ? { id: invitationId } : {}),
 					status: "pending",
 					expiresAt,
 					createdAt: new Date(),

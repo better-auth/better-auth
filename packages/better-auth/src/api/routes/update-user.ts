@@ -288,7 +288,7 @@ export const changePassword = createAuthEndpoint(
 		});
 		let token = null;
 		if (revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
 			);
@@ -549,7 +549,7 @@ export const deleteUser = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -640,7 +640,7 @@ export const deleteUserCallback = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			`delete-account-${ctx.query.token}`,
