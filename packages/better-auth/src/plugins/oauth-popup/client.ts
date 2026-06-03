@@ -45,6 +45,20 @@ const POPUP_HEIGHT = 600;
 const CLOSED_POLL_MS = 500;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
+/** True when embedded cross-origin, where the cookie may be partitioned. */
+function isEmbedded(): boolean {
+	if (typeof window === "undefined" || window.self === window.top) {
+		return false;
+	}
+	try {
+		// A cross-origin parent throws on location access, a same-origin one does not.
+		void window.top?.location.href;
+		return false;
+	} catch {
+		return true;
+	}
+}
+
 /** Reads the stored popup token (browser-only; null otherwise). */
 export function getStoredPopupToken(): string | null {
 	if (typeof window === "undefined") return null;
@@ -71,7 +85,7 @@ export const popupBearerFetchPlugin: BetterFetchPlugin = {
 	name: "Popup Bearer",
 	hooks: {
 		onRequest(context) {
-			if (typeof window === "undefined" || window.self === window.top) {
+			if (!isEmbedded()) {
 				return context;
 			}
 			const token = getStoredPopupToken();
@@ -270,7 +284,11 @@ export function createSignInPopup({
 				: popupError("POPUP_CLOSED");
 		}
 
-		storePopupToken(outcome.token);
+		// Only persist the token when embedded — at top level the cookie
+		// authenticates, so storing it would be an unused credential at rest.
+		if (isEmbedded()) {
+			storePopupToken(outcome.token);
+		}
 
 		// Confirm the handoff resolves a session: the bearer plugin attaches the
 		// token when embedded, the cookie resolves it at top level. A failure here
