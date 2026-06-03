@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -82,7 +82,7 @@ async function truncateAllTables(
 
 export async function pushPrismaSchema(dialect: Dialect, db?: RawClient) {
 	const cwd = import.meta.dirname;
-	const cli = `${process.execPath} ${resolvePrismaCli()}`;
+	const prismaCli = resolvePrismaCli();
 
 	// Write a per-dialect prisma config file (Prisma v7 requires datasource url here)
 	const configPath = join(cwd, `prisma-config-${dialect}.ts`);
@@ -128,8 +128,19 @@ export default defineConfig({
 
 	try {
 		if (!didReset) {
-			execSync(
-				`${cli} db push --force-reset --accept-data-loss --config ${configPath}`,
+			// execFileSync (binary + args array, no shell) so the prisma CLI path
+			// and flags are never parsed by a shell.
+			execFileSync(
+				process.execPath,
+				[
+					prismaCli,
+					"db",
+					"push",
+					"--force-reset",
+					"--accept-data-loss",
+					"--config",
+					configPath,
+				],
 				{
 					stdio: "pipe",
 					cwd,
@@ -149,10 +160,11 @@ export default defineConfig({
 			if (prevDir && fs.existsSync(prevDir)) {
 				fs.cpSync(prevDir, outputDir, { recursive: true });
 			} else {
-				execSync(`${cli} generate --config ${configPath}`, {
-					stdio: "pipe",
-					cwd,
-				});
+				execFileSync(
+					process.execPath,
+					[prismaCli, "generate", "--config", configPath],
+					{ stdio: "pipe", cwd },
+				);
 				lastGeneratedDir.set(schemaKey, outputDir);
 			}
 		}
