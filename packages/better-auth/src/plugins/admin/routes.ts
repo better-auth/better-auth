@@ -153,6 +153,14 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 					}
 				}
 			}
+
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				{
@@ -507,6 +515,14 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 					inputRoles as string[],
 				);
 			}
+
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				ctx.body.data,
@@ -849,6 +865,13 @@ export const unbanUser = (opts: AdminOptions) =>
 					"FORBIDDEN",
 					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 				);
+			}
+
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			const user = await ctx.context.internalAdapter.updateUser(
