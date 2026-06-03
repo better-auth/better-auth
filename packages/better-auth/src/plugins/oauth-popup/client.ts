@@ -13,9 +13,9 @@ import type { OAuthPopupError } from "./types";
 
 /** Inputs for `authClient.signIn.popup`; mirror the redirect sign-in. */
 export interface SignInPopupOptions {
-	/** Built-in social provider id (uses `/sign-in/social`). */
+	/** Built-in social provider id (e.g. `"google"`). */
 	provider?: string;
-	/** Generic OAuth provider id (uses `/sign-in/oauth2`). */
+	/** Generic OAuth provider id (registered via `genericOAuth`). */
 	providerId?: string;
 	callbackURL?: string;
 	errorCallbackURL?: string;
@@ -118,7 +118,7 @@ export const popupBearerFetchPlugin: BetterFetchPlugin = {
 	},
 };
 
-// One popup per client at a time.
+// One popup per page at a time (module-global).
 let activePopup: Window | null = null;
 
 function popupError(
