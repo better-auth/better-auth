@@ -23,6 +23,7 @@ const columns: ColumnDef<CommunityAdapter>[] = [
 		header: ({ column }) => {
 			return (
 				<button
+					type="button"
 					className="flex items-center gap-2 font-semibold hover:text-foreground transition-colors whitespace-nowrap"
 					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 				>
@@ -53,6 +54,7 @@ const columns: ColumnDef<CommunityAdapter>[] = [
 		header: ({ column }) => {
 			return (
 				<button
+					type="button"
 					className="flex items-center gap-2 font-semibold hover:text-foreground transition-colors whitespace-nowrap"
 					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 				>
@@ -80,6 +82,7 @@ const columns: ColumnDef<CommunityAdapter>[] = [
 		header: ({ column }) => {
 			return (
 				<button
+					type="button"
 					className="flex items-center gap-2 font-semibold hover:text-foreground transition-colors whitespace-nowrap"
 					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 				>
@@ -143,6 +146,7 @@ export function CommunityAdaptersTable() {
 				<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<input
 					type="text"
+					aria-label="Search community adapters"
 					placeholder="Search adapters, databases, or authors..."
 					value={globalFilter ?? ""}
 					onChange={(e) => setGlobalFilter(e.target.value)}
@@ -151,7 +155,7 @@ export function CommunityAdaptersTable() {
 			</div>
 			<div className="rounded-lg border">
 				<div className="overflow-x-auto">
-					<table className="w-full min-w-2xl">
+					<table className="w-full min-w-[720px]">
 						<thead>
 							{table.getHeaderGroups().map((headerGroup) => (
 								<tr key={headerGroup.id} className="border-b bg-muted/50">
