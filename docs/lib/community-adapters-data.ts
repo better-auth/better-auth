@@ -1,9 +1,4 @@
-"use client";
-
-import { ArrowUpRight, Database, Search } from "lucide-react";
-import { useState } from "react";
-
-interface CommunityAdapter {
+export interface CommunityAdapter {
 	name: string;
 	url: string;
 	database: string;
@@ -15,9 +10,9 @@ interface CommunityAdapter {
 	};
 }
 
-const adapters: CommunityAdapter[] = [
+export const communityAdapters: CommunityAdapter[] = [
 	{
-		name: "convex-better-auth",
+		name: "@convex-dev/better-auth",
 		url: "https://github.com/get-convex/better-auth",
 		database: "Convex",
 		databaseUrl: "https://www.convex.dev/",
@@ -61,7 +56,7 @@ const adapters: CommunityAdapter[] = [
 		},
 	},
 	{
-		name: "@payload-auth/better-auth-plugin",
+		name: "payload-auth",
 		url: "https://github.com/payload-auth/payload-auth",
 		database: "Payload CMS",
 		databaseUrl: "https://payloadcms.com/",
@@ -80,6 +75,17 @@ const adapters: CommunityAdapter[] = [
 			name: "Delmare Digital",
 			url: "https://github.com/delmaredigital",
 			avatar: "https://github.com/delmaredigital.png",
+		},
+	},
+	{
+		name: "@hedystia/better-auth-typeorm",
+		url: "https://github.com/Zastinian/better-auth-typeorm",
+		database: "TypeORM",
+		databaseUrl: "https://typeorm.io/",
+		author: {
+			name: "Zastinian",
+			url: "https://github.com/Zastinian",
+			avatar: "https://github.com/Zastinian.png",
 		},
 	},
 	{
@@ -148,92 +154,26 @@ const adapters: CommunityAdapter[] = [
 			avatar: "https://github.com/boazpoolman.png",
 		},
 	},
+	{
+		name: "neo4j-better-auth",
+		url: "https://github.com/florianamette/better-auth-neo4j",
+		database: "Neo4j",
+		databaseUrl: "https://neo4j.com/",
+		author: {
+			name: "florianamette",
+			url: "https://github.com/florianamette",
+			avatar: "https://github.com/florianamette.png",
+		},
+	},
+	{
+		name: "better-auth-mikro-orm",
+		url: "https://github.com/octet-stream/better-auth-mikro-orm",
+		database: "MikroORM",
+		databaseUrl: "https://mikro-orm.io/",
+		author: {
+			name: "octet-stream",
+			url: "https://github.com/octet-stream",
+			avatar: "https://github.com/octet-stream.png",
+		},
+	},
 ];
-
-export function CommunityAdaptersGrid() {
-	const [filter, setFilter] = useState("");
-
-	const filtered = adapters.filter((a) => {
-		const q = filter.toLowerCase();
-		return (
-			a.name.toLowerCase().includes(q) ||
-			a.database.toLowerCase().includes(q) ||
-			a.author.name.toLowerCase().includes(q)
-		);
-	});
-
-	return (
-		<div className="not-prose">
-			<div className="relative mb-4">
-				<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-foreground/30" />
-				<input
-					type="text"
-					placeholder="Filter adapters..."
-					value={filter}
-					onChange={(e) => setFilter(e.target.value)}
-					className="w-full border border-foreground/[0.08] bg-foreground/[0.02] pl-9 pr-4 py-2 text-sm font-mono text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground/20 transition-colors"
-				/>
-			</div>
-
-			<div className="text-[11px] font-mono uppercase tracking-wider text-foreground/30 mb-2">
-				{filtered.length} adapter{filtered.length !== 1 ? "s" : ""}
-			</div>
-
-			<div className="border border-foreground/[0.08] divide-y divide-foreground/[0.06]">
-				{filtered.map((adapter) => (
-					<div
-						key={adapter.name}
-						className="group flex flex-col gap-2 px-4 py-3.5 hover:bg-foreground/[0.03] transition-colors"
-					>
-						<div className="flex items-start justify-between gap-3">
-							<a
-								href={adapter.url}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="font-mono text-[13px] text-foreground/90 group-hover:text-foreground transition-colors break-all hover:underline"
-							>
-								{adapter.name}
-							</a>
-							<ArrowUpRight className="size-3.5 shrink-0 text-foreground/20 group-hover:text-foreground/50 transition-colors mt-0.5" />
-						</div>
-						<div className="flex items-center gap-3 flex-wrap">
-							<span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-foreground/40">
-								<Database className="size-3" />
-								<a
-									href={adapter.databaseUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="hover:text-foreground/70 transition-colors"
-								>
-									{adapter.database}
-								</a>
-							</span>
-							<span className="text-foreground/10">|</span>
-							<span className="inline-flex items-center gap-1.5">
-								<img
-									src={adapter.author.avatar}
-									alt={adapter.author.name}
-									className="size-4 border border-foreground/10 opacity-60"
-									style={{ borderRadius: 0 }}
-								/>
-								<a
-									href={adapter.author.url}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-[11px] font-mono text-foreground/40 hover:text-foreground/70 transition-colors"
-								>
-									{adapter.author.name}
-								</a>
-							</span>
-						</div>
-					</div>
-				))}
-				{filtered.length === 0 && (
-					<div className="px-4 py-8 text-center text-sm text-foreground/30 font-mono">
-						No adapters found.
-					</div>
-				)}
-			</div>
-		</div>
-	);
-}
