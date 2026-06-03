@@ -75,6 +75,12 @@ function storePopupToken(token: string): void {
 	} catch {}
 }
 
+function clearPopupToken(): void {
+	try {
+		window.localStorage?.removeItem(POPUP_TOKEN_STORAGE_KEY);
+	} catch {}
+}
+
 /**
  * Attaches the popup token as a bearer header, but only inside a cross-site
  * iframe where the session cookie is partitioned away. At top level the cookie
@@ -284,10 +290,13 @@ export function createSignInPopup({
 				: popupError("POPUP_CLOSED");
 		}
 
-		// Only persist the token when embedded — at top level the cookie
-		// authenticates, so storing it would be an unused credential at rest.
+		// Persist the token only when embedded (the bearer plugin reads it there).
+		// At top level the cookie authenticates, so clear any stale token instead
+		// of leaving one an embedded context could later reuse.
 		if (isEmbedded()) {
 			storePopupToken(outcome.token);
+		} else {
+			clearPopupToken();
 		}
 
 		// Confirm the handoff resolves a session: the bearer plugin attaches the
