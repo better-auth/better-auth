@@ -202,7 +202,7 @@ function getRequestBody(options: EndpointOptions): any {
 						type: "object",
 						properties,
 						required,
-						...(additionalProperties ? { additionalProperties: true } : {}),
+						...(additionalProperties ? { additionalProperties } : {}),
 					},
 				},
 			},
@@ -214,18 +214,20 @@ function getRequestBody(options: EndpointOptions): any {
 /**
  * Resolves a `ZodIntersection` body schema (e.g. `z.object({...}).and(z.record(...))`)
  * into a flat object schema. The object members are merged into `properties`, while a
- * record member (catch-all) is represented as `additionalProperties`. Without this the
- * generator would skip the `requestBody` entirely for endpoints using intersections.
+ * record member (catch-all) is represented as `additionalProperties` — preserving the
+ * record's value type, or `true` when the value type is unconstrained (`z.any()`/
+ * `z.unknown()`). Without this the generator would skip the `requestBody` entirely for
+ * endpoints using intersections.
  */
 function resolveIntersectionSchema(zodType: z.ZodType<any>): {
 	properties: Record<string, any>;
 	required: string[];
-	additionalProperties: boolean;
+	additionalProperties: boolean | Record<string, any>;
 } {
 	const result = {
 		properties: {} as Record<string, any>,
 		required: [] as string[],
-		additionalProperties: false,
+		additionalProperties: false as boolean | Record<string, any>,
 	};
 	const merge = (schema: z.ZodType<any>) => {
 		if (schema instanceof z.ZodOptional) {
@@ -239,7 +241,11 @@ function resolveIntersectionSchema(zodType: z.ZodType<any>): {
 			return;
 		}
 		if (schema instanceof z.ZodRecord) {
-			result.additionalProperties = true;
+			const valueType = (schema as any)._def.valueType as z.ZodType<any>;
+			result.additionalProperties =
+				valueType instanceof z.ZodAny || valueType instanceof z.ZodUnknown
+					? true
+					: processZodType(valueType);
 			return;
 		}
 		if (schema instanceof z.ZodObject) {
@@ -256,6 +262,9 @@ function resolveIntersectionSchema(zodType: z.ZodType<any>): {
 		}
 	};
 	merge(zodType);
+	// `required` must be a set of unique property names (JSON Schema); intersecting
+	// objects that share a key would otherwise produce duplicates.
+	result.required = [...new Set(result.required)];
 	return result;
 }
 
