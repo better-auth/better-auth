@@ -6,11 +6,9 @@ import type { DatabaseSync } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
-	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -18,20 +16,22 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
+import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
-	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+} from "kysely/migration";
 
-class NodeSqliteAdapter implements DialectAdapterBase {
+class NodeSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
+		return false;
+	}
+
+	get supportsMultipleConnections(): boolean {
 		return false;
 	}
 
@@ -205,14 +205,6 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
 	}
 
-	async getMetadata(
-		options?: DatabaseMetadataOptions | undefined,
-	): Promise<DatabaseMetadata> {
-		return {
-			tables: await this.getTables(options),
-		};
-	}
-
 	async #getTableMetadata(table: string): Promise<TableMetadata> {
 		const db = this.#db;
 
@@ -255,6 +247,7 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: false,
+			isForeign: false,
 		};
 	}
 }
