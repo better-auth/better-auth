@@ -49,6 +49,7 @@
     "i18n-built-in-translations",
     "lovely-toes-swim",
     "oauth-additional-params",
+    "oauth-granted-scopes-architecture",
     "oauth-idp-initiated-bounce",
     "oauth-provider-at-hash",
     "oauth-provider-token-refactor",

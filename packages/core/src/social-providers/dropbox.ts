@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -25,12 +26,15 @@ export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
 	accessType?: ("offline" | "online" | "legacy") | undefined;
 }
 
+const DROPBOX_DEFAULT_SCOPES = ["account_info.read"];
+
 export const dropbox = (options: DropboxOptions) => {
 	const tokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
 
 	return {
 		id: "dropbox",
 		name: "Dropbox",
+		callbackPath: "/callback/dropbox",
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -38,14 +42,16 @@ export const dropbox = (options: DropboxOptions) => {
 			redirectURI,
 			additionalParams,
 		}) => {
-			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				DROPBOX_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "dropbox",
 				options,
 				authorizationEndpoint: "https://www.dropbox.com/oauth2/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				codeVerifier,
@@ -110,5 +116,5 @@ export const dropbox = (options: DropboxOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<DropboxProfile>;
+	} satisfies UpstreamProvider<DropboxProfile>;
 };

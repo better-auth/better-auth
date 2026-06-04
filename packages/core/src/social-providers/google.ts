@@ -2,11 +2,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -51,12 +52,25 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * The hosted domain of the user
 	 */
 	hd?: string | undefined;
+	/**
+	 * Enable incremental authorization via Google's `include_granted_scopes`
+	 * parameter. When enabled, Google reports the user's full granted scope set
+	 * in the token response.
+	 *
+	 * @default true
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
+
+const GOOGLE_DEFAULT_SCOPES = ["email", "profile", "openid"];
 
 export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
+		callbackPath: "/callback/google",
+		grantAuthority:
+			options.includeGrantedScopes !== false ? "full-grant" : "projection",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -75,16 +89,16 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["email", "profile", "openid"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const url = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				GOOGLE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "google",
 				options,
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -93,12 +107,17 @@ export const google = (options: GoogleOptions) => {
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,
-				additionalParams: {
-					include_granted_scopes: "true",
-					...(additionalParams ?? {}),
-				},
+				additionalParams:
+					options.includeGrantedScopes === false
+						? { ...(additionalParams ?? {}) }
+						: {
+								...(additionalParams ?? {}),
+								// Not caller-overridable: the emitted param must stay in
+								// lockstep with `grantAuthority` (driven by the option), or
+								// the callback would treat a non-authoritative grant as full.
+								include_granted_scopes: "true",
+							},
 			});
-			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -176,7 +195,7 @@ export const google = (options: GoogleOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<GoogleProfile>;
+	} satisfies UpstreamProvider<GoogleProfile>;
 };
 
 export const getGooglePublicKey = async (kid: string) => {

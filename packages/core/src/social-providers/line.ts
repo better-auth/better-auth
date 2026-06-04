@@ -1,9 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -32,6 +33,8 @@ export interface LineOptions
 	clientId: string;
 }
 
+const LINE_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 /**
  * LINE Login v2.1
  * - Authorization endpoint: https://access.line.me/oauth2/v2.1/authorize
@@ -50,7 +53,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		async createAuthorizationURL({
+		callbackPath: "/callback/line",
+		createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -58,16 +62,16 @@ export const line = (options: LineOptions) => {
 			loginHint,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["openid", "profile", "email"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				LINE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "line",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -167,5 +171,5 @@ export const line = (options: LineOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
+	} satisfies UpstreamProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
 };
