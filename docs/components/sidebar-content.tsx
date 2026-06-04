@@ -2313,6 +2313,40 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Commet",
+				href: "/docs/plugins/commet",
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="50 55.5 400 400"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<mask
+							id="commet-mark"
+							maskUnits="userSpaceOnUse"
+							x="0"
+							y="0"
+							width="500"
+							height="500"
+						>
+							<rect width="500" height="500" fill="white" />
+							<rect
+								width="253.649"
+								height="17.0192"
+								transform="matrix(0.718749 0.695269 -0.64697 0.762515 143.458 243.867)"
+								fill="black"
+							/>
+						</mask>
+						<g mask="url(#commet-mark)" fill="currentColor">
+							<path d="M250 71L356.521 255.5H143.479L250 71Z" />
+							<path d="M250 440L356.521 255.5H143.479L250 440Z" />
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Others",
 				group: true,
 				icon: () => null,
