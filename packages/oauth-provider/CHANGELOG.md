@@ -1,5 +1,47 @@
 # @better-auth/oauth-provider
 
+## 1.6.14
+
+### Patch Changes
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- Updated dependencies [[`2d9781a`](https://github.com/better-auth/better-auth/commit/2d9781a83ddc7b51ecffbd7d24c28e4b917e2323), [`5a2d642`](https://github.com/better-auth/better-auth/commit/5a2d642bc7d940f4242df9b304818a8653ea2a10), [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f), [`9d3450a`](https://github.com/better-auth/better-auth/commit/9d3450ae23e8387d24adfb7bb1cb24cc6965b6e3)]:
+  - better-auth@1.6.14
+  - @better-auth/core@1.6.14
+
+## 1.6.13
+
+### Patch Changes
+
+- [#9837](https://github.com/better-auth/better-auth/pull/9837) [`17ab66c`](https://github.com/better-auth/better-auth/commit/17ab66c3a4beef72c3a4ac82ce7aca21650e8462) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Enforce the `clientPrivileges` create check on dynamic client registration.
+
+  `POST /oauth2/register` reached OAuth client persistence without the create gate that `/oauth2/create-client` and `/admin/oauth2/create-client` enforced. A deployment that restricted client creation through `clientPrivileges` could still let any authenticated user register a confidential client and receive a `client_secret`. The create check now runs at the single client-creation chokepoint, so every registration route enforces it by construction.
+
+  Unauthenticated public-client registration through `allowUnauthenticatedClientRegistration` is unchanged.
+
+- Updated dependencies [[`d3919dc`](https://github.com/better-auth/better-auth/commit/d3919dc1a560625d8f09161d64701e257452940f), [`5f282bd`](https://github.com/better-auth/better-auth/commit/5f282bd382d694f6834b1d0f8f694f737f223811), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`be32012`](https://github.com/better-auth/better-auth/commit/be32012ca3507a62371d1baa09cdacd5123a99bf), [`87c1a0c`](https://github.com/better-auth/better-auth/commit/87c1a0cab274b574592922ccc2454b0bd510a81f), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066), [`9c8ded6`](https://github.com/better-auth/better-auth/commit/9c8ded67b192997b6c02150c3423bbc99d9bdb6b), [`23d7cbf`](https://github.com/better-auth/better-auth/commit/23d7cbfa793ca69b733f98334bd12962cad61646)]:
+  - better-auth@1.6.13
+  - @better-auth/core@1.6.13
+
+## 1.6.12
+
+### Patch Changes
+
+- [#9624](https://github.com/better-auth/better-auth/pull/9624) [`f77060a`](https://github.com/better-auth/better-auth/commit/f77060af3a9d1f19f05a26ccf6e56d79bb9db69d) Thanks [@bytaesu](https://github.com/bytaesu)! - Expired magic-link tokens and OAuth authorization codes are now reliably rejected. Magic-link verify redirects to `?error=INVALID_TOKEN` for expired tokens (was `?error=EXPIRED_TOKEN`). The OIDC, MCP, and `@better-auth/oauth-provider` `/token` endpoints return `error_description: "invalid code"` for expired codes (was `"code expired"`). The OAuth `error` value stays `invalid_grant`.
+
+- [#9668](https://github.com/better-auth/better-auth/pull/9668) [`8401d11`](https://github.com/better-auth/better-auth/commit/8401d11f4386be819807f7f241a0aae5cd20edc1) Thanks [@kgarg2468](https://github.com/kgarg2468)! - Serve OAuth authorization server and OpenID Connect metadata at the direct issuer well-known URLs for path-prefixed issuers. Direct metadata requests now honor `advanced.skipTrailingSlashes` and only handle `GET` and `HEAD`.
+
+- [#9448](https://github.com/better-auth/better-auth/pull/9448) [`d64174e`](https://github.com/better-auth/better-auth/commit/d64174ec86434375cb7e010ee4dfcd031e20c821) Thanks [@chdanielmueller](https://github.com/chdanielmueller)! - Remove registration_endpoint on .well-known config if `allowDynamicClientRegistration` is not true
+
+- [#9601](https://github.com/better-auth/better-auth/pull/9601) [`938efee`](https://github.com/better-auth/better-auth/commit/938efee305c66cdb73e84321523d5db5658e4ed8) Thanks [@bytaesu](https://github.com/bytaesu)! - Basic Auth authentication now accepts `client_secret` values that contain `:`. Previously `/token`, `/revoke`, and `/introspect` rejected valid credentials for any confidential client whose secret contained a colon.
+
+- [#9600](https://github.com/better-auth/better-auth/pull/9600) [`87f5a8f`](https://github.com/better-auth/better-auth/commit/87f5a8fd27faa8534523348a0671e60466b083c0) Thanks [@bytaesu](https://github.com/bytaesu)! - The consent update endpoint now checks consent ownership before looking up the referenced client, and responds with `404 NOT_FOUND` when the consent references a client that no longer exists. Both behaviors now match the get and delete consent endpoints.
+
+- Updated dependencies [[`9bd53e1`](https://github.com/better-auth/better-auth/commit/9bd53e191cda174c202a07b6d27af73300e6b175), [`23dbe1a`](https://github.com/better-auth/better-auth/commit/23dbe1ad0eb79372a674bc0771990c6cc3272a92), [`7a12072`](https://github.com/better-auth/better-auth/commit/7a120724c5c3fdd9d60d59169b32d693e9497fec), [`09a1d50`](https://github.com/better-auth/better-auth/commit/09a1d50a806f1599707ef4e7c47f8a4b8eb20f96), [`a6f144a`](https://github.com/better-auth/better-auth/commit/a6f144ad0a8ef702969cf49c999ccd073eb1ffa6), [`f77060a`](https://github.com/better-auth/better-auth/commit/f77060af3a9d1f19f05a26ccf6e56d79bb9db69d), [`dcb2e6d`](https://github.com/better-auth/better-auth/commit/dcb2e6d29cf4c986ff8980dab50bcfcb8110a749), [`c92cd74`](https://github.com/better-auth/better-auth/commit/c92cd74162cd1750404ab1da10d3fc20ed7d5e04), [`f5fcc9d`](https://github.com/better-auth/better-auth/commit/f5fcc9d37f2c46d3719a70c18857d9913ce172cf), [`9d91eb7`](https://github.com/better-auth/better-auth/commit/9d91eb77f5c10779b287f9c8de0495fcb75a425a), [`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3), [`1b40dac`](https://github.com/better-auth/better-auth/commit/1b40dac22e0cfddbbb27136fe8067aba154ca91a), [`5626e1b`](https://github.com/better-auth/better-auth/commit/5626e1b4375aef7735e4f1103035377cbfad755c), [`ad9ad82`](https://github.com/better-auth/better-auth/commit/ad9ad824965cb8385f6f2a921576f2cc58ac2b47), [`62dabf6`](https://github.com/better-auth/better-auth/commit/62dabf66780a3dc7270e419886a15c43f3c8d879), [`276d67f`](https://github.com/better-auth/better-auth/commit/276d67fad597ca415a023c10fb5e1165093eebd1), [`2d73fff`](https://github.com/better-auth/better-auth/commit/2d73ffff4470664147e7207336442029c35f12d9), [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f), [`ac96316`](https://github.com/better-auth/better-auth/commit/ac96316af3070ba52c9492464305d3206aadc602), [`0a7cb70`](https://github.com/better-auth/better-auth/commit/0a7cb7064723d2096e36f44b86c59f7181a8e0c5), [`015f96b`](https://github.com/better-auth/better-auth/commit/015f96bc63a90c06a67fbaf80e286b6f6fe1967d), [`43cc49c`](https://github.com/better-auth/better-auth/commit/43cc49c640c0d2c27572807a291d318bbcadfd04), [`f5e29ea`](https://github.com/better-auth/better-auth/commit/f5e29eaf1e57d73a024d12b1bedf4162e5f4a863), [`1d372bb`](https://github.com/better-auth/better-auth/commit/1d372bbab9117f5a574ecb608b7a5108f1ccbc66), [`3f8f310`](https://github.com/better-auth/better-auth/commit/3f8f310a0f2737f65bb4393eefd6b9372b2cb00e), [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff), [`17cd433`](https://github.com/better-auth/better-auth/commit/17cd433c66a6ed323b9fda7d4e7db5ad98d8099b), [`c01b2f1`](https://github.com/better-auth/better-auth/commit/c01b2f13216463fc0fc0054b5acdb9559d29d825), [`6b44606`](https://github.com/better-auth/better-auth/commit/6b44606b7d596527b59176b7a0cd06ea66df9031), [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3), [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799), [`2b7937f`](https://github.com/better-auth/better-auth/commit/2b7937fc2febd048bfc14b8226287b55b7d48e52)]:
+  - better-auth@1.6.12
+  - @better-auth/core@1.6.12
+
 ## 1.6.11
 
 ### Patch Changes

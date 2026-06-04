@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
@@ -12,7 +13,10 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	applyUpdateUserInfoOnLink,
+	handleOAuthUserInfo,
+} from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
@@ -395,6 +399,10 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						additionalParams,
 					});
 				}
+				tokens = applyDefaultAccessTokenExpiry(
+					tokens,
+					providerConfig.accessTokenExpiresIn,
+				);
 			} catch (e) {
 				ctx.context.logger.error(
 					e && typeof e === "object" && "name" in e ? (e.name as string) : "",
@@ -505,6 +513,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						redirectOnError(ctx, resolvedErrorURL, "unable_to_link_account");
 					}
 				}
+
+				await applyUpdateUserInfoOnLink(ctx, link.userId, userInfo);
+
 				let toRedirectTo: string;
 				try {
 					const url = callbackURL;

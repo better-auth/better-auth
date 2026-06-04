@@ -9,6 +9,7 @@ import {
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -129,7 +130,16 @@ export const getMCPProtectedResourceMetadata = (
 };
 
 const registerMcpClientBodySchema = z.object({
-	redirect_uris: z.array(z.string()),
+	// This plugin is migrating to @better-auth/oauth-provider (see the deprecation
+	// notice in docs/plugins/mcp). It gets only the non-breaking guard that rejects
+	// code-execution schemes here; full https-or-loopback parity comes from
+	// @better-auth/oauth-provider's SafeUrlSchema, not from tightening this plugin.
+	redirect_uris: z.array(
+		z.string().refine(isSafeUrlScheme, {
+			message:
+				"redirect_uri cannot use a javascript:, data:, or vbscript: scheme",
+		}),
+	),
 	token_endpoint_auth_method: z
 		.enum(["none", "client_secret_basic", "client_secret_post"])
 		.default("client_secret_basic")

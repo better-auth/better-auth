@@ -1,5 +1,39 @@
 # @better-auth/core
 
+## 1.6.14
+
+### Patch Changes
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+## 1.6.13
+
+### Patch Changes
+
+- [#9818](https://github.com/better-auth/better-auth/pull/9818) [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix two buggy `internalAdapter` helpers.
+
+  Remove `findAccount(accountId)`. It looked accounts up by account ID alone, which is unique neither across providers nor across users, so it returned a non-deterministic match. All callers now use a user-scoped or provider-scoped lookup.
+
+  Replace the ambiguous `deleteSessions(string | string[])` with two explicit methods. `deleteUserSessions(userId)` revokes every session for a user, and `deleteSessions(tokens)` revokes sessions by token. The old single-string overload silently treated its argument as a user ID, so a caller that meant to delete one session token could instead wipe all of a user's sessions or quietly match nothing.
+
+- [#9831](https://github.com/better-auth/better-auth/pull/9831) [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066) Thanks [@bytaesu](https://github.com/bytaesu)! - Surface a clear error when an adapter's `deleteMany` returns a non-numeric value in the `consumeOne` fallback, instead of silently failing the consume.
+
+## 1.6.12
+
+### Patch Changes
+
+- [#8870](https://github.com/better-auth/better-auth/pull/8870) [`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3) Thanks [@jsj](https://github.com/jsj)! - fix(apple): accept hashed nonces for native iOS Sign In
+
+- [#9799](https://github.com/better-auth/better-auth/pull/9799) [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh access tokens from `genericOAuth` providers that omit `expires_in`.
+
+  When a provider's token response leaves out `expires_in`, Better Auth recorded no expiry, so `getAccessToken` couldn't tell the token had lapsed and never refreshed it; callers kept receiving a stale token. Set `accessTokenExpiresIn` (seconds) on a `genericOAuth` config entry to declare the token's lifetime; the expiry is then synthesized at sign-in and on refresh, and the existing refresh path works. The option is opt-in: providers that return `expires_in` or issue non-expiring tokens are unaffected.
+
+- [#9727](https://github.com/better-auth/better-auth/pull/9727) [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `toCamelCase`, `toSnakeCase`, `toPascalCase`, and `toKebabCase` to `@better-auth/core/utils/string`.
+
+- [#9683](https://github.com/better-auth/better-auth/pull/9683) [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3) Thanks [@yb175](https://github.com/yb175)! - Widen Kysely peer dependency ranges to support both 0.28.x and 0.29.x.
+
+- [#9655](https://github.com/better-auth/better-auth/pull/9655) [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799) Thanks [@cyphercodes](https://github.com/cyphercodes)! - `verifyAccessToken` now returns unauthorized API errors for invalid token-shape verification failures, including missing JWT key IDs, while preserving raw JOSE errors for JWKS infrastructure failures.
+
 ## 1.6.11
 
 ### Patch Changes
