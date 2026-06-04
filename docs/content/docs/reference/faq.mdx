@@ -121,6 +121,28 @@ This page contains frequently asked questions, common issues, and other helpful 
     You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">TypeScript docs</Link>.
   </Accordion>
 
+  <Accordion id="default-migration-lock-table-export-error" title="Export DEFAULT_MIGRATION_LOCK_TABLE doesn't exist">
+    If you see `Export DEFAULT_MIGRATION_LOCK_TABLE doesn't exist` while building a project that uses `better-auth@1.6.13` with Kysely 0.29, upgrade Better Auth and `@better-auth/kysely-adapter` to `1.6.14` or later.
+
+    This was caused by Kysely 0.29 moving migration constants out of the root `kysely` export. Better Auth `1.6.14` imports those constants from Kysely's migration subpath.
+
+    If you can't upgrade immediately, pin Kysely to `0.28.17` as a temporary workaround and reinstall your dependencies:
+
+    ```json title="package.json"
+    {
+      "overrides": {
+        "kysely": "0.28.17"
+      }
+    }
+    ```
+
+    ```bash
+    npm install
+    ```
+
+    Remove the override after upgrading Better Auth.
+  </Accordion>
+
   <Accordion id="can-i-remove-name-image-or-email-fields-from-the-user-table" title="Can I remove `name`, `image`, or `email` fields from the user table?">
     At this time, you can't remove the `name`, `image`, or `email` fields from the user table.
 
