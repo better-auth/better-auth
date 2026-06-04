@@ -506,7 +506,7 @@ export const createTestSuite = <
 						idToken: generateId(),
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
-						scope: "test",
+						grantedScopes: ["test"],
 					};
 					return account as any;
 				}

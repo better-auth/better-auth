@@ -27,15 +27,26 @@ export {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
 } from "./create-authorization-url";
 export type {
+	AuthorizationURLResult,
+	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	ProviderGrantAuthority,
 	ProviderOptions,
+	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
+export {
+	includesGrantedScope,
+	normalizeScopes,
+	parseScopeField,
+	readGrantedScopes,
+	resolveRequestedScopes,
+	unionGrantedScopes,
+} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,

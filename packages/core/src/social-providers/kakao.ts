@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -101,22 +102,29 @@ export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
 	clientId: string;
 }
 
+const KAKAO_DEFAULT_SCOPES = [
+	"account_email",
+	"profile_image",
+	"profile_nickname",
+];
+
 export const kakao = (options: KakaoOptions) => {
 	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
 	return {
 		id: "kakao",
 		name: "Kakao",
+		callbackPath: "/callback/kakao",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["account_email", "profile_image", "profile_nickname"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				KAKAO_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "kakao",
 				options,
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				additionalParams,
@@ -176,5 +184,5 @@ export const kakao = (options: KakaoOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<KakaoProfile>;
+	} satisfies UpstreamProvider<KakaoProfile>;
 };

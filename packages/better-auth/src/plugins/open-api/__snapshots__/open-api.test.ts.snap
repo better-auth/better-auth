@@ -21,6 +21,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
+          "grantedScopes": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
           "id": {
             "type": "string",
           },
@@ -38,9 +44,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
           "refreshTokenExpiresAt": {
             "format": "date-time",
-            "type": "string",
-          },
-          "scope": {
             "type": "string",
           },
           "updatedAt": {
@@ -2149,17 +2152,17 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "format": "date-time",
                         "type": "string",
                       },
+                      "grantedScopes": {
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
+                      },
                       "id": {
                         "type": "string",
                       },
                       "providerId": {
                         "type": "string",
-                      },
-                      "scopes": {
-                        "items": {
-                          "type": "string",
-                        },
-                        "type": "array",
                       },
                       "updatedAt": {
                         "format": "date-time",
@@ -2176,7 +2179,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "updatedAt",
                       "accountId",
                       "userId",
-                      "scopes",
+                      "grantedScopes",
                     ],
                     "type": "object",
                   },
@@ -2601,6 +2604,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "accessTokenExpiresAt": {
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "grantedScopes": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
                     },
                     "idToken": {
                       "type": "string",
@@ -4028,6 +4037,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "description": "Refresh token from the provider",
                         "type": [
                           "string",
+                          "null",
+                        ],
+                      },
+                      "scopes": {
+                        "description": "The scopes granted alongside the id token",
+                        "type": [
+                          "array",
                           "null",
                         ],
                       },
