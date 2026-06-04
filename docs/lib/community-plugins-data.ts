@@ -152,17 +152,6 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@commet/better-auth",
-		url: "https://github.com/commet-labs/commet",
-		description:
-			"Billing and payments plugin for Commet with customer sync, subscriptions, feature access, usage tracking, seats, and customer portal support.",
-		author: {
-			name: "Commet Labs",
-			github: "commet-labs",
-			avatar: "https://github.com/commet-labs.png",
-		},
-	},
-	{
 		name: "stargate-better-auth",
 		url: "https://github.com/neiii/stargate-better-auth",
 		description:
