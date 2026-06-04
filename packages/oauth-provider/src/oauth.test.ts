@@ -1,3 +1,4 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import {
 	multiSessionClient,
@@ -979,6 +980,333 @@ describe("oauth", async () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
+	});
+});
+
+describe("oauth - authorize resume hooks", async () => {
+	const tempServer = await listen(
+		toNodeHandler(async () => new Response("temp")),
+		{ port: 0 },
+	);
+	const allocatedPort = tempServer.address?.port;
+	await tempServer.close();
+	if (!allocatedPort) {
+		throw new Error("Expected test server port");
+	}
+	const port = allocatedPort;
+	const authServerBaseUrl = `http://localhost:${port}`;
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const hookCalls: string[] = [];
+	let afterHookAction:
+		| "replace-thrown-error"
+		| "throw-api-error"
+		| "return-null"
+		| undefined;
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+		cookieSetter,
+		testUser,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/oauth2/authorize") {
+					hookCalls.push("before");
+				}
+			}),
+			after: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/oauth2/authorize") {
+					hookCalls.push("after");
+					if (
+						afterHookAction === "replace-thrown-error" &&
+						ctx.context.returned instanceof APIError
+					) {
+						ctx.setHeader("x-after-hook", "replaced");
+						return {
+							redirect: true,
+							url: `${rpBaseUrl}/after-hook-replaced`,
+						};
+					}
+					if (
+						afterHookAction === "throw-api-error" &&
+						ctx.context.returned instanceof APIError
+					) {
+						ctx.setHeader("x-after-hook", "thrown");
+						throw new APIError("BAD_REQUEST", {
+							message: "after hook rejected",
+						});
+					}
+					if (afterHookAction === "return-null") {
+						return null;
+					}
+				}
+			}),
+		},
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				selectAccount: {
+					page: "/select-account",
+					shouldRedirect() {
+						return false;
+					},
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const serverClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	let server: Listener;
+
+	beforeAll(async () => {
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port,
+		});
+	});
+
+	afterEach(() => {
+		hookCalls.length = 0;
+		afterHookAction = undefined;
+		vi.unstubAllGlobals();
+	});
+
+	afterAll(async () => {
+		await server.close();
+	});
+
+	async function createOAuthClient(skipConsent: boolean) {
+		const { headers } = await signInWithTestUser();
+		const client = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: skipConsent,
+			},
+		});
+		expect(client?.client_id).toBeDefined();
+		expect(client?.client_secret).toBeDefined();
+		return { client: client!, headers };
+	}
+
+	function createAuthorizeUrl(client: OAuthClient, prompt?: string) {
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("client_id", client.client_id);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("scope", "openid profile email");
+		url.searchParams.set("state", "state");
+		url.searchParams.set("code_challenge", "test-code-challenge");
+		url.searchParams.set("code_challenge_method", "S256");
+		if (prompt) {
+			url.searchParams.set("prompt", prompt);
+		}
+		return url.toString();
+	}
+
+	function expectHookCalls(count: number) {
+		expect(hookCalls).toEqual(Array(count).fill(["before", "after"]).flat());
+	}
+
+	async function getRedirect(url: string, headers?: Headers) {
+		let redirectUri = "";
+		await serverClient.$fetch(url, {
+			method: "GET",
+			headers,
+			onError(ctx) {
+				redirectUri = ctx.response.headers.get("Location") || "";
+				if (headers) {
+					cookieSetter(headers)(ctx);
+				}
+			},
+		});
+		return redirectUri;
+	}
+
+	function stubWindowSearch(redirectUri: string) {
+		vi.stubGlobal("window", {
+			location: {
+				href: "",
+				search: new URL(redirectUri, authServerBaseUrl).search,
+			},
+		});
+	}
+
+	function expectCallback(url: string) {
+		expect(url).toContain(redirectUri);
+		expect(url).toContain("code=");
+	}
+
+	it("runs configured hooks when authorize resumes after navigation sign-in", async () => {
+		const { client: oauthClient } = await createOAuthClient(true);
+		const authorizeUrl = createAuthorizeUrl(oauthClient);
+		const loginRedirectUri = await getRedirect(authorizeUrl);
+		expect(loginRedirectUri).toContain("/login");
+		expectHookCalls(1);
+		stubWindowSearch(loginRedirectUri);
+
+		let signInLocationHeader = "";
+		await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: {
+					"Sec-Fetch-Mode": "navigate",
+				},
+				onResponse(ctx) {
+					signInLocationHeader = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expectCallback(signInLocationHeader);
+		expectHookCalls(2);
+	});
+
+	it("runs configured hooks when authorize resumes from continue", async () => {
+		const { client: oauthClient, headers } = await createOAuthClient(true);
+		const selectAccountRedirectUri = await getRedirect(
+			createAuthorizeUrl(oauthClient, "select_account"),
+			headers,
+		);
+		expect(selectAccountRedirectUri).toContain("/select-account");
+		expectHookCalls(1);
+		stubWindowSearch(selectAccountRedirectUri);
+
+		const continueResponse = await serverClient.oauth2.continue(
+			{
+				selected: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		expectCallback(continueResponse.url);
+		expectHookCalls(2);
+	});
+
+	it("allows after hook to replace a thrown authorize redirect", async () => {
+		const { client: oauthClient } = await createOAuthClient(true);
+		const loginRedirectUri = await getRedirect(createAuthorizeUrl(oauthClient));
+		expect(loginRedirectUri).toContain("/login");
+		expectHookCalls(1);
+		stubWindowSearch(loginRedirectUri);
+		afterHookAction = "replace-thrown-error";
+
+		const signInResponse = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: {
+					"Sec-Fetch-Mode": "navigate",
+				},
+				throw: true,
+			},
+		);
+		expect(signInResponse).toMatchObject({
+			redirect: true,
+			url: `${rpBaseUrl}/after-hook-replaced`,
+		});
+		expectHookCalls(2);
+	});
+
+	it("propagates after hook APIErrors from a thrown authorize redirect", async () => {
+		const { client: oauthClient } = await createOAuthClient(true);
+		const loginRedirectUri = await getRedirect(createAuthorizeUrl(oauthClient));
+		expect(loginRedirectUri).toContain("/login");
+		expectHookCalls(1);
+		stubWindowSearch(loginRedirectUri);
+		afterHookAction = "throw-api-error";
+
+		let responseStatus = 0;
+		let afterHookHeader = "";
+		const signInResponse = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: {
+					"Sec-Fetch-Mode": "navigate",
+				},
+				onResponse(ctx) {
+					responseStatus = ctx.response.status;
+					afterHookHeader = ctx.response.headers.get("x-after-hook") || "";
+				},
+			},
+		);
+		expect(responseStatus).toBe(400);
+		expect(afterHookHeader).toBe("thrown");
+		expect(signInResponse.error?.message).toBe("after hook rejected");
+		expectHookCalls(2);
+	});
+
+	it("allows after hook to replace a resumed authorize response with null", async () => {
+		const { client: oauthClient, headers } = await createOAuthClient(true);
+		const selectAccountRedirectUri = await getRedirect(
+			createAuthorizeUrl(oauthClient, "select_account"),
+			headers,
+		);
+		expect(selectAccountRedirectUri).toContain("/select-account");
+		expectHookCalls(1);
+		stubWindowSearch(selectAccountRedirectUri);
+		afterHookAction = "return-null";
+
+		const continueResponse = await serverClient.oauth2.continue(
+			{
+				selected: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		expect(continueResponse).toBeNull();
+		expectHookCalls(2);
+	});
+
+	it("runs configured hooks when authorize resumes after consent", async () => {
+		const { client: oauthClient, headers } = await createOAuthClient(false);
+		const consentRedirectUri = await getRedirect(
+			createAuthorizeUrl(oauthClient, "consent"),
+			headers,
+		);
+		expect(consentRedirectUri).toContain("/consent");
+		expectHookCalls(1);
+		stubWindowSearch(consentRedirectUri);
+
+		const consentResponse = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		expectCallback(consentResponse.url);
+		expectHookCalls(2);
 	});
 });
 

@@ -13,7 +13,11 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import {
+	authorizeEndpoint,
+	authorizeEndpointWithHooks,
+	authorizeRedirectOnError,
+} from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
@@ -412,7 +416,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						ctx.query = searchParamsToQuery(
 							removePromptFromQuery(query, "login"),
 						);
-						return await authorizeEndpoint(ctx, opts);
+						return await authorizeEndpointWithHooks(ctx, opts);
 					}),
 				},
 			],

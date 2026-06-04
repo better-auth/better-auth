@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { authorizeEndpoint } from "./authorize";
+import { authorizeEndpointWithHooks } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 import { removePromptFromQuery, searchParamsToQuery } from "./utils";
@@ -40,11 +40,7 @@ async function selected(
 	ctx.query = searchParamsToQuery(
 		removePromptFromQuery(query, "select_account"),
 	);
-	const { url } = await authorizeEndpoint(ctx, opts);
-	return {
-		redirect: true,
-		url,
-	};
+	return await authorizeEndpointWithHooks(ctx, opts);
 }
 
 async function created(
@@ -61,11 +57,7 @@ async function created(
 	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
 	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
-	const { url } = await authorizeEndpoint(ctx, opts);
-	return {
-		redirect: true,
-		url,
-	};
+	return await authorizeEndpointWithHooks(ctx, opts);
 }
 
 async function postLogin(
@@ -82,11 +74,7 @@ async function postLogin(
 	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
 	ctx.query = searchParamsToQuery(query);
-	const { url } = await authorizeEndpoint(ctx, opts, {
+	return await authorizeEndpointWithHooks(ctx, opts, {
 		postLogin: true,
 	});
-	return {
-		redirect: true,
-		url,
-	};
 }
