@@ -375,6 +375,22 @@ import { authClient } from "@/lib/auth-client"
 const accounts = await authClient.listAccounts();
 ```
 
+#### Granted Scopes
+
+Each account exposes a `grantedScopes` field: a `string[]` of the OAuth scopes the user has **accumulated** for that provider over time. It is not the latest token's `scope` claim. Every API that surfaces scopes returns this same array shape, including `listAccounts`, `getAccessToken`, and `refreshToken`.
+
+To check whether an account holds a particular scope, use the `includesGrantedScope` helper instead of inspecting the array yourself:
+
+```ts
+import { includesGrantedScope } from "better-auth/oauth2";
+
+const google = accounts.find((account) => account.providerId === "google");
+const canReadDrive = includesGrantedScope(
+    google?.grantedScopes,
+    "https://www.googleapis.com/auth/drive.readonly",
+);
+```
+
 ### Token Encryption
 
 Better Auth doesn’t encrypt tokens by default and that’s intentional. We want you to have full control over how encryption and decryption are handled, rather than baking in behavior that could be confusing or limiting. If you need to store encrypted tokens (like accessToken or refreshToken), you can use databaseHooks to encrypt them before they’re saved to your database.
@@ -458,7 +474,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  You can also request specific scopes when linking a social account, which can be different from the scopes used during the initial authentication:
+  You can also request specific scopes when linking a social account. The `scopes` you pass are **added** to the provider's default scopes; they don't replace them. This is how you perform incremental authorization: each `linkSocial` call asks for more access, and the newly granted scopes **accumulate** into the account's stored `grantedScopes` rather than overwriting it.
 
   ```ts
   import { authClient } from "@/lib/auth-client"
@@ -466,9 +482,13 @@ Users already signed in can manually link their account to additional social pro
   await authClient.linkSocial({
       provider: "google",
       callbackURL: "/callback",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Request additional scopes
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Added on top of the provider defaults
   });
   ```
+
+  <Callout type="info">
+    `signIn.social({ scopes })` works the same way: the scopes are additive to the provider defaults. Token refresh never changes the stored grant, and for most providers a narrower sign-in never shrinks it either. Google with the default `includeGrantedScopes: true` is the exception: it resyncs `grantedScopes` to Google's authoritative combined grant on each sign-in, so a scope revoked at Google drops on the next sign-in (see [OAuth scopes](/docs/concepts/oauth#how-granted-scopes-accumulate)).
+  </Callout>
 
   You can also link accounts using ID tokens directly, without redirecting to the provider's OAuth flow:
 

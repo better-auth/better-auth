@@ -2,11 +2,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -57,6 +58,8 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	identityProvider?: string | undefined;
 }
 
+const COGNITO_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 export const cognito = (options: CognitoOptions) => {
 	if (!options.domain || !options.region || !options.userPoolId) {
 		logger.error(
@@ -73,6 +76,7 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
+		callbackPath: "/callback/cognito",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -93,19 +97,19 @@ export const cognito = (options: CognitoOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_SECRET_REQUIRED");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["openid", "profile", "email"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				COGNITO_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const url = await createAuthorizationURL({
+			const { url } = await createAuthorizationURL({
 				id: "cognito",
 				options: {
 					...options,
 				},
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -126,9 +130,12 @@ export const cognito = (options: CognitoOptions) => {
 				// Manually append the scope with proper encoding to the URL
 				const urlString = url.toString();
 				const separator = urlString.includes("?") ? "&" : "?";
-				return new URL(`${urlString}${separator}scope=${encodedScope}`);
+				return {
+					url: new URL(`${urlString}${separator}scope=${encodedScope}`),
+					requestedScopes,
+				};
 			}
-			return url;
+			return { url, requestedScopes };
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -265,7 +272,7 @@ export const cognito = (options: CognitoOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<CognitoProfile>;
+	} satisfies UpstreamProvider<CognitoProfile>;
 };
 
 export const getCognitoPublicKey = async (

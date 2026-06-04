@@ -22,7 +22,7 @@ const baseInput = {
 describe("discord provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = discord({ ...credentials });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://discord.com/api/oauth2/authorize",
 		);
@@ -37,7 +37,7 @@ describe("discord provider", () => {
 
 	it("appends permissions when bot scope is requested with options.permissions", async () => {
 		const provider = discord({ ...credentials, permissions: 8 });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			scopes: ["bot"],
 		});
@@ -46,7 +46,7 @@ describe("discord provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = discord({ ...credentials });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", state: "attacker" },
 		});
@@ -58,7 +58,7 @@ describe("discord provider", () => {
 describe("roblox provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = roblox({ ...credentials });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://apis.roblox.com/oauth/v1/authorize",
 		);
@@ -70,7 +70,7 @@ describe("roblox provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = roblox({ ...credentials });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", scope: "admin" },
 		});
@@ -82,7 +82,7 @@ describe("roblox provider", () => {
 describe("slack provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = slack({ ...credentials });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://slack.com/openid/connect/authorize",
 		);
@@ -94,7 +94,7 @@ describe("slack provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = slack({ ...credentials });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { team: "T01ABC", client_id: "attacker" },
 		});
@@ -106,7 +106,7 @@ describe("slack provider", () => {
 describe("zoom provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = zoom({ ...credentials, pkce: false });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe("https://zoom.us/oauth/authorize");
 		expect(url.searchParams.get("client_id")).toBe(credentials.clientId);
 		expect(url.searchParams.get("response_type")).toBe("code");
@@ -117,14 +117,14 @@ describe("zoom provider", () => {
 
 	it("adds PKCE challenge by default", async () => {
 		const provider = zoom({ ...credentials });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
 		expect(url.searchParams.get("code_challenge")).not.toBeNull();
 	});
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = zoom({ ...credentials, pkce: false });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", redirect_uri: "https://attacker" },
 		});
@@ -139,7 +139,7 @@ describe("tiktok provider", () => {
 			clientKey: "tk-key-1",
 			clientSecret: "secret",
 		});
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://www.tiktok.com/v2/auth/authorize",
 		);
@@ -155,7 +155,7 @@ describe("tiktok provider", () => {
 			clientKey: "tk-key-1",
 			clientSecret: "secret",
 		});
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				custom: "value",
@@ -172,7 +172,7 @@ describe("tiktok provider", () => {
 describe("wechat provider", () => {
 	it("preserves the manual authorize URL shape with appid and wechat_redirect fragment", async () => {
 		const provider = wechat({ clientId: "wx-app-1", clientSecret: "secret" });
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://open.weixin.qq.com/connect/qrconnect",
 		);
@@ -185,7 +185,7 @@ describe("wechat provider", () => {
 
 	it("forwards additionalParams but drops reserved keys and appid", async () => {
 		const provider = wechat({ clientId: "wx-app-1", clientSecret: "secret" });
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				custom: "value",
@@ -212,7 +212,7 @@ describe("cognito provider", () => {
 			...cognitoConfig,
 			identityProvider: "Google",
 		});
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBe("Google");
 	});
 
@@ -221,7 +221,7 @@ describe("cognito provider", () => {
 			...cognitoConfig,
 			identityProvider: "Google",
 		});
-		const url = await provider.createAuthorizationURL({
+		const { url } = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { identity_provider: "Okta" },
 		});
@@ -230,7 +230,7 @@ describe("cognito provider", () => {
 
 	it("omits identity_provider when neither config nor additionalParams set it", async () => {
 		const provider = cognito(cognitoConfig);
-		const url = await provider.createAuthorizationURL(baseInput);
+		const { url } = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
 });

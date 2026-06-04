@@ -10,7 +10,7 @@ import type {
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
-import type { OAuthProvider } from "../oauth2";
+import type { UpstreamProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
@@ -87,12 +87,6 @@ export type GenericEndpointContext<
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
-	createOAuthUser(
-		user: Omit<User, "id" | "createdAt" | "updatedAt">,
-		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-			Partial<Account>,
-	): Promise<{ user: User; account: Account }>;
-
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
@@ -351,7 +345,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: OAuthProvider[];
+			socialProviders: UpstreamProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {

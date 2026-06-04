@@ -123,7 +123,7 @@ describe("PKCE optional - default behavior", async () => {
 
 	it("confidential client with PKCE should succeed", async () => {
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -346,7 +346,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 	it("offline_access with PKCE should succeed", async () => {
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -448,7 +448,7 @@ describe("PKCE optional - consistency checks", async () => {
 	it("PKCE in auth but not in token should fail", async () => {
 		// Authorize WITH PKCE
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -551,7 +551,7 @@ describe("PKCE optional - consistency checks", async () => {
 	it("mismatched PKCE challenge should fail", async () => {
 		// Authorize with PKCE
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,

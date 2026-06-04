@@ -26,6 +26,13 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	/**
+	 * The effective set of scopes requested in the authorization URL, captured
+	 * from `createAuthorizationURL`. Persisted so the callback can fall back to
+	 * the request when the provider omits `scope` from its token response
+	 * (RFC 6749 §5.1).
+	 */
+	requestedScopes: z.array(z.string()).optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
@@ -67,9 +74,9 @@ export class StateError extends BetterAuthError {
 export async function generateGenericState(
 	c: GenericEndpointContext,
 	stateData: StateData,
-	settings?: { cookieName: string },
+	settings?: { cookieName?: string; oauthState?: string },
 ) {
-	const state = generateRandomString(32);
+	const state = settings?.oauthState ?? generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	// Cookie strategy:

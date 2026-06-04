@@ -1730,7 +1730,6 @@ describe("base context creation", () => {
 			const ctx = await initBase({});
 
 			expect(ctx.internalAdapter).toBeDefined();
-			expect(ctx.internalAdapter.createOAuthUser).toBeDefined();
 			expect(ctx.internalAdapter.createUser).toBeDefined();
 			expect(ctx.internalAdapter.findUserByEmail).toBeDefined();
 		});

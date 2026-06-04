@@ -261,10 +261,15 @@ export const getAuthTables = (
 						options.account?.fields?.refreshTokenExpiresAt ||
 						"refreshTokenExpiresAt",
 				},
-				scope: {
-					type: "string",
+				// Renamed from the legacy `scope` column. The migration generator
+				// only adds this column; it does not transform the legacy `scope`
+				// value. Upgrading installs need a manual data migration (split
+				// legacy `scope` on comma/space, trim, drop empties, dedupe). Order
+				// is insignificant per RFC 6749 §3.3.
+				grantedScopes: {
+					type: "string[]",
 					required: false,
-					fieldName: options.account?.fields?.scope || "scope",
+					fieldName: options.account?.fields?.grantedScopes || "grantedScopes",
 				},
 				password: {
 					type: "string",

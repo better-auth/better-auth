@@ -144,6 +144,30 @@ describe("createAdapterFactory consumeOne fallback", () => {
 		expect(result).toBeNull();
 	});
 
+	it("fails closed when deleteMany returns a non-finite count", async () => {
+		// A misbehaving adapter that returns NaN gives no proof the row was
+		// deleted, so a single-use consume must not report success.
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				findMany: async <T>() =>
+					[
+						{
+							id: "verification-id",
+							identifier_text: "stored-token",
+						},
+					] as T[],
+				deleteMany: async () => Number.NaN,
+			}),
+		});
+
+		const result = await adapter.consumeOne({
+			model: "verification",
+			where: [{ field: "identifier", value: "token" }],
+		});
+
+		expect(result).toBeNull();
+	});
+
 	it("throws when deleteMany returns a non-numeric value", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
