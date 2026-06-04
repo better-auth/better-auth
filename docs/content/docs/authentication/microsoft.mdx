@@ -9,7 +9,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
   <Step>
     ### Get your Microsoft credentials
 
-    To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and Client Secret using your Microsoft Entra ID dashboard account.
+    To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and, for confidential clients, using your Microsoft Entra ID dashboard account either a Client Secret or a client assertion credential.
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/microsoft` for local development. For production, you should change it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
@@ -19,7 +19,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
   <Step>
     ### Configure the provider
 
-    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.microsoft` in your auth configuration.
+    To configure the provider, pass the `clientId` and, for confidential clients, either `clientSecret` or `clientAssertion` to `socialProviders.microsoft` in your auth configuration.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
@@ -39,6 +39,44 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
     ```
 
     **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
+
+    **Client assertions**: Use `clientAssertion` instead of `clientSecret` when your Microsoft Entra ID app is configured for `private_key_jwt` or workload identity federation. The callback receives the token request context and must return a JWT assertion. Do not combine `clientAssertion` with `clientSecret`.
+
+    ```ts title="auth.ts"
+    import { getVercelOidcToken } from "@vercel/oidc"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            microsoft: {
+                clientId: process.env.MICROSOFT_CLIENT_ID as string,
+                tenantId: process.env.MICROSOFT_TENANT_ID as string,
+                clientAssertion: async () => getVercelOidcToken(),
+            },
+        },
+    })
+    ```
+
+    You can also sign RFC 7523 assertions from a private key with the built-in helper:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            microsoft: {
+                clientId: process.env.MICROSOFT_CLIENT_ID as string,
+                tenantId: process.env.MICROSOFT_TENANT_ID as string,
+                clientAssertion: createPrivateKeyJwtClientAssertionGetter({
+                    privateKeyPem: process.env.MICROSOFT_PRIVATE_KEY_PEM as string,
+                    kid: process.env.MICROSOFT_PRIVATE_KEY_ID,
+                    algorithm: "RS256",
+                }),
+            },
+        },
+    })
+    ```
 
     <Callout type="warn">
       Entra does not emit the `email` claim for managed users by default, and the value is [tenant-mutable and never verified by Microsoft](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference); it must not be used for authorization decisions. Request `email` as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) for managed users, and use `profile.oid` (plus `profile.tid` when correlating across tenants) as the stable identity anchor. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
