@@ -280,4 +280,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/mhbdev.png",
 		},
 	},
+	{
+		name: "better-auth-email-challenge",
+    	url: "https://github.com/lapluviosilla/better-auth-email-challenge",
+    	description:
+        	"Passwordless, multi-device email challenge — one challenge completable by an approval link or OTP, with browser-bound session issuance for safe cross-device sign-in.",
+    	author: {
+    		name: "lapluviosilla",
+            github: "lapluviosilla",
+            avatar: "https://github.com/lapluviosilla.png",
+        },
+    },
 ];
