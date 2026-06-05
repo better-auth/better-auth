@@ -100,34 +100,30 @@ export const line = (options: LineOptions) => {
 						tokenEndpoint,
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			const body = new URLSearchParams();
-			body.set("id_token", token);
-			body.set("client_id", options.clientId);
-			if (nonce) body.set("nonce", nonce);
-			const { data, error } = await betterFetch<LineIdTokenPayload>(
-				verifyIdTokenEndpoint,
-				{
-					method: "POST",
-					headers: {
-						"content-type": "application/x-www-form-urlencoded",
+		idToken: {
+			verify: async (token, nonce) => {
+				const body = new URLSearchParams();
+				body.set("id_token", token);
+				body.set("client_id", options.clientId);
+				if (nonce) body.set("nonce", nonce);
+				const { data, error } = await betterFetch<LineIdTokenPayload>(
+					verifyIdTokenEndpoint,
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/x-www-form-urlencoded",
+						},
+						body,
 					},
-					body,
-				},
-			);
-			if (error || !data) {
-				return false;
-			}
-			// aud must match clientId; nonce (if provided) must also match nonce
-			if (data.aud !== options.clientId) return false;
-			if (data.nonce && data.nonce !== nonce) return false;
-			return true;
+				);
+				if (error || !data) {
+					return false;
+				}
+				// aud must match clientId; nonce (if provided) must also match nonce
+				if (data.aud !== options.clientId) return false;
+				if (data.nonce && data.nonce !== nonce) return false;
+				return true;
+			},
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

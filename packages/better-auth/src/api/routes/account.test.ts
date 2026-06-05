@@ -66,12 +66,15 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("account", async () => {
+	const googleVerifyIdTokenMock =
+		vi.fn<(token: string, nonce?: string) => Promise<boolean>>();
 	const { auth, signInWithTestUser, client } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
+				verifyIdToken: googleVerifyIdTokenMock,
 			},
 		},
 		account: {
@@ -84,13 +87,11 @@ describe("account", async () => {
 
 	const ctx = await auth.$context;
 
-	let googleVerifyIdTokenMock: MockInstance;
 	let googleGetUserInfoMock: MockInstance;
 	beforeAll(() => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		expect(googleProvider).toBeTruthy();
 
-		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
 
