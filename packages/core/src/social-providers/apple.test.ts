@@ -10,6 +10,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2";
 import { apple } from "./apple";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -46,7 +47,7 @@ function mockAppleJwks(publicJWK: JWK) {
 	} as Awaited<ReturnType<typeof betterFetch>>);
 }
 
-describe("apple.verifyIdToken", () => {
+describe("apple id_token verification", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
 	});
@@ -62,7 +63,9 @@ describe("apple.verifyIdToken", () => {
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("accepts a hashed token nonce when the request provides the raw native iOS nonce", async () => {
@@ -77,7 +80,9 @@ describe("apple.verifyIdToken", () => {
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("rejects a mismatched nonce", async () => {
@@ -93,7 +98,7 @@ describe("apple.verifyIdToken", () => {
 		});
 
 		await expect(
-			provider.verifyIdToken(token, "different-nonce"),
+			verifyProviderIdToken(provider, token, "different-nonce"),
 		).resolves.toBe(false);
 	});
 });

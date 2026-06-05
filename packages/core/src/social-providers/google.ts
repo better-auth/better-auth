@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { ProviderOptions, UpstreamProvider } from "../oauth2";
@@ -141,37 +141,12 @@ export const google = (options: GoogleOptions) => {
 						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			// Verify JWT integrity
-			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
-
-			try {
-				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getGooglePublicKey(kid);
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				});
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-
-				return true;
-			} catch {
-				return false;
-			}
+		idToken: {
+			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+			jwks: (header) => getGooglePublicKey(header.kid!),
+			issuer: ["https://accounts.google.com", "accounts.google.com"],
+			audience: options.clientId,
+			maxTokenAge: "1h",
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

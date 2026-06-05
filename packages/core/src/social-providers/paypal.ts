@@ -1,6 +1,5 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { ProviderOptions, UpstreamProvider } from "../oauth2";
@@ -197,22 +196,6 @@ export const paypal = (options: PayPalOptions) => {
 						throw new BetterAuthError("FAILED_TO_REFRESH_ACCESS_TOKEN");
 					}
 				},
-
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const payload = decodeJwt(token);
-				return !!payload.sub;
-			} catch (error) {
-				logger.error("Failed to verify PayPal ID token:", error);
-				return false;
-			}
-		},
 
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

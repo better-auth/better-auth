@@ -2,7 +2,11 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
@@ -269,7 +273,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			}
 
 			if (c.body.idToken) {
-				if (!provider.verifyIdToken) {
+				if (!supportsIdTokenSignIn(provider)) {
 					c.context.logger.error(
 						"Provider does not support id token verification",
 						{
@@ -282,7 +286,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
-				const valid = await provider.verifyIdToken(token, nonce);
+				const valid = await verifyProviderIdToken(provider, token, nonce);
 				if (!valid) {
 					c.context.logger.error("Invalid id token", {
 						provider: c.body.provider,

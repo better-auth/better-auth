@@ -31,6 +31,7 @@ export type {
 	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	OAuthIdTokenConfig,
 	ProviderGrantAuthority,
 	ProviderOptions,
 	UpstreamProvider,
@@ -68,3 +69,7 @@ export {
 	verifyAccessToken,
 	verifyJwsAccessToken,
 } from "./verify";
+export {
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "./verify-id-token";

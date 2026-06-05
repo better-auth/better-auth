@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
+import { createRemoteJWKSet, decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { ProviderOptions, UpstreamProvider } from "../oauth2";
@@ -87,46 +87,17 @@ export const facebook = (options: FacebookOptions) => {
 				tokenEndpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
 			});
 		},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			/* limited login */
-			// check is limited token
-			if (token.split(".").length === 3) {
-				try {
-					const { payload: jwtClaims } = await jwtVerify(
-						token,
-						createRemoteJWKSet(
-							// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
-							new URL(
-								"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
-							),
-						),
-						{
-							algorithms: ["RS256"],
-							audience: options.clientId,
-							issuer: "https://www.facebook.com",
-						},
-					);
-
-					if (nonce && jwtClaims.nonce !== nonce) {
-						return false;
-					}
-
-					return !!jwtClaims;
-				} catch {
-					return false;
-				}
-			}
-
-			/* access_token */
-			return true;
+		idToken: {
+			// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
+			jwks: createRemoteJWKSet(
+				new URL("https://limited.facebook.com/.well-known/oauth/openid/jwks/"),
+			),
+			issuer: "https://www.facebook.com",
+			audience: options.clientId,
+			algorithms: ["RS256"],
+			// Facebook also accepts an opaque Graph access token on the client sign-in path;
+			// identity is then resolved by getUserInfo via the Graph API, which validates it.
+			allowOpaqueToken: true,
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken

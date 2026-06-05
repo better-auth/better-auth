@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { ProviderOptions, UpstreamProvider } from "../oauth2";
@@ -162,41 +162,12 @@ export const cognito = (options: CognitoOptions) => {
 					});
 				},
 
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			try {
-				const decodedHeader = decodeProtectedHeader(token);
-				const { kid, alg: jwtAlg } = decodedHeader;
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getCognitoPublicKey(
-					kid,
-					options.region,
-					options.userPoolId,
-				);
-				const expectedIssuer = `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`;
-
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: expectedIssuer,
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				});
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-				return true;
-			} catch (error) {
-				logger.error("Failed to verify ID token:", error);
-				return false;
-			}
+		idToken: {
+			jwks: (header) =>
+				getCognitoPublicKey(header.kid!, options.region, options.userPoolId),
+			issuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
+			audience: options.clientId,
+			maxTokenAge: "1h",
 		},
 
 		async getUserInfo(token) {

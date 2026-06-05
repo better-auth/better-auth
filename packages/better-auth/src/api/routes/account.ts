@@ -6,6 +6,8 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	additionalAuthorizationParamsSchema,
 	readGrantedScopes,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
@@ -253,7 +255,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		// Handle ID Token flow if provided
 		if (c.body.idToken) {
-			if (!provider.verifyIdToken) {
+			if (!supportsIdTokenSignIn(provider)) {
 				c.context.logger.error(
 					"Provider does not support id token verification",
 					{
@@ -267,7 +269,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			const { token, nonce } = c.body.idToken;
-			const valid = await provider.verifyIdToken(token, nonce);
+			const valid = await verifyProviderIdToken(provider, token, nonce);
 			if (!valid) {
 				c.context.logger.error("Invalid id token", {
 					provider: c.body.provider,

@@ -1,6 +1,6 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { ProviderOptions, UpstreamProvider } from "../oauth2";
@@ -196,55 +196,21 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			try {
-				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getMicrosoftPublicKey(kid, tenant, authority);
-				const verifyOptions: {
-					algorithms: [string];
-					audience: string | string[];
-					maxTokenAge: string;
-					issuer?: string;
-				} = {
-					algorithms: [jwtAlg],
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				};
-				/**
-				 * Issuer varies per user's tenant for multi-tenant endpoints, so only validate for specific tenants.
-				 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
-				 */
-				if (
-					tenant !== "common" &&
-					tenant !== "organizations" &&
-					tenant !== "consumers"
-				) {
-					verifyOptions.issuer = `${authority}/${tenant}/v2.0`;
-				}
-				const { payload: jwtClaims } = await jwtVerify(
-					token,
-					publicKey,
-					verifyOptions,
-				);
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-
-				return true;
-			} catch (error) {
-				logger.error("Failed to verify ID token:", error);
-				return false;
-			}
+		idToken: {
+			jwks: (header) => getMicrosoftPublicKey(header.kid!, tenant, authority),
+			audience: options.clientId,
+			maxTokenAge: "1h",
+			/**
+			 * Issuer varies per tenant for multi-tenant endpoints, so only validate it for
+			 * specific tenants.
+			 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
+			 */
+			issuer:
+				tenant !== "common" &&
+				tenant !== "organizations" &&
+				tenant !== "consumers"
+					? `${authority}/${tenant}/v2.0`
+					: undefined,
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

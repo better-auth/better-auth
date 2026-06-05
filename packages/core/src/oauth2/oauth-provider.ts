@@ -1,4 +1,50 @@
+import type { JWTVerifyGetKey } from "jose";
 import type { Awaitable, LiteralString } from "../types";
+
+/**
+ * id_token verification config for a social provider.
+ *
+ * Declares how a client-submitted id_token is verified. The shared verifier
+ * (`verifyProviderIdToken`) consumes this instead of each provider implementing its own
+ * boolean check, so verification is centralized and fail-closed: a provider without a config
+ * cannot accept a forged token by omission.
+ */
+export type OAuthIdTokenConfig =
+	| {
+			/**
+			 * JWKS resolver used to verify the JWS signature. Accepts a jose
+			 * `createRemoteJWKSet` resolver or a key-resolving function
+			 * `(protectedHeader) => key`.
+			 */
+			jwks: JWTVerifyGetKey;
+			/** Expected `iss`. Omit for providers whose issuer varies per tenant. */
+			issuer?: (string | string[]) | undefined;
+			/** Expected `aud`, usually the client ID. */
+			audience: string | string[];
+			/** Permitted JWS algorithms. Defaults to the token's `alg` header. */
+			algorithms?: string[] | undefined;
+			/** Maximum token age passed to jose (e.g. `"1h"`). */
+			maxTokenAge?: string | undefined;
+			/**
+			 * How the `nonce` claim is compared to the expected nonce.
+			 * - `"exact"` (default): strict equality.
+			 * - `"exact-or-sha256"`: matches the raw nonce or its SHA-256 hex digest (Apple).
+			 */
+			nonceComparison?: ("exact" | "exact-or-sha256") | undefined;
+			/**
+			 * Accept non-JWS (opaque) tokens without signature verification. Identity is then
+			 * resolved by getUserInfo from the access token via the provider userinfo endpoint,
+			 * which validates it (e.g. Facebook Graph access tokens).
+			 */
+			allowOpaqueToken?: boolean | undefined;
+	  }
+	| {
+			/**
+			 * Custom verifier for providers that cannot verify against a local JWKS, such as a
+			 * remote verification endpoint (e.g. LINE).
+			 */
+			verify: (token: string, nonce?: string) => Promise<boolean>;
+	  };
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -130,14 +176,11 @@ export interface UpstreamProvider<
 		| ((refreshToken: string) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
-	 * Verify the id token
-	 * @param token - The id token
-	 * @param nonce - The nonce
-	 * @returns True if the id token is valid, false otherwise
+	 * Declarative id_token verification config consumed by the shared
+	 * `verifyProviderIdToken` verifier. Providers set this instead of implementing a boolean
+	 * verify method, which keeps verification centralized and fail-closed.
 	 */
-	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
-		| undefined;
+	idToken?: OAuthIdTokenConfig | undefined;
 	/**
 	 * The expected issuer identifier for this provider (RFC 9207).
 	 * When set, the callback handler validates the `iss` query parameter
