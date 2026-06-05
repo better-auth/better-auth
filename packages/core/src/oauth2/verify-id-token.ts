@@ -31,11 +31,14 @@ async function nonceMatches(
  *
  * A provider supports id_token sign-in when it declares an {@link UpstreamProvider.idToken}
  * verification config, or when the integrator supplies a `verifyIdToken` override on the
- * provider options. Providers without either reject the client id_token sign-in path with
- * `ID_TOKEN_NOT_SUPPORTED`.
+ * provider options. A provider whose options set `disableIdTokenSignIn`, or that declares
+ * neither, rejects the client id_token sign-in path with `ID_TOKEN_NOT_SUPPORTED`.
  */
 export function supportsIdTokenSignIn(provider: UpstreamProvider<any, any>) {
 	const options = (provider.options ?? {}) as Partial<ProviderOptions>;
+	if (options.disableIdTokenSignIn) {
+		return false;
+	}
 	return Boolean(provider.idToken || options.verifyIdToken);
 }
 
@@ -59,23 +62,26 @@ export async function verifyProviderIdToken(
 	if (options.disableIdTokenSignIn) {
 		return false;
 	}
-	if (options.verifyIdToken) {
-		return options.verifyIdToken(token, nonce);
-	}
-	const config = provider.idToken;
-	if (!config) {
-		return false;
-	}
-	if ("verify" in config) {
-		return config.verify(token, nonce);
-	}
-	// Opaque (non-JWS) tokens carry no signature to check. They are accepted only when the
-	// provider opts in, in which case getUserInfo resolves identity from the access token via
-	// the provider's userinfo endpoint, which validates it (e.g. Facebook Graph access tokens).
-	if (token.split(".").length !== 3) {
-		return config.allowOpaqueToken === true;
-	}
+	// Every verification path is fail-closed: a throw from the integrator override, a custom
+	// remote verifier, the JWKS resolver, or signature checking resolves to `false` instead of
+	// escaping to the caller as a server error.
 	try {
+		if (options.verifyIdToken) {
+			return await options.verifyIdToken(token, nonce);
+		}
+		const config = provider.idToken;
+		if (!config) {
+			return false;
+		}
+		if ("verify" in config) {
+			return await config.verify(token, nonce);
+		}
+		// Opaque (non-JWS) tokens carry no signature to check. They are accepted only when the
+		// provider opts in, in which case getUserInfo resolves identity from the access token via
+		// the provider's userinfo endpoint, which validates it (e.g. Facebook Graph access tokens).
+		if (token.split(".").length !== 3) {
+			return config.allowOpaqueToken === true;
+		}
 		// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
 		// key selection is left to config.jwks. The token's `alg` only seeds the default
 		// allowed-algorithms list when the provider does not pin one.

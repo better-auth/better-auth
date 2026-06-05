@@ -2167,7 +2167,7 @@ describe("Microsoft Provider", async () => {
 		expect(data.user.name).toBe("IdToken User");
 	});
 
-	it("should return false when disableIdTokenSignIn is true", async () => {
+	it("should report id_token sign-in unsupported when disableIdTokenSignIn is true", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-disabled-user",
 			email: "disabled@outlook.com",
@@ -2217,7 +2217,11 @@ describe("Microsoft Provider", async () => {
 			},
 		});
 
-		expect(res.error?.status).toBe(401);
+		// A disabled provider reports the id_token path as unsupported, the same as a provider
+		// that declares no idToken config, instead of the misleading "invalid id token" (401)
+		// that implies the token was verified and rejected.
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
 	});
 
 	it("should verify issuer when specific tenant is configured", async () => {

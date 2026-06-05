@@ -149,9 +149,28 @@ describe("verifyProviderIdToken", () => {
 			{ jwks, issuer: ISSUER, audience: AUDIENCE },
 			{ disableIdTokenSignIn: true },
 		);
+		expect(supportsIdTokenSignIn(provider)).toBe(false);
 		expect(
 			await verifyProviderIdToken(provider, await sign({ sub: "u1" })),
 		).toBe(false);
+	});
+
+	it("is fail-closed when a custom verifier throws", async () => {
+		const overrideThrows = providerWith(undefined, {
+			verifyIdToken: async () => {
+				throw new Error("override boom");
+			},
+		});
+		expect(await verifyProviderIdToken(overrideThrows, "token")).toBe(false);
+
+		const remoteVerifyThrows = providerWith({
+			verify: async () => {
+				throw new Error("remote boom");
+			},
+		});
+		expect(await verifyProviderIdToken(remoteVerifyThrows, "token")).toBe(
+			false,
+		);
 	});
 
 	it("gates opaque (non-JWS) tokens behind allowOpaqueToken", async () => {
