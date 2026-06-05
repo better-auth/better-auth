@@ -12,6 +12,7 @@ import {
 	ATTR_HOOK_TYPE,
 	ATTR_HTTP_ROUTE,
 	ATTR_OPERATION_ID,
+	getOpenTelemetryAPI,
 	withSpan,
 } from "@better-auth/core/instrumentation";
 import type {
@@ -159,6 +160,14 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				};
 				const hasRequest = isRequestLike(context?.request);
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
+
+				const { trace } = getOpenTelemetryAPI();
+				const parentSpan = trace.getActiveSpan?.();
+				if (parentSpan) {
+					parentSpan.updateName(`${methodName} ${route}`);
+					parentSpan.setAttribute(ATTR_HTTP_ROUTE, route);
+				}
+
 				return withSpan(
 					`${methodName} ${route}`,
 					{
