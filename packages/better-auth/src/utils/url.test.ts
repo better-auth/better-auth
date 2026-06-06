@@ -11,9 +11,6 @@ import {
 	trimTrailingSlashes,
 } from "./url";
 
-/**
- * @see https://github.com/better-auth/better-auth/issues/8898
- */
 describe("validateProxyHeader (ReDoS guard)", () => {
 	// Access the internal function through getHostFromSource since validateProxyHeader
 	// is not exported directly.  A valid host header goes through the same path.

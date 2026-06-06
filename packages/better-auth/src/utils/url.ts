@@ -116,14 +116,6 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 
 		// Basic hostname validation (allows localhost, IPs, and domains with ports)
 		// This is a simple check, not exhaustive RFC validation
-		//
-		// NOTE: The previous single combined regex
-		//   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/
-		// suffers from catastrophic backtracking (ReDoS) when the engine tries to
-		// satisfy the repeated outer group across dot-separated labels on a crafted
-		// input like a long string ending in '-'.  The fix splits on '.' first and
-		// validates each label independently with an anchored, non-backtracking
-		// per-label regex — O(n) total, no cross-label backtracking possible.
 		const labelRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 		const validateHostname = (hostname: string): boolean => {
 			if (!hostname) return false;
