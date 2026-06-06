@@ -310,7 +310,7 @@ async function runBeforeHooks(
 
 		const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
 		const route = endpoint.path ?? "/:virtual";
-		const result = await withSpan(
+		const result = (await withSpan(
 			`hook before ${route} ${hookSource}`,
 			{
 				[ATTR_HOOK_TYPE]: "before",
@@ -321,7 +321,7 @@ async function runBeforeHooks(
 			() =>
 				hook.handler({
 					...context,
-					returnHeaders: false,
+					returnHeaders: true,
 				}),
 		).catch((e: unknown) => {
 			if (
@@ -331,13 +331,18 @@ async function runBeforeHooks(
 				e.stack = e.errorStack;
 			}
 			throw e;
-		});
-		if (!result || typeof result !== "object") continue;
-		if ("context" in result && typeof result.context === "object") {
-			mergeHookContext(context, result.context);
+		})) as {
+			headers?: Headers | null | undefined;
+			response?: unknown;
+		};
+		mergeResponseHeaders(context.context, result.headers);
+		const response = result.response;
+		if (!response || typeof response !== "object") continue;
+		if ("context" in response && typeof response.context === "object") {
+			mergeHookContext(context, response.context);
 			continue;
 		}
-		return result;
+		return response;
 	}
 }
 
@@ -450,14 +455,15 @@ function withHookPipeline<T extends Endpoint>(endpoint: T): T {
 				operationId,
 			);
 			if (before) {
+				const headers = endpointContext.context.responseHeaders;
 				mergeEndpointHeadersBack(parentAuthContext!, endpointContext.context);
 				return shouldReturnResponse
 					? toResponse(before, {
-							headers: endpointContext.headers,
+							headers,
 						})
 					: context?.returnHeaders
 						? {
-								headers: endpointContext.headers,
+								headers,
 								response: before,
 							}
 						: before;

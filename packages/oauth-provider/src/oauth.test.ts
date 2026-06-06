@@ -11,7 +11,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { multiSession } from "better-auth/plugins/multi-session";
 import type { Organization } from "better-auth/plugins/organization";
 import { organization } from "better-auth/plugins/organization";
-import { getTestInstance } from "better-auth/test";
+import { getHttpTestInstance, getTestInstance } from "better-auth/test";
 import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { Listener } from "listhen";
@@ -984,17 +984,6 @@ describe("oauth", async () => {
 });
 
 describe("oauth - authorize resume hooks", async () => {
-	const tempServer = await listen(
-		toNodeHandler(async () => new Response("temp")),
-		{ port: 0 },
-	);
-	const allocatedPort = tempServer.address?.port;
-	await tempServer.close();
-	if (!allocatedPort) {
-		throw new Error("Expected test server port");
-	}
-	const port = allocatedPort;
-	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -1011,8 +1000,9 @@ describe("oauth - authorize resume hooks", async () => {
 		customFetchImpl,
 		cookieSetter,
 		testUser,
-	} = await getTestInstance({
+		server,
 		baseURL: authServerBaseUrl,
+	} = await getHttpTestInstance({
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
 				if (ctx.path === "/oauth2/authorize") {
@@ -1072,14 +1062,6 @@ describe("oauth - authorize resume hooks", async () => {
 		fetchOptions: {
 			customFetchImpl,
 		},
-	});
-
-	let server: Listener;
-
-	beforeAll(async () => {
-		server = await listen(toNodeHandler(authorizationServer.handler), {
-			port,
-		});
 	});
 
 	afterEach(() => {

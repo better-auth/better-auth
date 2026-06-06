@@ -296,11 +296,24 @@ describe("before hook", async () => {
 					return { response: true };
 				},
 			),
+			jsonWithHeaders: createAuthEndpoint(
+				"/json-with-headers",
+				{
+					method: "GET",
+				},
+				async (c) => {
+					return { response: true };
+				},
+			),
 		};
 
 		const authContext = init({
 			hooks: {
 				before: createAuthMiddleware(async (c) => {
+					if (c.path === "/json-with-headers") {
+						c.setHeader("x-before-hook", "set");
+						return { before: true };
+					}
 					if (c.path === "/json") {
 						return { before: true };
 					}
@@ -318,6 +331,32 @@ describe("before hook", async () => {
 		it("should return the hook response", async () => {
 			const response = await authEndpoints.json();
 			expect(response).toMatchObject({ before: true });
+		});
+
+		it("should preserve response headers from short-circuited before hooks", async () => {
+			const response = await authEndpoints.jsonWithHeaders({
+				asResponse: true,
+				headers: new Headers({
+					cookie: "session=request",
+				}),
+			});
+
+			expect(await response.json()).toEqual({ before: true });
+			expect(response.headers.get("x-before-hook")).toBe("set");
+			expect(response.headers.get("cookie")).toBeNull();
+		});
+
+		it("should return response headers from short-circuited before hooks", async () => {
+			const result = await authEndpoints.jsonWithHeaders({
+				returnHeaders: true,
+				headers: new Headers({
+					cookie: "session=request",
+				}),
+			});
+
+			expect(result.response).toEqual({ before: true });
+			expect(result.headers?.get("x-before-hook")).toBe("set");
+			expect(result.headers?.get("cookie")).toBeNull();
 		});
 	});
 });
