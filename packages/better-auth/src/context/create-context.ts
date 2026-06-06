@@ -8,7 +8,7 @@ import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { OAuthProvider } from "@better-auth/core/oauth2";
+import type { UpstreamProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
@@ -223,9 +223,9 @@ Most of the features of Better Auth will not work correctly.`,
 					);
 				}
 				const provider = socialProviders[key](config as never);
-				(provider as OAuthProvider).disableImplicitSignUp =
+				(provider as UpstreamProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
-				return provider as OAuthProvider;
+				return provider as UpstreamProvider;
 			}),
 		)
 	).filter((x) => x !== null);

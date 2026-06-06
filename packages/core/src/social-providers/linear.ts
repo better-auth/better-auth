@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,11 +27,14 @@ export interface LinearOptions extends ProviderOptions<LinearUser> {
 	clientId: string;
 }
 
+const LINEAR_DEFAULT_SCOPES = ["read"];
+
 export const linear = (options: LinearOptions) => {
 	const tokenEndpoint = "https://api.linear.app/oauth/token";
 	return {
 		id: "linear",
 		name: "Linear",
+		callbackPath: "/callback/linear",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -38,14 +42,16 @@ export const linear = (options: LinearOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope ? [] : ["read"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				LINEAR_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "linear",
 				options,
 				authorizationEndpoint: "https://linear.app/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				loginHint,
@@ -124,5 +130,5 @@ export const linear = (options: LinearOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<LinearUser>;
+	} satisfies UpstreamProvider<LinearUser>;
 };
