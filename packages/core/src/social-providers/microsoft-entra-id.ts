@@ -3,7 +3,12 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type {
+	ClientAssertionGetter,
+	ProviderOptions,
+	TokenEndpointAuth,
+	UpstreamProvider,
+} from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
@@ -123,23 +128,29 @@ export interface MicrosoftOptions
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string | undefined;
+	tenantId?: string;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string | undefined;
+	authority?: string;
+	/**
+	 * Function that returns a JWT client assertion for token endpoint authentication.
+	 *
+	 * Use this instead of `clientSecret` when your Microsoft Entra ID app is
+	 * configured for client authentication with assertions (private_key_jwt or
+	 * workload identity federation).
+	 */
+	clientAssertion?: ClientAssertionGetter;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?:
-		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
-		| undefined;
+	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean | undefined;
+	disableProfilePhoto?: boolean;
 }
 
 const MICROSOFT_ENTRA_ID_DEFAULT_SCOPES = [
@@ -155,6 +166,18 @@ export const microsoft = (options: MicrosoftOptions) => {
 	const authority = options.authority || "https://login.microsoftonline.com";
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
+	if (options.clientSecret && options.clientAssertion) {
+		throw new BetterAuthError(
+			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
+		);
+	}
+	const tokenEndpointAuth: TokenEndpointAuth | undefined =
+		options.clientAssertion
+			? {
+					method: "private_key_jwt",
+					getClientAssertion: options.clientAssertion,
+				}
+			: undefined;
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
@@ -194,6 +217,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint,
+				tokenEndpointAuth,
 			});
 		},
 		idToken: {
@@ -290,6 +314,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
 						tokenEndpoint,
+						tokenEndpointAuth,
 					});
 				},
 		options,
