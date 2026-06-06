@@ -370,8 +370,12 @@ export async function dispatchAuthEndpoint(
 					// Request-header overrides from the hook merge into the request
 					// headers; response headers are already accumulated separately.
 					if (headers) {
+						if (!internalContext.headers) {
+							internalContext.headers = new Headers();
+						}
+						const requestHeaders = internalContext.headers;
 						headers.forEach((value, key) => {
-							(internalContext.headers as Headers).set(key, value);
+							requestHeaders.set(key, value);
 						});
 					}
 					internalContext = defuReplaceArrays(rest, internalContext);

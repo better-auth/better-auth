@@ -1427,3 +1427,30 @@ describe("after hook error headers", async () => {
 		expect(response.headers.get("set-cookie")).toContain("from_after=1");
 	});
 });
+
+describe("before hook request headers", async () => {
+	const endpoints = {
+		echoHeaders: createAuthEndpoint(
+			"/echo-headers",
+			{ method: "GET" },
+			async (c) => Object.fromEntries(c.headers?.entries() ?? []),
+		),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				if (c.path === "/echo-headers") {
+					return { context: { headers: new Headers({ injected: "yes" }) } };
+				}
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("merges hook-provided request headers when the call has none", async () => {
+		// No request headers, so the dispatch context starts with `headers`
+		// undefined; the merge must not throw.
+		const res = await api.echoHeaders();
+		expect(res).toMatchObject({ injected: "yes" });
+	});
+});
