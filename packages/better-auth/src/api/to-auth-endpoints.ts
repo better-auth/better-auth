@@ -168,12 +168,58 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					async () =>
 						runWithEndpointContext(internalContext, async () => {
 							const { beforeHooks, afterHooks } = getHooks(authContext);
+							let beforeHookError: APIError | null = null;
 							const before = await runBeforeHooks(
 								internalContext,
 								beforeHooks,
 								endpoint,
 								operationId,
-							);
+							).catch((e: unknown) => {
+								if (isAPIError(e)) {
+									beforeHookError = e;
+									return { context: {} };
+								}
+								throw e;
+							});
+							if (beforeHookError) {
+								const hookError = beforeHookError as APIError;
+								internalContext.context.returned = hookError;
+								internalContext.context.responseHeaders = hookError.headers
+									? new Headers(hookError.headers as HeadersInit | undefined)
+									: undefined;
+								internalContext.asResponse = false;
+								internalContext.returnHeaders = true;
+								const after = await runAfterHooks(
+									internalContext,
+									afterHooks,
+									endpoint,
+									operationId,
+								);
+
+								const response = after.response ?? hookError;
+
+								if (isAPIError(response)) {
+									if (shouldPublishLog(authContext.logger.level, "debug")) {
+										response.stack = response.errorStack;
+									}
+									if (context?.asResponse) {
+										return toResponse(response, {
+											headers: after.headers,
+											status: response.statusCode,
+										});
+									}
+									throw response;
+								}
+
+								if (context?.asResponse) {
+									return toResponse(response, {
+										headers: after.headers,
+									});
+								}
+								return context?.returnHeaders
+									? { headers: after.headers, response }
+									: response;
+							}
 							/**
 							 * If `before.context` is returned, it should
 							 * get merged with the original context
