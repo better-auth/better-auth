@@ -2906,8 +2906,8 @@ describe("oauth2", async () => {
 		});
 	});
 
-	describe("validateUser callback", () => {
-		it("should allow sign-in when validateUser returns void", async () => {
+	describe("validateUserInfo callback", () => {
+		it("should allow sign-in when validateUserInfo returns void", async () => {
 			server.service.once("beforeUserinfo", (userInfoResponse) => {
 				userInfoResponse.body = {
 					email: "valid@test.com",
@@ -2919,6 +2919,11 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				user: {
+					validateUserInfo() {
+						// allow
+					},
+				},
 				plugins: [
 					genericOAuth({
 						config: [
@@ -2928,9 +2933,6 @@ describe("oauth2", async () => {
 								clientId,
 								clientSecret,
 								pkce: true,
-								validateUser() {
-									// allow
-								},
 							},
 						],
 					}),
@@ -2958,7 +2960,7 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/dashboard");
 		});
 
-		it("should reject sign-in when validateUser returns error", async () => {
+		it("should reject sign-in when validateUserInfo returns error", async () => {
 			server.service.once("beforeUserinfo", (userInfoResponse) => {
 				userInfoResponse.body = {
 					email: "rejected@blocked.com",
@@ -2970,6 +2972,20 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				user: {
+					validateUserInfo({ user, source }) {
+						if (source.type !== "oauth") {
+							return;
+						}
+						expect(source.type).toBe("oauth");
+						expect(source.providerId).toBe("validate-reject");
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_blocked",
+							};
+						}
+					},
+				},
 				plugins: [
 					genericOAuth({
 						config: [
@@ -2979,13 +2995,6 @@ describe("oauth2", async () => {
 								clientId,
 								clientSecret,
 								pkce: true,
-								validateUser({ user }) {
-									if (user.email?.endsWith("@blocked.com")) {
-										return {
-											error: "domain_blocked",
-										};
-									}
-								},
 							},
 						],
 					}),
@@ -3025,6 +3034,20 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				user: {
+					validateUserInfo({ user, source }) {
+						if (
+							source.providerId === "validate-desc" &&
+							user.email?.endsWith("@blocked.com")
+						) {
+							return {
+								error: "domain_blocked",
+								errorDescription:
+									"Only company emails are allowed for this provider",
+							};
+						}
+					},
+				},
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3034,15 +3057,6 @@ describe("oauth2", async () => {
 								clientId,
 								clientSecret,
 								pkce: true,
-								validateUser({ user }) {
-									if (user.email?.endsWith("@blocked.com")) {
-										return {
-											error: "domain_blocked",
-											errorDescription:
-												"Only company emails are allowed for this provider",
-										};
-									}
-								},
 							},
 						],
 					}),
@@ -3073,8 +3087,9 @@ describe("oauth2", async () => {
 			);
 		});
 
-		it("should provide raw profile data to validateUser", async () => {
+		it("should provide raw profile data to validateUserInfo", async () => {
 			let capturedProfile: unknown;
+			let capturedProviderId: string | undefined;
 			server.service.once("beforeUserinfo", (userInfoResponse) => {
 				userInfoResponse.body = {
 					email: "profile@test.com",
@@ -3088,6 +3103,12 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				user: {
+					validateUserInfo({ source }) {
+						capturedProfile = source.profile;
+						capturedProviderId = source.providerId;
+					},
+				},
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3097,9 +3118,6 @@ describe("oauth2", async () => {
 								clientId,
 								clientSecret,
 								pkce: true,
-								validateUser({ profile }) {
-									capturedProfile = profile;
-								},
 							},
 						],
 					}),
@@ -3121,6 +3139,7 @@ describe("oauth2", async () => {
 			await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
 
 			expect(capturedProfile).toBeDefined();
+			expect(capturedProviderId).toBe("validate-profile");
 			expect((capturedProfile as Record<string, unknown>).email).toBe(
 				"profile@test.com",
 			);
@@ -3142,6 +3161,20 @@ describe("oauth2", async () => {
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
 				database: undefined,
+				user: {
+					validateUserInfo({ user, source }) {
+						if (source.type !== "oauth") {
+							return;
+						}
+						expect(source.providerId).toBe("validate-stateless");
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "stateless_blocked",
+								errorDescription: "Stateless rejection test",
+							};
+						}
+					},
+				},
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3151,14 +3184,6 @@ describe("oauth2", async () => {
 								clientId,
 								clientSecret,
 								pkce: true,
-								validateUser({ user }) {
-									if (user.email?.endsWith("@blocked.com")) {
-										return {
-											error: "stateless_blocked",
-											errorDescription: "Stateless rejection test",
-										};
-									}
-								},
 							},
 						],
 					}),

@@ -1910,19 +1910,26 @@ describe("account", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/9732
  */
-describe("validateUser account linking", async () => {
+describe("validateUserInfo account linking", async () => {
 	const { signInWithTestUser, client } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.flow !== "account-linking") {
+					return;
+				}
+				expect(source.type).toBe("oauth");
+				expect(source.providerId).toBe("google");
+				return {
+					error: "domain_blocked",
+					errorDescription: "This email domain is not allowed",
+				};
+			},
+		},
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
-				validateUser() {
-					return {
-						error: "domain_blocked",
-						errorDescription: "This email domain is not allowed",
-					};
-				},
 			},
 		},
 		account: {
@@ -1934,7 +1941,7 @@ describe("validateUser account linking", async () => {
 
 	const { runWithUser } = await signInWithTestUser();
 
-	it("should reject account linking when validateUser returns error", async () => {
+	it("should reject account linking when validateUserInfo returns error", async () => {
 		await runWithUser(async (headers) => {
 			const linkAccountRes = await client.linkSocial(
 				{

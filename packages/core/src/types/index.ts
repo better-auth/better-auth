@@ -24,6 +24,8 @@ export type {
 	DynamicBaseURLConfig,
 	GenerateIdFn,
 	StoreIdentifierOption,
+	ValidateUserInfoResult,
+	ValidateUserInfoSource,
 } from "./init-options";
 export type {
 	BetterAuthPlugin,

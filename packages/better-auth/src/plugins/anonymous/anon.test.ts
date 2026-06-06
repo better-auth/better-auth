@@ -113,6 +113,36 @@ describe("anonymous", async () => {
 		expect(session.data?.user.isAnonymous).toBe(true);
 	});
 
+	it("should reject anonymous sign-in when validateUserInfo returns error", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						if (source.type !== "anonymous") {
+							return;
+						}
+						expect(source.type).toBe("anonymous");
+						return {
+							error: "anonymous_blocked",
+							errorDescription: "Anonymous users are not allowed",
+						};
+					},
+				},
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.anonymous();
+		expect(res.error?.code).toBe("anonymous_blocked");
+		expect(res.error?.message).toBe("Anonymous users are not allowed");
+	});
+
 	it("link anonymous user account", async () => {
 		expect(linkAccountFn).toHaveBeenCalledTimes(0);
 		await client.signIn.email(testUser, {

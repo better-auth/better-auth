@@ -9,6 +9,7 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import { validateUserInfo } from "../../utils/validate-user-info";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -357,8 +358,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					);
 
-					function redirectWithError(error: string): never {
+					function redirectWithError(
+						error: string,
+						description?: string | undefined,
+					): never {
 						errorCallbackURL.searchParams.set("error", error);
+						if (description) {
+							errorCallbackURL.searchParams.set(
+								"error_description",
+								description,
+							);
+						}
 						throw ctx.redirect(errorCallbackURL.toString());
 					}
 
@@ -388,6 +398,23 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
+							const validation = await validateUserInfo(ctx, {
+								user: {
+									email,
+									emailVerified: true,
+									name: name || "",
+								},
+								source: {
+									type: "magic-link",
+									flow: "verify",
+								},
+							});
+							if (validation) {
+								redirectWithError(
+									validation.error,
+									validation.errorDescription,
+								);
+							}
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
 								emailVerified: true,

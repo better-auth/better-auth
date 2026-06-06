@@ -10,6 +10,7 @@ import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import { validateUserInfo } from "../../utils/validate-user-info";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -321,6 +322,25 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						"UNPROCESSABLE_ENTITY",
 						BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					);
+				}
+				const validation = await validateUserInfo(ctx, {
+					user: {
+						email: normalizedEmail,
+						name,
+						image,
+						...additionalUserFields,
+						emailVerified: false,
+					},
+					source: {
+						type: "email-password",
+						flow: "sign-up",
+					},
+				});
+				if (validation) {
+					throw APIError.from("UNAUTHORIZED", {
+						code: validation.error,
+						message: validation.errorDescription || validation.error,
+					});
 				}
 				/**
 				 * Hash the password

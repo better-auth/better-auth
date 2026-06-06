@@ -253,6 +253,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							flow: "oauth-proxy",
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {

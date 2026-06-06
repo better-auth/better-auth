@@ -2483,17 +2483,19 @@ describe("Railway Provider", async () => {
 	});
 });
 
-describe("validateUser callback", async () => {
-	it("should allow sign-in when validateUser returns void", async () => {
+describe("validateUserInfo callback", async () => {
+	it("should allow sign-in when validateUserInfo returns void", async () => {
 		const { client, cookieSetter } = await getTestInstance(
 			{
+				user: {
+					validateUserInfo() {
+						// allow
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser() {
-							// allow
-						},
 					},
 				},
 			},
@@ -2527,18 +2529,22 @@ describe("validateUser callback", async () => {
 		const { client, cookieSetter } = await getTestInstance(
 			{
 				database: undefined,
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.type).toBe("oauth");
+						expect(source.providerId).toBe("google");
+						if (!user.email?.endsWith("@allowed.com")) {
+							return {
+								error: "email_not_allowed",
+								errorDescription: "Only allowed.com emails are permitted",
+							};
+						}
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser({ user }) {
-							if (!user.email?.endsWith("@allowed.com")) {
-								return {
-									error: "email_not_allowed",
-									errorDescription: "Only allowed.com emails are permitted",
-								};
-							}
-						},
 					},
 				},
 			},
@@ -2566,17 +2572,21 @@ describe("validateUser callback", async () => {
 
 		expect(redirectLocation).toContain("error=email_not_allowed");
 	});
-	it("should provide raw profile data to validateUser", async () => {
+	it("should provide raw profile data to validateUserInfo", async () => {
 		let capturedProfile: unknown;
+		let capturedProviderId: string | undefined;
 		const { client, cookieSetter } = await getTestInstance(
 			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedProfile = source.profile;
+						capturedProviderId = source.providerId;
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser({ profile }) {
-							capturedProfile = profile;
-						},
 					},
 				},
 			},
@@ -2602,12 +2612,13 @@ describe("validateUser callback", async () => {
 		});
 
 		expect(capturedProfile).toBeDefined();
+		expect(capturedProviderId).toBe("google");
 		expect(typeof (capturedProfile as Record<string, unknown>).email).toBe(
 			"string",
 		);
 		expect((capturedProfile as Record<string, unknown>).sub).toBeDefined();
 	});
-	it("should reject sign-in when validateUser returns error", async () => {
+	it("should reject sign-in when validateUserInfo returns error", async () => {
 		mswServer.use(
 			http.post("https://oauth2.googleapis.com/token", async () => {
 				const data = {
@@ -2631,18 +2642,20 @@ describe("validateUser callback", async () => {
 		);
 		const { client, cookieSetter } = await getTestInstance(
 			{
+				user: {
+					validateUserInfo({ user }) {
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_blocked",
+								errorDescription: "This email domain is not allowed",
+							};
+						}
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser({ user }) {
-							if (user.email?.endsWith("@blocked.com")) {
-								return {
-									error: "domain_blocked",
-									errorDescription: "This email domain is not allowed",
-								};
-							}
-						},
 					},
 				},
 			},
@@ -2697,18 +2710,20 @@ describe("validateUser callback", async () => {
 		);
 		const { client, cookieSetter } = await getTestInstance(
 			{
+				user: {
+					validateUserInfo({ user }) {
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_blocked",
+								errorDescription: "Only company emails are allowed",
+							};
+						}
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser({ user }) {
-							if (user.email?.endsWith("@blocked.com")) {
-								return {
-									error: "domain_blocked",
-									errorDescription: "Only company emails are allowed",
-								};
-							}
-						},
 					},
 				},
 			},
@@ -2739,7 +2754,7 @@ describe("validateUser callback", async () => {
 			"error_description=Only+company+emails+are+allowed",
 		);
 	});
-	it("should reject idToken sign-in when validateUser returns error", async () => {
+	it("should reject idToken sign-in when validateUserInfo returns error", async () => {
 		mswServer.use(
 			http.post("https://oauth2.googleapis.com/token", async () => {
 				const data = {
@@ -2763,13 +2778,17 @@ describe("validateUser callback", async () => {
 		);
 		const { client, auth } = await getTestInstance(
 			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.type).toBe("oauth");
+						expect(source.flow).toBe("id-token");
+						return { error: "user_blocked" };
+					},
+				},
 				socialProviders: {
 					google: {
 						clientId: "test",
 						clientSecret: "test",
-						validateUser() {
-							return { error: "user_blocked" };
-						},
 					},
 				},
 			},

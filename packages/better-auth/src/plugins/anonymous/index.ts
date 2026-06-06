@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { validateUserInfo } from "../../utils/validate-user-info";
 import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
@@ -108,6 +109,24 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 
 					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
+					const validation = await validateUserInfo(ctx, {
+						user: {
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name,
+						},
+						source: {
+							type: "anonymous",
+							flow: "sign-in",
+						},
+					});
+					if (validation) {
+						throw APIError.from("UNAUTHORIZED", {
+							code: validation.error,
+							message: validation.errorDescription || validation.error,
+						});
+					}
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
 						emailVerified: false,

@@ -85,15 +85,29 @@ The plugin uses the core OAuth callback route at `/callback/:providerId`. This m
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
 
-## Validate OAuth Users
+## Validate OAuth User Info
 
-You can use `validateUser` on a Generic OAuth provider to reject a user before Better Auth creates a user, links an account, or creates a session. The callback receives the mapped `user` and the raw OAuth `profile`, which is useful for email/domain allowlists or provider-specific profile checks.
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject Generic OAuth users before Better Auth creates a user, links an account, or creates a session. Check `source.providerId` to scope validation to a specific Generic OAuth provider, and use `source.profile` for provider-specific profile fields.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { genericOAuth } from "better-auth/plugins";
 
 export const auth = betterAuth({
+  user: {
+    validateUserInfo: ({ user, source }) => {
+      if (source.type !== "oauth" || source.providerId !== "company-oauth") {
+        return;
+      }
+
+      if (!user.email?.endsWith("@example.com")) {
+        return {
+          error: "email_not_allowed",
+          errorDescription: "Use your example.com email to sign in",
+        };
+      }
+    },
+  },
   plugins: [
     genericOAuth({
       config: [
@@ -102,14 +116,6 @@ export const auth = betterAuth({
           clientId: process.env.COMPANY_OAUTH_CLIENT_ID!,
           clientSecret: process.env.COMPANY_OAUTH_CLIENT_SECRET!,
           discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
-          validateUser: ({ user }) => {
-            if (!user.email?.endsWith("@example.com")) {
-              return {
-                error: "email_not_allowed",
-                errorDescription: "Use your example.com email to sign in",
-              };
-            }
-          },
         },
       ],
     }),
@@ -117,7 +123,7 @@ export const auth = betterAuth({
 });
 ```
 
-Return nothing to allow the OAuth flow. Return an object with `error` or `errorDescription` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while API-based flows such as ID-token sign-in return a 401 API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+Return nothing to allow the OAuth flow. Return an object with `error` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while API-based flows return a structured API error.
 
 ## Pre-configured Provider Helpers
 

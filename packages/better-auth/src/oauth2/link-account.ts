@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { validateUserInfo } from "../utils/validate-user-info";
 import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
@@ -18,6 +20,8 @@ export async function handleOAuthUserInfo(
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
+		sourceProfile?: Record<string, unknown> | undefined;
+		flow?: string | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
@@ -39,6 +43,21 @@ export async function handleOAuthUserInfo(
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
+	const validation = await validateUserInfo(c, {
+		user: userInfo,
+		source: {
+			type: "oauth",
+			providerId: account.providerId,
+			flow: opts.flow,
+			profile: opts.sourceProfile,
+		},
+	});
+	if (validation) {
+		throw APIError.from("UNAUTHORIZED", {
+			code: validation.error,
+			message: validation.errorDescription || validation.error,
+		});
+	}
 
 	if (dbUser) {
 		const linkedAccount =

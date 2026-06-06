@@ -3,4 +3,4 @@
 "better-auth": minor
 ---
 
-Add `validateUser` hooks for built-in social providers and Generic OAuth so applications can reject OAuth users before account/session creation or linking, including in stateless setups.
+Add a global `user.validateUserInfo` hook so applications can reject incoming user info before user creation or social account linking across OAuth, email/password, and plugin sign-up flows, including stateless OAuth setups.

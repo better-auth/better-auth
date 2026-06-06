@@ -14,6 +14,7 @@ import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
+import { validateUserInfo } from "../../utils/validate-user-info";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -216,28 +217,24 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
 		}
-		if (provider.options?.validateUser) {
-			const validateUser = provider.options.validateUser;
-			let validation: { error?: string; errorDescription?: string } | void =
-				undefined;
-			try {
-				validation = await validateUser({
-					user: userInfo,
-					profile: providerResult.data,
-				});
-			} catch (error) {
-				c.context.logger.error("validateUser callback failed", error);
-				redirectOnError("validation_failed", "User validation failed");
-			}
-			if (validation?.error || validation?.errorDescription) {
-				redirectOnError(
-					validation.error || "validation_failed",
-					validation.errorDescription,
-				);
-			}
-		}
 
 		if (link) {
+			const validation = await validateUserInfo(c, {
+				user: {
+					...userInfo,
+					id: providerAccountId,
+					email: userInfo.email ?? undefined,
+				},
+				source: {
+					type: "oauth",
+					providerId: provider.id,
+					flow: "account-linking",
+					profile: providerResult.data,
+				},
+			});
+			if (validation) {
+				redirectOnError(validation.error, validation.errorDescription);
+			}
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
@@ -336,6 +333,8 @@ export const callbackOAuth = createAuthEndpoint(
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				sourceProfile: providerResult.data,
+				flow: "callback",
 			});
 		} catch (e) {
 			// A before-callback hook (for example the admin plugin's banned-user

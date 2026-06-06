@@ -70,34 +70,36 @@ await auth.api.linkSocialAccount({
 });
 ```
 
-### Validate OAuth Users
+### Validate OAuth User Info
 
-Use `validateUser` when you need to reject an OAuth sign-in or account link before Better Auth creates a user, links an account, or creates a session. The callback receives the mapped `user` and the raw provider `profile`, so you can enforce rules like domain allowlists, disposable email blocking, or organization membership checks.
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) when you need to reject an OAuth sign-in or account link before Better Auth creates a user, links an account, or creates a session. The callback receives the mapped `user` and OAuth metadata in `source`, including the provider ID and raw provider profile.
 
-Return nothing to allow the flow. Return an object with `error` or `errorDescription` to reject it. Redirect-based OAuth flows send the rejection to the configured OAuth error URL, while API-based flows such as ID-token sign-in return a 401 API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+This runs during regular OAuth callbacks, ID-token sign-in, and account linking. It also works in stateless setups because it runs before any database-backed user creation or account linking step.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
+  user: {
+    validateUserInfo: ({ user, source }) => {
+      if (source.type !== "oauth" || source.providerId !== "google") return;
+
+      if (!user.email?.endsWith("@example.com")) {
+        return {
+          error: "email_not_allowed",
+          errorDescription: "Use your example.com email to sign in",
+        };
+      }
+    },
+  },
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      validateUser: ({ user }) => {
-        if (!user.email?.endsWith("@example.com")) {
-          return {
-            error: "email_not_allowed",
-            errorDescription: "Use your example.com email to sign in",
-          };
-        }
-      },
     },
   },
 });
 ```
-
-This runs during regular OAuth callbacks, ID-token sign-in, and account linking. It also works in stateless setups because it runs before any database-backed user creation or account linking step.
 
 ### Get Access Token
 

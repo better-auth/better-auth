@@ -47,6 +47,25 @@ export type GenerateIdFn = (options: {
 	size?: number | undefined;
 }) => string | false;
 
+export type ValidateUserInfoSource = {
+	type:
+		| "oauth"
+		| "email-password"
+		| "magic-link"
+		| "email-otp"
+		| "anonymous"
+		| "siwe"
+		| (string & {});
+	providerId?: string | undefined;
+	flow?: string | undefined;
+	profile?: Record<string, unknown> | undefined;
+};
+
+export type ValidateUserInfoResult = {
+	error: string;
+	errorDescription?: string | undefined;
+};
+
 /**
  * Configuration for dynamic base URL resolution.
  * Allows Better Auth to work with multiple domains (e.g., Vercel preview deployments).
@@ -777,6 +796,21 @@ export type BetterAuthOptions = {
 	 */
 	user?:
 		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
+				/**
+				 * Validate user info before Better Auth creates a user or links a
+				 * social account during authentication flows.
+				 *
+				 * Return nothing to allow the flow. Return an object with `error` to
+				 * reject the flow. Redirect-based flows send the rejection to the
+				 * configured error URL; API-based flows return a structured API error.
+				 */
+				validateUserInfo?: (
+					data: {
+						user: Partial<User> & Record<string, unknown>;
+						source: ValidateUserInfoSource;
+					},
+					request?: Request,
+				) => Awaitable<void | ValidateUserInfoResult>;
 				/**
 				 * Changing email configuration
 				 */

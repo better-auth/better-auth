@@ -301,6 +301,38 @@ await authClient.deleteUser({
 
 ### Callbacks
 
+**validateUserInfo**: This callback is called before Better Auth creates a user or links a social account during authentication flows. Use it to reject sign-ups or social account links from one place, including OAuth, email/password, magic link, email OTP, anonymous, and SIWE flows.
+
+Return nothing to allow the flow. Return an object with `error` to reject it. Redirect-based flows send the rejection to the configured error URL, while API-based flows return a structured API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        validateUserInfo: ({ user, source }) => {
+            if (!user.email?.endsWith("@example.com")) {
+                return {
+                    error: "email_not_allowed",
+                    errorDescription: "Use your example.com email to sign in",
+                };
+            }
+
+            if (
+                source.type === "oauth" &&
+                source.providerId === "company-oauth" &&
+                source.profile?.hd !== "example.com"
+            ) {
+                return {
+                    error: "invalid_organization",
+                    errorDescription: "Use your company OAuth account",
+                };
+            }
+        },
+    },
+});
+```
+
 **beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
 
 ```ts title="auth.ts"

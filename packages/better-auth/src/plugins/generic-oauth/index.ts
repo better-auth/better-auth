@@ -43,7 +43,6 @@ export type BaseOAuthProviderOptions = Pick<
 	| "disableImplicitSignUp"
 	| "disableSignUp"
 	| "overrideUserInfo"
-	| "validateUser"
 >;
 
 interface DiscoveryDocument {
@@ -379,7 +378,6 @@ export const genericOAuth = <const ID extends string>(
 					options: {
 						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
-						validateUser: c.validateUser,
 					},
 				} satisfies OAuthProvider);
 			}
