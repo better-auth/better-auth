@@ -53,6 +53,30 @@ describe("username", async () => {
 		);
 		expect(res.data?.token).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9469
+	 */
+	it("should redirect to callbackURL on sign-in (parity with sign-in/email)", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+			callbackURL: "/dashboard",
+		});
+		expect(res.data?.redirect).toBe(true);
+		expect(res.data?.url).toBe("/dashboard");
+		expect(res.data?.token).toBeDefined();
+	});
+
+	it("should not set redirect when callbackURL is omitted", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+		});
+		expect(res.data?.redirect).toBe(false);
+		expect(res.data?.url).toBeUndefined();
+	});
+
 	it("should update username", async () => {
 		await client.updateUser({
 			username: "new_username_2.1",
@@ -629,5 +653,218 @@ describe("username email verification flow (no info leak)", async () => {
 
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+	});
+});
+
+describe("immutable username", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					immutableUsername: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should sign up with username when immutable username is enabled", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-test@example.com",
+				username: "immutable_user",
+				password: "password123",
+				name: "Immutable Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_user");
+	});
+
+	it("should fail when trying to update username to a different value", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-update-test@example.com",
+				username: "immutable_update_user",
+				password: "password123",
+				name: "Immutable Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "new_username_attempt",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+		);
+	});
+
+	it("should succeed setting username if previously unset", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-update-unset-test@example.com",
+				password: "password123",
+				name: "Immutable Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "new_username_previously_unset",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("new_username_previously_unset");
+	});
+
+	it("should succeed when updating username to the same value", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-same-value@example.com",
+				username: "immutable_same_user",
+				password: "password123",
+				name: "Immutable Same Value Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "immutable_same_user",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_same_user");
+	});
+
+	it("should succeed when updating displayUsername even with immutable username", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-display-update@example.com",
+				username: "immutable_display_user",
+				displayUsername: "Original Display",
+				password: "password123",
+				name: "Immutable Display Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			displayUsername: "Updated Display Name",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_display_user");
+		expect(session?.user.displayUsername).toBe("Updated Display Name");
+	});
+});
+
+describe("username sign-in verify-email callbackURL", async () => {
+	/**
+	 * The verify-email link sent on username sign-in for an unverified user must
+	 * keep the caller's `callbackURL` intact. A raw interpolation truncates any
+	 * value containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link on username sign-in", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignIn: true,
+					async sendVerificationEmail({ url }) {
+						capturedUrl = url;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: {
+					plugins: [usernameClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "encode-username@example.com",
+			username: "encode_username",
+			password: "correct-password",
+			name: "Encode Username",
+		});
+
+		const callbackURL = "/welcome?ref=username&plan=pro";
+		await client.signIn.username({
+			username: "encode_username",
+			password: "correct-password",
+			callbackURL,
+		});
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
 	});
 });

@@ -133,7 +133,7 @@ describe("private_key_jwt authentication", async () => {
 		codeVerifier: string,
 		scopes = ["openid", "profile"],
 	) {
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: "test",
 			options: { clientId, redirectURI: redirectUri },
 			redirectURI: "",
@@ -695,6 +695,7 @@ describe("private_key_jwt registration validation", async () => {
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
+				consentPage: "/consent",
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

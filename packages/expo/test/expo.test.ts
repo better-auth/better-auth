@@ -825,9 +825,145 @@ describe("expo with cookieCache", async () => {
 				map.set(name, value);
 			},
 		});
-		storage.setItem("better-auth:session_token", "123");
+		await storage.setItem("better-auth:session_token", "123");
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
+	});
+
+	/**
+	 * Large provider tokens (e.g. Keycloak) overflow the device storage ceiling,
+	 * so the adapter must split and reassemble the value instead of dropping it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9151
+	 * @see https://github.com/better-auth/better-auth/issues/9814
+	 */
+	it("should round-trip a value larger than the per-write storage limit", async () => {
+		const WRITE_LIMIT = 2048;
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => {
+				if (value.length > WRITE_LIMIT) {
+					throw new Error("value exceeds storage limit");
+				}
+				map.set(name, value);
+			},
+		});
+
+		const large = "x".repeat(10_000);
+		await storage.setItem("better-auth_cookie", large);
+
+		// No single physical write may exceed the backend limit.
+		for (const value of map.values()) {
+			expect(value.length).toBeLessThanOrEqual(WRITE_LIMIT);
+		}
+		// The value is split across several keys, not stored under the base key.
+		expect(map.size).toBeGreaterThan(1);
+		expect(storage.getItem("better-auth_cookie")).toBe(large);
+	});
+
+	it("should store a value within the limit under the base key unchanged", async () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+		});
+
+		const small = JSON.stringify({ token: "abc" });
+		await storage.setItem("better-auth_cookie", small);
+
+		expect(map.get("better-auth_cookie")).toBe(small);
+		expect(map.size).toBe(1);
+		expect(storage.getItem("better-auth_cookie")).toBe(small);
+	});
+
+	it("should read back a value written before chunking existed", () => {
+		// Pre-fix installs stored the whole jar under the base key.
+		const map = new Map<string, string>([
+			["better-auth_cookie", JSON.stringify({ legacy: true })],
+		]);
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+		});
+
+		expect(storage.getItem("better-auth_cookie")).toBe(
+			JSON.stringify({ legacy: true }),
+		);
+	});
+
+	it("should fail closed when a chunk is missing", async () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+		});
+
+		await storage.setItem("better-auth_cookie", "y".repeat(5_000));
+		// Simulate a torn write: drop one data chunk.
+		map.delete("better-auth_cookie.1");
+
+		expect(storage.getItem("better-auth_cookie")).toBeNull();
+	});
+
+	it("should not return mixed old/new data when a chunked overwrite is interrupted", async () => {
+		const map = new Map<string, string>();
+		let failAfter = Number.POSITIVE_INFINITY;
+		let writes = 0;
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => {
+				if (writes++ >= failAfter) {
+					throw new Error("interrupted");
+				}
+				map.set(name, value);
+			},
+		});
+
+		const oldValue = "a".repeat(5_000);
+		await storage.setItem("better-auth_cookie", oldValue);
+		expect(storage.getItem("better-auth_cookie")).toBe(oldValue);
+
+		// Overwrite with another large value, failing after the marker clear and
+		// the first chunk so the remaining chunks keep their old data.
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		writes = 0;
+		failAfter = 2;
+		await storage.setItem("better-auth_cookie", "b".repeat(5_000));
+		error.mockRestore();
+
+		// The reassembled value must never splice old "a" chunks into the new write.
+		const result = storage.getItem("better-auth_cookie");
+		expect(result ?? "").not.toContain("a");
+	});
+
+	it("should shrink from chunked to a single value without bleeding stale chunks", async () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+		});
+
+		await storage.setItem("better-auth_cookie", "z".repeat(5_000));
+		await storage.setItem("better-auth_cookie", "small");
+
+		expect(storage.getItem("better-auth_cookie")).toBe("small");
+	});
+
+	it("should log instead of throw when the backend rejects a write", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const storage = storageAdapter({
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("keychain rejected write");
+			},
+		});
+
+		await expect(
+			storage.setItem("better-auth_cookie", "value"),
+		).resolves.toBeUndefined();
+		expect(error).toHaveBeenCalledOnce();
+		error.mockRestore();
 	});
 });
 

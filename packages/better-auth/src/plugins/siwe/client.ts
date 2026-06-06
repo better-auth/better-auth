@@ -7,5 +7,9 @@ export const siweClient = () => {
 		id: "siwe",
 		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof siwe>,
+		pathMethods: {
+			"/siwe/nonce": "POST",
+			"/siwe/get-nonce": "POST",
+		},
 	} satisfies BetterAuthClientPlugin;
 };

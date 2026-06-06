@@ -1,8 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	CLIENT_ASSERTION_TYPE,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import { APIError } from "better-call";
@@ -30,7 +29,7 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 		if (oldest !== undefined) jwksCache.delete(oldest);
 	}
 }
-const ALGORITHMS_LIST = [...ASSERTION_SIGNING_ALGORITHMS] as string[];
+const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 const pendingAssertionIds = new Set<string>();
 
 /**
@@ -38,9 +37,8 @@ const pendingAssertionIds = new Set<string>();
  * `backchannel_logout_uri`): returns true when the host is NOT publicly
  * routable. That covers loopback, RFC 1918 private, link-local (including AWS
  * IMDS `169.254.169.254`), shared-address-space (carrier-grade NAT),
- * IPv4-mapped IPv6,
- * 6to4/NAT64/Teredo tunnels, every other RFC 6890 special-purpose range, and
- * cloud-metadata FQDNs.
+ * IPv4-mapped IPv6, 6to4/NAT64/Teredo tunnels, every other RFC 6890
+ * special-purpose range, and cloud-metadata FQDNs.
  *
  * Delegates to the audited single source of truth so this check cannot drift
  * into the kind of encoding bypass that bespoke regexes invite. This is a
@@ -207,12 +205,7 @@ export async function verifyClientAssertion(
 			error: "invalid_client",
 		});
 	}
-	if (
-		!header.alg ||
-		!ASSERTION_SIGNING_ALGORITHMS.includes(
-			header.alg as AssertionSigningAlgorithm,
-		)
-	) {
+	if (!header.alg || !ALGORITHMS_LIST.includes(header.alg)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported assertion signing algorithm: ${header.alg}`,
 			error: "invalid_client",

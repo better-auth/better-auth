@@ -1,7 +1,4 @@
-import { isLoopbackHost } from "@better-auth/core/utils/host";
 import * as z from "zod";
-
-const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
 /**
  * Runtime schema for OAuthAuthorizationQuery.
@@ -25,6 +22,7 @@ const oauthAuthorizationQuerySchema = z
 		code_challenge: z.string().optional(),
 		code_challenge_method: z.literal("S256").optional(),
 		nonce: z.string().optional(),
+		resource: z.union([z.string(), z.array(z.string())]).optional(),
 	})
 	.passthrough();
 
@@ -41,40 +39,45 @@ export const verificationValueSchema = z
 		userId: z.string(),
 		referenceId: z.string().optional(),
 		authTime: z.number().optional(),
+		resource: z.array(z.string()).optional(),
 	})
 	.passthrough();
 
 /**
- * Reusable URL validation for OAuth redirect URIs.
- * - Blocks dangerous schemes (javascript:, data:, vbscript:)
- * - For http/https: requires HTTPS (HTTP allowed only for loopback hosts: 127.0.0.0/8, [::1], *.localhost per RFC 6761)
- * - Allows custom schemes for mobile apps (e.g., myapp://callback)
+ * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
+ * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
+export { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
+
+const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
+
+/**
+ * Validates an RFC 8707 resource indicator. The value must be an absolute URI
+ * with no fragment (RFC 8707 §2). Unlike a redirect URI it is not restricted to
+ * HTTPS, because a resource server identifier may use any absolute URI scheme;
+ * the configured `validAudiences` allowlist is the authoritative control over
+ * which resources a token may target.
+ */
+export const ResourceUriSchema = z.string().superRefine((val, ctx) => {
 	if (!URL.canParse(val)) {
 		ctx.addIssue({
 			code: "custom",
-			message: "URL must be parseable",
+			message: "resource must be an absolute URI",
 			fatal: true,
 		});
 		return z.NEVER;
 	}
-
-	const u = new URL(val);
-
-	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
+	if (val.includes("#")) {
 		ctx.addIssue({
 			code: "custom",
-			message: "URL cannot use javascript:, data:, or vbscript: scheme",
+			message: "resource must not contain a fragment",
 		});
 		return;
 	}
-
-	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
+	if (DANGEROUS_SCHEMES.includes(new URL(val).protocol)) {
 		ctx.addIssue({
 			code: "custom",
-			message:
-				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+			message: "resource cannot use javascript:, data:, or vbscript: scheme",
 		});
 	}
 });

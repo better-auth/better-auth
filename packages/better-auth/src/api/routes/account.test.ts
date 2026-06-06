@@ -66,12 +66,15 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("account", async () => {
+	const googleVerifyIdTokenMock =
+		vi.fn<(token: string, nonce?: string) => Promise<boolean>>();
 	const { auth, signInWithTestUser, client } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
+				verifyIdToken: googleVerifyIdTokenMock,
 			},
 		},
 		account: {
@@ -84,13 +87,11 @@ describe("account", async () => {
 
 	const ctx = await auth.$context;
 
-	let googleVerifyIdTokenMock: MockInstance;
 	let googleGetUserInfoMock: MockInstance;
 	beforeAll(() => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		expect(googleProvider).toBeTruthy();
 
-		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
 
@@ -227,6 +228,331 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8350
+	 */
+	it("should get account info server-side using userId without session headers", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+		});
+
+		const headers = new Headers();
+		email = "account-info-server-side@test.com";
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const accounts = await auth.api.listUserAccounts({ headers });
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+
+		// No headers: the server-side caller identifies the user via userId.
+		const info = await auth.api.accountInfo({
+			query: {
+				accountId: googleAccount!.accountId,
+				userId: googleAccount!.userId,
+			},
+		});
+
+		expect(info).toMatchObject({
+			user: expect.objectContaining({
+				id: expect.any(String),
+				email: expect.any(String),
+			}),
+			data: expect.any(Object),
+		});
+	});
+
+	it("should reject account info over HTTP without a session even when userId is passed", async () => {
+		const { user } = await signInWithTestUser();
+		// Top-level $fetch carries no session; a passed userId must not bypass auth.
+		const info = await client.$fetch("/account-info", {
+			query: { accountId: "any-account-id", userId: user.id },
+			method: "GET",
+		});
+		expect(info.data).toBeNull();
+		expect(info.error?.status).toBe(401);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should resolve account info from the current user's accounts when provider account IDs collide", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+				encryptOAuthTokens: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+		const sharedAccountId = "shared-provider-account-id";
+		const otherUser = await ctx.internalAdapter.createUser({
+			name: "Other User",
+			email: "other-account-info@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: otherUser.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "other-access-token",
+		});
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "current-access-token",
+		});
+
+		getUserInfoMock.mockResolvedValueOnce({
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				emailVerified: user.emailVerified,
+			},
+			data: { source: "current-user" },
+		});
+
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId },
+				method: "GET",
+			});
+
+			expect(info.error).toBeNull();
+			expect(info.data).toMatchObject({
+				data: { source: "current-user" },
+			});
+			expect(getUserInfoMock).toHaveBeenCalledWith(
+				expect.objectContaining({ accessToken: "current-access-token" }),
+			);
+		});
+	});
+
+	it("should require providerId when a current user's provider account IDs collide", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const githubProvider = ctx.socialProviders.find((v) => v.id === "github")!;
+		const googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
+		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
+		const sharedAccountId = "shared-provider-account-id";
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "google-access-token",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId: sharedAccountId,
+			accessToken: "github-access-token",
+		});
+
+		await runWithUser(async () => {
+			const ambiguousInfo = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId },
+				method: "GET",
+			});
+
+			expect(ambiguousInfo.error?.message).toBe(
+				"Multiple accounts share this account ID. Pass a providerId to disambiguate.",
+			);
+			expect(googleGetUserInfoMock).not.toHaveBeenCalled();
+			expect(githubGetUserInfoMock).not.toHaveBeenCalled();
+
+			githubGetUserInfoMock.mockResolvedValueOnce({
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					emailVerified: user.emailVerified,
+				},
+				data: { source: "github" },
+			});
+			const githubInfo = await client.$fetch("/account-info", {
+				query: { accountId: sharedAccountId, providerId: "github" },
+				method: "GET",
+			});
+
+			expect(githubInfo.error).toBeNull();
+			expect(githubInfo.data).toMatchObject({
+				data: { source: "github" },
+			});
+			expect(githubGetUserInfoMock).toHaveBeenCalledWith(
+				expect.objectContaining({ accessToken: "github-access-token" }),
+			);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should disambiguate by providerId on the server-side userId path without a session", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+				github: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const githubProvider = ctx.socialProviders.find((v) => v.id === "github")!;
+		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
+		const sharedAccountId = "shared-server-side-account-id";
+
+		const user = await ctx.internalAdapter.createUser({
+			name: "Server Side User",
+			email: "server-side-disambiguate@example.com",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: sharedAccountId,
+			accessToken: "google-access-token",
+		});
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId: sharedAccountId,
+			accessToken: "github-access-token",
+		});
+
+		githubGetUserInfoMock.mockResolvedValueOnce({
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				emailVerified: user.emailVerified,
+			},
+			data: { source: "github" },
+		});
+
+		// No headers: the trusted server-side caller names the user via userId,
+		// and providerId disambiguates the colliding accountId.
+		const info = await auth.api.accountInfo({
+			query: {
+				accountId: sharedAccountId,
+				userId: user.id,
+				providerId: "github",
+			},
+		});
+
+		expect(info).toMatchObject({ data: { source: "github" } });
+		expect(githubGetUserInfoMock).toHaveBeenCalledWith(
+			expect.objectContaining({ accessToken: "github-access-token" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9502
+	 */
+	it("should not find an account when providerId matches none of the user's accounts", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+				github: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const accountId = "github-only-account-id";
+
+		const { runWithUser, user } = await signInWithTestUser();
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId,
+			accessToken: "github-access-token",
+		});
+
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId, providerId: "google" },
+				method: "GET",
+			});
+
+			expect(info.error?.message).toBe(
+				BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+			);
+		});
+	});
+
+	it("should reject account info for a non-social (credential) account", async () => {
+		// A credential account stores its accountId as the user id. Asking for its
+		// provider info is a client error (400), not a server error (500).
+		const { runWithUser, user } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: user.id },
+				method: "GET",
+			});
+
+			expect(info.error?.status).toBe(400);
+			expect(info.error?.message).toBe(
+				"Account is not associated with a configured social provider.",
+			);
+		});
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
@@ -248,6 +574,47 @@ describe("account", async () => {
 					: new URL("");
 			const scopesParam = url.searchParams.get("scope");
 			expect(scopesParam).toContain(customScope);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/2351
+	 */
+	it("should forward additionalParams and loginHint to the authorization URL", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				loginHint: "user@example.com",
+				additionalParams: {
+					access_type: "offline",
+					prompt: "consent",
+				},
+			});
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const url = new URL(linkAccountRes.data!.url);
+			expect(url.searchParams.get("access_type")).toBe("offline");
+			expect(url.searchParams.get("prompt")).toBe("consent");
+			expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+		});
+	});
+
+	it("should reject additionalParams that override reserved OAuth params", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				additionalParams: {
+					state: "attacker-controlled",
+				},
+			});
+			expect(linkAccountRes.error?.status).toBe(400);
 		});
 	});
 
@@ -993,6 +1360,125 @@ describe("account", async () => {
 		expect(secondAccessToken.error).toBeFalsy();
 		expect(secondAccessToken.data?.idToken).toBe(newIdToken);
 		expect(refreshTokenCalls).toBeGreaterThan(0);
+	});
+
+	it("refreshes the account cookie with the rotated token and the preserved grant after a narrower refresh response", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "stale-cookie-refresh@test.com";
+		const idToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: 1234567890,
+				sub: "stale-cookie-refresh",
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+		// Initial sign-in echoes the full grant.
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const grantType = new URLSearchParams(await request.text()).get(
+					"grant_type",
+				);
+				if (grantType === "refresh_token") {
+					// Refresh rotates the access token but echoes a narrower scope.
+					return HttpResponse.json({
+						access_token: "rotated-access-token",
+						refresh_token: "rotated-refresh-token",
+						token_type: "Bearer",
+						expires_in: 3600,
+						scope: "openid email",
+					});
+				}
+				return HttpResponse.json({
+					access_token: "initial-access-token",
+					refresh_token: "initial-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					id_token: idToken,
+					scope:
+						"openid email profile https://www.googleapis.com/auth/drive.readonly",
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)({ response: context.response } as any);
+			},
+		});
+
+		let refreshedAccountCookie: string | undefined;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			(await client.getSession({ fetchOptions: { headers } })).data!.user.id,
+		);
+		await client.$fetch("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onSuccess(context) {
+				cookieSetter(headers)(context as any);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				refreshedAccountCookie =
+					cookies.get(accountDataCookieName)?.value || undefined;
+			},
+		});
+
+		// The cookie is rewritten (not stale): it carries the rotated token and the
+		// full grant from sign-in survives the narrower refresh echo.
+		expect(refreshedAccountCookie).toBeDefined();
+		const decoded = (await symmetricDecodeJWT(
+			refreshedAccountCookie!,
+			ctx.secret,
+			"better-auth-account",
+		)) as { accessToken?: string; grantedScopes?: string[] };
+		expect(decoded.grantedScopes).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
 	});
 
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {

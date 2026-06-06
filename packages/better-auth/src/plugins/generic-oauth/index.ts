@@ -3,9 +3,10 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	UpstreamProvider,
 } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
@@ -15,16 +16,6 @@ import { decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
-
-function buildClientAssertion(
-	config: GenericOAuthConfig,
-	tokenEndpoint: string,
-) {
-	if (config.authentication !== "private_key_jwt" || !config.clientAssertion) {
-		return undefined;
-	}
-	return { ...config.clientAssertion, tokenEndpoint };
-}
 
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
@@ -39,25 +30,20 @@ declare module "@better-auth/core" {
 
 /**
  * Base type for OAuth provider options.
- * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ * Extracts common fields from GenericOAuthConfig for provider helpers.
  */
-export type BaseOAuthProviderOptions = Omit<
-	Pick<
-		GenericOAuthConfig,
-		| "clientId"
-		| "clientSecret"
-		| "scopes"
-		| "redirectURI"
-		| "pkce"
-		| "disableImplicitSignUp"
-		| "disableSignUp"
-		| "overrideUserInfo"
-	>,
-	"clientSecret"
-> & {
-	/** OAuth client secret (required for provider options) */
-	clientSecret: string;
-};
+export type BaseOAuthProviderOptions = Pick<
+	GenericOAuthConfig,
+	| "clientId"
+	| "clientSecret"
+	| "tokenEndpointAuth"
+	| "scopes"
+	| "redirectURI"
+	| "pkce"
+	| "disableImplicitSignUp"
+	| "disableSignUp"
+	| "overrideUserInfo"
+>;
 
 interface DiscoveryDocument {
 	authorization_endpoint?: string;
@@ -65,6 +51,24 @@ interface DiscoveryDocument {
 	userinfo_endpoint?: string;
 	issuer?: string;
 	id_token_signing_alg_values_supported?: string[];
+}
+
+function isSecretlessTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "private_key_jwt" ||
+		tokenEndpointAuth?.method === "none"
+	);
+}
+
+function isClientSecretTokenEndpointAuth(
+	tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"],
+) {
+	return (
+		tokenEndpointAuth?.method === "client_secret_basic" ||
+		tokenEndpointAuth?.method === "client_secret_post"
+	);
 }
 
 async function fetchDiscovery(
@@ -181,7 +185,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: OAuthProvider[] = [];
+			const genericProviders: UpstreamProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -216,20 +220,41 @@ export const genericOAuth = <const ID extends string>(
 					}
 				}
 
+				const tokenEndpointAuth = c.tokenEndpointAuth;
+				if (
+					c.clientSecret &&
+					isSecretlessTokenEndpointAuth(tokenEndpointAuth)
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
+					);
+				}
+
 				if (
 					!c.clientSecret &&
-					!c.clientAssertion &&
-					c.authentication !== "private_key_jwt"
+					isClientSecretTokenEndpointAuth(tokenEndpointAuth)
 				) {
-					ctx.logger.warn(
-						`Provider "${c.providerId}": no clientSecret or clientAssertion configured. Token exchange will fail unless this is a public client.`,
+					throw new Error(
+						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" requires clientSecret`,
+					);
+				}
+
+				if (
+					!c.clientSecret &&
+					!tokenEndpointAuth &&
+					c.authentication === "basic"
+				) {
+					throw new Error(
+						`Provider "${c.providerId}": authentication "basic" requires clientSecret`,
 					);
 				}
 
 				genericProviders.push({
 					id: c.providerId,
 					name: c.name ?? c.providerId,
+					callbackPath: `/callback/${c.providerId}`,
 					issuer,
+					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
 							throw APIError.from(
@@ -259,13 +284,19 @@ export const genericOAuth = <const ID extends string>(
 							accessType: c.accessType,
 							responseType: c.responseType,
 							responseMode: c.responseMode,
-							additionalParams: c.authorizationUrlParams,
+							additionalParams: {
+								...(c.authorizationUrlParams ?? {}),
+								...(data.additionalParams ?? {}),
+							},
 							loginHint: data.loginHint,
 						});
 					},
 					async validateAuthorizationCode(data) {
 						if (c.getToken) {
-							return c.getToken(data);
+							return applyDefaultAccessTokenExpiry(
+								await c.getToken(data),
+								c.accessTokenExpiresIn,
+							);
 						}
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -273,7 +304,7 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return validateAuthorizationCode({
+						const tokens = await validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
@@ -285,9 +316,13 @@ export const genericOAuth = <const ID extends string>(
 							},
 							tokenEndpoint: tokenUrl,
 							authentication: c.authentication,
+							tokenEndpointAuth,
 							additionalParams: c.tokenUrlParams,
-							clientAssertion: buildClientAssertion(c, tokenUrl),
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async getUserInfo(tokens) {
 						const raw = c.getUserInfo
@@ -324,16 +359,20 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return refreshAccessToken({
+						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							clientAssertion: buildClientAssertion(c, tokenUrl),
+							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					disableImplicitSignUp: c.disableImplicitSignUp,
 					disableSignUp: c.disableSignUp,
@@ -341,7 +380,7 @@ export const genericOAuth = <const ID extends string>(
 						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
-				} satisfies OAuthProvider);
+				} satisfies UpstreamProvider);
 			}
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

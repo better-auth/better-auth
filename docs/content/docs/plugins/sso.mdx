@@ -348,8 +348,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
         domain: "example.com",
         samlConfig: {
             entryPoint: "https://idp.example.com/sso",
-            cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-            callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
             audience: "https://yourapp.com",
             wantAssertionsSigned: true,
             signatureAlgorithm: "sha256",
@@ -399,8 +397,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
             domain: "example.com",
             samlConfig: {
                 entryPoint: "https://idp.example.com/sso",
-                cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
                 audience: "https://yourapp.com",
                 wantAssertionsSigned: true,
                 signatureAlgorithm: "sha256",
@@ -444,6 +440,12 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 </Tabs>
 
 ### IdP-Initiated SSO
+
+For OIDC providers that initiate logins without sending a `state` parameter, set `allowIdpInitiated: true` on the provider's `oidcConfig`. When a stateless callback arrives at `/sso/callback/:providerId`, the IdP-issued code is discarded and a new OAuth flow is started server-side with a fresh `state` and PKCE verifier. CSRF protection remains in effect. This flag defaults to `false`.
+
+<Callout type="warn">
+  Set the global `baseURL` option when enabling `allowIdpInitiated` on an OIDC provider. IdP-initiated callbacks carry no initiating request body, so the bounce uses `baseURL` as the post-login destination. If `baseURL` is unset, the bounce fails with `CALLBACK_URL_REQUIRED`.
+</Callout>
 
 For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
 
@@ -759,6 +761,10 @@ const auth = betterAuth({
 
 When registering an SSO provider, you can link it to a specific organization:
 
+<Callout type="info">
+  When the `organization` plugin is enabled and `organizationId` is supplied, the caller must be an organization `owner` or `admin`. Regular members receive a `403 FORBIDDEN`. SSO deployments without the `organization` plugin keep the prior behavior (membership lookup only).
+</Callout>
+
 ```ts title="register-org-provider.ts"
 import { auth } from "@/lib/auth"
 
@@ -909,7 +915,6 @@ const auth = betterAuth({
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
                         cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                        callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs/default-saml",
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -966,6 +971,30 @@ You also need to provide Identity Provider (IdP) configuration:
 * **isAssertionEncrypted**: Whether assertions from IdP are encrypted
 * **encPrivateKey**: Private key for IdP assertion decryption
 * **encPrivateKeyPass**: Password for the IdP decryption key
+
+### Signing Certificates and Rotation
+
+When your IdP rotates its signing certificate, list both the old and the new PEM under `idpMetadata.cert` as an array. Better Auth accepts SAML responses signed by either, so users keep signing in while the rotation completes.
+
+```ts
+samlConfig: {
+    entryPoint: "https://idp.example.com/sso",
+    idpMetadata: {
+        entityID: "https://idp.example.com",
+        singleSignOnService: [
+            { Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST", Location: "https://idp.example.com/sso" },
+        ],
+        cert: [
+            "-----BEGIN CERTIFICATE-----\n<current>\n-----END CERTIFICATE-----",
+            "-----BEGIN CERTIFICATE-----\n<next>\n-----END CERTIFICATE-----",
+        ],
+    },
+}
+```
+
+Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
+
+If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
 
 ### SAML Attribute Mapping
 
@@ -1413,7 +1442,7 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
-**Important**: `callbackUrl` in your SAML configuration is used as the Assertion Consumer Service (ACS) URL. Set it to the SAML callback route for your provider (e.g., `https://yourapp.com/api/auth/sso/saml2/sp/acs/my-provider`). If omitted, Better Auth derives it automatically from your `baseURL` and `providerId`.
+Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 
 The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
@@ -1480,7 +1509,7 @@ export const ssoProviderTableFields = [
 	},
 ];
 
-<DatabaseTable fields={ssoProviderTableFields} />
+<DatabaseTable name="ssoProvider" fields={ssoProviderTableFields} />
 
 ### If you have enabled domain verification:
 
@@ -1495,7 +1524,7 @@ export const ssoProviderDomainVerificationFields = [
 	},
 ];
 
-<DatabaseTable fields={ssoProviderDomainVerificationFields} />
+<DatabaseTable name="ssoProvider" fields={ssoProviderDomainVerificationFields} />
 
 ### IdP-Initiated SAML SSO
 

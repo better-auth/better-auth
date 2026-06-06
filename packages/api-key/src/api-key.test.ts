@@ -1017,6 +1017,50 @@ describe("api-key", async () => {
 		expect(response?.valid).toBe(true);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9504
+	 */
+	it("should return 429 when API key rate limit is exceeded via before hook", async () => {
+		const { client: rlClient, signInWithTestUser: rlSignIn } =
+			await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+							rateLimit: {
+								enabled: true,
+								timeWindow: 60000,
+								maxRequests: 2,
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+		const { headers: userHeaders } = await rlSignIn();
+		const { data: rlKey } = await rlClient.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+		if (!rlKey) throw new Error("apiKey.create returned null");
+
+		const headers = new Headers();
+		headers.set("x-api-key", rlKey.key);
+
+		for (let i = 0; i < 2; i++) {
+			const res = await rlClient.getSession({ fetchOptions: { headers } });
+			expect(res.error).toBeNull();
+		}
+
+		const res = await rlClient.getSession({ fetchOptions: { headers } });
+		expect(res.error?.status).toBe(429);
+	});
+
 	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
@@ -1938,6 +1982,69 @@ describe("api-key", async () => {
 			});
 
 			expect(session?.session).toBeDefined();
+		});
+
+		it("should run customAPIKeyValidator once on the session path", async () => {
+			const validator = vi.fn(() => true);
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+							customAPIKeyValidator: validator,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { user } = await signInWithTestUser();
+			const apiKey2 = await auth.api.createApiKey({
+				body: { userId: user.id },
+			});
+
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			validator.mockClear();
+
+			await auth.api.getSession({ headers });
+
+			expect(validator).toHaveBeenCalledTimes(1);
+		});
+
+		it("should not grant a session for a key from a different config", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey([
+							{ configId: "primary", enableSessionForAPIKeys: true },
+							{ configId: "secondary", enableSessionForAPIKeys: true },
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { user } = await signInWithTestUser();
+
+			// Issued under "secondary" but presented via the shared default header,
+			// which matches the first config ("primary").
+			const secondaryKey = await auth.api.createApiKey({
+				body: { configId: "secondary", userId: user.id },
+			});
+
+			const headers = new Headers();
+			headers.set("x-api-key", secondaryKey.key);
+
+			await expect(auth.api.getSession({ headers })).rejects.toThrowError();
 		});
 
 		it("should not get session from an API key if enableSessionForAPIKeys is false", async () => {
@@ -3995,12 +4102,197 @@ describe("api-key", async () => {
 			});
 
 			const result = await auth.api.verifyApiKey({
-				body: { key: publicKey.key },
+				body: {
+					configId: "public-api",
+					key: publicKey.key,
+				},
 			});
 
 			expect(result.valid).toBe(true);
 			expect(result.key?.configId).toBe("public-api");
 			expect(result.key?.rateLimitMax).toBe(100);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9779
+		 */
+		describe("verify scoping by configId", () => {
+			it("should verify a non-default key when configId is omitted", async () => {
+				const { user } = await signInWithTestUser();
+
+				const publicKey = await auth.api.createApiKey({
+					body: {
+						configId: "public-api",
+						userId: user.id,
+					},
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: { key: publicKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("public-api");
+			});
+
+			it("should still verify a default key when configId is omitted", async () => {
+				const { user } = await signInWithTestUser();
+
+				const defaultKey = await auth.api.createApiKey({
+					body: { userId: user.id },
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: { key: defaultKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("default");
+			});
+
+			// Preserves the #9393 check: scoping to the wrong config is rejected.
+			it("should reject a key when scoped to a different configId", async () => {
+				const { user } = await signInWithTestUser();
+
+				const publicKey = await auth.api.createApiKey({
+					body: {
+						configId: "public-api",
+						userId: user.id,
+					},
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: {
+						configId: "internal-api",
+						key: publicKey.key,
+					},
+				});
+
+				expect(result.valid).toBe(false);
+				expect(result.error?.code).toBe("INVALID_API_KEY");
+			});
+
+			// Default config disables rate limiting; the key's config enforces it,
+			// so the second unscoped verify must be rate limited.
+			it("should apply the key's own config when configId is omitted", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "limited",
+										defaultPrefix: "lim_",
+										rateLimit: {
+											enabled: true,
+											maxRequests: 1,
+											timeWindow: 60000,
+										},
+									},
+									{
+										configId: "default",
+										defaultPrefix: "def_",
+										rateLimit: { enabled: false },
+									},
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const limitedKey = await scopedAuth.api.createApiKey({
+					body: { configId: "limited", userId: user.id },
+				});
+
+				const first = await scopedAuth.api.verifyApiKey({
+					body: { key: limitedKey.key },
+				});
+				expect(first.valid).toBe(true);
+
+				const second = await scopedAuth.api.verifyApiKey({
+					body: { key: limitedKey.key },
+				});
+				expect(second.valid).toBe(false);
+				expect(second.error?.code).toBe("RATE_LIMITED");
+			});
+
+			it("should run the key's own customAPIKeyValidator when configId is omitted", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "guarded",
+										defaultPrefix: "grd_",
+										customAPIKeyValidator: () => false,
+									},
+									{ configId: "default", defaultPrefix: "def_" },
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const guardedKey = await scopedAuth.api.createApiKey({
+					body: { configId: "guarded", userId: user.id },
+				});
+
+				const result = await scopedAuth.api.verifyApiKey({
+					body: { key: guardedKey.key },
+				});
+
+				expect(result.valid).toBe(false);
+				expect(result.error?.code).toBe("KEY_NOT_FOUND");
+			});
+
+			it("should not apply the default config validator to a non-default key", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "default",
+										defaultPrefix: "def_",
+										customAPIKeyValidator: () => false,
+									},
+									{ configId: "open", defaultPrefix: "opn_" },
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const openKey = await scopedAuth.api.createApiKey({
+					body: { configId: "open", userId: user.id },
+				});
+
+				const result = await scopedAuth.api.verifyApiKey({
+					body: { key: openKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("open");
+			});
 		});
 
 		it("should get key and resolve correct config", async () => {
@@ -4639,5 +4931,33 @@ describe("api-key", async () => {
 			expect(updatedKey.configId).toBe("org-keys");
 			expect(updatedKey.referenceId).toBe(org.id);
 		});
+	});
+});
+
+describe("listApiKeys with integer user.id (postgres + serial)", async () => {
+	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [apiKey()],
+			advanced: {
+				database: { generateId: "serial" },
+			},
+		},
+		{
+			testWith: "postgres",
+			testUser: { email: testUserEmail },
+			clientOptions: { plugins: [apiKeyClient()] },
+		},
+	);
+	const { headers } = await signInWithTestUser();
+
+	it("returns the key that createApiKey just wrote", async () => {
+		const created = await auth.api.createApiKey({ body: {}, headers });
+		expect(created.id).toBeDefined();
+
+		const result = await auth.api.listApiKeys({ headers });
+
+		expect(result.total).toBeGreaterThan(0);
+		expect(result.apiKeys.find((k) => k.id === created.id)).toBeDefined();
 	});
 });

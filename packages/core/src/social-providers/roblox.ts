@@ -1,6 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	resolveRequestedScopes,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -32,24 +37,35 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 		| undefined;
 }
 
+const ROBLOX_DEFAULT_SCOPES = ["openid", "profile"];
+
 export const roblox = (options: RobloxOptions) => {
 	const tokenEndpoint = "https://apis.roblox.com/oauth/v1/token";
 	return {
 		id: "roblox",
 		name: "Roblox",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return new URL(
-				`https://apis.roblox.com/oauth/v1/authorize?scope=${_scopes.join(
-					"+",
-				)}&response_type=code&client_id=${
-					options.clientId
-				}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${options.prompt || "select_account consent"}`,
+		callbackPath: "/callback/roblox",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				ROBLOX_DEFAULT_SCOPES,
+				scopes,
 			);
+			return createAuthorizationURL({
+				id: "roblox",
+				options,
+				authorizationEndpoint: "https://apis.roblox.com/oauth/v1/authorize",
+				scopes: requestedScopes,
+				state,
+				redirectURI,
+				prompt: options.prompt || "select_account consent",
+				additionalParams,
+			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -108,5 +124,5 @@ export const roblox = (options: RobloxOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<RobloxProfile>;
+	} satisfies UpstreamProvider<RobloxProfile>;
 };

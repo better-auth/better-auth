@@ -6,7 +6,16 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { validateConfigAlgorithms } from "../saml";
+import {
+	DiscoveryError,
+	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
+} from "../oidc";
+import {
+	resolveSigningCerts,
+	validateCertSources,
+	validateConfigAlgorithms,
+} from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
@@ -24,6 +33,27 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
+	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+}
+
+type ParsedCert = ReturnType<typeof parseCertificate>;
+type SanitizedCert = ParsedCert | { error: string };
+
+function parseCertOrError(cert: string): SanitizedCert {
+	try {
+		return parseCertificate(cert);
+	} catch {
+		return { error: "Failed to parse certificate" };
+	}
+}
+
+function sanitizeSigningCerts(config: SAMLConfig): SanitizedCert[] | undefined {
+	const certs = resolveSigningCerts(config);
+	if (certs === undefined) return undefined;
+	return certs.map(parseCertOrError);
+}
 
 async function isOrgAdmin(
 	ctx: {
@@ -46,9 +76,7 @@ async function isOrgAdmin(
 			{ field: "organizationId", value: organizationId },
 		],
 	});
-	if (!member) return false;
-	const roles = member.role.split(",");
-	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
+	return member ? hasOrgAdminRole(member) : false;
 }
 
 async function batchCheckOrgAdmin(
@@ -72,8 +100,7 @@ async function batchCheckOrgAdmin(
 
 	const adminOrgIds = new Set<string>();
 	for (const member of members) {
-		const roles = member.role.split(",");
-		if (roles.some((r: string) => ADMIN_ROLES.includes(r.trim()))) {
+		if (hasOrgAdminRole(member)) {
 			adminOrgIds.add(member.organizationId);
 		}
 	}
@@ -139,13 +166,7 @@ function sanitizeProvider(
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
-					certificate: (() => {
-						try {
-							return parseCertificate(samlConfig.cert);
-						} catch {
-							return { error: "Failed to parse certificate" };
-						}
-					})(),
+					certificate: sanitizeSigningCerts(samlConfig),
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
@@ -165,7 +186,8 @@ export const listSSOProviders = () => {
 					description: "Returns a list of SSO providers the user has access to",
 					responses: {
 						"200": {
-							description: "List of SSO providers",
+							description:
+								"List of SSO providers. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 					},
 				},
@@ -291,7 +313,8 @@ export const getSSOProvider = () => {
 					description: "Returns sanitized details for a specific SSO provider",
 					responses: {
 						"200": {
-							description: "SSO provider details",
+							description:
+								"SSO provider details. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -403,7 +426,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
-							description: "SSO provider updated successfully",
+							description:
+								"SSO provider updated successfully. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -480,10 +504,23 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
+				validateCertSources(updatedSamlConfig);
+
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}
 
 			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+
 				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
 					existingProvider.oidcConfig,
 					"OIDC",

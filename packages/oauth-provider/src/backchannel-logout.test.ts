@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
@@ -150,7 +150,7 @@ describe("oauth back-channel logout", async () => {
 		const { client: oauthClient, requestScopes = scopes } = params;
 		const redirectUri = `${rp.url}/callback`;
 		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,
@@ -176,7 +176,7 @@ describe("oauth back-channel logout", async () => {
 			throw new Error(`no authorization code in ${callbackRedirectUrl}`);
 		}
 
-		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -186,7 +186,7 @@ describe("oauth back-channel logout", async () => {
 				redirectURI: redirectUri,
 			},
 		} satisfies MakeRequired<
-			Parameters<typeof createAuthorizationCodeRequest>[0],
+			Parameters<typeof authorizationCodeRequest>[0],
 			"code"
 		>);
 

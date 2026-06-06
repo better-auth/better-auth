@@ -41,6 +41,15 @@ export interface OIDCConfig {
 	privateKeyAlgorithm?: string | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
+	/**
+	 * Accept callbacks from OIDC providers that initiate the OAuth flow
+	 * without sending a `state` parameter. When enabled, stateless callbacks
+	 * restart the OAuth flow server-side with a fresh `state` and PKCE
+	 * verifier. See the SSO docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }
 
 export interface SAMLConfig {
@@ -57,18 +66,25 @@ export interface SAMLConfig {
 	 */
 	entryPoint: string;
 	/**
-	 * IdP signing certificate. Used to verify SAML response signatures
-	 * when `idpMetadata.metadata` is not provided. Ignored when IdP
-	 * metadata XML is set (the certificate is extracted from the XML).
-	 * When both this and `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence.
+	 * IdP signing certificate(s). Used to verify SAML response signatures when
+	 * `idpMetadata.metadata` is not provided. Ignored when IdP metadata XML is
+	 * set (the certificate is extracted from the XML). When both this and
+	 * `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence. Pass an
+	 * array of PEM strings for rolling rotation; responses signed by any
+	 * listed cert are accepted.
 	 */
-	cert: string;
+	cert?: string | string[];
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;
 				entityID?: string;
-				cert?: string;
+				/**
+				 * IdP signing certificate(s). Pass a single PEM string or an array
+				 * for rolling rotation. Takes precedence over the top-level `cert`
+				 * when both are set. Omit when `metadata` XML is supplied.
+				 */
+				cert?: string | string[];
 				privateKey?: string;
 				privateKeyPass?: string;
 				isAssertionEncrypted?: boolean;
@@ -123,7 +139,10 @@ export interface AuthnRequestRecord {
 
 /** Session data stored during SAML login for Single Logout */
 export interface SAMLSessionRecord {
+	/** Session row id, used to key the by-id lookup index. */
 	sessionId: string;
+	/** Session token, used to revoke the session during Single Logout. */
+	sessionToken: string;
 	providerId: string;
 	nameID: string;
 	sessionIndex?: string;

@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -21,7 +22,11 @@ import {
 	revokeAndPlanBackchannelLogout,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import {
+	authServerMetadata,
+	metadataResponse,
+	oidcServerMetadata,
+} from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
@@ -30,12 +35,16 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { SafeUrlSchema } from "./types/zod";
+import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
-	deleteFromPrompt,
 	getJwtPlugin,
+	getSignedQueryIssuedAt,
 	mergeDiscoveryMetadata,
+	postLoginClearedParam,
+	removePromptFromQuery,
+	searchParamsToQuery,
+	signedQueryIssuedAtParam,
 	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
@@ -49,9 +58,11 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const oAuthState = defineRequestState<{ query?: string } | null>(
-	() => null,
-);
+export const oAuthState = defineRequestState<{
+	query?: string;
+	signedQueryIssuedAt?: Date;
+	postLoginClearedForSession?: string;
+} | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
 /**
@@ -170,10 +181,99 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	const handleIssuerMetadataRequest: NonNullable<
+		BetterAuthPlugin["onRequest"]
+	> = async (request, ctx) => {
+		const requestPathname = new URL(request.url).pathname;
+		const requestPath = ctx.options.advanced?.skipTrailingSlashes
+			? requestPathname.replace(/\/+$/, "") || "/"
+			: requestPathname;
+		const issuer = opts.disableJwtPlugin
+			? ctx.baseURL
+			: (getJwtPlugin(ctx)?.options?.jwt?.issuer ?? ctx.baseURL);
+		let issuerPath = "/";
+		try {
+			issuerPath = new URL(issuer).pathname.replace(/\/$/, "") || "";
+		} catch {
+			issuerPath = new URL(ctx.baseURL).pathname.replace(/\/$/, "") || "";
+		}
+
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		// RFC 8414 uses path insertion; some clients derive discovery from the
+		// issuer URL directly, so keep both public aliases equivalent.
+		const authServerMetadataPaths = new Set([
+			`/.well-known/oauth-authorization-server${issuerPath}`,
+			`${issuerPath}/.well-known/oauth-authorization-server`,
+		]);
+		const openIdConfigPath = `${issuerPath}/.well-known/openid-configuration`;
+		const isAuthServerMetadataRequest =
+			authServerMetadataPaths.has(requestPath);
+		const isOpenIdConfigRequest =
+			opts.scopes?.includes("openid") && requestPath === openIdConfigPath;
+		const createMetadataResponse = (metadata: unknown) => {
+			const response = metadataResponse(metadata);
+			if (request.method === "HEAD") {
+				return new Response(null, {
+					status: response.status,
+					headers: response.headers,
+				});
+			}
+			return response;
+		};
+		if (isAuthServerMetadataRequest || isOpenIdConfigRequest) {
+			if (request.method !== "GET" && request.method !== "HEAD") {
+				return {
+					response: new Response(null, {
+						status: 405,
+						headers: {
+							Allow: "GET, HEAD",
+						},
+					}),
+				};
+			}
+		}
+
+		if (isAuthServerMetadataRequest) {
+			if (opts.scopes?.includes("openid")) {
+				return {
+					response: createMetadataResponse(
+						oidcServerMetadata(endpointCtx, opts),
+					),
+				};
+			}
+			const jwtPluginOptions = opts.disableJwtPlugin
+				? undefined
+				: getJwtPlugin(ctx)?.options;
+			const authMetadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
+				scopes_supported:
+					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+				dynamic_client_registration_supported:
+					opts.allowDynamicClientRegistration,
+				public_client_supported:
+					opts.allowUnauthenticatedClientRegistration ||
+					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+				grant_types_supported: opts.grantTypes,
+				jwt_disabled: opts.disableJwtPlugin,
+			});
+			return {
+				response: createMetadataResponse({
+					...authMetadata,
+					...mergeDiscoveryMetadata(opts.clientDiscovery),
+				}),
+			};
+		}
+
+		if (isOpenIdConfigRequest) {
+			return {
+				response: createMetadataResponse(oidcServerMetadata(endpointCtx, opts)),
+			};
+		}
+	};
 	return {
 		id: "oauth-provider",
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
+		onRequest: handleIssuerMetadataRequest,
 		init: (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
@@ -299,11 +399,18 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
+						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
 						const queryParams = new URLSearchParams(query);
+						const postLoginClearedForSession =
+							queryParams.get(postLoginClearedParam) ?? undefined;
 						queryParams.delete("sig");
 						queryParams.delete("exp");
+						queryParams.delete(signedQueryIssuedAtParam);
+						queryParams.delete(postLoginClearedParam);
 						await oAuthState.set({
 							query: queryParams.toString(),
+							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
+							postLoginClearedForSession,
 						});
 
 						// If path is social sign-in, add to additional data body
@@ -357,7 +464,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
-						ctx.query = deleteFromPrompt(query, "login");
+						ctx.query = searchParamsToQuery(
+							removePromptFromQuery(query, "login"),
+						);
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
@@ -390,6 +499,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							dynamic_client_registration_supported:
+								opts.allowDynamicClientRegistration,
 							public_client_supported:
 								opts.allowUnauthenticatedClientRegistration ||
 								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
@@ -446,6 +557,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.pipe(z.enum(["S256"]))
 							.optional(),
 						nonce: z.string().optional(),
+						resource: z
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+							.optional(),
 						prompt: z
 							.string()
 							.pipe(
@@ -464,6 +578,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						openapi: {
@@ -532,6 +647,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OpenID Connect nonce",
+								},
+								{
+									name: "resource",
+									in: "query",
+									required: false,
+									schema: { type: "array", items: { type: "string" } },
+									description:
+										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 								},
 								{
 									name: "prompt",
@@ -698,7 +821,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
 						refresh_token: z.string().optional(),
-						resource: z.string().optional(),
+						resource: z
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+							.optional(),
 						scope: z.string().optional(),
 					}),
 					errorCodesByField: {
@@ -706,6 +831,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							missing: "invalid_request",
 							invalid: "unsupported_grant_type",
 						},
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -757,9 +883,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														"Refresh token (for refresh_token grant)",
 												},
 												resource: {
-													type: "string",
+													oneOf: [
+														{
+															type: "string",
+															description: "Single resource (URL)",
+														},
+														{
+															type: "array",
+															items: { type: "string" },
+															description: "Multiple resources (URLs)",
+														},
+													],
 													description:
-														"Requested token resource (ie audience) to obtain a JWT formatted access token",
+														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
 												},
 												scope: {
 													type: "string",
@@ -880,11 +1016,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													type: "string",
 													description:
 														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
-												},
-												resource: {
-													type: "string",
-													description:
-														"Introspects a token for a specific resource.",
 												},
 											},
 											required: ["token"],
@@ -1258,9 +1389,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						jwks: z
 							.union([
-								z.array(z.record(z.string(), z.unknown())),
+								z.array(z.record(z.string(), z.unknown())).min(1),
 								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())),
+									keys: z.array(z.record(z.string(), z.unknown())).min(1),
 								}),
 							])
 							.optional(),

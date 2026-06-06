@@ -4,11 +4,17 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
+import { generateRandomString } from "../../crypto";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
+import { persistOAuthAccount } from "../../oauth2/persist-account";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
+import { generateState, parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { isAPIError } from "../../utils/is-api-error";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -81,10 +87,32 @@ export const callbackOAuth = createAuthEndpoint(
 			iss,
 		} = queryOrBody;
 
+		if (state === undefined && code) {
+			const provider = await getAwaitableValue(c.context.socialProviders, {
+				value: c.params.id,
+			});
+			if (provider?.allowIdpInitiated) {
+				// Build the URL first so the effective requested scopes can be
+				// persisted into state, then write state once with the same nonces
+				// (same ordering as the normal sign-in flow). Without this the
+				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
+				const state = generateRandomString(32);
+				const codeVerifier = generateRandomString(128);
+				const { url: authUrl, requestedScopes } =
+					await provider.createAuthorizationURL({
+						state,
+						codeVerifier,
+						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+					});
+				await generateState(c, { requestedScopes, state, codeVerifier });
+				throw c.redirect(authUrl.toString());
+			}
+		}
+
 		if (!state) {
 			c.context.logger.error("State not found", error);
 			const sep = defaultErrorURL.includes("?") ? "&" : "?";
-			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			const url = `${defaultErrorURL}${sep}error=state_not_found`;
 			throw c.redirect(url);
 		}
 
@@ -95,6 +123,7 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			requestedScopes,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string | undefined) {
@@ -148,7 +177,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
@@ -178,12 +207,13 @@ export const callbackOAuth = createAuthEndpoint(
 			})
 			.then((res) => res?.user);
 
-		if (!userInfo) {
+		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
+		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -213,46 +243,35 @@ export const callbackOAuth = createAuthEndpoint(
 
 			const existingAccount =
 				await c.context.internalAdapter.findAccountByProviderId(
-					String(userInfo.id),
+					providerAccountId,
 					provider.id,
 				);
 
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
-					);
-				}
-				const updateData = Object.fromEntries(
-					Object.entries({
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: tokens.scopes?.join(","),
-					}).filter(([_, value]) => value !== undefined),
+			if (
+				existingAccount &&
+				existingAccount.userId.toString() !== link.userId.toString()
+			) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
-				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: String(userInfo.id),
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
-					);
-				}
 			}
+
+			const linkedAccount = await persistOAuthAccount(c, {
+				userId: link.userId,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				mode: "link",
+				grantAuthority: provider.grantAuthority,
+			});
+			if (!linkedAccount) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
+			}
+
+			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -264,31 +283,40 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!userInfo.email) {
-			c.context.logger.error(
-				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
-			);
+			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		const accountData = {
-			providerId: provider.id,
-			accountId: String(userInfo.id),
-			...tokens,
-			scope: tokens.scopes?.join(","),
-		};
-		const result = await handleOAuthUserInfo(c, {
-			userInfo: {
-				...userInfo,
-				id: String(userInfo.id),
-				email: userInfo.email,
-				name: userInfo.name || "",
-			},
-			account: accountData,
-			callbackURL,
-			disableSignUp:
-				(provider.disableImplicitSignUp && !requestSignUp) ||
-				provider.options?.disableSignUp,
-			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
-		});
+		let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+		try {
+			result = await signInWithOAuthIdentity(c, {
+				userInfo: {
+					...userInfo,
+					id: providerAccountId,
+					email: userInfo.email,
+					name: userInfo.name || "",
+				},
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				callbackURL,
+				disableSignUp:
+					(provider.disableImplicitSignUp && !requestSignUp) ||
+					provider.options?.disableSignUp,
+				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				grantAuthority: provider.grantAuthority,
+			});
+		} catch (e) {
+			// A before-callback hook (for example the admin plugin's banned-user
+			// guard) can reject sign-in by throwing an APIError. Forward its
+			// machine-readable code and message to the per-flow errorURL instead
+			// of surfacing a raw error response. The code is app-defined, so it is
+			// forwarded verbatim rather than mapped onto OAUTH_CALLBACK_ERROR_CODES.
+			if (isAPIError(e) && e.body?.code) {
+				redirectOnError(e.body.code, e.body.message);
+			}
+			throw e;
+		}
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
