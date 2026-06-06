@@ -135,11 +135,18 @@ description: Learn how to configure Better Auth in your project.
       <Tab value="prisma">
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
+        import { PrismaPg } from "@prisma/adapter-pg";
         import { prismaAdapter } from "better-auth/adapters/prisma";
         // If your Prisma file is located elsewhere, you can change the path
         import { PrismaClient } from "@/generated/prisma/client";
 
-        const prisma = new PrismaClient();
+        const adapter = new PrismaPg({
+          connectionString: process.env.DATABASE_URL,
+        });
+
+        const prisma = new PrismaClient({
+          adapter,
+        });
         export const auth = betterAuth({
             database: prismaAdapter(prisma, {
                 provider: "sqlite", // or "mysql", "postgresql", ...etc
