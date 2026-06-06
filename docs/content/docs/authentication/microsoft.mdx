@@ -9,7 +9,7 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
   <Step>
     ### Get your Microsoft credentials
 
-    To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and, for confidential clients, using your Microsoft Entra ID dashboard account either a Client Secret or a client assertion credential.
+    To use Microsoft as a social provider, you need to get your Microsoft credentials. This involves generating a Client ID in your Microsoft Entra ID dashboard and, for confidential clients, configuring either a Client Secret or a client assertion credential.
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/microsoft` for local development. For production, you should change it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 

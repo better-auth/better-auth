@@ -70,6 +70,7 @@ describe("microsoft provider", () => {
 		expect(url).toBe(
 			"https://login.microsoftonline.com/common/oauth2/v2.0/token",
 		);
+		expect(init?.body).toBeInstanceOf(URLSearchParams);
 		const body = init?.body as URLSearchParams;
 		expect(body.get("grant_type")).toBe("authorization_code");
 		expect(body.get("code")).toBe("auth-code");
@@ -112,6 +113,7 @@ describe("microsoft provider", () => {
 		expect(url).toBe(
 			"https://login.microsoftonline.com/common/oauth2/v2.0/token",
 		);
+		expect(init?.body).toBeInstanceOf(URLSearchParams);
 		const body = init?.body as URLSearchParams;
 		expect(body.get("grant_type")).toBe("refresh_token");
 		expect(body.get("refresh_token")).toBe("old-refresh-token");
