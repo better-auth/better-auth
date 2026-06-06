@@ -1,11 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@better-fetch/fetch", () => ({
+	betterFetch: vi.fn(),
+}));
+
+import { betterFetch } from "@better-fetch/fetch";
+import type { ClientAssertionContext } from "../oauth2";
+import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
+import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
 import { tiktok } from "./tiktok";
 import { wechat } from "./wechat";
 import { zoom } from "./zoom";
+
+const mockedBetterFetch = vi.mocked(betterFetch);
+
+beforeEach(() => {
+	mockedBetterFetch.mockReset();
+});
 
 const baseCallback = "https://app.example/callback";
 const baseState = "state-xyz";
@@ -18,6 +33,110 @@ const baseInput = {
 	codeVerifier: baseVerifier,
 	redirectURI: baseCallback,
 };
+
+describe("microsoft provider", () => {
+	it("sends client assertions instead of client secrets for authorization code exchange", async () => {
+		const assertion = "test-microsoft-client-assertion";
+		const getClientAssertion = vi.fn(async () => assertion);
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "access-token",
+				refresh_token: "refresh-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			},
+			error: null,
+		});
+
+		const provider = microsoft({
+			clientId: credentials.clientId,
+			clientAssertion: getClientAssertion,
+		});
+		const tokens = await provider.validateAuthorizationCode({
+			code: "auth-code",
+			codeVerifier: baseVerifier,
+			redirectURI: baseCallback,
+		});
+
+		expect(tokens?.accessToken).toBe("access-token");
+		expect(getClientAssertion).toHaveBeenCalledWith({
+			clientId: credentials.clientId,
+			tokenEndpoint:
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+			grantType: "authorization_code",
+		} satisfies ClientAssertionContext);
+
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe(
+			"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+		);
+		expect(init?.body).toBeInstanceOf(URLSearchParams);
+		const body = init?.body as URLSearchParams;
+		expect(body.get("grant_type")).toBe("authorization_code");
+		expect(body.get("code")).toBe("auth-code");
+		expect(body.get("code_verifier")).toBe(baseVerifier);
+		expect(body.get("redirect_uri")).toBe(baseCallback);
+		expect(body.get("client_id")).toBe(credentials.clientId);
+		expect(body.get("client_secret")).toBeNull();
+		expect(body.get("client_assertion_type")).toBe(CLIENT_ASSERTION_TYPE);
+		expect(body.get("client_assertion")).toBe(assertion);
+	});
+
+	it("sends client assertions instead of client secrets for refresh token exchange", async () => {
+		const assertion = "test-microsoft-refresh-client-assertion";
+		const getClientAssertion = vi.fn(async () => assertion);
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "refreshed-access-token",
+				refresh_token: "refreshed-refresh-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			},
+			error: null,
+		});
+
+		const provider = microsoft({
+			clientId: credentials.clientId,
+			clientAssertion: getClientAssertion,
+		});
+		const tokens = await provider.refreshAccessToken("old-refresh-token");
+
+		expect(tokens.accessToken).toBe("refreshed-access-token");
+		expect(getClientAssertion).toHaveBeenCalledWith({
+			clientId: credentials.clientId,
+			tokenEndpoint:
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+			grantType: "refresh_token",
+		} satisfies ClientAssertionContext);
+
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe(
+			"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+		);
+		expect(init?.body).toBeInstanceOf(URLSearchParams);
+		const body = init?.body as URLSearchParams;
+		expect(body.get("grant_type")).toBe("refresh_token");
+		expect(body.get("refresh_token")).toBe("old-refresh-token");
+		expect(body.get("scope")).toBe(
+			"openid profile email User.Read offline_access",
+		);
+		expect(body.get("client_id")).toBe(credentials.clientId);
+		expect(body.get("client_secret")).toBeNull();
+		expect(body.get("client_assertion_type")).toBe(CLIENT_ASSERTION_TYPE);
+		expect(body.get("client_assertion")).toBe(assertion);
+	});
+
+	it("rejects client assertions combined with client secrets", () => {
+		expect(() =>
+			microsoft({
+				...credentials,
+				clientAssertion: async () => "client-assertion",
+			}),
+		).toThrow(
+			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
+		);
+	});
+});
 
 describe("discord provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
