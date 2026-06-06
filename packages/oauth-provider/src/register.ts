@@ -308,10 +308,10 @@ export async function checkOAuthClient(
 			});
 		}
 		// SSRF guard: the OP issues an outbound POST to this URI on every
-		// session end, so reject private/reserved targets. Loopback is
-		// permitted only when the URI uses http (dev override above) so an
-		// attacker can't pivot https://internal-svc.example into a real
-		// private-IP request.
+		// session end, so reject any host that is not publicly routable.
+		// Loopback is exempt for local development (e.g.
+		// http://127.0.0.1:<port> or https://localhost); non-loopback private,
+		// link-local, tunneled, and cloud-metadata targets are always rejected.
 		if (isPrivateHostname(url.hostname) && !loopback) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",

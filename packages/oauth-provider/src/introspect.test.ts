@@ -410,6 +410,78 @@ describe("oauth introspect", async () => {
 		expect(introspection.data).toEqual({ active: false });
 	});
 
+	it("reports opaque access_token as inactive when its bound session has expired, without a revoked flag", async () => {
+		// Parity with the JWT path: revocation is a function of session state,
+		// not only the stored `revoked` flag the session-delete hook writes. Here
+		// the session is expired in place (no delete, no hook), so the token is
+		// rejected purely on session liveness.
+		const { headers: testHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers: testHeaders });
+		const sessionId = session!.session.id;
+		const tokens = await getTokens(undefined, undefined, testHeaders);
+
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+			update: { expiresAt: new Date(Date.now() - 60_000) },
+		});
+		const rows = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: sessionId }],
+		});
+		expect(rows.length).toBeGreaterThan(0);
+		for (const r of rows) expect(r.revoked ?? null).toBeNull();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	it("reports opaque access_token as inactive when the revoked flag is set while the session is live", async () => {
+		// Isolates the stored-flag path: the session is untouched, only `revoked`
+		// is set, and introspection must still report the token inactive.
+		const { headers: testHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers: testHeaders });
+		const sessionId = session!.session.id;
+		const tokens = await getTokens(undefined, undefined, testHeaders);
+
+		const ctx = await auth.$context;
+		await ctx.adapter.updateMany({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: sessionId }],
+			update: { revoked: new Date() },
+		});
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toEqual({ active: false });
+	});
+
 	it("reports jwt access_token as inactive after the user signs out", async () => {
 		// JWT access tokens that carry `sid` are bound to the OP session and
 		// become inactive when the session ends, per OIDC Back-Channel Logout

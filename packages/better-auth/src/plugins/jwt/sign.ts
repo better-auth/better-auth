@@ -162,7 +162,10 @@ export async function signJWT(
 			iss: iss ?? defaultIss,
 			aud: aud ?? defaultAud,
 		};
-		return options.jwt.sign(jwtPayload);
+		// Forward extra protected-header parameters (e.g. `typ: "logout+jwt"`)
+		// so profiles that require an explicit media type stay conformant even
+		// with a remote signer. The signer still owns `alg`/`kid`.
+		return options.jwt.sign(jwtPayload, config.header);
 	}
 
 	// Use pre-resolved key if available, otherwise resolve from DB
@@ -171,9 +174,10 @@ export async function signJWT(
 
 	const jwt = new SignJWT(payload)
 		.setProtectedHeader({
+			// Spread caller header first so the resolved `alg`/`kid` always win.
+			...config.header,
 			alg,
 			kid,
-			...config.header,
 		})
 		.setExpirationTime(exp)
 		.setIssuer(iss ?? defaultIss)

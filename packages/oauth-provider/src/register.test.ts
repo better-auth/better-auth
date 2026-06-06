@@ -306,6 +306,26 @@ describe("oauth register", async () => {
 			`${rpBaseUrl}/logout/backchannel`,
 		);
 	});
+
+	it("rejects backchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
+		// These all pass a naive https check but are non-public; the guard must
+		// reject every encoding, not just dotted-decimal private IPs.
+		const targets = [
+			"https://10.0.0.1/logout",
+			"https://169.254.169.254/logout",
+			"https://[::ffff:169.254.169.254]/logout",
+			"https://[64:ff9b::a9fe:a9fe]/logout",
+			"https://100.64.0.1/logout",
+			"https://metadata.google.internal/logout",
+		];
+		for (const backchannel_logout_uri of targets) {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: [redirectUri],
+				backchannel_logout_uri,
+			});
+			expect(response.error?.status).toBe(400);
+		}
+	});
 });
 
 describe("oauth register - disableJwtPlugin", async () => {

@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
-import { signJWT } from "better-auth/plugins";
+import { resolveSigningKey, signJWT } from "better-auth/plugins";
 import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
@@ -47,10 +47,12 @@ interface BackchannelLogoutTarget {
 
 /**
  * Plan produced by the synchronous revocation phase. The delivery phase
- * consumes this plan and POSTs one Logout Token per target.
+ * consumes this plan and POSTs one Logout Token per target. `sessionId` is
+ * always present because every session-end path that reaches here carries the
+ * id of the session being terminated.
  */
 interface BackchannelLogoutPlan {
-	sessionId?: string;
+	sessionId: string;
 	targets: BackchannelLogoutTarget[];
 }
 
@@ -58,35 +60,30 @@ interface BackchannelLogoutPlan {
  * Signs a Back-Channel Logout Token per OIDC Back-Channel Logout 1.0 §2.4.
  *
  * The token reuses the ID Token signing key so any RP that validates ID Tokens
- * from this OP can validate Logout Tokens without extra configuration.
+ * from this OP can validate Logout Tokens without extra configuration. The
+ * caller resolves that key once and passes it in so a fan-out to many RPs does
+ * not re-read it per target.
  *
- * Required because §2.4 mandates: `iss`, `aud`, `iat`, `exp`, `jti`, `events`,
- * and at least one of `sub` / `sid`. A `nonce` claim MUST NOT be present, and
+ * §2.4 mandates `iss`, `aud`, `iat`, `exp`, `jti`, `events`, and at least one
+ * of `sub` / `sid` (we send both). A `nonce` claim MUST NOT be present, and
  * `alg: none` is forbidden (§2.6).
  */
 async function signLogoutToken(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	options: Parameters<typeof signJWT>[1]["options"],
+	resolvedKey: Awaited<ReturnType<typeof resolveSigningKey>>,
 	claims: {
 		iss: string;
 		aud: string;
 		sub: string;
-		sid?: string;
+		sid: string;
 		iat: number;
 		exp: number;
 		jti: string;
 	},
 ): Promise<string> {
-	if (opts.disableJwtPlugin) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "server_error",
-			error_description:
-				"back-channel logout requires the jwt plugin (disableJwtPlugin must be false)",
-		});
-	}
-	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
 	return signJWT(ctx, {
-		options: jwtPluginOptions,
+		options,
 		payload: {
 			...claims,
 			events: {
@@ -94,19 +91,24 @@ async function signLogoutToken(
 			},
 		},
 		header: { typ: LOGOUT_TOKEN_JWT_TYP },
+		resolvedKey: resolvedKey ?? undefined,
 	});
 }
 
 /**
- * Synchronous phase: enumerate tokens for the session being terminated, apply
- * the spec §2.7 revocation policy, and return a plan for the asynchronous
- * delivery phase. Runs inline in the `session.delete.before` hook so the DB
- * state is consistent with the hook's promise (session gone → tokens revoked)
- * before the session row disappears.
+ * Synchronous phase: enumerate tokens for the session being terminated, revoke
+ * them, and return a plan for the asynchronous delivery phase. Runs inline in
+ * the `session.delete.before` hook so the DB state is consistent before the
+ * session row disappears.
  *
- * Access tokens bound to the session are revoked; refresh tokens without
- * `offline_access` are revoked; `offline_access` refresh tokens are preserved
- * so long-lived API access can survive the browser session.
+ * Revocation is the stored backstop, not the primary enforcement: introspection
+ * and `/userinfo` already treat a token whose session has ended as inactive
+ * (see `validateOpaqueAccessToken` / `validateJwtAccessToken`), so a missed
+ * `revoked` write cannot keep a session-bound token alive on its own. Access
+ * tokens bound to the session are revoked as OP hardening. Refresh tokens
+ * follow OIDC Back-Channel Logout 1.0 §2.7: those without `offline_access` are
+ * revoked; `offline_access` refresh tokens survive so long-lived API access can
+ * outlive the browser session.
  *
  * Returns `null` when there is nothing to do, so the caller can skip the
  * background handoff entirely.
@@ -114,7 +116,7 @@ async function signLogoutToken(
 async function revokeAndPlanBackchannelLogout(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	input: { sessionId?: string; userId: string },
+	input: { sessionId: string; userId: string },
 ): Promise<BackchannelLogoutPlan | null> {
 	if (opts.disableJwtPlugin) return null;
 	const { sessionId, userId } = input;
@@ -122,9 +124,7 @@ async function revokeAndPlanBackchannelLogout(
 
 	const logger = ctx.context.logger;
 	try {
-		const where = sessionId
-			? [{ field: "sessionId", value: sessionId }]
-			: [{ field: "userId", value: userId }];
+		const where = [{ field: "sessionId", value: sessionId }];
 
 		const [accessTokens, refreshTokens] = await Promise.all([
 			ctx.context.adapter.findMany<TokenRow>({
@@ -153,8 +153,9 @@ async function revokeAndPlanBackchannelLogout(
 			],
 		});
 
-		// Spec §2.7: access tokens are always revoked; refresh tokens without
-		// `offline_access` are revoked; `offline_access` refresh tokens survive.
+		// Access tokens are always revoked (OP hardening). Refresh tokens follow
+		// §2.7: revoke unless `offline_access` was granted. The non-offline_access
+		// branch is reachable via refresh-token scope narrowing, so it must stay.
 		const revokedAt = new Date();
 		const accessToRevokeIds = accessTokens
 			.filter((t) => !t.revoked)
@@ -163,7 +164,7 @@ async function revokeAndPlanBackchannelLogout(
 			.filter((t) => !t.revoked && !t.scopes?.includes("offline_access"))
 			.map((t) => t.id);
 
-		await Promise.allSettled([
+		const revocations = await Promise.allSettled([
 			accessToRevokeIds.length > 0
 				? ctx.context.adapter.updateMany({
 						model: "oauthAccessToken",
@@ -179,14 +180,22 @@ async function revokeAndPlanBackchannelLogout(
 					})
 				: Promise.resolve(),
 		]);
+		// Surface a failed revocation write at error level. Dispatch still
+		// proceeds (RP notification is independent and the session-liveness
+		// checks in introspection remain authoritative), but operators need a
+		// signal that the stored `revoked` backstop drifted from session state.
+		for (const result of revocations) {
+			if (result.status === "rejected") {
+				logger.error(
+					"back-channel logout: token revocation update failed",
+					result.reason,
+				);
+			}
+		}
 
-		const eligibleClients = clients.filter((c) => {
-			if (!c.backchannelLogoutUri) return false;
-			if (c.disabled) return false;
-			// Spec §2.2: when the RP requires `sid`, skip user-scoped dispatches.
-			if (c.backchannelLogoutSessionRequired && !sessionId) return false;
-			return true;
-		});
+		const eligibleClients = clients.filter(
+			(c) => Boolean(c.backchannelLogoutUri) && !c.disabled,
+		);
 		if (eligibleClients.length === 0) return null;
 
 		const targets: BackchannelLogoutTarget[] = await Promise.all(
@@ -198,16 +207,17 @@ async function revokeAndPlanBackchannelLogout(
 
 		return { sessionId, targets };
 	} catch (error) {
-		logger.warn("back-channel logout revocation failed", error);
+		logger.error("back-channel logout revocation failed", error);
 		return null;
 	}
 }
 
 /**
  * Asynchronous phase: sign one Logout Token per target client and POST it to
- * the registered `backchannel_logout_uri`. Runs inside the host's background
- * task handler (e.g. Vercel `waitUntil`, Cloudflare `ctx.waitUntil`) so a
- * slow or unreachable RP cannot delay the user-facing logout response.
+ * the registered `backchannel_logout_uri`. The caller hands this to
+ * `runInBackgroundOrAwait`, so when a background handler is configured (Vercel
+ * `waitUntil`, Cloudflare `ctx.waitUntil`) it runs after the response; without
+ * one it completes inline so delivery is not lost on request teardown.
  *
  * Spec §2.5: "the OP SHOULD NOT retransmit", so each RP gets a single attempt
  * within `BACKCHANNEL_DISPATCH_TIMEOUT_MS`. Every per-client failure (fetch
@@ -216,7 +226,6 @@ async function revokeAndPlanBackchannelLogout(
  */
 async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
 	const logger = ctx.context.logger;
@@ -224,20 +233,30 @@ async function deliverBackchannelLogoutTokens(
 	const iss = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + LOGOUT_TOKEN_LIFETIME_SECONDS;
+	// Resolve the signing key once and reuse it for every RP target. A custom
+	// remote signer (`jwt.sign`) owns its own key material, so skip resolution.
+	const resolvedKey = jwtPluginOptions?.jwt?.sign
+		? null
+		: await resolveSigningKey(ctx, jwtPluginOptions);
 
 	await Promise.allSettled(
 		plan.targets.map(async ({ client, sub }) => {
 			try {
 				const jti = generateRandomString(32, "a-z", "A-Z", "0-9");
-				const token = await signLogoutToken(ctx, opts, {
-					iss,
-					aud: client.clientId,
-					sub,
-					sid: plan.sessionId,
-					iat,
-					exp,
-					jti,
-				});
+				const token = await signLogoutToken(
+					ctx,
+					jwtPluginOptions,
+					resolvedKey,
+					{
+						iss,
+						aud: client.clientId,
+						sub,
+						sid: plan.sessionId,
+						iat,
+						exp,
+						jti,
+					},
+				);
 				const response = await fetch(client.backchannelLogoutUri!, {
 					method: "POST",
 					headers: {
@@ -265,24 +284,6 @@ async function deliverBackchannelLogoutTokens(
 	);
 }
 
-/**
- * Runs the full back-channel logout sequence inline. Used by code paths that
- * cannot rely on the `session.delete.before` hook firing (e.g. the
- * RP-Initiated Logout fallback when the session row lacks a usable token).
- *
- * Prefer the split `revokeAndPlan` + `deliver` flow elsewhere so the HTTP
- * fan-out is routed through the host's background handler.
- */
-async function dispatchBackchannelLogout(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-	input: { sessionId?: string; userId: string },
-): Promise<void> {
-	const plan = await revokeAndPlanBackchannelLogout(ctx, opts, input);
-	if (!plan) return;
-	await deliverBackchannelLogoutTokens(ctx, opts, plan);
-}
-
 export { revokeAndPlanBackchannelLogout, deliverBackchannelLogoutTokens };
 
 /**
@@ -290,11 +291,9 @@ export { revokeAndPlanBackchannelLogout, deliverBackchannelLogoutTokens };
  * `id_token_hint`; after verification, the OP terminates the matching session
  * and optionally redirects to `post_logout_redirect_uri`.
  *
- * Session termination goes through `internalAdapter.deleteSession`, which
- * fires `session.delete.before` so the hook drives back-channel notifications
- * to every other RP with tokens on the session. If the session row lacks a
- * `token` (malformed or legacy data), we fall back to deleting by id and
- * firing the dispatcher inline so the logout still propagates.
+ * Session termination goes through `internalAdapter.deleteSession`, which fires
+ * `session.delete.before` so the hook drives revocation and back-channel
+ * notifications to every RP with tokens on the session.
  *
  * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
  */
@@ -438,27 +437,20 @@ export async function rpInitiatedLogoutEndpoint(
 			where: [{ field: "id", value: sessionId }],
 		});
 		if (session?.token) {
-			// Happy path: goes through internalAdapter so the session-delete hook
-			// runs back-channel dispatch for us.
+			// internalAdapter.deleteSession fires `session.delete.before`, which
+			// runs revocation and back-channel dispatch for every RP on this
+			// session.
 			await ctx.context.internalAdapter.deleteSession(session.token);
-		} else if (session?.id) {
-			// Malformed or legacy row with no `token`: delete directly and fire
-			// the dispatcher inline so the logout still propagates.
-			ctx.context.logger.warn(
-				`rp-initiated logout: session ${session.id} has no token; dispatching back-channel logout inline`,
-			);
+		} else if (session) {
+			// A persisted session always carries a token; this only guards a
+			// corrupted row by removing it directly (best effort).
 			await ctx.context.adapter.delete<Session>({
 				model: "session",
 				where: [{ field: "id", value: session.id }],
 			});
-			await dispatchBackchannelLogout(ctx, opts, {
-				sessionId: session.id,
-				userId: (idTokenPayload.sub as string | undefined) ?? "",
-			});
 		}
 	} catch {
-		// Session already gone; dispatch has either already fired on a prior
-		// delete or there is nothing to dispatch for.
+		// Session already gone; nothing further to do.
 	}
 
 	if (post_logout_redirect_uri) {

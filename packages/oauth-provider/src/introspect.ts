@@ -197,7 +197,11 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
-	let sessionId = accessToken.sessionId ?? undefined;
+	// An opaque access token bound to a session (every authorization-code token;
+	// client-credentials tokens have no sessionId) dies with that session. This
+	// mirrors the JWT path so revocation is a function of session state and does
+	// not depend solely on the `revoked` flag written by the session-delete hook.
+	const sessionId = accessToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -209,7 +213,7 @@ async function validateOpaqueAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
+			return { active: false };
 		}
 	}
 

@@ -186,6 +186,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
+			// With secondaryStorage + preserveSessionInDatabase, deleteSession
+			// keeps the DB row and returns before the session-delete hook runs, so
+			// OAuth token revocation and back-channel logout never fire on session
+			// end. Surface it so operators don't assume sign-out invalidates tokens.
+			// TODO: warning-only is a stopgap. A complete fix needs core to fire
+			// the session-delete hook (or expose a dedicated session-end seam) even
+			// when the row is preserved, so revocation and back-channel dispatch run
+			// for this config. Re-evaluate moving off the delete hook then.
+			if (
+				ctx.options.secondaryStorage &&
+				ctx.options.session?.preserveSessionInDatabase
+			) {
+				logger.warn(
+					"OAuth Provider: `session.preserveSessionInDatabase: true` with secondaryStorage skips the session-delete hook, so OAuth access/refresh tokens are not revoked and back-channel logout is not dispatched on session end.",
+				);
+			}
+
 			// Well-known warnings are best-effort and only make sense with the
 			// JWT plugin. A dynamic baseURL resolves per-request, so there is
 			// nothing to emit at init time for that deployment shape either.
@@ -227,9 +244,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 			// The hook must register for every configuration path (including
 			// dynamic baseURL). Revocation runs inline because it mutates DB
-			// state we rely on; the HTTP fan-out is routed through the host's
-			// background handler (e.g. Vercel `waitUntil`, CF `ctx.waitUntil`)
-			// so a slow RP cannot delay the user-facing logout response.
+			// state we rely on. The HTTP fan-out goes through
+			// `runInBackgroundOrAwait`: with a background handler configured
+			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
+			// response; without one it is awaited inline so delivery is not lost
+			// on request teardown. Awaiting here keeps both paths reliable.
 			return {
 				options: {
 					databaseHooks: {
@@ -246,8 +265,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										},
 									);
 									if (!plan) return;
-									hookCtx.context.runInBackgroundOrAwait(
-										deliverBackchannelLogoutTokens(hookCtx, opts, plan),
+									// TODO: re-evaluate this await. It makes delivery reliable on
+									// every runtime, but without an `advanced.backgroundTasks.handler`
+									// a hung RP can add up to the per-RP timeout to sign-out latency.
+									// Alternative to weigh: keep delivery non-blocking and instead
+									// hard-require a background handler when back-channel logout is on.
+									await hookCtx.context.runInBackgroundOrAwait(
+										deliverBackchannelLogoutTokens(hookCtx, plan),
 									);
 								},
 							},
