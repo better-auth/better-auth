@@ -17,7 +17,11 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
-import { rpInitiatedLogoutEndpoint } from "./logout";
+import {
+	deliverBackchannelLogoutTokens,
+	revokeAndPlanBackchannelLogout,
+	rpInitiatedLogoutEndpoint,
+} from "./logout";
 import {
 	authServerMetadata,
 	metadataResponse,
@@ -282,30 +286,43 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Check for jwt plugin registration
+			// With secondaryStorage + preserveSessionInDatabase, deleteSession
+			// keeps the DB row and returns before the session-delete hook runs, so
+			// OAuth token revocation and back-channel logout never fire on session
+			// end. Surface it so operators don't assume sign-out invalidates tokens.
+			// TODO: warning-only is a stopgap. A complete fix needs core to fire
+			// the session-delete hook (or expose a dedicated session-end seam) even
+			// when the row is preserved, so revocation and back-channel dispatch run
+			// for this config. Re-evaluate moving off the delete hook then.
+			if (
+				ctx.options.secondaryStorage &&
+				ctx.options.session?.preserveSessionInDatabase
+			) {
+				logger.warn(
+					"OAuth Provider: `session.preserveSessionInDatabase: true` with secondaryStorage skips the session-delete hook, so OAuth access/refresh tokens are not revoked and back-channel logout is not dispatched on session end.",
+				);
+			}
+
+			// Well-known warnings are best-effort and only make sense with the
+			// JWT plugin. A dynamic baseURL resolves per-request, so there is
+			// nothing to emit at init time for that deployment shape either.
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
-
-				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
 				const isDynamicBaseURLInit =
 					jwtPluginOptions?.jwt?.issuer == null &&
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string;
+				let issuerPath: string | undefined;
 				try {
 					issuerPath = new URL(issuer).pathname;
 				} catch (error) {
-					// baseURL may not be available during init when using dynamic baseURL config
-					if (isDynamicBaseURLInit && issuer === "") {
-						return;
-					}
-					throw error;
+					if (!isDynamicBaseURLInit || issuer !== "") throw error;
 				}
-				// oAuth Server Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
 					!(ctx.options.basePath === "/" && issuerPath === "/")
 				) {
@@ -313,8 +330,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
 					);
 				}
-				// OpenId Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.openidConfig &&
 					ctx.options.basePath !== issuerPath &&
 					opts.scopes?.includes("openid")
@@ -324,6 +341,44 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+
+			// The hook must register for every configuration path (including
+			// dynamic baseURL). Revocation runs inline because it mutates DB
+			// state we rely on. The HTTP fan-out goes through
+			// `runInBackgroundOrAwait`: with a background handler configured
+			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
+			// response; without one it is awaited inline so delivery is not lost
+			// on request teardown. Awaiting here keeps both paths reliable.
+			return {
+				options: {
+					databaseHooks: {
+						session: {
+							delete: {
+								async before(session, hookCtx) {
+									if (!hookCtx) return;
+									const plan = await revokeAndPlanBackchannelLogout(
+										hookCtx,
+										opts,
+										{
+											sessionId: session.id,
+											userId: session.userId,
+										},
+									);
+									if (!plan) return;
+									// TODO: re-evaluate this await. It makes delivery reliable on
+									// every runtime, but without an `advanced.backgroundTasks.handler`
+									// a hung RP can add up to the per-RP timeout to sign-out latency.
+									// Alternative to weigh: keep delivery non-blocking and instead
+									// hard-require a background handler when back-channel logout is on.
+									await hookCtx.context.runInBackgroundOrAwait(
+										deliverBackchannelLogoutTokens(hookCtx, plan),
+									);
+								},
+							},
+						},
+					},
+				},
+			};
 		},
 		hooks: {
 			before: [
@@ -1321,6 +1376,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+						backchannel_logout_uri: SafeUrlSchema.optional(),
+						backchannel_logout_session_required: z.boolean().optional(),
 						token_endpoint_auth_method: z
 							.enum([
 								"none",
@@ -1465,6 +1522,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															format: "uri",
 														},
 														description: "List of allowed logout redirect uris",
+													},
+													backchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL to receive signed Logout Tokens when the end-user's OP session terminates",
+													},
+													backchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
