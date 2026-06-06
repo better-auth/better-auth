@@ -11,11 +11,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { setOAuthState } from "../../api/state/oauth";
 import { getAwaitableValue } from "../../context/helpers";
-import {
-	expireCookie,
-	parseSetCookieHeader,
-	toCookieOptions,
-} from "../../cookies";
+import { parseSetCookieHeader, splitSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import type { StateData } from "../../state";
 import { generateGenericState } from "../../state";
@@ -286,9 +282,6 @@ export const oauthPopup = () => {
 						);
 						if (!marker) return; // not a popup flow -> keep the redirect
 
-						// clear the marker on the completion response.
-						expireCookie(c, cookie);
-
 						let popupOrigin: string;
 						let popupNonce: string;
 						try {
@@ -302,14 +295,27 @@ export const oauthPopup = () => {
 							return;
 						}
 
+						// The callback's Set-Cookie headers as individual entries
+						// (`getSetCookie`, falling back to a comma-safe split) so a
+						// multi-cookie response (session token + cookie-cached session
+						// data) isn't mangled.
+						const responseHeaders = c.context.responseHeaders;
+						const setCookies =
+							responseHeaders?.getSetCookie?.() ??
+							splitSetCookieHeader(responseHeaders?.get("set-cookie") ?? "");
 						// On success the session token is the value `setSessionCookie`
 						// just wrote (the same value the bearer plugin accepts); on
 						// failure the callback redirects to the error URL with no token.
-						const setCookie =
-							c.context.responseHeaders?.get("set-cookie") ?? "";
-						const token = parseSetCookieHeader(setCookie).get(
-							c.context.authCookies.sessionToken.name,
-						)?.value;
+						let token: string | undefined;
+						for (const raw of setCookies) {
+							const value = parseSetCookieHeader(raw).get(
+								c.context.authCookies.sessionToken.name,
+							)?.value;
+							if (value !== undefined) {
+								token = value;
+								break;
+							}
+						}
 
 						let response: Response;
 						if (token) {
@@ -318,12 +324,6 @@ export const oauthPopup = () => {
 								token,
 								redirectTo,
 							});
-							// `setSessionCookie` wrote the session cookies to the handler
-							// response scope, which overriding the response would drop, so
-							// re-set them on this hook's scope.
-							for (const [name, attrs] of parseSetCookieHeader(setCookie)) {
-								c.setCookie(name, attrs.value ?? "", toCookieOptions(attrs));
-							}
 						} else {
 							const error = new URL(
 								redirectTo,
@@ -341,6 +341,17 @@ export const oauthPopup = () => {
 								},
 							});
 						}
+
+						// TODO: drop this once the response builder preserves multiple
+						// Set-Cookie headers (e.g. via `getSetCookie`).
+						for (const raw of setCookies) {
+							response.headers.append("set-cookie", raw);
+						}
+						response.headers.append(
+							"set-cookie",
+							`${cookie.name}=; Max-Age=0; Path=${cookie.attributes.path ?? "/"}`,
+						);
+						responseHeaders?.delete("set-cookie");
 
 						// replace the thrown redirect with the completion page.
 						c.context.returned = response;
