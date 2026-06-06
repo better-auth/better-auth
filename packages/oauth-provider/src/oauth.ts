@@ -2,11 +2,11 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { DispatchContext } from "better-auth/api";
 import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	type DispatchContext,
 	dispatchAuthEndpoint,
 	getOAuthState,
 	sessionMiddleware,
@@ -15,7 +15,8 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import { type AuthorizeEndpointSettings, authorizeEndpoint } from "./authorize";
+import type { AuthorizeEndpointSettings } from "./authorize";
+import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
@@ -414,7 +415,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			returnHeaders: false,
 			returnStatus: false,
 			authorizeSettings: settings ?? {},
-		} as DispatchContext & OAuth2AuthorizeContext) as Promise<OAuth2AuthorizeResult>;
+		} as DispatchContext &
+			OAuth2AuthorizeContext) as Promise<OAuth2AuthorizeResult>;
 
 	return {
 		id: "oauth-provider",
