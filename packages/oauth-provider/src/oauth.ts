@@ -13,11 +13,8 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import {
-	authorizeEndpoint,
-	authorizeEndpointWithHooks,
-	authorizeRedirectOnError,
-} from "./authorize";
+import type { AuthorizeEndpointSettings } from "./authorize";
+import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
@@ -139,6 +136,192 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
 	};
+
+	type OAuth2AuthorizeContext = GenericEndpointContext & {
+		authorizeSettings?: AuthorizeEndpointSettings | undefined;
+	};
+	type OAuth2AuthorizeResult = Awaited<ReturnType<typeof authorizeEndpoint>>;
+
+	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
+		"/oauth2/authorize",
+		{
+			method: "GET",
+			query: z.object({
+				response_type: z
+					.string()
+					.pipe(z.enum(["code"]))
+					.optional(),
+				client_id: z.string(),
+				redirect_uri: SafeUrlSchema.optional(),
+				scope: z.string().optional(),
+				state: z.string().optional(),
+				request_uri: z.string().optional(),
+				code_challenge: z.string().optional(),
+				code_challenge_method: z
+					.string()
+					.pipe(z.enum(["S256"]))
+					.optional(),
+				nonce: z.string().optional(),
+				resource: z
+					.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+					.optional(),
+				prompt: z
+					.string()
+					.pipe(
+						z.enum([
+							"none",
+							"consent",
+							"login",
+							"create",
+							"select_account",
+							"login consent",
+							"select_account consent",
+						]),
+					)
+					.optional(),
+			}),
+			redirectOnError: authorizeRedirectOnError(opts),
+			errorCodesByField: {
+				response_type: { invalid: "unsupported_response_type" },
+				resource: { invalid: "invalid_target" },
+			},
+			metadata: {
+				openapi: {
+					description: "Authorize an OAuth2 request",
+					parameters: [
+						{
+							name: "response_type",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 response type (e.g., 'code')",
+						},
+						{
+							name: "client_id",
+							in: "query",
+							required: true,
+							schema: { type: "string" },
+							description: "OAuth2 client ID",
+						},
+						{
+							name: "redirect_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string", format: "uri" },
+							description: "OAuth2 redirect URI",
+						},
+						{
+							name: "scope",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 scopes (space-separated)",
+						},
+						{
+							name: "state",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 state parameter",
+						},
+						{
+							name: "request_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Pushed Authorization Request URI referencing stored parameters",
+						},
+						{
+							name: "code_challenge",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge",
+						},
+						{
+							name: "code_challenge_method",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge method",
+						},
+						{
+							name: "nonce",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OpenID Connect nonce",
+						},
+						{
+							name: "resource",
+							in: "query",
+							required: false,
+							schema: { type: "array", items: { type: "string" } },
+							description:
+								"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
+						},
+						{
+							name: "prompt",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 prompt parameter",
+						},
+					],
+					responses: {
+						"302": {
+							description: "Redirect to client with code or error",
+							headers: {
+								Location: {
+									description: "Redirect URI with code or error",
+									schema: { type: "string", format: "uri" },
+								},
+							},
+						},
+						"400": {
+							description: "Invalid request",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: { type: "string" },
+											error_description: { type: "string" },
+											state: { type: "string" },
+										},
+										required: ["error"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx): Promise<OAuth2AuthorizeResult> => {
+			const authorizeCtx = ctx as OAuth2AuthorizeContext;
+			return authorizeEndpoint(
+				ctx,
+				opts,
+				"authorizeSettings" in authorizeCtx
+					? authorizeCtx.authorizeSettings
+					: { isAuthorize: true },
+			);
+		},
+	);
+
+	const runOAuth2Authorize = (
+		ctx: GenericEndpointContext,
+		settings?: AuthorizeEndpointSettings,
+	): Promise<OAuth2AuthorizeResult> =>
+		oauth2AuthorizeEndpoint({
+			...ctx,
+			asResponse: false,
+			returnHeaders: false,
+			returnStatus: false,
+			authorizeSettings: settings ?? {},
+		} as OAuth2AuthorizeContext) as Promise<OAuth2AuthorizeResult>;
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -416,7 +599,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						ctx.query = searchParamsToQuery(
 							removePromptFromQuery(query, "login"),
 						);
-						return await authorizeEndpointWithHooks(ctx, opts);
+						return await runOAuth2Authorize(ctx);
 					}),
 				},
 			],
@@ -486,169 +669,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return metadata;
 				},
 			),
-			oauth2Authorize: createOAuthEndpoint(
-				"/oauth2/authorize",
-				{
-					method: "GET",
-					query: z.object({
-						response_type: z
-							.string()
-							.pipe(z.enum(["code"]))
-							.optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z
-							.string()
-							.pipe(z.enum(["S256"]))
-							.optional(),
-						nonce: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						prompt: z
-							.string()
-							.pipe(
-								z.enum([
-									"none",
-									"consent",
-									"login",
-									"create",
-									"select_account",
-									"login consent",
-									"select_account consent",
-								]),
-							)
-							.optional(),
-					}),
-					redirectOnError: authorizeRedirectOnError(opts),
-					errorCodesByField: {
-						response_type: { invalid: "unsupported_response_type" },
-						resource: { invalid: "invalid_target" },
-					},
-					metadata: {
-						openapi: {
-							description: "Authorize an OAuth2 request",
-							parameters: [
-								{
-									name: "response_type",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 response type (e.g., 'code')",
-								},
-								{
-									name: "client_id",
-									in: "query",
-									required: true,
-									schema: { type: "string" },
-									description: "OAuth2 client ID",
-								},
-								{
-									name: "redirect_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string", format: "uri" },
-									description: "OAuth2 redirect URI",
-								},
-								{
-									name: "scope",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 scopes (space-separated)",
-								},
-								{
-									name: "state",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 state parameter",
-								},
-								{
-									name: "request_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description:
-										"Pushed Authorization Request URI referencing stored parameters",
-								},
-								{
-									name: "code_challenge",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge",
-								},
-								{
-									name: "code_challenge_method",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge method",
-								},
-								{
-									name: "nonce",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OpenID Connect nonce",
-								},
-								{
-									name: "resource",
-									in: "query",
-									required: false,
-									schema: { type: "array", items: { type: "string" } },
-									description:
-										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
-								},
-								{
-									name: "prompt",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 prompt parameter",
-								},
-							],
-							responses: {
-								"302": {
-									description: "Redirect to client with code or error",
-									headers: {
-										Location: {
-											description: "Redirect URI with code or error",
-											schema: { type: "string", format: "uri" },
-										},
-									},
-								},
-								"400": {
-									description: "Invalid request",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: { type: "string" },
-													error_description: { type: "string" },
-													state: { type: "string" },
-												},
-												required: ["error"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					return authorizeEndpoint(ctx, opts, {
-						isAuthorize: true,
-					});
-				},
-			),
+			oauth2Authorize: oauth2AuthorizeEndpoint,
 			oauth2Consent: createAuthEndpoint(
 				"/oauth2/consent",
 				{
@@ -694,7 +715,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return consentEndpoint(ctx, opts);
+					return consentEndpoint(ctx, opts, runOAuth2Authorize);
 				},
 			),
 			oauth2Continue: createAuthEndpoint(
@@ -745,7 +766,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return continueEndpoint(ctx, opts);
+					return continueEndpoint(ctx, runOAuth2Authorize);
 				},
 			),
 			oauth2Token: createOAuthEndpoint(

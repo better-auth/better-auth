@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
-import { getSessionFromCtx, isAPIError } from "better-auth/api";
+import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
-import { APIError, kAPIErrorHeaderSymbol } from "better-call";
+import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
@@ -278,10 +278,7 @@ export function authorizeRedirectOnError(
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	settings?: {
-		isAuthorize?: boolean;
-		postLogin?: boolean;
-	},
+	settings?: AuthorizeEndpointSettings,
 ) {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
@@ -688,200 +685,10 @@ export async function authorizeEndpoint(
 	});
 }
 
-export async function authorizeEndpointWithHooks(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-	settings?: {
-		isAuthorize?: boolean;
-		postLogin?: boolean;
-	},
-): Promise<Awaited<ReturnType<typeof authorizeEndpoint>>> {
-	const beforeHook = ctx.context.options.hooks?.before;
-	const afterHook = ctx.context.options.hooks?.after;
-	if (!beforeHook && !afterHook) {
-		return authorizeEndpoint(ctx, opts, settings);
-	}
-
-	const originalPath = ctx.path;
-	ctx.path = "/oauth2/authorize";
-	try {
-		if (beforeHook) {
-			const before = await beforeHook({
-				...ctx,
-				returnHeaders: false,
-			});
-			if (before && typeof before === "object" && "context" in before) {
-				applyHookContext(ctx, before.context);
-			} else if (before) {
-				return before as Awaited<ReturnType<typeof authorizeEndpoint>>;
-			}
-		}
-
-		try {
-			const response = await authorizeEndpoint(ctx, opts, settings);
-			return (await runAfterAuthorizeHook(ctx, response)) as Awaited<
-				ReturnType<typeof authorizeEndpoint>
-			>;
-		} catch (error) {
-			if (!isAPIError(error)) {
-				throw error;
-			}
-			syncResponseHeadersFromAPIError(ctx, error as APIError);
-			const response = await runAfterAuthorizeHook(ctx, error);
-			if (response !== error) {
-				return response as Awaited<ReturnType<typeof authorizeEndpoint>>;
-			}
-			attachResponseHeadersToAPIError(ctx, error as APIError);
-			throw error;
-		}
-	} finally {
-		ctx.path = originalPath;
-	}
-
-	async function runAfterAuthorizeHook(
-		ctx: GenericEndpointContext,
-		response: unknown,
-	) {
-		if (!afterHook) {
-			return response;
-		}
-		ensureResponseHeaders(ctx);
-		ctx.context.returned = response;
-		let after:
-			| {
-					headers?: Headers | null;
-					response?: unknown;
-			  }
-			| undefined;
-		try {
-			after = (await afterHook({
-				...ctx,
-				returnHeaders: true,
-			})) as typeof after;
-		} catch (error) {
-			if (!isAPIError(error)) {
-				throw error;
-			}
-			syncResponseHeadersFromAPIError(ctx, error as APIError);
-			ctx.context.returned = error;
-			attachResponseHeadersToAPIError(ctx, error as APIError);
-			throw error;
-		}
-		if (after?.headers) {
-			mergeResponseHeaders(ctx, after.headers);
-		}
-		if (after?.response !== undefined) {
-			ctx.context.returned = after.response;
-		}
-		return ctx.context.returned;
-	}
-}
-
-function applyHookContext(ctx: GenericEndpointContext, hookContext: unknown) {
-	if (!hookContext || typeof hookContext !== "object") return;
-	const { headers, ...rest } = hookContext as Partial<GenericEndpointContext>;
-	if (headers instanceof Headers) {
-		if (!ctx.headers) {
-			ctx.headers = new Headers();
-		}
-		headers.forEach((value, key) => {
-			ctx.headers?.set(key, value);
-		});
-	}
-	mergeHookContext(ctx, rest);
-}
-
-function mergeHookContext(
-	ctx: GenericEndpointContext,
-	hookContext: Partial<GenericEndpointContext>,
-) {
-	for (const [key, value] of Object.entries(hookContext)) {
-		if (value === undefined) continue;
-		const target = ctx as Record<string, unknown>;
-		target[key] = mergeHookValue(target[key], value);
-	}
-}
-
-function mergeHookValue(target: unknown, value: unknown): unknown {
-	if (isMergeableRecord(target) && isMergeableRecord(value)) {
-		const merged = { ...target };
-		for (const [key, childValue] of Object.entries(value)) {
-			merged[key] = mergeHookValue(merged[key], childValue);
-		}
-		return merged;
-	}
-	return value;
-}
-
-function isMergeableRecord(value: unknown): value is Record<string, unknown> {
-	return (
-		!!value &&
-		typeof value === "object" &&
-		!Array.isArray(value) &&
-		!(value instanceof Headers) &&
-		!(value instanceof Request) &&
-		!(value instanceof Response) &&
-		!(value instanceof URLSearchParams) &&
-		!(value instanceof Date)
-	);
-}
-
-function ensureResponseHeaders(ctx: GenericEndpointContext) {
-	const responseHeaders = (
-		ctx as GenericEndpointContext & {
-			responseHeaders?: Headers;
-		}
-	).responseHeaders;
-	if (!ctx.context.responseHeaders && responseHeaders) {
-		ctx.context.responseHeaders = responseHeaders;
-	}
-}
-
-function syncResponseHeadersFromAPIError(
-	ctx: GenericEndpointContext,
-	error: APIError,
-) {
-	const headers = getAPIErrorHeaders(error);
-	if (!headers || headers === ctx.context.responseHeaders) return;
-	mergeResponseHeaders(ctx, headers);
-}
-
-function attachResponseHeadersToAPIError(
-	ctx: GenericEndpointContext,
-	error: APIError,
-) {
-	if (!ctx.context.responseHeaders) return;
-	Object.defineProperty(error, kAPIErrorHeaderSymbol, {
-		enumerable: false,
-		configurable: true,
-		value: ctx.context.responseHeaders,
-		writable: false,
-	});
-}
-
-function getAPIErrorHeaders(error: APIError) {
-	const headersFromSymbol = (
-		error as APIError & { [kAPIErrorHeaderSymbol]?: Headers }
-	)[kAPIErrorHeaderSymbol];
-	if (headersFromSymbol) {
-		return headersFromSymbol;
-	}
-	if (error.headers) {
-		return new Headers(error.headers);
-	}
-}
-
-function mergeResponseHeaders(ctx: GenericEndpointContext, headers: Headers) {
-	headers.forEach((value, key) => {
-		if (!ctx.context.responseHeaders) {
-			ctx.context.responseHeaders = new Headers({ [key]: value });
-		} else if (key.toLowerCase() === "set-cookie") {
-			ctx.context.responseHeaders.append(key, value);
-		} else {
-			ctx.context.responseHeaders.set(key, value);
-		}
-	});
-}
+export type AuthorizeEndpointSettings = {
+	isAuthorize?: boolean;
+	postLogin?: boolean;
+};
 
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	const params = new URLSearchParams();

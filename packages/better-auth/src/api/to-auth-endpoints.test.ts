@@ -11,6 +11,102 @@ import { getTestInstance } from "../test-utils/test-instance";
 import { isAPIError } from "../utils/is-api-error";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
+function createHookPipelineOptions(calls: string[]) {
+	return {
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path !== "/hook-pipeline") return;
+				calls.push("before");
+				return {
+					context: {
+						body: {
+							name: "from-before",
+						},
+					},
+				};
+			}),
+			after: createAuthMiddleware(async (ctx) => {
+				if (ctx.path !== "/hook-pipeline") return;
+				calls.push(`after:${(ctx.context.returned as { name: string }).name}`);
+				return {
+					name: "from-after",
+				};
+			}),
+		},
+	};
+}
+
+function createHookPipelineEndpoint(calls: string[]) {
+	return createAuthEndpoint(
+		"/hook-pipeline",
+		{
+			method: "POST",
+			body: z.object({
+				name: z.string(),
+			}),
+		},
+		async (ctx) => {
+			calls.push(`handler:${ctx.body.name}`);
+			return {
+				name: ctx.body.name,
+			};
+		},
+	);
+}
+
+describe("endpoint hook pipeline", () => {
+	it("runs hooks exactly once through auth.api calls", async () => {
+		const calls: string[] = [];
+		const endpoint = createHookPipelineEndpoint(calls);
+		const authContext = init(createHookPipelineOptions(calls));
+		const api = toAuthEndpoints({ hookPipeline: endpoint }, authContext);
+
+		const response = await api.hookPipeline({
+			body: {},
+		} as any);
+
+		expect(response).toEqual({ name: "from-after" });
+		expect(calls).toEqual([
+			"before",
+			"handler:from-before",
+			"after:from-before",
+		]);
+	});
+
+	it("runs hooks exactly once through the HTTP router", async () => {
+		const calls: string[] = [];
+		const endpoint = createHookPipelineEndpoint(calls);
+		const { auth } = await getTestInstance({
+			...createHookPipelineOptions(calls),
+			plugins: [
+				{
+					id: "hook-pipeline-test",
+					endpoints: {
+						hookPipeline: endpoint,
+					},
+				},
+			],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/hook-pipeline", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(await response.json()).toEqual({ name: "from-after" });
+		expect(calls).toEqual([
+			"before",
+			"handler:from-before",
+			"after:from-before",
+		]);
+	});
+});
+
 describe("before hook", async () => {
 	describe("context", async () => {
 		const endpoints = {

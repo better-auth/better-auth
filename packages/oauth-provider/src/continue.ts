@@ -1,21 +1,25 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { authorizeEndpointWithHooks } from "./authorize";
+import type { AuthorizeEndpointSettings } from "./authorize";
 import { oAuthState } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
 import { removePromptFromQuery, searchParamsToQuery } from "./utils";
 
-export async function continueEndpoint(
+export type AuthorizeEndpointCaller<Result = unknown> = (
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	settings?: AuthorizeEndpointSettings,
+) => Promise<Result>;
+
+export async function continueEndpoint<Result>(
+	ctx: GenericEndpointContext,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	// Continue login flow (ensure it's strictly boolean true)
 	if (ctx.body.selected === true) {
-		return await selected(ctx, opts);
+		return await selected(ctx, authorize);
 	} else if (ctx.body.created === true) {
-		return await created(ctx, opts);
+		return await created(ctx, authorize);
 	} else if (ctx.body.postLogin === true) {
-		return await postLogin(ctx, opts);
+		return await postLogin(ctx, authorize);
 	} else {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing parameters",
@@ -24,9 +28,9 @@ export async function continueEndpoint(
 	}
 }
 
-async function selected(
+async function selected<Result>(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	const _query = (await oAuthState.get())?.query as string | undefined;
 	if (!_query) {
@@ -40,12 +44,12 @@ async function selected(
 	ctx.query = searchParamsToQuery(
 		removePromptFromQuery(query, "select_account"),
 	);
-	return await authorizeEndpointWithHooks(ctx, opts);
+	return await authorize(ctx);
 }
 
-async function created(
+async function created<Result>(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	const _query = (await oAuthState.get())?.query as string | undefined;
 	if (!_query) {
@@ -57,12 +61,12 @@ async function created(
 	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
 	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
-	return await authorizeEndpointWithHooks(ctx, opts);
+	return await authorize(ctx);
 }
 
-async function postLogin(
+async function postLogin<Result>(
 	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	const _query = (await oAuthState.get())?.query as string | undefined;
 	if (!_query) {
@@ -74,7 +78,7 @@ async function postLogin(
 	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
 	ctx.query = searchParamsToQuery(query);
-	return await authorizeEndpointWithHooks(ctx, opts, {
+	return await authorize(ctx, {
 		postLogin: true,
 	});
 }
