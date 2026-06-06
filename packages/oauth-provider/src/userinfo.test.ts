@@ -177,6 +177,32 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.error?.status).toBe(400);
 	});
 
+	it("rejects a revoked access token with invalid_token (401), not invalid_scope", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const ctx = await auth.$context;
+		const session = await auth.api.getSession({ headers });
+		await ctx.adapter.updateMany({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: session!.session.id }],
+			update: { revoked: new Date() },
+		});
+
+		try {
+			await auth.api.oauth2UserInfo({
+				headers: new Headers({
+					Authorization: `Bearer ${tokens.data!.access_token!}`,
+				}),
+			});
+			expect.unreachable();
+		} catch (error) {
+			const err = error as APIError;
+			expect(err.statusCode).toBe(401);
+			expect(err.body).toMatchObject({ error: "invalid_token" });
+		}
+	});
+
 	it("should pass provide all user information - opaque", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();

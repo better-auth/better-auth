@@ -3,6 +3,7 @@ import {
 	CLIENT_ASSERTION_TYPE,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
+import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import {
@@ -32,66 +33,20 @@ const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 const pendingAssertionIds = new Set<string>();
 
 /**
- * Block SSRF: reject jwks_uri pointing at private/reserved IP ranges.
- * Only HTTPS with public hostnames is allowed.
+ * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
+ * `backchannel_logout_uri`): returns true when the host is NOT publicly
+ * routable. That covers loopback, RFC 1918 private, link-local (including AWS
+ * IMDS `169.254.169.254`), shared-address-space (carrier-grade NAT),
+ * IPv4-mapped IPv6, 6to4/NAT64/Teredo tunnels, every other RFC 6890
+ * special-purpose range, and cloud-metadata FQDNs.
+ *
+ * Delegates to the audited single source of truth so this check cannot drift
+ * into the kind of encoding bypass that bespoke regexes invite. This is a
+ * syntactic check only: it does not resolve DNS, so a public name that
+ * resolves to a private address at fetch time is not caught here.
  */
-function isPrivateIpv4(hostname: string): boolean {
-	const parts = hostname.split(".");
-	if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
-		return false;
-	}
-	const octets = parts.map(Number);
-	const a = octets[0]!;
-	const b = octets[1]!;
-	return (
-		a === 10 ||
-		a === 0 ||
-		(a === 172 && b >= 16 && b <= 31) ||
-		(a === 192 && b === 168) ||
-		(a === 169 && b === 254) ||
-		a === 127
-	);
-}
-
 export function isPrivateHostname(hostname: string): boolean {
-	const lower = hostname.toLowerCase();
-	// Strip IPv6 brackets for uniform prefix matching
-	const host =
-		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
-
-	if (host === "localhost" || host === "::1") {
-		return true;
-	}
-	if (isPrivateIpv4(host)) {
-		return true;
-	}
-	// Only apply IPv6 heuristics when the hostname contains ":" (the IPv6
-	// separator). Without this gate, DNS names starting with "fc"/"fd"
-	// would be incorrectly blocked by the unique-local prefix check.
-	if (host.includes(":")) {
-		// IPv4-mapped IPv6 (::ffff:a.b.c.d): extract the trailing IPv4 and check it
-		const v4MappedMatch = host.match(
-			/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
-		);
-		if (v4MappedMatch && isPrivateIpv4(v4MappedMatch[1]!)) {
-			return true;
-		}
-		// Link-local IPv6: fe80::/10 covers fe8*-feb*
-		const isLinkLocal =
-			host.startsWith("fe8") ||
-			host.startsWith("fe9") ||
-			host.startsWith("fea") ||
-			host.startsWith("feb");
-		// Unique-local IPv6: fc00::/7 covers fc* and fd*
-		const isUniqueLocal = host.startsWith("fc") || host.startsWith("fd");
-		if (isLinkLocal || isUniqueLocal) {
-			return true;
-		}
-	}
-	if (host === "metadata.google.internal") {
-		return true;
-	}
-	return false;
+	return !isPublicRoutableHost(hostname);
 }
 
 function validateJwksUri(

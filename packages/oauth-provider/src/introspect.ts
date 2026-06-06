@@ -104,20 +104,18 @@ async function validateJwtAccessToken(
 		}
 	}
 
-	// Validate JWT against its session if it exists
+	// A JWT access token carrying `sid` is bound to that OP session; once the
+	// session has ended (sign-out, admin revoke, back-channel logout...) the
+	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
+	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
+			where: [{ field: "id", value: sessionId }],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			jwtPayload.sid = undefined;
+			return { active: false };
 		}
 	}
 
@@ -179,6 +177,11 @@ async function validateOpaqueAccessToken(
 			active: false,
 		};
 	}
+	if (accessToken.revoked) {
+		return {
+			active: false,
+		};
+	}
 
 	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
@@ -195,7 +198,11 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
-	let sessionId = accessToken.sessionId ?? undefined;
+	// An opaque access token bound to a session (every authorization-code token;
+	// client-credentials tokens have no sessionId) dies with that session. This
+	// mirrors the JWT path so revocation is a function of session state and does
+	// not depend solely on the `revoked` flag written by the session-delete hook.
+	const sessionId = accessToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -207,7 +214,7 @@ async function validateOpaqueAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
+			return { active: false };
 		}
 	}
 
