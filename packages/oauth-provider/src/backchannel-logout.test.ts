@@ -372,3 +372,108 @@ describe("oauth back-channel logout", async () => {
 		expect(rp.received).toHaveLength(1);
 	});
 });
+
+describe("oauth back-channel logout (jwt plugin disabled)", async () => {
+	const baseUrl = "http://localhost:3021";
+	const redirectUri = "http://localhost:5556/callback";
+	const state = "123";
+
+	// No jwt plugin: Logout Tokens cannot be signed, so delivery never runs, but
+	// the spec §2.7 token revocation on session end must still happen.
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("revokes session-bound access tokens on sign-out even when the jwt plugin is disabled", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				enable_end_session: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw new Error("client registration failed");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${baseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid", "profile"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		if (!code) {
+			throw new Error(`no authorization code in ${callbackRedirectUrl}`);
+		}
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		} satisfies MakeRequired<
+			Parameters<typeof authorizationCodeRequest>[0],
+			"code"
+		>);
+		const tokens = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: tokenHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const ctx = await auth.$context;
+		const before = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		expect(before.length).toBeGreaterThan(0);
+		for (const t of before) expect(t.revoked ?? null).toBeNull();
+
+		// Revocation runs inline in `session.delete.before`; with no jwt plugin
+		// there is no async delivery to wait for.
+		await client.signOut({ fetchOptions: { headers } });
+
+		const after = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
+	});
+});

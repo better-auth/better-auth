@@ -110,6 +110,10 @@ async function signLogoutToken(
  * revoked; `offline_access` refresh tokens survive so long-lived API access can
  * outlive the browser session.
  *
+ * Revocation runs regardless of the JWT plugin (refresh-token revocation has no
+ * dependency on signing). Only the Logout Token delivery plan needs the JWT
+ * plugin, so when it is disabled we still revoke but never build a plan.
+ *
  * Returns `null` when there is nothing to do, so the caller can skip the
  * background handoff entirely.
  */
@@ -118,7 +122,6 @@ async function revokeAndPlanBackchannelLogout(
 	opts: OAuthOptions<Scope[]>,
 	input: { sessionId: string; userId: string },
 ): Promise<BackchannelLogoutPlan | null> {
-	if (opts.disableJwtPlugin) return null;
 	const { sessionId, userId } = input;
 	if (!userId) return null;
 
@@ -193,9 +196,12 @@ async function revokeAndPlanBackchannelLogout(
 			}
 		}
 
-		const eligibleClients = clients.filter(
-			(c) => Boolean(c.backchannelLogoutUri) && !c.disabled,
-		);
+		// Logout Tokens are signed through the JWT plugin's JWKS, so skip the
+		// delivery plan when it is disabled. Registration already rejects
+		// `backchannel_logout_uri` in that mode; this also guards stale clients.
+		const eligibleClients = opts.disableJwtPlugin
+			? []
+			: clients.filter((c) => Boolean(c.backchannelLogoutUri) && !c.disabled);
 		if (eligibleClients.length === 0) return null;
 
 		const targets: BackchannelLogoutTarget[] = await Promise.all(

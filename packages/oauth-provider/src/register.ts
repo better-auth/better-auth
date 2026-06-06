@@ -289,8 +289,10 @@ export async function checkOAuthClient(
 				error_description: "backchannel_logout_uri must use http or https",
 			});
 		}
-		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment component."
-		if (url.hash) {
+		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
+		// component." Check the raw value rather than `url.hash`, which is empty
+		// for a bare trailing `#` and would let that fragment delimiter through.
+		if (client.backchannel_logout_uri.includes("#")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:

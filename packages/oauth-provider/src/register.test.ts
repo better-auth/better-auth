@@ -317,6 +317,16 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
+	it("rejects backchannel_logout_uri ending with a bare fragment delimiter", async () => {
+		// `new URL(...).hash` is empty for a trailing `#`, so the raw value must
+		// be checked to honor spec §2.2 (no fragment component).
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
 	it("rejects http backchannel_logout_uri on confidential clients", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
