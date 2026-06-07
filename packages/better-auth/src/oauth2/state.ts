@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { setOAuthState } from "../api/state/oauth";
+import { getOAuthServerContext, setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";
@@ -42,6 +42,12 @@ export async function generateState(
 
 	const codeVerifier = options?.codeVerifier ?? generateRandomString(128);
 
+	const pendingServerContext = await getOAuthServerContext();
+	const serverContext =
+		pendingServerContext && Object.keys(pendingServerContext).length
+			? pendingServerContext
+			: undefined;
+
 	const stateData: StateData = {
 		...(options?.additionalData ? options.additionalData : {}),
 		callbackURL,
@@ -49,6 +55,9 @@ export async function generateState(
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link: options?.link,
+		// Assigned after the client-controlled `additionalData` spread so a client
+		// cannot smuggle a `serverContext` of its own through the request body.
+		serverContext,
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
 		requestedScopes: options?.requestedScopes,

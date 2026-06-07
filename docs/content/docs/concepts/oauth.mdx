@@ -266,51 +266,46 @@ Example using an after hook:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { getOAuthState } from "better-auth/api";
+import { createAuthMiddleware, getOAuthState } from "better-auth/api";
 
 export const auth = betterAuth({
   // Other configurations...
   hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: async (ctx) => {
-          // Additional data is only available during OAuth callback
-          if (ctx.path === "/callback/:id") {
-            const additionalData = await getOAuthState<{
-              referralCode?: string;
-              source?: string;
-            }>();
+    after: createAuthMiddleware(async (ctx) => {
+      // Additional data is only available during OAuth callback
+      if (ctx.path === "/callback/:id") {
+        const additionalData = await getOAuthState<{
+          referralCode?: string;
+          source?: string;
+        }>();
 
-            if (additionalData) {
-              // IMPORTANT: Validate and sanitize the data before using it
-              // This data comes from the client and should not be trusted
+        if (additionalData) {
+          // IMPORTANT: Validate and sanitize the data before using it
+          // This data comes from the client and should not be trusted
 
-              // Example: Validate and process referral code
-              if (additionalData.referralCode) {
-                const isValidFormat = /^[A-Z0-9]{6}$/.test(additionalData.referralCode);
-                if (isValidFormat) {
-                  // Verify the referral code exists in your database
-                  const referral = await db.referrals.findByCode(additionalData.referralCode);
-                  if (referral) {
-                    // Safe to use the verified referral
-                    await db.referrals.incrementUsage(referral.id);
-                  }
-                }
-              }
-
-              // Track analytics (low-risk usage)
-              if (additionalData.source) {
-                await analytics.track("oauth_signin", {
-                  source: additionalData.source,
-                  userId: ctx.context.session?.user.id,
-                });
+          // Example: Validate and process referral code
+          if (additionalData.referralCode) {
+            const isValidFormat = /^[A-Z0-9]{6}$/.test(additionalData.referralCode);
+            if (isValidFormat) {
+              // Verify the referral code exists in your database
+              const referral = await db.referrals.findByCode(additionalData.referralCode);
+              if (referral) {
+                // Safe to use the verified referral
+                await db.referrals.incrementUsage(referral.id);
               }
             }
           }
-        },
-      },
-    ],
+
+          // Track analytics (low-risk usage)
+          if (additionalData.source) {
+            await analytics.track("oauth_signin", {
+              source: additionalData.source,
+              userId: ctx.context.session?.user.id,
+            });
+          }
+        }
+      }
+    }),
   },
 });
 ```
@@ -349,8 +344,40 @@ Example using a database hook:
   * `link` - the link for the OAuth flow (email and user id)
   * `requestSignUp` - whether to request sign up for the OAuth flow
   * `expiresAt` - the expiration time of the OAuth state
-  * `[key: string]`: any additional data you pass in the OAuth flow
+  * `serverContext` - server-set values that survive the redirect (see [Passing Server-Trusted Data](#passing-server-trusted-data))
+  * `[key: string]` - the `additionalData` you passed in. This originates from the client, so treat it as untrusted.
 </Callout>
+
+#### Passing Server-Trusted Data
+
+`additionalData` is client-supplied, so it must be validated before use on the callback. When a plugin (or your own `before` hook) needs to carry server-derived data across the redirect, use `addOAuthServerContext`. It writes to a server-only slot that the client cannot populate, and the values are readable on the callback under `serverContext`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import {
+  addOAuthServerContext,
+  createAuthMiddleware,
+  getOAuthState,
+} from "better-auth/api";
+
+export const auth = betterAuth({
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Social and generic OAuth providers both sign in here.
+      if (ctx.path === "/sign-in/social") {
+        // Derived on the server, so it is safe to trust on the callback.
+        await addOAuthServerContext({ tenantId: ctx.context.tenantId });
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/callback/:id") {
+        const tenantId = (await getOAuthState())?.serverContext?.tenantId;
+        // Safe to use without re-validation: the client could not set this.
+      }
+    }),
+  },
+});
+```
 
 ## Handling Providers Without Email
 
