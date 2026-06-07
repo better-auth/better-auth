@@ -367,6 +367,68 @@ describe("oauth register", async () => {
 			expect(response.error?.status).toBe(400);
 		}
 	});
+
+	it("round-trips frontchannel_logout_uri and frontchannel_logout_session_required", async () => {
+		const frontchannelUri = `${rpBaseUrl}/logout/frontchannel`;
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: frontchannelUri,
+			frontchannel_logout_session_required: true,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(frontchannelUri);
+		expect(response.data?.frontchannel_logout_session_required).toBe(true);
+	});
+
+	it("rejects frontchannel_logout_uri with a fragment", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel#section`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects http frontchannel_logout_uri on confidential clients", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: "http://rp.example.com/logout/frontchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("allows http frontchannel_logout_uri on public clients", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "none",
+			type: "native",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
+	});
+
+	it("rejects frontchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
+		// The OP directs every end-user's browser at this URI from its own
+		// logout page, so non-public hosts are rejected just like the
+		// back-channel POST target.
+		const targets = [
+			"https://10.0.0.1/logout",
+			"https://169.254.169.254/logout",
+			"https://[::ffff:169.254.169.254]/logout",
+			"https://[64:ff9b::a9fe:a9fe]/logout",
+			"https://100.64.0.1/logout",
+			"https://metadata.google.internal/logout",
+		];
+		for (const frontchannel_logout_uri of targets) {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri,
+			});
+			expect(response.error?.status).toBe(400);
+		}
+	});
 });
 
 describe("oauth register - disableJwtPlugin", async () => {
@@ -400,6 +462,19 @@ describe("oauth register - disableJwtPlugin", async () => {
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
 		expect(response.error?.status).toBe(400);
+	});
+
+	it("allows frontchannel_logout_uri when jwt plugin is disabled", async () => {
+		// Unlike back-channel logout, front-channel logout involves no signed
+		// Logout Token, so it has no dependency on the jwt plugin.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
 	});
 });
 

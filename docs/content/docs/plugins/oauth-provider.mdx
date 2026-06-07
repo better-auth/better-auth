@@ -706,6 +706,42 @@ The Logout Token carries the §2.4 claims (`iss`, `aud`, `iat`, `exp`, `jti`, `e
   The OP advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. RPs use these fields during dynamic client registration to decide whether to register a `backchannel_logout_uri`.
 </Callout>
 
+### Front-Channel Logout
+
+[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) is the browser-based sibling of Back-Channel Logout: when the end-user navigates to `/oauth2/end-session`, the OP responds with a page containing one hidden iframe per opted-in Relying Party, and the user's browser fans the logout out by loading each RP's `frontchannel_logout_uri`. The RP endpoint clears its own session cookies in the browser context — no server-to-server call is involved.
+
+To opt a client in, register a `frontchannel_logout_uri`:
+
+```ts title="admin-create-oauth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    enable_end_session: true,
+    frontchannel_logout_uri: "https://rp.example.com/logout/frontchannel", // [!code highlight]
+    frontchannel_logout_session_required: true, // [!code highlight]
+  }
+});
+```
+
+When `frontchannel_logout_session_required` is `true`, the OP appends `iss` and `sid` query parameters to the iframe URL so the RP can validate the request and terminate the right session.
+
+The `frontchannel_logout_uri` is validated at registration with the same rules as `backchannel_logout_uri`: absolute `http`/`https` URL, no fragment, `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development), and non-public hosts (private, reserved, tunneled, cloud-metadata) are rejected. Unlike the back-channel URI it has no `jwt` plugin requirement, since nothing is signed.
+
+After the OP terminates the session (and back-channel notifications fire), it renders the iframe page; once every iframe has settled — or after a 3-second safety timeout, so a hung RP cannot stall the user — the page redirects to the validated `post_logout_redirect_uri` when one was provided. When no front-channel client holds tokens on the session, `/oauth2/end-session` redirects immediately, exactly as before.
+
+<Callout type="warn">
+  Browsers that partition or block third-party cookies (Safari ITP, Chrome's third-party-cookie phase-out) may hide the RP's session cookie inside the iframe, which makes front-channel logout best-effort by design. Pair it with Back-Channel Logout when you need reliable session termination.
+</Callout>
+
+<Callout type="info">
+  The iframe page is only rendered for browser navigation requests. Fetch-style requests to `/oauth2/end-session` (e.g. `authClient.oauth2.endSession()`) keep the JSON contract: the session still ends and back-channel notifications still fire, but no front-channel fan-out occurs.
+</Callout>
+
+<Callout type="info">
+  The OP advertises `frontchannel_logout_supported: true` and `frontchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. Support does not depend on the `jwt` plugin.
+</Callout>
+
 ### UserInfo Endpoint
 
 The UserInfo Endpoint provides [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant user information. Available at `/oauth2/userinfo`, the endpoint requires a valid access token with at least the scope `openid`. An access token that is expired, revoked, or bound to a session that has ended is rejected with `invalid_token` (401), per [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1).
@@ -1915,6 +1951,20 @@ export const oauthClientTableFields = [
     type: "boolean",
     description:
       "When true, the RP requires a `sid` claim in every Logout Token and user-scoped logouts are skipped",
+    isOptional: true,
+  },
+  {
+    name: "frontchannelLogoutUri",
+    type: "string",
+    description:
+      "RP URL rendered in a hidden iframe on the OP's logout page when the user's session ends (OIDC Front-Channel Logout 1.0)",
+    isOptional: true,
+  },
+  {
+    name: "frontchannelLogoutSessionRequired",
+    type: "boolean",
+    description:
+      "When true, the OP appends `iss` and `sid` query parameters to the front-channel logout URI",
     isOptional: true,
   },
   {

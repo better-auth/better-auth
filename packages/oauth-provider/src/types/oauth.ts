@@ -214,6 +214,27 @@ export interface AuthServerMetadata {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
 	 */
 	backchannel_logout_session_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP supports HTTP-based (front-channel)
+	 * logout, with true indicating support.
+	 *
+	 * Registered in the "OAuth Authorization Server Metadata" IANA registry
+	 * under OpenID Connect Front-Channel Logout 1.0, so this may appear at both
+	 * `.well-known/oauth-authorization-server` and `.well-known/openid-configuration`.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP can pass `iss` (issuer) and `sid`
+	 * (session ID) query parameters to identify the RP session with the OP when
+	 * the `frontchannel_logout_uri` is used.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_session_supported?: boolean;
 }
 
 /**
@@ -337,6 +358,23 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
 	 */
 	backchannel_logout_session_required?: boolean;
+	/**
+	 * RP URL that the OP renders in a hidden iframe on its logout page so the
+	 * RP can log itself out when the end-user's OP session ends at
+	 * `/oauth2/end-session`.
+	 *
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_uri?: string;
+	/**
+	 * When true, the OP appends `iss` and `sid` query parameters to the
+	 * `frontchannel_logout_uri` so the RP can validate the request and
+	 * determine which session to terminate.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_session_required?: boolean;
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
