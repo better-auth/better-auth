@@ -101,6 +101,8 @@ type OAuthProxyStatePackage = {
 type PassthroughPayload = {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
+	profile?: Record<string, unknown> | undefined;
 	state: string;
 	callbackURL: string;
 	newUserURL?: string;
@@ -281,6 +283,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							grantAuthority: provider?.grantAuthority,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							sourceProfile: payload.profile,
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -505,6 +508,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
+							profile: userInfoResult?.data,
 							account: {
 								providerId: provider.id,
 								accountId: String(userInfo.id),

@@ -7,6 +7,7 @@ import type {
 import { createEmailVerificationToken } from "../api";
 import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { assertValidUserInfo } from "../utils/validate-user-info";
 import { persistOAuthAccount } from "./persist-account";
 import type {
 	ResolvedOAuthUser,
@@ -42,6 +43,11 @@ export async function signInWithOAuthIdentity(
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
 		/**
+		 * The raw, unmapped provider profile. Forwarded to the
+		 * `validateUserInfo` provisioning gate when this sign-in creates a user.
+		 */
+		sourceProfile?: Record<string, unknown> | undefined;
+		/**
 		 * The provider's declared {@link GrantAuthority}; `"full-grant"` lets a
 		 * non-empty echo replace the stored grant (the only narrowing path).
 		 * @see UpstreamProvider.grantAuthority
@@ -59,6 +65,7 @@ export async function signInWithOAuthIdentity(
 		disableSignUp,
 		overrideUserInfo,
 		isTrustedProvider,
+		sourceProfile,
 		grantAuthority,
 	} = opts;
 
@@ -73,6 +80,7 @@ export async function signInWithOAuthIdentity(
 			const r = await resolveOAuthUser(c, {
 				userInfo,
 				providerId,
+				profile: sourceProfile,
 				linkPolicy: { isTrustedProvider, disableSignUp, overrideUserInfo },
 			});
 			// Resolution failed (sign-up disabled, linking gate rejected, or the
@@ -82,6 +90,24 @@ export async function signInWithOAuthIdentity(
 				return r;
 			}
 			isRegister = r.isRegister;
+
+			// Re-validate existing users against the fresh provider profile, not the
+			// stored row, so a domain policy can reject one whose identity moved out
+			// of bounds. `linkedAccount === null` is a first-time implicit link;
+			// otherwise a returning sign-in. New users were already gated in
+			// createUser. Runs before the account write so a rejection rolls back the
+			// link and token refresh.
+			if (!r.isRegister) {
+				await assertValidUserInfo(c, {
+					user: { ...r.user, email: userInfo.email.toLowerCase() },
+					source: {
+						action: r.linkedAccount === null ? "link-account" : "sign-in",
+						method: "oauth",
+						oauth: { providerId, profile: sourceProfile },
+					},
+				});
+			}
+
 			await persistOAuthAccount(c, {
 				userId: r.user.id,
 				providerId,
@@ -94,10 +120,12 @@ export async function signInWithOAuthIdentity(
 			return r;
 		});
 	} catch (e) {
-		c.context.logger.error("Unable to persist OAuth account", e);
+		// Re-throw APIErrors so the caller can forward the machine-readable code
+		// to its error surface instead of flattening it into a generic string.
 		if (isAPIError(e)) {
-			return { error: e.message, data: null, isRegister };
+			throw e;
 		}
+		c.context.logger.error("Unable to persist OAuth account", e);
 		return {
 			error: isRegister ? "unable to create user" : "unable to link account",
 			data: null,

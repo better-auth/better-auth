@@ -108,14 +108,17 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 
 					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser({
-						email,
-						emailVerified: false,
-						isAnonymous: true,
-						name,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
+					const newUser = await ctx.context.internalAdapter.createUser(
+						{
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						{ method: "anonymous" },
+					);
 					if (!newUser) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",

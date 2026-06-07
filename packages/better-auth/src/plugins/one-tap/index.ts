@@ -140,6 +140,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						accountId: sub,
 						tokens: { idToken, scopes: ["openid", "profile", "email"] },
 						disableSignUp: options?.disableSignup,
+						sourceProfile: payload as Record<string, unknown>,
 					});
 					if (result.error) {
 						throw new APIError("UNAUTHORIZED", {

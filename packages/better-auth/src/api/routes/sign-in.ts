@@ -342,6 +342,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
+					sourceProfile: userInfo.data,
 				});
 				if (data.error) {
 					throw APIError.from("UNAUTHORIZED", {

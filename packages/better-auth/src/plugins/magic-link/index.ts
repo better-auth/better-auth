@@ -9,6 +9,7 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -357,8 +358,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					);
 
-					function redirectWithError(error: string): never {
+					function redirectWithError(
+						error: string,
+						description?: string | undefined,
+					): never {
 						errorCallbackURL.searchParams.set("error", error);
+						if (description) {
+							errorCallbackURL.searchParams.set(
+								"error_description",
+								description,
+							);
+						}
 						throw ctx.redirect(errorCallbackURL.toString());
 					}
 
@@ -388,11 +398,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser({
-								email: email,
-								emailVerified: true,
-								name: name || "",
-							});
+							let newUser: Awaited<
+								ReturnType<typeof ctx.context.internalAdapter.createUser>
+							> | null;
+							try {
+								newUser = await ctx.context.internalAdapter.createUser(
+									{
+										email: email,
+										emailVerified: true,
+										name: name || "",
+									},
+									{ method: "magic-link" },
+								);
+							} catch (e) {
+								// Browser flow: forward a gate rejection's code to the error
+								// URL instead of surfacing a raw API error.
+								if (isAPIError(e) && e.body?.code) {
+									redirectWithError(e.body.code, e.body.message);
+								}
+								throw e;
+							}
 							isNewUser = true;
 							user = newUser;
 							if (!user) {

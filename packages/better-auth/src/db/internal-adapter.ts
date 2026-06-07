@@ -1,7 +1,9 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InternalAdapter,
+	UserProvisioningSource,
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
@@ -15,6 +17,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
+import { assertValidUserInfo } from "../utils/validate-user-info";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -115,18 +118,28 @@ export const createInternalAdapter = (
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
+			source: UserProvisioningSource,
 		) => {
-			const createdUser = await createWithHooks(
-				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...user,
-					email: user.email?.toLowerCase(),
-				},
-				"user",
-				undefined,
-			);
+			const data = {
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				...user,
+				email: user.email?.toLowerCase(),
+			};
+
+			if (options.user?.validateUserInfo) {
+				// Skipped outside a request context (no request to hand the hook).
+				const endpointContext = await getCurrentAuthContext().catch(() => null);
+				if (endpointContext) {
+					await assertValidUserInfo(endpointContext as GenericEndpointContext, {
+						user: data,
+						source: { action: "create-user", ...source },
+					});
+				}
+			}
+
+			const createdUser = await createWithHooks(data, "user", undefined);
 
 			return createdUser as T & User;
 		},

@@ -244,6 +244,65 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					"create",
 				);
 				const normalizedEmail = email.toLowerCase();
+
+				// The opaque success returned when an email already exists. Reused
+				// for gate rejections under the same mode so that an existing email
+				// and a policy-rejected one are indistinguishable from a fresh
+				// sign-up, closing an account-enumeration channel.
+				const buildGenericDuplicateResponse = () => {
+					const now = new Date();
+					const generatedId =
+						ctx.context.generateId({ model: "user" }) || generateId();
+					const coreFields = {
+						name,
+						email: normalizedEmail,
+						emailVerified: false,
+						image: image ?? null,
+						createdAt: now,
+						updatedAt: now,
+					};
+
+					const customSyntheticUser =
+						ctx.context.options.emailAndPassword?.customSyntheticUser;
+
+					let syntheticUser: Record<string, unknown>;
+					if (customSyntheticUser) {
+						// Extract only user-defined additionalFields (not plugin fields)
+						const additionalFieldKeys = Object.keys(
+							ctx.context.options.user?.additionalFields ?? {},
+						);
+						const additionalFields: Record<string, unknown> = {};
+						for (const key of additionalFieldKeys) {
+							if (key in additionalUserFields) {
+								additionalFields[key] = additionalUserFields[key];
+							}
+						}
+						const customResult = customSyntheticUser({
+							coreFields,
+							additionalFields,
+							id: generatedId,
+						});
+						syntheticUser = buildSyntheticUserOutput(
+							ctx.context.options,
+							customResult,
+						);
+					} else {
+						syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
+							...coreFields,
+							...additionalUserFields,
+							id: generatedId,
+						});
+					}
+
+					return ctx.json({
+						token: null,
+						user: parseUserOutput(
+							ctx.context.options,
+							syntheticUser as User,
+						) as User<O["user"], O["plugins"]>,
+					});
+				};
+
 				const dbUser =
 					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
 				if (dbUser?.user) {
@@ -264,58 +323,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								),
 							);
 						}
-						const now = new Date();
-						const generatedId =
-							ctx.context.generateId({ model: "user" }) || generateId();
-						const coreFields = {
-							name,
-							email: normalizedEmail,
-							emailVerified: false,
-							image: image ?? null,
-							createdAt: now,
-							updatedAt: now,
-						};
-
-						const customSyntheticUser =
-							ctx.context.options.emailAndPassword?.customSyntheticUser;
-
-						let syntheticUser: Record<string, unknown>;
-						if (customSyntheticUser) {
-							// Extract only user-defined additionalFields (not plugin fields)
-							const additionalFieldKeys = Object.keys(
-								ctx.context.options.user?.additionalFields ?? {},
-							);
-							const additionalFields: Record<string, unknown> = {};
-							for (const key of additionalFieldKeys) {
-								if (key in additionalUserFields) {
-									additionalFields[key] = additionalUserFields[key];
-								}
-							}
-							const customResult = customSyntheticUser({
-								coreFields,
-								additionalFields,
-								id: generatedId,
-							});
-							// Ensure custom synthetic users have consistent shape with real users
-							syntheticUser = buildSyntheticUserOutput(
-								ctx.context.options,
-								customResult,
-							);
-						} else {
-							syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
-								...coreFields,
-								...additionalUserFields,
-								id: generatedId,
-							});
-						}
-
-						return ctx.json({
-							token: null,
-							user: parseUserOutput(
-								ctx.context.options,
-								syntheticUser as User,
-							) as User<O["user"], O["plugins"]>,
-						});
+						return buildGenericDuplicateResponse();
 					}
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",
@@ -333,13 +341,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
-					createdUser = await ctx.context.internalAdapter.createUser({
-						email: normalizedEmail,
-						name,
-						image,
-						...additionalUserFields,
-						emailVerified: false,
-					});
+					createdUser = await ctx.context.internalAdapter.createUser(
+						{
+							email: normalizedEmail,
+							name,
+							image,
+							...additionalUserFields,
+							emailVerified: false,
+						},
+						{ method: "email-password" },
+					);
 					if (!createdUser) {
 						throw APIError.from(
 							"BAD_REQUEST",
@@ -347,11 +358,17 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						);
 					}
 				} catch (e) {
+					if (isAPIError(e)) {
+						// Under generic-duplicate mode, a gate rejection (403) returns the
+						// same opaque success as an existing email to prevent account
+						// enumeration.
+						if (e.statusCode === 403 && shouldReturnGenericDuplicateResponse) {
+							return buildGenericDuplicateResponse();
+						}
+						throw e;
+					}
 					if (isDevelopment()) {
 						ctx.context.logger.error("Failed to create user", e);
-					}
-					if (isAPIError(e)) {
-						throw e;
 					}
 					ctx.context.logger?.error("Failed to create user", e);
 					throw APIError.from(

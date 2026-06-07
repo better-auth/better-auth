@@ -611,17 +611,20 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						"create",
 					);
 					user =
-						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>({
-							...additionalFields,
-							email: opts.signUpOnVerification.getTempEmail(
-								ctx.body.phoneNumber,
-							),
-							name: opts.signUpOnVerification.getTempName
-								? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
-								: ctx.body.phoneNumber,
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: true,
-						});
+						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>(
+							{
+								...additionalFields,
+								email: opts.signUpOnVerification.getTempEmail(
+									ctx.body.phoneNumber,
+								),
+								name: opts.signUpOnVerification.getTempName
+									? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
+									: ctx.body.phoneNumber,
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+							{ method: "phone-number" },
+						);
 					if (!user) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",

@@ -1363,6 +1363,9 @@ async function handleOIDCCallback(
 		[key: string]: any;
 	} | null = null;
 	const mapping = config.mapping || {};
+	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
+	// as `source.oauth.profile` so a policy can inspect provider-specific fields.
+	let rawProfile: Record<string, unknown> | undefined;
 
 	if (config.userInfoEndpoint) {
 		const userInfoResponse = await betterFetch<Record<string, unknown>>(
@@ -1381,6 +1384,7 @@ async function handleOIDCCallback(
 			);
 		}
 		const rawUserInfo = userInfoResponse.data;
+		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1400,6 +1404,7 @@ async function handleOIDCCallback(
 		};
 	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
+		rawProfile = idToken as Record<string, unknown>;
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
 				`${
@@ -1486,6 +1491,7 @@ async function handleOIDCCallback(
 			callbackURL,
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
+			sourceProfile: rawProfile,
 			isTrustedProvider,
 		});
 	} catch (e) {

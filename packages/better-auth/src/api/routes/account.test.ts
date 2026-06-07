@@ -313,10 +313,13 @@ describe("account", async () => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 		const sharedAccountId = "shared-provider-account-id";
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other User",
-			email: "other-account-info@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other User",
+				email: "other-account-info@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
@@ -455,10 +458,13 @@ describe("account", async () => {
 		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
 		const sharedAccountId = "shared-server-side-account-id";
 
-		const user = await ctx.internalAdapter.createUser({
-			name: "Server Side User",
-			email: "server-side-disambiguate@example.com",
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				name: "Server Side User",
+				email: "server-side-disambiguate@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
@@ -2024,5 +2030,87 @@ describe("account", async () => {
 
 		expect(refreshedSessionCookie).toBe(true);
 		expect(refreshedAccountCookie).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9732
+ */
+describe("validateUserInfo account linking", async () => {
+	const { signInWithTestUser, client } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.action !== "link-account") {
+					return;
+				}
+				expect(source.method).toBe("oauth");
+				expect(source.oauth?.providerId).toBe("google");
+				return {
+					error: "domain_blocked",
+					errorDescription: "This email domain is not allowed",
+				};
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		account: {
+			accountLinking: {
+				allowDifferentEmails: true,
+			},
+		},
+	});
+
+	const { runWithUser } = await signInWithTestUser();
+
+	it("should reject account linking when validateUserInfo returns error", async () => {
+		await runWithUser(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+				},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						const state = cookies.get("better-auth.state")?.value;
+						headers.set(
+							"cookie",
+							`${headers.get("cookie") || ""}; better-auth.state=${state}`,
+						);
+					},
+				},
+			);
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "blocked@example.com";
+			let redirectLocation = "";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=domain_blocked");
+			expect(redirectLocation).toContain(
+				"error_description=This+email+domain+is+not+allowed",
+			);
+
+			const accounts = await client.listAccounts();
+			expect(accounts.data).toHaveLength(1);
+		});
 	});
 });

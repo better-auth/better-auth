@@ -599,10 +599,13 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 
 			const createUser = () =>
-				ctx.context.internalAdapter.createUser({
-					email,
-					name,
-				});
+				ctx.context.internalAdapter.createUser(
+					{
+						email,
+						name,
+					},
+					{ method: "scim" },
+				);
 
 			const createOrgMembership = async (userId: string) => {
 				const organizationId = ctx.context.scimProvider.organizationId;

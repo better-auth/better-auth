@@ -2038,3 +2038,79 @@ describe("Admin plugin id-token sign-in", async () => {
 		expect(res.error?.message).toBe("Custom banned user message");
 	});
 });
+
+// Admin-created users flow through the createUser seam, so the provisioning
+// gate applies to them without the admin plugin calling it directly.
+describe("admin createUser validateUserInfo provisioning gate", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
+		{
+			user: {
+				validateUserInfo({ user, source }) {
+					if (source.method !== "admin") {
+						return;
+					}
+					expect(source.action).toBe("create-user");
+					if ((user.email as string).endsWith("@blocked.com")) {
+						return {
+							error: "admin_create_blocked",
+							errorDescription: "This email domain is not allowed",
+						};
+					}
+				},
+			},
+			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("rejects an admin-created user when validateUserInfo returns error", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Blocked User",
+				email: "new@blocked.com",
+				password: "password",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("admin_create_blocked");
+	});
+
+	it("allows an admin-created user that passes validation", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Allowed User",
+				email: "ok@allowed.com",
+				password: "password",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user.email).toBe("ok@allowed.com");
+	});
+});
