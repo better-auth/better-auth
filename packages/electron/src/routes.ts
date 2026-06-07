@@ -1,18 +1,21 @@
-import { Buffer } from "node:buffer";
-import { timingSafeEqual } from "node:crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { User } from "better-auth/db";
 import { parseUserOutput } from "better-auth/db";
+import { generateCodeChallenge } from "better-auth/oauth2";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
 import type { ElectronOptions } from "./types";
+
+type ElectronVerificationValue = {
+	userId: string;
+	codeChallenge: string;
+	state: string;
+};
 
 const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),
@@ -64,7 +67,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 
-			const tokenRecord = safeJSONParse<Record<string, any>>(token.value);
+			const tokenRecord = safeJSONParse<ElectronVerificationValue>(token.value);
 			if (!tokenRecord) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -82,39 +85,14 @@ export const electronToken = (_opts: ElectronOptions) =>
 					ELECTRON_ERROR_CODES.MISSING_CODE_CHALLENGE,
 				);
 			}
-			if (
-				!tokenRecord.codeChallengeMethod ||
-				tokenRecord.codeChallengeMethod === "plain"
-			) {
+			// PKCE is always S256: the stored challenge is the SHA-256 digest of
+			// the verifier, so a legacy or plaintext challenge fails this check.
+			const codeChallenge = await generateCodeChallenge(ctx.body.code_verifier);
+			if (codeChallenge !== tokenRecord.codeChallenge) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED,
+					ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
 				);
-			}
-			if (tokenRecord.codeChallengeMethod === "s256") {
-				const codeChallenge = Buffer.from(
-					base64Url.decode(tokenRecord.codeChallenge),
-				);
-				const codeVerifier = Buffer.from(
-					await createHash("SHA-256").digest(ctx.body.code_verifier),
-				);
-
-				if (
-					codeChallenge.length !== codeVerifier.length ||
-					!timingSafeEqual(codeChallenge, codeVerifier)
-				) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
-					);
-				}
-			} else {
-				if (tokenRecord.codeChallenge !== ctx.body.code_verifier) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
-					);
-				}
 			}
 			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 				`electron:${ctx.body.token}`,
@@ -155,7 +133,6 @@ const electronInitOAuthProxyQuerySchema = z.object({
 	provider: z.string().nonempty(),
 	state: z.string(),
 	code_challenge: z.string(),
-	code_challenge_method: z.string().optional(),
 });
 
 export const electronInitOAuthProxy = (opts: ElectronOptions) =>
@@ -209,10 +186,6 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			const searchParams = new URLSearchParams();
 			searchParams.set("client_id", opts.clientID || "electron");
 			searchParams.set("code_challenge", ctx.query.code_challenge);
-			searchParams.set(
-				"code_challenge_method",
-				ctx.query.code_challenge_method || "S256",
-			);
 			searchParams.set("state", ctx.query.state);
 			const res = await betterFetch<{
 				url: string | undefined;
@@ -254,7 +227,6 @@ const electronTransferUserQuerySchema = z.object({
 	client_id: z.string(),
 	state: z.string(),
 	code_challenge: z.string(),
-	code_challenge_method: z.string().optional(),
 });
 const electronTransferUserBodySchema = z.object({
 	callbackURL: z.string().optional(),
@@ -271,7 +243,6 @@ export const electronTransferUser = (
 				client_id: string;
 				state: string;
 				code_challenge: string;
-				code_challenge_method?: string | undefined;
 			},
 		) => Promise<string | null>;
 	},

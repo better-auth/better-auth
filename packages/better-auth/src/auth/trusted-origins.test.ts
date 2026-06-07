@@ -322,6 +322,14 @@ describe("trusted origins", () => {
 			await expect(isTrustedOrigin("myapp://callback/path")).resolves.toBe(
 				true,
 			);
+			// A query or fragment directly on the host is not part of the
+			// authority, so the host still matches exactly.
+			await expect(isTrustedOrigin("myapp://callback?token=x")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://callback#frag")).resolves.toBe(
+				true,
+			);
 		});
 
 		it("should match custom-scheme with empty host (myapp:/)", async () => {
@@ -354,6 +362,65 @@ describe("trusted origins", () => {
 			await expect(isTrustedOrigin("exp://10.0.0.1:8081/--/")).resolves.toBe(
 				false,
 			);
+		});
+
+		it("should trust any host for a host-less custom-scheme pattern", async () => {
+			// The Expo plugin registers a bare `exp://` in development to trust
+			// every Expo Go dev origin, and apps register `myapp://` to trust any
+			// deep link. A host-less pattern matches any host of the scheme.
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["exp://", "myapp://"],
+			});
+
+			await expect(isTrustedOrigin("exp://192.168.1.5:8081/--/")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("exp://localhost:8081/--/")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://callback")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://other-host/path")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("evil://anything")).resolves.toBe(false);
+		});
+
+		it("should match custom-scheme host case-insensitively", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(isTrustedOrigin("myapp://CALLBACK")).resolves.toBe(true);
+			await expect(isTrustedOrigin("MyApp://Callback")).resolves.toBe(true);
+		});
+
+		it("should pin the path when the pattern includes one", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://host/cb"],
+			});
+
+			await expect(isTrustedOrigin("myapp://host/cb")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://host/cb/extra")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://host/cbx")).resolves.toBe(false);
+			await expect(isTrustedOrigin("myapp://host/other")).resolves.toBe(false);
+		});
+
+		it("should not let a path-pinned pattern be bypassed with traversal", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://host/cb"],
+			});
+
+			await expect(isTrustedOrigin("myapp://host/cb/../evil")).resolves.toBe(
+				false,
+			);
+			await expect(
+				isTrustedOrigin("myapp://host/cb/%2e%2e/evil"),
+			).resolves.toBe(false);
+			await expect(
+				isTrustedOrigin("myapp://host/cb%2f..%2fevil"),
+			).resolves.toBe(false);
 		});
 	});
 

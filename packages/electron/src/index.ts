@@ -57,22 +57,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			client_id: string;
 			state: string;
 			code_challenge: string;
-			code_challenge_method?: string | undefined;
 		},
 	) => {
-		const {
-			client_id,
-			state,
-			code_challenge,
-			code_challenge_method = "S256",
-		} = payload;
-		const method = code_challenge_method.toLowerCase();
-		if (method !== "s256") {
-			throw APIError.from(
-				"BAD_REQUEST",
-				ELECTRON_ERROR_CODES.PLAIN_PKCE_REJECTED,
-			);
-		}
+		const { client_id, state, code_challenge } = payload;
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
@@ -95,7 +82,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			value: JSON.stringify({
 				userId,
 				codeChallenge: code_challenge,
-				codeChallengeMethod: method,
 				state,
 			}),
 			expiresAt,
@@ -117,11 +103,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 	return {
 		id: "electron",
 		version: PACKAGE_VERSION,
-		async onRequest(_request, _ctx) {
-			// Intentionally does not trust the `electron-origin` header.
-			// Electron main-process clients should set a real Origin via
-			// net.fetch or add their custom scheme to `trustedOrigins`.
-		},
 		hooks: {
 			after: [
 				{
@@ -155,7 +136,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						const querySchema = z.object({
 							client_id: z.string(),
 							code_challenge: z.string().nonempty(),
-							code_challenge_method: z.string().optional().default("S256"),
 							state: z.string().nonempty(),
 						});
 						const cookie = ctx.context.createAuthCookie("transfer_token", {
