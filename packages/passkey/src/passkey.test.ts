@@ -373,6 +373,32 @@ describe("passkey", async () => {
 		expect(updateResult.passkey.name).toBe("newName");
 	});
 
+	it("rejects a whitespace-only passkey name on update", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "original",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "update-reject-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+		await expect(
+			auth.api.updatePasskey({
+				headers,
+				body: { id: passkey.id, name: "   " },
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
 	it("should not delete a passkey that doesn't exist", async () => {
 		const { headers } = await signInWithTestUser();
 		await expect(
@@ -922,6 +948,149 @@ describe("passkey", async () => {
 		} finally {
 			consumeSpy.mockRestore();
 		}
+	});
+});
+
+const buildRegistrationVerification = (
+	aaguid: string,
+	credentialID: string,
+) => ({
+	verified: true,
+	registrationInfo: {
+		aaguid,
+		credentialDeviceType: "singleDevice",
+		credentialBackedUp: false,
+		credential: {
+			id: credentialID,
+			publicKey: new Uint8Array([1, 2, 3]),
+			counter: 0,
+		},
+	},
+});
+
+// A known AAGUID, used to prove the server still does not derive a label from it.
+const googleAaguid = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
+
+describe("passkey registration naming (default options)", async () => {
+	const { auth, client, cookieSetter, signInWithTestUser } =
+		await getTestInstance({ plugins: [passkey()] });
+
+	const register = async (opts: {
+		aaguid: string;
+		credentialID: string;
+		name?: string;
+	}) => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			buildRegistrationVerification(opts.aaguid, opts.credentialID),
+		);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		return auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				...(opts.name === undefined ? {} : { name: opts.name }),
+			},
+		});
+	};
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	it("stores the trimmed client-provided name", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-explicit",
+			name: "  My Work Key  ",
+		});
+		expect(record.name).toBe("My Work Key");
+	});
+
+	it("stores no label for a whitespace-only name", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-whitespace",
+			name: "   ",
+		});
+		expect(record.name ?? null).toBeNull();
+	});
+
+	it("does not infer a label from the AAGUID, but persists the raw AAGUID", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-no-name",
+		});
+		expect(record.name ?? null).toBeNull();
+		expect(record.aaguid).toBe(googleAaguid);
+	});
+});
+
+describe("passkey registration naming (afterVerification fallback)", async () => {
+	const afterVerification = vi.fn(async () => ({ name: "My Provider" }));
+	const { auth, client, cookieSetter, signInWithTestUser } =
+		await getTestInstance({
+			plugins: [passkey({ registration: { afterVerification } })],
+		});
+
+	const register = async (opts: {
+		aaguid: string;
+		credentialID: string;
+		name?: string;
+	}) => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			buildRegistrationVerification(opts.aaguid, opts.credentialID),
+		);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		return auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				...(opts.name === undefined ? {} : { name: opts.name }),
+			},
+		});
+	};
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	it("uses the returned name when the client provides none", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-fallback",
+		});
+		expect(record.name).toBe("My Provider");
+	});
+
+	it("falls back to the returned name when the client sends only whitespace", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-whitespace-fallback",
+			name: "   ",
+		});
+		expect(record.name).toBe("My Provider");
+	});
+
+	it("keeps the client-provided name over the returned one, but still runs the hook", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-precedence",
+			name: "Explicit Name",
+		});
+		expect(record.name).toBe("Explicit Name");
+		expect(afterVerification).toHaveBeenCalled();
 	});
 });
 
