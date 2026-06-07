@@ -16,6 +16,7 @@ import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	UserProvisioningSource,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
 import type { SecretConfig } from "./secret";
@@ -91,6 +92,11 @@ export interface InternalAdapter<
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
+		/**
+		 * Provisioning source. The creation seam adds `action: "create-user"` and
+		 * runs the `user.validateUserInfo` gate.
+		 */
+		source: UserProvisioningSource,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(

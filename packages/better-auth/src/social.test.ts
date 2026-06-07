@@ -2489,6 +2489,496 @@ describe("Railway Provider", async () => {
 	});
 });
 
+describe("validateUserInfo callback", async () => {
+	it("should allow sign-in when validateUserInfo returns void", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						// allow
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.email).toBe("user@email.com");
+	});
+
+	it("should reject redirect sign-in with source metadata and raw profile", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await signJWT(
+					{
+						email: "user@blocked.com",
+						email_verified: true,
+						name: "Blocked User",
+						picture: "https://test.com/picture.png",
+						sub: "blocked-user-id",
+						iat: 1234567890,
+						exp: 1234567890,
+						aud: "test",
+						azp: "test",
+						iss: "test",
+					},
+					DEFAULT_SECRET,
+				);
+				return HttpResponse.json({ access_token: "test", id_token: idToken });
+			}),
+		);
+
+		let capturedProfile: unknown;
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.action).toBe("create-user");
+						expect(source.method).toBe("oauth");
+						expect(source.oauth?.providerId).toBe("google");
+						capturedProfile = source.oauth?.profile;
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_blocked",
+								errorDescription: "Only company emails are allowed",
+							};
+						}
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=domain_blocked");
+		expect(redirectLocation).toContain(
+			"error_description=Only+company+emails+are+allowed",
+		);
+		expect((capturedProfile as Record<string, unknown>).sub).toBe(
+			"blocked-user-id",
+		);
+	});
+
+	it("should work in stateless mode (no database)", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database: undefined,
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.method).toBe("oauth");
+						expect(source.oauth?.providerId).toBe("google");
+						if (!user.email?.endsWith("@allowed.com")) {
+							return {
+								error: "email_not_allowed",
+								errorDescription: "Only allowed.com emails are permitted",
+							};
+						}
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=email_not_allowed");
+	});
+
+	it("should reject idToken sign-in when validateUserInfo returns error", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.action).toBe("create-user");
+						expect(source.method).toBe("oauth");
+						return { error: "user_blocked" };
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idToken = await signJWT(
+			{
+				email: "blocked@email.com",
+				email_verified: true,
+				name: "Blocked User",
+				sub: "blocked-id",
+			},
+			DEFAULT_SECRET,
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("fires create-user on first OAuth sign-in and sign-in on the return", async () => {
+		const actions: string[] = [];
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						actions.push(source.action);
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInOnce = async () => {
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test" },
+				headers,
+				method: "GET",
+				onError(context) {
+					cookieSetter(headers)(context as any);
+				},
+			});
+		};
+
+		await signInOnce(); // first time: the user is created
+		await signInOnce(); // same identity returns
+
+		expect(actions).toEqual(["create-user", "sign-in"]);
+	});
+
+	// The OAuth-specific security case: a returning user whose provider email
+	// moved to a now-disallowed domain must be rejected, and the hook must see
+	// the FRESH provider email, not the stored row.
+	it("re-validates a returning OAuth user against the fresh provider email", async () => {
+		const tokenFor = (email: string) =>
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await signJWT(
+					{
+						email,
+						email_verified: true,
+						name: "Mover",
+						picture: "https://test.com/picture.png",
+						sub: "mover-sub",
+						iat: 1234567890,
+						exp: 1234567890,
+						aud: "test",
+						azp: "test",
+						iss: "test",
+					},
+					DEFAULT_SECRET,
+				);
+				return HttpResponse.json({ access_token: "test", id_token: idToken });
+			});
+
+		let emailSeenOnSignIn: string | undefined;
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						if (source.action !== "sign-in") {
+							return;
+						}
+						emailSeenOnSignIn = user.email as string;
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_revoked",
+								errorDescription: "Your account is no longer allowed",
+							};
+						}
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signIn = async () => {
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test" },
+				headers,
+				method: "GET",
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+					cookieSetter(headers)(context as any);
+				},
+			});
+			return { headers, redirectLocation };
+		};
+
+		// First sign-in on an allowed domain provisions the user.
+		mswServer.use(tokenFor("mover@allowed.com"));
+		const first = await signIn();
+		const session = await client.getSession({
+			fetchOptions: { headers: first.headers },
+		});
+		expect(session.data?.user.email).toBe("mover@allowed.com");
+
+		// The provider now asserts a disallowed email for the same account.
+		mswServer.use(tokenFor("mover@blocked.com"));
+		const second = await signIn();
+
+		// The hook saw the fresh provider email, not the stored allowed one.
+		expect(emailSeenOnSignIn).toBe("mover@blocked.com");
+		expect(second.redirectLocation).toContain("error=domain_revoked");
+	});
+
+	it("re-validates a returning OAuth user on the id-token (API) surface", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						if (
+							source.action === "sign-in" &&
+							user.email?.endsWith("@blocked.com")
+						) {
+							return { error: "domain_revoked" };
+						}
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idTokenFor = (email: string) =>
+			signJWT(
+				{
+					email,
+					email_verified: true,
+					name: "Mover",
+					sub: "idtoken-mover",
+				},
+				DEFAULT_SECRET,
+			);
+
+		// First id-token sign-in on an allowed domain provisions the user.
+		const created = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			idToken: { token: await idTokenFor("mover@allowed.com") },
+		});
+		expect(created.error).toBeNull();
+
+		// Same account (sub), provider now asserts a disallowed email.
+		const blocked = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			idToken: { token: await idTokenFor("mover@blocked.com") },
+		});
+		expect(blocked.error?.status).toBe(403);
+		expect(blocked.error?.code).toBe("domain_revoked");
+	});
+
+	// An implicit link of a new provider to an existing user on sign-in reports
+	// `link-account` (not `sign-in`), and a rejection persists no account row,
+	// because the gate runs before the account write.
+	it("reports link-account for an implicit link and persists no orphaned link when rejected", async () => {
+		// Self-contained token handler so this test does not depend on a prior
+		// test's mswServer.use override leaking through.
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await signJWT(
+					{
+						email: "implicit-link@example.com",
+						email_verified: true,
+						name: "Implicit Link",
+						picture: "https://test.com/picture.png",
+						sub: "implicit-link-sub",
+						iat: 1234567890,
+						exp: 1234567890,
+						aud: "test",
+						azp: "test",
+						iss: "test",
+					},
+					DEFAULT_SECRET,
+				);
+				return HttpResponse.json({ access_token: "test", id_token: idToken });
+			}),
+		);
+
+		let seenAction: string | undefined;
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true },
+				account: {
+					accountLinking: {
+						trustedProviders: ["google"],
+						requireLocalEmailVerified: false,
+					},
+				},
+				user: {
+					validateUserInfo({ source }) {
+						if (source.action === "link-account") {
+							seenAction = source.action;
+							return { error: "linking_blocked" };
+						}
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		// An existing user owning the email the provider will assert.
+		await client.signUp.email({
+			email: "implicit-link@example.com",
+			password: "password",
+			name: "Existing User",
+		});
+
+		// OAuth sign-in for that email with no linked google account: an implicit
+		// link, which the gate rejects.
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(seenAction).toBe("link-account");
+		expect(redirectLocation).toContain("error=linking_blocked");
+
+		// No google account was persisted for the rejected implicit link.
+		const signedIn = new Headers();
+		await client.signIn.email(
+			{ email: "implicit-link@example.com", password: "password" },
+			{ onSuccess: cookieSetter(signedIn) },
+		);
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: signedIn },
+		});
+		const providers = (accounts.data || []).map((a) => a.providerId);
+		expect(providers).toContain("credential");
+		expect(providers).not.toContain("google");
+	});
+});
+
 /**
  * `account.grantedScopes` is the user's accumulated grant set, not the latest
  * token's `scope` claim. `linkSocial` unions newly granted scopes; sign-in
@@ -2784,11 +3274,14 @@ describe("grantedScopes legacy migration", async () => {
 	const ctx = await auth.$context;
 
 	it("normalizes the migrated array and unions later grants through the seam", async () => {
-		const user = await ctx.internalAdapter.createUser({
-			email: "legacy-scope@email.com",
-			name: "Legacy Scope",
-			emailVerified: true,
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				email: "legacy-scope@email.com",
+				name: "Legacy Scope",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
 
 		// The migration has split the legacy "openid,email,profile" string into
 		// this array; store it the post-migration way.
@@ -2846,11 +3339,14 @@ describe("grantedScopes resync", async () => {
 	const ctx = await auth.$context;
 
 	async function seedAccount(accountId: string, grantedScopes: string[]) {
-		const user = await ctx.internalAdapter.createUser({
-			email: `${accountId}@email.com`,
-			name: "Resync User",
-			emailVerified: true,
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				email: `${accountId}@email.com`,
+				name: "Resync User",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
 		await runWithEndpointContext(
 			{ context: ctx } as GenericEndpointContext,
 			() =>

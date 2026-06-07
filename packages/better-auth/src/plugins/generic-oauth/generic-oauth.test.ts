@@ -71,10 +71,13 @@ describe("oauth2", async () => {
 				context,
 			} as unknown as GenericEndpointContext,
 			async () => {
-				await context.internalAdapter.createUser({
-					email: "oauth2@test.com",
-					name: "OAuth2 Test",
-				});
+				await context.internalAdapter.createUser(
+					{
+						email: "oauth2@test.com",
+						name: "OAuth2 Test",
+					},
+					{ method: "test" },
+				);
 			},
 		);
 		await server.issuer.keys.generate("RS256");
@@ -2903,6 +2906,147 @@ describe("oauth2", async () => {
 			expect(location).not.toContain(`http://localhost:${port}/authorize`);
 			expect(location).toContain("error=state_mismatch");
 			expect(location).not.toContain("please_restart_the_process");
+		});
+	});
+
+	describe("validateUserInfo callback", () => {
+		it("should reject sign-in with provider metadata and raw profile", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "bad@blocked.com",
+					name: "Bad User",
+					sub: "bad-oauth",
+					email_verified: true,
+					custom_field: "custom-value",
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			let capturedProfile: unknown;
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				user: {
+					validateUserInfo({ user, source }) {
+						if (source.method !== "oauth") {
+							return;
+						}
+						expect(source.action).toBe("create-user");
+						expect(source.oauth?.providerId).toBe("validate-generic");
+						capturedProfile = source.oauth?.profile;
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "domain_blocked",
+								errorDescription:
+									"Only company emails are allowed for this provider",
+							};
+						}
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-generic",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-generic",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=domain_blocked");
+			expect(callbackURL).toContain(
+				"error_description=Only+company+emails+are+allowed+for+this+provider",
+			);
+			expect((capturedProfile as Record<string, unknown>).custom_field).toBe(
+				"custom-value",
+			);
+		});
+
+		it("should work in stateless mode (no database)", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "stateless@blocked.com",
+					name: "Stateless User",
+					sub: "stateless-oauth",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				database: undefined,
+				user: {
+					validateUserInfo({ user, source }) {
+						if (source.method !== "oauth") {
+							return;
+						}
+						expect(source.oauth?.providerId).toBe("validate-stateless");
+						if (user.email?.endsWith("@blocked.com")) {
+							return {
+								error: "stateless_blocked",
+								errorDescription: "Stateless rejection test",
+							};
+						}
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "validate-stateless",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const localAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const res = await localAuthClient.signIn.social({
+				provider: "validate-stateless",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=stateless_blocked");
+			expect(callbackURL).toContain(
+				"error_description=Stateless+rejection+test",
+			);
 		});
 	});
 });

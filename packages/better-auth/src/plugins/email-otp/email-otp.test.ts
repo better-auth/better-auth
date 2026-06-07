@@ -101,6 +101,50 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should reject sign-up with otp when validateUserInfo returns error", async () => {
+		let blockedOtp = "";
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.method).toBe("email-otp");
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return {
+								error: "email_otp_blocked",
+								errorDescription: "OTP sign-up is not allowed",
+							};
+						}
+					},
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							blockedOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: "new@blocked.com",
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp({
+			email: "new@blocked.com",
+			otp: blockedOtp,
+		});
+
+		expect(res.error?.code).toBe("email_otp_blocked");
+		expect(res.error?.message).toBe("OTP sign-up is not allowed");
+	});
+
 	it("should sign-up with otp and set name and image", async () => {
 		const testUser3 = {
 			email: "test-email-with-name@domain.com",

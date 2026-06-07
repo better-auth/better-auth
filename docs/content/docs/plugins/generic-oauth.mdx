@@ -91,6 +91,46 @@ The plugin uses the core OAuth callback route at `/callback/:providerId`. This m
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
 
+## Validate OAuth User Info
+
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject Generic OAuth users before Better Auth creates a user (`create-user`), links a new account (`link-account`), or signs an existing user back in (`sign-in`). On the `sign-in` action it receives the fresh provider email and profile, so a domain or org check can reject a user whose provider identity later moved out of bounds. Check `source.oauth?.providerId` to scope validation to a specific Generic OAuth provider, and use `source.oauth?.profile` for provider-specific profile fields.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  user: {
+    validateUserInfo: ({ user, source }) => {
+      if (source.oauth?.providerId !== "company-oauth") {
+        return;
+      }
+
+      if (!user.email?.endsWith("@example.com")) {
+        return {
+          error: "email_not_allowed",
+          errorDescription: "Use your example.com email to sign in",
+        };
+      }
+    },
+  },
+  plugins: [
+    genericOAuth({
+      config: [
+        {
+          providerId: "company-oauth",
+          clientId: process.env.COMPANY_OAUTH_CLIENT_ID!,
+          clientSecret: process.env.COMPANY_OAUTH_CLIENT_SECRET!,
+          discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Return nothing to allow the OAuth flow. Return an object with `error` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while programmatic flows return a `403` API error.
+
 ## Pre-configured Provider Helpers
 
 Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
