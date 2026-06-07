@@ -1,3 +1,4 @@
+import type { Awaitable } from "@better-auth/core";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
@@ -85,6 +86,50 @@ function getAllSecrets(
 		result.push({ version: -1, value: secret.legacySecret });
 	}
 	return result;
+}
+
+export type SessionCryptoHook = {
+	encrypt: (plaintext: string) => Awaitable<string>;
+	decrypt: (ciphertext: string) => Awaitable<string>;
+};
+
+export async function hookEncodeSession<T extends Record<string, any>>(
+	payload: T,
+	hook: SessionCryptoHook,
+	expiresIn: number = 3600,
+): Promise<string> {
+	const iat = now();
+	const envelope = {
+		...payload,
+		iat,
+		exp: iat + expiresIn,
+		jti: crypto.randomUUID(),
+	};
+	return hook.encrypt(JSON.stringify(envelope));
+}
+
+export async function hookDecodeSession<T = any>(
+	token: string,
+	hook: SessionCryptoHook,
+	clockToleranceSeconds: number = 15,
+): Promise<T | null> {
+	if (!token) return null;
+	let plaintext: string;
+	try {
+		plaintext = await hook.decrypt(token);
+	} catch {
+		return null;
+	}
+	let parsed: any;
+	try {
+		parsed = JSON.parse(plaintext);
+	} catch {
+		return null;
+	}
+	if (typeof parsed?.exp === "number") {
+		if (parsed.exp + clockToleranceSeconds < now()) return null;
+	}
+	return parsed as T;
 }
 
 export async function symmetricEncodeJWT<T extends Record<string, any>>(

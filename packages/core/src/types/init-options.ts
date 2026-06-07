@@ -466,6 +466,50 @@ export type BetterAuthOptions = {
 	 */
 	secrets?: Array<{ version: number; value: string }> | undefined;
 	/**
+	 * Override symmetric encryption for the JWE session cookie cache.
+	 *
+	 * Active only when `session.cookieCache.strategy === "jwe"`. When set,
+	 * the built-in JWE codec is bypassed: the session payload is
+	 * JSON-stringified, passed to `encrypt`, and the returned ciphertext
+	 * is what gets stored in the cookie. `decrypt` must return the
+	 * original JSON string.
+	 *
+	 * Useful for delegating to a KMS / HashiCorp Vault Transit so the
+	 * application never holds the encryption key.
+	 *
+	 * **Ciphertext format requirements.** The string returned by `encrypt`
+	 * is written into a `Set-Cookie` value and, for payloads over the
+	 * 4093-byte cookie limit, split into chunks by raw string length and
+	 * re-joined verbatim on read. To stay safe across browsers and the
+	 * chunking path, the ciphertext MUST be:
+	 *
+	 * - printable ASCII only (base64url is recommended);
+	 * - free of cookie delimiters and whitespace (`;`, `,`, `=`, space,
+	 *   tabs, CR, LF) and free of control characters;
+	 * - byte-splittable at any offset (no multi-byte sequences that the
+	 *   chunk re-join could tear).
+	 *
+	 * Vault Transit's `vault:v1:<base64>` and AWS KMS base64 ciphertext
+	 * blobs satisfy these constraints. Raw binary or arbitrary UTF-8 does
+	 * not — base64url-encode it before returning.
+	 *
+	 * Strict scope: this hook is NOT used for any other crypto in the
+	 * library (OAuth tokens, 2FA secrets, JWKS rows, OAuth state cookie,
+	 * OIDC codes, email-otp, oauth-proxy). Those continue to use
+	 * `secret` / `secrets`.
+	 *
+	 * NOTE: Enabling this on a running deployment makes existing JWE
+	 * cookies unreadable; affected requests fall through to the database
+	 * / secondary storage on the next read (normal cookie-cache miss
+	 * behavior). No persisted data is impacted.
+	 */
+	crypto?:
+		| {
+				encrypt: (plaintext: string) => Awaitable<string>;
+				decrypt: (ciphertext: string) => Awaitable<string>;
+		  }
+		| undefined;
+	/**
 	 * Database configuration
 	 */
 	database?:
