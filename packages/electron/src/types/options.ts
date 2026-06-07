@@ -26,11 +26,4 @@ export interface ElectronOptions extends ElectronSharedOptions {
 	 * @default "better-auth"
 	 */
 	cookiePrefix?: string | undefined;
-	/**
-	 * Override the origin for Electron API routes.
-	 * Enable this if you're facing cors origin issues with Electron API routes.
-	 *
-	 * @default false
-	 */
-	disableOriginOverride?: boolean | undefined;
 }

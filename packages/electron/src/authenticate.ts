@@ -2,11 +2,11 @@ import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
 import { APIError, getBaseURL, safeJSONParse } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import { generateCodeChallenge } from "better-auth/oauth2";
 import { shell } from "electron";
 import * as z from "zod";
 import type { ElectronClientOptions } from "./types/client";
@@ -45,10 +45,8 @@ export async function requestAuth(
 
 	const state = generateRandomString(16, "A-Z", "a-z", "0-9");
 
-	const codeVerifier = base64Url.encode(randomBytes(32));
-	const codeChallenge = base64Url.encode(
-		await createHash("SHA-256").digest(codeVerifier),
-	);
+	const codeVerifier = base64Url.encode(randomBytes(32), { padding: false });
+	const codeChallenge = await generateCodeChallenge(codeVerifier);
 
 	((globalThis as any)[kElectron] ??= new Map<string, string>()).set(
 		state,
@@ -83,7 +81,6 @@ export async function requestAuth(
 	}
 	url.searchParams.set("client_id", options.clientID || "electron");
 	url.searchParams.set("code_challenge", codeChallenge);
-	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);
 
 	await shell.openExternal(url.toString(), {
