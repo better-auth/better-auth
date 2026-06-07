@@ -13,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { parseSetCookieHeader } from "../cookies";
 import { signJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
@@ -1848,5 +1849,246 @@ describe("oauth2 - provider identity is not linkable across users", async () => 
 			"google",
 		);
 		expect(linked?.userId).toBe(userA.userId);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9486
+ */
+describe("oauth2 - per-provider requireEmailVerification gate", async () => {
+	async function setup(config: {
+		requireEmailVerification?: boolean | undefined;
+		emailPasswordRequireEmailVerification?: boolean | undefined;
+		sendOnSignUp?: boolean | undefined;
+		sendOnSignIn?: boolean | undefined;
+		withoutSendVerificationEmail?: boolean | undefined;
+	}) {
+		const sendVerificationEmail = vi.fn(async () => {});
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						requireEmailVerification: config.requireEmailVerification,
+					},
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification:
+						config.emailPasswordRequireEmailVerification,
+				},
+				emailVerification: {
+					sendOnSignUp: config.sendOnSignUp,
+					sendOnSignIn: config.sendOnSignIn,
+					sendVerificationEmail: config.withoutSendVerificationEmail
+						? undefined
+						: sendVerificationEmail,
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+
+		async function signInViaCallback(profile: {
+			email: string;
+			email_verified: boolean;
+			sub: string;
+		}) {
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const idToken = await signJWT(
+						{
+							email: profile.email,
+							email_verified: profile.email_verified,
+							name: "OAuth User",
+							sub: profile.sub,
+							iat: 1234567890,
+							exp: 1234567890,
+							aud: "test",
+							iss: "test",
+						},
+						DEFAULT_SECRET,
+					);
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						refresh_token: "test_refresh_token",
+						id_token: idToken,
+					});
+				}),
+			);
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			let setCookie = "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			});
+			return { redirectLocation, setCookie };
+		}
+
+		return { ctx, signInViaCallback, sendVerificationEmail };
+	}
+
+	function sessionToken(setCookie: string) {
+		return parseSetCookieHeader(setCookie).get("better-auth.session_token")
+			?.value;
+	}
+
+	it("blocks the session for a new user whose provider email is unverified", async () => {
+		// No sendOnSignUp: the send is driven by requireEmailVerification (the
+		// credential sign-up rule), so a blocked new user still receives a link.
+		const { ctx, signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+		});
+		const email = "gate-new-unverified@example.com";
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email,
+			email_verified: false,
+			sub: "gate_new_unverified",
+		});
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+
+		// The user and account are still created; only the session is withheld.
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user?.emailVerified).toBe(false);
+	});
+
+	it("creates a session for a new user whose provider email is verified", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignUp: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-new-verified@example.com",
+			email_verified: true,
+			sub: "gate_new_verified",
+		});
+
+		expect(redirectLocation).toContain("/welcome");
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("re-sends and blocks a returning unverified user when sendOnSignIn is set", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignIn: true,
+		});
+		const profile = {
+			email: "gate-returning@example.com",
+			email_verified: false,
+			sub: "gate_returning",
+		};
+
+		// The first sign-in creates the user and account, then blocks the session.
+		await signInViaCallback(profile);
+		sendVerificationEmail.mockClear();
+
+		// The returning sign-in is blocked again and re-sends the email.
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not gate social sign-in from emailAndPassword.requireEmailVerification", async () => {
+		// Only the credential flag is on; the provider opted out, so social
+		// sign-in must still succeed for an unverified provider email.
+		const { signInViaCallback } = await setup({
+			emailPasswordRequireEmailVerification: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-optin-only@example.com",
+			email_verified: false,
+			sub: "gate_optin_only",
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+	});
+
+	it("lets a returning verified user through the gate without re-sending", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignIn: true,
+		});
+		const profile = {
+			email: "gate-returning-verified@example.com",
+			email_verified: true,
+			sub: "gate_returning_verified",
+		};
+
+		// First sign-in creates the user and issues a session (verified).
+		const first = await signInViaCallback(profile);
+		expect(sessionToken(first.setCookie)).toBeDefined();
+
+		// The returning, already-verified user still gets a session and no email.
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+		expect(redirectLocation).toContain("/dashboard");
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("blocks a returning unverified user without re-sending when sendOnSignIn is unset", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+		});
+		const profile = {
+			email: "gate-returning-no-resend@example.com",
+			email_verified: false,
+			sub: "gate_returning_no_resend",
+		};
+
+		await signInViaCallback(profile);
+		sendVerificationEmail.mockClear();
+
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("blocks an unverified user even when no sendVerificationEmail is configured", async () => {
+		const { signInViaCallback } = await setup({
+			requireEmailVerification: true,
+			withoutSendVerificationEmail: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-no-send@example.com",
+			email_verified: false,
+			sub: "gate_no_send",
+		});
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
 	});
 });

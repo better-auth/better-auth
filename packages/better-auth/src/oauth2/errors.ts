@@ -1,8 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 
 /**
- * Error codes used in OAuth callback redirects (`?error=<code>`).
- * These are URL-safe strings, not API error objects.
+ * Error codes used in OAuth callback redirects (`?error=<code>`). These are
+ * URL-safe strings, not API error objects. Some also serve as the OAuth seam's
+ * machine-readable `result.error` value, which non-redirect callers (e.g.
+ * id-token sign-in) remap to an API error code.
  */
 export const OAUTH_CALLBACK_ERROR_CODES = {
 	NO_CODE: "no_code",
@@ -17,6 +19,7 @@ export const OAUTH_CALLBACK_ERROR_CODES = {
 	ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER:
 		"account_already_linked_to_different_user",
 	EMAIL_NOT_FOUND: "email_not_found",
+	EMAIL_NOT_VERIFIED: "email_not_verified",
 } as const;
 
 const HANDLING_DOCS_URL =
