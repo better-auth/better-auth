@@ -1,0 +1,112 @@
+---
+title: "Security update: June 2026"
+description: "The security advisories we published this cycle across Better Auth core and its plugins, with the upgrade path for each."
+date: 2026-06-02
+author:
+  name: "Better Auth Maintainers"
+  avatar: ""
+image: "/blogs/security-june-2026.png"
+tags: ["security", "advisories", "release"]
+---
+
+# Security update: June 2026
+
+Better Auth **1.6.14** is the current stable release. Stable projects should update to the latest 1.6.x version.
+
+This update bundles a number of fixes, and we have published GitHub advisories for every reported issue. Some advisories affect scoped packages such as `@better-auth/sso`, `@better-auth/scim`, or `@better-auth/oauth-provider`. Update any Better Auth packages you install directly, not only the top-level `better-auth` package.
+
+```bash title="Terminal"
+pnpm add better-auth@latest
+```
+
+Most stable-line advisories are covered by the latest 1.6.x release. A few advisories require the `next` package channel or a documented workaround because the complete fix changes behavior. In those cases, follow the linked advisory for the exact upgrade path.
+
+We have also started a dedicated security-review workstream across Better Auth and its plugins. It covers report triage, focused code review, automated and manual scanning, variant analysis, patch review, release coordination, and advisory publication.
+
+## Published Advisories
+
+The tables below cover the advisories published in this security cycle, grouped by the affected component. The full historical list remains available in the [Security Advisories tab](https://github.com/better-auth/better-auth/security/advisories).
+
+### Core (`better-auth`)
+
+| Advisory                                                                                                  | Area                                | Severity | Fixed path                                       |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------- | ------------------------------------------------ |
+| [GHSA-g38m-r43w-p2q7](https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7) | OAuth account linking ownership     | High     | `better-auth@1.6.11`                             |
+| [GHSA-2vg6-77g8-24mp](https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp) | Session cleanup after user deletion | Low      | `better-auth@1.6.11`, `@better-auth/scim@1.6.11` |
+
+### Organization
+
+| Advisory                                                                                                  | Area                              | Severity | Fixed path                                                     |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------- | -------- | -------------------------------------------------------------- |
+| [GHSA-fmh4-wcc4-5jm3](https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3) | Organization invitation ownership | High     | `better-auth@1.6.11`, with compatibility follow-up in `better-auth@1.6.14` |
+
+### Device Authorization
+
+| Advisory                                                                                                                                                                      | Area                      | Severity | Fixed path           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------- | -------------------- |
+| [GHSA-cq3f-vc6p-68fh](https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh) ([CVE-2026-45337](https://www.cve.org/CVERecord?id=CVE-2026-45337)) | Device-flow owner binding | High     | `better-auth@1.6.11` |
+
+### OAuth Provider (`@better-auth/oauth-provider`)
+
+| Advisory                                                                                                                                                                      | Area                                | Severity | Fixed path                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------- | ---------------------------------------------------------- |
+| [GHSA-xr8f-h2gw-9xh6](https://github.com/better-auth/better-auth/security/advisories/GHSA-xr8f-h2gw-9xh6) ([CVE-2026-41427](https://www.cve.org/CVERecord?id=CVE-2026-41427)) | OAuth client privilege checks       | High     | `@better-auth/oauth-provider@1.6.5`                        |
+| [GHSA-7w99-5wm4-3g79](https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79)                                                                     | OAuth authorization-code redemption | High     | `better-auth@1.6.11`, `@better-auth/oauth-provider@1.6.11` |
+| [GHSA-392p-2q2v-4372](https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372)                                                                     | OAuth refresh-token rotation        | High     | `@better-auth/oauth-provider@1.6.11`                       |
+| [GHSA-p2fr-6hmx-4528](https://github.com/better-auth/better-auth/security/advisories/GHSA-p2fr-6hmx-4528)                                                                     | OAuth resource indicators           | Medium   | `@better-auth/oauth-provider@1.7.0-beta.4`                 |
+
+### SCIM (`@better-auth/scim`)
+
+| Advisory                                                                                                  | Area                    | Severity | Fixed path                       |
+| --------------------------------------------------------------------------------------------------------- | ----------------------- | -------- | -------------------------------- |
+| [GHSA-j8v8-g9cx-5qf4](https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4) | SCIM provider ownership | High     | `@better-auth/scim@1.7.0-beta.4` |
+
+### SSO (`@better-auth/sso`)
+
+| Advisory                                                                                                  | Area                                     | Severity | Fixed path                |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------- | ------------------------- |
+| [GHSA-5rr4-8452-hf4v](https://github.com/better-auth/better-auth/security/advisories/GHSA-5rr4-8452-hf4v) | SSO provider registration URL validation | Critical | `@better-auth/sso@1.6.11` |
+| [GHSA-gv74-j8m3-fg5f](https://github.com/better-auth/better-auth/security/advisories/GHSA-gv74-j8m3-fg5f) | SSO provider registration authorization  | High     | `@better-auth/sso@1.6.11` |
+
+### Deprecated plugins (OIDC and MCP)
+
+The `oidcProvider` and `mcp` plugins have been deprecated for roughly half a year and will be removed from the library in **1.7**. For the advisories below we strongly recommend migrating to `@better-auth/oauth-provider` rather than relying on continued patches to these plugins.
+
+| Advisory                                                                                                  | Area                                 | Severity | Fixed path                           |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------- | ------------------------------------ |
+| [GHSA-pw9m-5jxm-xr6h](https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h) | OIDC and MCP refresh-token handling  | Critical | `better-auth@1.6.11`                 |
+| [GHSA-86j7-9j95-vpqj](https://github.com/better-auth/better-auth/security/advisories/GHSA-86j7-9j95-vpqj) | OIDC and MCP redirect URI validation | High     | `better-auth@1.6.13`, `better-auth@1.7.0-beta.4` |
+| [GHSA-9h47-pqcx-hjr4](https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4) | OIDC and MCP protocol defaults       | High     | `better-auth@1.6.11`                 |
+
+Each advisory has the exact affected ranges, fixed versions, and package names. The tables are a quick index, not a replacement for the advisory body. If your project uses one of the affected plugins, read the linked advisory before deciding that a top-level `better-auth` update is enough.
+
+***
+
+## Stable and Breaking Fixes
+
+Security fixes often sit between two constraints: users need a patch quickly, and stable releases should not break existing applications unless there is no safe alternative.
+
+Our stable line is still the first place we try to ship a fix. When the fix can preserve public types, defaults, and request or response shapes, it goes into the following 1.6.x release. That is the preferred path because most users can update without changing application code.
+
+Some issues require a stronger default or a different API contract. In those cases, we have three options:
+
+* Ship a compatible stable fix and document the stricter configuration.
+* Ship the complete fix through the `next` package channel when stable compatibility would hide the risk.
+* Publish a workaround in the advisory when the stable line cannot safely take the breaking change.
+
+If a compatibility release changes the recommended secure posture after publication, we will update the advisory body and metadata. Release notes alone are not enough for downstream audit tools.
+
+***
+
+## How to Stay Current
+
+* **Update stable projects to `better-auth@latest`.** As of this update, that is 1.6.14.
+* **Update `next` channel projects to the version named in the advisory.** Several current advisories point to 1.7.0-beta.4.
+* **Update scoped Better Auth packages too.** Several advisories affect packages such as `@better-auth/sso`, `@better-auth/scim`, and `@better-auth/oauth-provider`.
+* **Watch the repository releases.** The [Releases page](https://github.com/better-auth/better-auth/releases) shows each patch release.
+* **Watch the advisory feed.** The [Security Advisories tab](https://github.com/better-auth/better-auth/security/advisories) is the source of truth for affected and fixed ranges.
+* **Run audit tools against your lockfile.** GitHub Dependabot and `npm audit` both consume advisory metadata.
+
+## Thanks
+
+Thank you to the researchers, contributors, maintainers, and users who reported issues, tested fixes, and reviewed patches during this cycle. As LLMs lower the bar for attackers, especially in open source software, covering the surfaces that matter and responding to the community's security reports remains one of our top priorities.
