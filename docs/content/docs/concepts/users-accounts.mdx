@@ -324,7 +324,7 @@ export const auth = betterAuth({
 
             if (
                 source.oauth?.providerId === "company-oauth" &&
-                source.oauth.profile?.hd !== "example.com"
+                source.oauth?.profile?.hd !== "example.com"
             ) {
                 return {
                     error: "invalid_organization",
