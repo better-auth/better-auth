@@ -149,13 +149,15 @@ function getErrorURL(
 	return formattedURL;
 }
 
+export type AuthorizeEndpointSettings = {
+	isAuthorize?: boolean;
+	postLogin?: boolean;
+};
+
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	settings?: {
-		isAuthorize?: boolean;
-		postLogin?: boolean;
-	},
+	settings?: AuthorizeEndpointSettings,
 ) {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {

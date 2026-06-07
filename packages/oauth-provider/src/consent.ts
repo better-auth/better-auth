@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
+import { formatErrorURL, getIssuer } from "./authorize";
+import type { AuthorizeEndpointCaller } from "./continue";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
@@ -10,9 +11,10 @@ import {
 	searchParamsToQuery,
 } from "./utils";
 
-export async function consentEndpoint(
+export async function consentEndpoint<Result>(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	// Obtain oauth query
 	const oauthRequest = await oAuthState.get();
@@ -72,11 +74,7 @@ export async function consentEndpoint(
 	if (hasLoginPrompt && !hasSatisfiedLoginPrompt) {
 		ctx?.headers?.set("accept", "application/json");
 		ctx.query = searchParamsToQuery(query);
-		const { url } = await authorizeEndpoint(ctx, opts);
-		return {
-			redirect: true,
-			url,
-		};
+		return await authorize(ctx);
 	}
 
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
@@ -151,13 +149,9 @@ export async function consentEndpoint(
 	const postLoginClearedForThisSession =
 		oauthRequest?.postLoginClearedForSession !== undefined &&
 		oauthRequest.postLoginClearedForSession === session?.session.id;
-	const { url } = await authorizeEndpoint(ctx, opts, {
+	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
 	});
-	return {
-		redirect: true,
-		url,
-	};
 }
 
 // Relies on session.createdAt being immutable for the session's lifetime; a
