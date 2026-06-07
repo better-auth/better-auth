@@ -805,9 +805,14 @@ export const kyselyAdapter = (
 							: db.transaction().execute(claimFromTransaction);
 					}
 
-					const targetIds = applyWhere(
+					const targetIdsQuery = applyWhere(
 						db.selectFrom(model).select(`${model}.${idField}`),
-					).limit(1);
+					);
+					// MSSQL does not support `LIMIT`; use `TOP` instead (mirrors `findMany`).
+					const targetIds =
+						config?.type === "mssql"
+							? targetIdsQuery.top(1)
+							: targetIdsQuery.limit(1);
 					const query = db
 						.deleteFrom(model)
 						.where(`${model}.${idField}`, "in", targetIds);

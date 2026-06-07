@@ -60,4 +60,47 @@ describe("kysely-adapter", () => {
 		);
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9903
+	 */
+	it("consumeOne uses TOP instead of LIMIT on mssql", async () => {
+		const selectQuery = {
+			select: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+			top: vi.fn(() => selectQuery),
+		};
+		const deleted = {
+			id: "verification-1",
+			identifier: "same-identifier",
+			value: "first",
+		};
+		const deleteQuery = {
+			where: vi.fn(() => deleteQuery),
+			outputAll: vi.fn(() => deleteQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(deleted),
+		};
+		const db = {
+			selectFrom: vi.fn(() => selectQuery),
+			deleteFrom: vi.fn(() => deleteQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql" })({});
+
+		const result = await adapter.consumeOne({
+			model: "verification",
+			where: [{ field: "identifier", value: "same-identifier" }],
+		});
+
+		expect(result).toEqual(deleted);
+		// MSSQL has no LIMIT — the row-selection subquery must use TOP.
+		expect(selectQuery.top).toHaveBeenCalledWith(1);
+		expect(selectQuery.limit).not.toHaveBeenCalled();
+		expect(deleteQuery.where).toHaveBeenCalledWith(
+			"verification.id",
+			"in",
+			selectQuery,
+		);
+		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
+	});
 });
