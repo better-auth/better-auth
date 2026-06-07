@@ -1452,7 +1452,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							responses: {
 								"200": {
 									description:
-										"Logout completed, or an HTML confirmation page was returned for browser navigation. A redirect is used only for an exact registered post_logout_redirect_uri.",
+										"Logout completed, or an HTML page was returned for browser navigation — a confirmation page, or the OIDC front-channel logout page when clients with a registered frontchannel_logout_uri hold tokens on the session. A redirect is used only for an exact registered post_logout_redirect_uri.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1472,7 +1472,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											},
 										},
 										"text/html": {
-											schema: { type: "string" },
+											schema: {
+												type: "string",
+												description:
+													"Logout confirmation page, or the OIDC Front-Channel Logout page with one hidden iframe per registered RP",
+											},
 										},
 									},
 								},
@@ -1624,6 +1628,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "boolean",
 														description:
 															"Whether the RP requires a `sid` claim in every Logout Token",
+													},
+													frontchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL rendered in a hidden iframe on the OP's logout page when the end-user's OP session terminates",
+													},
+													frontchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the OP appends `iss` and `sid` query parameters to the front-channel logout URI",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
