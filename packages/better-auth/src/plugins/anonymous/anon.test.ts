@@ -118,10 +118,10 @@ describe("anonymous", async () => {
 			{
 				user: {
 					validateUserInfo({ source }) {
-						if (source.type !== "anonymous") {
+						if (source.method !== "anonymous") {
 							return;
 						}
-						expect(source.type).toBe("anonymous");
+						expect(source.action).toBe("create-user");
 						return {
 							error: "anonymous_blocked",
 							errorDescription: "Anonymous users are not allowed",

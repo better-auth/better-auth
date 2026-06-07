@@ -9,7 +9,7 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import { validateUserInfo } from "../../utils/validate-user-info";
+import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -398,28 +398,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const validation = await validateUserInfo(ctx, {
-								user: {
-									email,
-									emailVerified: true,
-									name: name || "",
-								},
-								source: {
-									type: "magic-link",
-									flow: "verify",
-								},
-							});
-							if (validation) {
-								redirectWithError(
-									validation.error,
-									validation.errorDescription,
+							let newUser: Awaited<
+								ReturnType<typeof ctx.context.internalAdapter.createUser>
+							> | null;
+							try {
+								newUser = await ctx.context.internalAdapter.createUser(
+									{
+										email: email,
+										emailVerified: true,
+										name: name || "",
+									},
+									{ method: "magic-link" },
 								);
+							} catch (e) {
+								// Browser flow: forward a gate rejection's code to the error
+								// URL instead of surfacing a raw API error.
+								if (isAPIError(e) && e.body?.code) {
+									redirectWithError(e.body.code, e.body.message);
+								}
+								throw e;
 							}
-							const newUser = await ctx.context.internalAdapter.createUser({
-								email: email,
-								emailVerified: true,
-								name: name || "",
-							});
 							isNewUser = true;
 							user = newUser;
 							if (!user) {

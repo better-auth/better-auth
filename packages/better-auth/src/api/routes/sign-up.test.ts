@@ -211,7 +211,8 @@ describe("validateUserInfo sign-up", async () => {
 				},
 				user: {
 					validateUserInfo({ user, source }) {
-						capturedSourceType = source.type;
+						expect(source.action).toBe("create-user");
+						capturedSourceType = source.method;
 						capturedEmail = user.email as string;
 					},
 				},
@@ -242,7 +243,7 @@ describe("validateUserInfo sign-up", async () => {
 				},
 				user: {
 					validateUserInfo({ user, source }) {
-						expect(source.type).toBe("email-password");
+						expect(source.method).toBe("email-password");
 						if ((user.email as string).endsWith("@blocked.com")) {
 							return {
 								error: "email_not_allowed",
@@ -266,7 +267,7 @@ describe("validateUserInfo sign-up", async () => {
 				},
 			}),
 		).rejects.toMatchObject({
-			statusCode: 401,
+			statusCode: 403,
 			body: {
 				code: "email_not_allowed",
 				message: "Only company emails are allowed",
@@ -277,6 +278,48 @@ describe("validateUserInfo sign-up", async () => {
 		expect(
 			users.find(
 				(user) => (user as { email?: string }).email === "new@blocked.com",
+			),
+		).toBeUndefined();
+	});
+
+	// A blocking policy must not become an account-existence oracle. When the
+	// generic-duplicate response is enabled, a rejected new email has to return
+	// the same opaque success as an existing email rather than a 403.
+	it("hides gate rejections behind the generic-duplicate response", async () => {
+		const { auth, db } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+				user: {
+					validateUserInfo({ user }) {
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return { error: "email_not_allowed" };
+						}
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "ghost@blocked.com",
+				password: "password",
+				name: "Ghost User",
+			},
+		});
+
+		expect(res.token).toBeNull();
+		expect(res.user.email).toBe("ghost@blocked.com");
+
+		const users = await db.findMany({ model: "user" });
+		expect(
+			users.find(
+				(user) => (user as { email?: string }).email === "ghost@blocked.com",
 			),
 		).toBeUndefined();
 	});

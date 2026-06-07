@@ -12,7 +12,6 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { validateUserInfo } from "../../utils/validate-user-info";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -652,32 +651,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const validation = await validateUserInfo(ctx, {
-					user: {
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
 						...additionalFields,
 						email,
 						emailVerified: true,
 						name: name || "",
 						image,
 					},
-					source: {
-						type: "email-otp",
-						flow: "sign-in",
-					},
-				});
-				if (validation) {
-					throw APIError.from("UNAUTHORIZED", {
-						code: validation.error,
-						message: validation.errorDescription || validation.error,
-					});
-				}
-				const newUser = await ctx.context.internalAdapter.createUser({
-					...additionalFields,
-					email,
-					emailVerified: true,
-					name: name || "",
-					image,
-				});
+					{ method: "email-otp" },
+				);
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);

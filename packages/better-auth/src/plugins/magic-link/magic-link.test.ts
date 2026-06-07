@@ -94,7 +94,7 @@ describe("magic link", async () => {
 			{
 				user: {
 					validateUserInfo({ source }) {
-						expect(source.type).toBe("magic-link");
+						expect(source.method).toBe("magic-link");
 						return {
 							error: "magic_link_blocked",
 							errorDescription: "Magic link sign-up is not allowed",

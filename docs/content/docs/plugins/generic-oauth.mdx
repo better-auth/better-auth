@@ -93,7 +93,7 @@ Unlike built-in providers, the `:providerId` parameter is required and must matc
 
 ## Validate OAuth User Info
 
-Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject Generic OAuth users before Better Auth creates a user, links an account, or creates a session. Check `source.providerId` to scope validation to a specific Generic OAuth provider, and use `source.profile` for provider-specific profile fields.
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject Generic OAuth users before Better Auth creates a user (`create-user`), links a new account (`link-account`), or signs an existing user back in (`sign-in`). On the `sign-in` action it receives the fresh provider email and profile, so a domain or org check can reject a user whose provider identity later moved out of bounds. Check `source.oauth?.providerId` to scope validation to a specific Generic OAuth provider, and use `source.oauth?.profile` for provider-specific profile fields.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -102,7 +102,7 @@ import { genericOAuth } from "better-auth/plugins";
 export const auth = betterAuth({
   user: {
     validateUserInfo: ({ user, source }) => {
-      if (source.type !== "oauth" || source.providerId !== "company-oauth") {
+      if (source.oauth?.providerId !== "company-oauth") {
         return;
       }
 
@@ -129,7 +129,7 @@ export const auth = betterAuth({
 });
 ```
 
-Return nothing to allow the OAuth flow. Return an object with `error` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while API-based flows return a structured API error.
+Return nothing to allow the OAuth flow. Return an object with `error` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while programmatic flows return a `403` API error.
 
 ## Pre-configured Provider Helpers
 

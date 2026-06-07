@@ -8,7 +8,6 @@ import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
-import { validateUserInfo } from "../../utils/validate-user-info";
 import { PACKAGE_VERSION } from "../../version";
 import type { WalletAddressSchema } from "./schema";
 import { schema } from "./schema";
@@ -239,28 +238,14 @@ export const siwe = (options: SIWEPluginOptions) => {
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
 
-							const validation = await validateUserInfo(ctx, {
-								user: {
+							user = await ctx.context.internalAdapter.createUser(
+								{
 									name: name ?? walletAddress,
 									email: userEmail,
 									image: avatar ?? "",
 								},
-								source: {
-									type: "siwe",
-									flow: "sign-in",
-								},
-							});
-							if (validation) {
-								throw APIError.from("UNAUTHORIZED", {
-									code: validation.error,
-									message: validation.errorDescription || validation.error,
-								});
-							}
-							user = await ctx.context.internalAdapter.createUser({
-								name: name ?? walletAddress,
-								email: userEmail,
-								image: avatar ?? "",
-							});
+								{ method: "siwe" },
+							);
 
 							// Create wallet address record
 							await ctx.context.adapter.create({

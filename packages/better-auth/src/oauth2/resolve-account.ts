@@ -28,6 +28,11 @@ export interface ResolveOAuthUserParams {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	providerId: string;
 	linkPolicy: OAuthLinkPolicy;
+	/**
+	 * The raw, unmapped provider profile. Forwarded to the `validateUserInfo`
+	 * provisioning gate when a new user is created here.
+	 */
+	profile?: Record<string, unknown> | undefined;
 }
 
 /**
@@ -67,7 +72,7 @@ export async function resolveOAuthUser(
 	c: GenericEndpointContext,
 	params: ResolveOAuthUserParams,
 ): Promise<ResolvedOAuthUser | ResolveOAuthUserError> {
-	const { userInfo, providerId, linkPolicy } = params;
+	const { userInfo, providerId, linkPolicy, profile } = params;
 
 	let dbUser: Awaited<
 		ReturnType<typeof c.context.internalAdapter.findOAuthUser>
@@ -92,10 +97,13 @@ export async function resolveOAuthUser(
 		}
 		try {
 			const { id: _id, ...restUserInfo } = userInfo;
-			const createdUser = await c.context.internalAdapter.createUser({
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-			});
+			const createdUser = await c.context.internalAdapter.createUser(
+				{
+					...restUserInfo,
+					email: userInfo.email.toLowerCase(),
+				},
+				{ method: "oauth", oauth: { providerId, profile } },
+			);
 			return {
 				user: createdUser,
 				isRegister: true,
@@ -103,10 +111,12 @@ export async function resolveOAuthUser(
 				error: null,
 			};
 		} catch (e) {
-			logger.error("Unable to create user", e);
+			// Re-throw APIErrors to preserve the machine-readable code; only opaque
+			// failures fall through to the generic error return.
 			if (isAPIError(e)) {
-				return { error: e.message, user: null };
+				throw e;
 			}
+			logger.error("Unable to create user", e);
 			return { error: "unable to create user", user: null };
 		}
 	}

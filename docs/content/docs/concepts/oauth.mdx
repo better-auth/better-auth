@@ -72,9 +72,9 @@ await auth.api.linkSocialAccount({
 
 ### Validate OAuth User Info
 
-Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) when you need to reject an OAuth sign-in or account link before Better Auth creates a user, links an account, or creates a session. The callback receives the mapped `user` and OAuth metadata in `source`, including the provider ID and raw provider profile.
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject an OAuth identity before Better Auth creates a user, links a new account, or signs a returning user back in. The callback receives the mapped `user` and, in `source.oauth`, the provider id and raw provider profile.
 
-This runs during regular OAuth callbacks, ID-token sign-in, and account linking. It also works in stateless setups because it runs before any database-backed user creation or account linking step.
+It runs when an OAuth identity is first provisioned (`create-user` from a regular callback, ID-token sign-in, One Tap, or OAuth Proxy), when a new account is linked (`link-account`), and again every time an existing OAuth user signs in (`sign-in`). On the `sign-in` action the `user` carries the *fresh* provider email, so a domain check rejects a user whose provider email later moved to a disallowed domain. It works in stateless setups because it runs at the same points regardless of the database.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -82,7 +82,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
   user: {
     validateUserInfo: ({ user, source }) => {
-      if (source.type !== "oauth" || source.providerId !== "google") return;
+      if (source.oauth?.providerId !== "google") return;
 
       if (!user.email?.endsWith("@example.com")) {
         return {

@@ -345,7 +345,7 @@ describe("siwe", async () => {
 			{
 				user: {
 					validateUserInfo({ source }) {
-						expect(source.type).toBe("siwe");
+						expect(source.method).toBe("siwe");
 						return {
 							error: "siwe_blocked",
 							errorDescription: "SIWE sign-up is not allowed",

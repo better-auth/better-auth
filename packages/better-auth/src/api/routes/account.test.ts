@@ -313,10 +313,13 @@ describe("account", async () => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 		const sharedAccountId = "shared-provider-account-id";
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other User",
-			email: "other-account-info@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other User",
+				email: "other-account-info@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
@@ -455,10 +458,13 @@ describe("account", async () => {
 		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
 		const sharedAccountId = "shared-server-side-account-id";
 
-		const user = await ctx.internalAdapter.createUser({
-			name: "Server Side User",
-			email: "server-side-disambiguate@example.com",
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				name: "Server Side User",
+				email: "server-side-disambiguate@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
@@ -2034,11 +2040,11 @@ describe("validateUserInfo account linking", async () => {
 	const { signInWithTestUser, client } = await getTestInstance({
 		user: {
 			validateUserInfo({ source }) {
-				if (source.flow !== "account-linking") {
+				if (source.action !== "link-account") {
 					return;
 				}
-				expect(source.type).toBe("oauth");
-				expect(source.providerId).toBe("google");
+				expect(source.method).toBe("oauth");
+				expect(source.oauth?.providerId).toBe("google");
 				return {
 					error: "domain_blocked",
 					errorDescription: "This email domain is not allowed",

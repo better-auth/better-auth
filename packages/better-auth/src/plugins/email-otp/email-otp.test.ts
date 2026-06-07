@@ -107,7 +107,7 @@ describe("email-otp", async () => {
 			{
 				user: {
 					validateUserInfo({ user, source }) {
-						expect(source.type).toBe("email-otp");
+						expect(source.method).toBe("email-otp");
 						if ((user.email as string).endsWith("@blocked.com")) {
 							return {
 								error: "email_otp_blocked",

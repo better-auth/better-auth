@@ -140,11 +140,14 @@ describe("internal adapter test", async () => {
 	const internalAdapter = authContext.internalAdapter;
 
 	it("creates a user and linked account with custom generated ids, firing user-create hooks", async () => {
-		const user = await internalAdapter.createUser({
-			email: "email@email.com",
-			name: "name",
-			emailVerified: false,
-		});
+		const user = await internalAdapter.createUser(
+			{
+				email: "email@email.com",
+				name: "name",
+				emailVerified: false,
+			},
+			{ method: "test" },
+		);
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "provider",
@@ -495,7 +498,7 @@ describe("internal adapter test", async () => {
 		};
 
 		// Create a user in the database first
-		await ctx.context.internalAdapter.createUser(testUser);
+		await ctx.context.internalAdapter.createUser(testUser, { method: "test" });
 
 		// Test case 1: Session with fractional seconds in TTL
 		const expiresAt = new Date(Date.now() + 3599500); // 59 minutes and 59.5 seconds from now
@@ -601,10 +604,13 @@ describe("internal adapter test", async () => {
 		// Create session
 		const now = Date.now();
 		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
-		const user = await internalAdapter.createUser({
-			name: "test-user",
-			email: "test@email.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "test-user",
+				email: "test@email.com",
+			},
+			{ method: "test" },
+		);
 		const session = await internalAdapter.createSession(user.id);
 
 		// Session should always have an id, even with secondary storage only
@@ -705,10 +711,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete a single account", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Account Delete User",
-			email: "account.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Account Delete User",
+				email: "account.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
@@ -732,10 +741,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete multiple accounts for a user", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Accounts Delete User",
-			email: "accounts.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Accounts Delete User",
+				email: "accounts.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		await internalAdapter.createAccount({
 			userId: user.id,
@@ -781,10 +793,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-skip",
-			email: "test-skip@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-skip",
+				email: "test-skip@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -829,10 +844,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-malformed",
-			email: "test-malformed@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-malformed",
+				email: "test-malformed@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -873,10 +891,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-corrupt",
-			email: "test-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-corrupt",
+				email: "test-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -916,10 +937,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-all-corrupt",
-			email: "test-all-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-all-corrupt",
+				email: "test-all-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 2 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -957,10 +981,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-find",
-			email: "test-find@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-find",
+				email: "test-find@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -1012,10 +1039,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testCtx.internalAdapter;
 
 		// Create a user first
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-update",
-			email: "test-update@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-update",
+				email: "test-update@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -1115,10 +1145,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testAuthContext.internalAdapter;
 
 		// Create a user
-		const user = await testInternalAdapter.createUser({
-			name: "corrupt-sessions-test-user",
-			email: "corrupt-sessions-test@example.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "corrupt-sessions-test-user",
+				email: "corrupt-sessions-test@example.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);

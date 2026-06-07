@@ -185,10 +185,13 @@ describe("one-tap implicit linking gate", async () => {
 		});
 
 		const ctx = await auth.$context;
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other Provider User",
-			email: "one-tap-other-provider@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other Provider User",
+				email: "one-tap-other-provider@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
@@ -288,19 +291,25 @@ describe("one-tap implicit linking gate", async () => {
 		});
 		const ctx = await auth.$context;
 
-		const userA = await ctx.internalAdapter.createUser({
-			name: "Sub Owner A",
-			email: "one-tap-sub-owner-a@example.com",
-		});
+		const userA = await ctx.internalAdapter.createUser(
+			{
+				name: "Sub Owner A",
+				email: "one-tap-sub-owner-a@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: userA.id,
 			providerId: "google",
 			accountId: sharedSub,
 		});
-		const userB = await ctx.internalAdapter.createUser({
-			name: "Email Match B",
-			email: verifiedPayload.email,
-		});
+		const userB = await ctx.internalAdapter.createUser(
+			{
+				name: "Email Match B",
+				email: verifiedPayload.email,
+			},
+			{ method: "test" },
+		);
 
 		const res = await client.$fetch<{ user?: { id: string } }>(
 			"/one-tap/callback",

@@ -71,10 +71,13 @@ describe("oauth2", async () => {
 				context,
 			} as unknown as GenericEndpointContext,
 			async () => {
-				await context.internalAdapter.createUser({
-					email: "oauth2@test.com",
-					name: "OAuth2 Test",
-				});
+				await context.internalAdapter.createUser(
+					{
+						email: "oauth2@test.com",
+						name: "OAuth2 Test",
+					},
+					{ method: "test" },
+				);
 			},
 		);
 		await server.issuer.keys.generate("RS256");
@@ -2923,13 +2926,12 @@ describe("oauth2", async () => {
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
 				user: {
 					validateUserInfo({ user, source }) {
-						if (source.type !== "oauth") {
+						if (source.method !== "oauth") {
 							return;
 						}
-						expect(source.type).toBe("oauth");
-						expect(source.providerId).toBe("validate-generic");
-						expect(source.flow).toBe("callback");
-						capturedProfile = source.profile;
+						expect(source.action).toBe("create-user");
+						expect(source.oauth?.providerId).toBe("validate-generic");
+						capturedProfile = source.oauth?.profile;
 						if (user.email?.endsWith("@blocked.com")) {
 							return {
 								error: "domain_blocked",
@@ -2996,10 +2998,10 @@ describe("oauth2", async () => {
 				database: undefined,
 				user: {
 					validateUserInfo({ user, source }) {
-						if (source.type !== "oauth") {
+						if (source.method !== "oauth") {
 							return;
 						}
-						expect(source.providerId).toBe("validate-stateless");
+						expect(source.oauth?.providerId).toBe("validate-stateless");
 						if (user.email?.endsWith("@blocked.com")) {
 							return {
 								error: "stateless_blocked",

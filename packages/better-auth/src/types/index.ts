@@ -5,6 +5,10 @@ export type {
 	BetterAuthPlugin,
 	BetterAuthRateLimitOptions,
 	StoreIdentifierOption,
+	UserProvisioningSource,
+	ValidateUserInfoAction,
+	ValidateUserInfoMethod,
+	ValidateUserInfoOAuthInfo,
 	ValidateUserInfoResult,
 	ValidateUserInfoSource,
 } from "@better-auth/core";

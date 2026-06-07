@@ -1,34 +1,44 @@
 import type {
 	GenericEndpointContext,
-	ValidateUserInfoResult,
 	ValidateUserInfoSource,
 } from "@better-auth/core";
+import { APIError } from "@better-auth/core/error";
 import type { User } from "../types";
 
-export async function validateUserInfo(
+/**
+ * Invoke the application's `user.validateUserInfo` gate and throw a `403`
+ * {@link APIError} if it rejects.
+ *
+ * Fails closed: if the hook throws, provisioning is rejected rather than
+ * silently allowed.
+ */
+export async function assertValidUserInfo(
 	ctx: GenericEndpointContext,
 	data: {
 		user: Partial<User> & Record<string, unknown>;
 		source: ValidateUserInfoSource;
 	},
-): Promise<ValidateUserInfoResult | null> {
+): Promise<void> {
 	const validate = ctx.context.options.user?.validateUserInfo;
 	if (!validate) {
-		return null;
+		return;
 	}
 
+	let result: Awaited<ReturnType<typeof validate>>;
 	try {
-		const validation = await validate(data, ctx.request);
-		if (validation?.error) {
-			return validation;
-		}
+		result = await validate(data, ctx);
 	} catch (error) {
-		ctx.context.logger.error("validateUserInfo callback failed", error);
-		return {
-			error: "validation_failed",
-			errorDescription: "User validation failed",
-		};
+		ctx.context.logger.error("validateUserInfo callback threw", error);
+		throw new APIError("FORBIDDEN", {
+			code: "validation_failed",
+			message: "User validation failed",
+		});
 	}
 
-	return null;
+	if (result?.error) {
+		throw new APIError("FORBIDDEN", {
+			code: result.error,
+			message: result.errorDescription || result.error,
+		});
+	}
 }
