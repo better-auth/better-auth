@@ -1112,7 +1112,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			oauth2UserInfo: createAuthEndpoint(
 				"/oauth2/userinfo",
 				{
-					method: "GET",
+					method: ["GET", "POST"],
 					metadata: {
 						openapi: {
 							description:
