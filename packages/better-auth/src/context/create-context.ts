@@ -1,9 +1,13 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	FinalizedSignIn,
 	SecretConfig,
+	SignInAttemptWithUser,
 } from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
+import type { AuthContextWriters } from "@better-auth/core/context/internals";
+import type { Session, User } from "@better-auth/core/db";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -265,7 +269,15 @@ Most of the features of Better Auth will not work correctly.`,
 	const trustedOrigins = await getTrustedOrigins(options);
 	const trustedProviders = await getTrustedProviders(options);
 
-	const ctx: AuthContext = {
+	const ctx: AuthContext &
+		AuthContextWriters & {
+			issuedSession: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
+			finalizedSignIn: FinalizedSignIn | null;
+			signInAttempt: SignInAttemptWithUser | null;
+		} = {
 		appName: options.appName || "Better Auth",
 		baseURL: baseURL || "",
 		version: getBetterAuthVersion(),
@@ -359,10 +371,27 @@ Most of the features of Better Auth will not work correctly.`,
 			},
 			checkPassword,
 		},
-		setNewSession(session) {
-			this.newSession = session;
+		setIssuedSession(session) {
+			this.issuedSession = session;
 		},
-		newSession: null,
+		issuedSession: null,
+		getIssuedSession() {
+			return this.issuedSession;
+		},
+		setFinalizedSignIn(signIn) {
+			this.finalizedSignIn = signIn;
+		},
+		finalizedSignIn: null,
+		getFinalizedSignIn() {
+			return this.finalizedSignIn;
+		},
+		setSignInAttempt(attempt) {
+			this.signInAttempt = attempt;
+		},
+		signInAttempt: null,
+		getSignInAttempt() {
+			return this.signInAttempt;
+		},
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,

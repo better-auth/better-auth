@@ -14,7 +14,13 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import type { Account, Session, User, Verification } from "../types";
+import type {
+	Account,
+	Session,
+	SignInAttempt,
+	User,
+	Verification,
+} from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import { assertValidUserInfo } from "../utils/validate-user-info";
@@ -293,9 +299,26 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
+		/**
+		 * Create a session row directly on the adapter. Most callers should go
+		 * through `finalizeSignIn` (or `resolveSignIn`) instead: that path
+		 * enforces the primary-factor AMR projection, runs sign-in hooks, and
+		 * participates in the rollback/commit dispatch in `to-auth-endpoints`.
+		 *
+		 * `override` is merged into the persisted row (with `id` stripped —
+		 * sessions must have fresh ids). `override.amr` is **not** validated
+		 * here: callers that pass it take full responsibility for the value
+		 * being a valid `AuthenticationMethodReference[]`. Prefer letting
+		 * `finalizeSignIn` derive AMR from the factor(s) you actually verified
+		 * over hand-rolling it here.
+		 *
+		 * `overrideAll` re-applies the override after the defaults block, so
+		 * caller-supplied `expiresAt` / `userId` / `token` can win; use with
+		 * care.
+		 */
 		createSession: async (
 			userId: string,
-			dontRememberMe?: boolean | undefined,
+			rememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
@@ -324,21 +347,26 @@ export const createInternalAdapter = (
 				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
+				...defaultAdditionalFields,
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
-				 * The cookie will be set to expire at the end of the session
+				 * The cookie will be set to expire at the end of the session.
+				 * Undefined `rememberMe` defaults to remember (persistent).
+				 * Session-replacement flows must resolve the current cookie policy
+				 * before calling `createSession`, because this layer does not read
+				 * browser cookies and cannot infer "inherit the active session".
 				 */
-				expiresAt: dontRememberMe
-					? getDate(60 * 60 * 24, "sec") // 1 day
-					: getDate(sessionExpiration, "sec"),
+				expiresAt:
+					rememberMe === false
+						? getDate(60 * 60 * 24, "sec") // 1 day
+						: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
-				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
 			const res = await createWithHooks(
@@ -1399,5 +1427,202 @@ export const createInternalAdapter = (
 			return data as Verification;
 		},
 		refreshUserSessions,
+		/**
+		 * Compare-and-swap variant of `updateVerificationByIdentifier` scoped to
+		 * the `value` column. Writes `newValue` only when the current stored
+		 * value still equals `expectedValue`. Returns `true` on successful write
+		 * and `false` when another caller already mutated the record (or the
+		 * identifier is missing). Callers that need read-modify-write semantics
+		 * (e.g. an OTP attempt counter) should wrap this in a bounded retry loop
+		 * so concurrent bad-code submissions don't collapse their increments.
+		 *
+		 * DB path is genuinely atomic: `updateMany` filters on both the
+		 * identifier and the expected value, so the database either applies the
+		 * write or returns 0 affected rows. The secondary-storage path falls
+		 * back to get-check-set, which is best-effort under contention because
+		 * generic KV stores lack CAS primitives.
+		 */
+		casUpdateVerificationValue: async (
+			identifier: string,
+			expectedValue: string,
+			newValue: string,
+		): Promise<boolean> => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+				if (parsed && parsed.value === expectedValue) {
+					const updated = { ...parsed, value: newValue };
+					const ttl = getTTLSeconds(
+						updated.expiresAt instanceof Date
+							? updated.expiresAt
+							: new Date(updated.expiresAt),
+					);
+					if (ttl > 0) {
+						await secondaryStorage.set(
+							`verification:${storedIdentifier}`,
+							JSON.stringify(updated),
+							ttl,
+						);
+					}
+					if (!options.verification?.storeInDatabase) {
+						return true;
+					}
+				} else if (!options.verification?.storeInDatabase) {
+					return false;
+				}
+			}
+
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const affected = await currentAdapter.updateMany({
+				model: "verification",
+				where: [
+					{ field: "identifier", value: storedIdentifier },
+					{ field: "value", value: expectedValue },
+				],
+				update: { value: newValue },
+			});
+			return affected === 1;
+		},
+		createSignInAttempt: async (
+			data: Omit<
+				SignInAttempt,
+				"amr" | "createdAt" | "failedVerifications" | "id" | "updatedAt"
+			> &
+				Partial<SignInAttempt>,
+		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			return currentAdapter.create<SignInAttempt>({
+				model: "signInAttempt",
+				data: {
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...data,
+					amr: data.amr ?? [],
+					failedVerifications: data.failedVerifications ?? 0,
+				},
+				// Restoration after a rolled-back sign-in re-inserts the previously
+				// consumed row so retries keep working; that path passes the
+				// original id, which the adapter would otherwise strip.
+				forceAllowId: true,
+			});
+		},
+		findSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const attempt = await currentAdapter.findOne<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			if (!attempt) {
+				return null;
+			}
+			return {
+				...attempt,
+				rememberMe: attempt.rememberMe ?? undefined,
+			};
+		},
+		deleteSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			await currentAdapter.delete({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+		},
+		// Concurrency-only. Contract and non-goals are documented on the
+		// InternalAdapter interface; keep them in sync when editing either side.
+		consumeSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const now = new Date();
+			const attempt = await currentAdapter.findOne<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			// Pre-gate on expiry so we don't commit a sign-in for an attempt that
+			// has already passed its window, even if cleanup hasn't reaped it. The
+			// atomic delete below repeats the same gate so a concurrent cleanup
+			// cannot race us into a false success.
+			if (!attempt || attempt.expiresAt <= now || attempt.lockedAt) {
+				return null;
+			}
+			// Gate the atomic delete on `lockedAt IS NULL` so a concurrent
+			// `recordSignInAttemptFailure` that locked the attempt between our
+			// read and this write cannot be bypassed: the delete misses, we
+			// return null, and the caller sees the verification as rejected.
+			const deleted = await currentAdapter.deleteMany({
+				model: "signInAttempt",
+				where: [
+					{ field: "id", value: id },
+					{ field: "expiresAt", operator: "gt", value: now },
+					{ field: "lockedAt", value: null },
+				],
+			});
+			if (deleted !== 1) {
+				return null;
+			}
+			return {
+				...attempt,
+				rememberMe: attempt.rememberMe ?? undefined,
+			};
+		},
+		recordSignInAttemptFailure: async (
+			id: string,
+			options: { maxAttempts: number },
+		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const MAX_CAS_RETRIES = 5;
+			for (let i = 0; i < MAX_CAS_RETRIES; i++) {
+				const attempt = await currentAdapter.findOne<SignInAttempt>({
+					model: "signInAttempt",
+					where: [{ field: "id", value: id }],
+				});
+				if (!attempt) {
+					return null;
+				}
+				const currentCount = attempt.failedVerifications ?? 0;
+				const nextCount = currentCount + 1;
+				const shouldLock =
+					nextCount >= options.maxAttempts && !attempt.lockedAt;
+				const now = new Date();
+				const affected = await currentAdapter.updateMany({
+					model: "signInAttempt",
+					where: [
+						{ field: "id", value: id },
+						{ field: "failedVerifications", value: currentCount },
+					],
+					update: {
+						failedVerifications: nextCount,
+						...(shouldLock ? { lockedAt: now } : {}),
+						updatedAt: now,
+					},
+				});
+				if (affected === 1) {
+					return {
+						...attempt,
+						failedVerifications: nextCount,
+						...(shouldLock ? { lockedAt: now } : {}),
+						updatedAt: now,
+						rememberMe: attempt.rememberMe ?? undefined,
+					};
+				}
+			}
+			// CAS exhausted under sustained contention. Returning null silently
+			// would mean the per-attempt lockout stops advancing, so surface it
+			// for operators to investigate (indicates either an attacker
+			// flooding verify requests or a pathological retry loop upstream).
+			logger.warn(
+				`recordSignInAttemptFailure: CAS exhausted after ${MAX_CAS_RETRIES} attempts for signInAttempt ${id}`,
+			);
+			return null;
+		},
 	};
 };

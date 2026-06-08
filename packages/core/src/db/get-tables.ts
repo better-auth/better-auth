@@ -143,10 +143,82 @@ export const getAuthTables = (
 					required: true,
 					index: true,
 				},
+				amr: {
+					type: "json",
+					required: true,
+					fieldName: options.session?.fields?.amr || "amr",
+					defaultValue: () => [],
+					input: false,
+				},
 				...session?.fields,
 				...options.session?.additionalFields,
 			},
 			order: 2,
+		},
+	} satisfies BetterAuthDBSchema;
+
+	const shouldAddSignInAttemptTable = (options.plugins ?? []).some(
+		(plugin) => (plugin.signInChallenges?.length ?? 0) > 0,
+	);
+	const signInAttemptTable = {
+		signInAttempt: {
+			modelName: "signInAttempt",
+			fields: {
+				userId: {
+					type: "string",
+					required: true,
+					fieldName: "userId",
+					references: {
+						model: options.user?.modelName || "user",
+						field: "id",
+						onDelete: "cascade",
+					},
+					index: true,
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+					fieldName: "expiresAt",
+					index: true,
+				},
+				rememberMe: {
+					type: "boolean",
+					required: false,
+					fieldName: "rememberMe",
+				},
+				amr: {
+					type: "json",
+					required: true,
+					fieldName: "amr",
+					defaultValue: () => [],
+					input: false,
+				},
+				failedVerifications: {
+					type: "number",
+					required: true,
+					defaultValue: 0,
+					fieldName: "failedVerifications",
+				},
+				lockedAt: {
+					type: "date",
+					required: false,
+					fieldName: "lockedAt",
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					fieldName: "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					onUpdate: () => new Date(),
+					fieldName: "updatedAt",
+				},
+			},
+			order: 5,
 		},
 	} satisfies BetterAuthDBSchema;
 
@@ -297,6 +369,7 @@ export const getAuthTables = (
 		...(!options.secondaryStorage || options.verification?.storeInDatabase
 			? verificationTable
 			: {}),
+		...(shouldAddSignInAttemptTable ? signInAttemptTable : {}),
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;

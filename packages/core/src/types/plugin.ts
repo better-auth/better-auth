@@ -8,7 +8,12 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
+import type {
+	AuthContext,
+	CheckSignInChallengeInput,
+	CheckSignInChallengeResult,
+	GenericEndpointContext,
+} from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -160,4 +165,29 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * Names of sign-in challenge kinds this plugin gates finalization on.
+	 *
+	 * Declaring a non-empty tuple activates the `signInAttempt` schema table
+	 * and enables `resolveSignIn` to pause for this challenge. The tuple is a
+	 * runtime pairing for the type-level `BetterAuthSignInChallengeRegistry`:
+	 * registry augmentation alone is insufficient, because adapters and
+	 * `getAuthTables` need to decide at runtime whether to emit the attempt
+	 * schema.
+	 */
+	signInChallenges?: readonly string[] | undefined;
+	/**
+	 * Invoked by `resolveSignIn` before a fresh sign-in is finalized. Plugins
+	 * can pause sign-in with a typed challenge envelope, attach best-effort
+	 * success-side effects, or return `null` to let the next plugin decide.
+	 *
+	 * Any returned challenge kind must be declared in `signInChallenges` so the
+	 * runtime schema and the type-level registry stay paired.
+	 */
+	checkSignInChallenge?:
+		| ((
+				ctx: GenericEndpointContext,
+				input: CheckSignInChallengeInput,
+		  ) => Awaitable<CheckSignInChallengeResult>)
+		| undefined;
 };

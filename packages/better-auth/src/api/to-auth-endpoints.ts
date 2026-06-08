@@ -5,6 +5,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import { writers } from "@better-auth/core/context/internals";
 import { shouldPublishLog } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import {
@@ -27,6 +28,7 @@ import {
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
+import { expireSessionCookiesInHeaders } from "../cookies";
 import { isAPIError } from "../utils/is-api-error";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
@@ -53,6 +55,107 @@ type Hook = {
 	matcher: (context: HookEndpointContext) => boolean;
 	handler: AuthMiddleware;
 };
+
+function normalizeHeaders(
+	headers:
+		| Headers
+		| Record<string, string>
+		| [string, string][]
+		| null
+		| undefined,
+): Headers {
+	if (headers instanceof Headers) {
+		return headers;
+	}
+	return new Headers(headers ?? undefined);
+}
+
+async function commitFinalizedSignIn(context: InternalContext): Promise<void> {
+	const finalizedSignIn = context.context.getFinalizedSignIn();
+	await finalizedSignIn?.commit?.();
+}
+
+/**
+ * Fires the `onSuccess` closure a finalized sign-in registered with
+ * `finalizeSignIn({ onSuccess })`. Invoked once after-hooks complete without
+ * converting the response into a failure, so any side-effects it writes
+ * (trusted-device rotation, best-effort audit marks) are strictly durable.
+ * Errors are logged and swallowed: the sign-in already succeeded and
+ * best-effort writes must not rebound into an error response.
+ */
+async function runFinalizedSignInOnSuccess(
+	context: InternalContext,
+): Promise<void> {
+	const finalizedSignIn = context.context.getFinalizedSignIn();
+	if (!finalizedSignIn?.onSuccess) {
+		return;
+	}
+	try {
+		await finalizedSignIn.onSuccess();
+	} catch (error) {
+		context.context.logger.error(
+			"Sign-in onSuccess callback failed; sign-in succeeded, side-effect did not.",
+			error,
+		);
+	}
+}
+
+async function rollbackFinalizedSignIn(
+	context: InternalContext,
+): Promise<void> {
+	const finalizedSignIn = context.context.getFinalizedSignIn();
+	if (!finalizedSignIn) {
+		return;
+	}
+	try {
+		await context.context.internalAdapter.deleteSession(
+			finalizedSignIn.session.token,
+		);
+	} catch (error) {
+		context.context.logger.error(
+			"Failed to roll back finalized sign-in after request failure",
+			error,
+		);
+	}
+	// Undo handler-side state the dispatcher cannot reach on its own (e.g. an
+	// atomically-consumed sign-in attempt), so a retry can complete instead of
+	// failing with INVALID_TWO_FACTOR_COOKIE.
+	try {
+		await finalizedSignIn.rollback?.();
+	} catch (error) {
+		context.context.logger.error(
+			"Failed to run sign-in rollback after request failure",
+			error,
+		);
+	}
+	// Finalizers ran before after-hooks, so the session `Set-Cookie` is
+	// already on the outgoing response. Append an expired cookie so the
+	// browser discards the now-orphaned token instead of 401-ing on it.
+	const responseHeaders = context.context.responseHeaders;
+	if (responseHeaders) {
+		expireSessionCookiesInHeaders(
+			responseHeaders,
+			context.context.authCookies,
+			finalizedSignIn.cookiesToExpireOnRollback,
+		);
+	}
+	const ctxWriters = writers(context.context);
+	ctxWriters.setIssuedSession(null);
+	ctxWriters.setFinalizedSignIn(null);
+}
+
+function didSignInSucceed(
+	response: unknown,
+	context: InternalContext,
+): boolean {
+	if (!context.context.getFinalizedSignIn()) {
+		return false;
+	}
+	if (!isAPIError(response)) {
+		return true;
+	}
+	return response.statusCode >= 300 && response.statusCode < 400;
+}
 
 const hooksSourceWeakMap = new WeakMap<
 	AuthMiddleware,
@@ -225,53 +328,48 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 										},
 										() => (endpoint as any)(internalContext as any),
 									),
-							).catch((e: any) => {
+							).catch(async (e: any) => {
 								if (isAPIError(e)) {
 									/**
-									 * API Errors from response are caught
-									 * and returned to hooks.
-									 *
-									 * Headers come from two sources that must both
+									 * API Errors from response are caught and returned to
+									 * hooks. Headers come from two sources that must both
 									 * survive:
-									 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
-									 *   accumulated via c.setCookie / c.setHeader
-									 *   before the throw.
-									 * - `e.headers`: explicit headers on the APIError
-									 *   (e.g. `location` from c.redirect).
+									 * - `kAPIErrorHeaderSymbol`: `ctx.responseHeaders`
+									 *   accumulated via `c.setCookie` / `c.setHeader` before
+									 *   the throw. This is also the seam the deferred sign-in
+									 *   commit writes the session cookie into, so its reference
+									 *   must stay live.
+									 * - `e.headers`: explicit headers on the APIError (e.g.
+									 *   `location` from `c.redirect`).
 									 *
-									 * Start from the accumulated ctx headers, then
-									 * apply e.headers on top — appending `set-cookie`
-									 * and setting others — so explicit APIError
-									 * headers override while cookies accumulate.
+									 * When `c.redirect()` reuses `ctx.responseHeaders` as
+									 * `e.headers` (or the error carries no explicit headers),
+									 * return the accumulated set as-is: copying it would break
+									 * the reference the deferred commit relies on and duplicate
+									 * every `set-cookie`. Only when `e.headers` is a distinct
+									 * explicit set do we merge, appending `set-cookie` and
+									 * overriding the rest.
 									 */
 									const ctxHeaders = (
-										e as {
-											[kAPIErrorHeaderSymbol]?: Headers;
-										}
+										e as { [kAPIErrorHeaderSymbol]?: Headers }
 									)[kAPIErrorHeaderSymbol];
-									/**
-									 * `c.redirect()` (and similar APIError throws) reuse
-									 * `ctx.responseHeaders` as `e.headers`, so when both sources
-									 * reference the same Headers, iterating both duplicates every
-									 * `set-cookie`. Skip the `errHeaders` copy in that case.
-									 */
-									const errHeaders =
-										e.headers && e.headers !== ctxHeaders
-											? new Headers(e.headers)
-											: null;
-									let headers: Headers | null = null;
-									if (ctxHeaders || errHeaders) {
+									let headers: Headers | null;
+									if (ctxHeaders && e.headers && e.headers !== ctxHeaders) {
 										headers = new Headers();
-										ctxHeaders?.forEach((value, key) => {
+										ctxHeaders.forEach((value, key) => {
 											headers!.append(key, value);
 										});
-										errHeaders?.forEach((value, key) => {
+										new Headers(e.headers).forEach((value, key) => {
 											if (key.toLowerCase() === "set-cookie") {
 												headers!.append(key, value);
 											} else {
 												headers!.set(key, value);
 											}
 										});
+									} else {
+										headers =
+											ctxHeaders ??
+											(e.headers ? normalizeHeaders(e.headers) : null);
 									}
 									return {
 										response: e,
@@ -279,6 +377,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 										headers,
 									};
 								}
+								// Non-APIError throw escapes the handler path before
+								// after-hooks get a chance to run; clean up any session
+								// row `finalizeSignIn` may have already persisted.
+								await rollbackFinalizedSignIn(internalContext);
 								throw e;
 							})) as {
 								headers: Headers;
@@ -292,74 +394,136 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							}
 
 							internalContext.context.returned = result.response;
+							result.headers = normalizeHeaders(result.headers);
 							internalContext.context.responseHeaders = result.headers;
-
-							const after = await runAfterHooks(
-								internalContext,
-								afterHooks,
-								endpoint,
-								operationId,
-							);
-
-							if (after.response) {
-								result.response = after.response;
-							}
-
-							if (
-								isAPIError(result.response) &&
-								shouldPublishLog(authContext.logger.level, "debug")
-							) {
-								// inherit stack from errorStack if debug mode is enabled
-								result.response.stack = result.response.errorStack;
-							}
-
-							if (isAPIError(result.response) && !shouldReturnResponse) {
+							try {
 								/**
-								 * Non-response path: we re-throw the raw APIError
-								 * to callers of `auth.api.*`. `result.headers`
-								 * holds the merged ctx + explicit headers (see
-								 * catch block above) — rewrite
-								 * `kAPIErrorHeaderSymbol` with the merged set so
-								 * downstream pipelines (e.g. better-call's
-								 * response builder, or an outer hook catch) see
-								 * the same headers we'd have written on the
-								 * response.
+								 * Commit the session cookie (and any sibling rotations) BEFORE
+								 * after-hooks run so plugins that read `set-cookie` from
+								 * `responseHeaders` (bearer, oidc-provider, mcp) observe the
+								 * freshly issued session. If an after-hook converts the response
+								 * into an error, the DB row is rolled back below; the emitted
+								 * cookie then references a dead session and is rejected on next
+								 * use.
 								 */
-								if (result.headers) {
-									Object.defineProperty(
-										result.response,
-										kAPIErrorHeaderSymbol,
-										{
-											enumerable: false,
-											configurable: true,
-											writable: false,
-											value: result.headers,
-										},
-									);
+								const signInSucceeded = didSignInSucceed(
+									result.response,
+									internalContext,
+								);
+								if (signInSucceeded) {
+									await commitFinalizedSignIn(internalContext);
 								}
-								throw result.response;
-							}
 
-							const response = shouldReturnResponse
-								? toResponse(result.response, {
+								const preHookResponse = result.response;
+								const after = await runAfterHooks(
+									internalContext,
+									afterHooks,
+									endpoint,
+									operationId,
+								);
+
+								if (after.response) {
+									result.response = after.response;
+								}
+
+								/**
+								 * Only roll back when the response actually represents a
+								 * failed sign-in. A 3xx redirect is a successful auth outcome
+								 * regardless of whether it was the handler's own response or
+								 * an after-hook replacement (e.g. oidc-provider redirecting
+								 * to the consent page after /sign-in/email).
+								 */
+								const isRedirectResponse =
+									isAPIError(result.response) &&
+									result.response.statusCode >= 300 &&
+									result.response.statusCode < 400;
+								const afterHooksReplacedResponse =
+									result.response !== preHookResponse;
+								const shouldRollback =
+									isAPIError(result.response) &&
+									!isRedirectResponse &&
+									(!signInSucceeded || afterHooksReplacedResponse);
+								if (shouldRollback) {
+									await rollbackFinalizedSignIn(internalContext);
+								}
+
+								if (
+									isAPIError(result.response) &&
+									shouldPublishLog(authContext.logger.level, "debug")
+								) {
+									// inherit stack from errorStack if debug mode is enabled
+									result.response.stack = result.response.errorStack;
+								}
+
+								if (isAPIError(result.response) && !shouldReturnResponse) {
+									// Non-response path: the raw APIError is re-thrown to callers
+									// of `auth.api.*`. `result.headers` holds the merged ctx +
+									// explicit headers (see catch above); rewrite
+									// `kAPIErrorHeaderSymbol` with the merged set so downstream
+									// pipelines (better-call's response builder, or an outer hook
+									// catch) see the same headers we'd have written on the
+									// response.
+									//
+									// `throw` falls into the outer catch which rolls back;
+									// firing `onSuccess` *before* the throw would leak its
+									// side-effects when the rollback expires the session.
+									if (result.headers) {
+										Object.defineProperty(
+											result.response,
+											kAPIErrorHeaderSymbol,
+											{
+												enumerable: false,
+												configurable: true,
+												writable: false,
+												value: result.headers,
+											},
+										);
+									}
+									throw result.response;
+								}
+
+								if (!shouldRollback && signInSucceeded) {
+									// After-hooks accepted the sign-in and the redirect path
+									// has had its chance to unwind. Fire post-success
+									// side-effects now, when the outcome is confirmed. This
+									// keeps durable writes (trusted-device rotation etc.) out
+									// of the commit window and eliminates the need for a
+									// paired rollback.
+									await runFinalizedSignInOnSuccess(internalContext);
+								}
+
+								let response: unknown;
+								if (shouldReturnResponse) {
+									response = toResponse(result.response, {
 										headers: result.headers,
 										status: result.status,
-									})
-								: context?.returnHeaders
-									? context?.returnStatus
-										? {
-												headers: result.headers,
-												response: result.response,
-												status: result.status,
-											}
-										: {
-												headers: result.headers,
-												response: result.response,
-											}
-									: context?.returnStatus
-										? { response: result.response, status: result.status }
-										: result.response;
-							return response;
+									});
+								} else if (context?.returnHeaders) {
+									if (context?.returnStatus) {
+										response = {
+											headers: result.headers,
+											response: result.response,
+											status: result.status,
+										};
+									} else {
+										response = {
+											headers: result.headers,
+											response: result.response,
+										};
+									}
+								} else if (context?.returnStatus) {
+									response = {
+										response: result.response,
+										status: result.status,
+									};
+								} else {
+									response = result.response;
+								}
+								return response;
+							} catch (error) {
+								await rollbackFinalizedSignIn(internalContext);
+								throw error;
+							}
 						}),
 				);
 			};

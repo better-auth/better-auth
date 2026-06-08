@@ -4,6 +4,7 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
@@ -12,6 +13,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { serializeCookie } from "better-call";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -123,7 +125,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const accountData = createCookie("account_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
-	const dontRememberToken = createCookie("dont_remember");
+	const sessionOnlyToken = createCookie("session_only");
 	return {
 		sessionToken: {
 			name: sessionToken.name,
@@ -137,9 +139,9 @@ export function getCookies(options: BetterAuthOptions) {
 			name: sessionData.name,
 			attributes: sessionData.attributes,
 		},
-		dontRememberToken: {
-			name: dontRememberToken.name,
-			attributes: dontRememberToken.attributes,
+		sessionOnlyToken: {
+			name: sessionOnlyToken.name,
+			attributes: sessionOnlyToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
@@ -148,13 +150,37 @@ export function getCookies(options: BetterAuthOptions) {
 	};
 }
 
+/**
+ * New authentication flows default to persistent sessions unless the caller
+ * explicitly opted into a session-only cookie.
+ */
+export function normalizeRememberMe(rememberMe?: boolean): boolean {
+	return rememberMe !== false;
+}
+
+/**
+ * Session-replacement flows must preserve the current cookie policy explicitly
+ * before they create the replacement session row. `createSession()` cannot
+ * infer this from the request, because only the cookie layer knows whether the
+ * browser opted into session-only mode.
+ */
+export async function getSessionCookieRememberMe(
+	ctx: GenericEndpointContext,
+): Promise<boolean> {
+	const sessionOnlyCookie = await ctx.getSignedCookie(
+		ctx.context.authCookies.sessionOnlyToken.name,
+		ctx.context.secret,
+	);
+	return !sessionOnlyCookie;
+}
+
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe: boolean,
+	rememberMe: boolean,
 ) {
 	if (!ctx.context.options.session?.cookieCache?.enabled) {
 		return;
@@ -187,9 +213,9 @@ export async function setCookieCache(
 
 	const options = {
 		...ctx.context.authCookies.sessionData.attributes,
-		maxAge: dontRememberMe
-			? undefined
-			: ctx.context.authCookies.sessionData.attributes.maxAge,
+		maxAge: rememberMe
+			? ctx.context.authCookies.sessionData.attributes.maxAge
+			: undefined,
 	};
 
 	const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
@@ -265,27 +291,37 @@ export async function setCookieCache(
 	}
 }
 
+/**
+ * Writes the session cookie (and any supporting cookies) and pins the session
+ * onto `ctx.context.issuedSession` so downstream after-hooks and plugins
+ * observe the same session the browser just received.
+ *
+ * **Invariant:** any code path that publishes the session cookie for a given
+ * request must also mirror the session into request state via
+ * `writers(ctx.context).setIssuedSession(session)` (done here). Do not write
+ * `better-auth.session_token` via `ctx.setSignedCookie` directly without
+ * mirroring the in-memory state, otherwise after-hooks will see a stale (or
+ * missing) session and make wrong decisions about what to do next (e.g.
+ * whether to stamp lastLoginMethod, whether to sync multi-session, etc.).
+ */
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe?: boolean | undefined,
+	rememberMe?: boolean | undefined,
 	overrides?: Partial<CookieOptions> | undefined,
 ) {
-	const dontRememberMeCookie = await ctx.getSignedCookie(
-		ctx.context.authCookies.dontRememberToken.name,
-		ctx.context.secret,
-	);
-	// if dontRememberMe is not set, use the cookie value
-	dontRememberMe =
-		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
+	// if rememberMe is not set, inherit from the session-only cookie: its
+	// presence means the browser previously opted into session-only.
+	rememberMe =
+		rememberMe !== undefined
+			? rememberMe
+			: await getSessionCookieRememberMe(ctx);
 
 	const options = ctx.context.authCookies.sessionToken.attributes;
-	const maxAge = dontRememberMe
-		? undefined
-		: ctx.context.sessionConfig.expiresIn;
+	const maxAge = rememberMe ? ctx.context.sessionConfig.expiresIn : undefined;
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
@@ -297,16 +333,16 @@ export async function setSessionCookie(
 		},
 	);
 
-	if (dontRememberMe) {
+	if (!rememberMe) {
 		await ctx.setSignedCookie(
-			ctx.context.authCookies.dontRememberToken.name,
+			ctx.context.authCookies.sessionOnlyToken.name,
 			"true",
 			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.attributes,
+			ctx.context.authCookies.sessionOnlyToken.attributes,
 		);
 	}
-	await setCookieCache(ctx, session, dontRememberMe);
-	ctx.context.setNewSession(session);
+	await setCookieCache(ctx, session, rememberMe);
+	writers(ctx.context).setIssuedSession(session);
 }
 
 type CookieScrubView = GenericEndpointContext & {
@@ -384,7 +420,7 @@ export function expireCookie(
 
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
-	skipDontRememberMe?: boolean | undefined,
+	skipSessionOnly?: boolean | undefined,
 ) {
 	expireCookie(ctx, ctx.context.authCookies.sessionToken);
 	expireCookie(ctx, ctx.context.authCookies.sessionData);
@@ -415,8 +451,39 @@ export function deleteSessionCookie(
 	const cleanCookies = sessionStore.clean();
 	sessionStore.setCookies(cleanCookies);
 
-	if (!skipDontRememberMe) {
-		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+	if (!skipSessionOnly) {
+		expireCookie(ctx, ctx.context.authCookies.sessionOnlyToken);
+	}
+}
+
+/**
+ * Append expired `Set-Cookie` headers for every auth cookie produced by
+ * `setSessionCookie`, plus any plugin-issued cookies tied to the same
+ * sign-in (collected via `FinalizedSignIn.cookiesToExpireOnRollback`).
+ * Used during sign-in rollback (after-hook errors) to retract cookies that
+ * were already emitted before the DB session was deleted, avoiding a window
+ * where the browser holds a token (or a marker pointing at one) that no
+ * longer exists server-side.
+ */
+export function expireSessionCookiesInHeaders(
+	headers: Headers,
+	authCookies: BetterAuthCookies,
+	extras: readonly BetterAuthCookie[] = [],
+) {
+	const expire = (cookie: BetterAuthCookie) => {
+		headers.append(
+			"set-cookie",
+			serializeCookie(cookie.name, "", {
+				...cookie.attributes,
+				maxAge: 0,
+			}),
+		);
+	};
+	expire(authCookies.sessionToken);
+	expire(authCookies.sessionData);
+	expire(authCookies.sessionOnlyToken);
+	for (const extra of extras) {
+		expire(extra);
 	}
 }
 
