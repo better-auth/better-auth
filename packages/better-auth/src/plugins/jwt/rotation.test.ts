@@ -56,7 +56,7 @@ describe("jwt rotation", async () => {
 	it("should return keys within grace period", async () => {
 		vi.useFakeTimers();
 		const storage: Jwk[] = [];
-		const rotationInterval = 1; // 1 second
+		const rotationInterval = 10; // 10 seconds
 		const gracePeriod = 1; // 1 second
 
 		const { auth } = await getTestInstance({
@@ -85,7 +85,7 @@ describe("jwt rotation", async () => {
 		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
 
 		// Advance time past rotation interval but within grace period
-		vi.advanceTimersByTime(1100);
+		vi.advanceTimersByTime(10_100);
 
 		// Trigger rotation by signing
 		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });

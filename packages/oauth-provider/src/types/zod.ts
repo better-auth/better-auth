@@ -1,5 +1,6 @@
 import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
+import { supportedPromptValues } from ".";
 
 /**
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
@@ -8,6 +9,34 @@ import * as z from "zod";
 export { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
+const supportedPromptValueSet = new Set<string>(supportedPromptValues);
+
+const authorizationPromptSchema = z.string().superRefine((value, ctx) => {
+	const prompts = value.split(" ");
+	if (prompts.length === 0 || prompts.some((prompt) => prompt.length === 0)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "prompt must be a space-delimited list of supported values",
+		});
+		return;
+	}
+	const unsupportedPrompt = prompts.find(
+		(prompt) => !supportedPromptValueSet.has(prompt),
+	);
+	if (unsupportedPrompt) {
+		ctx.addIssue({
+			code: "custom",
+			message: "prompt contains an unsupported value",
+		});
+		return;
+	}
+	if (prompts.includes("none") && prompts.length > 1) {
+		ctx.addIssue({
+			code: "custom",
+			message: "prompt value none cannot be combined with other prompt values",
+		});
+	}
+});
 
 /**
  * Validates an RFC 8707 resource indicator. The value must be an absolute URI
@@ -55,7 +84,7 @@ export const authorizationQuerySchema = z
 		scope: z.string().optional(),
 		state: z.string().optional(),
 		client_id: z.string(),
-		prompt: z.string().optional(),
+		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),
 		max_age: z.coerce.number().int().nonnegative().optional(),

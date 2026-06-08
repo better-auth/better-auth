@@ -15,8 +15,8 @@ import { parseClientMetadata, resolveSessionAuthTime } from "./utils";
  * @see https://openid.net/specs/openid-connect-core-1_0.html#IDToken
  */
 export const LEVEL_0_ACR = "0";
-export const DEFAULT_ACR_VALUES_SUPPORTED = [LEVEL_0_ACR] as const;
-export const DEFAULT_ID_TOKEN_SIGNING_ALGORITHM = DEFAULT_JWT_ALGORITHM;
+const DEFAULT_ACR_VALUES_SUPPORTED = [LEVEL_0_ACR] as const;
+const DEFAULT_ID_TOKEN_SIGNING_ALGORITHM = DEFAULT_JWT_ALGORITHM;
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([
 	"iss",

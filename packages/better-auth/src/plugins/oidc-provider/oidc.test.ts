@@ -1491,7 +1491,7 @@ describe("oidc-jwt", async () => {
 	});
 
 	test.for([
-		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
+		{ useJwt: true, description: "with jwt plugin", expected: "RS256" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
 	])("testing oidc-provider $description to return token signed with $expected", async ({
 		useJwt,

@@ -27,11 +27,20 @@ type InternallySupportedScopes =
 	| "email"
 	| "offline_access";
 export type Scope = LiteralString | InternallySupportedScopes;
-export type Prompt = "none" | "consent" | "login" | "create" | "select_account";
+export const supportedPromptValues = [
+	"login",
+	"consent",
+	"create",
+	"select_account",
+	"none",
+] as const;
+export type Prompt = (typeof supportedPromptValues)[number];
+type InteractivePrompt = Exclude<Prompt, "none">;
 export type AuthorizePrompt =
 	| Prompt
-	| "login consent"
-	| "select_account consent";
+	| `${InteractivePrompt} ${InteractivePrompt}`
+	| `${InteractivePrompt} ${InteractivePrompt} ${InteractivePrompt}`
+	| `${InteractivePrompt} ${InteractivePrompt} ${InteractivePrompt} ${InteractivePrompt}`;
 
 /**
  * Describes how to resolve a `client_id` from an external source (a URL-based

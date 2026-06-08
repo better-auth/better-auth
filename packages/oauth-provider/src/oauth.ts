@@ -36,7 +36,11 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
+import {
+	authorizationQuerySchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
@@ -553,33 +557,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
-					query: z.object({
-						response_type: z
-							.string()
-							.pipe(z.enum(["code"]))
-							.optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						display: z.string().optional(),
-						ui_locales: z.string().optional(),
-						max_age: z.coerce.number().int().nonnegative().optional(),
-						acr_values: z.string().optional(),
-						login_hint: z.string().optional(),
-						id_token_hint: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z
-							.string()
-							.pipe(z.enum(["S256"]))
-							.optional(),
-						nonce: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						prompt: z.string().optional(),
-					}),
+					query: authorizationQuerySchema,
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },

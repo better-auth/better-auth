@@ -85,7 +85,7 @@ type ValidationErrorHookArgs = {
 
 type ValidationErrorHook = (args: ValidationErrorHookArgs) => unknown;
 
-export interface OAuthEndpointExtras {
+interface OAuthEndpointExtras {
 	/**
 	 * Invoked when validation fails. Presence switches delivery from a JSON
 	 * `APIError` envelope to this callback, which receives the request
@@ -113,7 +113,11 @@ export interface OAuthEndpointExtras {
 	defaultError?: OAuthErrorCode;
 }
 
-type OAuthEndpointExtraKey = keyof OAuthEndpointExtras;
+type OAuthEndpointExtraKey =
+	| "redirectOnError"
+	| "onValidationError"
+	| "errorCodesByField"
+	| "defaultError";
 
 type OAuthEndpointOptions<Options extends EndpointOptions> =
 	Omit<Options, OAuthEndpointExtraKey> extends EndpointOptions

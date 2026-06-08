@@ -7,6 +7,7 @@ import {
 } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
+import { supportedPromptValues } from "./types";
 import type {
 	AuthServerMetadata,
 	GrantType,
@@ -134,13 +135,7 @@ export function oidcServerMetadata(
 		}),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: [...getAcrValuesSupported(opts)],
-		prompt_values_supported: [
-			"login",
-			"consent",
-			"create",
-			"select_account",
-			"none",
-		],
+		prompt_values_supported: [...supportedPromptValues],
 	};
 	return {
 		...metadata,

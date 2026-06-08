@@ -161,6 +161,46 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("oauth2Authorize (redirect delivery)", () => {
+		it("unsupported prompt value → invalid_request", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const state = "opaque-state-prompt";
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				prompt: "not_a_prompt",
+				state,
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			expect(location).toBeTruthy();
+			const errorUrl = new URL(location!);
+			expect(location!.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+			expect(errorUrl.searchParams.get("error_description")).toMatch(/prompt/);
+			expect(errorUrl.searchParams.get("state")).toBe(state);
+		});
+
+		it("prompt=none combined with another prompt → invalid_request", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				prompt: "none login",
+				state: "opaque-state-prompt-none",
+			}).toString();
+			const { location } = await captureRedirect(`/oauth2/authorize?${qs}`);
+			expect(location).toBeTruthy();
+			const errorUrl = new URL(location!);
+			expect(location!.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+			expect(errorUrl.searchParams.get("error_description")).toMatch(/none/);
+		});
+
 		it("unsupported response_type=token → error in fragment (OIDC §5)", async () => {
 			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
 			const state = "opaque-state-abc";
