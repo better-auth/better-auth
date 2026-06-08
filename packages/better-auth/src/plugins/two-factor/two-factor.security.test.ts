@@ -9,7 +9,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
 import { twoFactor } from ".";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import type { TwoFactorMethod, TwoFactorTotpSecret } from "./types";
 
 /**
  * Regression coverage for the duplicate `Set-Cookie` leak on a 2FA-required
@@ -109,28 +109,31 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		},
 	});
 
-	const enrollment = await auth.api.enableTwoFactor({
+	const enrollment = await auth.api.enableTwoFactorTotp({
 		body: { password: testUser.password },
 		headers,
 	});
-	if (enrollment.method !== "totp") {
+	if (enrollment.method.kind !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
-	const row = await db.findOne<TwoFactorTable>({
-		model: "twoFactor",
-		where: [{ field: "userId", value: userId }],
+	const row = await db.findOne<TwoFactorTotpSecret>({
+		model: "twoFactorTotp",
+		where: [{ field: "methodId", value: enrollment.method.id }],
 	});
 	const secret = await symmetricDecrypt({
 		key: DEFAULT_SECRET,
 		data: row!.secret,
 	});
 	const totpCode = await createOTP(secret).totp();
-	await auth.api.verifyTOTP({ body: { code: totpCode }, headers });
-	const verified = await db.findOne<UserWithTwoFactor>({
-		model: "user",
-		where: [{ field: "id", value: userId }],
+	await auth.api.verifyTwoFactor({
+		body: { methodId: enrollment.method.id, code: totpCode },
+		headers,
 	});
-	if (!verified?.twoFactorEnabled) {
+	const verified = await db.findOne<TwoFactorMethod>({
+		model: "twoFactorMethod",
+		where: [{ field: "id", value: enrollment.method.id }],
+	});
+	if (!verified?.verifiedAt) {
 		throw new Error("failed to enable 2FA for test user");
 	}
 
@@ -185,7 +188,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		}
 
 		const twoFactorEntry = setCookies.find((entry) =>
-			entry.startsWith("better-auth.two_factor="),
+			entry.startsWith("better-auth.two_factor_challenge="),
 		);
 		expect(twoFactorEntry).toBeDefined();
 	});
@@ -221,33 +224,31 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 	});
 
 	const { headers } = await signInWithTestUser();
-	const enrollment = await auth.api.enableTwoFactor({
+	const enrollment = await auth.api.enableTwoFactorTotp({
 		body: { password: testUser.password },
 		headers,
 	});
-	if (enrollment.method !== "totp") {
+	if (enrollment.method.kind !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
-	const dbUser = await db.findOne<User>({
-		model: "user",
-		where: [{ field: "email", value: testUser.email }],
-	});
-	const userId = dbUser?.id as string;
-	const row = await db.findOne<TwoFactorTable>({
-		model: "twoFactor",
-		where: [{ field: "userId", value: userId }],
+	const row = await db.findOne<TwoFactorTotpSecret>({
+		model: "twoFactorTotp",
+		where: [{ field: "methodId", value: enrollment.method.id }],
 	});
 	const secret = await symmetricDecrypt({
 		key: DEFAULT_SECRET,
 		data: row!.secret,
 	});
 	const totpCode = await createOTP(secret).totp();
-	await auth.api.verifyTOTP({ body: { code: totpCode }, headers });
-	const verified = await db.findOne<UserWithTwoFactor>({
-		model: "user",
-		where: [{ field: "id", value: userId }],
+	await auth.api.verifyTwoFactor({
+		body: { methodId: enrollment.method.id, code: totpCode },
+		headers,
 	});
-	if (!verified?.twoFactorEnabled) {
+	const verified = await db.findOne<TwoFactorMethod>({
+		model: "twoFactorMethod",
+		where: [{ field: "id", value: enrollment.method.id }],
+	});
+	if (!verified?.verifiedAt) {
 		throw new Error("failed to enable 2FA for test user");
 	}
 
@@ -323,23 +324,26 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 		entry.startsWith("better-auth.session_data."),
 	);
 
-	const enrollment = await auth.api.enableTwoFactor({
+	const enrollment = await auth.api.enableTwoFactorTotp({
 		body: { password: testUser.password },
 		headers,
 	});
-	if (enrollment.method !== "totp") {
+	if (enrollment.method.kind !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
-	const row = await db.findOne<TwoFactorTable>({
-		model: "twoFactor",
-		where: [{ field: "userId", value: userId }],
+	const row = await db.findOne<TwoFactorTotpSecret>({
+		model: "twoFactorTotp",
+		where: [{ field: "methodId", value: enrollment.method.id }],
 	});
 	const secret = await symmetricDecrypt({
 		key: DEFAULT_SECRET,
 		data: row!.secret,
 	});
 	const totpCode = await createOTP(secret).totp();
-	await auth.api.verifyTOTP({ body: { code: totpCode }, headers });
+	await auth.api.verifyTwoFactor({
+		body: { methodId: enrollment.method.id, code: totpCode },
+		headers,
+	});
 
 	it("test setup exercises chunked session_data cookies", () => {
 		expect(chunkProbeRes.status).toBe(200);

@@ -1,41 +1,68 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "@better-auth/core/api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware } from "../../api";
 import {
-	deleteSessionCookie,
-	expireCookie,
-	setSessionCookie,
-} from "../../cookies";
-import { symmetricEncrypt } from "../../crypto";
+	constantTimeEqual,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
+import type { User } from "../../types";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
-import type { BackupCodeOptions } from "./backup-codes";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
-import {
-	TRUST_DEVICE_COOKIE_MAX_AGE,
-	TRUST_DEVICE_COOKIE_NAME,
-	TWO_FACTOR_COOKIE_NAME,
-} from "./constant";
+import { checkTwoFactor, getPendingTwoFactorAttemptId } from "./check";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import { otp2fa } from "./otp";
+import {
+	createTotpMethod,
+	deleteAllMethodsForUser,
+	deleteMethod,
+	ensureOtpMethod,
+	ensureRecoveryMethod,
+	findUserTwoFactorMethod,
+	getTotpMaterial,
+	isInteractiveMethodKind,
+	isVerifiedMethod,
+	listChallengeMethodDescriptors,
+	listTwoFactorMethods,
+	markMethodVerified,
+	toMethodDescriptor,
+	touchMethodUsage,
+} from "./methods";
+import {
+	consumeRecoveryCode,
+	generateRecoveryCodes,
+	replaceRecoveryCodes,
+} from "./recovery-codes";
+import { resolveTwoFactorVerification } from "./resolve-two-factor-verification";
 import { schema } from "./schema";
-import { totp2fa } from "./totp";
+import {
+	listTrustedDevices,
+	revokeAllTrustedDevices,
+	revokeTrustedDevice,
+} from "./trust-device";
 import type {
+	OTPOptions,
+	RecoveryCodeOptions,
+	TwoFactorMethod,
 	TwoFactorOptions,
-	TwoFactorTable,
-	UserWithTwoFactor,
 } from "./types";
+import { defaultKeyHasher } from "./utils";
 
 export * from "./error-code";
+export type {
+	FinalizeTwoFactorVerificationResolver,
+	SessionTwoFactorVerificationResolver,
+	TwoFactorVerificationResolver,
+	TwoFactorVerifyResponse,
+} from "./resolve-two-factor-verification";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -44,550 +71,669 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
-	const opts = {
-		twoFactorTable: "twoFactor",
+
+function getOTPSettings(options?: OTPOptions | undefined) {
+	return {
+		storeOTP: "plain" as const,
+		digits: 6,
+		...options,
+		period: (options?.period || 3) * 60 * 1000,
 	};
-	const trustDeviceMaxAge =
-		options?.trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
-	const allowPasswordless = options?.allowPasswordless;
-	const backupCodeOptions = {
-		storeBackupCodes: "encrypted",
-		...options?.backupCodeOptions,
-	} satisfies BackupCodeOptions;
-	const totp = totp2fa({
-		...options?.totpOptions,
-		allowPasswordless:
-			options?.totpOptions?.allowPasswordless ?? allowPasswordless,
+}
+
+function buildOtpVerificationIdentifier(key: string, methodId: string): string {
+	return `2fa-code-${key}:${methodId}`;
+}
+
+async function storeOTPCode(
+	ctx: GenericEndpointContext,
+	otp: string,
+	options: ReturnType<typeof getOTPSettings>,
+) {
+	if (options.storeOTP === "hashed") {
+		return defaultKeyHasher(otp);
+	}
+	if (typeof options.storeOTP === "object" && "hash" in options.storeOTP) {
+		return options.storeOTP.hash(otp);
+	}
+	if (typeof options.storeOTP === "object" && "encrypt" in options.storeOTP) {
+		return options.storeOTP.encrypt(otp);
+	}
+	if (options.storeOTP === "encrypted") {
+		return symmetricEncrypt({
+			key: ctx.context.secretConfig,
+			data: otp,
+		});
+	}
+	return otp;
+}
+
+async function decodeOTPForComparison(
+	ctx: GenericEndpointContext,
+	storedCode: string,
+	userInput: string,
+	options: ReturnType<typeof getOTPSettings>,
+): Promise<[string, string]> {
+	if (options.storeOTP === "hashed") {
+		return [storedCode, await defaultKeyHasher(userInput)];
+	}
+	if (options.storeOTP === "encrypted") {
+		const decrypted = await symmetricDecrypt({
+			key: ctx.context.secretConfig,
+			data: storedCode,
+		});
+		return [decrypted, userInput];
+	}
+	if (typeof options.storeOTP === "object" && "encrypt" in options.storeOTP) {
+		return [await options.storeOTP.decrypt(storedCode), userInput];
+	}
+	if (typeof options.storeOTP === "object" && "hash" in options.storeOTP) {
+		return [storedCode, await options.storeOTP.hash(userInput)];
+	}
+	return [storedCode, userInput];
+}
+
+async function requirePasswordIfNeeded(
+	ctx: GenericEndpointContext,
+	userId: string,
+	password?: string,
+): Promise<void> {
+	const passwordRequired = await shouldRequirePassword(ctx, userId);
+	if (!passwordRequired) {
+		return;
+	}
+	if (!password) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+	}
+	const validPassword = await validatePassword(ctx, { password, userId });
+	if (!validPassword) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+	}
+}
+
+async function issueRecoveryCodesIfMissing(
+	ctx: GenericEndpointContext,
+	userId: string,
+	options?: RecoveryCodeOptions | undefined,
+) {
+	const { method, created } = await ensureRecoveryMethod(ctx, userId);
+	if (!created) {
+		return {
+			method,
+			recoveryCodes: null as string[] | null,
+		};
+	}
+	const recoveryCodes = generateRecoveryCodes(options);
+	await replaceRecoveryCodes(ctx, method.id, recoveryCodes);
+	return {
+		method,
+		recoveryCodes,
+	};
+}
+
+async function sendOTPCode(
+	ctx: GenericEndpointContext,
+	data: {
+		key: string;
+		user: User;
+		method: TwoFactorMethod;
+		options: ReturnType<typeof getOTPSettings>;
+	},
+) {
+	if (!data.options.sendOTP) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			TWO_FACTOR_ERROR_CODES.CODE_DELIVERY_NOT_SUPPORTED,
+		);
+	}
+
+	const code = generateRandomString(data.options.digits, "0-9");
+	const storedCode = await storeOTPCode(ctx, code, data.options);
+	const identifier = buildOtpVerificationIdentifier(data.key, data.method.id);
+	await ctx.context.internalAdapter
+		.deleteVerificationByIdentifier(identifier)
+		.catch(() => {});
+	await ctx.context.internalAdapter.createVerificationValue({
+		value: `${storedCode}:0`,
+		identifier,
+		expiresAt: new Date(Date.now() + data.options.period),
 	});
-	const backupCode = backupCode2fa({
-		...backupCodeOptions,
-		allowPasswordless:
-			options?.backupCodeOptions?.allowPasswordless ?? allowPasswordless,
-	});
-	const otp = otp2fa(options?.otpOptions);
+	await data.options.sendOTP(
+		{
+			user: data.user,
+			otp: code,
+		},
+		ctx,
+	);
+}
+
+export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
+	const otpOptions = getOTPSettings(options?.otpOptions);
+	const recoveryCodeOptions = options?.recoveryCodeOptions;
 	const passwordSchema = z.string().meta({
 		description: "User password",
 	});
-	const methodField = z.enum(["otp", "totp"]).default("totp").meta({
-		description:
-			"The 2FA method to enable. 'totp' generates an authenticator app secret (requires verification). 'otp' enables email/SMS-based codes immediately.",
+	const methodIdSchema = z.string().meta({
+		description: "Two-factor method identifier",
 	});
-	const issuerField = z
-		.string()
-		.meta({
-			description: "Custom issuer for the TOTP URI",
-		})
-		.optional();
-	const enableTwoFactorBodySchema = allowPasswordless
-		? z.object({
-				password: passwordSchema.optional(),
-				method: methodField,
-				issuer: issuerField,
-			})
-		: z.object({
-				password: passwordSchema,
-				method: methodField,
-				issuer: issuerField,
-			});
-	const disableTwoFactorBodySchema = allowPasswordless
-		? z.object({
-				password: passwordSchema.optional(),
-			})
-		: z.object({
-				password: passwordSchema,
-			});
 
 	return {
 		id: "two-factor",
 		version: PACKAGE_VERSION,
+		signInChallenges: ["two-factor"] as const,
+		checkSignInChallenge: checkTwoFactor,
 		endpoints: {
-			...totp.endpoints,
-			...otp.endpoints,
-			...backupCode.endpoints,
-			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/enable`
-			 *
-			 * ### API Methods
-			 *
-			 * **server:**
-			 * `auth.api.enableTwoFactor`
-			 *
-			 * **client:**
-			 * `authClient.twoFactor.enable`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-enable)
-			 */
-			enableTwoFactor: createAuthEndpoint(
-				"/two-factor/enable",
+			enableTwoFactorTotp: createAuthEndpoint(
+				"/two-factor/enable-totp",
 				{
 					method: "POST",
-					body: enableTwoFactorBodySchema,
-					use: [sessionMiddleware],
-					metadata: {
-						openapi: {
-							summary: "Enable two factor authentication",
-							description:
-								"Enable two factor authentication. Pass method 'totp' (default) to set up an authenticator app (returns TOTP URI and backup codes), or 'otp' to enable email/SMS-based codes immediately.",
-							responses: {
-								200: {
-									description: "Successful response",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													method: {
-														type: "string",
-														enum: ["otp", "totp"],
-														description: "The 2FA method that was enabled.",
-													},
-													totpURI: {
-														type: "string",
-														description:
-															"TOTP URI for authenticator app setup. Only present when method is 'totp'.",
-													},
-													backupCodes: {
-														type: "array",
-														items: {
-															type: "string",
-														},
-														description:
-															"Recovery backup codes. Only present when method is 'totp'.",
-													},
-												},
-												required: ["method"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						password: passwordSchema.optional(),
+						label: z.string().optional(),
+						issuer: z.string().optional(),
+					}),
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password, issuer, method } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
-						ctx,
-						user.id,
-						allowPasswordless,
-					);
-					if (requirePassword) {
-						if (!password) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
-						}
-						const isPasswordValid = await validatePassword(ctx, {
-							password,
-							userId: user.id,
-						});
-						if (!isPasswordValid) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
-						}
-					}
-
-					if (method === "otp" && !options?.otpOptions?.sendOTP) {
+					const user = ctx.context.session.user;
+					if (options?.totpOptions?.disable) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							TWO_FACTOR_ERROR_CODES.OTP_NOT_CONFIGURED,
-						);
-					}
-					if (method === "totp" && options?.totpOptions?.disable) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							TWO_FACTOR_ERROR_CODES.TOTP_NOT_CONFIGURED,
+							TWO_FACTOR_ERROR_CODES.CODE_DELIVERY_NOT_SUPPORTED,
 						);
 					}
 
-					if (method === "otp") {
-						const updatedUser = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								twoFactorEnabled: true,
-							},
-						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
-						return ctx.json({ method: "otp" as const });
-					}
-
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secretConfig,
-						backupCodeOptions,
-					);
-					const existingTwoFactor =
-						await ctx.context.adapter.findOne<TwoFactorTable>({
-							model: opts.twoFactorTable,
-							where: [{ field: "userId", value: user.id }],
-						});
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secretConfig,
 						data: secret,
 					});
-					if (options?.skipVerificationOnEnable) {
-						const updatedUser = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								twoFactorEnabled: true,
-							},
-						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
-					}
-					const totpData = {
+					const verifiedAt = options?.skipVerificationOnEnable
+						? new Date()
+						: null;
+					const method = await createTotpMethod(ctx, {
+						userId: user.id,
+						label: ctx.body.label,
 						secret: encryptedSecret,
-						backupCodes: backupCodes.encryptedBackupCodes,
-						verified:
-							(existingTwoFactor != null &&
-								existingTwoFactor.verified === true) ||
-							!!options?.skipVerificationOnEnable,
-					};
-					if (existingTwoFactor) {
-						await ctx.context.adapter.update({
-							model: opts.twoFactorTable,
-							update: totpData,
-							where: [{ field: "id", value: existingTwoFactor.id }],
-						});
-					} else {
-						await ctx.context.adapter.create({
-							model: opts.twoFactorTable,
-							data: { ...totpData, userId: user.id },
-						});
-					}
+						verifiedAt,
+					});
+					const recovery = await issueRecoveryCodesIfMissing(
+						ctx,
+						user.id,
+						recoveryCodeOptions,
+					);
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
-					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
+					}).url(
+						ctx.body.issuer || options?.issuer || ctx.context.appName,
+						user.email,
+					);
+
 					return ctx.json({
-						method: "totp" as const,
+						method: toMethodDescriptor(method),
 						totpURI,
-						backupCodes: backupCodes.backupCodes,
+						recoveryCodes: recovery.recoveryCodes,
 					});
 				},
 			),
-			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/disable`
-			 *
-			 * ### API Methods
-			 *
-			 * **server:**
-			 * `auth.api.disableTwoFactor`
-			 *
-			 * **client:**
-			 * `authClient.twoFactor.disable`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-disable)
-			 */
+			getTwoFactorTotpUri: createAuthEndpoint(
+				"/two-factor/get-totp-uri",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						password: passwordSchema.optional(),
+						methodId: methodIdSchema,
+					}),
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
+					const method = await findUserTwoFactorMethod(
+						ctx,
+						user.id,
+						ctx.body.methodId,
+					);
+					if (!method || method.kind !== "totp") {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_FOUND,
+						);
+					}
+					const material = await getTotpMaterial(ctx, method.id);
+					if (!material) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_READY,
+						);
+					}
+					const secret = await symmetricDecrypt({
+						key: ctx.context.secretConfig,
+						data: material.secret,
+					});
+					const totpURI = createOTP(secret, {
+						digits: options?.totpOptions?.digits || 6,
+						period: options?.totpOptions?.period,
+					}).url(options?.issuer || ctx.context.appName, user.email);
+					return ctx.json({ totpURI });
+				},
+			),
+			enableTwoFactorOtp: createAuthEndpoint(
+				"/two-factor/enable-otp",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						password: passwordSchema.optional(),
+						label: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
+					const verifiedAt = options?.skipVerificationOnEnable
+						? new Date()
+						: null;
+					const method = await ensureOtpMethod(ctx, {
+						userId: user.id,
+						label: ctx.body.label,
+						verifiedAt,
+					});
+					const recovery = await issueRecoveryCodesIfMissing(
+						ctx,
+						user.id,
+						recoveryCodeOptions,
+					);
+					if (!options?.skipVerificationOnEnable) {
+						await sendOTPCode(ctx, {
+							key: `${user.id}!${ctx.context.session.session.id}`,
+							user,
+							method,
+							options: otpOptions,
+						});
+					}
+					return ctx.json({
+						method: toMethodDescriptor(method),
+						recoveryCodes: recovery.recoveryCodes,
+						codeSent: !options?.skipVerificationOnEnable,
+					});
+				},
+			),
+			listTwoFactorMethods: createAuthEndpoint(
+				"/two-factor/list-methods",
+				{
+					method: "GET",
+					use: [sensitiveSessionMiddleware],
+				},
+				async (ctx) => {
+					const methods = await listTwoFactorMethods(
+						ctx,
+						ctx.context.session.user.id,
+					);
+					const enabled = methods.some(
+						(method) =>
+							isInteractiveMethodKind(method.kind) && isVerifiedMethod(method),
+					);
+					return ctx.json({
+						enabled,
+						methods,
+					});
+				},
+			),
+			getPendingTwoFactorChallenge: createAuthEndpoint(
+				"/two-factor/pending-challenge",
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					const attemptId = await getPendingTwoFactorAttemptId(ctx);
+					if (!attemptId) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							TWO_FACTOR_ERROR_CODES.INVALID_PENDING_CHALLENGE,
+						);
+					}
+					const attempt =
+						await ctx.context.internalAdapter.findSignInAttempt(attemptId);
+					if (!attempt || attempt.expiresAt <= new Date() || attempt.lockedAt) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							TWO_FACTOR_ERROR_CODES.INVALID_PENDING_CHALLENGE,
+						);
+					}
+					return ctx.json({
+						kind: "two-factor" as const,
+						attemptId,
+						methods: await listChallengeMethodDescriptors(ctx, attempt.userId),
+					});
+				},
+			),
+			sendTwoFactorCode: createAuthEndpoint(
+				"/two-factor/send-code",
+				{
+					method: "POST",
+					body: z.object({
+						attemptId: z.string().optional(),
+						methodId: methodIdSchema,
+					}),
+				},
+				async (ctx) => {
+					const resolver = await resolveTwoFactorVerification(ctx);
+					const method = await findUserTwoFactorMethod(
+						ctx,
+						resolver.session.user.id,
+						ctx.body.methodId,
+					);
+					if (!method) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_FOUND,
+						);
+					}
+					if (method.kind !== "otp") {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.CODE_DELIVERY_NOT_SUPPORTED,
+						);
+					}
+					if (resolver.mode === "finalize" && !isVerifiedMethod(method)) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_READY,
+						);
+					}
+					await sendOTPCode(ctx, {
+						key: resolver.key,
+						user: resolver.session.user,
+						method,
+						options: otpOptions,
+					});
+					return ctx.json({ status: true });
+				},
+			),
+			verifyTwoFactor: createAuthEndpoint(
+				"/two-factor/verify",
+				{
+					method: "POST",
+					body: z.object({
+						attemptId: z.string().optional(),
+						methodId: methodIdSchema,
+						code: z.string(),
+						trustDevice: z.boolean().optional(),
+					}),
+				},
+				async (ctx) => {
+					const resolver = await resolveTwoFactorVerification(ctx);
+					const method = await findUserTwoFactorMethod(
+						ctx,
+						resolver.session.user.id,
+						ctx.body.methodId,
+					);
+					if (!method) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_FOUND,
+						);
+					}
+
+					if (resolver.mode === "finalize" && !isVerifiedMethod(method)) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_READY,
+						);
+					}
+
+					if (method.kind === "totp") {
+						const material = await getTotpMaterial(ctx, method.id);
+						if (!material) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								TWO_FACTOR_ERROR_CODES.METHOD_NOT_READY,
+							);
+						}
+						const secret = await symmetricDecrypt({
+							key: ctx.context.secretConfig,
+							data: material.secret,
+						});
+						const valid = await createOTP(secret, {
+							period: options?.totpOptions?.period || 30,
+							digits: options?.totpOptions?.digits || 6,
+						}).verify(ctx.body.code);
+						if (!valid) {
+							return resolver.invalid("INVALID_CODE");
+						}
+						if (!isVerifiedMethod(method)) {
+							await markMethodVerified(ctx, method.id);
+						}
+						await touchMethodUsage(ctx, method.id);
+						if (resolver.mode === "finalize") {
+							return resolver.valid(ctx, {
+								method: BUILTIN_AMR_METHOD.TOTP,
+								factor: "possession",
+								completedAt: new Date(),
+							});
+						}
+						return resolver.valid(ctx);
+					}
+
+					if (method.kind === "otp") {
+						const identifier = buildOtpVerificationIdentifier(
+							resolver.key,
+							method.id,
+						);
+						const stored =
+							await ctx.context.internalAdapter.findVerificationValue(
+								identifier,
+							);
+						const [storedCode, attempts] = stored?.value?.split(":") ?? [];
+						if (!stored || stored.expiresAt < new Date()) {
+							if (stored) {
+								await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+									identifier,
+								);
+							}
+							throw APIError.from(
+								"BAD_REQUEST",
+								TWO_FACTOR_ERROR_CODES.CODE_HAS_EXPIRED,
+							);
+						}
+						const allowedAttempts = otpOptions.allowedAttempts || 5;
+						if ((parseInt(attempts ?? "0", 10) || 0) >= allowedAttempts) {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								identifier,
+							);
+							throw APIError.from(
+								"BAD_REQUEST",
+								TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+							);
+						}
+						const [expectedValue, inputValue] = await decodeOTPForComparison(
+							ctx,
+							storedCode!,
+							ctx.body.code,
+							otpOptions,
+						);
+						const valid = constantTimeEqual(
+							new TextEncoder().encode(expectedValue),
+							new TextEncoder().encode(inputValue),
+						);
+						if (!valid) {
+							const MAX_CAS_RETRIES = 5;
+							let latest = stored;
+							for (let i = 0; i < MAX_CAS_RETRIES; i++) {
+								const [currentValue, currentAttempts] = latest.value.split(":");
+								const nextValue = `${currentValue}:${
+									(parseInt(currentAttempts ?? "0", 10) || 0) + 1
+								}`;
+								const applied =
+									await ctx.context.internalAdapter.casUpdateVerificationValue(
+										identifier,
+										latest.value,
+										nextValue,
+									);
+								if (applied) {
+									break;
+								}
+								const reread =
+									await ctx.context.internalAdapter.findVerificationValue(
+										identifier,
+									);
+								if (!reread) {
+									break;
+								}
+								latest = reread;
+							}
+							return resolver.invalid("INVALID_CODE");
+						}
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							identifier,
+						);
+						if (!isVerifiedMethod(method)) {
+							await markMethodVerified(ctx, method.id);
+						}
+						await touchMethodUsage(ctx, method.id);
+						if (resolver.mode === "finalize") {
+							return resolver.valid(ctx, {
+								method: BUILTIN_AMR_METHOD.OTP,
+								factor: "possession",
+								completedAt: new Date(),
+							});
+						}
+						return resolver.valid(ctx);
+					}
+
+					if (resolver.mode !== "finalize") {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_READY,
+						);
+					}
+
+					const consumed = await consumeRecoveryCode(
+						ctx,
+						method.id,
+						ctx.body.code,
+					);
+					if (!consumed) {
+						return resolver.invalid("INVALID_CODE");
+					}
+					await touchMethodUsage(ctx, method.id);
+					return resolver.valid(ctx, {
+						method: BUILTIN_AMR_METHOD.BACKUP_CODE,
+						factor: "possession",
+						completedAt: new Date(),
+					});
+				},
+			),
+			regenerateRecoveryCodes: createAuthEndpoint(
+				"/two-factor/regenerate-recovery-codes",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						password: passwordSchema.optional(),
+					}),
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
+					const { method } = await ensureRecoveryMethod(ctx, user.id);
+					const recoveryCodes = generateRecoveryCodes(recoveryCodeOptions);
+					await replaceRecoveryCodes(ctx, method.id, recoveryCodes);
+					return ctx.json({
+						method: toMethodDescriptor(method),
+						recoveryCodes,
+					});
+				},
+			),
+			removeTwoFactorMethod: createAuthEndpoint(
+				"/two-factor/remove-method",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						password: passwordSchema.optional(),
+						methodId: methodIdSchema,
+					}),
+				},
+				async (ctx) => {
+					const user = ctx.context.session.user;
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
+					const method = await findUserTwoFactorMethod(
+						ctx,
+						user.id,
+						ctx.body.methodId,
+					);
+					if (!method) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.METHOD_NOT_FOUND,
+						);
+					}
+					await deleteMethod(ctx, method.id);
+					return ctx.json({ status: true });
+				},
+			),
+			listTwoFactorTrustedDevices: createAuthEndpoint(
+				"/two-factor/list-trusted-devices",
+				{
+					method: "GET",
+					use: [sensitiveSessionMiddleware],
+				},
+				async (ctx) => {
+					const devices = await listTrustedDevices(
+						ctx,
+						ctx.context.session.user.id,
+					);
+					return ctx.json({ devices });
+				},
+			),
+			revokeTwoFactorTrustedDevice: createAuthEndpoint(
+				"/two-factor/revoke-trusted-device",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					body: z.object({
+						deviceId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const revoked = await revokeTrustedDevice(
+						ctx,
+						ctx.context.session.user.id,
+						ctx.body.deviceId,
+					);
+					if (!revoked) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TRUSTED_DEVICE_NOT_FOUND,
+						);
+					}
+					return ctx.json({ status: true });
+				},
+			),
 			disableTwoFactor: createAuthEndpoint(
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: disableTwoFactorBodySchema,
-					// Disabling 2FA is a sensitive operation; require a DB-backed
-					// session so a stale or replayed cookie-cache payload cannot
-					// authorize it (defense in depth against the duplicate
-					// Set-Cookie leak fixed in cookies/expireCookie).
 					use: [sensitiveSessionMiddleware],
-					metadata: {
-						openapi: {
-							summary: "Disable two factor authentication",
-							description:
-								"Use this endpoint to disable two factor authentication.",
-							responses: {
-								200: {
-									description: "Successful response",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													status: {
-														type: "boolean",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
+					body: z.object({
+						password: passwordSchema.optional(),
+					}),
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
-						ctx,
-						user.id,
-						allowPasswordless,
-					);
-					if (requirePassword) {
-						if (!password) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
-						}
-						const isPasswordValid = await validatePassword(ctx, {
-							password,
-							userId: user.id,
-						});
-						if (!isPasswordValid) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
-						}
-					}
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							twoFactorEnabled: false,
-						},
-					);
-					await ctx.context.adapter.delete({
-						model: opts.twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: updatedUser.id,
-							},
-						],
-					});
-					const newSession = await ctx.context.internalAdapter.createSession(
-						updatedUser.id,
-						false,
-						ctx.context.session.session,
-					);
-					/**
-					 * Update the session cookie with the new user data
-					 */
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
-					const disableTrustCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
-						{
-							maxAge: trustDeviceMaxAge,
-						},
-					);
-					const disableTrustValue = await ctx.getSignedCookie(
-						disableTrustCookie.name,
-						ctx.context.secret,
-					);
-					if (disableTrustValue) {
-						const [, trustId] = disableTrustValue.split("!");
-						if (trustId) {
-							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-								trustId,
-							);
-						}
-						expireCookie(ctx, disableTrustCookie);
-					}
+					const user = ctx.context.session.user;
+					await requirePasswordIfNeeded(ctx, user.id, ctx.body.password);
+					await deleteAllMethodsForUser(ctx, user.id);
+					await revokeAllTrustedDevices(ctx, user.id);
 					return ctx.json({ status: true });
 				},
 			),
 		},
 		options: options as NoInfer<O>,
-		hooks: {
-			after: [
-				{
-					matcher(context) {
-						return (
-							context.path === "/sign-in/email" ||
-							context.path === "/sign-in/username" ||
-							context.path === "/sign-in/phone-number"
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const data = ctx.context.newSession;
-						if (!data) {
-							return;
-						}
-
-						if (!data?.user.twoFactorEnabled) {
-							return;
-						}
-
-						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
-							TRUST_DEVICE_COOKIE_NAME,
-							{
-								maxAge: trustDeviceMaxAge,
-							},
-						);
-						// Check for trust device cookie
-						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieAttrs.name,
-							ctx.context.secret,
-						);
-
-						if (trustDeviceCookie) {
-							const [token, trustIdentifier] = trustDeviceCookie.split("!");
-							if (token && trustIdentifier) {
-								const expectedToken = await createHMAC(
-									"SHA-256",
-									"base64urlnopad",
-								).sign(
-									ctx.context.secret,
-									`${data.user.id}!${trustIdentifier}`,
-								);
-
-								if (token === expectedToken) {
-									// HMAC is valid; verify the server-side record
-									const verificationRecord =
-										await ctx.context.internalAdapter.findVerificationValue(
-											trustIdentifier,
-										);
-									if (
-										verificationRecord &&
-										verificationRecord.value === data.user.id &&
-										verificationRecord.expiresAt > new Date()
-									) {
-										await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-											trustIdentifier,
-										);
-										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
-										const newToken = await createHMAC(
-											"SHA-256",
-											"base64urlnopad",
-										).sign(
-											ctx.context.secret,
-											`${data.user.id}!${newTrustIdentifier}`,
-										);
-										await ctx.context.internalAdapter.createVerificationValue({
-											value: data.user.id,
-											identifier: newTrustIdentifier,
-											expiresAt: new Date(
-												Date.now() + trustDeviceMaxAge * 1000,
-											),
-										});
-										const newTrustDeviceCookie = ctx.context.createAuthCookie(
-											TRUST_DEVICE_COOKIE_NAME,
-											{
-												maxAge: trustDeviceMaxAge,
-											},
-										);
-										await ctx.setSignedCookie(
-											newTrustDeviceCookie.name,
-											`${newToken}!${newTrustIdentifier}`,
-											ctx.context.secret,
-											trustDeviceCookieAttrs.attributes,
-										);
-										return;
-									}
-								}
-							}
-							expireCookie(ctx, trustDeviceCookieAttrs);
-						}
-
-						/**
-						 * remove the session cookie. It's set by the sign in credential
-						 */
-						deleteSessionCookie(ctx, true);
-						await ctx.context.internalAdapter.deleteSession(data.session.token);
-						ctx.context.setNewSession(null);
-						const maxAge = options?.twoFactorCookieMaxAge ?? 10 * 60; // 10 minutes
-						const twoFactorCookie = ctx.context.createAuthCookie(
-							TWO_FACTOR_COOKIE_NAME,
-							{
-								maxAge,
-							},
-						);
-						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
-						});
-						await ctx.setSignedCookie(
-							twoFactorCookie.name,
-							identifier,
-							ctx.context.secret,
-							twoFactorCookie.attributes,
-						);
-						const twoFactorMethods: string[] = [];
-
-						/**
-						 * totp requires per-user setup, so we check
-						 * that the user actually has a secret stored.
-						 */
-						if (!options?.totpOptions?.disable) {
-							const userTotpSecret =
-								await ctx.context.adapter.findOne<TwoFactorTable>({
-									model: opts.twoFactorTable,
-									where: [
-										{
-											field: "userId",
-											value: data.user.id,
-										},
-									],
-								});
-							if (userTotpSecret && userTotpSecret.verified !== false) {
-								twoFactorMethods.push("totp");
-							}
-						}
-
-						/**
-						 * otp is server-level — if sendOTP is configured,
-						 * any user with 2fa enabled can receive a code.
-						 */
-						if (options?.otpOptions?.sendOTP) {
-							twoFactorMethods.push("otp");
-						}
-
-						return ctx.json({
-							twoFactorRedirect: true,
-							twoFactorMethods,
-						});
-					}),
-				},
-			],
-		},
-		schema: mergeSchema(schema, {
-			...options?.schema,
-			twoFactor: {
-				...options?.schema?.twoFactor,
-				...(options?.twoFactorTable
-					? { modelName: options.twoFactorTable }
-					: {}),
-			},
-		}),
+		schema: mergeSchema(schema, options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {
