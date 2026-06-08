@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 	InternalAdapter,
 	UserProvisioningSource,
+	ValidateUserInfoSource,
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
@@ -12,12 +13,16 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
-import { assertValidUserInfo } from "../utils/validate-user-info";
+import {
+	assertValidUserInfo,
+	assertValidUserInfoSource,
+} from "../utils/validate-user-info";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -129,14 +134,29 @@ export const createInternalAdapter = (
 			};
 
 			if (options.user?.validateUserInfo) {
-				// Skipped outside a request context (no request to hand the hook).
-				const endpointContext = await getCurrentAuthContext().catch(() => null);
-				if (endpointContext) {
-					await assertValidUserInfo(endpointContext as GenericEndpointContext, {
-						user: data,
-						source: { action: "create-user", ...source },
+				const validationSource: ValidateUserInfoSource = {
+					...source,
+					action: "create-user",
+				};
+				assertValidUserInfoSource(validationSource);
+				let endpointContext: GenericEndpointContext;
+				try {
+					endpointContext =
+						(await getCurrentAuthContext()) as GenericEndpointContext;
+				} catch (error) {
+					logger.error(
+						"Unable to run validateUserInfo: missing endpoint context",
+						error,
+					);
+					throw new APIError("FORBIDDEN", {
+						code: "validation_context_missing",
+						message: "User validation requires an endpoint context",
 					});
 				}
+				await assertValidUserInfo(endpointContext, {
+					user: data,
+					source: validationSource,
+				});
 			}
 
 			const createdUser = await createWithHooks(data, "user", undefined);

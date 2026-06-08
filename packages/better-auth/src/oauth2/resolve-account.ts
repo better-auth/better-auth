@@ -1,4 +1,7 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	UserProvisioningSource,
+} from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
@@ -29,10 +32,10 @@ export interface ResolveOAuthUserParams {
 	providerId: string;
 	linkPolicy: OAuthLinkPolicy;
 	/**
-	 * The raw, unmapped provider profile. Forwarded to the `validateUserInfo`
+	 * Authentication source metadata forwarded to the `validateUserInfo`
 	 * provisioning gate when a new user is created here.
 	 */
-	profile?: Record<string, unknown> | undefined;
+	source: UserProvisioningSource;
 }
 
 /**
@@ -72,7 +75,7 @@ export async function resolveOAuthUser(
 	c: GenericEndpointContext,
 	params: ResolveOAuthUserParams,
 ): Promise<ResolvedOAuthUser | ResolveOAuthUserError> {
-	const { userInfo, providerId, linkPolicy, profile } = params;
+	const { userInfo, providerId, linkPolicy, source } = params;
 
 	let dbUser: Awaited<
 		ReturnType<typeof c.context.internalAdapter.findOAuthUser>
@@ -102,7 +105,7 @@ export async function resolveOAuthUser(
 					...restUserInfo,
 					email: userInfo.email.toLowerCase(),
 				},
-				{ method: "oauth", oauth: { providerId, profile } },
+				source,
 			);
 			return {
 				user: createdUser,

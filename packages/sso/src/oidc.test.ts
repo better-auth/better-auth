@@ -797,9 +797,17 @@ describe("provisioning", async (ctx) => {
  */
 describe("provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			trustedOrigins: ["http://localhost:8080"],
+			user: {
+				validateUserInfo({ source }) {
+					if (source.method === "sso-oidc") {
+						validateUserInfoFn(source);
+					}
+				},
+			},
 			plugins: [
 				sso({
 					provisionUser: provisionUserFn,
@@ -897,6 +905,7 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const signInHeaders1 = new Headers();
@@ -910,6 +919,16 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 		await simulateOAuthFlow(res1.url, signInHeaders1);
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-oidc",
+			sso: {
+				providerId: "provision-test",
+				profile: { sub: "provision-test-sub" },
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -925,6 +944,16 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 		await simulateOAuthFlow(res2.url, signInHeaders2);
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-oidc",
+			sso: {
+				providerId: "provision-test",
+				profile: { sub: "provision-test-sub" },
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 

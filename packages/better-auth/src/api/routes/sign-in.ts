@@ -345,7 +345,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
-					sourceProfile: userInfo.data,
+					source: {
+						method: "oauth",
+						oauth: { providerId: provider.id, profile: userInfo.data },
+					},
 				});
 				if (data.error) {
 					if (data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED) {

@@ -5,6 +5,32 @@ import type {
 import { APIError } from "@better-auth/core/error";
 import type { User } from "../types";
 
+export function assertValidUserInfoSource(
+	source: ValidateUserInfoSource,
+): void {
+	if (!source?.method) {
+		throw new APIError("FORBIDDEN", {
+			code: "validation_source_missing",
+			message: "User validation source is required",
+		});
+	}
+	if (source.method === "oauth" && !source.oauth?.providerId) {
+		throw new APIError("FORBIDDEN", {
+			code: "validation_source_missing",
+			message: "OAuth user validation source requires oauth.providerId",
+		});
+	}
+	if (
+		(source.method === "sso-oidc" || source.method === "sso-saml") &&
+		!source.sso?.providerId
+	) {
+		throw new APIError("FORBIDDEN", {
+			code: "validation_source_missing",
+			message: "SSO user validation source requires sso.providerId",
+		});
+	}
+}
+
 /**
  * Invoke the application's `user.validateUserInfo` gate and throw a `403`
  * {@link APIError} if it rejects.
@@ -23,6 +49,7 @@ export async function assertValidUserInfo(
 	if (!validate) {
 		return;
 	}
+	assertValidUserInfoSource(data.source);
 
 	let result: Awaited<ReturnType<typeof validate>>;
 	try {
