@@ -189,6 +189,9 @@
     },
     "@opentelemetry/api": {
       "optional": true
+    },
+    "kysely": {
+      "optional": true
     }
   }
 }

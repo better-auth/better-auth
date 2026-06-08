@@ -5,7 +5,6 @@ export default defineConfig({
 	format: ["esm"],
 	entry: [
 		"./src/index.ts",
-		"./src/auth/minimal.ts",
 		"./src/social-providers/index.ts",
 		"./src/client/index.ts",
 		"./src/client/plugins/index.ts",

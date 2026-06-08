@@ -2,13 +2,6 @@ import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
-import type {
-	Dialect,
-	Kysely,
-	MysqlPool,
-	PostgresPool,
-	SqliteDatabase,
-} from "kysely";
 import type { AuthMiddleware } from "../api";
 import type {
 	Account,
@@ -29,10 +22,17 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type {
+	DatabaseType,
+	KyselyInstance,
+	MysqlPoolLike,
+	PostgresPoolLike,
+	SqlDialect,
+	SqliteDatabaseLike,
+} from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
-type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -546,17 +546,16 @@ export type BetterAuthOptions = {
 	 */
 	database?:
 		| (
-				| PostgresPool
-				| MysqlPool
-				| SqliteDatabase
-				| Dialect
+				| PostgresPoolLike
+				| MysqlPoolLike
+				| SqliteDatabaseLike
 				| DBAdapterInstance
 				| BunDatabase
 				| DatabaseSync
 				| D1Database
 				| {
-						dialect: Dialect;
-						type: KyselyDatabaseType;
+						dialect: SqlDialect;
+						type: DatabaseType;
 						/**
 						 * casing for table names
 						 *
@@ -582,11 +581,11 @@ export type BetterAuthOptions = {
 						/**
 						 * Kysely instance
 						 */
-						db: Kysely<any>;
+						db: KyselyInstance;
 						/**
 						 * Database type between postgres, mysql and sqlite
 						 */
-						type: KyselyDatabaseType;
+						type: DatabaseType;
 						/**
 						 * casing for table names
 						 *
