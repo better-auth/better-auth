@@ -122,10 +122,6 @@ export const getMetadata = (
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
 		grant_types_supported: ["authorization_code", "refresh_token"],
-		acr_values_supported: [
-			"urn:mace:incommon:iap:silver",
-			"urn:mace:incommon:iap:bronze",
-		],
 		subject_types_supported: ["public"],
 		id_token_signing_alg_values_supported: supportedAlgs,
 		token_endpoint_auth_methods_supported: [
@@ -134,6 +130,14 @@ export const getMetadata = (
 			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
+		...options?.metadata,
+		// Core AMR discovery fields are written after the caller spread so plugin
+		// or caller metadata cannot clobber them (including with `undefined`),
+		// keeping OIDC capability advertisement consistent.
+		acr_values_supported: [
+			"urn:mace:incommon:iap:silver",
+			"urn:mace:incommon:iap:bronze",
+		],
 		amr_values_supported: [...RFC_8176_AMR_VALUES],
 		claims_supported: [
 			"sub",
@@ -148,7 +152,6 @@ export const getMetadata = (
 			"name",
 			"amr",
 		],
-		...options?.metadata,
 	};
 };
 

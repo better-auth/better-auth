@@ -92,7 +92,6 @@ export const getMCPProviderMetadata = (
 			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
-		amr_values_supported: [...RFC_8176_AMR_VALUES],
 		claims_supported: [
 			"sub",
 			"iss",
@@ -106,6 +105,7 @@ export const getMCPProviderMetadata = (
 			"name",
 		],
 		...options?.metadata,
+		amr_values_supported: [...RFC_8176_AMR_VALUES],
 	};
 };
 

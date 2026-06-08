@@ -31,12 +31,15 @@ export function appendSignInChallengeToURL(
 	const beforeHash =
 		hashIndex === -1 ? redirectTarget : redirectTarget.slice(0, hashIndex);
 	const hash = hashIndex === -1 ? "" : redirectTarget.slice(hashIndex);
-	const separator = beforeHash.includes("?") ? "&" : "?";
-	const encoded = params
-		.map(
-			([key, value]) =>
-				`${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
-		)
-		.join("&");
-	return `${beforeHash}${separator}${encoded}${hash}`;
+	const queryIndex = beforeHash.indexOf("?");
+	const path = queryIndex === -1 ? beforeHash : beforeHash.slice(0, queryIndex);
+	const search =
+		queryIndex === -1
+			? new URLSearchParams()
+			: new URLSearchParams(beforeHash.slice(queryIndex + 1));
+	for (const [key, value] of params) {
+		search.set(key, value);
+	}
+	const query = search.toString();
+	return `${path}${query ? `?${query}` : ""}${hash}`;
 }

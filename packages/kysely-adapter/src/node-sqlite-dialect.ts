@@ -131,10 +131,14 @@ class NodeSqliteConnection implements DatabaseConnection {
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
-		const isRead = /^(\s*--[^\n]*\n)*\s*(select|with|pragma)\b/i.test(sql);
-		const hasReturning = /\breturning\b/i.test(sql);
+		// `columns()` returns the result-set columns, so a non-empty list marks any
+		// statement that produces rows: SELECT, CTE reads, and writes with RETURNING.
+		// Keyword sniffing cannot tell a `WITH ... INSERT/UPDATE/DELETE` CTE write
+		// from a `WITH ... SELECT` read, which is why this uses the prepared
+		// statement's own metadata instead.
+		const isRead = stmt.columns().length > 0;
 
-		if (isRead || hasReturning) {
+		if (isRead) {
 			const rows = stmt.all(...(parameters as any[])) as O[];
 			return Promise.resolve({
 				rows,

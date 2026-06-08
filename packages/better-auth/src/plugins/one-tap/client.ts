@@ -251,7 +251,12 @@ function buildTwoFactorRedirectURL(
 	currentURL: string,
 	challenge: TwoFactorChallenge,
 ) {
-	const redirectURL = new URL(callbackURL ?? "/", currentURL);
+	// Guard the scheme before this URL reaches `window.location.href`: a
+	// `javascript:` (or other unsafe) callbackURL would otherwise execute on
+	// assignment. Fall back to the app root when the scheme is not safe.
+	const safeCallbackURL =
+		callbackURL && isSafeUrlScheme(callbackURL) ? callbackURL : "/";
+	const redirectURL = new URL(safeCallbackURL, currentURL);
 	redirectURL.searchParams.set("challenge", "two-factor");
 	return redirectURL.toString();
 }

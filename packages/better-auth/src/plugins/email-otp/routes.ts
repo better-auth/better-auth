@@ -27,6 +27,42 @@ const types = [
 ] as const;
 
 /**
+ * OpenAPI `properties` shared by sign-in responses that can pause for a plugin
+ * challenge (`{ kind: "challenge", challenge: { ... } }`) instead of returning a
+ * session. better-call's schema type only allows `oneOf` on nested property
+ * values, so the union is documented as optional properties on a single object
+ * rather than a top-level `oneOf`. The inner `challenge` shape is widened by
+ * challenge plugins, so only the shared `kind`/`attemptId` discriminants are
+ * documented.
+ *
+ * @internal
+ */
+const signInChallengeResponseProperties = {
+	kind: {
+		type: "string",
+		enum: ["challenge"],
+		description:
+			"Present only when sign-in paused for a plugin challenge (e.g. two-factor) before a session was issued",
+	},
+	challenge: {
+		type: "object",
+		description:
+			'Challenge payload returned alongside `kind: "challenge"`. Remaining fields depend on the registered challenge plugin.',
+		properties: {
+			kind: {
+				type: "string",
+				description: "Discriminant of the challenge kind",
+			},
+			attemptId: {
+				type: "string",
+				description: "Identifier of the paused sign-in attempt to resume",
+			},
+		},
+		required: ["kind", "attemptId"],
+	},
+} as const;
+
+/**
  * Resolves the OTP to send: reuses an existing one if possible,
  * otherwise generates and stores a new one.
  *
@@ -446,11 +482,14 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					description: "Verify email with OTP",
 					responses: {
 						200: {
-							description: "Success",
+							description:
+								"Success - returns the verified session, or a pending sign-in challenge when a plugin pauses sign-in before issuing a session",
 							content: {
 								"application/json": {
 									schema: {
 										type: "object",
+										description:
+											"Either the verified-session fields or the challenge fields (`kind`, `challenge`); the two sets are mutually exclusive.",
 										properties: {
 											status: {
 												type: "boolean",
@@ -467,8 +506,8 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 											user: {
 												$ref: "#/components/schemas/User",
 											},
+											...signInChallengeResponseProperties,
 										},
-										required: ["status", "token", "user"],
 									},
 								},
 							},
@@ -631,11 +670,14 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					description: "Sign in with email and OTP",
 					responses: {
 						200: {
-							description: "Success",
+							description:
+								"Success - returns the verified session, or a pending sign-in challenge when a plugin pauses sign-in before issuing a session",
 							content: {
 								"application/json": {
 									schema: {
 										type: "object",
+										description:
+											"Either the verified-session fields or the challenge fields (`kind`, `challenge`); the two sets are mutually exclusive.",
 										properties: {
 											token: {
 												type: "string",
@@ -645,8 +687,8 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 											user: {
 												$ref: "#/components/schemas/User",
 											},
+											...signInChallengeResponseProperties,
 										},
-										required: ["token", "user"],
 									},
 								},
 							},

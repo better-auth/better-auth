@@ -1,4 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { generateRandomString } from "../../crypto/random";
 import type { RecoveryCodeOptions, TwoFactorRecoveryCode } from "./types";
 import { defaultKeyHasher } from "./utils";
@@ -39,21 +43,24 @@ export async function replaceRecoveryCodes(
 	methodId: string,
 	codes: string[],
 ): Promise<void> {
-	await ctx.context.adapter.deleteMany({
-		model: "twoFactorRecoveryCode",
-		where: [{ field: "methodId", value: methodId }],
-	});
-
-	for (const code of codes) {
-		await ctx.context.adapter.create({
+	await runWithTransaction(ctx.context.adapter, async () => {
+		const adapter = await getCurrentAdapter(ctx.context.adapter);
+		await adapter.deleteMany({
 			model: "twoFactorRecoveryCode",
-			data: {
-				methodId,
-				codeHash: await hashRecoveryCode(code),
-				usedAt: null,
-			},
+			where: [{ field: "methodId", value: methodId }],
 		});
-	}
+
+		for (const code of codes) {
+			await adapter.create({
+				model: "twoFactorRecoveryCode",
+				data: {
+					methodId,
+					codeHash: await hashRecoveryCode(code),
+					usedAt: null,
+				},
+			});
+		}
+	});
 }
 
 export async function countUnusedRecoveryCodes(
