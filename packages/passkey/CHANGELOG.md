@@ -1,5 +1,15 @@
 # @better-auth/passkey
 
+## 1.6.15
+
+### Patch Changes
+
+- [#9927](https://github.com/better-auth/better-auth/pull/9927) [`d23735b`](https://github.com/better-auth/better-auth/commit/d23735b1deb3ff7d63330430fc1f0cdf639bd734) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resolve a friendly label for a passkey from the authenticator that created it. Passkeys already store the authenticator `aaguid`; the plugin now exports `getAuthenticatorName(aaguid)` and an extensible `commonAuthenticatorNames` map so you can show a provider name (for example "1Password" or "Google Password Manager") when rendering passkeys, with full coverage available through the community AAGUID source. To set a server-side default, `registration.afterVerification` can now return a `name` used when the client supplies none. Passkey names are trimmed on registration and update.
+
+- Updated dependencies [[`1012b69`](https://github.com/better-auth/better-auth/commit/1012b690466ccd7078441dbfb406eef166fca805), [`ad60333`](https://github.com/better-auth/better-auth/commit/ad60333d1517142d688c61b6ccee14b4c30864ae), [`0933c05`](https://github.com/better-auth/better-auth/commit/0933c050ff8735466a273347c9aab0fdd8cd38ff), [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35)]:
+  - better-auth@1.6.15
+  - @better-auth/core@1.6.15
+
 ## 1.6.14
 
 ### Patch Changes
