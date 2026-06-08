@@ -201,4 +201,55 @@ describe("passkey client", () => {
 			consoleError.mockRestore();
 		}
 	});
+
+	it("does not refresh passkeys or session state when sign-in pauses for two factor", async () => {
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: [],
+						userVerification: "preferred",
+					},
+				};
+			}
+			if (path === "/passkey/verify-authentication") {
+				return {
+					data: {
+						kind: "challenge",
+						challenge: {
+							kind: "two-factor",
+							attemptId: "attempt-id",
+							methods: [{ id: "otp-method-id", kind: "otp", label: null }],
+						},
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startAuthentication.mockResolvedValue({
+			clientExtensionResults: {},
+		});
+
+		const result = await actions.signIn.passkey();
+
+		expect(result.data).toMatchObject({
+			kind: "challenge",
+			challenge: {
+				kind: "two-factor",
+				attemptId: "attempt-id",
+				methods: [{ id: "otp-method-id", kind: "otp", label: null }],
+			},
+		});
+		expect(listPasskeys.set).not.toHaveBeenCalled();
+		expect(store.notify).not.toHaveBeenCalled();
+	});
 });

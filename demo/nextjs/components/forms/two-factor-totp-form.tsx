@@ -13,6 +13,7 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { usePendingTwoFactorChallengeQuery } from "@/data/user/two-factor-query";
 import { authClient } from "@/lib/auth-client";
 
 const totpSchema = z.object({
@@ -33,8 +34,12 @@ export function TwoFactorTotpForm({
 	onSuccess,
 	onError,
 }: TwoFactorTotpFormProps) {
+	const pendingChallengeQuery = usePendingTwoFactorChallengeQuery();
 	const [loading, startTransition] = useTransition();
 	const [isVerified, setIsVerified] = useState(false);
+	const totpMethodId = pendingChallengeQuery.data?.methods.find(
+		(method) => method.kind === "totp",
+	)?.id;
 
 	const form = useForm<TotpFormValues>({
 		resolver: zodResolver(totpSchema),
@@ -44,11 +49,16 @@ export function TwoFactorTotpForm({
 	});
 
 	const onSubmit = (data: TotpFormValues) => {
+		if (!totpMethodId) {
+			onError?.("No TOTP method is available for this sign-in.");
+			return;
+		}
 		startTransition(async () => {
-			const res = await authClient.twoFactor.verifyTotp({
+			const res = await authClient.twoFactor.verify({
+				methodId: totpMethodId,
 				code: data.code,
 			});
-			if (res.data?.token) {
+			if (res.data && !res.error) {
 				setIsVerified(true);
 				onSuccess?.();
 			} else {
@@ -57,6 +67,22 @@ export function TwoFactorTotpForm({
 			}
 		});
 	};
+
+	if (pendingChallengeQuery.isLoading) {
+		return (
+			<div className="flex items-center justify-center py-4">
+				<Loader2 className="h-5 w-5 animate-spin" />
+			</div>
+		);
+	}
+
+	if (!totpMethodId) {
+		return (
+			<p className="text-sm text-muted-foreground">
+				This sign-in attempt does not have a TOTP method available.
+			</p>
+		);
+	}
 
 	if (isVerified) {
 		return (

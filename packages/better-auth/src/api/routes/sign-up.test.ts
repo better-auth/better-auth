@@ -1,6 +1,8 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { admin } from "../../plugins/admin/admin";
+import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async () => {
@@ -120,6 +122,57 @@ describe("sign-up with custom fields", async () => {
 			userAgent: "test-user-agent",
 			ipAddress: "127.0.0.1",
 		});
+	});
+
+	it("should default sign-up sessions to persistent cookies and full session TTL", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "remember-me-default@test.com",
+				password: "password123",
+				name: "Remember Me Default",
+			},
+			asResponse: true,
+		});
+		const parsedCookies = parseSetCookieHeader(
+			res.headers.get("set-cookie") || "",
+		);
+		expect(
+			parsedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeDefined();
+
+		const session = await auth.api.getSession({
+			headers: convertSetCookieToCookie(res.headers),
+		});
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeGreaterThan(
+			Date.now() + 6 * 24 * 60 * 60 * 1000,
+		);
+	});
+
+	it("should honor rememberMe=false during sign-up for both cookie and session TTL", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "remember-me-false@test.com",
+				password: "password123",
+				name: "Remember Me False",
+				rememberMe: false,
+			},
+			asResponse: true,
+		});
+		const parsedCookies = parseSetCookieHeader(
+			res.headers.get("set-cookie") || "",
+		);
+		expect(
+			parsedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeUndefined();
+
+		const session = await auth.api.getSession({
+			headers: convertSetCookieToCookie(res.headers),
+		});
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now() + 24 * 60 * 60 * 1000 + 5_000,
+		);
 	});
 
 	it("should rollback when session creation fails", async ({ skip }) => {

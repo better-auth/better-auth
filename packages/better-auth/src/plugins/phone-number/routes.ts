@@ -1,8 +1,9 @@
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
@@ -175,29 +176,21 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
-			const session = await ctx.context.internalAdapter.createSession(
-				user.id,
-				ctx.body.rememberMe === false,
-			);
-			if (!session) {
-				ctx.context.logger.error("Failed to create session");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-				);
-			}
-
-			await setSessionCookie(
-				ctx,
-				{
-					session,
-					user: user,
+			const result = await resolveSignIn(ctx, {
+				user,
+				rememberMe: ctx.body.rememberMe,
+				amr: {
+					method: BUILTIN_AMR_METHOD.PASSWORD,
+					factor: "knowledge",
+					completedAt: new Date(),
 				},
-				ctx.body.rememberMe === false,
-			);
+			});
+			if (result.kind === "challenge") {
+				return ctx.json(result);
+			}
 			return ctx.json({
-				token: session.token,
-				user: parseUserOutput(ctx.context.options, user),
+				token: result.session.token,
+				user: parseUserOutput(ctx.context.options, result.user),
 			});
 		},
 	);
@@ -657,23 +650,21 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 
 			if (!ctx.body.disableSession) {
-				const session = await ctx.context.internalAdapter.createSession(
-					user.id,
-				);
-				if (!session) {
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
-				await setSessionCookie(ctx, {
-					session,
+				const result = await resolveSignIn(ctx, {
 					user,
+					amr: {
+						method: BUILTIN_AMR_METHOD.PHONE_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
+				if (result.kind === "challenge") {
+					return ctx.json(result);
+				}
 				return ctx.json({
 					status: true,
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, user),
+					token: result.session.token,
+					user: parseUserOutput(ctx.context.options, result.user),
 				});
 			}
 

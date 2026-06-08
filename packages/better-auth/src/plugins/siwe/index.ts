@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
@@ -293,21 +294,20 @@ export const siwe = (options: SIWEPluginOptions) => {
 							}
 						}
 
-						const session = await ctx.context.internalAdapter.createSession(
-							user.id,
-						);
-
-						if (!session) {
-							throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
-								message: "Internal Server Error",
-								status: 500,
-							});
+						const result = await resolveSignIn(ctx, {
+							user,
+							amr: {
+								method: BUILTIN_AMR_METHOD.SIWE,
+								factor: "possession",
+								completedAt: new Date(),
+							},
+						});
+						if (result.kind === "challenge") {
+							return ctx.json(result);
 						}
 
-						await setSessionCookie(ctx, { session, user });
-
 						return ctx.json({
-							token: session.token,
+							token: result.session.token,
 							success: true,
 							user: {
 								id: user.id,

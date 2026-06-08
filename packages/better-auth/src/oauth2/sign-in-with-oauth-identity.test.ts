@@ -15,7 +15,7 @@ import {
 } from "vitest";
 import { parseSetCookieHeader } from "../cookies";
 import { signJWT } from "../crypto";
-import { getTestInstance } from "../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../test-utils";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
 
@@ -94,7 +94,8 @@ describe("oauth2 - email verification on link", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
@@ -534,7 +535,8 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
@@ -600,7 +602,8 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
@@ -696,7 +699,8 @@ describe("oauth2 - disableImplicitLinking", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
@@ -750,7 +754,8 @@ describe("oauth2 - disableImplicitLinking", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
@@ -1128,7 +1133,8 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 			callbackURL: "/",
 			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
@@ -1251,7 +1257,8 @@ describe("oauth2 - override user info on sign-in", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
@@ -1358,8 +1365,9 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 			callbackURL: "/",
 			fetchOptions: { onSuccess: cookieSetter(userAHeaders) },
 		});
+		expectNoTwoFactorChallenge(googleSignIn.data);
 		const stateA =
-			new URL(googleSignIn.data!.url!).searchParams.get("state") || "";
+			new URL(googleSignIn.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state: stateA, code: "test_code" },
 			method: "GET",
@@ -1524,8 +1532,9 @@ describe("oauth2 - providers without email", async () => {
 				},
 			});
 
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			let redirectLocation = "";
 			await client.$fetch("/callback/discord", {
 				query: { state, code: "test_code" },
@@ -1589,8 +1598,9 @@ describe("oauth2 - providers without email", async () => {
 				},
 			});
 
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			let redirectLocation = "";
 			await client.$fetch("/callback/discord", {
 				query: { state, code: "test_code" },
@@ -1648,8 +1658,9 @@ describe("oauth2 - providers without email", async () => {
 				},
 			});
 
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			let redirectLocation = "";
 			await client.$fetch("/callback/discord", {
 				query: { state, code: "test_code" },
@@ -1723,7 +1734,8 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 			callbackURL: "/",
 			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
@@ -1925,8 +1937,9 @@ describe("oauth2 - per-provider requireEmailVerification gate", async () => {
 				newUserCallbackURL: "/welcome",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			let redirectLocation = "";
 			let setCookie = "";
 			await client.$fetch("/callback/google", {

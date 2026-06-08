@@ -47,33 +47,26 @@ export async function getTestInstance<
 		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
-	const postgresSchema =
-		testWith === "postgres"
-			? `ba_test_${randomUUID().replaceAll("-", "_")}`
-			: undefined;
+	const postgresSchema = `test_${randomUUID().replace(/-/g, "_")}`;
+	const mongodbDatabaseName = `better-auth-${randomUUID()}`;
 
-	const quotePostgresIdentifier = (identifier: string) =>
-		`"${identifier.replaceAll('"', '""')}"`;
+	async function resetPostgresSchema() {
+		const postgres = await getPostgres();
+		await sql
+			.raw(`DROP SCHEMA IF EXISTS "${postgresSchema}" CASCADE;`)
+			.execute(postgres);
+		await sql.raw(`CREATE SCHEMA "${postgresSchema}";`).execute(postgres);
+		await postgres.destroy();
+	}
 
 	async function getPostgres() {
 		const { Kysely, PostgresDialect } = await import("kysely");
 		const { Pool } = await import("pg");
-		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5432/better_auth",
-			options: postgresSchema
-				? `-c search_path=${postgresSchema},public`
-				: undefined,
-		});
-		if (postgresSchema) {
-			await pool.query(
-				`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(
-					postgresSchema,
-				)}`,
-			);
-		}
 		return new Kysely({
 			dialect: new PostgresDialect({
-				pool,
+				pool: new Pool({
+					connectionString: `postgres://user:password@localhost:5432/better_auth?options=-c%20search_path%3D${postgresSchema}`,
+				}),
 			}),
 		});
 	}
@@ -101,7 +94,7 @@ export async function getTestInstance<
 			const db = client.db(dbName);
 			return db;
 		};
-		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+		const db = await dbClient("mongodb://127.0.0.1:27017", mongodbDatabaseName);
 		return db;
 	}
 
@@ -183,6 +176,9 @@ export async function getTestInstance<
 	}
 
 	if (testWith !== "mongodb") {
+		if (testWith === "postgres") {
+			await resetPostgresSchema();
+		}
 		const { runMigrations } = await getMigrations({
 			...auth.options,
 			database: opts.database,
@@ -199,20 +195,8 @@ export async function getTestInstance<
 			return;
 		}
 		if (testWith === "postgres") {
+			await resetPostgresSchema();
 			const postgres = await getPostgres();
-			if (postgresSchema) {
-				await sql
-					.raw(
-						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
-							postgresSchema,
-						)} CASCADE`,
-					)
-					.execute(postgres);
-			} else {
-				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-					postgres,
-				);
-			}
 			await postgres.destroy();
 			return;
 		}

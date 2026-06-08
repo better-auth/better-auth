@@ -4,8 +4,11 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   uuid,
+  jsonb,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
@@ -21,7 +24,6 @@ export const custom_user = pgTable("custom_user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false),
   username: text("username").unique(),
   displayUsername: text("display_username"),
 });
@@ -43,6 +45,7 @@ export const custom_session = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    amr: jsonb("amr").notNull(),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
@@ -91,29 +94,133 @@ export const custom_verification = pgTable(
   (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
 );
 
-export const twoFactor = pgTable(
-  "two_factor",
+export const signInAttempt = pgTable(
+  "sign_in_attempt",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
-    secret: text("secret").notNull(),
-    backupCodes: text("backup_codes").notNull(),
     userId: uuid("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
-    verified: boolean("verified").default(true),
+    expiresAt: timestamp("expires_at").notNull(),
+    rememberMe: boolean("remember_me"),
+    amr: jsonb("amr").notNull(),
+    failedVerifications: integer("failed_verifications").default(0).notNull(),
+    lockedAt: timestamp("locked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
   },
   (table) => [
-    index("twoFactor_secret_idx").on(table.secret),
-    index("twoFactor_userId_idx").on(table.userId),
+    index("signInAttempt_userId_idx").on(table.userId),
+    index("signInAttempt_expiresAt_idx").on(table.expiresAt),
+  ],
+);
+
+export const twoFactorMethod = pgTable(
+  "two_factor_method",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    label: text("label"),
+    verifiedAt: timestamp("verified_at"),
+    lastUsedAt: timestamp("last_used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorMethod_userId_idx").on(table.userId),
+    index("twoFactorMethod_kind_idx").on(table.kind),
+    index("twoFactorMethod_verifiedAt_idx").on(table.verifiedAt),
+  ],
+);
+
+export const twoFactorTotp = pgTable(
+  "two_factor_totp",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    methodId: uuid("method_id")
+      .notNull()
+      .unique()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("twoFactorTotp_methodId_uidx").on(table.methodId)],
+);
+
+export const twoFactorRecoveryCode = pgTable(
+  "two_factor_recovery_code",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    methodId: uuid("method_id")
+      .notNull()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorRecoveryCode_methodId_idx").on(table.methodId),
+    index("twoFactorRecoveryCode_codeHash_idx").on(table.codeHash),
+  ],
+);
+
+export const trustedDevice = pgTable(
+  "trusted_device",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    lookupKeyHash: text("lookup_key_hash").notNull().unique(),
+    label: text("label"),
+    userAgent: text("user_agent"),
+    lastUsedAt: timestamp("last_used_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("trustedDevice_userId_idx").on(table.userId),
+    index("trustedDevice_expiresAt_idx").on(table.expiresAt),
   ],
 );
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
   custom_accounts: many(custom_account),
-  twoFactors: many(twoFactor),
+  signInAttempts: many(signInAttempt),
+  twoFactorMethods: many(twoFactorMethod),
+  trustedDevices: many(trustedDevice),
 }));
 
 export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
@@ -130,9 +237,45 @@ export const custom_accountRelations = relations(custom_account, ({ one }) => ({
   }),
 }));
 
-export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+export const signInAttemptRelations = relations(signInAttempt, ({ one }) => ({
   custom_user: one(custom_user, {
-    fields: [twoFactor.userId],
+    fields: [signInAttempt.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorMethodRelations = relations(
+  twoFactorMethod,
+  ({ one, many }) => ({
+    custom_user: one(custom_user, {
+      fields: [twoFactorMethod.userId],
+      references: [custom_user.id],
+    }),
+    twoFactorTotp: many(twoFactorTotp),
+    twoFactorRecoveryCodes: many(twoFactorRecoveryCode),
+  }),
+);
+
+export const twoFactorTotpRelations = relations(twoFactorTotp, ({ one }) => ({
+  twoFactorMethod: one(twoFactorMethod, {
+    fields: [twoFactorTotp.methodId],
+    references: [twoFactorMethod.id],
+  }),
+}));
+
+export const twoFactorRecoveryCodeRelations = relations(
+  twoFactorRecoveryCode,
+  ({ one }) => ({
+    twoFactorMethod: one(twoFactorMethod, {
+      fields: [twoFactorRecoveryCode.methodId],
+      references: [twoFactorMethod.id],
+    }),
+  }),
+);
+
+export const trustedDeviceRelations = relations(trustedDevice, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [trustedDevice.userId],
     references: [custom_user.id],
   }),
 }));

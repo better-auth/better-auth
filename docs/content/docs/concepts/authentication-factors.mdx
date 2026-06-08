@@ -1,0 +1,156 @@
+---
+title: Authentication Factors
+description: How Better Auth records which factors authenticated a session, and how those values flow into OIDC.
+---
+
+Every successful sign-in writes the factor that produced it onto
+`session.amr`, an `AuthenticationMethodReference[]` that follows OIDC Core §2
+and [RFC 8176](https://www.rfc-editor.org/rfc/rfc8176). This is the
+canonical record of *what* authenticated the current session: the
+`last-login-method` cookie, the OIDC `id_token.amr` claim, and any
+freshness/step-up checks all read from the same place.
+
+## Shape
+
+```ts
+interface AuthenticationMethodReference {
+    method: string;
+    factor: "knowledge" | "possession" | "inherence";
+    completedAt: Date;
+}
+```
+
+* **`method`** is an open string. Built-in factors use the
+  `BUILTIN_AMR_METHOD` constants (`"password"`, `"passkey"`, `"totp"`, ...).
+  OAuth providers emit their `providerId` directly (`"google"`, `"github"`,
+  custom SSO ids). RFC 8176 explicitly permits "other acceptable values", so
+  the namespace is open by design.
+* **`factor`** is the [NIST SP 800-63B](https://pages.nist.gov/800-63-3/sp800-63b.html)
+  category for the proof: something you *know*, *have*, or *are*. Passkeys
+  stay `possession` even when verified with a biometric, because the
+  framework cannot distinguish biometric UV from PIN UV without platform
+  attestation; an attestation-aware plugin can upgrade specific passkeys to
+  `inherence` later.
+* **`completedAt`** is the instant the verification finished. It enables
+  per-factor freshness checks (step-up reauth) without a schema migration.
+
+The chain is ordered by completion time: the **primary factor lives at
+`amr[0]`**, and 2FA verifications append. After signing in with a password
+and a TOTP, a session looks like:
+
+```ts
+session.amr === [
+    { method: "password", factor: "knowledge", completedAt: /* sign-in */ },
+    { method: "totp",     factor: "possession", completedAt: /* 2FA verify */ },
+]
+```
+
+## Built-in vocabulary
+
+Import constants from `@better-auth/core` so spelling never drifts between
+your app, the cookie, and the OIDC claim:
+
+```ts
+import { BUILTIN_AMR_METHOD } from "@better-auth/core"
+```
+
+| Constant             | Value                  | Factor     | Notes                                                                    |
+| -------------------- | ---------------------- | ---------- | ------------------------------------------------------------------------ |
+| `PASSWORD`           | `"password"`           | knowledge  | Email+password and username+password share this method.                  |
+| `MAGIC_LINK`         | `"magic-link"`         | possession | Sign-in via emailed link.                                                |
+| `EMAIL_OTP`          | `"email-otp"`          | possession | One-time code delivered by email.                                        |
+| `EMAIL_VERIFICATION` | `"email-verification"` | possession | Distinct from `magic-link`: proves mailbox control.                      |
+| `PHONE_OTP`          | `"phone-otp"`          | possession | One-time code delivered by SMS.                                          |
+| `PASSKEY`            | `"passkey"`            | possession | WebAuthn credential. Upgrades to inherence pending UV-aware attestation. |
+| `SIWE`               | `"siwe"`               | possession | Sign-In With Ethereum.                                                   |
+| `TOTP`               | `"totp"`               | possession | Authenticator-app code.                                                  |
+| `OTP`                | `"otp"`                | possession | Generic 2FA OTP.                                                         |
+| `BACKUP_CODE`        | `"backup-code"`        | possession | Single-use recovery code consumed on use.                                |
+
+OAuth and SSO sign-ins emit the provider id as `method` (`"google"`,
+`"github"`, custom ids). Use the `amrForProvider(providerId)` helper from
+`@better-auth/core` whenever you build an entry for an OAuth-style flow so
+the shape stays consistent.
+
+## How values are written
+
+| Sign-in path                 | `amr` contribution                                             |
+| ---------------------------- | -------------------------------------------------------------- |
+| `signInEmail` / username     | `password` / `knowledge`                                       |
+| `magicLinkVerify`            | `magic-link` / `possession`                                    |
+| `verifyEmail` (auto sign-in) | `email-verification` / `possession`                            |
+| Email OTP / phone OTP        | `email-otp` or `phone-otp` / `possession`                      |
+| OAuth callback, SSO, one-tap | `<providerId>` / `possession` (via `amrForProvider`)           |
+| OIDC native ID-token sign-in | `<providerId>` / `possession` (via `amrForProvider`)           |
+| SIWE                         | `siwe` / `possession`                                          |
+| Passkey                      | `passkey` / `possession`                                       |
+| 2FA TOTP / OTP / backup code | Appends `totp`, `otp`, or `backup-code` / `possession`         |
+| `changePassword`             | Reissues `amr[0]` with a fresh `completedAt` (knowledge proof) |
+
+`session.amr` is server-assigned (`input: false` on the session schema):
+clients cannot set it on session creation, and adapter migrations install it
+as a required column.
+
+## OIDC `id_token.amr` projection
+
+When the `oidc-provider` plugin issues an `id_token`, it projects each
+`session.amr[].method` into the [RFC 8176 AMR registry](https://www.rfc-editor.org/rfc/rfc8176#section-2):
+
+| Better Auth `method`                                                | RFC 8176 value       |
+| ------------------------------------------------------------------- | -------------------- |
+| `password`                                                          | `pwd`                |
+| `magic-link`, `email-otp`, `phone-otp`, `email-verification`, `otp` | `otp`                |
+| `totp`                                                              | `mfa`                |
+| `passkey`                                                           | `hwk`                |
+| `backup-code`                                                       | `kba`                |
+| `siwe`                                                              | `siwe` (passthrough) |
+| OAuth provider ids                                                  | `fed`                |
+
+The projection is exposed on the discovery document as
+`amr_values_supported`, so relying parties can discover the vocabulary
+without out-of-band documentation.
+
+You can call the projection helpers directly when emitting your own JWTs:
+
+```ts
+import { toRfc8176Amr, RFC_8176_AMR_VALUES } from "@better-auth/core"
+
+toRfc8176Amr("password")                     // "pwd"
+toRfc8176Amr("totp")                         // "mfa"
+toRfc8176Amr("google", { provider: true })   // "fed"
+```
+
+## Freshness and step-up
+
+Because each entry carries its own `completedAt`, a sensitive endpoint can
+require, say, a knowledge-factor proof from within the last 5 minutes:
+
+```ts
+const passwordEntry = session.amr.find((entry) => entry.method === "password")
+const isFresh =
+    passwordEntry !== undefined &&
+    Date.now() - new Date(passwordEntry.completedAt).getTime() < 5 * 60_000
+
+if (!isFresh) {
+    // prompt for re-authentication
+}
+```
+
+`changePassword` deliberately reissues `session.amr[0].completedAt` so the
+new password proof is treated as fresh, while preserving any 2FA entries in
+`amr[1..]` with their original timestamps.
+
+## Reading from secondary storage
+
+`session.amr` is validated through `amrSchema` from `@better-auth/core`,
+which uses `z.coerce.date()` for `completedAt`. Values that round-trip
+through JSON columns or external stores come back as `Date` instances
+without a separate revival step:
+
+```ts
+import { amrSchema } from "@better-auth/core"
+
+const stored = JSON.parse(await store.get(key))
+const amr = amrSchema.parse(stored)
+amr[0]?.completedAt instanceof Date // true
+```

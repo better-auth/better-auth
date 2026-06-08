@@ -21,7 +21,7 @@ const pluginMeta: Record<
 	"2fa": {
 		category: "Authentication",
 		icon: "ScanFace",
-		tagline: "Two-factor authentication with TOTP and backup codes",
+		tagline: "Two-factor authentication with TOTP and recovery codes",
 	},
 	username: {
 		category: "Authentication",

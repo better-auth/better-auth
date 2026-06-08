@@ -1,9 +1,10 @@
+import { amrForProvider } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
+import { resolveSignInWithRedirect } from "../../auth/resolve-sign-in";
 import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import {
 	missingEmailLogMessage,
@@ -346,21 +347,36 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
-		const { session, user } = result.data!;
-		await setSessionCookie(c, {
-			session,
-			user,
-		});
-
-		let toRedirectTo: string;
+		const { user } = result.data!;
+		const redirectTarget = (() => {
+			try {
+				const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
+				return url.toString();
+			} catch {
+				return result.isRegister ? newUserURL || callbackURL : callbackURL;
+			}
+		})();
 		try {
-			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
-			toRedirectTo = url.toString();
-		} catch {
-			toRedirectTo = result.isRegister
-				? newUserURL || callbackURL
-				: callbackURL;
+			await resolveSignInWithRedirect(c, {
+				signIn: {
+					user,
+					amr: amrForProvider(provider.id),
+				},
+				redirectTarget,
+				onFailedToCreateSession() {
+					return redirectOnError("failed_to_create_session");
+				},
+			});
+		} catch (e) {
+			// A session/database hook (e.g. ban enforcement) can throw an APIError
+			// while the resolver creates the session. Forward its code to the error
+			// redirect, matching the pre-resolver behavior; the two-factor challenge
+			// redirect carries no `body.code`, so it falls through and re-throws.
+			if (isAPIError(e) && e.body?.code) {
+				redirectOnError(e.body.code, e.body.message);
+			}
+			throw e;
 		}
-		throw c.redirect(toRedirectTo);
+		throw c.redirect(redirectTarget);
 	},
 );

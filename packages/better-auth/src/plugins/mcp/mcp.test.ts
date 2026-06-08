@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge } from "../../test-utils/two-factor";
 import { genericOAuth } from "../generic-oauth";
 import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
@@ -211,6 +212,7 @@ describe("mcp", async () => {
 			},
 		);
 
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
 		expect(data.url).toContain(`client_id=${publicClient.clientId}`);
 		expect(data.url).toContain("code_challenge=");
@@ -307,6 +309,7 @@ describe("mcp", async () => {
 			},
 		);
 
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(`${baseURL}/api/auth/mcp/authorize`);
 		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
 
@@ -378,6 +381,7 @@ describe("mcp", async () => {
 			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
 		);
 
+		expectNoTwoFactorChallenge(data);
 		let redirectURI = "";
 		await serverClient.$fetch(data.url!, {
 			method: "GET",

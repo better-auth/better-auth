@@ -1,7 +1,7 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { expectNoTwoFactorChallenge, getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 
 interface VerificationEmail {
@@ -76,7 +76,8 @@ describe("magic link with secondary storage (string return)", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -155,7 +156,8 @@ describe("magic link with secondary storage (string return)", async () => {
 			query: { token },
 			fetchOptions: { onSuccess: ss(firstHeaders) },
 		});
-		expect(firstResponse.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(firstResponse.data);
+		expect(firstResponse.data.token).toBeDefined();
 
 		for (let i = 0; i < 3; i++) {
 			await c.magicLink.verify(
@@ -285,7 +287,8 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -338,7 +341,8 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 			query: { token },
 			fetchOptions: { onSuccess: ss(firstHeaders) },
 		});
-		expect(firstResponse.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(firstResponse.data);
+		expect(firstResponse.data.token).toBeDefined();
 
 		for (let i = 0; i < 2; i++) {
 			await c.magicLink.verify(

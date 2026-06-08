@@ -1,14 +1,15 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Account, User } from "@better-auth/core/db";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { getSessionFromCtx } from "../../api/routes/session";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { PACKAGE_VERSION } from "../../version";
@@ -532,29 +533,26 @@ export const username = (options?: UsernameOptions | undefined) => {
 						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 					}
 
-					const session = await ctx.context.internalAdapter.createSession(
-						user.id,
-						ctx.body.rememberMe === false,
-					);
-					if (!session) {
-						throw APIError.from(
-							"INTERNAL_SERVER_ERROR",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-						);
+					const result = await resolveSignIn(ctx, {
+						user,
+						rememberMe: ctx.body.rememberMe,
+						amr: {
+							method: BUILTIN_AMR_METHOD.PASSWORD,
+							factor: "knowledge",
+							completedAt: new Date(),
+						},
+					});
+					if (result.kind === "challenge") {
+						return ctx.json(result);
 					}
-					await setSessionCookie(
-						ctx,
-						{ session, user },
-						ctx.body.rememberMe === false,
-					);
 					if (ctx.body.callbackURL) {
 						ctx.setHeader("Location", ctx.body.callbackURL);
 					}
 					return ctx.json({
 						redirect: !!ctx.body.callbackURL,
-						token: session.token,
+						token: result.session.token,
 						url: ctx.body.callbackURL,
-						user: parseUserOutput(ctx.context.options, user),
+						user: parseUserOutput(ctx.context.options, result.user),
 					});
 				},
 			),

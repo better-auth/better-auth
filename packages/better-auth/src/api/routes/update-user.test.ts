@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../cookies";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
@@ -97,7 +98,12 @@ describe("updateUser", async () => {
 					token: token,
 				},
 			});
-			expect(res.data?.status).toBe(true);
+			const data = res.data;
+			if (!data) {
+				throw new Error("Expected verification response");
+			}
+			expectNoTwoFactorChallenge(data);
+			expect(data.status).toBe(true);
 
 			// This should trigger sending verification to the NEW email.
 			// emailVerification.sendVerificationEmail should have been called.
@@ -114,7 +120,12 @@ describe("updateUser", async () => {
 					token: emailVerificationToken,
 				},
 			});
-			expect(res2.data?.status).toBe(true);
+			const data2 = res2.data;
+			if (!data2) {
+				throw new Error("Expected verification response");
+			}
+			expectNoTwoFactorChallenge(data2);
+			expect(data2.status).toBe(true);
 
 			// NOW user email should be updated
 			const sessionRes2 = await client.getSession();
@@ -137,7 +148,8 @@ describe("updateUser", async () => {
 			email: newEmail,
 			password: "newPassword",
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
 			email: testUser.email, // Old email
 			password: testUser.password,
@@ -840,5 +852,48 @@ describe("change-email rejects confirmation-only config for verified users", asy
 			});
 			expect(res.error?.status).toBe(400);
 		});
+	});
+});
+
+describe("changePassword remember me", async () => {
+	it("should preserve session-only expiry when rotating the current session", async () => {
+		const { auth, client, cookieSetter, testUser } = await getTestInstance();
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		let rotatedCookies = new Map<string, Record<string, any>>();
+		const changePasswordResult = await client.changePassword({
+			newPassword: "password123-new",
+			currentPassword: testUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					rotatedCookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+				},
+			},
+		});
+		expect(changePasswordResult.data).toBeDefined();
+		expect(
+			rotatedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeUndefined();
+
+		const session = await auth.api.getSession({
+			headers,
+		});
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now() + 24 * 60 * 60 * 1000 + 5_000,
+		);
 	});
 });

@@ -11,7 +11,7 @@
  */
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { signJWT } from "better-auth/crypto";
-import { getTestInstance } from "better-auth/test";
+import { expectNoTwoFactorChallenge, getTestInstance } from "better-auth/test";
 import type { Dispatcher } from "undici";
 import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -119,10 +119,11 @@ describe("ProxyAgent with better-auth OAuth", () => {
 			},
 		);
 
-		expect(signInRes.data?.url).toContain("github.com");
-		expect(signInRes.data?.redirect).toBe(true);
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toContain("github.com");
+		expect(signInRes.data.redirect).toBe(true);
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		// Step 2: Complete OAuth callback - this will trigger requests through the proxy
 		await client.$fetch("/callback/github", {
@@ -140,7 +141,7 @@ describe("ProxyAgent with better-auth OAuth", () => {
 
 		// Verify that better-auth made requests through our global dispatcher (proxy)
 		// If this test passes, it means all OAuth requests went through setGlobalDispatcher
-		expect(signInRes.data?.url).toBeDefined();
+		expect(signInRes.data.url).toBeDefined();
 	});
 
 	it("should route Google OAuth requests through global dispatcher", async () => {
@@ -214,10 +215,11 @@ describe("ProxyAgent with better-auth OAuth", () => {
 			},
 		);
 
-		expect(signInRes.data?.url).toContain("google.com");
-		expect(signInRes.data?.redirect).toBe(true);
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toContain("google.com");
+		expect(signInRes.data.redirect).toBe(true);
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		// Complete OAuth callback - this triggers token exchange through proxy
 		await client.$fetch("/callback/google", {
@@ -236,6 +238,6 @@ describe("ProxyAgent with better-auth OAuth", () => {
 		});
 
 		// If this test passes, Google OAuth token exchange went through the global dispatcher
-		expect(signInRes.data?.url).toBeDefined();
+		expect(signInRes.data.url).toBeDefined();
 	});
 });

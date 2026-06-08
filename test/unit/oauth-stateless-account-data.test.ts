@@ -19,7 +19,7 @@
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { symmetricDecodeJWT } from "better-auth/crypto";
 import { genericOAuth } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { expectNoTwoFactorChallenge, getTestInstance } from "better-auth/test";
 import type { Dispatcher } from "undici";
 import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -138,6 +138,7 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 				},
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 		const state = new URL(signInRes.data?.url ?? "").searchParams.get("state");
 		expect(state).toBeTruthy();
 

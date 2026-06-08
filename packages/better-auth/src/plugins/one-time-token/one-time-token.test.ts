@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { seedVerifiedOtpMethodForEmail } from "../../test-utils/two-factor";
 import { isAPIError } from "../../utils/is-api-error";
+import { twoFactor } from "../two-factor";
 import { oneTimeToken } from ".";
 import { oneTimeTokenClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -364,6 +366,37 @@ describe("One-time token", async () => {
 			const ottHeader = response.headers.get("set-ott");
 			expect(ottHeader).toBeDefined();
 			expect(ottHeader).toHaveLength(32);
+		});
+
+		it("should not set OTT header when sign-in is challenged by two-factor", async () => {
+			const testInstance = await getTestInstance({
+				plugins: [
+					oneTimeToken({
+						setOttHeaderOnNewSession: true,
+					}),
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+			});
+
+			await seedVerifiedOtpMethodForEmail(
+				testInstance.auth,
+				testInstance.db,
+				testInstance.testUser.email,
+			);
+
+			const response = await testInstance.auth.api.signInEmail({
+				body: {
+					email: testInstance.testUser.email,
+					password: testInstance.testUser.password,
+				},
+				asResponse: true,
+			});
+
+			expect(response.headers.get("set-ott")).toBeNull();
 		});
 	});
 });

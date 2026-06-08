@@ -1,4 +1,8 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	SignInChallenge,
+} from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
@@ -19,8 +23,10 @@ import {
 	requireResourceOwnership,
 	sessionMiddleware,
 } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import { resolveSignIn } from "better-auth/auth/resolve-sign-in";
 import { generateRandomString } from "better-auth/crypto";
+import { parseUserOutput } from "better-auth/db";
+import type { Session, User } from "better-auth/types";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type {
@@ -708,6 +714,12 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					body: {} as {
 						response: AuthenticationResponseJSON;
 					},
+					returned: {} as
+						| {
+								session: Session;
+								user: User;
+						  }
+						| { kind: "challenge"; challenge: SignInChallenge },
 				},
 			},
 		},
@@ -808,15 +820,6 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						counter: verification.authenticationInfo.newCounter,
 					},
 				});
-				const s = await ctx.context.internalAdapter.createSession(
-					passkey.userId,
-				);
-				if (!s) {
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
-					);
-				}
 				const user = await ctx.context.internalAdapter.findUserById(
 					passkey.userId,
 				);
@@ -825,15 +828,29 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						message: "User not found",
 					});
 				}
-				await setSessionCookie(ctx, {
-					session: s,
+				const result = await resolveSignIn(ctx, {
 					user,
+					amr: {
+						method: BUILTIN_AMR_METHOD.PASSKEY,
+						factor: "possession",
+						completedAt: new Date(),
+					},
+					satisfiedChallenges: verification.authenticationInfo.userVerified
+						? ["two-factor"]
+						: undefined,
 				});
-
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
+				if (result.kind === "challenge") {
+					return ctx.json(result, {
+						status: 200,
+					});
+				}
 				return ctx.json(
 					{
-						session: s,
-						user,
+						session: result.session,
+						user: parseUserOutput(ctx.context.options, result.user),
 					},
 					{
 						status: 200,

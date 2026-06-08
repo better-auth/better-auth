@@ -1,10 +1,11 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { amrForProvider } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { parseUserOutput } from "../../db/schema";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
@@ -130,7 +131,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Google `sub` wins, never whichever local user happens to share the
 					// token's email. One Tap is a fixed-grant credential flow, so the
 					// recorded grant is the ID token's openid/profile/email.
-					const result = await signInWithOAuthIdentity(ctx, {
+					const data = await signInWithOAuthIdentity(ctx, {
 						userInfo: {
 							id: sub,
 							email,
@@ -144,9 +145,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						disableSignUp: options?.disableSignup,
 						sourceProfile: payload as Record<string, unknown>,
 					});
-					if (result.error) {
+					if (data.error) {
 						if (
-							result.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
+							data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
 						) {
 							throw APIError.from(
 								"FORBIDDEN",
@@ -154,14 +155,20 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							);
 						}
 						throw new APIError("UNAUTHORIZED", {
-							message: result.error,
+							message: data.error,
 						});
 					}
 
-					await setSessionCookie(ctx, result.data!);
+					const result = await resolveSignIn(ctx, {
+						user: data.data!.user,
+						amr: amrForProvider("google"),
+					});
+					if (result.kind === "challenge") {
+						return ctx.json(result);
+					}
 					return ctx.json({
-						token: result.data!.session.token,
-						user: parseUserOutput(ctx.context.options, result.data!.user),
+						token: result.session.token,
+						user: parseUserOutput(ctx.context.options, result.user),
 					});
 				},
 			),

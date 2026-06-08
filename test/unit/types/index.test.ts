@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { Auth, User } from "better-auth";
 import type { AuthClient } from "better-auth/client";
+import { expectNoTwoFactorChallenge } from "better-auth/test";
 import { expectTypeOf, test } from "vitest";
 
 test("expect imports", async () => {
@@ -56,12 +57,14 @@ test("infer user type correctly", async () => {
 		expectTypeOf(user).toEqualTypeOf<Res>();
 	}
 	{
-		const { user } = await api.signInEmail({
+		const signInRes = await api.signInEmail({
 			body: {
 				email: "",
 				password: "",
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes);
+		const { user } = signInRes;
 		expectTypeOf(user).toEqualTypeOf<Res>();
 	}
 });

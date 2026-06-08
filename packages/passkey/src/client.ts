@@ -2,6 +2,7 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 	ClientStore,
+	SignInChallenge,
 } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type {
@@ -26,6 +27,26 @@ import type { passkey } from ".";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 import { PACKAGE_VERSION } from "./version";
+
+type SignInChallengeEnvelope = {
+	kind: "challenge";
+	challenge: SignInChallenge;
+};
+
+function isSignInChallengeEnvelope(
+	value: unknown,
+): value is SignInChallengeEnvelope {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const record = value as {
+		kind?: unknown;
+		challenge?: { kind?: unknown };
+	};
+	return (
+		record.kind === "challenge" && typeof record.challenge?.kind === "string"
+	);
+}
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -87,10 +108,13 @@ export const getPasskeyActions = (
 		}
 		try {
 			const { clientExtensionResults, ...responseBody } = res;
-			const verified = await $fetch<{
-				session: Session;
-				user: User;
-			}>("/passkey/verify-authentication", {
+			const verified = await $fetch<
+				| {
+						session: Session;
+						user: User;
+				  }
+				| SignInChallengeEnvelope
+			>("/passkey/verify-authentication", {
 				body: {
 					response: responseBody,
 				},
@@ -99,8 +123,10 @@ export const getPasskeyActions = (
 				method: "POST",
 				throw: false,
 			});
-			$listPasskeys.set(Math.random());
-			$store.notify("$sessionSignal");
+			if (verified.data && !isSignInChallengeEnvelope(verified.data)) {
+				$listPasskeys.set(Math.random());
+				$store.notify("$sessionSignal");
+			}
 
 			if (opts?.returnWebAuthnResponse) {
 				return {

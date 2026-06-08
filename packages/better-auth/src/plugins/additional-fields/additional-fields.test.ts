@@ -247,7 +247,10 @@ describe("additionalFields", async () => {
 				password: "test-password",
 			});
 		type SignInData = Awaited<ReturnType<typeof signInEmail>>["data"];
-		type SignInUser = NonNullable<SignInData>["user"];
+		type SignInUser = Extract<
+			NonNullable<SignInData>,
+			{ user: unknown }
+		>["user"];
 		expectTypeOf<SignInUser["phone"]>().toEqualTypeOf<
 			string | undefined | null
 		>();

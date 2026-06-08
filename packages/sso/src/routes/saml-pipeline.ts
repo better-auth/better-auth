@@ -1,7 +1,9 @@
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
-import type { User } from "better-auth";
+import type { GenericEndpointContext, User } from "better-auth";
+import { amrForProvider } from "better-auth";
 import { APIError } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import { resolveSignInWithRedirect } from "better-auth/auth/resolve-sign-in";
+import { symmetricEncrypt } from "better-auth/crypto";
 import { signInWithOAuthIdentity } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import type { FlowResult } from "samlify/types/src/flow";
@@ -18,13 +20,18 @@ import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
 import type {
+	PendingSAMLSessionRecord,
 	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	normalizeSamlSessionIndex,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
@@ -111,6 +118,53 @@ function extractAssertionId(samlContent: string): string | null {
 	}
 }
 
+export async function persistSamlSessionRecord(
+	ctx: GenericEndpointContext,
+	record: SAMLSessionRecord,
+	expiresAt: Date,
+) {
+	const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${record.providerId}:${record.nameID}`;
+	await ctx.context.internalAdapter
+		.createVerificationValue({
+			identifier: samlSessionKey,
+			value: JSON.stringify(record),
+			expiresAt,
+		})
+		.catch((e: unknown) =>
+			ctx.context.logger.warn("Failed to create SAML session record", {
+				error: e,
+			}),
+		);
+	await ctx.context.internalAdapter
+		.createVerificationValue({
+			identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${record.sessionId}`,
+			value: samlSessionKey,
+			expiresAt,
+		})
+		.catch((e: unknown) =>
+			ctx.context.logger.warn("Failed to create SAML session lookup record", e),
+		);
+}
+
+async function storePendingSamlSessionRecord(
+	ctx: GenericEndpointContext,
+	attemptId: string,
+	record: PendingSAMLSessionRecord,
+	expiresAt: Date,
+) {
+	await ctx.context.internalAdapter
+		.createVerificationValue({
+			identifier: `${constants.SAML_PENDING_SESSION_KEY_PREFIX}${attemptId}`,
+			value: JSON.stringify(record),
+			expiresAt,
+		})
+		.catch((e: unknown) =>
+			ctx.context.logger.warn("Failed to store pending SAML session record", {
+				error: e,
+			}),
+		);
+}
+
 export interface SAMLResponseParams {
 	SAMLResponse: string;
 	RelayState?: string;
@@ -127,7 +181,7 @@ export interface SAMLResponseParams {
  * URL computation.
  */
 export async function processSAMLResponse(
-	ctx: any,
+	ctx: GenericEndpointContext,
 	params: SAMLResponseParams,
 	options?: SSOOptions,
 ): Promise<string> {
@@ -425,7 +479,10 @@ export async function processSAMLResponse(
 		);
 	}
 
-	const { session, user } = result.data!;
+	const { user } = result.data!;
+	const sessionIndex = normalizeSamlSessionIndex(
+		(extract as SAMLAssertionExtract).sessionIndex?.sessionIndex,
+	);
 
 	// 17. Provision user
 	if (
@@ -438,12 +495,10 @@ export async function processSAMLResponse(
 			provider,
 		});
 	}
-
-	// 18. Organization assignment
-	await assignOrganizationFromProvider(ctx as any, {
+	const providerOrganizationAssignment = {
 		user,
 		profile: {
-			providerType: "saml",
+			providerType: "saml" as const,
 			providerId,
 			accountId: userInfo.id as string,
 			email: userInfo.email as string,
@@ -452,45 +507,89 @@ export async function processSAMLResponse(
 		},
 		provider,
 		provisioningOptions: options?.organizationProvisioning,
-	});
+	};
 
-	// 19. Set session cookie
-	await setSessionCookie(ctx, { session, user });
+	const failedToCreateSessionRedirectUrl = getSafeRedirectUrl(
+		relayState?.errorURL || relayState?.callbackURL,
+		currentCallbackPath,
+		appOrigin,
+		(url: string, settings?: { allowRelativePaths: boolean }) =>
+			ctx.context.isTrustedOrigin(url, settings),
+	);
+
+	// 19. Finalize or challenge the sign-in before issuing auth cookies
+	await resolveSignInWithRedirect(ctx, {
+		signIn: {
+			user,
+			amr: amrForProvider(providerId),
+		},
+		redirectTarget: samlRedirectUrl,
+		onFailedToCreateSession() {
+			throw ctx.redirect(
+				`${failedToCreateSessionRedirectUrl}?error=failed_to_create_session`,
+			);
+		},
+		onChallenge: async (challenge) => {
+			if (challenge.kind !== "two-factor") {
+				return;
+			}
+			const attemptId = challenge.attemptId;
+			const attempt = ctx.context.getSignInAttempt();
+			const expiresAt =
+				attempt?.id === attemptId
+					? attempt.expiresAt
+					: new Date(Date.now() + 10 * 60 * 1000);
+			if (provider.organizationId) {
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `${constants.SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId}`,
+					value: await symmetricEncrypt({
+						key: ctx.context.secretConfig,
+						data: JSON.stringify({
+							userId: user.id,
+							providerId: provider.providerId,
+							profile: providerOrganizationAssignment.profile,
+						}),
+					}),
+					expiresAt,
+				});
+			}
+			if (!options?.saml?.enableSingleLogout || !extract.nameID) {
+				return;
+			}
+			await storePendingSamlSessionRecord(
+				ctx,
+				attemptId,
+				{
+					userId: user.id,
+					providerId,
+					nameID: extract.nameID,
+					sessionIndex,
+				},
+				expiresAt,
+			);
+		},
+	});
+	await assignOrganizationFromProvider(ctx, providerOrganizationAssignment);
+	const finalizedSession = ctx.context.getIssuedSession();
+	if (!finalizedSession) {
+		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+			message: "Failed to create session",
+		});
+	}
 
 	// 20. SLO session record
 	if (options?.saml?.enableSingleLogout && extract.nameID) {
-		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
-		const samlSessionData: SAMLSessionRecord = {
-			sessionId: session.id,
-			sessionToken: session.token,
-			providerId,
-			nameID: extract.nameID,
-			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex
-				?.sessionIndex,
-		};
-		await ctx.context.internalAdapter
-			.createVerificationValue({
-				identifier: samlSessionKey,
-				value: JSON.stringify(samlSessionData),
-				expiresAt: session.expiresAt,
-			})
-			.catch((e: unknown) =>
-				ctx.context.logger.warn("Failed to create SAML session record", {
-					error: e,
-				}),
-			);
-		await ctx.context.internalAdapter
-			.createVerificationValue({
-				identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
-				value: samlSessionKey,
-				expiresAt: session.expiresAt,
-			})
-			.catch((e: unknown) =>
-				ctx.context.logger.warn(
-					"Failed to create SAML session lookup record",
-					e,
-				),
-			);
+		await persistSamlSessionRecord(
+			ctx,
+			{
+				sessionId: finalizedSession.session.id,
+				sessionToken: finalizedSession.session.token,
+				providerId,
+				nameID: extract.nameID,
+				sessionIndex,
+			},
+			finalizedSession.session.expiresAt,
+		);
 	}
 
 	// 21. Compute safe redirect URL

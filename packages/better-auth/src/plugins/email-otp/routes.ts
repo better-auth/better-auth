@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
@@ -8,6 +9,7 @@ import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
@@ -518,23 +520,42 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			);
 
 			if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-				const session = await ctx.context.internalAdapter.createSession(
-					updatedUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
+				const currentSession = await getSessionFromCtx(ctx);
+				if (currentSession?.user.id === updatedUser.id) {
+					await setSessionCookie(ctx, {
+						session: currentSession.session,
+						user: {
+							...currentSession.user,
+							emailVerified: true,
+						},
+					});
+					return ctx.json({
+						status: true,
+						token: currentSession.session.token,
+						user: parseUserOutput(ctx.context.options, updatedUser),
+					});
+				}
+				const result = await resolveSignIn(ctx, {
 					user: updatedUser,
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
+				if (result.kind === "challenge") {
+					return ctx.json(result);
+				}
 				return ctx.json({
 					status: true,
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, updatedUser),
+					token: result.session.token,
+					user: parseUserOutput(ctx.context.options, result.user),
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
 			if (currentSession && updatedUser.emailVerified) {
-				const dontRememberMeCookie = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
+				const sessionOnlyCookie = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionOnlyToken.name,
 					ctx.context.secret,
 				);
 				await setCookieCache(
@@ -546,7 +567,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 							emailVerified: true,
 						},
 					},
-					!!dontRememberMeCookie,
+					!sessionOnlyCookie,
 				);
 			}
 			return ctx.json({
@@ -661,16 +682,20 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					},
 					{ method: "email-otp" },
 				);
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
+				const result = await resolveSignIn(ctx, {
 					user: newUser,
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
+				if (result.kind === "challenge") {
+					return ctx.json(result);
+				}
 				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, newUser),
+					token: result.session.token,
+					user: parseUserOutput(ctx.context.options, result.user),
 				});
 			}
 
@@ -680,16 +705,20 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
-			);
-			await setSessionCookie(ctx, {
-				session,
+			const result = await resolveSignIn(ctx, {
 				user: user.user,
+				amr: {
+					method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+					factor: "possession",
+					completedAt: new Date(),
+				},
 			});
+			if (result.kind === "challenge") {
+				return ctx.json(result);
+			}
 			return ctx.json({
-				token: session.token,
-				user: parseUserOutput(ctx.context.options, user.user),
+				token: result.session.token,
+				user: parseUserOutput(ctx.context.options, result.user),
 			});
 		},
 	);

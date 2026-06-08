@@ -1,11 +1,12 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
+import { normalizeRememberMe, setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
@@ -202,9 +203,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					password,
 					image,
 					callbackURL: _callbackURL,
-					rememberMe,
+					rememberMe: requestedRememberMe,
 					...rest
 				} = body;
+				const rememberMe = normalizeRememberMe(requestedRememberMe);
 				const isValidEmail = z.email().safeParse(email);
 
 				if (!isValidEmail.success) {
@@ -429,7 +431,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
-					rememberMe === false,
+					rememberMe,
+					{
+						amr: [
+							{
+								method: BUILTIN_AMR_METHOD.PASSWORD,
+								factor: "knowledge",
+								completedAt: new Date(),
+							},
+						],
+					},
 				);
 				if (!session) {
 					throw APIError.from(
@@ -443,7 +454,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						session,
 						user: createdUser,
 					},
-					rememberMe === false,
+					rememberMe,
 				);
 				return ctx.json({
 					token: session.token,

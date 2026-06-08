@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../cookies";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "../../test-utils";
 import { bearer } from "../bearer";
+import { twoFactor } from "../two-factor";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
@@ -56,7 +63,8 @@ describe("phone-number", async () => {
 			},
 		);
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 	});
 
 	it("shouldn't verify again with the same code", async () => {
@@ -160,7 +168,8 @@ describe("phone-number callbackOnVerification on updatePhoneNumber", async () =>
 		});
 
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 		expect(callbackOnVerification).toHaveBeenCalledTimes(1);
 		expect(callbackOnVerification).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -172,6 +181,117 @@ describe("phone-number callbackOnVerification on updatePhoneNumber", async () =>
 			}),
 			expect.any(Object),
 		);
+	});
+});
+
+describe("phone-number two-factor challenge", async () => {
+	let verificationOtp = "";
+	const phoneNumberValue = "+351911111111";
+	const password = "password";
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					sendOTP({ code }) {
+						verificationOtp = code;
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const signUp = await client.signUp.email({
+		email: "two-factor-phone@example.com",
+		password,
+		name: "Two Factor Phone",
+		phoneNumber: phoneNumberValue,
+	});
+
+	if (!signUp.data) {
+		throw new Error("sign up failed");
+	}
+
+	await client.phoneNumber.verify({
+		phoneNumber: phoneNumberValue,
+		code: verificationOtp,
+	});
+
+	await seedVerifiedOtpMethod(db, signUp.data.user.id);
+
+	it("should return a challenge and clear the session cookies", async () => {
+		let setCookieHeader = "";
+		const res = await client.signIn.phoneNumber(
+			{
+				phoneNumber: phoneNumberValue,
+				password,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+					expect(ctx.response.headers.get("set-auth-token")).toBeNull();
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.methods).toEqual([
+			expect.objectContaining({
+				kind: "otp",
+				label: null,
+			}),
+		]);
+	});
+
+	it("should challenge passwordless phone verification before issuing a session", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: phoneNumberValue,
+		});
+
+		let setCookieHeader = "";
+		const res = await client.phoneNumber.verify(
+			{
+				phoneNumber: phoneNumberValue,
+				code: verificationOtp,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+					expect(ctx.response.headers.get("set-auth-token")).toBeNull();
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.methods).toEqual([
+			expect.objectContaining({
+				kind: "otp",
+				label: null,
+			}),
+		]);
 	});
 });
 
@@ -329,10 +449,11 @@ describe("phone auth flow", async () => {
 			phoneNumber: "+251911121314",
 			code: otp,
 		});
+		expectNoTwoFactorChallenge(res.data);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
-					Authorization: `Bearer ${res.data?.token}`,
+					Authorization: `Bearer ${res.data.token}`,
 				},
 				throw: true,
 			},
@@ -356,7 +477,8 @@ describe("phone auth flow", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 	});
 
 	const newEmail = "new-email@email.com";
@@ -382,7 +504,9 @@ describe("phone auth flow", async () => {
 			phoneNumber: "+251911121314",
 			password: "password",
 		});
-		expect(res.data?.token).toBeDefined();
+		const signInData = res.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
 	});
 
 	it("should sign in with new email", async () => {
@@ -452,7 +576,8 @@ describe("verify phone-number", async () => {
 			},
 		);
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 	});
 
 	it("should block after exceeding allowed attempts", async () => {
@@ -588,7 +713,8 @@ describe("reset password flow attempts", async () => {
 			email: testUser2.email,
 			password: "password",
 		});
-		expect(res.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.token).toBeDefined();
 	});
 
 	it("shouldn't allow to re-use the same OTP code", async () => {
@@ -855,7 +981,8 @@ describe("updateUser phone number update prevention", async () => {
 			},
 		);
 		expect(verifyRes.error).toBe(null);
-		expect(verifyRes.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(verifyRes.data);
+		expect(verifyRes.data.status).toBe(true);
 
 		// Verify that phoneNumberVerified is true after verification
 		const sessionBeforeUpdate = await client.getSession({
@@ -1025,10 +1152,11 @@ describe("signUpOnVerification with additionalFields", async () => {
 		});
 
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
-		expect(res.data?.user).not.toBe(null);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
+		expect(res.data.user).not.toBe(null);
 		// @ts-expect-error - additionalFields not yet inferred in plugin response type
-		expect(res.data?.user.lastName).toBe("Doe");
+		expect(res.data.user.lastName).toBe("Doe");
 	});
 });
 
@@ -1079,7 +1207,8 @@ describe("custom verifyOTP", async () => {
 		);
 
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 		expect(mockVerifyOTP).toHaveBeenCalledWith(
 			{
 				phoneNumber: testPhoneNumber,
@@ -1131,7 +1260,8 @@ describe("custom verifyOTP", async () => {
 
 		// Should succeed because custom verifyOTP is used, not internal DB lookup
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 		expect(mockVerifyOTP).toHaveBeenCalledWith(
 			{
 				phoneNumber: anotherPhoneNumber,
@@ -1157,7 +1287,8 @@ describe("custom verifyOTP", async () => {
 		});
 
 		expect(res.error).toBe(null);
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 
 		// Verify phone number was updated
 		const user = await client.getSession({

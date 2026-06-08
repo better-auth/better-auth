@@ -6,7 +6,9 @@
     "start:client": "vite"
   },
   "devDependencies": {
+    "@better-auth/sso": "workspace:*",
     "@better-auth-test/test-utils": "workspace:*",
+    "oauth2-mock-server": "^8.2.2",
     "vite": "^7.3.2"
   },
   "dependencies": {

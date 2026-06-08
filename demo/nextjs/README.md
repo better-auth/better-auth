@@ -43,6 +43,20 @@ Make sure `TURSO_DATABASE_URL=your_turso_url` and
 `TURSO_AUTH_TOKEN=your_turso_token` is set or `USE_MYSQL=true` and
 `MYSQL_DATABASE_URL=your_mysql_url` is set.
 
+If you are using a local database for manual testing, prepare the schema before
+starting the app:
+
+```bash
+pnpm db:setup
+```
+
+If your local MySQL Better Auth tables are stale and you want a clean slate in
+the configured demo database, reset them explicitly:
+
+```bash
+pnpm db:reset
+```
+
 ### Start the Development Server
 
 Once everything is set up, start the development server with:
@@ -59,6 +73,9 @@ bun dev
 
 The app will be live at [http://localhost:3000](http://localhost:3000).
 Open it in your browser, and you’re good to go!
+
+For email-based two-factor authentication in local development, the demo logs
+OTP codes to the server console when no `RESEND_API_KEY` is configured.
 
 Feel free to jump in and edit the app by modifying `app/page.tsx`.
 Any changes you make will update automatically in the browser.
