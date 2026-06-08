@@ -37,6 +37,20 @@ describe("open-api", async () => {
 		});
 	});
 
+	it("emits a valid OpenAPI array schema for string[] fields (grantedScopes)", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+		// Must be a JSON Schema array, never the invalid literal type "string[]".
+		expect(schemas["Account"]!.properties.grantedScopes).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["Account"]!.required ?? []).not.toContain("grantedScopes");
+	});
+
 	it("should include additionalFields in the User schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
@@ -137,6 +151,45 @@ describe("open-api", async () => {
 		expect(getSessionSchema.type).toContain("object");
 		expect(getSessionSchema.type).toContain("null");
 		expect(getSessionSchema.nullable).toBe(undefined);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9669
+	 */
+	it("should emit unique operationIds across multi-method endpoints", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const seen = new Set<string>();
+
+		for (const pathItem of Object.values(paths)) {
+			for (const method of ["get", "post", "put", "patch", "delete"]) {
+				const id = pathItem[method]?.operationId;
+				if (!id) continue;
+				expect(seen.has(id)).toBe(false);
+				seen.add(id);
+			}
+		}
+
+		expect(paths["/get-session"].get.operationId).toBe("getSession");
+		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9669
+	 */
+	it("should serialize the generated schema without circular response refs", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		expect(paths["/get-session"].get.responses["200"]).not.toBe(
+			paths["/get-session"].post.responses["200"],
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/open-api/generate-schema"),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.text()).not.toContain("[Circular ref");
 	});
 
 	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {

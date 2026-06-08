@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -39,6 +40,8 @@ export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
 	redirectURI?: string | undefined;
 }
 
+const SALESFORCE_DEFAULT_SCOPES = ["openid", "email", "profile"];
+
 export const salesforce = (options: SalesforceOptions) => {
 	const environment = options.environment ?? "production";
 	const isSandbox = environment === "sandbox";
@@ -63,8 +66,15 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
+		callbackPath: "/callback/salesforce",
 
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret are required for Salesforce. Make sure to provide them in the options.",
@@ -75,20 +85,21 @@ export const salesforce = (options: SalesforceOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Salesforce");
 			}
 
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["openid", "email", "profile"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				SALESFORCE_DEFAULT_SCOPES,
+				scopes,
+			);
 
 			return createAuthorizationURL({
 				id: "salesforce",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
+				additionalParams,
 			});
 		},
 
@@ -155,5 +166,5 @@ export const salesforce = (options: SalesforceOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<SalesforceProfile>;
+	} satisfies UpstreamProvider<SalesforceProfile>;
 };

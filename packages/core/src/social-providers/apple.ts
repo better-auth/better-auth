@@ -1,13 +1,14 @@
 import { betterFetch } from "@better-fetch/fetch";
 
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface AppleProfile {
@@ -77,32 +78,42 @@ export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	audience?: (string | string[]) | undefined;
 }
 
+const APPLE_DEFAULT_SCOPES = ["email", "name"];
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		callbackPath: "/callback/apple",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
-			if (options.scope) _scope.push(...options.scope);
-			if (scopes) _scope.push(...scopes);
-			const url = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				APPLE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "apple",
 				options,
 				authorizationEndpoint: "https://appleid.apple.com/auth/authorize",
-				scopes: _scope,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				responseMode: "form_post",
 				responseType: "code id_token",
+				additionalParams,
 			});
-			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -113,41 +124,17 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const decodedHeader = decodeProtectedHeader(token);
-				const { kid, alg: jwtAlg } = decodedHeader;
-				if (!kid || !jwtAlg) return false;
-				const publicKey = await getApplePublicKey(kid);
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: "https://appleid.apple.com",
-					audience:
-						options.audience && options.audience.length
-							? options.audience
-							: options.appBundleIdentifier
-								? options.appBundleIdentifier
-								: options.clientId,
-					maxTokenAge: "1h",
-				});
-				["email_verified", "is_private_email"].forEach((field) => {
-					if (jwtClaims[field] !== undefined) {
-						jwtClaims[field] = Boolean(jwtClaims[field]);
-					}
-				});
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-				return !!jwtClaims;
-			} catch {
-				return false;
-			}
+		idToken: {
+			jwks: (header) => getApplePublicKey(header.kid!),
+			issuer: "https://appleid.apple.com",
+			audience:
+				options.audience && options.audience.length
+					? options.audience
+					: options.appBundleIdentifier
+						? options.appBundleIdentifier
+						: options.clientId,
+			maxTokenAge: "1h",
+			nonceComparison: "exact-or-sha256",
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
@@ -202,7 +189,7 @@ export const apple = (options: AppleOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<AppleProfile>;
+	} satisfies UpstreamProvider<AppleProfile>;
 };
 
 export const getApplePublicKey = async (kid: string) => {

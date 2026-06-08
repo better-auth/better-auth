@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
+import { getTrustedOrigins } from "../context/helpers";
 import { getTestInstance } from "../test-utils";
 import type { BetterAuthOptions } from "../types";
 
@@ -296,6 +297,133 @@ describe("trusted origins", () => {
 		});
 	});
 
+	describe("custom-scheme origin matching", () => {
+		it("should reject URLs where the host extends the trusted pattern", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(
+				isTrustedOrigin("myapp://callback.attacker.tld"),
+			).resolves.toBe(false);
+
+			await expect(
+				isTrustedOrigin("myapp://callback.attacker.tld/path"),
+			).resolves.toBe(false);
+		});
+
+		it("should allow exact custom-scheme origin match", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(isTrustedOrigin("myapp://callback")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://callback/")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://callback/path")).resolves.toBe(
+				true,
+			);
+			// A query or fragment directly on the host is not part of the
+			// authority, so the host still matches exactly.
+			await expect(isTrustedOrigin("myapp://callback?token=x")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://callback#frag")).resolves.toBe(
+				true,
+			);
+		});
+
+		it("should match custom-scheme with empty host (myapp:/)", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp:/"],
+			});
+
+			await expect(isTrustedOrigin("myapp:/")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp:/auth/callback")).resolves.toBe(true);
+		});
+
+		it("should reject different custom schemes", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(isTrustedOrigin("otherapp://callback")).resolves.toBe(false);
+		});
+
+		it("should still support wildcard matching for custom schemes", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["exp://192.168.*.*:*/*"],
+			});
+
+			await expect(
+				isTrustedOrigin("exp://192.168.1.100:8081/--/"),
+			).resolves.toBe(true);
+
+			await expect(isTrustedOrigin("exp://10.0.0.1:8081/--/")).resolves.toBe(
+				false,
+			);
+		});
+
+		it("should trust any host for a host-less custom-scheme pattern", async () => {
+			// The Expo plugin registers a bare `exp://` in development to trust
+			// every Expo Go dev origin, and apps register `myapp://` to trust any
+			// deep link. A host-less pattern matches any host of the scheme.
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["exp://", "myapp://"],
+			});
+
+			await expect(isTrustedOrigin("exp://192.168.1.5:8081/--/")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("exp://localhost:8081/--/")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://callback")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://other-host/path")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("evil://anything")).resolves.toBe(false);
+		});
+
+		it("should match custom-scheme host case-insensitively", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(isTrustedOrigin("myapp://CALLBACK")).resolves.toBe(true);
+			await expect(isTrustedOrigin("MyApp://Callback")).resolves.toBe(true);
+		});
+
+		it("should pin the path when the pattern includes one", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://host/cb"],
+			});
+
+			await expect(isTrustedOrigin("myapp://host/cb")).resolves.toBe(true);
+			await expect(isTrustedOrigin("myapp://host/cb/extra")).resolves.toBe(
+				true,
+			);
+			await expect(isTrustedOrigin("myapp://host/cbx")).resolves.toBe(false);
+			await expect(isTrustedOrigin("myapp://host/other")).resolves.toBe(false);
+		});
+
+		it("should not let a path-pinned pattern be bypassed with traversal", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://host/cb"],
+			});
+
+			await expect(isTrustedOrigin("myapp://host/cb/../evil")).resolves.toBe(
+				false,
+			);
+			await expect(
+				isTrustedOrigin("myapp://host/cb/%2e%2e/evil"),
+			).resolves.toBe(false);
+			await expect(
+				isTrustedOrigin("myapp://host/cb%2f..%2fevil"),
+			).resolves.toBe(false);
+		});
+	});
+
 	describe("dynamic trusted origins", () => {
 		it("should allow dynamically computed trusted origins", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
@@ -323,6 +451,89 @@ describe("trusted origins", () => {
 			await expect(
 				isTrustedOrigin("http://localhost:5000/callback"),
 			).resolves.toBe(false);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9634
+	 */
+	describe("dynamic baseURL protocol option", () => {
+		it("should add http:// origins when protocol is 'http'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "dev.example.local"],
+					protocol: "http",
+					fallback: "https://app.example.com",
+				},
+			});
+			expect(origins).toContain("http://staging.example.com");
+			expect(origins).toContain("http://dev.example.local");
+			expect(origins).not.toContain("https://staging.example.com");
+			expect(origins).not.toContain("https://dev.example.local");
+			expect(origins).toContain("https://app.example.com");
+		});
+
+		it("should add only https:// origins when protocol is 'https'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "app.example.com"],
+					protocol: "https",
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).toContain("https://app.example.com");
+			expect(origins).not.toContain("http://staging.example.com");
+			expect(origins).not.toContain("http://app.example.com");
+		});
+
+		it("should add both http:// and https:// origins when protocol is 'auto'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com"],
+					protocol: "auto",
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).toContain("http://staging.example.com");
+		});
+
+		it("should default to https:// with http:// for loopback when protocol is undefined", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "localhost:3000"],
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).not.toContain("http://staging.example.com");
+			expect(origins).toContain("https://localhost:3000");
+			expect(origins).toContain("http://localhost:3000");
+		});
+
+		it("should still allow hosts with explicit protocol in the host string", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: [
+						"http://already-specified.example.com",
+						"staging.example.com",
+					],
+					protocol: "http",
+				},
+			});
+			expect(origins).toContain("http://already-specified.example.com");
+			expect(origins).toContain("http://staging.example.com");
+		});
+
+		it("should add http:// for loopback hosts even when protocol is 'https'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["localhost:3000", "127.0.0.1:8080"],
+					protocol: "https",
+				},
+			});
+			expect(origins).toContain("https://localhost:3000");
+			expect(origins).toContain("http://localhost:3000");
+			expect(origins).toContain("https://127.0.0.1:8080");
+			expect(origins).toContain("http://127.0.0.1:8080");
 		});
 	});
 

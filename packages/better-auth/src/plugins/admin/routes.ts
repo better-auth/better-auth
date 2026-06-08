@@ -360,15 +360,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				email: email,
-				name: ctx.body.name,
-				role:
-					(ctx.body.role && parseRoles(ctx.body.role)) ??
-					opts?.defaultRole ??
-					"user",
-				...ctx.body.data,
-			});
+			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+				{
+					email: email,
+					name: ctx.body.name,
+					role:
+						(ctx.body.role && parseRoles(ctx.body.role)) ??
+						opts?.defaultRole ??
+						"user",
+					...ctx.body.data,
+				},
+				{ method: "admin" },
+			);
 
 			if (!user) {
 				throw APIError.from(
@@ -983,7 +986,7 @@ export const banUser = (opts: AdminOptions) =>
 				},
 			);
 			//revoke all sessions
-			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
@@ -1367,7 +1370,7 @@ export const revokeUserSessions = (opts: AdminOptions) =>
 				);
 			}
 
-			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});
@@ -1460,6 +1463,7 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 			return ctx.json({
 				success: true,

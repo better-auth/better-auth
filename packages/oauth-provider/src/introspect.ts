@@ -20,6 +20,7 @@ import {
 	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
+	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
 
@@ -103,20 +104,18 @@ async function validateJwtAccessToken(
 		}
 	}
 
-	// Validate JWT against its session if it exists
+	// A JWT access token carrying `sid` is bound to that OP session; once the
+	// session has ended (sign-out, admin revoke, back-channel logout...) the
+	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
+	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
+			where: [{ field: "id", value: sessionId }],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			jwtPayload.sid = undefined;
+			return { active: false };
 		}
 	}
 
@@ -178,6 +177,11 @@ async function validateOpaqueAccessToken(
 			active: false,
 		};
 	}
+	if (accessToken.revoked) {
+		return {
+			active: false,
+		};
+	}
 
 	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
@@ -194,7 +198,11 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
-	let sessionId = accessToken.sessionId ?? undefined;
+	// An opaque access token bound to a session (every authorization-code token;
+	// client-credentials tokens have no sessionId) dies with that session. This
+	// mirrors the JWT path so revocation is a function of session state and does
+	// not depend solely on the `revoked` flag written by the session-delete hook.
+	const sessionId = accessToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -206,13 +214,23 @@ async function validateOpaqueAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
+			return { active: false };
 		}
 	}
 
 	let user: User | null | undefined;
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
+	}
+	const resources = Array.isArray(accessToken.resources)
+		? accessToken.resources
+		: undefined;
+	const audience = resources ? [...resources] : undefined;
+	if (audience?.length && accessToken.scopes?.includes("openid")) {
+		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+		if (!audience.includes(userInfoEndpoint)) {
+			audience.push(userInfoEndpoint);
+		}
 	}
 
 	// Add Custom Claims
@@ -221,6 +239,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
+				resources,
 				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
@@ -235,6 +254,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		aud: toAudienceClaim(audience),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,

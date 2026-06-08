@@ -4,12 +4,18 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
-import { missingEmailLogMessage } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { generateRandomString } from "../../crypto";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
+import { persistOAuthAccount } from "../../oauth2/persist-account";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { generateState, parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { isAPIError } from "../../utils/is-api-error";
+import { assertValidUserInfo } from "../../utils/validate-user-info";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -87,16 +93,19 @@ export const callbackOAuth = createAuthEndpoint(
 				value: c.params.id,
 			});
 			if (provider?.allowIdpInitiated) {
-				const { state: freshState, codeVerifier } = await generateState(
-					c,
-					undefined,
-					undefined,
-				);
-				const authUrl = await provider.createAuthorizationURL({
-					state: freshState,
-					codeVerifier,
-					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
-				});
+				// Build the URL first so the effective requested scopes can be
+				// persisted into state, then write state once with the same nonces
+				// (same ordering as the normal sign-in flow). Without this the
+				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
+				const state = generateRandomString(32);
+				const codeVerifier = generateRandomString(128);
+				const { url: authUrl, requestedScopes } =
+					await provider.createAuthorizationURL({
+						state,
+						codeVerifier,
+						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+					});
+				await generateState(c, { requestedScopes, state, codeVerifier });
 				throw c.redirect(authUrl.toString());
 			}
 		}
@@ -104,7 +113,7 @@ export const callbackOAuth = createAuthEndpoint(
 		if (!state) {
 			c.context.logger.error("State not found", error);
 			const sep = defaultErrorURL.includes("?") ? "&" : "?";
-			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			const url = `${defaultErrorURL}${sep}error=state_not_found`;
 			throw c.redirect(url);
 		}
 
@@ -115,6 +124,7 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			requestedScopes,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string | undefined) {
@@ -168,7 +178,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
@@ -187,23 +197,25 @@ export const callbackOAuth = createAuthEndpoint(
 				}>(userData)
 			: null;
 
-		const userInfo = await provider
-			.getUserInfo({
-				...tokens,
-				/**
-				 * The user object from the provider
-				 * This is only available for some providers like Apple
-				 */
-				user: parsedUserData ?? undefined,
-			})
-			.then((res) => res?.user);
-
-		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
+		const providerResult = await provider.getUserInfo({
+			...tokens,
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user: parsedUserData ?? undefined,
+		});
+		if (
+			!providerResult?.user ||
+			providerResult.user.id === undefined ||
+			providerResult.user.id === null
+		) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
+		const userInfo = providerResult.user;
 		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
@@ -212,6 +224,30 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
+			// Link-account creates no user row, so the gate runs here rather than
+			// inside createUser.
+			try {
+				await assertValidUserInfo(c, {
+					user: {
+						...userInfo,
+						id: providerAccountId,
+						email: userInfo.email ?? undefined,
+					},
+					source: {
+						action: "link-account",
+						method: "oauth",
+						oauth: {
+							providerId: provider.id,
+							profile: providerResult.data,
+						},
+					},
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					throw redirectOnError(e.body.code, e.body.message);
+				}
+				throw e;
+			}
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
@@ -238,42 +274,31 @@ export const callbackOAuth = createAuthEndpoint(
 					provider.id,
 				);
 
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
-					);
-				}
-				const updateData = Object.fromEntries(
-					Object.entries({
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: tokens.scopes?.join(","),
-					}).filter(([_, value]) => value !== undefined),
+			if (
+				existingAccount &&
+				existingAccount.userId.toString() !== link.userId.toString()
+			) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
-				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: providerAccountId,
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
-					);
-				}
 			}
+
+			const linkedAccount = await persistOAuthAccount(c, {
+				userId: link.userId,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				mode: "link",
+				grantAuthority: provider.grantAuthority,
+			});
+			if (!linkedAccount) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
+			}
+
+			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -288,26 +313,38 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		const accountData = {
-			providerId: provider.id,
-			accountId: providerAccountId,
-			...tokens,
-			scope: tokens.scopes?.join(","),
-		};
-		const result = await handleOAuthUserInfo(c, {
-			userInfo: {
-				...userInfo,
-				id: providerAccountId,
-				email: userInfo.email,
-				name: userInfo.name || "",
-			},
-			account: accountData,
-			callbackURL,
-			disableSignUp:
-				(provider.disableImplicitSignUp && !requestSignUp) ||
-				provider.options?.disableSignUp,
-			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
-		});
+		let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+		try {
+			result = await signInWithOAuthIdentity(c, {
+				userInfo: {
+					...userInfo,
+					id: providerAccountId,
+					email: userInfo.email,
+					name: userInfo.name || "",
+				},
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				callbackURL,
+				disableSignUp:
+					(provider.disableImplicitSignUp && !requestSignUp) ||
+					provider.options?.disableSignUp,
+				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				source: {
+					method: "oauth",
+					oauth: { providerId: provider.id, profile: providerResult.data },
+				},
+				grantAuthority: provider.grantAuthority,
+			});
+		} catch (e) {
+			// App-defined rejection codes are forwarded verbatim rather than mapped
+			// onto OAUTH_CALLBACK_ERROR_CODES.
+			if (isAPIError(e) && e.body?.code) {
+				redirectOnError(e.body.code, e.body.message);
+			}
+			throw e;
+		}
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));

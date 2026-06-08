@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -139,48 +140,152 @@ describe("internal adapter test", async () => {
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
 
-	it("should create oauth user with custom generate id", async () => {
-		const user = await internalAdapter.createOAuthUser(
+	it("creates a user and linked account with custom generated ids, firing user-create hooks", async () => {
+		const user = await internalAdapter.createUser(
 			{
 				email: "email@email.com",
 				name: "name",
 				emailVerified: false,
 			},
-			{
-				providerId: "provider",
-				accountId: "account",
-				accessTokenExpiresAt: new Date(),
-				refreshTokenExpiresAt: new Date(),
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
+			{ method: "test" },
 		);
-		expect(user).toMatchObject({
-			user: {
-				id: "1",
-				name: "name",
-				email: "email@email.com",
-				emailVerified: false,
-				image: null,
-				createdAt: expect.any(Date),
-				updatedAt: expect.any(Date),
-			},
-			account: {
-				id: "2",
-				userId: expect.any(String),
-				providerId: "provider",
-				accountId: "account",
-				accessToken: null,
-				refreshToken: null,
-				refreshTokenExpiresAt: expect.any(Date),
-				accessTokenExpiresAt: expect.any(Date),
-			},
+		const account = await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "provider",
+			accountId: "account",
+			accessTokenExpiresAt: new Date(),
+			refreshTokenExpiresAt: new Date(),
 		});
-		expect(user?.user.id).toBe(user?.account.userId);
+		expect(user).toMatchObject({
+			id: "1",
+			name: "name",
+			email: "email@email.com",
+			emailVerified: false,
+			image: null,
+			createdAt: expect.any(Date),
+			updatedAt: expect.any(Date),
+		});
+		expect(account).toMatchObject({
+			id: "2",
+			userId: "1",
+			providerId: "provider",
+			accountId: "account",
+			accessToken: null,
+			refreshToken: null,
+			refreshTokenExpiresAt: expect.any(Date),
+			accessTokenExpiresAt: expect.any(Date),
+		});
+		expect(account.userId).toBe(user.id);
 		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("rejects createUser outside an endpoint context when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+
+		await expect(
+			context.internalAdapter.createUser(
+				{
+					email: "missing-context@example.com",
+					name: "Missing Context",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			),
+		).rejects.toMatchObject({
+			body: { code: "validation_context_missing" },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("requires a provisioning source when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const missingSource = undefined as unknown as Parameters<
+			typeof context.internalAdapter.createUser
+		>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await expect(
+					context.internalAdapter.createUser(
+						{
+							email: "missing-source@example.com",
+							name: "Missing Source",
+							emailVerified: false,
+						},
+						missingSource,
+					),
+				).rejects.toMatchObject({
+					body: { code: "validation_source_missing" },
+				});
+			},
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("forces create-user as the createUser validation action", async () => {
+		let capturedAction: string | undefined;
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedAction = source.action;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const spoofedSource = {
+			method: "test",
+			action: "sign-in",
+		} as unknown as Parameters<typeof context.internalAdapter.createUser>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUser(
+					{
+						email: "canonical-action@example.com",
+						name: "Canonical Action",
+						emailVerified: false,
+					},
+					spoofedSource,
+				);
+			},
+		);
+
+		expect(capturedAction).toBe("create-user");
 	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
@@ -500,7 +605,7 @@ describe("internal adapter test", async () => {
 		};
 
 		// Create a user in the database first
-		await ctx.context.internalAdapter.createUser(testUser);
+		await ctx.context.internalAdapter.createUser(testUser, { method: "test" });
 
 		// Test case 1: Session with fractional seconds in TTL
 		const expiresAt = new Date(Date.now() + 3599500); // 59 minutes and 59.5 seconds from now
@@ -606,10 +711,13 @@ describe("internal adapter test", async () => {
 		// Create session
 		const now = Date.now();
 		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
-		const user = await internalAdapter.createUser({
-			name: "test-user",
-			email: "test@email.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "test-user",
+				email: "test@email.com",
+			},
+			{ method: "test" },
+		);
 		const session = await internalAdapter.createSession(user.id);
 
 		// Session should always have an id, even with secondary storage only
@@ -710,10 +818,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete a single account", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Account Delete User",
-			email: "account.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Account Delete User",
+				email: "account.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
@@ -721,20 +832,29 @@ describe("internal adapter test", async () => {
 			accountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccount(account.accountId);
+		let foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccount(account.accountId);
+		foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeNull();
 	});
 
 	it("should delete multiple accounts for a user", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Accounts Delete User",
-			email: "accounts.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Accounts Delete User",
+				email: "accounts.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		await internalAdapter.createAccount({
 			userId: user.id,
@@ -780,10 +900,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-skip",
-			email: "test-skip@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-skip",
+				email: "test-skip@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -828,10 +951,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-malformed",
-			email: "test-malformed@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-malformed",
+				email: "test-malformed@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -872,10 +998,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-corrupt",
-			email: "test-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-corrupt",
+				email: "test-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -915,10 +1044,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-all-corrupt",
-			email: "test-all-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-all-corrupt",
+				email: "test-all-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 2 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -956,10 +1088,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-find",
-			email: "test-find@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-find",
+				email: "test-find@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -1011,10 +1146,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testCtx.internalAdapter;
 
 		// Create a user first
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-update",
-			email: "test-update@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-update",
+				email: "test-update@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -1114,10 +1252,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testAuthContext.internalAdapter;
 
 		// Create a user
-		const user = await testInternalAdapter.createUser({
-			name: "corrupt-sessions-test-user",
-			email: "corrupt-sessions-test@example.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "corrupt-sessions-test-user",
+				email: "corrupt-sessions-test@example.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -1491,6 +1632,349 @@ describe("internal adapter test", async () => {
 			expect(typeof found!.value).toBe("string");
 			// Date strings MUST be converted
 			expect(found!.expiresAt).toBeInstanceOf(Date);
+		});
+	});
+
+	describe("consumeVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns the row to the first caller and null to subsequent reads", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:single",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const first = await adapter.consumeVerificationValue("consume:single");
+			expect(first).not.toBeNull();
+			expect(first!.value).toBe("user-1");
+
+			const second = await adapter.consumeVerificationValue("consume:single");
+			expect(second).toBeNull();
+		});
+
+		it("yields exactly one winner under concurrent consume", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:race",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+			]);
+
+			const winners = results.filter((r) => r !== null);
+			expect(winners).toHaveLength(1);
+			expect(winners[0]!.value).toBe("user-2");
+		});
+
+		it("returns null for an unknown identifier", async () => {
+			const adapter = await makeAdapter();
+			const result = await adapter.consumeVerificationValue("consume:missing");
+			expect(result).toBeNull();
+		});
+
+		it("returns null when the row exists but has already expired", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:expired",
+				value: "user-expired",
+				expiresAt: new Date(Date.now() - 1_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:expired");
+			expect(result).toBeNull();
+
+			// The expired row must still be invalidated so a later replay cannot
+			// consume it after a cleanup pass.
+			const replay = await adapter.findVerificationValue("consume:expired");
+			expect(replay).toBeNull();
+		});
+
+		it("aborts the consume when a delete.before hook returns false", async () => {
+			const veto = vi.fn().mockReturnValue(false);
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							before: veto,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:veto",
+				value: "user-3",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:veto");
+			expect(result).toBeNull();
+			expect(veto).toHaveBeenCalledTimes(1);
+
+			const stillThere = await adapter.findVerificationValue("consume:veto");
+			expect(stillThere).not.toBeNull();
+		});
+
+		it("fires delete.after only for the winning racer", async () => {
+			const afterHook = vi.fn();
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							after: afterHook,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:after-once",
+				value: "user-4",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:after-once"),
+				adapter.consumeVerificationValue("consume:after-once"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(afterHook).toHaveBeenCalledTimes(1);
+		});
+
+		it("consumes via the original identifier when storeIdentifier is hashed", async () => {
+			const adapter = await makeAdapter({
+				verification: { storeIdentifier: "hashed" },
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:hashed",
+				value: "user-5",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:hashed");
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("user-5");
+
+			const replay = await adapter.consumeVerificationValue("consume:hashed");
+			expect(replay).toBeNull();
+		});
+
+		it("consumes the latest row and invalidates stale rows for the identifier", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const consumed = await adapter.consumeVerificationValue("consume:multi");
+			expect(consumed).not.toBeNull();
+			expect(consumed!.value).toBe("newer");
+
+			const leftover = await adapter.findVerificationValue("consume:multi");
+			expect(leftover).toBeNull();
+		});
+
+		it("uses secondary storage getAndDelete when verification values are storage-only", async () => {
+			const store = new Map<string, string>();
+			const getAndDelete = vi.fn((key: string) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			});
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					getAndDelete,
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary",
+				value: "secondary-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:secondary"),
+				adapter.consumeVerificationValue("consume:secondary"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(results.find((r) => r !== null)?.value).toBe("secondary-user");
+			expect(getAndDelete).toHaveBeenCalledWith(
+				"verification:consume:secondary",
+			);
+			expect(store.has("verification:consume:secondary")).toBe(false);
+		});
+
+		it("returns null when the secondary storage row has already expired", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			// Bypass `createVerificationValue`'s TTL gate by writing directly
+			// with an `expiresAt` already in the past. This mirrors a row that
+			// was valid when written but reached the consume call after expiry.
+			store.set(
+				"verification:consume:secondary-expired",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-expired",
+					value: "secondary-expired-user",
+					expiresAt: new Date(Date.now() - 1_000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-expired",
+			);
+			expect(result).toBeNull();
+			// The expired row is still consumed (deleted) so it cannot be
+			// replayed later.
+			expect(store.has("verification:consume:secondary-expired")).toBe(false);
+		});
+
+		it("rehydrates string `expiresAt` from secondary storage JSON", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary-hydrate",
+				value: "hydrate-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-hydrate",
+			);
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("hydrate-user");
+			expect(result!.expiresAt).toBeInstanceOf(Date);
+			expect(result!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+		});
+
+		it("returns null when secondary storage `expiresAt` cannot be parsed", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			store.set(
+				"verification:consume:secondary-invalid-date",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-invalid-date",
+					value: "bad-row",
+					expiresAt: "not-a-date",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-invalid-date",
+			);
+			expect(result).toBeNull();
+		});
+
+		it("serializes the secondary storage compatibility fallback within one process", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					async get(key) {
+						await new Promise((resolve) => setTimeout(resolve, 5));
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary-fallback",
+				value: "fallback-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+				adapter.consumeVerificationValue("consume:secondary-fallback"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(results.find((r) => r !== null)?.value).toBe("fallback-user");
+			expect(store.has("verification:consume:secondary-fallback")).toBe(false);
 		});
 	});
 });

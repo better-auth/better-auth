@@ -611,17 +611,20 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						"create",
 					);
 					user =
-						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>({
-							...additionalFields,
-							email: opts.signUpOnVerification.getTempEmail(
-								ctx.body.phoneNumber,
-							),
-							name: opts.signUpOnVerification.getTempName
-								? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
-								: ctx.body.phoneNumber,
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: true,
-						});
+						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>(
+							{
+								...additionalFields,
+								email: opts.signUpOnVerification.getTempEmail(
+									ctx.body.phoneNumber,
+								),
+								name: opts.signUpOnVerification.getTempName
+									? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
+									: ctx.body.phoneNumber,
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+							{ method: "phone-number" },
+						);
 					if (!user) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
@@ -907,7 +910,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteSessions(user.id);
+				await ctx.context.internalAdapter.deleteUserSessions(user.id);
 			}
 
 			return ctx.json({

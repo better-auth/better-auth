@@ -20,12 +20,16 @@ export function authServerMetadata(
 	opts?: JwtOptions,
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
+		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
+	// Back-channel logout requires a verifiable Logout Token, which depends on
+	// the JWT plugin's JWKS. Advertise support only when the plugin is enabled.
+	const backchannelSupported = !overrides?.jwt_disabled;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
@@ -35,7 +39,9 @@ export function authServerMetadata(
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
 				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
-		registration_endpoint: `${baseURL}/oauth2/register`,
+		registration_endpoint: overrides?.dynamic_client_registration_supported
+			? `${baseURL}/oauth2/register`
+			: undefined,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported:
@@ -78,6 +84,8 @@ export function authServerMetadata(
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		backchannel_logout_supported: backchannelSupported,
+		backchannel_logout_session_supported: backchannelSupported,
 	};
 	return metadata;
 }
@@ -92,6 +100,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		// `public_client_supported` flips `"none"` into the advertised auth
 		// methods. Any configured `clientDiscovery` implicitly produces public
 		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
@@ -141,7 +150,10 @@ export function oidcServerMetadata(
 const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
 
-function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+export function metadataResponse(
+	body: unknown,
+	extraHeaders?: HeadersInit,
+): Response {
 	const headers = new Headers(extraHeaders);
 	if (!headers.has("Cache-Control")) {
 		headers.set("Cache-Control", METADATA_CACHE_CONTROL);

@@ -100,6 +100,14 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
+			backchannelLogoutUri: {
+				type: "string",
+				required: false,
+			},
+			backchannelLogoutSessionRequired: {
+				type: "boolean",
+				required: false,
+			},
 			tokenEndpointAuthMethod: {
 				type: "string",
 				required: false,
@@ -154,6 +162,7 @@ export const schema = {
 			token: {
 				type: "string",
 				required: true,
+				unique: true,
 			},
 			clientId: {
 				type: "string",
@@ -187,6 +196,10 @@ export const schema = {
 			},
 			referenceId: {
 				type: "string",
+				required: false,
+			},
+			resources: {
+				type: "string[]",
 				required: false,
 			},
 			expiresAt: {
@@ -264,6 +277,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			refreshId: {
 				type: "string",
 				required: false,
@@ -278,6 +295,10 @@ export const schema = {
 			},
 			createdAt: {
 				type: "date",
+			},
+			revoked: {
+				type: "date",
+				required: false,
 			},
 			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
@@ -309,6 +330,10 @@ export const schema = {
 			},
 			referenceId: {
 				type: "string",
+				required: false,
+			},
+			resources: {
+				type: "string[]",
 				required: false,
 			},
 			scopes: {

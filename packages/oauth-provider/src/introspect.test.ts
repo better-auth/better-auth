@@ -61,7 +61,7 @@ describe("oauth introspect", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -380,7 +380,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should pass opaque access_token introspection with logged out user", async () => {
+	it("reports opaque access_token as inactive after the user signs out", async () => {
+		// Per OIDC Back-Channel Logout §2.7: access tokens bound to a session
+		// are revoked when the session ends, even if they have not yet
+		// reached their TTL.
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(undefined, undefined, testHeaders);
 		const signOut = await auth.api.signOut({
@@ -402,19 +405,85 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
-		});
-		expect(introspection.data?.sid).toBeUndefined();
+		expect(introspection.data).toEqual({ active: false });
 	});
 
-	it("should pass jwt access_token introspection with logged out user", async () => {
+	it("reports opaque access_token as inactive when its bound session has expired, without a revoked flag", async () => {
+		// Parity with the JWT path: revocation is a function of session state,
+		// not only the stored `revoked` flag the session-delete hook writes. Here
+		// the session is expired in place (no delete, no hook), so the token is
+		// rejected purely on session liveness.
+		const { headers: testHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers: testHeaders });
+		const sessionId = session!.session.id;
+		const tokens = await getTokens(undefined, undefined, testHeaders);
+
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+			update: { expiresAt: new Date(Date.now() - 60_000) },
+		});
+		const rows = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: sessionId }],
+		});
+		expect(rows.length).toBeGreaterThan(0);
+		for (const r of rows) expect(r.revoked ?? null).toBeNull();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	it("reports opaque access_token as inactive when the revoked flag is set while the session is live", async () => {
+		// Isolates the stored-flag path: the session is untouched, only `revoked`
+		// is set, and introspection must still report the token inactive.
+		const { headers: testHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers: testHeaders });
+		const sessionId = session!.session.id;
+		const tokens = await getTokens(undefined, undefined, testHeaders);
+
+		const ctx = await auth.$context;
+		await ctx.adapter.updateMany({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: sessionId }],
+			update: { revoked: new Date() },
+		});
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	it("reports jwt access_token as inactive after the user signs out", async () => {
+		// JWT access tokens that carry `sid` are bound to the OP session and
+		// become inactive when the session ends, per OIDC Back-Channel Logout
+		// §2.7, regardless of their own TTL.
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(
 			undefined,
@@ -442,16 +511,7 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
-		});
-		expect(introspection.data?.sid).toBeUndefined();
+		expect(introspection.data).toEqual({ active: false });
 	});
 
 	it("should pass refresh_token introspection with logged out user", async () => {
@@ -565,7 +625,7 @@ describe("oauth introspect - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -710,6 +770,194 @@ describe("oauth introspect - config", async () => {
 			sub: expect.any(String),
 			exp: expect.any(Number),
 			iat: expect.any(Number),
+		});
+	});
+
+	it("should include aud in opaque access token introspection response", async () => {
+		const testScopes = ["openid", "profile", "email", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+				scopes: testScopes,
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient, {
+			scopes: testScopes,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "authorization_code",
+				code: url.searchParams.get("code") ?? undefined,
+				code_verifier: codeVerifier,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validAudience,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token ?? "",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+			aud: [validAudience, `${authServerBaseUrl}/api/auth/oauth2/userinfo`],
+		});
+	});
+
+	it("should pass resources to customAccessTokenClaims for jwt and opaque introspection", async () => {
+		const testScopes = ["openid", "profile", "email", "offline_access"];
+		const customAccessTokenClaims = ({
+			resources,
+		}: {
+			resources?: string[];
+		}) => ({
+			resource_count: resources?.length ?? 0,
+			first_resource: resources?.[0],
+		});
+
+		const jwtInstance = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				customAccessTokenClaims,
+			},
+		});
+		if (!jwtInstance.oauthClient) expect.unreachable();
+
+		const { url: jwtAuthUrl, codeVerifier: jwtCodeVerifier } =
+			await createAuthUrl(jwtInstance.oauthClient, {
+				scopes: testScopes,
+			});
+		let jwtCallbackRedirectUrl = "";
+		await jwtInstance.client.$fetch(jwtAuthUrl.toString(), {
+			onError(context) {
+				jwtCallbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const jwtCallbackUrl = new URL(jwtCallbackRedirectUrl);
+		const jwtTokens = await jwtInstance.client.oauth2.token(
+			{
+				grant_type: "authorization_code",
+				code: jwtCallbackUrl.searchParams.get("code") ?? undefined,
+				code_verifier: jwtCodeVerifier,
+				client_id: jwtInstance.oauthClient?.client_id,
+				client_secret: jwtInstance.oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validAudience,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const jwtIntrospection = await jwtInstance.client.oauth2.introspect(
+			{
+				client_id: jwtInstance.oauthClient?.client_id,
+				client_secret: jwtInstance.oauthClient?.client_secret,
+				token: jwtTokens.data?.access_token ?? "",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(jwtIntrospection.data).toMatchObject({
+			active: true,
+			resource_count: 1,
+			first_resource: validAudience,
+		});
+
+		const opaqueInstance = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+				scopes: testScopes,
+				customAccessTokenClaims,
+			},
+		});
+		if (!opaqueInstance.oauthClient) expect.unreachable();
+
+		const { url: opaqueAuthUrl, codeVerifier: opaqueCodeVerifier } =
+			await createAuthUrl(opaqueInstance.oauthClient, {
+				scopes: testScopes,
+			});
+		let opaqueCallbackRedirectUrl = "";
+		await opaqueInstance.client.$fetch(opaqueAuthUrl.toString(), {
+			onError(context) {
+				opaqueCallbackRedirectUrl =
+					context.response.headers.get("Location") || "";
+			},
+		});
+		const opaqueCallbackUrl = new URL(opaqueCallbackRedirectUrl);
+		const opaqueTokens = await opaqueInstance.client.oauth2.token(
+			{
+				grant_type: "authorization_code",
+				code: opaqueCallbackUrl.searchParams.get("code") ?? undefined,
+				code_verifier: opaqueCodeVerifier,
+				client_id: opaqueInstance.oauthClient?.client_id,
+				client_secret: opaqueInstance.oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validAudience,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const opaqueIntrospection = await opaqueInstance.client.oauth2.introspect(
+			{
+				client_id: opaqueInstance.oauthClient?.client_id,
+				client_secret: opaqueInstance.oauthClient?.client_secret,
+				token: opaqueTokens.data?.access_token ?? "",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(opaqueIntrospection.data).toMatchObject({
+			active: true,
+			resource_count: 1,
+			first_resource: validAudience,
 		});
 	});
 });

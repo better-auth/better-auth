@@ -1,7 +1,10 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InternalAdapter,
+	UserProvisioningSource,
+	ValidateUserInfoSource,
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
@@ -10,11 +13,16 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
+import {
+	assertValidUserInfo,
+	assertValidUserInfoSource,
+} from "../utils/validate-user-info";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -45,6 +53,7 @@ export const createInternalAdapter = (
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
+	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -52,6 +61,7 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -86,57 +96,70 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function withVerificationConsumeLock<T>(
+		key: string,
+		fn: () => Promise<T>,
+	): Promise<T> {
+		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
+		let release!: () => void;
+		const current = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const next = previous.catch(() => {}).then(() => current);
+		verificationConsumeLocks.set(key, next);
+		await previous.catch(() => {});
+		try {
+			return await fn();
+		} finally {
+			release();
+			if (verificationConsumeLocks.get(key) === next) {
+				verificationConsumeLocks.delete(key);
+			}
+		}
+	}
+
 	return {
-		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt">,
-			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-		) => {
-			return runWithTransaction(adapter, async () => {
-				const createdUser = await createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-						email: user.email?.toLowerCase(),
-					},
-					"user",
-					undefined,
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser!.id,
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-					undefined,
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			});
-		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
+			source: UserProvisioningSource,
 		) => {
-			const createdUser = await createWithHooks(
-				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...user,
-					email: user.email?.toLowerCase(),
-				},
-				"user",
-				undefined,
-			);
+			const data = {
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				...user,
+				email: user.email?.toLowerCase(),
+			};
+
+			if (options.user?.validateUserInfo) {
+				const validationSource: ValidateUserInfoSource = {
+					...source,
+					action: "create-user",
+				};
+				assertValidUserInfoSource(validationSource);
+				let endpointContext: GenericEndpointContext;
+				try {
+					endpointContext =
+						(await getCurrentAuthContext()) as GenericEndpointContext;
+				} catch (error) {
+					logger.error(
+						"Unable to run validateUserInfo: missing endpoint context",
+						error,
+					);
+					throw new APIError("FORBIDDEN", {
+						code: "validation_context_missing",
+						message: "User validation requires an endpoint context",
+					});
+				}
+				await assertValidUserInfo(endpointContext, {
+					user: data,
+					source: validationSource,
+				});
+			}
+
+			const createdUser = await createWithHooks(data, "user", undefined);
 
 			return createdUser as T & User;
 		},
@@ -752,28 +775,44 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
+		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				if (typeof userIdOrSessionTokens === "string") {
-					const activeSession = await secondaryStorage.get(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-					const sessions = activeSession
-						? safeJSONParse<{ token: string }[]>(activeSession)
-						: [];
-					if (!sessions) return;
-					for (const session of sessions) {
-						await secondaryStorage.delete(session.token);
-					}
-					await secondaryStorage.delete(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-				} else {
-					for (const sessionToken of userIdOrSessionTokens) {
-						const session = await secondaryStorage.get(sessionToken);
-						if (session) {
-							await secondaryStorage.delete(sessionToken);
-						}
+				const activeSession = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+				const sessions = activeSession
+					? safeJSONParse<{ token: string }[]>(activeSession)
+					: [];
+				if (!sessions) return;
+				for (const session of sessions) {
+					await secondaryStorage.delete(session.token);
+				}
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
+				}
+			}
+			await deleteManyWithHooks(
+				[
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+				"session",
+				undefined,
+			);
+		},
+		deleteSessions: async (sessionTokens: string[]) => {
+			if (secondaryStorage) {
+				for (const sessionToken of sessionTokens) {
+					const session = await secondaryStorage.get(sessionToken);
+					if (session) {
+						await secondaryStorage.delete(sessionToken);
 					}
 				}
 
@@ -787,9 +826,9 @@ export const createInternalAdapter = (
 			await deleteManyWithHooks(
 				[
 					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						field: "token",
+						value: sessionTokens,
+						operator: "in",
 					},
 				],
 				"session",
@@ -1008,20 +1047,6 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccount: async (accountId: string) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
-		},
 		findAccountByProviderId: async (accountId: string, providerId: string) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
@@ -1194,6 +1219,154 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
+		},
+		/**
+		 * Atomically consume a single-use verification row by `identifier` and
+		 * return it. The first concurrent caller receives the latest row for the
+		 * identifier; every other caller racing against it receives `null`.
+		 *
+		 * Race-safe replacement for the `findVerificationValue` then
+		 * `deleteVerificationByIdentifier` pair. Callers MUST gate any state
+		 * change (issue session, mint token, change password) on a non-null
+		 * return value, because consuming one row invalidates the whole
+		 * identifier and stale rows cannot be replayed.
+		 *
+		 * Rows past their `expiresAt` are treated as already invalid: the row
+		 * is still deleted (so it cannot be replayed later) but `null` is
+		 * returned. Callers do not need their own `expiresAt` gate.
+		 *
+		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
+		 * only when the configured storage implements `getAndDelete`; otherwise
+		 * it falls back to an in-process lock around `get` then `delete`.
+		 *
+		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
+		 * in the next breaking release, or require database-backed verification
+		 * storage for security-sensitive consume paths. The compatibility
+		 * fallback cannot coordinate across multiple application processes.
+		 */
+		consumeVerificationValue: async (
+			identifier: string,
+		): Promise<Verification | null> => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+			const identifiersToTry =
+				storageOption && storageOption !== "plain"
+					? [storedIdentifier, identifier]
+					: [storedIdentifier];
+
+			// After a JSON round-trip `expiresAt` arrives as a string, so coerce
+			// it back to a valid `Date` to match what the DB adapter returns.
+			const hydrateCachedVerification = (raw: unknown): Verification | null => {
+				if (!raw) return null;
+				const candidate =
+					typeof raw === "string"
+						? safeJSONParse<Verification>(raw)
+						: typeof raw === "object"
+							? (raw as Verification)
+							: null;
+				if (!candidate) return null;
+				const expiresAt = new Date(candidate.expiresAt);
+				if (!Number.isFinite(expiresAt.getTime())) return null;
+				return { ...candidate, expiresAt };
+			};
+
+			let consumed: Verification | null = null;
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				const consumeCacheKey = async (key: string) => {
+					if (secondaryStorage.getAndDelete) {
+						return hydrateCachedVerification(
+							await secondaryStorage.getAndDelete(key),
+						);
+					}
+					return withVerificationConsumeLock(key, async () => {
+						const raw = await secondaryStorage.get(key);
+						const parsed = hydrateCachedVerification(raw);
+						if (!parsed) return null;
+						await secondaryStorage.delete(key);
+						return parsed;
+					});
+				};
+
+				for (const stored of identifiersToTry) {
+					const cacheKey = `verification:${stored}`;
+					const cached = await consumeCacheKey(cacheKey);
+					if (!cached) continue;
+					await Promise.all(
+						identifiersToTry
+							.filter((candidate) => candidate !== stored)
+							.map((candidate) =>
+								secondaryStorage.delete(`verification:${candidate}`),
+							),
+					);
+					consumed = cached;
+					break;
+				}
+			} else {
+				const consumeByIdentifier = async (
+					id: string,
+				): Promise<Verification | null> =>
+					withVerificationConsumeLock(`verification:${id}`, () =>
+						runWithTransaction(adapter, async () => {
+							const txAdapter = await getCurrentAdapter(adapter);
+							const where = [{ field: "identifier", value: id }];
+							const rows = await txAdapter.findMany<Verification>({
+								model: "verification",
+								where,
+								sortBy: { field: "createdAt", direction: "desc" },
+								limit: 1,
+							});
+							const latest = rows[0] ?? null;
+							if (!latest) return null;
+
+							// FIXME(consume-identifier-atomic): add an adapter primitive that
+							// deletes all rows for an identifier and returns the latest row in
+							// one operation. Until then, consume the latest row as the race gate
+							// and invalidate stale rows inside the same transaction/local lock.
+							return consumeOneWithHooks<Verification>(
+								"verification",
+								[{ field: "id", value: latest.id }],
+								async () => {
+									const row = await txAdapter.consumeOne<Verification>({
+										model: "verification",
+										where: [{ field: "id", value: latest.id }],
+									});
+									if (!row) return null;
+									await txAdapter.deleteMany({
+										model: "verification",
+										where,
+									});
+									return row;
+								},
+								latest,
+							);
+						}),
+					);
+
+				for (const stored of identifiersToTry) {
+					consumed = await consumeByIdentifier(stored);
+					if (consumed) break;
+				}
+
+				if (consumed && secondaryStorage) {
+					await Promise.all(
+						identifiersToTry.map((stored) =>
+							secondaryStorage.delete(`verification:${stored}`),
+						),
+					);
+				}
+			}
+
+			// Single expiry gate. A row past its `expiresAt` is treated as already
+			// invalid, so callers can rely on a non-null return meaning "valid".
+			if (!consumed || consumed.expiresAt < new Date()) return null;
+			return consumed;
 		},
 		updateVerificationByIdentifier: async (
 			identifier: string,

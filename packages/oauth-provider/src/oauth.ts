@@ -1,8 +1,10 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	APIError,
+	addOAuthServerContext,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getOAuthState,
@@ -16,8 +18,16 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
-import { rpInitiatedLogoutEndpoint } from "./logout";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import {
+	deliverBackchannelLogoutTokens,
+	revokeAndPlanBackchannelLogout,
+	rpInitiatedLogoutEndpoint,
+} from "./logout";
+import {
+	authServerMetadata,
+	metadataResponse,
+	oidcServerMetadata,
+} from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
@@ -26,7 +36,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { SafeUrlSchema } from "./types/zod";
+import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
@@ -172,10 +182,99 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	const handleIssuerMetadataRequest: NonNullable<
+		BetterAuthPlugin["onRequest"]
+	> = async (request, ctx) => {
+		const requestPathname = new URL(request.url).pathname;
+		const requestPath = ctx.options.advanced?.skipTrailingSlashes
+			? requestPathname.replace(/\/+$/, "") || "/"
+			: requestPathname;
+		const issuer = opts.disableJwtPlugin
+			? ctx.baseURL
+			: (getJwtPlugin(ctx)?.options?.jwt?.issuer ?? ctx.baseURL);
+		let issuerPath = "/";
+		try {
+			issuerPath = new URL(issuer).pathname.replace(/\/$/, "") || "";
+		} catch {
+			issuerPath = new URL(ctx.baseURL).pathname.replace(/\/$/, "") || "";
+		}
+
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		// RFC 8414 uses path insertion; some clients derive discovery from the
+		// issuer URL directly, so keep both public aliases equivalent.
+		const authServerMetadataPaths = new Set([
+			`/.well-known/oauth-authorization-server${issuerPath}`,
+			`${issuerPath}/.well-known/oauth-authorization-server`,
+		]);
+		const openIdConfigPath = `${issuerPath}/.well-known/openid-configuration`;
+		const isAuthServerMetadataRequest =
+			authServerMetadataPaths.has(requestPath);
+		const isOpenIdConfigRequest =
+			opts.scopes?.includes("openid") && requestPath === openIdConfigPath;
+		const createMetadataResponse = (metadata: unknown) => {
+			const response = metadataResponse(metadata);
+			if (request.method === "HEAD") {
+				return new Response(null, {
+					status: response.status,
+					headers: response.headers,
+				});
+			}
+			return response;
+		};
+		if (isAuthServerMetadataRequest || isOpenIdConfigRequest) {
+			if (request.method !== "GET" && request.method !== "HEAD") {
+				return {
+					response: new Response(null, {
+						status: 405,
+						headers: {
+							Allow: "GET, HEAD",
+						},
+					}),
+				};
+			}
+		}
+
+		if (isAuthServerMetadataRequest) {
+			if (opts.scopes?.includes("openid")) {
+				return {
+					response: createMetadataResponse(
+						oidcServerMetadata(endpointCtx, opts),
+					),
+				};
+			}
+			const jwtPluginOptions = opts.disableJwtPlugin
+				? undefined
+				: getJwtPlugin(ctx)?.options;
+			const authMetadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
+				scopes_supported:
+					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+				dynamic_client_registration_supported:
+					opts.allowDynamicClientRegistration,
+				public_client_supported:
+					opts.allowUnauthenticatedClientRegistration ||
+					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+				grant_types_supported: opts.grantTypes,
+				jwt_disabled: opts.disableJwtPlugin,
+			});
+			return {
+				response: createMetadataResponse({
+					...authMetadata,
+					...mergeDiscoveryMetadata(opts.clientDiscovery),
+				}),
+			};
+		}
+
+		if (isOpenIdConfigRequest) {
+			return {
+				response: createMetadataResponse(oidcServerMetadata(endpointCtx, opts)),
+			};
+		}
+	};
 	return {
 		id: "oauth-provider",
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
+		onRequest: handleIssuerMetadataRequest,
 		init: (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
@@ -188,30 +287,43 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Check for jwt plugin registration
+			// With secondaryStorage + preserveSessionInDatabase, deleteSession
+			// keeps the DB row and returns before the session-delete hook runs, so
+			// OAuth token revocation and back-channel logout never fire on session
+			// end. Surface it so operators don't assume sign-out invalidates tokens.
+			// TODO: warning-only is a stopgap. A complete fix needs core to fire
+			// the session-delete hook (or expose a dedicated session-end seam) even
+			// when the row is preserved, so revocation and back-channel dispatch run
+			// for this config. Re-evaluate moving off the delete hook then.
+			if (
+				ctx.options.secondaryStorage &&
+				ctx.options.session?.preserveSessionInDatabase
+			) {
+				logger.warn(
+					"OAuth Provider: `session.preserveSessionInDatabase: true` with secondaryStorage skips the session-delete hook, so OAuth access/refresh tokens are not revoked and back-channel logout is not dispatched on session end.",
+				);
+			}
+
+			// Well-known warnings are best-effort and only make sense with the
+			// JWT plugin. A dynamic baseURL resolves per-request, so there is
+			// nothing to emit at init time for that deployment shape either.
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
-
-				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
 				const isDynamicBaseURLInit =
 					jwtPluginOptions?.jwt?.issuer == null &&
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string;
+				let issuerPath: string | undefined;
 				try {
 					issuerPath = new URL(issuer).pathname;
 				} catch (error) {
-					// baseURL may not be available during init when using dynamic baseURL config
-					if (isDynamicBaseURLInit && issuer === "") {
-						return;
-					}
-					throw error;
+					if (!isDynamicBaseURLInit || issuer !== "") throw error;
 				}
-				// oAuth Server Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
 					!(ctx.options.basePath === "/" && issuerPath === "/")
 				) {
@@ -219,8 +331,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
 					);
 				}
-				// OpenId Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.openidConfig &&
 					ctx.options.basePath !== issuerPath &&
 					opts.scopes?.includes("openid")
@@ -230,6 +342,44 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+
+			// The hook must register for every configuration path (including
+			// dynamic baseURL). Revocation runs inline because it mutates DB
+			// state we rely on. The HTTP fan-out goes through
+			// `runInBackgroundOrAwait`: with a background handler configured
+			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
+			// response; without one it is awaited inline so delivery is not lost
+			// on request teardown. Awaiting here keeps both paths reliable.
+			return {
+				options: {
+					databaseHooks: {
+						session: {
+							delete: {
+								async before(session, hookCtx) {
+									if (!hookCtx) return;
+									const plan = await revokeAndPlanBackchannelLogout(
+										hookCtx,
+										opts,
+										{
+											sessionId: session.id,
+											userId: session.userId,
+										},
+									);
+									if (!plan) return;
+									// TODO: re-evaluate this await. It makes delivery reliable on
+									// every runtime, but without an `advanced.backgroundTasks.handler`
+									// a hung RP can add up to the per-RP timeout to sign-out latency.
+									// Alternative to weigh: keep delivery non-blocking and instead
+									// hard-require a background handler when back-channel logout is on.
+									await hookCtx.context.runInBackgroundOrAwait(
+										deliverBackchannelLogoutTokens(hookCtx, plan),
+									);
+								},
+							},
+						},
+					},
+				},
+			};
 		},
 		hooks: {
 			before: [
@@ -264,11 +414,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							postLoginClearedForSession,
 						});
 
-						// If path is social sign-in, add to additional data body
+						// On the social sign-in path the authorize query has to survive the
+						// provider redirect to be resumed after login. Carry it in the
+						// server-only OAuth state so a client cannot inject its own `query`
+						// through the request body.
 						if (ctx.path === "/sign-in/social") {
-							if (ctx.body.additionalData?.query) return;
-							if (!ctx.body.additionalData) ctx.body.additionalData = {};
-							ctx.body.additionalData.query = queryParams.toString();
+							await addOAuthServerContext({
+								query: queryParams.toString(),
+							});
 						}
 					}),
 				},
@@ -293,7 +446,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// but clearing the login prompt cookie if forced login prompt
 						const _query =
 							(await oAuthState.get())?.query ??
-							((await getOAuthState())?.query as string | undefined);
+							((await getOAuthState())?.serverContext?.query as
+								| string
+								| undefined);
 						if (!_query) return;
 						const query = new URLSearchParams(_query);
 
@@ -350,6 +505,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							dynamic_client_registration_supported:
+								opts.allowDynamicClientRegistration,
 							public_client_supported:
 								opts.allowUnauthenticatedClientRegistration ||
 								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
@@ -406,6 +563,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.pipe(z.enum(["S256"]))
 							.optional(),
 						nonce: z.string().optional(),
+						resource: z
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+							.optional(),
 						prompt: z
 							.string()
 							.pipe(
@@ -424,6 +584,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						openapi: {
@@ -492,6 +653,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OpenID Connect nonce",
+								},
+								{
+									name: "resource",
+									in: "query",
+									required: false,
+									schema: { type: "array", items: { type: "string" } },
+									description:
+										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 								},
 								{
 									name: "prompt",
@@ -658,7 +827,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
 						refresh_token: z.string().optional(),
-						resource: z.string().optional(),
+						resource: z
+							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+							.optional(),
 						scope: z.string().optional(),
 					}),
 					errorCodesByField: {
@@ -666,6 +837,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							missing: "invalid_request",
 							invalid: "unsupported_grant_type",
 						},
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -717,9 +889,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														"Refresh token (for refresh_token grant)",
 												},
 												resource: {
-													type: "string",
+													oneOf: [
+														{
+															type: "string",
+															description: "Single resource (URL)",
+														},
+														{
+															type: "array",
+															items: { type: "string" },
+															description: "Multiple resources (URLs)",
+														},
+													],
 													description:
-														"Requested token resource (ie audience) to obtain a JWT formatted access token",
+														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
 												},
 												scope: {
 													type: "string",
@@ -840,11 +1022,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													type: "string",
 													description:
 														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
-												},
-												resource: {
-													type: "string",
-													description:
-														"Introspects a token for a specific resource.",
 												},
 											},
 											required: ["token"],
@@ -1205,6 +1382,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+						backchannel_logout_uri: SafeUrlSchema.optional(),
+						backchannel_logout_session_required: z.boolean().optional(),
 						token_endpoint_auth_method: z
 							.enum([
 								"none",
@@ -1349,6 +1528,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															format: "uri",
 														},
 														description: "List of allowed logout redirect uris",
+													},
+													backchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL to receive signed Logout Tokens when the end-user's OP session terminates",
+													},
+													backchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
 													token_endpoint_auth_method: {
 														type: "string",

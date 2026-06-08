@@ -133,7 +133,7 @@ describe("private_key_jwt authentication", async () => {
 		codeVerifier: string,
 		scopes = ["openid", "profile"],
 	) {
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: "test",
 			options: { clientId, redirectURI: redirectUri },
 			redirectURI: "",
@@ -664,8 +664,25 @@ describe("isPrivateHostname", () => {
 		expect(isPrivateHostname("[::ffff:8.8.8.8]")).toBe(false);
 	});
 
+	it("should block IPv4-mapped IPv6 written in hex", () => {
+		// ::ffff:7f00:1 == 127.0.0.1, ::ffff:a9fe:a9fe == 169.254.169.254 (IMDS)
+		expect(isPrivateHostname("[::ffff:7f00:1]")).toBe(true);
+		expect(isPrivateHostname("[::ffff:a9fe:a9fe]")).toBe(true);
+	});
+
+	it("should block NAT64 and 6to4 tunnels to private targets", () => {
+		expect(isPrivateHostname("[64:ff9b::7f00:1]")).toBe(true); // NAT64 -> 127.0.0.1
+		expect(isPrivateHostname("[2002:a9fe:a9fe::]")).toBe(true); // 6to4 -> IMDS
+	});
+
+	it("should block shared address space (carrier-grade NAT)", () => {
+		expect(isPrivateHostname("100.64.0.1")).toBe(true);
+	});
+
 	it("should block cloud metadata endpoints", () => {
 		expect(isPrivateHostname("metadata.google.internal")).toBe(true);
+		expect(isPrivateHostname("metadata.goog")).toBe(true);
+		expect(isPrivateHostname("instance-data")).toBe(true);
 	});
 });
 

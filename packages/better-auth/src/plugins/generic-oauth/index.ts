@@ -3,9 +3,10 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	UpstreamProvider,
 } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
@@ -184,7 +185,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: OAuthProvider[] = [];
+			const genericProviders: UpstreamProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -251,6 +252,7 @@ export const genericOAuth = <const ID extends string>(
 				genericProviders.push({
 					id: c.providerId,
 					name: c.name ?? c.providerId,
+					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {
@@ -282,13 +284,19 @@ export const genericOAuth = <const ID extends string>(
 							accessType: c.accessType,
 							responseType: c.responseType,
 							responseMode: c.responseMode,
-							additionalParams: c.authorizationUrlParams,
+							additionalParams: {
+								...(c.authorizationUrlParams ?? {}),
+								...(data.additionalParams ?? {}),
+							},
 							loginHint: data.loginHint,
 						});
 					},
 					async validateAuthorizationCode(data) {
 						if (c.getToken) {
-							return c.getToken(data);
+							return applyDefaultAccessTokenExpiry(
+								await c.getToken(data),
+								c.accessTokenExpiresIn,
+							);
 						}
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -296,7 +304,7 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return validateAuthorizationCode({
+						const tokens = await validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
@@ -311,6 +319,10 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpointAuth,
 							additionalParams: c.tokenUrlParams,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async getUserInfo(tokens) {
 						const raw = c.getUserInfo
@@ -347,7 +359,7 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return refreshAccessToken({
+						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
 								clientId: c.clientId,
@@ -357,14 +369,19 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					disableImplicitSignUp: c.disableImplicitSignUp,
 					disableSignUp: c.disableSignUp,
 					options: {
 						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
+						requireEmailVerification: c.requireEmailVerification,
 					},
-				} satisfies OAuthProvider);
+				} satisfies UpstreamProvider);
 			}
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

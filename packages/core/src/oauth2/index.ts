@@ -1,3 +1,4 @@
+export { additionalAuthorizationParamsSchema } from "./authorization-params";
 export {
 	decodeBasicCredentials,
 	encodeBasicCredentials,
@@ -20,23 +21,40 @@ export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,
 } from "./client-credentials-token";
-export { createAuthorizationURL } from "./create-authorization-url";
+export {
+	createAuthorizationURL,
+	RESERVED_AUTHORIZATION_PARAMS,
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+} from "./create-authorization-url";
 export type {
+	AuthorizationURLResult,
+	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	OAuthIdTokenConfig,
+	ProviderGrantAuthority,
 	ProviderOptions,
+	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
+export {
+	includesGrantedScope,
+	normalizeScopes,
+	parseScopeField,
+	readGrantedScopes,
+	resolveRequestedScopes,
+	unionGrantedScopes,
+} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 export {
+	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
@@ -51,3 +69,7 @@ export {
 	verifyAccessToken,
 	verifyJwsAccessToken,
 } from "./verify";
+export {
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "./verify-id-token";

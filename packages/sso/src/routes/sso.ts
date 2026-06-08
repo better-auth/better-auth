@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -15,15 +16,20 @@ import {
 } from "better-auth";
 import {
 	APIError,
+	addOAuthServerContext,
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { handleOAuthUserInfo } from "better-auth/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	signInWithOAuthIdentity,
+} from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -33,12 +39,14 @@ import {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
 } from "../oidc";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLConfig,
 	SAMLSessionRecord,
@@ -53,6 +61,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 import { registerSSOProviderBodySchema } from "./schemas";
 
@@ -383,7 +392,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -396,9 +405,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
+					});
+				}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
 			}
@@ -420,6 +435,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "SSO provider with this providerId already exists",
 				});
+			}
+
+			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
 			}
 
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
@@ -655,41 +683,43 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+				"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 		})
 		.optional(),
 	organizationSlug: z
 		.string({})
 		.meta({
-			description: "The slug of the organization to sign in with",
+			description: "The slug of the organization to sign in with.",
 		})
 		.optional(),
 	providerId: z
 		.string({})
 		.meta({
 			description:
-				"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+				"The ID of the provider to sign in with. Can be provided instead of email.",
 		})
 		.optional(),
 	domain: z
 		.string({})
 		.meta({
-			description: "The domain of the provider.",
+			description:
+				"The email domain of the provider. Can be provided instead of email.",
 		})
 		.optional(),
 	callbackURL: z.string({}).meta({
-		description: "The URL to redirect to after login",
+		description: "The URL to redirect to after successful sign-in.",
 	}),
 	errorCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login",
+			description: "The URL to redirect to if the sign-in flow fails.",
 		})
 		.optional(),
 	newUserCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login if the user is new",
+			description:
+				"The URL to redirect to after sign-in if the user is newly registered.",
 		})
 		.optional(),
 	scopes: z
@@ -702,17 +732,23 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+				"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 		})
 		.optional(),
+	additionalParams: additionalAuthorizationParamsSchema,
 	requestSignUp: z
 		.boolean({})
 		.meta({
 			description:
-				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
 		})
 		.optional(),
-	providerType: z.enum(["oidc", "saml"]).optional(),
+	providerType: z
+		.enum(["oidc", "saml"])
+		.meta({
+			description: "The provider protocol to sign in with.",
+		})
+		.optional(),
 });
 
 export const signInSSO = (options?: SSOOptions) => {
@@ -736,35 +772,63 @@ export const signInSSO = (options?: SSOOptions) => {
 										email: {
 											type: "string",
 											description:
-												"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+												"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 										},
-										issuer: {
+										organizationSlug: {
 											type: "string",
 											description:
-												"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+												"The slug of the organization to sign in with.",
 										},
 										providerId: {
 											type: "string",
 											description:
-												"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+												"The ID of the provider to sign in with. Can be provided instead of email.",
+										},
+										domain: {
+											type: "string",
+											description:
+												"The email domain of the provider. Can be provided instead of email.",
 										},
 										callbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to after successful sign-in.",
 										},
 										errorCallbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to if the sign-in flow fails.",
 										},
 										newUserCallbackURL: {
 											type: "string",
 											description:
-												"The URL to redirect to after login if the user is new",
+												"The URL to redirect to after sign-in if the user is newly registered.",
+										},
+										scopes: {
+											type: "array",
+											items: { type: "string" },
+											description: "Scopes to request from the provider.",
 										},
 										loginHint: {
 											type: "string",
 											description:
 												"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
+										},
+										additionalParams: {
+											type: "object",
+											additionalProperties: { type: "string" },
+											description:
+												"Extra query parameters to append to the OIDC provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected. Not supported for SAML providers.",
+										},
+										requestSignUp: {
+											type: "boolean",
+											description:
+												"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
+										},
+										providerType: {
+											type: "string",
+											enum: ["oidc", "saml"],
+											description: "The provider protocol to sign in with.",
 										},
 									},
 									required: ["callbackURL"],
@@ -973,19 +1037,22 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const state = await generateState(
-					ctx,
-					undefined,
-					options?.redirectURI?.trim()
-						? { ssoProviderId: provider.providerId }
-						: false,
-				);
+				const requestedScopes = ctx.body.scopes ||
+					config.scopes || ["openid", "email", "profile", "offline_access"];
+				if (options?.redirectURI?.trim()) {
+					// The shared OIDC callback resolves the provider from server-only
+					// state, so it must not be client-spoofable.
+					await addOAuthServerContext({
+						ssoProviderId: provider.providerId,
+					});
+				}
+				const state = await generateState(ctx, { requestedScopes });
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
 					options,
 				);
-				const authorizationURL = await createAuthorizationURL({
+				const { url: authorizationURL } = await createAuthorizationURL({
 					id: provider.issuer,
 					options: {
 						clientId: config.clientId,
@@ -994,10 +1061,10 @@ export const signInSSO = (options?: SSOOptions) => {
 					redirectURI,
 					state: state.state,
 					codeVerifier: config.pkce ? state.codeVerifier : undefined,
-					scopes: ctx.body.scopes ||
-						config.scopes || ["openid", "email", "profile", "offline_access"],
+					scopes: requestedScopes,
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
+					additionalParams: ctx.body.additionalParams,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -1005,6 +1072,12 @@ export const signInSSO = (options?: SSOOptions) => {
 				});
 			}
 			if (provider.samlConfig) {
+				if (ctx.body.additionalParams) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"additionalParams is not supported for SAML providers; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters.",
+					});
+				}
 				const parsedSamlConfig =
 					typeof provider.samlConfig === "object"
 						? provider.samlConfig
@@ -1028,11 +1101,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
+				const { state: relayState } = await generateRelayState(ctx, undefined);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1117,7 +1186,8 @@ async function handleOIDCCallback(
 			`${ctx.context.baseURL}/error`;
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
-	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
+	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
+		stateData;
 	if (!code || error) {
 		throw ctx.redirect(
 			`${
@@ -1292,6 +1362,9 @@ async function handleOIDCCallback(
 		[key: string]: any;
 	} | null = null;
 	const mapping = config.mapping || {};
+	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
+	// as `source.sso.profile` so a policy can inspect provider-specific fields.
+	let rawProfile: Record<string, unknown> | undefined;
 
 	if (config.userInfoEndpoint) {
 		const userInfoResponse = await betterFetch<Record<string, unknown>>(
@@ -1310,6 +1383,7 @@ async function handleOIDCCallback(
 			);
 		}
 		const rawUserInfo = userInfoResponse.data;
+		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1329,6 +1403,7 @@ async function handleOIDCCallback(
 		};
 	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
+		rawProfile = idToken as Record<string, unknown>;
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
 				`${
@@ -1396,33 +1471,46 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	const linked = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
-			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
-				: false,
-		},
-		account: {
-			idToken: tokenResponse.idToken,
-			accessToken: tokenResponse.accessToken,
-			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
+	let linked: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+	try {
+		linked = await signInWithOAuthIdentity(ctx, {
+			userInfo: {
+				email: userInfo.email,
+				name: userInfo.name || "",
+				id: userInfo.id,
+				image: userInfo.image,
+				emailVerified: options?.trustEmailVerified
+					? userInfo.emailVerified || false
+					: false,
+			},
 			providerId: provider.providerId,
-			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-			scope: tokenResponse.scopes?.join(","),
-		},
-		callbackURL,
-		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-		overrideUserInfo: config.overrideUserInfo,
-		isTrustedProvider,
-	});
+			accountId: userInfo.id,
+			tokens: tokenResponse,
+			requestedScopes,
+			callbackURL,
+			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+			overrideUserInfo: config.overrideUserInfo,
+			source: {
+				method: "sso-oidc",
+				sso: { providerId: provider.providerId, profile: rawProfile },
+			},
+			isTrustedProvider,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({ error: linked.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
 	const { session, user } = linked.data!;
 
@@ -1558,19 +1646,25 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
-	const state = await generateState(
-		ctx,
-		undefined,
-		options?.redirectURI?.trim()
-			? { ssoProviderId: provider.providerId }
-			: false,
-	);
+	if (options?.redirectURI?.trim()) {
+		// The shared OIDC callback resolves the provider from server-only state,
+		// so it must not be client-spoofable.
+		await addOAuthServerContext({ ssoProviderId: provider.providerId });
+	}
+	const state = await generateState(ctx, {
+		requestedScopes: config.scopes || [
+			"openid",
+			"email",
+			"profile",
+			"offline_access",
+		],
+	});
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,
 		options,
 	);
-	const authorizationURL = await createAuthorizationURL({
+	const { url: authorizationURL } = await createAuthorizationURL({
 		id: provider.issuer,
 		options: {
 			clientId: config.clientId,
@@ -1629,7 +1723,9 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = stateData.ssoProviderId as string | undefined;
+			const providerId = stateData.serverContext?.ssoProviderId as
+				| string
+				| undefined;
 			if (!providerId) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(
@@ -1951,7 +2047,7 @@ async function handleLogoutRequest(
 				sessionIndex === data.sessionIndex
 			) {
 				await ctx.context.internalAdapter
-					.deleteSession(data.sessionId)
+					.deleteSession(data.sessionToken)
 					.catch((e: unknown) =>
 						ctx.context.logger.warn("Failed to delete session during SLO", {
 							error: e,
@@ -1990,22 +2086,24 @@ async function handleLogoutRequest(
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
-		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
+		await ctx.context.internalAdapter.deleteSession(
+			currentSession.session.token,
+		);
 	}
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
@@ -2133,7 +2231,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					),
 				);
 
-			await ctx.context.internalAdapter.deleteSession(session.session.id);
+			await ctx.context.internalAdapter.deleteSession(session.session.token);
 
 			deleteSessionCookie(ctx);
 

@@ -205,9 +205,19 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
-	 * Require email verification on accepting or rejecting an invitation
+	 * Require email verification on session-authenticated recipient invitation
+	 * calls (accept, reject, get, list). Defaults to `true` so unverified
+	 * accounts registered against a victim's email cannot accept, read, or
+	 * enumerate invitations targeted at that email. Server-side
+	 * `listUserInvitations` calls without a session (caller passes
+	 * `ctx.query.email`) continue to bypass the gate because the caller is
+	 * trusted. Set to `false` for backward compatibility on apps that do not
+	 * require email verification; understand the takeover risk before doing so.
 	 *
-	 * @default false
+	 * @default true
+	 *
+	 * @deprecated The option will be removed on the next minor; the gate will
+	 * become unconditional. Plan to verify emails before invitation acceptance.
 	 */
 	requireEmailVerificationOnInvitation?: boolean | undefined;
 	/**
@@ -375,7 +385,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -406,7 +416,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -416,7 +426,7 @@ export interface OrganizationOptions {
 					data: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};

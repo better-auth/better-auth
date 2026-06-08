@@ -10,12 +10,13 @@ import type {
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
-import type { OAuthProvider } from "../oauth2";
+import type { UpstreamProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	UserProvisioningSource,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
 import type { SecretConfig } from "./secret";
@@ -87,16 +88,15 @@ export type GenericEndpointContext<
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
-	createOAuthUser(
-		user: Omit<User, "id" | "createdAt" | "updatedAt">,
-		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-			Partial<Account>,
-	): Promise<{ user: User; account: Account }>;
-
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
+		/**
+		 * Provisioning source. The creation seam adds `action: "create-user"` and
+		 * runs the `user.validateUserInfo` gate.
+		 */
+		source: UserProvisioningSource,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
@@ -158,7 +158,15 @@ export interface InternalAdapter<
 	 */
 	deleteAccount(id: string): Promise<void>;
 
-	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
+	/**
+	 * Delete every session belonging to a user.
+	 */
+	deleteUserSessions(userId: string): Promise<void>;
+
+	/**
+	 * Delete sessions by their session tokens.
+	 */
+	deleteSessions(sessionTokens: string[]): Promise<void>;
 
 	findOAuthUser(
 		email: string,
@@ -196,8 +204,6 @@ export interface InternalAdapter<
 
 	findAccounts(userId: string): Promise<Account[]>;
 
-	findAccount(accountId: string): Promise<Account | null>;
-
 	findAccountByProviderId(
 		accountId: string,
 		providerId: string,
@@ -215,6 +221,21 @@ export interface InternalAdapter<
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
+
+	/**
+	 * Atomically consume a single-use verification row by `identifier` and
+	 * return it. Only the first concurrent caller receives the latest row;
+	 * subsequent callers receive `null`. Consuming one row invalidates the
+	 * whole identifier so stale rows cannot be replayed. Rows past their
+	 * `expiresAt` are treated as already invalid: the row is deleted but
+	 * `null` is returned, so callers do not need to gate on `expiresAt`
+	 * themselves. Callers MUST gate any state change (issue session, mint
+	 * token, change password) on a non-null result.
+	 *
+	 * Replaces the racy `findVerificationValue` + `deleteVerificationByIdentifier`
+	 * pair at single-use credential consumption sites.
+	 */
+	consumeVerificationValue(identifier: string): Promise<Verification | null>;
 
 	updateVerificationByIdentifier(
 		identifier: string,
@@ -306,7 +327,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
@@ -330,7 +351,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: OAuthProvider[];
+			socialProviders: UpstreamProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {

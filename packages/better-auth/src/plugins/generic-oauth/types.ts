@@ -103,6 +103,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	accessType?: string | undefined;
 	/**
+	 * Fallback access-token lifetime, in seconds, used only when the provider's
+	 * token response omits `expires_in`. Set this so `getAccessToken` can track
+	 * expiry and refresh the token; leave unset if the provider returns
+	 * `expires_in`.
+	 */
+	accessTokenExpiresIn?: number | undefined;
+	/**
 	 * Custom function to exchange authorization code for tokens.
 	 * If provided, this function will be used instead of the default token exchange logic.
 	 * This is useful for providers with non-standard token endpoints.
@@ -180,6 +187,19 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created or linked, but no session is issued: the callback redirects
+	 * with `?error=email_not_verified`. The gate checks the local user's
+	 * verification state, so a user already verified through another method keeps
+	 * access. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
 	/**
 	 * Accept callbacks from providers that initiate the OAuth flow without
 	 * sending a `state` parameter (e.g. Clever). When enabled, stateless

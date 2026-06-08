@@ -110,10 +110,20 @@ export interface JwtOptions {
 				 * MUST be defined within this function.
 				 * You can safely define the header `typ: 'JWT'`.
 				 *
+				 * The optional `header` argument carries extra protected-header
+				 * parameters the caller requires (e.g. `typ: "logout+jwt"` for
+				 * OIDC Back-Channel Logout). Merge them into the signed header so
+				 * such profiles stay conformant; `alg`/`kid` remain yours to set.
+				 *
 				 * @requires jwks.remoteUrl
 				 * @invalidates other jwt.* options
 				 */
-				sign?: ((payload: JWTPayload) => Awaitable<string>) | undefined;
+				sign?:
+					| ((
+							payload: JWTPayload,
+							header?: { typ?: string; cty?: string },
+					  ) => Awaitable<string>)
+					| undefined;
 		  }
 		| undefined;
 

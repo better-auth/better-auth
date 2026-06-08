@@ -7,6 +7,11 @@ import {
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import {
+	DiscoveryError,
+	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
+} from "../oidc";
+import {
 	resolveSigningCerts,
 	validateCertSources,
 	validateConfigAlgorithms,
@@ -28,6 +33,10 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
+	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+}
 
 type ParsedCert = ReturnType<typeof parseCertificate>;
 type SanitizedCert = ParsedCert | { error: string };
@@ -67,9 +76,7 @@ async function isOrgAdmin(
 			{ field: "organizationId", value: organizationId },
 		],
 	});
-	if (!member) return false;
-	const roles = member.role.split(",");
-	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
+	return member ? hasOrgAdminRole(member) : false;
 }
 
 async function batchCheckOrgAdmin(
@@ -93,8 +100,7 @@ async function batchCheckOrgAdmin(
 
 	const adminOrgIds = new Set<string>();
 	for (const member of members) {
-		const roles = member.role.split(",");
-		if (roles.some((r: string) => ADMIN_ROLES.includes(r.trim()))) {
+		if (hasOrgAdminRole(member)) {
 			adminOrgIds.add(member.organizationId);
 		}
 	}
@@ -504,6 +510,17 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			}
 
 			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+
 				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
 					existingProvider.oidcConfig,
 					"OIDC",

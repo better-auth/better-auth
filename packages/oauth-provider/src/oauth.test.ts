@@ -303,38 +303,47 @@ describe("oauth", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	// Tests if it is oauth2 compatible
@@ -400,10 +409,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -949,10 +963,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackURL = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -1130,38 +1149,47 @@ describe("oauth - prompt", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	it("login - should always redirect to login", async () => {
@@ -1707,8 +1735,9 @@ describe("oauth - prompt", async () => {
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
-		expect(tokens.data?.scopes).toEqual(["openid", "profile", "email"]);
-		expect(tokens.data?.scopes).not.toContain("read:posts");
+		// grantedScopes is normalized (deduped + sorted) per RFC 6749 §3.3.
+		expect(tokens.data?.grantedScopes).toEqual(["email", "openid", "profile"]);
+		expect(tokens.data?.grantedScopes).not.toContain("read:posts");
 	});
 
 	it("select_account - should sign in requesting account selection", async ({
@@ -2642,38 +2671,47 @@ describe("oauth - config", () => {
 		if (!oauthClient?.client_id) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient?.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient?.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	/**
@@ -3122,7 +3160,7 @@ describe("oauth - config", () => {
 				iat: expect.any(Number),
 				exp: expect.any(Number),
 			});
-			if (resource && !(resource && disableJwtPlugin)) {
+			if (resource) {
 				expect(payload?.aud).toStrictEqual([
 					validAudience,
 					`${authServerUrl}/oauth2/userinfo`,

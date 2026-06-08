@@ -20,6 +20,7 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
+import type { RequestInfo } from "samlify/types/src/types";
 import {
 	afterAll,
 	afterEach,
@@ -34,6 +35,7 @@ import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 import { saml } from "./samlify";
+import { normalizePem } from "./utils";
 
 const spMetadata = `
 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -515,13 +517,13 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 				emailAddress: emailValue,
 				famName: "hello world",
 			};
-			const { context, entityEndpoint } = await idp.createLoginResponse(
+			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
 				{} as any,
 				saml.Constants.wording.binding.post,
 				user,
 				createTemplateCallback(idp, sp, user.emailAddress),
-			);
+			)) as { context: string; entityEndpoint?: string };
 			res.status(200).json({ samlResponse: context, entityEndpoint });
 		} catch (error) {
 			res.status(500).json({
@@ -611,6 +613,21 @@ afterAll(async () => {
 	await sharedMockIdP.stop();
 });
 
+describe("private key normalization", () => {
+	// samlify >= 2.11 parses keys with native crypto (OpenSSL 3), which rejects
+	// indented PEM that node-forge tolerated. normalizePem keeps such keys working.
+	it("loads PEM keys pasted with leading indentation", () => {
+		const indented = idPk
+			.split("\n")
+			.map((line) => `    ${line}`)
+			.join("\n");
+		expect(() => createPrivateKey({ key: indented })).toThrow();
+		expect(() =>
+			createPrivateKey({ key: normalizePem(indented) }),
+		).not.toThrow();
+	});
+});
+
 describe("SAML SSO with defaultSSO array", async () => {
 	const data = {
 		user: [],
@@ -678,6 +695,18 @@ describe("SAML SSO with defaultSSO array", async () => {
 			url: expect.stringContaining("http://localhost:8081"),
 			redirect: true,
 		});
+	});
+
+	it("should reject additionalParams when routing to a SAML provider", async () => {
+		await expect(
+			auth.api.signInSSO({
+				body: {
+					providerId: "default-saml",
+					callbackURL: "http://localhost:3000/dashboard",
+					additionalParams: { domain_hint: "contoso.com" },
+				},
+			}),
+		).rejects.toThrow(/additionalParams is not supported for SAML/);
 	});
 
 	it("should fetch sp metadata for a defaultSSO provider", async () => {
@@ -5505,6 +5534,10 @@ describe("SAML Single Logout (SLO)", () => {
 			const location = initSloRes.headers.get("location");
 			expect(location).toContain("http://localhost:8081/api/sso/saml2/idp/slo");
 			expect(location).toContain("SAMLRequest=");
+
+			// SP-initiated logout must revoke the local session, not just redirect.
+			const sessionAfter = await auth.api.getSession({ headers });
+			expect(sessionAfter).toBeNull();
 		});
 	});
 
@@ -5649,7 +5682,7 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const logoutResponse = idp.createLogoutResponse(
 				sp,
-				null,
+				null as unknown as RequestInfo,
 				saml.Constants.wording.binding.redirect,
 				callbackUrl,
 			) as { context: string };
@@ -5732,7 +5765,7 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const logoutResponse = idp.createLogoutResponse(
 				sp,
-				null,
+				null as unknown as RequestInfo,
 				saml.Constants.wording.binding.redirect,
 				"",
 			) as { context: string };
@@ -5761,7 +5794,15 @@ describe("SAML Single Logout (SLO)", () => {
  */
 describe("SAML provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.method === "sso-saml") {
+					validateUserInfoFn(source);
+				}
+			},
+		},
 		plugins: [
 			sso({
 				provisionUser: provisionUserFn,
@@ -5797,6 +5838,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const response1 = await auth.api.signInSSO({
@@ -5831,6 +5873,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -5867,6 +5919,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 

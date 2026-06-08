@@ -84,10 +84,6 @@ function resolveRequiredRoles(
 	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
 }
 
-function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
-	return opts.providerOwnership?.enabled ?? false;
-}
-
 async function getSCIMUserOrgMemberships(
 	ctx: GenericEndpointContext,
 	userId: string,
@@ -163,7 +159,7 @@ async function assertSCIMProviderAccess(
 				message: "Insufficient role for this operation",
 			});
 		}
-	} else if (provider.userId && provider.userId !== userId) {
+	} else if (provider.userId !== userId) {
 		throw new APIError("FORBIDDEN", {
 			message: "You must be the owner to access this provider",
 		});
@@ -236,6 +232,36 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				});
 			}
 
+			// A SCIM token authenticates as the row whose providerId matches the
+			// claim in the bearer token. If a caller mints a token whose
+			// providerId collides with a built-in account.providerId
+			// (`credential`, `email-otp`, `magic-link`, `phone-number`,
+			// `anonymous`, `siwe`, or any configured social provider key), the
+			// resulting token can be used to act against accounts that were
+			// never SCIM-provisioned, which would be a privilege escalation.
+			// Reject the collision at issuance.
+			//
+			// We read social provider keys from `options.socialProviders` (raw
+			// config) rather than `context.socialProviders` (resolved list) so
+			// that providers configured with `enabled: false` are still
+			// rejected: their account rows can persist in the DB from a prior
+			// enabled state.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				"email-otp",
+				"magic-link",
+				"phone-number",
+				"anonymous",
+				"siwe",
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
+			]);
+			if (reservedProviderIds.has(providerId)) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"Provider id collides with a built-in account provider and cannot be used for SCIM",
+				});
+			}
+
 			if (organizationId && !ctx.context.hasPlugin("organization")) {
 				throw new APIError("BAD_REQUEST", {
 					message:
@@ -302,7 +328,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					providerId,
 					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
-					...(isProviderOwnershipEnabled(opts) ? { userId: user.id } : {}),
+					userId: user.id,
 				},
 			});
 
@@ -387,8 +413,7 @@ export const listSCIMProviderConnections = (opts: SCIMOptions) =>
 								roles.some((role) => requiredRole.includes(role))
 						: false;
 				}
-				// Owned by this user, or legacy provider without ownership tracking
-				return p.userId === userId || !p.userId;
+				return p.userId === userId;
 			});
 
 			const providers = accessibleProviders.map((p) =>
@@ -574,10 +599,13 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 
 			const createUser = () =>
-				ctx.context.internalAdapter.createUser({
-					email,
-					name,
-				});
+				ctx.context.internalAdapter.createUser(
+					{
+						email,
+						name,
+					},
+					{ method: "scim" },
+				);
 
 			const createOrgMembership = async (userId: string) => {
 				const organizationId = ctx.context.scimProvider.organizationId;
@@ -1016,6 +1044,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			await ctx.context.internalAdapter.deleteUserSessions(userId);
 			await ctx.context.internalAdapter.deleteUser(userId);
 
 			ctx.setStatus(204);

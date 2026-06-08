@@ -296,6 +296,111 @@ describe("oauth register", async () => {
 		expect(response?.fromMetadata).toBe("value1");
 		expect(response?.customField).toBe(undefined);
 	});
+
+	it("round-trips backchannel_logout_uri and backchannel_logout_session_required", async () => {
+		const backchannelUri = `${rpBaseUrl}/logout/backchannel`;
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: backchannelUri,
+			backchannel_logout_session_required: true,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.backchannel_logout_uri).toBe(backchannelUri);
+		expect(response.data?.backchannel_logout_session_required).toBe(true);
+	});
+
+	it("rejects backchannel_logout_uri with a fragment", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#section`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects backchannel_logout_uri ending with a bare fragment delimiter", async () => {
+		// `new URL(...).hash` is empty for a trailing `#`, so the raw value must
+		// be checked to honor spec §2.2 (no fragment component).
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects http backchannel_logout_uri on confidential clients", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: "http://rp.example.com/logout/backchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("allows http backchannel_logout_uri on public clients", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "none",
+			type: "native",
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.backchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/backchannel`,
+		);
+	});
+
+	it("rejects backchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
+		// These all pass a naive https check but are non-public; the guard must
+		// reject every encoding, not just dotted-decimal private IPs.
+		const targets = [
+			"https://10.0.0.1/logout",
+			"https://169.254.169.254/logout",
+			"https://[::ffff:169.254.169.254]/logout",
+			"https://[64:ff9b::a9fe:a9fe]/logout",
+			"https://100.64.0.1/logout",
+			"https://metadata.google.internal/logout",
+		];
+		for (const backchannel_logout_uri of targets) {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: [redirectUri],
+				backchannel_logout_uri,
+			});
+			expect(response.error?.status).toBe(400);
+		}
+	});
+});
+
+describe("oauth register - disableJwtPlugin", async () => {
+	const baseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				disableJwtPlugin: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	it("rejects backchannel_logout_uri when jwt plugin is disabled", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
 });
 
 describe("oauth register - unauthenticated", async () => {
@@ -475,7 +580,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 
 		// 2. Build authorization URL with PKCE (no client secret)
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId,
