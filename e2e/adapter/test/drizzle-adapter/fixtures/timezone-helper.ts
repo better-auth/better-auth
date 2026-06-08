@@ -1,6 +1,4 @@
-import pg from "pg";
-
-const { Pool } = pg;
+import { Pool } from "pg";
 
 const connectionString = "postgres://user:password@localhost:5432/better_auth";
 
@@ -59,6 +57,8 @@ async function main() {
 				WHERE table_name IN ('naive_ts', 'tz_ts') AND column_name = 'created_at';
 			`);
 			console.log(JSON.stringify(colTypesQuery.rows));
+		} else {
+			throw new Error(`Invalid or missing TEST_MODE: "${mode}"`);
 		}
 	} finally {
 		client.release();

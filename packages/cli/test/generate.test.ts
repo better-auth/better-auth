@@ -1510,7 +1510,7 @@ describe("--dialect flag support", () => {
 });
 
 describe("PostgreSQL Drizzle timestamptz and migration surface", () => {
-	it("should generate Drizzle schema with withTimezone: true for date fields and not touch other fields", async () => {
+	it("should generate Drizzle schema using withTimezone: true for date fields and not touch other fields", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
 			adapter: {

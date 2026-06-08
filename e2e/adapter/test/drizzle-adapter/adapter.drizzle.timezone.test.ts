@@ -16,8 +16,15 @@ const helperPath = path.join(
 );
 
 function runHelper(tz: string, mode: string): any {
-	const cmd = `TZ=${tz} TEST_MODE=${mode} node ${tsxCliPath} ${helperPath}`;
-	const output = execSync(cmd, { encoding: "utf8" });
+	const cmd = `node ${tsxCliPath} ${helperPath}`;
+	const output = execSync(cmd, {
+		encoding: "utf8",
+		env: {
+			...process.env,
+			TZ: tz,
+			TEST_MODE: mode,
+		},
+	});
 	return JSON.parse(output.trim());
 }
 
