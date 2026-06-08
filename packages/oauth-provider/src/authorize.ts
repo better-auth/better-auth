@@ -28,6 +28,19 @@ import {
 } from "./utils";
 
 /**
+ * Whether a past authentication is still fresh enough for an OIDC `max_age`
+ * request: true when no more than `maxAge` seconds have elapsed since the user
+ * last authenticated. The caller supplies `nowSeconds`, keeping this pure.
+ */
+function isWithinMaxAge(
+	authTimeSeconds: number,
+	maxAge: number,
+	nowSeconds: number,
+): boolean {
+	return nowSeconds - authTimeSeconds <= maxAge;
+}
+
+/**
  * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
  * implicit and hybrid flows are delivered in the URL fragment, not the query.
  * Callers on the code flow (default) omit `mode` and get query delivery.
@@ -499,7 +512,30 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+	// A stale session under `max_age` requires re-authentication, which the host
+	// login page performs (minting a fresh session whose createdAt becomes the
+	// new auth_time). Reuse the prompt=login redirect rather than deleting the
+	// session, so other relying parties are not back-channel logged out.
+	// Authorization params arrive as strings on resumed and request_uri flows,
+	// so coerce defensively and ignore a malformed max_age rather than risk a
+	// re-auth loop on a NaN or negative value.
+	const maxAge = query.max_age != null ? Number(query.max_age) : undefined;
+	const staleForMaxAge =
+		session != null &&
+		maxAge !== undefined &&
+		Number.isInteger(maxAge) &&
+		maxAge >= 0 &&
+		!isWithinMaxAge(
+			Math.floor(new Date(session.session.createdAt).getTime() / 1000),
+			maxAge,
+			Math.floor(Date.now() / 1000),
+		);
+	if (
+		!session ||
+		staleForMaxAge ||
+		promptSet?.has("login") ||
+		promptSet?.has("create")
+	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(
 				ctx,

@@ -563,6 +563,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.pipe(z.enum(["S256"]))
 							.optional(),
 						nonce: z.string().optional(),
+						max_age: z.coerce.number().int().nonnegative().optional(),
 						resource: z
 							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 							.optional(),
@@ -653,6 +654,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OpenID Connect nonce",
+								},
+								{
+									name: "max_age",
+									in: "query",
+									required: false,
+									schema: { type: "integer", minimum: 0 },
+									description:
+										"Maximum authentication age in seconds; forces re-authentication when exceeded",
 								},
 								{
 									name: "resource",

@@ -187,6 +187,87 @@ describe("oauth authorize - unauthenticated", async () => {
 	});
 });
 
+describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+	});
+
+	function authorizeUrl(maxAge: string, prompt?: string) {
+		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", oauthClient.client_id);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("state", "123");
+		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge_method", "S256");
+		url.searchParams.set("max_age", maxAge);
+		if (prompt) url.searchParams.set("prompt", prompt);
+		return url.toString();
+	}
+
+	async function redirectFor(maxAge: string, prompt?: string) {
+		let location = "";
+		await authenticatedClient.$fetch(authorizeUrl(maxAge, prompt), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return location;
+	}
+
+	it("forces re-authentication when the session is older than max_age", async () => {
+		// Let the session land in an earlier second than the request, so any
+		// elapsed time exceeds max_age=0 and re-authentication is required.
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+		const location = await redirectFor("0");
+		expect(location).toContain("/login");
+	});
+
+	it("does not re-authenticate when the session is within max_age", async () => {
+		const location = await redirectFor("10000");
+		expect(location).toContain(redirectUri);
+		expect(location).toContain("code=");
+		expect(location).not.toContain("/login");
+	});
+
+	it("returns login_required for prompt=none when the session is older than max_age", async () => {
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+		const location = await redirectFor("0", "none");
+		expect(location).toContain("error=login_required");
+		expect(location).not.toContain("/login");
+	});
+});
+
 describe("oauth authorize - request_uri resolution", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
