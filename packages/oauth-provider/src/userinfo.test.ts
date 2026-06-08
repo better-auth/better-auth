@@ -198,6 +198,21 @@ describe("oauth userinfo", async () => {
 		});
 	});
 
+	it("should accept POST with the bearer token in the Authorization header", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+			},
+		);
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+	});
+
 	/**
 	 * Programmatic callers have no `ctx.request`, so userinfo must resolve the
 	 * bearer token from `ctx.headers` for both transports.
