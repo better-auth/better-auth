@@ -234,7 +234,7 @@ label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:
 .ba-page{min-height:100vh;padding:2rem;display:flex;align-items:center;justify-content:center}
 .ba-auth-page{position:relative;isolation:isolate;min-height:100vh;padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;overflow:hidden}
 .ba-card{width:100%;max-width:28rem;border:1px solid color-mix(in srgb,var(--ba-border) 88%,transparent);border-radius:var(--ba-radius-card);background:color-mix(in srgb,var(--ba-surface) 96%,transparent);padding:1.5rem;box-shadow:0 18px 60px rgba(0,0,0,.12);filter:drop-shadow(0 16px 32px rgba(0,0,0,.10));backdrop-filter:blur(16px)}
-.ba-auth-card{display:grid;gap:1.5rem;max-width:30rem;padding:2rem;border-radius:var(--ba-radius-card)}
+.ba-auth-card{display:grid;gap:1.5rem;max-width:30rem;padding:2rem;border-radius:var(--ba-radius-card);transform:scale(.9);transform-origin:center}
 .ba-auth-brand-placement{width:100%;max-width:30rem;display:flex}
 .ba-auth-brand-position-top-left,.ba-auth-brand-position-top-right,.ba-auth-brand-position-bottom-left,.ba-auth-brand-position-bottom-right{position:absolute;z-index:2;width:auto;max-width:calc(100vw - 4rem)}
 .ba-auth-brand-position-top-left{top:2rem;left:2rem;justify-content:flex-start}
