@@ -6,6 +6,7 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -155,10 +156,7 @@ async function createIdToken(
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
-	// TODO: this should be validated against the login process
-	// - bronze : password only
-	// - silver : mfa
-	const acr = "urn:mace:incommon:iap:bronze";
+	const acr = UNSPECIFIED_ACR;
 
 	const customClaims = opts.customIdTokenClaims
 		? await opts.customIdTokenClaims({

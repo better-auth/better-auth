@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
 import type {
@@ -131,7 +132,7 @@ export function oidcServerMetadata(
 				? ["HS256"]
 				: ["EdDSA"],
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
-		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+		acr_values_supported: [UNSPECIFIED_ACR],
 		prompt_values_supported: [
 			"login",
 			"consent",

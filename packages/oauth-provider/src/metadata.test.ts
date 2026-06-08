@@ -120,7 +120,7 @@ describe("oauth metadata", async () => {
 			subject_types_supported: ["public"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
-			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+			acr_values_supported: ["0"],
 			prompt_values_supported: [
 				"login",
 				"consent",
@@ -410,6 +410,16 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	it("advertises the configured RS256 signing algorithm (Config OP)", async () => {
+		const { auth } = await createTestInstance({
+			jwtConfig: { jwks: { keyPairConfig: { alg: "RS256" } } },
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
+			id_token_signing_alg_values_supported: ["RS256"],
+		});
 	});
 
 	it("should support disableJwtPlugin", async () => {

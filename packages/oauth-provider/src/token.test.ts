@@ -2564,7 +2564,7 @@ describe("scope preservation through authorization code flow", async () => {
 	});
 });
 
-describe("at_hash in id tokens", async () => {
+describe("id token claims", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
@@ -2685,6 +2685,12 @@ describe("at_hash in id tokens", async () => {
 		expect(decoded.at_hash).toBeDefined();
 		expect(typeof decoded.at_hash).toBe("string");
 		expect((decoded.at_hash as string).length).toBeGreaterThan(0);
+	});
+
+	it("issues acr '0' (RFC 6711 unspecified) by default", async ({ expect }) => {
+		const tokens = await getTokens(["openid"]);
+		const decoded = decodeJwt(tokens.id_token!);
+		expect(decoded.acr).toBe("0");
 	});
 
 	/**

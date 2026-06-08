@@ -233,17 +233,13 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Supported Authentication Context Class Reference values.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
+	 * The provider does not yet attest a specific assurance level, so it reports
+	 * the RFC 6711 "unspecified" value `"0"`.
 	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
-	 *
-	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * @default ["0"]
+	 * @see https://www.rfc-editor.org/rfc/rfc6711#section-4
 	 */
 	acr_values_supported: string[];
 	/**
