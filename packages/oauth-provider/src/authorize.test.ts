@@ -1,14 +1,19 @@
 import { createAuthClient } from "better-auth/client";
-import { generateRandomString } from "better-auth/crypto";
+import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
-import { postLoginClearedParam } from "./utils";
+import {
+	canonicalizeOAuthQueryParams,
+	postLoginClearedParam,
+	signedQueryIssuedAtParam,
+	verifyOAuthQueryParams,
+} from "./utils";
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {
@@ -69,6 +74,108 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
 		).toBe("https://auth.example.com:8080/path");
+	});
+});
+
+describe("oauth signed query signatures", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const createSignedParams = async (
+		secret: string,
+		configure?: (params: URLSearchParams) => void,
+	) => {
+		const params = new URLSearchParams();
+		params.set("client_id", "client-a");
+		params.set("redirect_uri", "https://rp.example.com/callback");
+		params.set("response_type", "code");
+		params.set("scope", "openid profile");
+		params.set("state", "state-a");
+		configure?.(params);
+		params.set("exp", String(Math.floor(Date.now() / 1000) + 600));
+		params.set(signedQueryIssuedAtParam, String(Date.now()));
+		params.set(
+			"sig",
+			await makeSignature(
+				canonicalizeOAuthQueryParams(params).toString(),
+				secret,
+			),
+		);
+		return params;
+	};
+
+	it("should verify signed params when query params are reordered", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		const reordered = new URLSearchParams();
+
+		for (const [key, value] of [...signedParams.entries()].reverse()) {
+			reordered.append(key, value);
+		}
+
+		expect(
+			await verifyOAuthQueryParams(reordered.toString(), "test-secret"),
+		).toBe(true);
+	});
+
+	it("should verify signed params when repeated values are reordered", async () => {
+		const signedParams = await createSignedParams("test-secret", (params) => {
+			params.append("resource", "https://b.example.com");
+			params.append("resource", "https://a.example.com");
+		});
+		const reordered = new URLSearchParams();
+
+		for (const [key, value] of [...signedParams.entries()].reverse()) {
+			reordered.append(key, value);
+		}
+
+		expect(
+			await verifyOAuthQueryParams(reordered.toString(), "test-secret"),
+		).toBe(true);
+	});
+
+	it("should reject tampered signed params", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.set("client_id", "client-b");
+
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(false);
+	});
+
+	it("should reject duplicate signature params", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.append("sig", "extra-sig");
+
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(false);
+	});
+
+	it("should preserve params after sig when the client copies signed queries", async () => {
+		vi.stubGlobal("window", {
+			location: {
+				search:
+					"?client_id=client-a&sig=test-sig&scope=openid&exp=123&resource=https%3A%2F%2Fapi.example.com&utm_email=user%40example.com",
+			},
+		});
+
+		const plugin = oauthProviderClient();
+		const onRequest = plugin.fetchPlugins[0]?.hooks?.onRequest;
+		const ctx = {
+			method: "POST",
+			headers: new Headers({
+				"content-type": "application/json",
+			}),
+			body: "{}",
+		};
+
+		await onRequest?.(ctx as Parameters<NonNullable<typeof onRequest>>[0]);
+
+		const body = JSON.parse(String(ctx.body));
+		expect(body.oauth_query).toBe(
+			"client_id=client-a&sig=test-sig&scope=openid&exp=123&resource=https%3A%2F%2Fapi.example.com",
+		);
 	});
 });
 
@@ -147,6 +254,52 @@ describe("oauth authorize - unauthenticated", async () => {
 		expect(loginRedirectUrl).toContain("scope=openid");
 		expect(loginRedirectUrl).toContain(
 			`redirect_uri=${encodeURIComponent(redirectUri)}`,
+		);
+	});
+
+	it("should replace incoming sig when signing the login redirect", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "incoming-sig",
+			scopes: ["openid"],
+			responseType: "code",
+			codeVerifier: generateRandomString(64),
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		});
+		authUrl.searchParams.append("sig", "attacker-sig");
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const loginRedirect = new URL(loginRedirectUrl, authServerBaseUrl);
+		const secret = (auth.options as unknown as { secret: string }).secret;
+		const reordered = new URLSearchParams();
+
+		for (const [key, value] of [
+			...loginRedirect.searchParams.entries(),
+		].reverse()) {
+			reordered.append(key, value);
+		}
+
+		expect(loginRedirect.searchParams.getAll("sig")).toHaveLength(1);
+		expect(loginRedirect.searchParams.get("sig")).not.toBe("attacker-sig");
+		expect(
+			await verifyOAuthQueryParams(loginRedirect.search.slice(1), secret),
+		).toBe(true);
+		expect(await verifyOAuthQueryParams(reordered.toString(), secret)).toBe(
+			true,
 		);
 	});
 

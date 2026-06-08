@@ -3,13 +3,41 @@ import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthProvider } from "./oauth";
 import { PACKAGE_VERSION } from "./version";
 
+const signedOAuthQueryKeys = new Set([
+	"acr_values",
+	"authorization_details",
+	"ba_iat",
+	"ba_pl",
+	"claims",
+	"client_id",
+	"code_challenge",
+	"code_challenge_method",
+	"display",
+	"exp",
+	"id_token_hint",
+	"login_hint",
+	"max_age",
+	"nonce",
+	"prompt",
+	"redirect_uri",
+	"request_uri",
+	"resource",
+	"response_mode",
+	"response_type",
+	"scope",
+	"sig",
+	"state",
+	"ui_locales",
+]);
+
 function parseSignedQuery(search: string) {
 	const params = new URLSearchParams(search);
 	if (params.has("sig")) {
 		const signedParams = new URLSearchParams();
 		for (const [key, value] of params.entries()) {
-			signedParams.append(key, value);
-			if (key === "sig") break;
+			if (signedOAuthQueryKeys.has(key)) {
+				signedParams.append(key, value);
+			}
 		}
 		return signedParams.toString();
 	}

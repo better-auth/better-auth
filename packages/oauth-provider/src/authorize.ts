@@ -16,6 +16,7 @@ import type {
 
 import {
 	clientAllowsGrant,
+	canonicalizeOAuthQueryParams,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
@@ -655,13 +656,17 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	params.delete("sig");
 	// Reserved marker: only server-issued consent redirects may sign this.
 	params.delete(postLoginClearedParam);
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
 
-	const signature = await makeSignature(params.toString(), ctx.context.secret);
-	params.append("sig", signature);
+	const signature = await makeSignature(
+		canonicalizeOAuthQueryParams(params).toString(),
+		ctx.context.secret,
+	);
+	params.set("sig", signature);
 	return params.toString();
 }

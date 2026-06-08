@@ -137,16 +137,38 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
+export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
+	const canonicalParams = new URLSearchParams();
+	const entries = [...params.entries()].sort(
+		([keyA, valueA], [keyB, valueB]) => {
+			if (keyA < keyB) return -1;
+			if (keyA > keyB) return 1;
+			if (valueA < valueB) return -1;
+			if (valueA > valueB) return 1;
+			return 0;
+		},
+	);
+	for (const [key, value] of entries) {
+		canonicalParams.append(key, value);
+	}
+	return canonicalParams;
+}
+
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
 ) {
 	const queryParams = new URLSearchParams(oauth_query);
 	const sig = queryParams.get("sig");
+	const sigs = queryParams.getAll("sig");
 	const exp = Number(queryParams.get("exp"));
 	queryParams.delete("sig");
-	const verifySig = await makeSignature(queryParams.toString(), secret);
+	const verifySig = await makeSignature(
+		canonicalizeOAuthQueryParams(queryParams).toString(),
+		secret,
+	);
 	return (
+		sigs.length === 1 &&
 		!!sig &&
 		constantTimeEqual(sig, verifySig) &&
 		new Date(exp * 1000) >= new Date()
