@@ -7,6 +7,8 @@
  * The values are a stable part of Kysely's public migration contract, so
  * mirroring them lets the SQLite dialects run on both Kysely 0.28 and 0.29
  * without importing from a moving path.
+ * TODO: Revisit this mirror if Better Auth drops Kysely 0.28 support and can
+ * depend on Kysely's `kysely/migration` export.
  *
  * @see https://github.com/better-auth/better-auth/issues/9810
  */
