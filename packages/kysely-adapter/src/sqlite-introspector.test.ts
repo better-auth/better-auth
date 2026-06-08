@@ -40,6 +40,38 @@ interface KyselyMigrationTableConstants {
 	DEFAULT_MIGRATION_TABLE: string;
 }
 
+function getErrorCode(error: unknown): string | undefined {
+	if (typeof error !== "object" || error === null || !("code" in error)) {
+		return undefined;
+	}
+
+	const code = error.code;
+	return typeof code === "string" ? code : undefined;
+}
+
+function isMissingKyselyMigrationModule(
+	error: unknown,
+	moduleName: string,
+): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	const code = getErrorCode(error);
+	if (code === "ERR_PACKAGE_PATH_NOT_EXPORTED") {
+		return true;
+	}
+
+	return (
+		(code === "ERR_MODULE_NOT_FOUND" ||
+			code === "MODULE_NOT_FOUND" ||
+			error.message.includes("Cannot find module") ||
+			error.message.includes("Failed to resolve import") ||
+			error.message.includes("Could not resolve")) &&
+		error.message.includes(moduleName)
+	);
+}
+
 async function loadKyselyMigrationTableConstants(): Promise<KyselyMigrationTableConstants> {
 	const migrationModule = "kysely/migration";
 
@@ -47,7 +79,11 @@ async function loadKyselyMigrationTableConstants(): Promise<KyselyMigrationTable
 		return (await import(
 			migrationModule
 		)) as unknown as KyselyMigrationTableConstants;
-	} catch {
+	} catch (error) {
+		if (!isMissingKyselyMigrationModule(error, migrationModule)) {
+			throw error;
+		}
+
 		return (await import("kysely")) as unknown as KyselyMigrationTableConstants;
 	}
 }
