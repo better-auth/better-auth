@@ -13,6 +13,7 @@ import {
 import type { AuthClient } from "../../client";
 import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
+import { expectNoTwoFactorChallenge } from "../../test-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { jwt } from "../jwt";
@@ -247,6 +248,7 @@ describe("oidc", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
@@ -334,6 +336,7 @@ describe("oidc", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
@@ -423,6 +426,7 @@ describe("oidc", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
@@ -1190,6 +1194,7 @@ describe("oidc storage", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);
@@ -1311,6 +1316,7 @@ describe("oidc token response format", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 
 		let redirectURI = "";
 		const consentHeaders = new Headers();
@@ -1616,6 +1622,7 @@ describe("oidc-jwt", async () => {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
 		);
+		expectNoTwoFactorChallenge(data);
 		expect(data.url).toContain(
 			"http://localhost:3000/api/auth/oauth2/authorize",
 		);

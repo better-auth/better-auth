@@ -34,7 +34,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
 		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("password");
 	});
 
 	it("should work with custom cookie name and prefix", async () => {
@@ -65,7 +65,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 			},
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
-		expect(cookies.get("my-app.last_method")).toBe("email");
+		expect(cookies.get("my-app.last_method")).toBe("password");
 	});
 
 	it("should work with custom cookie name regardless of prefix", async () => {
@@ -97,7 +97,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
 		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("last_login_method")).toBe("email");
+		expect(cookies.get("last_login_method")).toBe("password");
 	});
 
 	it("should work with cross-subdomain and custom prefix", async () => {
@@ -132,7 +132,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 					expect(setCookie).toContain("SameSite=Lax");
 					// Uses exact cookie name from config, not affected by cookiePrefix
 					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
+						"better-auth.last_used_login_method=password",
 					);
 				},
 			},
@@ -174,7 +174,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 					// Should not contain Domain attribute for cross-origin
 					expect(setCookie).not.toContain("Domain=");
 					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
+						"better-auth.last_used_login_method=password",
 					);
 				},
 			},
@@ -216,7 +216,7 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 					// Should not contain Secure on localhost when allowLocalhostUnsecure is true
 					expect(setCookie).not.toContain("Secure");
 					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
+						"better-auth.last_used_login_method=password",
 					);
 				},
 			},
