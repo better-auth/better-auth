@@ -2025,9 +2025,9 @@ describe("oauth2 - per-provider requireEmailVerification gate", async () => {
 		});
 
 		const { redirectLocation, setCookie } = await signInViaCallback({
-			email: "gate-optin-only@example.com",
+			email: "gate-credential-only@example.com",
 			email_verified: false,
-			sub: "gate_optin_only",
+			sub: "gate_credential_only",
 		});
 
 		expect(redirectLocation).not.toContain("error");
