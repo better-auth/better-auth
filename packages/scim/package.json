@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/scim",
-  "version": "1.6.14",
+  "version": "1.6.15",
   "description": "SCIM plugin for Better Auth",
   "type": "module",
   "license": "MIT",
