@@ -2283,29 +2283,30 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 	});
 
 	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
-		const { customFetchImpl: sharedRedirectFetch } = await getTestInstance({
-			trustedOrigins: ["http://localhost:8080"],
-			plugins: [
-				sso({
-					redirectURI: "/sso/callback",
-					defaultSSO: [
-						{
-							domain: "idp-initiated-shared.com",
-							providerId: "idp-initiated-shared",
-							oidcConfig: {
-								issuer: "http://localhost:8080",
-								clientId: "idp-initiated-shared-client",
-								clientSecret: "idp-initiated-shared-secret",
-								pkce: true,
-								discoveryEndpoint:
-									"http://localhost:8080/.well-known/openid-configuration",
-								allowIdpInitiated: true,
+		const { customFetchImpl: sharedRedirectFetch, auth: sharedRedirectAuth } =
+			await getTestInstance({
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [
+					sso({
+						redirectURI: "/sso/callback",
+						defaultSSO: [
+							{
+								domain: "idp-initiated-shared.com",
+								providerId: "idp-initiated-shared",
+								oidcConfig: {
+									issuer: "http://localhost:8080",
+									clientId: "idp-initiated-shared-client",
+									clientSecret: "idp-initiated-shared-secret",
+									pkce: true,
+									discoveryEndpoint:
+										"http://localhost:8080/.well-known/openid-configuration",
+									allowIdpInitiated: true,
+								},
 							},
-						},
-					],
-				}),
-			],
-		});
+						],
+					}),
+				],
+			});
 
 		const res = await sharedRedirectFetch(
 			"http://localhost:3000/api/auth/sso/callback/idp-initiated-shared?code=idp-issued-code",
@@ -2319,7 +2320,21 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(url.searchParams.get("redirect_uri")).toBe(
 			"http://localhost:3000/api/auth/sso/callback",
 		);
-		expect(url.searchParams.get("state")).toBeTruthy();
+		const stateNonce = url.searchParams.get("state");
+		expect(stateNonce).toBeTruthy();
+
+		// The shared callback resolves the provider from the server-only
+		// `serverContext` channel, so the bounce must write `ssoProviderId` there
+		// and never into the client-controlled top-level state.
+		const ctx = await sharedRedirectAuth.$context;
+		const verification = await ctx.internalAdapter.findVerificationValue(
+			stateNonce!,
+		);
+		const parsedState = JSON.parse(verification!.value);
+		expect(parsedState.serverContext?.ssoProviderId).toBe(
+			"idp-initiated-shared",
+		);
+		expect(parsedState.ssoProviderId).toBeUndefined();
 	});
 
 	it("should redirect to the error page for providers without the flag", async () => {

@@ -73,6 +73,8 @@ await authClient.signIn.social({
 
 The `scopes` parameter is additive: appended to the provider's configured scopes, not a replacement. Whatever the user consents to accumulates into the account's `grantedScopes`. Re-authenticating never narrows previously granted scopes.
 
+You can also pass `additionalData` (a `Record<string, any>`) to round-trip client data through the flow; read it back on the callback with `getOAuthState()` and treat it as untrusted. See [Passing Additional Data Through OAuth Flow](/docs/concepts/oauth#passing-additional-data-through-oauth-flow).
+
 ### Link Account
 
 ```ts

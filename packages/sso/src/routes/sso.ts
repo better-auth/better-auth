@@ -16,6 +16,7 @@ import {
 } from "better-auth";
 import {
 	APIError,
+	addOAuthServerContext,
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
@@ -1038,12 +1039,14 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 				const requestedScopes = ctx.body.scopes ||
 					config.scopes || ["openid", "email", "profile", "offline_access"];
-				const state = await generateState(ctx, {
-					additionalData: options?.redirectURI?.trim()
-						? { ssoProviderId: provider.providerId }
-						: false,
-					requestedScopes,
-				});
+				if (options?.redirectURI?.trim()) {
+					// The shared OIDC callback resolves the provider from server-only
+					// state, so it must not be client-spoofable.
+					await addOAuthServerContext({
+						ssoProviderId: provider.providerId,
+					});
+				}
+				const state = await generateState(ctx, { requestedScopes });
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1098,11 +1101,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
+				const { state: relayState } = await generateRelayState(ctx, undefined);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1644,10 +1643,12 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
+	if (options?.redirectURI?.trim()) {
+		// The shared OIDC callback resolves the provider from server-only state,
+		// so it must not be client-spoofable.
+		await addOAuthServerContext({ ssoProviderId: provider.providerId });
+	}
 	const state = await generateState(ctx, {
-		additionalData: options?.redirectURI?.trim()
-			? { ssoProviderId: provider.providerId }
-			: false,
 		requestedScopes: config.scopes || [
 			"openid",
 			"email",
@@ -1719,7 +1720,9 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = stateData.ssoProviderId as string | undefined;
+			const providerId = stateData.serverContext?.ssoProviderId as
+				| string
+				| undefined;
 			if (!providerId) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(

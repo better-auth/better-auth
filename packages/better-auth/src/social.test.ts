@@ -968,6 +968,7 @@ describe("signin", async () => {
 				},
 				requestSignUp: true,
 				expiresAt: expiresAt,
+				serverContext: { spoofed: true },
 			},
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
@@ -1000,6 +1001,9 @@ describe("signin", async () => {
 		});
 		expect(additionalData!.requestSignUp).not.toBe(true);
 		expect(additionalData!.expiresAt).not.toBe(expiresAt);
+		// `serverContext` is reserved for server-set values; a client-supplied one
+		// must never survive the round-trip.
+		expect(additionalData!.serverContext).toBeUndefined();
 	});
 });
 

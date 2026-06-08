@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -7,6 +10,8 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
 	APIError,
+	addOAuthServerContext,
+	getOAuthState,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
@@ -16,6 +21,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import type { Session, User } from "../../types";
 import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
@@ -24,6 +30,53 @@ import type {
 	AnonymousSession,
 	UserWithAnonymous,
 } from "./types";
+
+/**
+ * Resolves the anonymous session being upgraded during an account-link callback.
+ *
+ * The anonymous session is normally read from the request cookie. When the
+ * OAuth callback arrives without that cookie (for example Expo's in-app browser,
+ * which only carries the OAuth state, not the session cookie), the anonymous
+ * user id captured at sign-in is recovered from the server-only OAuth state
+ * instead. Returns `null` when there is no anonymous session to link.
+ */
+async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
+	session: Session & Record<string, any>;
+	user: UserWithAnonymous & Record<string, any>;
+} | null> {
+	const cookieSession = await getSessionFromCtx<{
+		isAnonymous: boolean | null;
+	}>(ctx, { disableRefresh: true });
+	if (cookieSession?.user.isAnonymous) {
+		return {
+			session: cookieSession.session,
+			user: { ...cookieSession.user, isAnonymous: true },
+		};
+	}
+
+	const anonymousUserId = (await getOAuthState())?.serverContext
+		?.anonymousUserId;
+	if (typeof anonymousUserId !== "string") {
+		return null;
+	}
+	const user = (await ctx.context.internalAdapter.findUserById(
+		anonymousUserId,
+	)) as (User & { isAnonymous?: boolean | null }) | null;
+	if (!user?.isAnonymous) {
+		return null;
+	}
+	const [anonymousSession] = await ctx.context.internalAdapter.listSessions(
+		user.id,
+		{ onlyActiveSessions: true },
+	);
+	if (!anonymousSession) {
+		return null;
+	}
+	return {
+		session: anonymousSession,
+		user: { ...user, isAnonymous: true },
+	};
+}
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -251,6 +304,29 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			),
 		},
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						// Generic OAuth providers also sign in through `/sign-in/social`,
+						// so this single path covers them too.
+						return ctx.path === "/sign-in/social";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, { disableRefresh: true });
+						if (!session?.user.isAnonymous) {
+							return;
+						}
+						// Carry the anonymous user id across the provider redirect so the
+						// callback can link the account even when the session cookie is
+						// absent (for example Expo's in-app browser).
+						await addOAuthServerContext({
+							anonymousUserId: session.user.id,
+						});
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {
@@ -286,15 +362,12 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 						/**
-						 * Make sure the user had an anonymous session.
+						 * Make sure the user had an anonymous session. Falls back to the
+						 * server-only OAuth state when the callback arrives without the
+						 * anonymous session cookie (for example Expo).
 						 */
-						const session = await getSessionFromCtx<{
-							isAnonymous: boolean | null;
-						}>(ctx, {
-							disableRefresh: true,
-						});
-
-						if (!session || !session.user.isAnonymous) {
+						const session = await resolveAnonymousSession(ctx);
+						if (!session) {
 							return;
 						}
 
@@ -309,21 +382,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 
-						const user = {
-							...session.user,
-							// Type hack to ensure `isAnonymous` is correctly inferred as true.
-							// Without this, `isAnonymous` is inferred as `boolean | null` despite
-							// the conditional checks above suggesting otherwise.
-							isAnonymous: session.user.isAnonymous,
-						};
-
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the
 						// integrator can perform any additional logic such as transferring data
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
-							await options?.onLinkAccount?.({
-								anonymousUser: { session: session.session, user },
+							await options.onLinkAccount({
+								anonymousUser: {
+									session: session.session,
+									user: session.user,
+								},
 								newUser: newSession,
 								ctx,
 							});
