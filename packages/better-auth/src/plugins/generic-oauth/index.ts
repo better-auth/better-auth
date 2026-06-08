@@ -379,6 +379,7 @@ export const genericOAuth = <const ID extends string>(
 					options: {
 						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
+						requireEmailVerification: c.requireEmailVerification,
 					},
 				} satisfies UpstreamProvider);
 			}

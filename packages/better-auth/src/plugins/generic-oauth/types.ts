@@ -188,6 +188,19 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	overrideUserInfo?: boolean | undefined;
 	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created or linked, but no session is issued: the callback redirects
+	 * with `?error=email_not_verified`. The gate checks the local user's
+	 * verification state, so a user already verified through another method keeps
+	 * access. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
+	/**
 	 * Accept callbacks from providers that initiate the OAuth flow without
 	 * sending a `state` parameter (e.g. Clever). When enabled, stateless
 	 * callbacks restart the OAuth flow server-side with a fresh `state` and

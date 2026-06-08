@@ -497,6 +497,34 @@ A custom function to verify the ID token.
 
 A boolean value that determines whether to override the user information in the database when signing in. By default, it is set to `false`, meaning that the user information will not be overridden during sign-in. If you want to update the user information every time they sign in, set this to `true`.
 
+### requireEmailVerification
+
+Require this provider's email to be verified before a session is created. Defaults to `false`.
+
+When the provider reports the email as unverified, Better Auth still creates or links the user and account, but it does not issue a session. The OAuth callback redirects with `?error=email_not_verified`, and ID token sign-in returns a `403` with the `EMAIL_NOT_VERIFIED` error code. A verification email is (re)sent according to your `emailVerification` settings: `sendOnSignUp` covers new users and `sendOnSignIn` covers returning users. Configure `emailVerification.sendVerificationEmail` and keep `sendOnSignUp` enabled so blocked users always receive a link to verify.
+
+The gate checks the local user's verification state rather than the provider's claim on each request. A user already verified through another method (such as email and password) keeps access even if the provider later reports the email as unverified.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      requireEmailVerification: true,
+    },
+  },
+});
+```
+
+This is opt-in per provider and is independent of `emailAndPassword.requireEmailVerification`: enabling email and password verification does not gate social sign-in.
+
+<Callout type="warn">
+  Only enable this for providers that report a trustworthy `email_verified` signal. Several providers always report the email as unverified (or never return one), so enabling it there blocks every sign-in. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+</Callout>
+
 ### mapProfileToUser
 
 A custom function to map the user profile returned from the provider to the user object in your database.
