@@ -74,9 +74,9 @@ export interface OAuthEndpointRedirectContext<Ctx = unknown> {
 	ctx: Ctx;
 }
 
-export type OAuthRedirectOnError<Ctx = any> = (
+export type OAuthRedirectOnError<Ctx = never, Result = unknown> = (
 	result: OAuthEndpointRedirectContext<Ctx>,
-) => unknown;
+) => Result | Promise<Result>;
 
 type ValidationErrorHookArgs = {
 	message: string;
@@ -113,6 +113,13 @@ export interface OAuthEndpointExtras {
 	defaultError?: OAuthErrorCode;
 }
 
+type OAuthEndpointExtraKey = keyof OAuthEndpointExtras;
+
+type OAuthEndpointOptions<Options extends EndpointOptions> =
+	Omit<Options, OAuthEndpointExtraKey> extends EndpointOptions
+		? Omit<Options, OAuthEndpointExtraKey>
+		: never;
+
 /**
  * Wraps `createAuthEndpoint` so zod schemas stay the single source of truth
  * for body/query shape while validation failures serialize as the RFC 6749
@@ -130,13 +137,15 @@ export interface OAuthEndpointExtras {
  */
 export function createOAuthEndpoint<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends EndpointOptions & OAuthEndpointExtras,
 	R,
 >(
 	path: Path,
-	options: Options & OAuthEndpointExtras,
-	handler: (ctx: EndpointContext<Path, Options, AuthContext>) => Promise<R>,
-): StrictEndpoint<Path, Options, R> {
+	options: Options,
+	handler: (
+		ctx: EndpointContext<Path, OAuthEndpointOptions<Options>, AuthContext>,
+	) => Promise<R>,
+): StrictEndpoint<Path, OAuthEndpointOptions<Options>, R> {
 	const {
 		redirectOnError,
 		onValidationError: userHook,
@@ -158,7 +167,7 @@ export function createOAuthEndpoint<
 					),
 				});
 			},
-		} as unknown as Options;
+		} as unknown as OAuthEndpointOptions<Options>;
 		return createAuthEndpoint(path, forwarded, handler);
 	}
 
@@ -175,7 +184,7 @@ export function createOAuthEndpoint<
 	};
 
 	async function validateSlot(
-		ctx: EndpointContext<Path, Options, AuthContext>,
+		ctx: EndpointContext<Path, OAuthEndpointOptions<Options>, AuthContext>,
 		slot: "body" | "query",
 		schema: z.ZodTypeAny | undefined,
 	): Promise<{ ok: true } | { ok: false; response: unknown }> {
@@ -191,22 +200,27 @@ export function createOAuthEndpoint<
 				issues: result.error.issues,
 			});
 		}
+		const response = await (
+			redirect as OAuthRedirectOnError<
+				EndpointContext<Path, OAuthEndpointOptions<Options>, AuthContext>
+			>
+		)({
+			...mapIssuesToOAuthError(
+				result.error.issues,
+				errorCodesByField,
+				defaultError,
+			),
+			ctx,
+		});
 		return {
 			ok: false,
-			response: redirect({
-				...mapIssuesToOAuthError(
-					result.error.issues,
-					errorCodesByField,
-					defaultError,
-				),
-				ctx,
-			}),
+			response,
 		};
 	}
 
 	return createAuthEndpoint(
 		path,
-		forwarded as unknown as Options,
+		forwarded as unknown as OAuthEndpointOptions<Options>,
 		async (ctx) => {
 			const body = await validateSlot(ctx, "body", bodySchema);
 			if (!body.ok) return body.response;
@@ -214,7 +228,7 @@ export function createOAuthEndpoint<
 			if (!query.ok) return query.response;
 			return handler(ctx);
 		},
-	) as StrictEndpoint<Path, Options, R>;
+	) as StrictEndpoint<Path, OAuthEndpointOptions<Options>, R>;
 }
 
 export function mapIssuesToOAuthError(

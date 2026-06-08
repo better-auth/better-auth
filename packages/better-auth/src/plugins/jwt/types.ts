@@ -19,7 +19,7 @@ export interface JwtOptions {
 				 *
 				 * @see https://github.com/panva/jose/blob/main/src/runtime/node/generate.ts
 				 *
-				 * @default { alg: 'EdDSA', crv: 'Ed25519' }
+				 * @default { alg: 'RS256' }
 				 */
 				keyPairConfig?: JWKOptions | undefined;
 				/**
@@ -91,17 +91,17 @@ export interface JwtOptions {
 				 * A function that is called to define the payload of the JWT
 				 */
 				definePayload?: (session: {
-					user: User & Record<string, any>;
-					session: Session & Record<string, any>;
-				}) => Awaitable<Record<string, any>> | undefined;
+					user: User & Record<string, unknown>;
+					session: Session & Record<string, unknown>;
+				}) => Awaitable<Record<string, unknown>> | undefined;
 				/**
 				 * A function that is called to get the subject of the JWT
 				 *
 				 * @default session.user.id
 				 */
 				getSubject?: (session: {
-					user: User & Record<string, any>;
-					session: Session & Record<string, any>;
+					user: User & Record<string, unknown>;
+					session: Session & Record<string, unknown>;
 				}) => Awaitable<string> | undefined;
 				/**
 				 * A custom function to remote sign the jwt payload.

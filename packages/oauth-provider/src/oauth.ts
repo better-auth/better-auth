@@ -118,6 +118,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
+		"auth_time",
+		"acr",
+		"amr",
+		"at_hash",
+		"nonce",
 		...(scopes.has("email") ? ["email", "email_verified"] : []),
 		...(scopes.has("profile")
 			? ["name", "picture", "family_name", "given_name"]
@@ -470,6 +475,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
+						query.delete("max_age");
 						ctx.query = searchParamsToQuery(
 							removePromptFromQuery(query, "login"),
 						);
@@ -557,6 +563,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional(),
 						state: z.string().optional(),
 						request_uri: z.string().optional(),
+						display: z.string().optional(),
+						ui_locales: z.string().optional(),
+						max_age: z.coerce.number().int().nonnegative().optional(),
+						acr_values: z.string().optional(),
+						login_hint: z.string().optional(),
+						id_token_hint: z.string().optional(),
 						code_challenge: z.string().optional(),
 						code_challenge_method: z
 							.string()
@@ -566,20 +578,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: z
 							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 							.optional(),
-						prompt: z
-							.string()
-							.pipe(
-								z.enum([
-									"none",
-									"consent",
-									"login",
-									"create",
-									"select_account",
-									"login consent",
-									"select_account consent",
-								]),
-							)
-							.optional(),
+						prompt: z.string().optional(),
 					}),
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {

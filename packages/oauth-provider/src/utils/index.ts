@@ -602,9 +602,14 @@ export async function validateClientCredentials(
  */
 export function parseClientMetadata(
 	metadata: string | object | undefined,
-): object | undefined {
+): Record<string, unknown> | undefined {
 	if (!metadata) return undefined;
-	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+	const parsed =
+		typeof metadata === "string" ? (JSON.parse(metadata) as unknown) : metadata;
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return undefined;
+	}
+	return parsed as Record<string, unknown>;
 }
 
 export type ExtractedCredentials =

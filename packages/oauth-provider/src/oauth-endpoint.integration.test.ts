@@ -78,13 +78,13 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 
 	async function captureRedirect(path: string) {
 		let status = 0;
-		let location: string | null = null;
+		let location: string | undefined;
 		await client.$fetch(path, {
 			method: "GET",
 			redirect: "manual",
 			onResponse: async (context) => {
 				status = context.response.status;
-				location = context.response.headers.get("location");
+				location = context.response.headers.get("location") ?? undefined;
 			},
 		});
 		return { status, location };

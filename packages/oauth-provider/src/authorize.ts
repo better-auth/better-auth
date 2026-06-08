@@ -5,15 +5,22 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import {
+	getStoredAuthenticationContext,
+	isAuthenticationFresh,
+	resolveAuthenticationContext,
+} from "./authentication-context";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
+	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
 	Scope,
 	VerificationValue,
 } from "./types";
+import { authorizationQuerySchema } from "./types/zod";
 
 import {
 	checkResource,
@@ -76,7 +83,22 @@ function deriveResponseMode(
 	return "query";
 }
 
-export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+function removeMaxAgeFromAuthorizationQuery(
+	query: OAuthAuthorizationQuery,
+): OAuthAuthorizationQuery {
+	const { max_age: _maxAge, ...queryWithoutMaxAge } = query;
+	return queryWithoutMaxAge;
+}
+
+export type OAuthRedirectResult = {
+	redirect: true;
+	url: string;
+};
+
+export const handleRedirect = (
+	ctx: GenericEndpointContext,
+	uri: string,
+): OAuthRedirectResult => {
 	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (fromFetch || acceptJson) {
@@ -245,7 +267,7 @@ async function resolveTrustedRedirectUri(
  */
 export function authorizeRedirectOnError(
 	opts: OAuthOptions<Scope[]>,
-): OAuthRedirectOnError<GenericEndpointContext> {
+): OAuthRedirectOnError<GenericEndpointContext, OAuthRedirectResult> {
 	return async ({ error, error_description, ctx }) => {
 		const raw = (ctx.query ?? {}) as Record<string, unknown>;
 		const clientId =
@@ -282,7 +304,7 @@ export async function authorizeEndpoint(
 		isAuthorize?: boolean;
 		postLogin?: boolean;
 	},
-) {
+): Promise<OAuthRedirectResult> {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
 		throw new APIError("NOT_FOUND");
@@ -294,6 +316,7 @@ export async function authorizeEndpoint(
 			error: "invalid_request",
 		});
 	}
+	const request = ctx.request;
 
 	// Resolve request_uri (PAR) before processing
 	let query: OAuthAuthorizationQuery = ctx.query;
@@ -327,6 +350,16 @@ export async function authorizeEndpoint(
 			query.client_id = urlClientId;
 		}
 	}
+	ctx.query = query;
+	const parsedQuery = authorizationQuerySchema.safeParse(query);
+	if (!parsedQuery.success) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "invalid authorization request",
+			ctx,
+		});
+	}
+	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
@@ -499,7 +532,23 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+	const maxAgeSeconds = query.max_age;
+	const hasSatisfiedMaxAge =
+		session != null &&
+		maxAgeSeconds !== undefined &&
+		isAuthenticationFresh(
+			new Date(session.session.createdAt),
+			maxAgeSeconds,
+			new Date(),
+		);
+	const staleForMaxAge =
+		session != null && maxAgeSeconds !== undefined && !hasSatisfiedMaxAge;
+	if (
+		!session ||
+		staleForMaxAge ||
+		promptSet?.has("login") ||
+		promptSet?.has("create")
+	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(
 				ctx,
@@ -514,6 +563,10 @@ export async function authorizeEndpoint(
 			opts,
 			promptSet?.has("create") ? "create" : "login",
 		);
+	}
+	if (hasSatisfiedMaxAge) {
+		query = removeMaxAgeFromAuthorizationQuery(query);
+		ctx.query = query;
 	}
 
 	// Force account selection (eg. multi-session)
@@ -603,18 +656,30 @@ export async function authorizeEndpoint(
 		session: session.session,
 		scopes: requestedScopes,
 	});
-
-	// Can skip consent (unless forced by prompt above)
-	if (client.skipConsent) {
+	const createAuthorizationCode = async () => {
+		const authenticationContext = await resolveAuthenticationContext({
+			opts,
+			user: session.user,
+			session: session.session,
+			client,
+			scopes: requestedScopes,
+			headers: request.headers,
+			requestedAcrValues: query.acr_values?.split(" ").filter(Boolean),
+		});
 		return redirectWithAuthorizationCode(ctx, opts, {
 			query,
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
-			authTime: new Date(session.session.createdAt).getTime(),
+			authenticationContext,
 			referenceId,
 			resource: requestedResources,
 		});
+	};
+
+	// Can skip consent (unless forced by prompt above)
+	if (client.skipConsent) {
+		return createAuthorizationCode();
 	}
 	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 		model: "oauthConsent",
@@ -677,15 +742,7 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	return redirectWithAuthorizationCode(ctx, opts, {
-		query,
-		clientId: client.clientId,
-		userId: session.user.id,
-		sessionId: session.session.id,
-		authTime: new Date(session.session.createdAt).getTime(),
-		referenceId,
-		resource: requestedResources,
-	});
+	return createAuthorizationCode();
 }
 
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
@@ -711,7 +768,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
-		authTime: number;
+		authenticationContext: OAuthAuthenticationContext;
 		referenceId?: string;
 		resource?: string[];
 	},
@@ -719,6 +776,9 @@ async function redirectWithAuthorizationCode(
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const storedAuthenticationContext = getStoredAuthenticationContext(
+		verificationValue.authenticationContext,
+	);
 
 	const data: Omit<Verification, "id" | "createdAt"> = {
 		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
@@ -730,7 +790,9 @@ async function redirectWithAuthorizationCode(
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
-			authTime: verificationValue.authTime,
+			authTime: storedAuthenticationContext.authTime,
+			acr: storedAuthenticationContext.acr,
+			amr: storedAuthenticationContext.amr,
 			resource: verificationValue.resource,
 		} satisfies VerificationValue),
 	};

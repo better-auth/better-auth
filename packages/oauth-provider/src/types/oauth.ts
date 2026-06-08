@@ -235,11 +235,11 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	/**
 	 * Supported Authentication Context Class Reference values.
 	 *
-	 * The provider does not yet attest a specific assurance level, so it reports
-	 * the RFC 6711 "unspecified" value `"0"`.
+	 * The default value `"0"` is the OpenID Connect level 0 value for no
+	 * assurance.
 	 *
 	 * @default ["0"]
-	 * @see https://www.rfc-editor.org/rfc/rfc6711#section-4
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 	 */
 	acr_values_supported: string[];
 	/**
@@ -259,7 +259,7 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * to sharing key vulnerabilities!
 	 *
 	 * @default
-	 * ["EdDSA"]
+	 * ["RS256"]
 	 */
 	id_token_signing_alg_values_supported: JWSAlgorithms[];
 	/**

@@ -5,7 +5,7 @@ import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions, ResolvedSigningKey } from "./types";
-import { createJwk, toExpJWT } from "./utils";
+import { createJwk, DEFAULT_JWT_ALGORITHM, toExpJWT } from "./utils";
 
 type JWTPayloadWithOptional = {
 	/**
@@ -79,8 +79,14 @@ export async function resolveSigningKey(
 		return null;
 	}
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	const requestedAlg =
+		options?.jwks?.keyPairConfig?.alg ?? DEFAULT_JWT_ALGORITHM;
 	let key = await adapter.getLatestKey(ctx);
-	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
+	if (
+		!key ||
+		(key.expiresAt && key.expiresAt < new Date()) ||
+		(key.alg != null && key.alg !== requestedAlg)
+	) {
 		key = await createJwk(ctx, options);
 	}
 	const privateKeyEncryptionEnabled =
@@ -95,7 +101,7 @@ export async function resolveSigningKey(
 				);
 			})
 		: key.privateKey;
-	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const alg = key.alg ?? requestedAlg;
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 	return { alg, kid: key.id, privateKey };
 }

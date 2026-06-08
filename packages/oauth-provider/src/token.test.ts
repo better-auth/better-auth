@@ -2157,6 +2157,7 @@ describe("id token claim override security", async () => {
 				customIdTokenClaims: () => ({
 					acr: "silver",
 					auth_time: 0,
+					amr: ["pwd"],
 					sub: "evil",
 					iss: "https://evil.com",
 					aud: "evil-client",
@@ -2259,12 +2260,13 @@ describe("id token claim override security", async () => {
 		return decodeJwt(tokens.data!.id_token!);
 	}
 
-	it("customIdTokenClaims can override acr and auth_time", async ({
+	it("customIdTokenClaims cannot override authentication context claims", async ({
 		expect,
 	}) => {
 		const claims = await getIdTokenClaims();
-		expect(claims.acr).toBe("silver");
-		expect(claims.auth_time).toBe(0);
+		expect(claims.acr).toBe("0");
+		expect(claims.auth_time).not.toBe(0);
+		expect(claims.amr).toBeUndefined();
 	});
 
 	it("customIdTokenClaims cannot override pinned security claims", async ({
@@ -2278,6 +2280,151 @@ describe("id token claim override security", async () => {
 		expect(claims.iat).not.toBe(0);
 		expect(claims.exp).not.toBe(0);
 		expect(claims.sid).not.toBe("evil-sid");
+	});
+});
+
+describe("id token authentication context", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const resolvedAcr = "urn:example:loa:mfa";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				authenticationContext: {
+					acrValuesSupported: ["0", resolvedAcr],
+					resolve: () => ({
+						acr: resolvedAcr,
+						amr: ["pwd", "otp"],
+					}),
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getTokens() {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "authentication-context",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+		return tokens.data!;
+	}
+
+	it("emits resolved acr/amr and preserves them on refresh", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const tokens = await getTokens();
+		const idToken = decodeJwt(tokens.id_token!);
+		expect(idToken.acr).toBe(resolvedAcr);
+		expect(idToken.amr).toEqual(["pwd", "otp"]);
+
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken: tokens.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		const refreshedTokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(refreshedTokens.data?.id_token).toBeDefined();
+		const refreshedIdToken = decodeJwt(refreshedTokens.data!.id_token!);
+		expect(refreshedIdToken.acr).toBe(resolvedAcr);
+		expect(refreshedIdToken.amr).toEqual(["pwd", "otp"]);
 	});
 });
 
@@ -2687,17 +2834,17 @@ describe("id token claims", async () => {
 		expect((decoded.at_hash as string).length).toBeGreaterThan(0);
 	});
 
-	it("issues acr '0' (RFC 6711 unspecified) by default", async ({ expect }) => {
+	it("issues acr '0' (OIDC Core level 0) by default", async ({ expect }) => {
 		const tokens = await getTokens(["openid"]);
 		const decoded = decodeJwt(tokens.id_token!);
 		expect(decoded.acr).toBe("0");
 	});
 
 	/**
-	 * EdDSA (Ed25519) uses SHA-512 per RFC 8032.
-	 * at_hash = base64url(left-half(SHA-512(access_token)))
+	 * RS256 uses SHA-256 per OIDC Core hash algorithm selection.
+	 * at_hash = base64url(left-half(SHA-256(access_token)))
 	 */
-	it("at_hash should match manual computation for EdDSA", async ({
+	it("at_hash should match manual computation for RS256", async ({
 		expect,
 	}) => {
 		const tokens = await getTokens(["openid"]);
@@ -2705,7 +2852,7 @@ describe("id token claims", async () => {
 
 		const digest = new Uint8Array(
 			await crypto.subtle.digest(
-				"SHA-512",
+				"SHA-256",
 				new TextEncoder().encode(tokens.access_token!),
 			),
 		);
@@ -3051,6 +3198,9 @@ describe("verificationValueSchema", () => {
 			},
 			userId: "user-1",
 			sessionId: "session-1",
+			authTime: 1710000000000,
+			acr: "0",
+			amr: ["pwd"],
 		};
 
 		const result = verificationValueSchema.safeParse(value);
@@ -3120,5 +3270,38 @@ describe("verificationValueSchema", () => {
 				"should-pass-through",
 			);
 		}
+	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
 	});
 });

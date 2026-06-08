@@ -1,7 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
-import { UNSPECIFIED_ACR } from "./authentication-context";
+import {
+	getAcrValuesSupported,
+	getIdTokenSigningAlgValuesSupported,
+} from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
 import type {
@@ -125,14 +128,12 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
-			?.alg
-			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
-			: opts.disableJwtPlugin
-				? ["HS256"]
-				: ["EdDSA"],
+		id_token_signing_alg_values_supported: getIdTokenSigningAlgValuesSupported({
+			disableJwtPlugin: opts.disableJwtPlugin,
+			jwtPluginOptions,
+		}),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
-		acr_values_supported: [UNSPECIFIED_ACR],
+		acr_values_supported: [...getAcrValuesSupported(opts)],
 		prompt_values_supported: [
 			"login",
 			"consent",
@@ -150,6 +151,11 @@ export function oidcServerMetadata(
 // Cache for 15s with a short stale window; metadata rarely changes.
 const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
+
+type ExportedMetadataRequest = {
+	request: Request;
+	asResponse: false;
+};
 
 export function metadataResponse(
 	body: unknown,
@@ -174,7 +180,7 @@ export function metadataResponse(
 export const oauthProviderAuthServerMetadata = <
 	Auth extends {
 		api: {
-			getOAuthServerConfig: (...args: any) => any;
+			getOAuthServerConfig: (input: ExportedMetadataRequest) => unknown;
 		};
 	},
 >(
@@ -201,7 +207,7 @@ export const oauthProviderAuthServerMetadata = <
 export const oauthProviderOpenIdConfigMetadata = <
 	Auth extends {
 		api: {
-			getOpenIdConfig: (...args: any) => any;
+			getOpenIdConfig: (input: ExportedMetadataRequest) => unknown;
 		};
 	},
 >(

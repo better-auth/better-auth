@@ -13,12 +13,17 @@ import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
+import { createJwk, DEFAULT_JWT_ALGORITHM } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
 export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
+export {
+	createJwk,
+	DEFAULT_JWT_ALGORITHM,
+	generateExportedKeyPair,
+	toExpJWT,
+} from "./utils";
 export { verifyJWT } from "./verify";
 
 declare module "@better-auth/core" {
@@ -168,8 +173,19 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					const adapter = getJwksAdapter(ctx.context.adapter, options);
 
 					let keySets = await adapter.getAllKeys(ctx);
+					const requestedAlg =
+						options?.jwks?.keyPairConfig?.alg ?? DEFAULT_JWT_ALGORITHM;
+					const now = Date.now();
 
-					if (!keySets || keySets?.length === 0) {
+					const hasActiveRequestedAlgKey = keySets?.some((key) => {
+						const keyAlg = key.alg ?? requestedAlg;
+						return (
+							keyAlg === requestedAlg &&
+							(!key.expiresAt || key.expiresAt.getTime() > now)
+						);
+					});
+
+					if (!keySets || keySets?.length === 0 || !hasActiveRequestedAlgKey) {
 						await createJwk(ctx, options);
 						keySets = await adapter.getAllKeys(ctx);
 					}
@@ -180,7 +196,6 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 						);
 					}
 
-					const now = Date.now();
 					const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
 					const gracePeriod =
 						(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
@@ -201,7 +216,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					return ctx.json({
 						keys: keys.map((keySet) => {
 							return {
-								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+								alg: keySet.alg ?? requestedAlg,
 								crv: keySet.crv ?? defaultCrv,
 								...JSON.parse(keySet.publicKey),
 								kid: keySet.id,
@@ -285,7 +300,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 								payload: {
 									sub: string;
 									aud: string;
-									[key: string]: any;
+									[key: string]: unknown;
 								} | null;
 							},
 						},

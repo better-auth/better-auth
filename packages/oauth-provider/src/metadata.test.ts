@@ -26,6 +26,11 @@ describe("oauth metadata", async () => {
 		"sid",
 		"scope",
 		"azp",
+		"auth_time",
+		"acr",
+		"amr",
+		"at_hash",
+		"nonce",
 		"email",
 		"email_verified",
 		"name",
@@ -118,7 +123,7 @@ describe("oauth metadata", async () => {
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["EdDSA"],
+			id_token_signing_alg_values_supported: ["RS256"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
 			acr_values_supported: ["0"],
 			prompt_values_supported: [
@@ -385,6 +390,23 @@ describe("oauth metadata", async () => {
 		const metadata = await auth.api.getOpenIdConfig();
 		expect(metadata).toMatchObject({
 			claims_supported: [...baseClaims, ...customClaims],
+		});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	it("should advertise configured authentication context values", async () => {
+		const acrValuesSupported = ["0", "urn:example:loa:mfa"];
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				authenticationContext: {
+					acrValuesSupported,
+				},
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
+			acr_values_supported: acrValuesSupported,
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});

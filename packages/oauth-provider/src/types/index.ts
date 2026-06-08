@@ -80,6 +80,55 @@ export interface ClientDiscovery<
 	discoveryMetadata?: Record<string, unknown>;
 }
 
+export interface OAuthAuthenticationContext {
+	/**
+	 * Time when the end user last actively authenticated.
+	 *
+	 * Emitted as the `auth_time` ID token claim when available.
+	 */
+	authTime?: Date;
+	/**
+	 * Authentication Context Class Reference satisfied by the current session.
+	 *
+	 * Defaults to `"0"`, the OpenID Connect level 0 value for no assurance.
+	 */
+	acr?: string;
+	/**
+	 * Authentication Methods References used for the current session.
+	 *
+	 * Values should use registered AMR identifiers when possible.
+	 */
+	amr?: string[];
+}
+
+export interface OAuthAuthenticationContextOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * ACR values this provider can honestly issue.
+	 *
+	 * Defaults to `["0"]`, OpenID Connect level 0.
+	 */
+	acrValuesSupported?: string[];
+	/**
+	 * Resolve the authentication context for an authorization grant.
+	 *
+	 * Return only values that were established by the authentication flow.
+	 * Do not use this hook for arbitrary custom ID token claims.
+	 */
+	resolve?: (info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scopes>;
+		scopes: string[];
+		headers: Headers;
+		metadata?: Record<string, unknown>;
+		requestedAcrValues?: string[];
+		defaultContext: Required<Pick<OAuthAuthenticationContext, "acr">> &
+			OAuthAuthenticationContext;
+	}) => Awaitable<OAuthAuthenticationContext | undefined>;
+}
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -527,7 +576,7 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** The access token payload used in the /userinfo request */
 		jwt: JWTPayload;
-	}) => Awaitable<Record<string, any>>;
+	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
 	 *
@@ -544,8 +593,15 @@ export interface OAuthOptions<
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
-		metadata?: Record<string, any>;
-	}) => Awaitable<Record<string, any>>;
+		metadata?: Record<string, unknown>;
+	}) => Awaitable<Record<string, unknown>>;
+	/**
+	 * Authentication context emitted in OIDC ID tokens.
+	 *
+	 * This owns `auth_time`, `acr`, and `amr`. `customIdTokenClaims`
+	 * cannot override these protocol claims.
+	 */
+	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**
 	 * Custom claims attached to access tokens.
 	 *
@@ -569,8 +625,8 @@ export interface OAuthOptions<
 		/** The resources requested. */
 		resources?: string[];
 		/** oAuthClient metadata */
-		metadata?: Record<string, any>;
-	}) => Awaitable<Record<string, any>>;
+		metadata?: Record<string, unknown>;
+	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Custom fields to include in the token response body.
 	 *
@@ -594,7 +650,7 @@ export interface OAuthOptions<
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
-		metadata?: Record<string, any>;
+		metadata?: Record<string, unknown>;
 		/**
 		 * The authorization code verification value.
 		 * Only present for `authorization_code` grant. Contains the original
@@ -618,7 +674,7 @@ export interface OAuthOptions<
 		 * Advertised claims_supported located at /.well-known/openid-configuration
 		 *
 		 * Internally supported claims:
-		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
+		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp", "auth_time", "acr", "amr", "at_hash", "nonce"]
 		 */
 		claims_supported?: string[];
 	};
@@ -934,6 +990,8 @@ export interface VerificationValue {
 	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
+	acr?: string;
+	amr?: string[];
 }
 
 /**
@@ -1164,6 +1222,14 @@ export interface OAuthRefreshToken<
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
 	 */
 	authTime?: Date;
+	/**
+	 * Authentication Context Class Reference satisfied at authorization time.
+	 */
+	acr?: string;
+	/**
+	 * Authentication Methods References used at authorization time.
+	 */
+	amr?: string[];
 	/**
 	 * Scopes granted for this refresh token.
 	 *
