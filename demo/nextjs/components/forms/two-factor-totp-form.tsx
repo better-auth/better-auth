@@ -76,6 +76,14 @@ export function TwoFactorTotpForm({
 		);
 	}
 
+	if (pendingChallengeQuery.isError) {
+		return (
+			<p className="text-sm text-destructive">
+				Could not load this sign-in attempt. Please try again.
+			</p>
+		);
+	}
+
 	if (!totpMethodId) {
 		return (
 			<p className="text-sm text-muted-foreground">

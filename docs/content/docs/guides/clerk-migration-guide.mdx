@@ -266,7 +266,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
           recoveryCodes,
           rows: recoveryCodes.map((code) => ({
               methodId,
-              codeHash: createHash("sha256").update(code).digest("hex"),
+              codeHash: createHash("sha256").update(code).digest("base64url"),
           })),
       };
     }

@@ -1,8 +1,8 @@
 ---
-"@better-auth/core": major
-"better-auth": major
-"@better-auth/passkey": major
-"@better-auth/sso": major
+"@better-auth/core": minor
+"better-auth": minor
+"@better-auth/passkey": minor
+"@better-auth/sso": minor
 ---
 
 Introduce a generic sign-in challenge envelope and pause sign-in consistently across every flow that can be gated by 2FA. The legacy flat `twoFactorRedirect` / `challengeId` / `twoFactorMethods` shape has been removed.

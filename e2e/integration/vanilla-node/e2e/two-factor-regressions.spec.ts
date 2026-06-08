@@ -1023,6 +1023,18 @@ test.describe("two factor regression paths", () => {
 			expect(deviceCodePayload.device_code).toBeTruthy();
 			expect(deviceCodePayload.user_code).toBeTruthy();
 
+			// Claim the device code against the approving user's session before
+			// approving it: `/device/approve` requires a claimed (userId-bound)
+			// code, and the `GET /device` verify step performs that binding.
+			const verifyResponse = await authRequest(
+				`${baseURL}/device?user_code=${deviceCodePayload.user_code}`,
+				sessionJar,
+				{
+					method: "GET",
+				},
+			);
+			expect(verifyResponse.status).toBe(200);
+
 			const approveResponse = await authRequest(
 				`${baseURL}/device/approve`,
 				sessionJar,
@@ -1082,6 +1094,24 @@ test.describe("two factor regression paths", () => {
 
 		try {
 			const { port, stop } = await setupServer({
+				// Seed users verified so the implicit OAuth link is allowed: next's
+				// `requireLocalEmailVerified` gate rejects linking an unverified local
+				// account even for a trusted provider.
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["test-provider"],
+					},
+				},
 				plugins: [
 					twoFactor({
 						skipVerificationOnEnable: true,
@@ -1129,12 +1159,12 @@ test.describe("two factor regression paths", () => {
 				expect(enableResponse.status).toBe(200);
 
 				const oauthStartResponse = await authRequest(
-					`${baseURL}/sign-in/oauth2`,
+					`${baseURL}/sign-in/social`,
 					oauthJar,
 					{
 						method: "POST",
 						body: {
-							providerId: "test-provider",
+							provider: "test-provider",
 							callbackURL: "/dashboard",
 						},
 					},
@@ -1193,6 +1223,18 @@ test.describe("two factor regression paths", () => {
 
 		try {
 			const { port, stop } = await setupServer({
+				// Seed users verified so the implicit OAuth link is allowed: next's
+				// `requireLocalEmailVerified` gate rejects linking an unverified local
+				// account even for a trusted provider.
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
 				account: {
 					accountLinking: {
 						enabled: true,
@@ -1320,12 +1362,12 @@ test.describe("two factor regression paths", () => {
 				expect(enableResponse.status).toBe(200);
 
 				const oauthStartResponse = await authRequest(
-					`${baseURL}/sign-in/oauth2`,
+					`${baseURL}/sign-in/social`,
 					oauthJar,
 					{
 						method: "POST",
 						body: {
-							providerId: "test-provider",
+							provider: "test-provider",
 							callbackURL: "/dashboard",
 						},
 					},

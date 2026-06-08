@@ -14,6 +14,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/cimd": "link:../../packages/cimd",
     "@better-auth/dash": "^0.1.6",
     "@better-auth/electron": "link:../../packages/electron",
     "@better-auth/oauth-provider": "link:../../packages/oauth-provider",

@@ -146,9 +146,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						sourceProfile: payload as Record<string, unknown>,
 					});
 					if (data.error) {
-						if (
-							data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
-						) {
+						if (data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED) {
 							throw APIError.from(
 								"FORBIDDEN",
 								BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,

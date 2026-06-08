@@ -276,4 +276,47 @@ describe("two-factor method-first journeys", () => {
 		});
 		expectTwoFactorChallenge(await afterRevokeResponse.json());
 	});
+
+	it("rejects TOTP enablement when totpOptions.disable is set", async () => {
+		const { auth, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					totpOptions: { disable: true },
+				}),
+			],
+		});
+		const initialSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const sessionHeaders = convertSetCookieToCookie(initialSignIn.headers);
+
+		const res = await auth.api.enableTwoFactorTotp({
+			body: { password: testUser.password },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects OTP enablement when sendOTP is not configured", async () => {
+		const { auth, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
+		const initialSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const sessionHeaders = convertSetCookieToCookie(initialSignIn.headers);
+
+		const res = await auth.api.enableTwoFactorOtp({
+			body: { password: testUser.password },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
 });

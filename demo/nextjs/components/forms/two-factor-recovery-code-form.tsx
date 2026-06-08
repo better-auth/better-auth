@@ -73,6 +73,14 @@ export function TwoFactorRecoveryCodeForm({
 		);
 	}
 
+	if (pendingChallengeQuery.isError) {
+		return (
+			<p className="text-sm text-destructive">
+				Could not load the pending sign-in. Please try again.
+			</p>
+		);
+	}
+
 	if (!recoveryMethodId) {
 		return (
 			<p className="text-sm text-muted-foreground">

@@ -93,6 +93,14 @@ export function TwoFactorEmailOtpForm({
 		);
 	}
 
+	if (pendingChallengeQuery.isError) {
+		return (
+			<p className="text-sm text-destructive">
+				Could not load the sign-in attempt. Please try again.
+			</p>
+		);
+	}
+
 	if (!otpMethodId) {
 		return (
 			<p className="text-sm text-muted-foreground">

@@ -20,25 +20,19 @@ export function TwoFactorMethodLinks({ current }: TwoFactorMethodLinksProps) {
 	return (
 		<div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
 			{hasTotp && current !== "totp" ? (
-				<Link href="/two-factor">
-					<Button variant="link" size="sm">
-						Use TOTP
-					</Button>
-				</Link>
+				<Button asChild variant="link" size="sm">
+					<Link href="/two-factor">Use TOTP</Link>
+				</Button>
 			) : null}
 			{hasOtp && current !== "otp" ? (
-				<Link href="/two-factor/otp">
-					<Button variant="link" size="sm">
-						Use Email OTP
-					</Button>
-				</Link>
+				<Button asChild variant="link" size="sm">
+					<Link href="/two-factor/otp">Use Email OTP</Link>
+				</Button>
 			) : null}
 			{hasRecoveryCode && current !== "recovery-code" ? (
-				<Link href="/two-factor/recovery-code">
-					<Button variant="link" size="sm">
-						Use Recovery Code
-					</Button>
-				</Link>
+				<Button asChild variant="link" size="sm">
+					<Link href="/two-factor/recovery-code">Use Recovery Code</Link>
+				</Button>
 			) : null}
 		</div>
 	);
