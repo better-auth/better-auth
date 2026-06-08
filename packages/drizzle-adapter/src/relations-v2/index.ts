@@ -19,6 +19,8 @@ import {
 	gt,
 	gte,
 	inArray,
+	isNotNull,
+	isNull,
 	like,
 	lt,
 	lte,
@@ -216,6 +218,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					if (w.operator === "ne") {
+						if (w.value === null) {
+							return [isNotNull(schemaModel[field])];
+						}
 						return [ne(schemaModel[field], w.value)];
 					}
 
@@ -227,6 +232,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return [gte(schemaModel[field], w.value)];
 					}
 
+					// eq operator
+					if (w.value === null) {
+						return [isNull(schemaModel[field])];
+					}
 					return [eq(schemaModel[field], w.value)];
 				}
 				const andGroup = where.filter(
@@ -275,7 +284,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
+							if (w.value === null) {
+								return isNotNull(schemaModel[field]);
+							}
 							return ne(schemaModel[field], w.value);
+						}
+						if (w.value === null) {
+							return isNull(schemaModel[field]);
 						}
 						return eq(schemaModel[field], w.value);
 					}),
@@ -321,7 +336,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
+							if (w.value === null) {
+								return isNotNull(schemaModel[field]);
+							}
 							return ne(schemaModel[field], w.value);
+						}
+						if (w.value === null) {
+							return isNull(schemaModel[field]);
 						}
 						return eq(schemaModel[field], w.value);
 					}),
@@ -375,11 +396,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					} else if (w.operator === "lte") {
 						columnObj.lte = w.value;
 					} else if (w.operator === "ne") {
-						columnObj.ne = w.value;
+						if (w.value === null) {
+							columnObj.isNotNull = true;
+						} else {
+							columnObj.ne = w.value;
+						}
 					} else if (w.operator === "gt") {
 						columnObj.gt = w.value;
 					} else if (w.operator === "gte") {
 						columnObj.gte = w.value;
+					} else if (w.value === null) {
+						columnObj.isNull = true;
 					} else {
 						columnObj.eq = w.value;
 					}
