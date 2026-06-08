@@ -4,6 +4,7 @@ import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
 	APIError,
+	addOAuthServerContext,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	getOAuthState,
@@ -413,11 +414,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							postLoginClearedForSession,
 						});
 
-						// If path is social sign-in, add to additional data body
+						// On the social sign-in path the authorize query has to survive the
+						// provider redirect to be resumed after login. Carry it in the
+						// server-only OAuth state so a client cannot inject its own `query`
+						// through the request body.
 						if (ctx.path === "/sign-in/social") {
-							if (ctx.body.additionalData?.query) return;
-							if (!ctx.body.additionalData) ctx.body.additionalData = {};
-							ctx.body.additionalData.query = queryParams.toString();
+							await addOAuthServerContext({
+								query: queryParams.toString(),
+							});
 						}
 					}),
 				},
@@ -442,7 +446,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// but clearing the login prompt cookie if forced login prompt
 						const _query =
 							(await oAuthState.get())?.query ??
-							((await getOAuthState())?.query as string | undefined);
+							((await getOAuthState())?.serverContext?.query as
+								| string
+								| undefined);
 						if (!_query) return;
 						const query = new URLSearchParams(_query);
 
