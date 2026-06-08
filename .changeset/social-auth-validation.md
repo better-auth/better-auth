@@ -1,6 +1,6 @@
 ---
-"@better-auth/core": major
-"better-auth": major
+"@better-auth/core": minor
+"better-auth": minor
 "@better-auth/sso": patch
 "@better-auth/scim": patch
 ---
