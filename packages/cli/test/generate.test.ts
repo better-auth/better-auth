@@ -1508,3 +1508,79 @@ describe("--dialect flag support", () => {
 		expect(schema.fileName).toBe("test.prisma");
 	});
 });
+
+describe("PostgreSQL Drizzle timestamptz and migration surface", () => {
+	it("should generate Drizzle schema with withTimezone: true for date fields and not touch other fields", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						lastUsedAt: {
+							type: "date",
+						},
+						accessTokenExpiresAt: {
+							type: "date",
+						},
+						refreshTokenExpiresAt: {
+							type: "date",
+						},
+						otherTextField: {
+							type: "string",
+						},
+						otherBoolField: {
+							type: "boolean",
+						},
+						otherIntField: {
+							type: "number",
+						},
+						otherJsonField: {
+							type: "json",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+
+		// Assertions for withTimezone: true on all auth-related / date fields
+		expect(schema.code).toMatch(
+			/createdAt:\s*timestamp\("created_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true\s*\}\)/,
+		);
+		expect(schema.code).toMatch(
+			/updatedAt:\s*timestamp\("updated_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true\s*\}\)/,
+		);
+		expect(schema.code).toMatch(
+			/expiresAt:\s*timestamp\("expires_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true,?\s*\}\)/,
+		);
+		expect(schema.code).toMatch(
+			/lastUsedAt:\s*timestamp\("last_used_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true,?\s*\}\)/,
+		);
+		expect(schema.code).toMatch(
+			/accessTokenExpiresAt:\s*timestamp\("access_token_expires_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true,?\s*\}\)/,
+		);
+		expect(schema.code).toMatch(
+			/refreshTokenExpiresAt:\s*timestamp\("refresh_token_expires_at",\s*\{\s*mode:\s*["']date["'],\s*withTimezone:\s*true,?\s*\}\)/,
+		);
+
+		// Assertions that other types are NOT modified
+		expect(schema.code).toContain('otherTextField: text("other_text_field")');
+		expect(schema.code).toContain(
+			'otherBoolField: boolean("other_bool_field")',
+		);
+		expect(schema.code).toContain('otherIntField: integer("other_int_field")');
+		expect(schema.code).toContain('otherJsonField: jsonb("other_json_field")');
+
+		expect(schema.code).not.toMatch(/otherTextField:[^;]*withTimezone/);
+		expect(schema.code).not.toMatch(/otherBoolField:[^;]*withTimezone/);
+		expect(schema.code).not.toMatch(/otherIntField:[^;]*withTimezone/);
+		expect(schema.code).not.toMatch(/otherJsonField:[^;]*withTimezone/);
+	});
+});
