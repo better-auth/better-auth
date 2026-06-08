@@ -162,6 +162,39 @@ describe("one-tap implicit linking gate", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 */
+	it("returns 403 EMAIL_NOT_VERIFIED when the provider requires a verified email", async () => {
+		verifiedPayload.email = "one-tap-unverified@example.com";
+		verifiedPayload.email_verified = false;
+		verifiedPayload.sub = "one_tap_unverified_sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		// 403 distinguishes the mapped EMAIL_NOT_VERIFIED gate from the generic
+		// 401 the unverified-linking path returns.
+		expect(res.error?.status).toBe(403);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9502
 	 */
 	it("links Google One Tap when another provider has the same account ID", async () => {

@@ -347,6 +347,7 @@ export const auth = betterAuth({
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `requireEmailVerification`: Require this provider's email to be verified before a session is created. Opt-in per provider and independent of `emailAndPassword.requireEmailVerification`. Only enable it for providers that report a trustworthy `email_verified` signal (optional)
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)

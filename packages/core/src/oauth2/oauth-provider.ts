@@ -343,4 +343,27 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * @default false
 	 */
 	overrideUserInfoOnSignIn?: boolean | undefined;
+	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created/linked, but no session is issued: the OAuth callback redirects
+	 * with `?error=email_not_verified` and id-token sign-in returns a `403`
+	 * `EMAIL_NOT_VERIFIED`. A verification email is (re)sent per the
+	 * `emailVerification` settings (`sendOnSignUp` / `sendOnSignIn`).
+	 *
+	 * The gate checks the local user's verification state, not the provider's
+	 * claim on each request: a user already verified through another method (or a
+	 * prior verified sign-in) keeps access even if the provider later reports the
+	 * email as unverified.
+	 *
+	 * This is opt-in per provider and is independent of
+	 * `emailAndPassword.requireEmailVerification`; enabling that does not gate
+	 * social sign-in. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal: several providers always report the email as
+	 * unverified, which would block every sign-in.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
 };

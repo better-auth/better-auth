@@ -835,6 +835,61 @@ describe("oauth2", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 */
+	it("blocks the session with error=email_not_verified when requireEmailVerification is set", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-require-verify",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+							requireEmailVerification: true,
+						},
+					],
+				}),
+			],
+		});
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "generic-unverified@test.com",
+				name: "Generic Unverified",
+				sub: "generic-unverified",
+				email_verified: false,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.social({
+			provider: "test-require-verify",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const { callbackURL, setCookieHeader } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toContain("error=email_not_verified");
+		expect(setCookieHeader).not.toContain("better-auth.session_token=");
+	});
+
 	it("should create user when sign ups are disabled and sign up is requested", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {

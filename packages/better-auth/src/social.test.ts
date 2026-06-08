@@ -1222,6 +1222,51 @@ describe("Google Provider — multiple client IDs", async () => {
 
 		expect(res.error?.status).toBe(500);
 	});
+
+	it("returns 403 EMAIL_NOT_VERIFIED for an unverified id token when the provider requires verification", async () => {
+		const idToken = await new SignJWT({
+			email: "mobile-unverified@example.com",
+			email_verified: false,
+			name: "Mobile Unverified",
+			sub: "google-sub-unverified",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(webClientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+						requireEmailVerification: true,
+					},
+				},
+				emailAndPassword: { enabled: true, requireEmailVerification: false },
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+		expect(res.data).toBeNull();
+
+		// The user is still created; only the session is withheld.
+		const ctx = await auth.$context;
+		const user = await ctx.adapter.findOne<{ emailVerified: boolean }>({
+			model: "user",
+			where: [{ field: "email", value: "mobile-unverified@example.com" }],
+		});
+		expect(user?.emailVerified).toBe(false);
+	});
 });
 
 /**

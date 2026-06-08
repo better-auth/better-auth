@@ -8,6 +8,7 @@ import { createEmailVerificationToken } from "../api";
 import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
 import { persistOAuthAccount } from "./persist-account";
 import type {
 	ResolvedOAuthUser,
@@ -23,6 +24,12 @@ import { resolveOAuthUser } from "./resolve-account";
  * persist the provider account's tokens and granted scopes through the single
  * write seam, then issue a session and (for a brand-new user) the
  * verification email.
+ *
+ * When the provider opts into `requireEmailVerification` and the local email is
+ * still unverified, no session is issued: the user/account are persisted but the
+ * result carries `EMAIL_NOT_VERIFIED` (the callback redirects with
+ * `?error=email_not_verified`, the id-token path returns `403`), and the
+ * verification email is (re)sent per `sendOnSignUp` / `sendOnSignIn`.
  *
  * Composes {@link resolveOAuthUser} (identity + linking policy) and
  * {@link persistOAuthAccount} (token encryption + grant accumulation), so no
@@ -143,8 +150,41 @@ export async function signInWithOAuthIdentity(
 
 	const { user } = resolved;
 
-	if (isRegister) {
-		await sendSignUpVerificationEmail(c, user, callbackURL);
+	// Read the provider's verification policy from the resolved provider list, not
+	// from `opts`, so the callback, id-token, and oauth-proxy callers all enforce
+	// it without each having to thread the flag.
+	const requireEmailVerification = c.context.socialProviders.find(
+		(p) => p.id === providerId,
+	)?.options?.requireEmailVerification;
+
+	// A brand-new user whose provider email is unverified is sent a verification
+	// email. Mirrors the credential sign-up rule (`sendOnSignUp`, otherwise the
+	// provider's `requireEmailVerification`), so a user the gate is about to block
+	// can still verify and recover.
+	if (
+		isRegister &&
+		!user.emailVerified &&
+		(c.context.options.emailVerification?.sendOnSignUp ??
+			requireEmailVerification)
+	) {
+		await dispatchVerificationEmail(c, user, callbackURL);
+	}
+
+	// Per-provider email-verification gate: when this provider requires a verified
+	// email and the local row is still unverified, the user/account are already
+	// created or linked, but no session is issued. Opt-in per provider and
+	// independent of `emailAndPassword.requireEmailVerification`.
+	if (requireEmailVerification && !user.emailVerified) {
+		// Returning unverified users get a fresh verification email when the app
+		// opted into sign-in sends; brand-new users already received one above.
+		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
+			await dispatchVerificationEmail(c, user, callbackURL);
+		}
+		return {
+			error: OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED,
+			data: null,
+			isRegister,
+		};
 	}
 
 	const session = await c.context.internalAdapter.createSession(user.id);
@@ -167,37 +207,33 @@ export async function signInWithOAuthIdentity(
 }
 
 /**
- * Fire the sign-up verification email when the provider did not vouch for the
- * email and the option is enabled. Runs in the background; a failure must not
- * abort the sign-in.
+ * Mint a verification token and dispatch the verification email in the
+ * background. The user and account are already committed by the time this runs,
+ * so a token-mint or send failure must not abort the sign-in. Callers decide
+ * *when* to send (`sendOnSignUp` / `sendOnSignIn`); this owns the token and URL.
  */
-async function sendSignUpVerificationEmail(
+async function dispatchVerificationEmail(
 	c: GenericEndpointContext,
 	user: User,
 	callbackURL: string | undefined,
 ) {
-	if (
-		user.emailVerified ||
-		!c.context.options.emailVerification?.sendOnSignUp ||
-		!c.context.options.emailVerification?.sendVerificationEmail
-	) {
+	const sendVerificationEmail =
+		c.context.options.emailVerification?.sendVerificationEmail;
+	if (!sendVerificationEmail) {
 		return;
 	}
-	// The user and account are already committed by the time this runs, so a
-	// verification-email failure (token mint or send) must not abort the
-	// sign-in. Token creation is awaited inline, so guard the whole block.
 	try {
 		const token = await createEmailVerificationToken(
 			c.context.secret,
 			user.email,
 			undefined,
-			c.context.options.emailVerification.expiresIn,
+			c.context.options.emailVerification?.expiresIn,
 		);
 		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 			callbackURL || "/",
 		)}`;
 		await c.context.runInBackgroundOrAwait(
-			c.context.options.emailVerification.sendVerificationEmail(
+			sendVerificationEmail(
 				{
 					user,
 					url,
@@ -207,6 +243,6 @@ async function sendSignUpVerificationEmail(
 			),
 		);
 	} catch (e) {
-		c.context.logger.error("Failed to send sign-up verification email", e);
+		c.context.logger.error("Failed to send OAuth verification email", e);
 	}
 }

@@ -13,7 +13,10 @@ import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserOutput } from "../../db/schema";
-import { missingEmailLogMessage } from "../../oauth2/errors";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -345,6 +348,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					sourceProfile: userInfo.data,
 				});
 				if (data.error) {
+					if (data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED) {
+						throw APIError.from(
+							"FORBIDDEN",
+							BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+						);
+					}
 					throw APIError.from("UNAUTHORIZED", {
 						message: data.error,
 						code: "OAUTH_LINK_ERROR",
