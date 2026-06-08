@@ -11,6 +11,7 @@ export type {
 	ValidateUserInfoOAuthInfo,
 	ValidateUserInfoResult,
 	ValidateUserInfoSource,
+	ValidateUserInfoSSOInfo,
 } from "@better-auth/core";
 export type * from "@better-auth/core/social-providers";
 export * from "../client/types";

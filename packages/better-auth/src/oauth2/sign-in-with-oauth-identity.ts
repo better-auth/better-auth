@@ -1,4 +1,7 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	UserProvisioningSource,
+} from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
 import type {
 	OAuth2Tokens,
@@ -50,10 +53,10 @@ export async function signInWithOAuthIdentity(
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
 		/**
-		 * The raw, unmapped provider profile. Forwarded to the
-		 * `validateUserInfo` provisioning gate when this sign-in creates a user.
+		 * Authentication source metadata forwarded to the `validateUserInfo`
+		 * provisioning gate for create, link, and returning sign-in actions.
 		 */
-		sourceProfile?: Record<string, unknown> | undefined;
+		source: UserProvisioningSource;
 		/**
 		 * The provider's declared {@link GrantAuthority}; `"full-grant"` lets a
 		 * non-empty echo replace the stored grant (the only narrowing path).
@@ -72,7 +75,7 @@ export async function signInWithOAuthIdentity(
 		disableSignUp,
 		overrideUserInfo,
 		isTrustedProvider,
-		sourceProfile,
+		source,
 		grantAuthority,
 	} = opts;
 
@@ -87,7 +90,7 @@ export async function signInWithOAuthIdentity(
 			const r = await resolveOAuthUser(c, {
 				userInfo,
 				providerId,
-				profile: sourceProfile,
+				source,
 				linkPolicy: { isTrustedProvider, disableSignUp, overrideUserInfo },
 			});
 			// Resolution failed (sign-up disabled, linking gate rejected, or the
@@ -105,12 +108,16 @@ export async function signInWithOAuthIdentity(
 			// createUser. Runs before the account write so a rejection rolls back the
 			// link and token refresh.
 			if (!r.isRegister) {
+				const { id: _providerAccountId, ...providerUserInfo } = userInfo;
 				await assertValidUserInfo(c, {
-					user: { ...r.user, email: userInfo.email.toLowerCase() },
+					user: {
+						...providerUserInfo,
+						id: r.user.id,
+						email: userInfo.email.toLowerCase(),
+					},
 					source: {
+						...source,
 						action: r.linkedAccount === null ? "link-account" : "sign-in",
-						method: "oauth",
-						oauth: { providerId, profile: sourceProfile },
 					},
 				});
 			}

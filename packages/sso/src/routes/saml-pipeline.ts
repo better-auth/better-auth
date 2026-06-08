@@ -404,9 +404,10 @@ export async function processSAMLResponse(
 			tokens: {},
 			callbackURL: postAuthRedirect,
 			disableSignUp: options?.disableImplicitSignUp,
-			// The raw, unmapped SAML assertion attributes, forwarded to the
-			// validateUserInfo gate as `source.oauth.profile`.
-			sourceProfile: attributes,
+			source: {
+				method: "sso-saml",
+				sso: { providerId, profile: attributes },
+			},
 			isTrustedProvider,
 		});
 	} catch (e) {

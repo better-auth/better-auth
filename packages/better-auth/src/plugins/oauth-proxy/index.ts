@@ -283,7 +283,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							grantAuthority: provider?.grantAuthority,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
-							sourceProfile: payload.profile,
+							source: {
+								method: "oauth",
+								oauth: {
+									providerId: payload.account.providerId,
+									profile: payload.profile,
+								},
+							},
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {

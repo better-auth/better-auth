@@ -1363,7 +1363,7 @@ async function handleOIDCCallback(
 	} | null = null;
 	const mapping = config.mapping || {};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
-	// as `source.oauth.profile` so a policy can inspect provider-specific fields.
+	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
 
 	if (config.userInfoEndpoint) {
@@ -1490,7 +1490,10 @@ async function handleOIDCCallback(
 			callbackURL,
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
-			sourceProfile: rawProfile,
+			source: {
+				method: "sso-oidc",
+				sso: { providerId: provider.providerId, profile: rawProfile },
+			},
 			isTrustedProvider,
 		});
 	} catch (e) {

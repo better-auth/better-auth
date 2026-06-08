@@ -331,7 +331,10 @@ export const callbackOAuth = createAuthEndpoint(
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
-				sourceProfile: providerResult.data,
+				source: {
+					method: "oauth",
+					oauth: { providerId: provider.id, profile: providerResult.data },
+				},
 				grantAuthority: provider.grantAuthority,
 			});
 		} catch (e) {

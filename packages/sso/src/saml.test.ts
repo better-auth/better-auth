@@ -5794,7 +5794,15 @@ describe("SAML Single Logout (SLO)", () => {
  */
 describe("SAML provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.method === "sso-saml") {
+					validateUserInfoFn(source);
+				}
+			},
+		},
 		plugins: [
 			sso({
 				provisionUser: provisionUserFn,
@@ -5830,6 +5838,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const response1 = await auth.api.signInSSO({
@@ -5864,6 +5873,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -5900,6 +5919,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 

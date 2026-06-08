@@ -30,6 +30,7 @@ export type {
 	ValidateUserInfoOAuthInfo,
 	ValidateUserInfoResult,
 	ValidateUserInfoSource,
+	ValidateUserInfoSSOInfo,
 } from "./init-options";
 export type {
 	BetterAuthPlugin,
