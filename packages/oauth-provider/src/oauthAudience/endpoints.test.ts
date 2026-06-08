@@ -132,11 +132,16 @@ describe("audience admin CRUD", () => {
 			},
 			headers,
 		});
-		await instance.auth.api.adminUpdateAudience({
+		// The update endpoint re-fetches after `adapter.update` (which may
+		// return null/non-fresh data), so its response body must reflect the
+		// persisted row rather than a null body.
+		const updated = (await instance.auth.api.adminUpdateAudience({
 			params: { identifier: "https://api.example.com/update-me" },
 			body: { accessTokenTtl: 60 },
 			headers,
-		});
+		})) as OAuthAudience;
+		expect(updated).not.toBeNull();
+		expect(updated.accessTokenTtl).toBe(60);
 		const fetched = (await instance.auth.api.adminGetAudience({
 			params: { identifier: "https://api.example.com/update-me" },
 			headers,

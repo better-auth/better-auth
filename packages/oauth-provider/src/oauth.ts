@@ -749,10 +749,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					const identifier = decodeURIComponent(
-						(ctx as unknown as { params: { identifier: string } }).params
-							.identifier,
-					);
+					const rawIdentifier = (
+						ctx as unknown as { params: { identifier: string } }
+					).params.identifier;
+					// `decodeURIComponent` throws `URIError` on malformed escape
+					// sequences. Fall back to the raw value so a bad identifier
+					// surfaces as a clean NOT_FOUND from the row lookup in
+					// `protectedResourceMetadata` rather than an unhandled 500 —
+					// mirroring the `decodePathParam` helper used by the admin
+					// audience endpoints.
+					let identifier: string;
+					try {
+						identifier = decodeURIComponent(rawIdentifier);
+					} catch {
+						identifier = rawIdentifier;
+					}
 					return protectedResourceMetadata(ctx, opts, identifier);
 				},
 			),

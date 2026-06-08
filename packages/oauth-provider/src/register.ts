@@ -3,6 +3,7 @@ import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import { buildClientAudienceLinkId } from "./audiences";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import type { OAuthAudience, OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
@@ -455,15 +456,31 @@ export async function createOAuthClientEndpoint(
 		const linkModel =
 			opts.schema?.oauthClientAudience?.modelName ?? "oauthClientAudience";
 		const now = new Date();
-		for (const audienceId of settings.audiences) {
-			await ctx.context.adapter.create({
-				model: linkModel,
-				data: {
-					clientId,
-					audienceId,
-					createdAt: now,
-				} as never,
-			});
+		// Dedupe so a registration that lists the same audience twice doesn't
+		// attempt two inserts of the same deterministic-id row.
+		const uniqueAudiences = [...new Set(settings.audiences)];
+		for (const audienceId of uniqueAudiences) {
+			// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
+			// constraint enforces composite (clientId, audienceId) uniqueness.
+			// Idempotent under retries: a duplicate insert hits the constraint
+			// and is swallowed rather than creating a second link row.
+			try {
+				await ctx.context.adapter.create({
+					model: linkModel,
+					forceAllowId: true,
+					data: {
+						id: buildClientAudienceLinkId(clientId, audienceId),
+						clientId,
+						audienceId,
+						createdAt: now,
+					} as never,
+				});
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				if (!/unique|duplicate|UNIQUE/i.test(message)) {
+					throw err;
+				}
+			}
 		}
 	}
 

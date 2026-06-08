@@ -231,6 +231,36 @@ describe("oauth register", async () => {
 		expect(response.data?.public).toBeFalsy();
 	});
 
+	it("dedupes repeated DCR audiences to a single client/audience link row", async () => {
+		const identifier = "https://api.example.com/dcr-dedupe";
+		await auth.api.adminCreateAudience({
+			headers,
+			body: { identifier },
+		});
+
+		// A client that lists the same audience twice must not produce two
+		// link rows: the deterministic `${clientId}::${audienceId}` id makes
+		// the second insert a no-op via the PK uniqueness constraint.
+		const response = await serverClient.$fetch<
+			OAuthClient & { audiences?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				audiences: [identifier, identifier],
+			},
+		});
+		const clientId = response.data?.client_id;
+		expect(clientId).toBeDefined();
+
+		const ctx = await auth.$context;
+		const links = await ctx.adapter.findMany({
+			model: "oauthClientAudience",
+			where: [{ field: "clientId", value: clientId! }],
+		});
+		expect(links.length).toBe(1);
+	});
+
 	it("should register client with metadata field", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,

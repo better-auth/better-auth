@@ -210,4 +210,20 @@ describe("RFC 9728 — protected resource metadata", () => {
 			body: expect.objectContaining({ error: "not_found" }),
 		});
 	});
+
+	// A malformed percent-escape makes `decodeURIComponent` throw `URIError`.
+	// The handler must fall back to the raw value and surface a clean
+	// NOT_FOUND from the row lookup rather than letting the URIError bubble
+	// up as an unhandled 500.
+	it("returns 404 (not 500) for a malformed percent-encoded identifier", async () => {
+		const instance = await boot({
+			audiences: ["https://api.example.com/known"],
+			publishProtectedResourceMetadata: true,
+		});
+		await expect(
+			instance.auth.api.getProtectedResourceMetadata({
+				params: { identifier: "https%3A%2F%2Fapi.example.com%2F%E0%A4%A" },
+			}),
+		).rejects.toMatchObject({ status: "NOT_FOUND" });
+	});
 });

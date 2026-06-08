@@ -1,7 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import type { Session, User } from "better-auth/types";
-import { assertIdentifierValid, invalidateAudienceCache } from "../audiences";
+import {
+	assertIdentifierValid,
+	buildClientAudienceLinkId,
+	invalidateAudienceCache,
+} from "../audiences";
 import type {
 	OAuthAudience,
 	OAuthAudienceInput,
@@ -84,27 +88,6 @@ function decodePathParam(value: string): string {
 	} catch {
 		return value;
 	}
-}
-
-/**
- * Builds a deterministic primary-key value for an `oauthClientAudience`
- * row. Used so the implicit PK uniqueness constraint enforces the composite
- * `(clientId, audienceId)` uniqueness that Better Auth's schema layer
- * cannot declare directly.
- *
- * The `::` separator is collision-free: client_id is a URL-safe random
- * string (no `::`) and audience identifier is an RFC 8707 absolute URI
- * (a bare `::` would be a malformed IPv6 host the validator rejects).
- *
- * @see comment block in `schema.ts` on `oauthClientAudience` for the full
- * rationale.
- * @internal
- */
-function buildClientAudienceLinkId(
-	clientId: string,
-	audienceId: string,
-): string {
-	return `${clientId}::${audienceId}`;
 }
 
 // `validateIdentifier` is shared with the seed path — see
@@ -248,13 +231,28 @@ export async function updateAudienceEndpoint(
 		}
 	}
 
-	const updated = await ctx.context.adapter.update<OAuthAudience>({
+	await ctx.context.adapter.update<OAuthAudience>({
 		model: audienceModel(opts),
 		where: [{ field: "identifier", value: identifier }],
 		update,
 	});
 	invalidateAudienceCache(identifier);
-	return ctx.json(updated);
+	// `adapter.update` may return `null` or non-fresh data (see the Adapter
+	// contract). Re-fetch the row so the response always reflects what was
+	// persisted rather than serializing a `null` body for a row that exists.
+	const refreshed = await ctx.context.adapter.findOne<OAuthAudience>({
+		model: audienceModel(opts),
+		where: [{ field: "identifier", value: identifier }],
+	});
+	if (!refreshed) {
+		// Row vanished between the update and the re-read (concurrent delete).
+		// Surface a clean 404 instead of a null body.
+		throw new APIError("NOT_FOUND", {
+			error: "not_found",
+			error_description: `audience ${identifier} not found`,
+		});
+	}
+	return ctx.json(refreshed);
 }
 
 export async function deleteAudienceEndpoint(
