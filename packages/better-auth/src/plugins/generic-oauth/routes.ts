@@ -16,6 +16,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
+import { getUIErrorURL } from "../../ui";
 import { HIDE_METADATA } from "../../utils";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
@@ -278,9 +279,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			},
 		},
 		async (ctx: GenericEndpointContext) => {
-			const defaultErrorURL =
-				ctx.context.options.onAPIError?.errorURL ||
-				`${ctx.context.baseURL}/error`;
+			const defaultErrorURL = getUIErrorURL(ctx.context);
 			if (ctx.query.error || !ctx.query.code) {
 				throw ctx.redirect(
 					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
@@ -316,9 +315,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			const code = ctx.query.code;
 
 			function redirectOnError(error: string) {
-				const defaultErrorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
+				const defaultErrorURL = getUIErrorURL(ctx.context);
 				let url = errorURL || defaultErrorURL;
 				if (url.includes("?")) {
 					url = `${url}&error=${encodeURIComponent(error)}`;

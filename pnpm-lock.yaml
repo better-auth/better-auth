@@ -870,6 +870,9 @@ importers:
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.0
@@ -1468,6 +1471,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1545,6 +1551,19 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+      vitest:
+        specifier: catalog:vitest
+        version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/ui:
+    dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)

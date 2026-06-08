@@ -11,6 +11,7 @@ import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
+import type { UIPluginConfig } from "./ui";
 
 type DeepPartial<T> = T extends Function
 	? T
@@ -58,6 +59,10 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 				[key: string]: Endpoint;
 		  }
 		| undefined;
+	/**
+	 * UI pages and extensions contributed by the plugin.
+	 */
+	ui?: UIPluginConfig | undefined;
 	middlewares?:
 		| {
 				path: string;

@@ -46,7 +46,7 @@ function toBoolean(val: boolean | string | undefined) {
 	return val ? val !== "false" : false;
 }
 
-export const nodeENV =
+export const nodeENV: string =
 	(typeof process !== "undefined" && process.env && process.env.NODE_ENV) || "";
 
 /** Detect if `NODE_ENV` environment variable is `production` */
@@ -118,7 +118,7 @@ export const ENV = Object.freeze({
 	get BETTER_AUTH_TELEMETRY_ENDPOINT(): string | undefined {
 		return getEnvVar(
 			"BETTER_AUTH_TELEMETRY_ENDPOINT",
-			import.meta.env.BETTER_AUTH_TELEMETRY_ENDPOINT,
+			import.meta.env?.BETTER_AUTH_TELEMETRY_ENDPOINT,
 		);
 	},
 });

@@ -3,6 +3,7 @@ import { isDevelopment, logger } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
+import { getUIErrorURL } from "../ui";
 import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
 
@@ -32,8 +33,7 @@ export async function handleOAuthUserInfo(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			const errorURL = getUIErrorURL(c.context);
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;

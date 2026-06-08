@@ -4,6 +4,8 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@better-auth/ui",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,

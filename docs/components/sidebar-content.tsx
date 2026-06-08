@@ -356,6 +356,48 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+				subpages: [
+					{
+						title: "Server Plugin",
+						href: "/docs/concepts/plugins/server-plugin",
+					},
+					{
+						title: "Endpoints",
+						href: "/docs/concepts/plugins/endpoints",
+					},
+					{
+						title: "UI Pages",
+						href: "/docs/concepts/plugins/ui-pages",
+					},
+					{
+						title: "Schema",
+						href: "/docs/concepts/plugins/schema",
+					},
+					{
+						title: "Hooks",
+						href: "/docs/concepts/plugins/hooks",
+					},
+					{
+						title: "Middleware",
+						href: "/docs/concepts/plugins/middleware",
+					},
+					{
+						title: "Rate Limit",
+						href: "/docs/concepts/plugins/rate-limit",
+					},
+					{
+						title: "Trusted Origins",
+						href: "/docs/concepts/plugins/trusted-origins",
+					},
+					{
+						title: "Server Helpers",
+						href: "/docs/concepts/plugins/server-helpers",
+					},
+					{
+						title: "Client Plugin",
+						href: "/docs/concepts/plugins/client-plugin",
+					},
+				],
 			},
 			{
 				title: "OAuth",

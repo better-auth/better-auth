@@ -1,0 +1,203 @@
+---
+title: Plugin Hooks
+description: Learn how to run Better Auth plugin logic before or after an action with hooks.
+---
+
+## Hooks
+
+Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
+
+Use plugin hooks when you want to participate in the lifecycle of existing Better Auth endpoints without replacing the endpoint implementation.
+
+* `before` hooks run before a matched endpoint handler. Use them to validate input, block requests, add data to the endpoint context, or normalize request data before the endpoint runs.
+* `after` hooks run after a matched endpoint handler. Use them to update side effects, set cookies, inspect response data, or replace the endpoint response.
+
+Unlike plugin middleware, hooks also run when an endpoint is invoked directly through the server API, such as `auth.api.signInEmail()`.
+
+## Hook Shape
+
+Each hook entry has a `matcher` and a `handler`.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        hooks: {
+            before: [
+                {
+                    matcher: (context) => context.path === "/sign-up/email",
+                    handler: createAuthMiddleware(async (ctx) => {
+                        // Runs before the sign-up endpoint handler.
+                    }),
+                },
+            ],
+            after: [
+                {
+                    matcher: (context) => context.path === "/sign-in/email",
+                    handler: createAuthMiddleware(async (ctx) => {
+                        // Runs after the sign-in endpoint handler.
+                    }),
+                },
+            ],
+        },
+    } satisfies BetterAuthPlugin;
+};
+```
+
+The `matcher` receives the endpoint context and must return a boolean. Common fields include:
+
+* `path`: The Better Auth endpoint path, such as `/sign-in/email`.
+* `headers`: The request headers.
+* `body`: The parsed request body, when the endpoint accepts one.
+* `query`: The parsed query values, when the endpoint accepts query parameters.
+* `context`: The Better Auth context, including options, cookies, adapters, logger, and request-scoped state.
+
+Keep matchers small and deterministic. They should decide whether the hook applies, not perform the hook's main work.
+
+## Before Hooks
+
+Before hooks are a good fit for validation and request shaping.
+
+### Block a Request
+
+Throw an `APIError` when the request should not continue.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+
+export const requireWorkEmailPlugin = () => {
+    return {
+        id: "require-work-email",
+        hooks: {
+            before: [
+                {
+                    matcher: (context) => context.path === "/sign-up/email",
+                    handler: createAuthMiddleware(async (ctx) => {
+                        const email = ctx.body?.email;
+
+                        if (typeof email !== "string" || !email.endsWith("@example.com")) {
+                            throw new APIError("BAD_REQUEST", {
+                                message: "Email must end with @example.com",
+                            });
+                        }
+                    }),
+                },
+            ],
+        },
+    } satisfies BetterAuthPlugin;
+};
+```
+
+### Modify the Context
+
+Return a `context` object when you need to pass additional request-scoped data to the endpoint or to later hooks.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const addSignupMetadataPlugin = () => {
+    return {
+        id: "signup-metadata",
+        hooks: {
+            before: [
+                {
+                    matcher: (context) => context.path === "/sign-up/email",
+                    handler: createAuthMiddleware(async (ctx) => {
+                        return {
+                            context: {
+                                ...ctx,
+                                body: {
+                                    ...ctx.body,
+                                    referralSource: ctx.headers?.get("x-referral-source"),
+                                },
+                            },
+                        };
+                    }),
+                },
+            ],
+        },
+    } satisfies BetterAuthPlugin;
+};
+```
+
+Only add data that the endpoint or another hook is expected to understand. For persisted user fields, define the field through a plugin schema first.
+
+## After Hooks
+
+After hooks run after the endpoint handler. They can inspect request data, response data, and request-scoped auth context.
+
+### Run a Side Effect
+
+This pattern is useful for analytics, audit logs, or plugin-owned state updates.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auditSignInPlugin = () => {
+    return {
+        id: "audit-sign-in",
+        hooks: {
+            after: [
+                {
+                    matcher: (context) => context.path === "/sign-in/email",
+                    handler: createAuthMiddleware(async (ctx) => {
+                        const session = ctx.context.newSession;
+
+                        if (!session) {
+                            return;
+                        }
+
+                        ctx.context.logger.info("User signed in", {
+                            userId: session.user.id,
+                        });
+                    }),
+                },
+            ],
+        },
+    } satisfies BetterAuthPlugin;
+};
+```
+
+### Modify the Response
+
+Return a response from an after hook when your plugin needs to change what the client receives.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        hooks: {
+            after: [{
+                matcher: (context) => {
+                    return context.path === "/sign-up/email"
+                },
+                handler: createAuthMiddleware(async (ctx) => {
+                    return ctx.json({
+                        message: "Hello World"
+                    }) // if you want to modify the response
+                })
+            }]
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+## Hooks vs Middleware
+
+Use hooks when your plugin needs to affect endpoint behavior consistently, including direct server-side calls. Use middleware when you only need to intercept HTTP API requests from clients.
+
+Common hook patterns include:
+
+* Use `before` hooks to validate endpoint input or block specific flows.
+* Use `after` hooks to react to successful sign-in, sign-up, or account-linking flows.
+* Keep slow side effects resilient. Catch and log failures when the endpoint should still succeed.
+* Prefer explicit `path` checks over broad matchers unless your plugin truly applies to every endpoint.

@@ -1,0 +1,191 @@
+---
+title: Plugin Middleware
+description: Learn how to add Better Auth plugin middleware and global request or response hooks.
+---
+
+## Middleware
+
+You can add middleware to the server by passing a `middlewares` array. This array should contain middleware objects, each with a `path` and a `middleware` property. Unlike hooks, middleware only runs on `api` requests from a client. If the endpoint is invoked directly, the middleware will not run.
+
+The `path` can be either a string or a path matcher, using the same path-matching system as `better-call`.
+
+If you throw an `APIError` from the middleware or return a `Response` object, the request will be stopped, and the response will be sent to the client.
+
+Use middleware when you want to guard or transform HTTP requests before they reach a plugin endpoint. For behavior that must also run when users call `auth.api.*` directly on the server, use [plugin hooks](/docs/concepts/plugins/hooks) instead.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        middlewares: [
+            {
+                path: "/my-plugin/hello-world",
+                middleware: createAuthMiddleware(async(ctx) => {
+                    // do something
+                })
+            }
+        ]
+    } satisfies BetterAuthPlugin
+}
+```
+
+## Path Matching
+
+Middleware entries are checked against the request path. Keep middleware paths as specific as possible so your plugin does not intercept unrelated Better Auth routes.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        middlewares: [
+            {
+                path: "/my-plugin/*",
+                middleware: createAuthMiddleware(async (ctx) => {
+                    ctx.context.logger.info("Plugin endpoint requested", {
+                        path: ctx.path,
+                    });
+                }),
+            },
+        ],
+    } satisfies BetterAuthPlugin;
+};
+```
+
+Middleware is best for request-level concerns such as:
+
+* Requiring a header for plugin-owned endpoints.
+* Rejecting requests before expensive endpoint logic runs.
+* Adding request-scoped data for downstream plugin endpoints.
+* Applying behavior only to browser or client HTTP calls.
+
+## Throwing Errors
+
+Throw an `APIError` to stop the request with a structured Better Auth error.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+
+export const internalHeaderPlugin = () => {
+    return {
+        id: "internal-header",
+        middlewares: [
+            {
+                path: "/my-plugin/*",
+                middleware: createAuthMiddleware(async (ctx) => {
+                    const internalToken = ctx.headers?.get("x-internal-token");
+
+                    if (!internalToken) {
+                        throw new APIError("UNAUTHORIZED", {
+                            message: "Missing internal token",
+                        });
+                    }
+                }),
+            },
+        ],
+    } satisfies BetterAuthPlugin;
+};
+```
+
+If your middleware needs to authenticate a user session, prefer the built-in `sessionMiddleware` helper for endpoint definitions. Use plugin middleware for plugin-specific request rules.
+
+## On Request & On Response
+
+Additional to middlewares, you can also hook into right before a request is made and right after a response is returned. This is mostly useful if you want to do something that affects all requests or responses.
+
+### On Request
+
+The `onRequest` function is called right before the request is made. It takes two parameters: the `request` and the `context` object.
+
+Here’s how it works:
+
+* **Continue as Normal**: If you don't return anything, the request will proceed as usual.
+* **Interrupt the Request**: To stop the request and send a response, return an object with a `response` property that contains a `Response` object.
+* **Modify the Request**: You can also return a modified `request` object to change the request before it's sent.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return  {
+        id: "my-plugin",
+        onRequest: async (request, context) => {
+            context.logger.info("Auth request received", {
+                method: request.method,
+                url: request.url,
+            });
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+You can also return a new request object. This is useful for appending headers or normalizing request metadata before the rest of Better Auth handles the request.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        onRequest: async (request) => {
+            const headers = new Headers(request.headers);
+            headers.set("x-plugin-request", "true");
+
+            return {
+                request: new Request(request, {
+                    headers,
+                }),
+            };
+        },
+    } satisfies BetterAuthPlugin;
+};
+```
+
+### On Response
+
+The `onResponse` function is executed immediately after a response is returned. It takes two parameters: the `response` and the `context` object.
+
+Here’s how to use it:
+
+* **Modify the Response**: You can return a modified response object to change the response before it is sent to the client.
+* **Continue Normally**: If you don't return anything, the response will be sent as is.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        onResponse: async (response, context) => {
+            const headers = new Headers(response.headers);
+            headers.set("x-plugin-response", "true");
+
+            return {
+                response: new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers,
+                }),
+            };
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+## Which One Should You Use?
+
+Use the extension point that matches the behavior you need:
+
+* Use `middlewares` for HTTP-only checks on specific plugin paths.
+* Use `hooks.before` when endpoint input should be validated or changed before the endpoint runs, including direct server calls.
+* Use `hooks.after` when your plugin should react to the result of an endpoint, including direct server calls.
+* Use `onRequest` when your plugin needs to observe, block, or replace every auth request.
+* Use `onResponse` when your plugin needs to observe or change every auth response.
+
+In most plugins, prefer endpoint-level middleware or hooks over global `onRequest` and `onResponse`. Global handlers affect all auth traffic and should stay small, predictable, and fast.

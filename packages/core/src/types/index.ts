@@ -38,3 +38,24 @@ export type {
 	ClientStore,
 } from "./plugin-client";
 export type { SecretConfig } from "./secret";
+export type {
+	BetterAuthUIOptions,
+	ClientEffect,
+	ThemeConfig,
+	ThemeLogoPlacement,
+	ThemeLogoUrl,
+	UIAction,
+	UIActionDescriptor,
+	UIComponent,
+	UIComponentTag,
+	UICondition,
+	UIContentSecurityPolicyOptions,
+	UIContext,
+	UIExtension,
+	UIMiddleware,
+	UIPage,
+	UIPluginCapability,
+	UIPluginConfig,
+	UIPrimitive,
+	UIProps,
+} from "./ui";

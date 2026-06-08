@@ -549,6 +549,36 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				max: 3,
 			},
 		],
+		ui: {
+			capabilities: {
+				"two-factor": {
+					id: "two-factor",
+					enabled: true,
+					metadata: {
+						allowPasswordless: Boolean(allowPasswordless),
+						supportsTotp: options?.totpOptions?.disable !== true,
+						supportsOtp: Boolean(options?.otpOptions?.sendOTP),
+					},
+					routes: {
+						verifyTotp: {
+							type: "auth-route",
+							path: "/two-factor/verify-totp",
+							method: "POST",
+						},
+						sendOtp: {
+							type: "auth-route",
+							path: "/two-factor/send-otp",
+							method: "POST",
+						},
+						enable: {
+							type: "auth-route",
+							path: "/two-factor/enable",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

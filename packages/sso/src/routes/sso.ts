@@ -2,7 +2,9 @@ import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	createAuthorizationURL,
 	generateState,
+	getUIErrorURL,
 	HIDE_METADATA,
+	normalizeUIBasePath,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -1396,9 +1398,7 @@ async function handleOIDCCallback(
 		stateData = await parseState(ctx);
 	}
 	if (!stateData) {
-		const errorURL =
-			ctx.context.options.onAPIError?.errorURL ||
-			`${ctx.context.baseURL}/error`;
+		const errorURL = getUIErrorURL(ctx.context);
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
@@ -1782,9 +1782,7 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 		async (ctx) => {
 			const stateData = await parseState(ctx);
 			if (!stateData) {
-				const errorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
+				const errorURL = getUIErrorURL(ctx.context);
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
@@ -1846,7 +1844,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const errorURL =
-				ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
+				ctx.context.options.onAPIError?.errorURL ||
+				`${appOrigin}${normalizeUIBasePath(ctx.context.options.ui?.basePath ?? "/auth")}/error`;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
 
 			// Determine if this is a GET request by checking both method AND body presence
