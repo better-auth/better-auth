@@ -212,18 +212,24 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 
 	let oauthClient: OAuthClient | null;
+	let oauthClientNeedsConsent: OAuthClient | null;
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
 	beforeAll(async () => {
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: { redirect_uris: [redirectUri], skip_consent: true },
 		});
+		oauthClientNeedsConsent = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: false },
+		});
 	});
 
-	function authorizeUrl(maxAge: string, prompt?: string) {
-		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
+	function authorizeUrl(maxAge: string, prompt?: string, clientId?: string) {
+		const resolvedClientId = clientId ?? oauthClient?.client_id;
+		if (!resolvedClientId) throw new Error("beforeAll not run properly");
 		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
-		url.searchParams.set("client_id", oauthClient.client_id);
+		url.searchParams.set("client_id", resolvedClientId);
 		url.searchParams.set("redirect_uri", redirectUri);
 		url.searchParams.set("response_type", "code");
 		url.searchParams.set("scope", "openid");
@@ -235,9 +241,13 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return url.toString();
 	}
 
-	async function redirectFor(maxAge: string, prompt?: string) {
+	async function redirectFor(
+		maxAge: string,
+		prompt?: string,
+		clientId?: string,
+	) {
 		let location = "";
-		await authenticatedClient.$fetch(authorizeUrl(maxAge, prompt), {
+		await authenticatedClient.$fetch(authorizeUrl(maxAge, prompt, clientId), {
 			onError(context) {
 				location = context.response.headers.get("Location") || "";
 			},
@@ -245,10 +255,10 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return location;
 	}
 
-	it("forces re-authentication when the session is older than max_age", async () => {
-		// Let the session land in an earlier second than the request, so any
-		// elapsed time exceeds max_age=0 and re-authentication is required.
-		await new Promise((resolve) => setTimeout(resolve, 1100));
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("treats max_age=0 as an explicit re-authentication request", async () => {
 		const location = await redirectFor("0");
 		expect(location).toContain("/login");
 	});
@@ -260,10 +270,42 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 		expect(location).not.toContain("/login");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("removes satisfied max_age before redirecting to consent", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw new Error("beforeAll not run properly");
+		}
+
+		const location = await redirectFor(
+			"10000",
+			undefined,
+			oauthClientNeedsConsent.client_id,
+		);
+		const consentUrl = new URL(location, authServerBaseUrl);
+
+		expect(consentUrl.pathname).toBe("/consent");
+		expect(consentUrl.searchParams.get("max_age")).toBeNull();
+		expect(consentUrl.searchParams.get("client_id")).toBe(
+			oauthClientNeedsConsent.client_id,
+		);
+	});
+
 	it("returns login_required for prompt=none when the session is older than max_age", async () => {
-		await new Promise((resolve) => setTimeout(resolve, 1100));
 		const location = await redirectFor("0", "none");
 		expect(location).toContain("error=login_required");
+		expect(location).not.toContain("/login");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("returns invalid_request for invalid max_age values", async () => {
+		const location = await redirectFor("-1");
+
+		expect(location).toContain(redirectUri);
+		expect(location).toContain("error=invalid_request");
 		expect(location).not.toContain("/login");
 	});
 });
@@ -275,6 +317,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const requestUri = "urn:better-auth:par:test";
 	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
+	const requestUriWithInvalidMaxAge = "urn:better-auth:par:invalid-max-age";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -300,6 +343,13 @@ describe("oauth authorize - request_uri resolution", async () => {
 						return {
 							...resolvedParams,
 							[postLoginClearedParam]: "attacker-session",
+						};
+					}
+
+					if (receivedRequestUri === requestUriWithInvalidMaxAge) {
+						return {
+							...resolvedParams,
+							max_age: "-1",
 						};
 					}
 
@@ -412,6 +462,30 @@ describe("oauth authorize - request_uri resolution", async () => {
 		expect(loginRedirectUrl).not.toContain("admin");
 		// prompt=none was not in the PAR payload — must not appear
 		expect(loginRedirectUrl).not.toContain("prompt=none");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("should validate resolved PAR parameters through the authorization query schema", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUriWithInvalidMaxAge);
+
+		let callbackRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=invalid_request");
+		expect(callbackRedirectUrl).not.toContain("/login");
 	});
 });
 

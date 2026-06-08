@@ -1,53 +1,11 @@
+import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
-
-/**
- * Runtime schema for OAuthAuthorizationQuery.
- * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
- */
-const oauthAuthorizationQuerySchema = z
-	.object({
-		response_type: z.literal("code").optional(),
-		request_uri: z.string().optional(),
-		redirect_uri: z.string(),
-		scope: z.string().optional(),
-		state: z.string().optional(),
-		client_id: z.string(),
-		prompt: z.string().optional(),
-		display: z.string().optional(),
-		ui_locales: z.string().optional(),
-		max_age: z.coerce.number().optional(),
-		acr_values: z.string().optional(),
-		login_hint: z.string().optional(),
-		id_token_hint: z.string().optional(),
-		code_challenge: z.string().optional(),
-		code_challenge_method: z.literal("S256").optional(),
-		nonce: z.string().optional(),
-		resource: z.union([z.string(), z.array(z.string())]).optional(),
-	})
-	.passthrough();
-
-/**
- * Runtime schema for the authorization code verification value.
- * Validates structure on deserialization from the JSON blob stored in the DB.
- * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
- */
-export const verificationValueSchema = z
-	.object({
-		type: z.literal("authorization_code"),
-		query: oauthAuthorizationQuerySchema,
-		sessionId: z.string(),
-		userId: z.string(),
-		referenceId: z.string().optional(),
-		authTime: z.number().optional(),
-		resource: z.array(z.string()).optional(),
-	})
-	.passthrough();
 
 /**
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
  * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
+export { SafeUrlSchema };
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
@@ -81,3 +39,72 @@ export const ResourceUriSchema = z.string().superRefine((val, ctx) => {
 		});
 	}
 });
+
+const authorizationPromptSchema = z
+	.string()
+	.pipe(
+		z.enum([
+			"none",
+			"consent",
+			"login",
+			"create",
+			"select_account",
+			"login consent",
+			"select_account consent",
+		]),
+	);
+
+/**
+ * Runtime schema for OAuthAuthorizationQuery.
+ * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
+ */
+export const authorizationQuerySchema = z
+	.object({
+		response_type: z
+			.string()
+			.pipe(z.enum(["code"]))
+			.optional(),
+		request_uri: z.string().optional(),
+		redirect_uri: SafeUrlSchema.optional(),
+		scope: z.string().optional(),
+		state: z.string().optional(),
+		client_id: z.string(),
+		prompt: authorizationPromptSchema.optional(),
+		display: z.string().optional(),
+		ui_locales: z.string().optional(),
+		max_age: z.coerce.number().int().nonnegative().optional(),
+		acr_values: z.string().optional(),
+		login_hint: z.string().optional(),
+		id_token_hint: z.string().optional(),
+		code_challenge: z.string().optional(),
+		code_challenge_method: z
+			.string()
+			.pipe(z.enum(["S256"]))
+			.optional(),
+		nonce: z.string().optional(),
+		resource: z
+			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+			.optional(),
+	})
+	.passthrough();
+
+const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
+	redirect_uri: SafeUrlSchema,
+});
+
+/**
+ * Runtime schema for the authorization code verification value.
+ * Validates structure on deserialization from the JSON blob stored in the DB.
+ * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
+ */
+export const verificationValueSchema = z
+	.object({
+		type: z.literal("authorization_code"),
+		query: storedAuthorizationQuerySchema,
+		sessionId: z.string(),
+		userId: z.string(),
+		referenceId: z.string().optional(),
+		authTime: z.number().optional(),
+		resource: z.array(z.string()).optional(),
+	})
+	.passthrough();

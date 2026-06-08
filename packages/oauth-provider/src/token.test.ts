@@ -3115,4 +3115,37 @@ describe("verificationValueSchema", () => {
 			);
 		}
 	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
 });
