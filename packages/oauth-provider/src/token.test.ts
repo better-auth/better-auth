@@ -3148,4 +3148,51 @@ describe("verificationValueSchema", () => {
 
 		expect(result.success).toBe(false);
 	});
+
+	it("should reject empty max_age values in stored authorization queries", () => {
+		for (const maxAge of ["", "   "]) {
+			const result = verificationValueSchema.safeParse({
+				type: "authorization_code",
+				query: {
+					client_id: "test",
+					redirect_uri: "https://example.com",
+					max_age: maxAge,
+				},
+				userId: "u1",
+				sessionId: "s1",
+			});
+
+			expect(result.success).toBe(false);
+		}
+	});
+
+	it("should accept valid prompt values in any order", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "consent login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject prompt=none combined with other prompt values", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "none login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
 });

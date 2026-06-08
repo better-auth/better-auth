@@ -308,6 +308,19 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 		expect(location).toContain("error=invalid_request");
 		expect(location).not.toContain("/login");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("returns invalid_request for empty max_age values", async () => {
+		for (const maxAge of ["", "   "]) {
+			const location = await redirectFor(maxAge);
+
+			expect(location).toContain(redirectUri);
+			expect(location).toContain("error=invalid_request");
+			expect(location).not.toContain("/login");
+		}
+	});
 });
 
 describe("oauth authorize - request_uri resolution", async () => {
@@ -318,6 +331,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const requestUri = "urn:better-auth:par:test";
 	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
 	const requestUriWithInvalidMaxAge = "urn:better-auth:par:invalid-max-age";
+	const requestUriWithReorderedPrompt = "urn:better-auth:par:reordered-prompt";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -350,6 +364,13 @@ describe("oauth authorize - request_uri resolution", async () => {
 						return {
 							...resolvedParams,
 							max_age: "-1",
+						};
+					}
+
+					if (receivedRequestUri === requestUriWithReorderedPrompt) {
+						return {
+							...resolvedParams,
+							prompt: "consent login",
 						};
 					}
 
@@ -486,6 +507,30 @@ describe("oauth authorize - request_uri resolution", async () => {
 		expect(callbackRedirectUrl).toContain(redirectUri);
 		expect(callbackRedirectUrl).toContain("error=invalid_request");
 		expect(callbackRedirectUrl).not.toContain("/login");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9936
+	 */
+	it("should accept valid PAR prompt values in any order", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUriWithReorderedPrompt);
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const loginRedirect = new URL(loginRedirectUrl, authServerBaseUrl);
+		expect(loginRedirect.pathname).toBe("/login");
+		expect(loginRedirect.searchParams.get("prompt")).toBe("consent login");
 	});
 });
 

@@ -31,7 +31,7 @@ import {
 /**
  * Whether a past authentication is still fresh enough for an OIDC `max_age`
  * request: true when no more than `maxAge` seconds have elapsed since the user
- * last authenticated. The caller supplies `nowSeconds`, keeping this pure.
+ * last authenticated. The caller supplies `now`, keeping this pure.
  */
 function isWithinMaxAge(
 	sessionCreatedAt: Date,

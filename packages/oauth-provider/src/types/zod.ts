@@ -40,19 +40,59 @@ export const ResourceUriSchema = z.string().superRefine((val, ctx) => {
 	}
 });
 
-const authorizationPromptSchema = z
-	.string()
-	.pipe(
-		z.enum([
-			"none",
-			"consent",
-			"login",
-			"create",
-			"select_account",
-			"login consent",
-			"select_account consent",
-		]),
-	);
+const authorizationPromptTokenSchema = z.enum([
+	"none",
+	"consent",
+	"login",
+	"create",
+	"select_account",
+]);
+
+const authorizationPromptSchema = z.string().superRefine((value, ctx) => {
+	const promptTokens = value
+		.split(" ")
+		.map((token) => token.trim())
+		.filter(Boolean);
+	const promptSet = new Set<string>();
+	if (!promptTokens.length) {
+		ctx.addIssue({
+			code: "custom",
+			message: "prompt must include at least one value",
+		});
+		return;
+	}
+	for (const token of promptTokens) {
+		const result = authorizationPromptTokenSchema.safeParse(token);
+		if (!result.success) {
+			ctx.addIssue({
+				code: "custom",
+				message: `unsupported prompt value: ${token}`,
+			});
+			continue;
+		}
+		promptSet.add(result.data);
+	}
+	if (promptSet.has("none") && promptSet.size > 1) {
+		ctx.addIssue({
+			code: "custom",
+			message: "prompt=none cannot be combined with other prompt values",
+		});
+	}
+});
+
+const maxAgeSchema = z
+	.union([z.number(), z.string().trim().min(1)])
+	.transform((value, ctx) => {
+		const maxAge = typeof value === "number" ? value : Number(value);
+		if (!Number.isInteger(maxAge) || maxAge < 0) {
+			ctx.addIssue({
+				code: "custom",
+				message: "max_age must be a non-negative integer",
+			});
+			return z.NEVER;
+		}
+		return maxAge;
+	});
 
 /**
  * Runtime schema for OAuthAuthorizationQuery.
@@ -72,7 +112,7 @@ export const authorizationQuerySchema = z
 		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),
-		max_age: z.coerce.number().int().nonnegative().optional(),
+		max_age: maxAgeSchema.optional(),
 		acr_values: z.string().optional(),
 		login_hint: z.string().optional(),
 		id_token_hint: z.string().optional(),
