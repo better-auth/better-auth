@@ -30,6 +30,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
+import type { BetterAuthUIOptions } from "./ui";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type Optional<T> = {
@@ -534,6 +535,13 @@ export type BetterAuthOptions = {
 	 * @default "/api/auth"
 	 */
 	basePath?: string | undefined;
+	/**
+	 * Configure the Better Auth UI handler.
+	 *
+	 * The UI handler is mounted separately from the API handler and defaults to
+	 * `/auth`.
+	 */
+	ui?: BetterAuthUIOptions | undefined;
 	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.

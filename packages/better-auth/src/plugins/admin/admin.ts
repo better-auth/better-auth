@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
+import { getUIErrorURL } from "../../ui";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultRoles } from "./access";
@@ -111,6 +112,17 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 												},
 											);
 											return;
+										}
+
+										if (
+											ctx &&
+											(ctx.path.startsWith("/callback") ||
+												ctx.path.startsWith("/oauth2/callback"))
+										) {
+											const redirectURI = getUIErrorURL(ctx.context);
+											throw ctx.redirect(
+												`${redirectURI}?error=banned&error_description=${opts.bannedUserMessage}`,
+											);
 										}
 
 										throw APIError.from("FORBIDDEN", {

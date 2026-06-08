@@ -1,0 +1,124 @@
+---
+title: Plugin Rate Limit
+description: Learn how to define custom rate limit rules for Better Auth plugins.
+---
+
+## Rate Limit
+
+You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
+
+Rate limit rules are useful for sensitive or expensive plugin endpoints such as OTP delivery, two-factor verification, device trust flows, invitation flows, and custom verification endpoints.
+
+Each rule has three fields:
+
+* `pathMatcher`: A function that receives the Better Auth endpoint path and returns `true` when the rule should apply.
+* `window`: The time window in seconds.
+* `max`: The maximum number of requests allowed in that window.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        rateLimit: [
+            {
+                pathMatcher: (path) => {
+                    return path === "/my-plugin/hello-world"
+                },
+                max: 10,
+                window: 60,
+            }
+        ]
+    } satisfies BetterAuthPlugin
+}
+```
+
+## Matching Paths
+
+Use an exact match when the rule applies to a single endpoint.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        rateLimit: [
+            {
+                pathMatcher(path) {
+                    return path === "/my-plugin/send-code";
+                },
+                window: 60,
+                max: 3,
+            },
+        ],
+    } satisfies BetterAuthPlugin;
+};
+```
+
+Use a prefix match when a group of plugin-owned endpoints should share the same rule.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        rateLimit: [
+            {
+                pathMatcher(path) {
+                    return path.startsWith("/my-plugin/verification/");
+                },
+                window: 10,
+                max: 5,
+            },
+        ],
+    } satisfies BetterAuthPlugin;
+};
+```
+
+Keep prefix matches specific to your plugin. A broad matcher such as `path.startsWith("/")` can throttle unrelated Better Auth endpoints.
+
+## Multiple Rules
+
+You can define multiple rules for different endpoint groups.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        rateLimit: [
+            {
+                pathMatcher(path) {
+                    return path === "/my-plugin/send-otp";
+                },
+                window: 60,
+                max: 3,
+            },
+            {
+                pathMatcher(path) {
+                    return path.startsWith("/my-plugin/admin/");
+                },
+                window: 60,
+                max: 30,
+            },
+        ],
+    } satisfies BetterAuthPlugin;
+};
+```
+
+Place stricter rules on endpoints that send messages, create tokens, or verify one-time values. Less sensitive read endpoints can usually have a higher `max` value.
+
+## Choosing Limits
+
+Start with the smallest limit that supports your expected user flow:
+
+* For OTP or verification-code delivery, use a low `max` such as 3 to 5 per minute.
+* For two-factor verification attempts, use a short window and low `max` to slow brute-force attempts.
+* For user-driven read endpoints, use a larger `max` but still scope the matcher to plugin-owned paths.
+* For expensive endpoints, consider a lower `max` even if they are not security-sensitive.
+
+Rate limits should complement validation and authorization. They should not be the only protection for sensitive plugin endpoints.

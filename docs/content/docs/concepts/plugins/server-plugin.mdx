@@ -1,0 +1,25 @@
+---
+title: Server Plugin
+description: Learn how to create a Better Auth server plugin and define the required BetterAuthPlugin shape.
+---
+
+## Create a Server plugin
+
+To create a server plugin, you need to pass an object that satisfies the `BetterAuthPlugin` interface.
+
+The only required property is `id`, which is a unique identifier for the plugin.
+Both server and client plugins can use the same `id`.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+export const myPlugin = () => {
+    return {
+        id: "my-plugin",
+    } satisfies BetterAuthPlugin
+}
+```
+
+<Callout>
+  You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugin and it's consistent with the built-in plugins.
+</Callout>

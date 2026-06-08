@@ -9,7 +9,9 @@ import {
 	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
 	getOAuth2Tokens,
+	getUIErrorURL,
 	HIDE_METADATA,
+	normalizeUIBasePath,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
 } from "better-auth";
@@ -1262,9 +1264,7 @@ async function handleOIDCCallback(
 		stateData = await parseState(ctx);
 	}
 	if (!stateData) {
-		const errorURL =
-			ctx.context.options.onAPIError?.errorURL ||
-			`${ctx.context.baseURL}/error`;
+		const errorURL = getUIErrorURL(ctx.context);
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
 	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
@@ -1852,9 +1852,7 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 		async (ctx) => {
 			const stateData = await parseState(ctx);
 			if (!stateData) {
-				const errorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
+				const errorURL = getUIErrorURL(ctx.context);
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
@@ -1869,6 +1867,96 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 			}
 
 			return handleOIDCCallback(ctx, options, providerId, stateData);
+		},
+	);
+};
+
+const callbackSSOSAMLBodySchema = z.object({
+	SAMLResponse: z.string(),
+	RelayState: z.string().optional(),
+});
+
+export const callbackSSOSAML = (options?: SSOOptions) => {
+	return createAuthEndpoint(
+		"/sso/saml2/callback/:providerId",
+		{
+			method: ["GET", "POST"],
+			body: callbackSSOSAMLBodySchema.optional(),
+			query: z
+				.object({
+					RelayState: z.string().optional(),
+				})
+				.optional(),
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
+				openapi: {
+					operationId: "handleSAMLCallback",
+					summary: "Callback URL for SAML provider",
+					description:
+						"This endpoint is used as the callback URL for SAML providers. Supports both GET and POST methods for IdP-initiated and SP-initiated flows.",
+					responses: {
+						"302": {
+							description: "Redirects to the callback URL",
+						},
+						"400": {
+							description: "Invalid SAML response",
+						},
+						"401": {
+							description: "Unauthorized - SAML authentication failed",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.params;
+			const appOrigin = new URL(ctx.context.baseURL).origin;
+			const errorURL =
+				ctx.context.options.onAPIError?.errorURL ||
+				`${appOrigin}${normalizeUIBasePath(ctx.context.options.ui?.basePath ?? "/auth")}/error`;
+			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
+
+			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
+
+			if (isGetRequest) {
+				const session = await getSessionFromCtx(ctx);
+
+				if (!session?.session) {
+					throw ctx.redirect(`${errorURL}?error=invalid_request`);
+				}
+
+				const relayState = ctx.query?.RelayState as string | undefined;
+				const safeRedirectUrl = getSafeRedirectUrl(
+					relayState,
+					currentCallbackPath,
+					appOrigin,
+					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+				);
+
+				throw ctx.redirect(safeRedirectUrl);
+			}
+
+			if (!ctx.body?.SAMLResponse) {
+				throw new APIError("BAD_REQUEST", {
+					message: "SAMLResponse is required for POST requests",
+				});
+			}
+
+			const safeRedirectUrl = await processSAMLResponse(
+				ctx,
+				{
+					SAMLResponse: ctx.body.SAMLResponse,
+					RelayState: ctx.body.RelayState,
+					providerId,
+					currentCallbackPath,
+				},
+				options,
+			);
+			throw ctx.redirect(safeRedirectUrl);
 		},
 	);
 };

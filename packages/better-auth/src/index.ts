@@ -13,6 +13,7 @@ export * from "@better-auth/core/utils/json";
 export { betterAuth } from "./auth/full";
 // @ts-expect-error
 export * from "./types";
+export * from "./ui";
 export * from "./utils";
 
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type

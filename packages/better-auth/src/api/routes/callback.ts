@@ -13,6 +13,7 @@ import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { generateState, parseState } from "../../oauth2/state";
+import { getUIErrorURL } from "../../ui";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -44,8 +45,7 @@ export const callbackOAuth = createAuthEndpoint(
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
-		const defaultErrorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		const defaultErrorURL = getUIErrorURL(c.context);
 
 		// Handle POST requests by redirecting to GET to ensure cookies are sent
 		if (c.method === "POST") {

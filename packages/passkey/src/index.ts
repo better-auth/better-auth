@@ -58,6 +58,36 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			deletePasskey,
 			updatePasskey,
 		},
+		ui: {
+			capabilities: {
+				passkey: {
+					id: "passkey",
+					enabled: true,
+					routes: {
+						generateRegisterOptions: {
+							type: "auth-route",
+							path: "/passkey/generate-register-options",
+							method: "POST",
+						},
+						verifyRegistration: {
+							type: "auth-route",
+							path: "/passkey/verify-registration",
+							method: "POST",
+						},
+						generateAuthenticateOptions: {
+							type: "auth-route",
+							path: "/passkey/generate-authenticate-options",
+							method: "POST",
+						},
+						verifyAuthentication: {
+							type: "auth-route",
+							path: "/passkey/verify-authentication",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: PASSKEY_ERROR_CODES,
 		options,
