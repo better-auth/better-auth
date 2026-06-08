@@ -340,6 +340,87 @@ describe("forgot password", async () => {
 			"If this email exists in our system, check your email for the reset link",
 		);
 	});
+
+	it("should call sendResetPasswordNoAccount when email has no account", async () => {
+		const mockSendNoAccount = vi.fn();
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+				sendResetPasswordNoAccount: async ({ email }) => {
+					await mockSendNoAccount(email);
+				},
+			},
+		});
+		await client.requestPasswordReset({
+			email: "non-existent-user@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+		expect(mockSendNoAccount).toHaveBeenCalledWith(
+			"non-existent-user@email.com",
+		);
+	});
+
+	it("should not call sendResetPasswordNoAccount when email has an account", async () => {
+		const mockSendNoAccount = vi.fn();
+		const mockSendReset = vi.fn();
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {
+					await mockSendReset();
+				},
+				sendResetPasswordNoAccount: async () => {
+					await mockSendNoAccount();
+				},
+			},
+		});
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(mockSendReset).toHaveBeenCalled();
+		expect(mockSendNoAccount).not.toHaveBeenCalled();
+	});
+
+	it("should preserve enumeration protection when sendResetPasswordNoAccount is set", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+				sendResetPasswordNoAccount: async () => {},
+			},
+		});
+		const existing = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		const unknown = await client.requestPasswordReset({
+			email: "non-existent-user@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+		expect(existing.data).toEqual(unknown.data);
+	});
+
+	it("should not reveal failure of email sending in the no-account branch", async () => {
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+				sendResetPasswordNoAccount: async () => {
+					throw new Error("Failed to send email");
+				},
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: "non-existent-user@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.message).toBe(
+			"If this email exists in our system, check your email for the reset link",
+		);
+	});
 });
 
 describe("revoke sessions on password reset", async () => {

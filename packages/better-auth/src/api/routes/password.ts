@@ -111,6 +111,14 @@ export const requestPasswordReset = createAuthEndpoint(
 				"dummy-verification-token",
 			);
 			ctx.context.logger.error("Reset Password: User not found", { email });
+			if (ctx.context.options.emailAndPassword?.sendResetPasswordNoAccount) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.options.emailAndPassword.sendResetPasswordNoAccount(
+						{ email },
+						ctx.request,
+					),
+				);
+			}
 			return ctx.json({
 				status: true,
 				message:
