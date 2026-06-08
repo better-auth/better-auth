@@ -2786,17 +2786,21 @@ describe("validateUserInfo callback", async () => {
 		expect(actions).toEqual(["create-user", "sign-in"]);
 	});
 
-	// The OAuth-specific security case: a returning user whose provider email
-	// moved to a now-disallowed domain must be rejected, and the hook must see
-	// the FRESH provider email, not the stored row.
-	it("re-validates a returning OAuth user against the fresh provider email", async () => {
-		const tokenFor = (email: string) =>
+	// The OAuth-specific security case: a returning user whose provider identity
+	// moved out of policy must be rejected, and the hook must see the fresh
+	// mapped provider user, not the stored row.
+	it("re-validates a returning OAuth user against the fresh provider identity", async () => {
+		const tokenFor = (identity: {
+			email: string;
+			name: string;
+			emailVerified: boolean;
+		}) =>
 			http.post("https://oauth2.googleapis.com/token", async () => {
 				const idToken = await signJWT(
 					{
-						email,
-						email_verified: true,
-						name: "Mover",
+						email: identity.email,
+						email_verified: identity.emailVerified,
+						name: identity.name,
 						picture: "https://test.com/picture.png",
 						sub: "mover-sub",
 						iat: 1234567890,
@@ -2811,6 +2815,9 @@ describe("validateUserInfo callback", async () => {
 			});
 
 		let emailSeenOnSignIn: string | undefined;
+		let emailVerifiedSeenOnSignIn: boolean | undefined;
+		let nameSeenOnSignIn: string | undefined;
+		let idSeenOnSignIn: string | undefined;
 		const { client, cookieSetter } = await getTestInstance(
 			{
 				user: {
@@ -2819,6 +2826,9 @@ describe("validateUserInfo callback", async () => {
 							return;
 						}
 						emailSeenOnSignIn = user.email as string;
+						emailVerifiedSeenOnSignIn = user.emailVerified as boolean;
+						nameSeenOnSignIn = user.name as string;
+						idSeenOnSignIn = user.id as string;
 						if (user.email?.endsWith("@blocked.com")) {
 							return {
 								error: "domain_revoked",
@@ -2860,19 +2870,36 @@ describe("validateUserInfo callback", async () => {
 		};
 
 		// First sign-in on an allowed domain provisions the user.
-		mswServer.use(tokenFor("mover@allowed.com"));
+		mswServer.use(
+			tokenFor({
+				email: "mover@allowed.com",
+				name: "Allowed Mover",
+				emailVerified: true,
+			}),
+		);
 		const first = await signIn();
 		const session = await client.getSession({
 			fetchOptions: { headers: first.headers },
 		});
 		expect(session.data?.user.email).toBe("mover@allowed.com");
+		expect(session.data?.user.name).toBe("Allowed Mover");
 
-		// The provider now asserts a disallowed email for the same account.
-		mswServer.use(tokenFor("mover@blocked.com"));
+		// The provider now asserts a disallowed identity for the same account.
+		mswServer.use(
+			tokenFor({
+				email: "mover@blocked.com",
+				name: "Blocked Mover",
+				emailVerified: false,
+			}),
+		);
 		const second = await signIn();
 
-		// The hook saw the fresh provider email, not the stored allowed one.
+		// The hook saw the fresh provider identity, not the stored allowed one,
+		// while keeping the Better Auth user id instead of the provider account id.
 		expect(emailSeenOnSignIn).toBe("mover@blocked.com");
+		expect(nameSeenOnSignIn).toBe("Blocked Mover");
+		expect(emailVerifiedSeenOnSignIn).toBe(false);
+		expect(idSeenOnSignIn).toBe(session.data?.user.id);
 		expect(second.redirectLocation).toContain("error=domain_revoked");
 	});
 

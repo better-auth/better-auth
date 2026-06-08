@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -179,6 +180,112 @@ describe("internal adapter test", async () => {
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("rejects createUser outside an endpoint context when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+
+		await expect(
+			context.internalAdapter.createUser(
+				{
+					email: "missing-context@example.com",
+					name: "Missing Context",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			),
+		).rejects.toMatchObject({
+			body: { code: "validation_context_missing" },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("requires a provisioning source when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const missingSource = undefined as unknown as Parameters<
+			typeof context.internalAdapter.createUser
+		>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await expect(
+					context.internalAdapter.createUser(
+						{
+							email: "missing-source@example.com",
+							name: "Missing Source",
+							emailVerified: false,
+						},
+						missingSource,
+					),
+				).rejects.toMatchObject({
+					body: { code: "validation_source_missing" },
+				});
+			},
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("forces create-user as the createUser validation action", async () => {
+		let capturedAction: string | undefined;
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedAction = source.action;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const spoofedSource = {
+			method: "test",
+			action: "sign-in",
+		} as unknown as Parameters<typeof context.internalAdapter.createUser>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUser(
+					{
+						email: "canonical-action@example.com",
+						name: "Canonical Action",
+						emailVerified: false,
+					},
+					spoofedSource,
+				);
+			},
+		);
+
+		expect(capturedAction).toBe("create-user");
 	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({

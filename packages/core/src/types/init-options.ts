@@ -54,13 +54,13 @@ export type GenerateIdFn = (options: {
  * - `create-user`: a brand-new user record is about to be created.
  * - `link-account`: a new provider account is about to be linked to an
  *   already-existing user.
- * - `sign-in`: an existing OAuth user is signing in again. This is the one case
- *   where the provider can assert *changed* data, so the hook receives the
- *   fresh provider email and profile (not the stored row), letting a domain or
- *   org policy reject a user whose provider identity moved out of bounds.
+ * - `sign-in`: an existing OAuth or SSO user is signing in again. This is the
+ *   one case where the provider can assert *changed* data, so the hook receives
+ *   the fresh provider email and profile (not the stored row), letting a domain
+ *   or org policy reject a user whose provider identity moved out of bounds.
  *
- * Non-OAuth returning sign-ins are not re-validated: they carry only the stored
- * row, which has not changed since `create-user` gated it. Use the admin
+ * Non-provider returning sign-ins are not re-validated: they carry only the
+ * stored row, which has not changed since `create-user` gated it. Use the admin
  * plugin's ban controls or a `databaseHooks.session.create.before` hook to
  * block those.
  */
@@ -73,6 +73,8 @@ export type ValidateUserInfoAction = "create-user" | "link-account" | "sign-in";
  */
 export type ValidateUserInfoMethod =
 	| "oauth"
+	| "sso-oidc"
+	| "sso-saml"
 	| "email-password"
 	| "magic-link"
 	| "email-otp"
@@ -82,7 +84,7 @@ export type ValidateUserInfoMethod =
 	| "admin"
 	| (string & {});
 
-/** OAuth-specific provisioning context; present only when `method` is OAuth-based. */
+/** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
 export type ValidateUserInfoOAuthInfo = {
 	/** The social or generic OAuth provider id (e.g. `"google"`). */
 	providerId: string;
@@ -90,23 +92,37 @@ export type ValidateUserInfoOAuthInfo = {
 	profile?: Record<string, unknown> | undefined;
 };
 
+/** SSO-specific provisioning context; present for OIDC and SAML SSO methods. */
+export type ValidateUserInfoSSOInfo = {
+	/** The configured SSO provider id. */
+	providerId: string;
+	/** The raw OIDC claims or SAML assertion attributes, unmapped. */
+	profile?: Record<string, unknown> | undefined;
+};
+
 /** Provisioning origin passed to `createUser`; the creation seam adds `action: "create-user"` to build {@link ValidateUserInfoSource}. */
 export type UserProvisioningSource = {
 	method: ValidateUserInfoMethod;
-	/** Provider id and raw profile; present iff `method` is OAuth-based. */
+	/** Provider id and raw profile; present iff `method` is `"oauth"`. */
 	oauth?: ValidateUserInfoOAuthInfo | undefined;
+	/** Provider id and raw profile; present iff `method` is `"sso-oidc"` or `"sso-saml"`. */
+	sso?: ValidateUserInfoSSOInfo | undefined;
 };
 
 /**
  * The context passed to `validateUserInfo`: the lifecycle
  * {@link ValidateUserInfoAction}, the {@link ValidateUserInfoMethod}, and (for
- * OAuth-based methods) the {@link ValidateUserInfoOAuthInfo}.
+ * OAuth/SSO provider methods) protocol-specific provider metadata.
  *
  * ```ts
  * // Scope to one OAuth provider:
  * if (source.oauth?.providerId !== "google") return;
  * // Branch on the method:
  * if (source.method === "anonymous") return { error: "no_anonymous" };
+ * // Inspect SSO claims:
+ * if (source.method === "sso-saml" && source.sso?.profile?.department !== "eng") {
+ *   return { error: "invalid_department" };
+ * }
  * ```
  */
 export type ValidateUserInfoSource = UserProvisioningSource & {
@@ -861,7 +877,7 @@ export type BetterAuthOptions = {
 				 * provider email and profile, so a domain policy can reject a user
 				 * whose provider identity moved out of bounds.
 				 *
-				 * Non-OAuth returning sign-ins are not re-validated; use the admin
+				 * Non-provider returning sign-ins are not re-validated; use the admin
 				 * plugin's ban controls or a `databaseHooks.session.create.before`
 				 * hook for those.
 				 *
