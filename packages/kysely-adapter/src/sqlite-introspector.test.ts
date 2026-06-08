@@ -1,10 +1,6 @@
 import type { SQLInputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import { Kysely } from "kysely";
-import {
-	DEFAULT_MIGRATION_LOCK_TABLE as KYSELY_DEFAULT_MIGRATION_LOCK_TABLE,
-	DEFAULT_MIGRATION_TABLE as KYSELY_DEFAULT_MIGRATION_TABLE,
-} from "kysely/migration";
 import { describe, expect, it } from "vitest";
 import { BunSqliteDialect } from "./bun-sqlite-dialect";
 import {
@@ -37,6 +33,23 @@ function asBunLikeDatabase(db: DatabaseSync) {
 			db.close();
 		},
 	} as unknown as ConstructorParameters<typeof BunSqliteDialect>[0]["database"];
+}
+
+interface KyselyMigrationTableConstants {
+	DEFAULT_MIGRATION_LOCK_TABLE: string;
+	DEFAULT_MIGRATION_TABLE: string;
+}
+
+async function loadKyselyMigrationTableConstants(): Promise<KyselyMigrationTableConstants> {
+	const migrationModule = "kysely/migration";
+
+	try {
+		return (await import(
+			migrationModule
+		)) as unknown as KyselyMigrationTableConstants;
+	} catch {
+		return (await import("kysely")) as unknown as KyselyMigrationTableConstants;
+	}
 }
 
 describe("sqlite introspector", () => {
@@ -102,7 +115,12 @@ describe("sqlite introspector", () => {
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/9810
 	 */
-	it("mirrors Kysely's migration-table constants", () => {
+	it("mirrors Kysely's migration-table constants", async () => {
+		const {
+			DEFAULT_MIGRATION_LOCK_TABLE: KYSELY_DEFAULT_MIGRATION_LOCK_TABLE,
+			DEFAULT_MIGRATION_TABLE: KYSELY_DEFAULT_MIGRATION_TABLE,
+		} = await loadKyselyMigrationTableConstants();
+
 		expect(DEFAULT_MIGRATION_TABLE).toBe(KYSELY_DEFAULT_MIGRATION_TABLE);
 		expect(DEFAULT_MIGRATION_LOCK_TABLE).toBe(
 			KYSELY_DEFAULT_MIGRATION_LOCK_TABLE,
