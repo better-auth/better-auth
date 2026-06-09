@@ -29,6 +29,63 @@ export interface SAMLMapping {
 	extraFields?: Record<string, string> | undefined;
 }
 
+export type OrganizationProvisioningRole =
+	| "member"
+	| "admin"
+	| "owner"
+	| (string & {});
+
+export type OrganizationRoleResolverData = {
+	/**
+	 * The user object from the database
+	 */
+	user: User & Record<string, any>;
+	/**
+	 * The normalized user info object from the provider mapping
+	 */
+	userInfo: Record<string, any>;
+	/**
+	 * The IdP claims or attributes used for role mapping.
+	 * For OIDC this is the userinfo response when configured, otherwise the
+	 * verified ID token payload. For SAML this is the assertion attributes.
+	 */
+	claims: Record<string, unknown>;
+	/**
+	 * The OAuth2 tokens from the provider
+	 */
+	token?: OAuth2Tokens;
+	/**
+	 * The SSO provider
+	 */
+	provider: SSOProvider<SSOOptions>;
+};
+
+export interface OrganizationProvisioningOptions {
+	disabled?: boolean;
+	defaultRole?: OrganizationProvisioningRole;
+	getRole?: (
+		data: Omit<OrganizationRoleResolverData, "claims"> & {
+			claims?: Record<string, unknown>;
+		},
+	) => Awaitable<OrganizationProvisioningRole>;
+	/**
+	 * Map raw IdP claims or SAML attributes to an organization role.
+	 * Runs during SSO sign-in before the session cookie is finalized.
+	 *
+	 * For existing organization members, this syncs the member role on
+	 * every SSO login unless `syncRoleOnLogin` is set to `false`.
+	 */
+	mapClaimsToRoles?: (
+		data: OrganizationRoleResolverData,
+	) => Awaitable<OrganizationProvisioningRole>;
+	/**
+	 * Update an existing organization member's role on every SSO login.
+	 *
+	 * Defaults to `true` when `mapClaimsToRoles` is configured, otherwise `false`.
+	 */
+	syncRoleOnLogin?: boolean;
+}
+
 export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
@@ -378,30 +435,7 @@ export interface SSOOptions {
 	/**
 	 * Organization provisioning options
 	 */
-	organizationProvisioning?:
-		| {
-				disabled?: boolean;
-				defaultRole?: "member" | "admin";
-				getRole?: (data: {
-					/**
-					 * The user object from the database
-					 */
-					user: User & Record<string, any>;
-					/**
-					 * The user info object from the provider
-					 */
-					userInfo: Record<string, any>;
-					/**
-					 * The OAuth2 tokens from the provider
-					 */
-					token?: OAuth2Tokens;
-					/**
-					 * The SSO provider
-					 */
-					provider: SSOProvider<SSOOptions>;
-				}) => Promise<"member" | "admin">;
-		  }
-		| undefined;
+	organizationProvisioning?: OrganizationProvisioningOptions | undefined;
 	/**
 	 * Default SSO provider configurations for testing.
 	 * These will take the precedence over the database providers.
