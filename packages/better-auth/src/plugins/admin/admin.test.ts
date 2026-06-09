@@ -1934,6 +1934,201 @@ describe("access control", async () => {
 	});
 });
 
+describe("create-user role escalation", async () => {
+	const ac = createAccessControl({
+		user: ["create", "set-role"],
+	});
+	const roles = {
+		admin: ac.newRole({ user: ["create", "set-role"] }),
+		support: ac.newRole({ user: ["create"] }),
+		user: ac.newRole({ user: [] }),
+	};
+
+	const { client, auth, signInWithUser } = await getTestInstance(
+		{ plugins: [admin({ ac, roles })] },
+		{ clientOptions: { plugins: [adminClient({ ac, roles })] } },
+	);
+
+	// Seed the actors server-side. A server call has no session, so it bypasses
+	// the role guard, which is also the property that keeps backend provisioning
+	// able to assign roles.
+	await auth.api.createUser({
+		body: {
+			email: "root@test.com",
+			password: "password",
+			name: "Root Admin",
+			role: "admin",
+		},
+	});
+	await auth.api.createUser({
+		body: {
+			email: "support@test.com",
+			password: "password",
+			name: "Support",
+			role: "support",
+		},
+	});
+
+	it("blocks a user:create-only admin from assigning a role", async () => {
+		const { headers } = await signInWithUser("support@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "escalated@test.com",
+				password: "password",
+				name: "Escalated",
+				role: "admin",
+			},
+			{ headers },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE.code,
+		);
+	});
+
+	it("blocks the same admin from smuggling a role through data", async () => {
+		const { headers } = await signInWithUser("support@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "smuggled@test.com",
+				password: "password",
+				name: "Smuggled",
+				data: { role: "admin" },
+			},
+			{ headers },
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("ignores data.role for an authorized admin; role only comes from the role param", async () => {
+		const { headers } = await signInWithUser("root@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "data-role@test.com",
+				password: "password",
+				name: "Data Role",
+				data: { role: "admin" },
+			},
+			{ headers },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.user.role).toBe("user");
+	});
+
+	it("still lets a user:set-role admin assign roles via the role param", async () => {
+		const { headers } = await signInWithUser("root@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "new-admin@test.com",
+				password: "password",
+				name: "New Admin",
+				role: "admin",
+			},
+			{ headers },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.user.role).toBe("admin");
+	});
+});
+
+describe("admin ban-field authority", async () => {
+	const ac = createAccessControl({
+		user: ["create", "ban", "update"],
+	});
+	const roles = {
+		admin: ac.newRole({ user: ["create", "ban", "update"] }),
+		creator: ac.newRole({ user: ["create"] }),
+		updater: ac.newRole({ user: ["update"] }),
+		user: ac.newRole({ user: [] }),
+	};
+
+	const { client, auth, signInWithUser } = await getTestInstance(
+		{ plugins: [admin({ ac, roles })] },
+		{ clientOptions: { plugins: [adminClient({ ac, roles })] } },
+	);
+
+	// Seed actors and a target via trusted server calls (no session, no guard).
+	await auth.api.createUser({
+		body: {
+			email: "ban-admin@test.com",
+			password: "password",
+			name: "Ban Admin",
+			role: "admin",
+		},
+	});
+	await auth.api.createUser({
+		body: {
+			email: "creator@test.com",
+			password: "password",
+			name: "Creator",
+			role: "creator",
+		},
+	});
+	await auth.api.createUser({
+		body: {
+			email: "updater@test.com",
+			password: "password",
+			name: "Updater",
+			role: "updater",
+		},
+	});
+	const target = await auth.api.createUser({
+		body: {
+			email: "ban-target@test.com",
+			password: "password",
+			name: "Ban Target",
+			role: "user",
+		},
+	});
+
+	it("blocks creating a banned user without user:ban", async () => {
+		const { headers } = await signInWithUser("creator@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "prebanned@test.com",
+				password: "password",
+				name: "Prebanned",
+				data: { banned: true },
+			},
+			{ headers },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS.code,
+		);
+	});
+
+	it("blocks setting ban state via update-user without user:ban", async () => {
+		const { headers } = await signInWithUser("updater@test.com", "password");
+		const res = await client.admin.updateUser(
+			{
+				userId: target?.user.id ?? "",
+				data: { banned: true },
+			},
+			{ headers },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS.code,
+		);
+	});
+
+	it("lets a user:ban admin create a banned user via data", async () => {
+		const { headers } = await signInWithUser("ban-admin@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "banned-ok@test.com",
+				password: "password",
+				name: "Banned OK",
+				data: { banned: true },
+			},
+			{ headers },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.user.banned).toBe(true);
+	});
+});
+
 describe("edge cases: userId validation", async () => {
 	const { signInWithTestUser, customFetchImpl, auth } = await getTestInstance(
 		{

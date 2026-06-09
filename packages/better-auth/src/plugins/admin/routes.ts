@@ -352,6 +352,68 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 					);
 				}
+
+				// Assigning a role at creation requires `user:set-role` and a known
+				// role, matching `setRole` and `adminUpdateUser`. Without this guard a
+				// delegated `user:create` admin could mint an `admin` account.
+				const requestedRole = ctx.body.role ?? ctx.body.data?.role;
+				if (requestedRole !== undefined) {
+					const canSetRole = hasPermission({
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permissions: {
+							user: ["set-role"],
+						},
+					});
+					if (!canSetRole) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
+						);
+					}
+					const requestedRoles = Array.isArray(requestedRole)
+						? requestedRole
+						: [requestedRole];
+					for (const role of requestedRoles) {
+						if (typeof role !== "string") {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
+							);
+						}
+						if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+							);
+						}
+					}
+				}
+
+				// Setting ban state (`banned`, `banReason`, `banExpires`) requires
+				// `user:ban`, the same permission `banUser` enforces.
+				const setsBanState =
+					ctx.body.data != null &&
+					["banned", "banReason", "banExpires"].some((field) =>
+						Object.prototype.hasOwnProperty.call(ctx.body.data, field),
+					);
+				if (setsBanState) {
+					const canBanUser = hasPermission({
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permissions: {
+							user: ["ban"],
+						},
+					});
+					if (!canBanUser) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+						);
+					}
+				}
 			}
 
 			const email = ctx.body.email.toLowerCase();
@@ -368,14 +430,20 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+			// FIXME: `data` is spread raw, bypassing the `input:false` enforcement
+			// that endpoint input-parsing applies elsewhere. Role and ban fields are
+			// permission-guarded above, but other `input:false` fields (e.g. core
+			// `emailVerified`) can still be set here. Enforcing `input:false`
+			// uniformly across createUser and adminUpdateUser is a breaking change
+			// deferred to the next branch.
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
 				email: email,
 				name: ctx.body.name,
+				...ctx.body.data,
 				role:
 					(ctx.body.role && parseRoles(ctx.body.role)) ??
 					opts?.defaultRole ??
 					"user",
-				...ctx.body.data,
 			});
 
 			if (!user) {
@@ -514,6 +582,28 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				(ctx.body.data as Record<string, any>).role = parseRoles(
 					inputRoles as string[],
 				);
+			}
+
+			// Ban state (`banned`, `banReason`, `banExpires`) is owned by the ban
+			// endpoints; writing it here requires `user:ban`, same as `banUser`.
+			const setsBanState = ["banned", "banReason", "banExpires"].some((field) =>
+				Object.prototype.hasOwnProperty.call(ctx.body.data, field),
+			);
+			if (setsBanState) {
+				const canBanUser = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["ban"],
+					},
+				});
+				if (!canBanUser) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+					);
+				}
 			}
 
 			const isUserExist = await ctx.context.internalAdapter.findUserById(
