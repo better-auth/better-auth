@@ -348,4 +348,27 @@ export const schema = {
 			},
 		},
 	},
+	/**
+	 * Single-use record for `private_key_jwt` client assertion `jti` values.
+	 * The unique `identifier` makes the database the atomic gate: a replayed or
+	 * concurrent assertion fails the insert, so no two token requests can both
+	 * consume the same assertion. A row is inert once past `expiresAt`.
+	 *
+	 * TODO: no scheduled job prunes expired rows yet; like the verification
+	 * table, they accumulate until a deployment-level sweep removes them.
+	 */
+	oauthClientAssertion: {
+		modelName: "oauthClientAssertion",
+		fields: {
+			identifier: {
+				type: "string",
+				required: true,
+				unique: true,
+			},
+			expiresAt: {
+				type: "date",
+				required: true,
+			},
+		},
+	},
 } satisfies BetterAuthPluginDBSchema;

@@ -30,7 +30,6 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 	}
 }
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
-const pendingAssertionIds = new Set<string>();
 
 /**
  * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
@@ -357,51 +356,31 @@ export async function verifyClientAssertion(
 		});
 	}
 
+	// Consume the jti with a single insert: the unique `identifier` makes the
+	// database the atomic gate, so concurrent token requests across workers
+	// cannot both pass a stale lookup. A failed insert that finds an existing
+	// row is a replay; any other error is a real adapter failure and rethrown.
 	const jtiIdentifier = `private_key_jwt:${clientId}:${payload.jti}`;
-	if (pendingAssertionIds.has(jtiIdentifier)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion jti has already been used",
-			error: "invalid_client",
-		});
-	}
-
-	pendingAssertionIds.add(jtiIdentifier);
 	try {
-		const existingJti =
-			await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-		if (existingJti) {
+		await ctx.context.adapter.create({
+			model: "oauthClientAssertion",
+			data: {
+				identifier: jtiIdentifier,
+				expiresAt: new Date(payload.exp * 1000),
+			},
+		});
+	} catch (createErr) {
+		const alreadyUsed = await ctx.context.adapter.findOne({
+			model: "oauthClientAssertion",
+			where: [{ field: "identifier", value: jtiIdentifier }],
+		});
+		if (alreadyUsed) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "client assertion jti has already been used",
 				error: "invalid_client",
 			});
 		}
-
-		// Store JTI tombstone until the assertion's actual expiry.
-		// If another instance created the tombstone between our find and create
-		// (race in multi-instance deployments), the create may succeed as a
-		// duplicate or throw; either way the assertion is consumed.
-		const jtiExpiry = new Date(payload.exp * 1000);
-		try {
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: jtiIdentifier,
-				value: clientId,
-				expiresAt: jtiExpiry,
-			});
-		} catch (createErr) {
-			// If the tombstone already exists (created by another instance in
-			// the race window), treat it as a replay.
-			const doubleCheck =
-				await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-			if (doubleCheck) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "client assertion jti has already been used",
-					error: "invalid_client",
-				});
-			}
-			throw createErr;
-		}
-	} finally {
-		pendingAssertionIds.delete(jtiIdentifier);
+		throw createErr;
 	}
 
 	return { clientId, client };
