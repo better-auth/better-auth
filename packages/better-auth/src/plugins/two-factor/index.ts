@@ -469,7 +469,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						}
 
 						/**
-						 * remove the session cookie. It's set by the sign in credential
+						 * Remove the session cookie set by the credential sign-in.
+						 *
+						 * The credential handler already created a session and set
+						 * `ctx.context.newSession`. Since 2FA is still pending, that
+						 * session is deleted here and `newSession` is reset to `null`
+						 * so downstream hooks don't observe a session that no longer
+						 * exists. Hooks that read `ctx.context.newSession` after a
+						 * sign-in must therefore null-check it: it is `null` while a
+						 * 2FA challenge is in flight (no authenticated session yet).
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
