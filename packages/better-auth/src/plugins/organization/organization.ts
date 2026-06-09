@@ -1221,6 +1221,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						input: false,
 						fieldName: opts.schema?.session?.fields?.activeOrganizationId,
 					},
 					...(teamSupport
@@ -1228,6 +1229,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 								activeTeamId: {
 									type: "string",
 									required: false,
+									input: false,
 									fieldName: opts.schema?.session?.fields?.activeTeamId,
 								},
 							}
@@ -1239,16 +1241,19 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							activeTeamId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						}
 					: {
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						},
 			},
