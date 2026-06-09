@@ -177,6 +177,24 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.error?.status).toBe(400);
 	});
 
+	/**
+	 * RFC 6750 §3.1: an invalid/expired bearer token must yield 401 invalid_token
+	 * (not 400 invalid_request), so resource clients can trigger token refresh.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 */
+	it("should return 401 invalid_token for an invalid access token", async () => {
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: "Bearer this-is-not-a-valid-access-token",
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+	});
+
 	it("should pass provide all user information - opaque", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();
