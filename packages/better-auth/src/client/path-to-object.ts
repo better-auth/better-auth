@@ -239,12 +239,17 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															session: InferSessionFromClient<COpts>;
 														} | null
 													: T["options"]["metadata"] extends {
-																inferAdditionalFields: boolean;
+																inferAdditionalFields: any;
 															}
-														? RefineAdditionalFieldsResponse<
-																NonNullable<Awaited<R>>,
-																COpts
-															>
+														? true extends T["options"]["metadata"]["inferAdditionalFields"]
+															? RefineAdditionalFieldsResponse<
+																	NonNullable<Awaited<R>>,
+																	COpts
+																>
+															: RefineAuthResponse<
+																	NonNullable<Awaited<R>>,
+																	COpts
+																>
 														: RefineAuthResponse<
 																NonNullable<Awaited<R>>,
 																COpts

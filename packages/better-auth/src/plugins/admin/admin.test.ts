@@ -2088,14 +2088,13 @@ describe("edge cases: userId validation", async () => {
 			session.data?.user.approved;
 		void approvedFromSession;
 
-		// Verify Case 2: admin.listUsers does NOT propagate 'approved' to type system
+		// Verify Case 2: admin.listUsers propagates 'approved' to type system
 		const result = await authClient.admin.listUsers({
 			query: {
 				limit: 10,
 			},
 		});
 
-		// Verify Case 2: admin.listUsers propagates 'approved' to type system
 		const approvedFromAdminList: boolean | undefined | null =
 			result.data?.users[0]?.approved;
 		void approvedFromAdminList;
