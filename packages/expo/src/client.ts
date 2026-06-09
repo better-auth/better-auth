@@ -521,8 +521,12 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
+						const cookie = url.includes("/link-social")
+							? getCookie(storage.getItem(cookieName) || "{}")
+							: "";
 						options.headers = {
 							...options.headers,
+							...(cookie ? { cookie } : {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
