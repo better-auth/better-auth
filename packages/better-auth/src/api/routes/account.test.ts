@@ -1865,3 +1865,35 @@ describe("account", async () => {
 		expect(refreshedAccountCookie).toBe(true);
 	});
 });
+
+describe("token routes cookie cache revocation", async () => {
+	it("get-access-token fails closed after the session is revoked in a stateful deployment", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+		expect(headers.get("cookie")).toContain("session_data");
+
+		// Revoke server-side; the cookie cache is the only thing still vouching.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		// resolveUserId validates against the database before any account lookup,
+		// so the revoked session is rejected outright rather than minting a token.
+		const res = await client.$fetch("/get-access-token", {
+			method: "POST",
+			body: { providerId: "google" },
+			headers,
+		});
+		expect(res.error?.status).toBe(401);
+	});
+});
