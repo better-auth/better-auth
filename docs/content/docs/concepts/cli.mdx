@@ -100,6 +100,25 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 npx auth@latest secret
 ```
 
+## Upgrade
+
+The `upgrade` command bumps every Better Auth package in your `package.json` to the latest published version and detects packages that have been renamed on npm.
+
+```package-install title="Terminal"
+npx auth@latest upgrade
+```
+
+It scans both `dependencies` and `devDependencies`, fetches the current `latest` tag for each match, and prints a summary before running your package manager.
+
+### Renames
+
+The CLI was originally published as `@better-auth/cli` and was renamed to `auth` after v1.4.21. The old name is unmaintained on npm and pins `better-auth@1.4.21`, which silently breaks `@better-auth/core@1.6+` peer-dep resolution when installed alongside a current `better-auth`. When `upgrade` finds `@better-auth/cli` in your project it removes it and installs `auth` at the latest version in the same dependency section. See [issue #9558](https://github.com/better-auth/better-auth/issues/9558) for the underlying scenario.
+
+### Options
+
+* `--cwd` - The working directory to operate in. Defaults to the current directory.
+* `--yes` - Apply renames and upgrades without prompting.
+
 ## Common Issues
 
 **Error: Cannot find module X**
