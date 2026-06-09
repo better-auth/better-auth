@@ -427,6 +427,11 @@ To cancel a subscription:
        * URL to take customers to when they click on the billing portal's link to return to your website.
        */
       returnUrl: string = '/account'
+      /**
+       * The IETF language tag of the locale Checkout is displayed in.
+       * If not provided or set to `auto`, the browser's locale is used.
+       */
+      locale?: string
   }
   ```
 </APIMethod>
