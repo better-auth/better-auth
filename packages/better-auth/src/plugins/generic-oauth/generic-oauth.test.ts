@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
+import { generateKeyPair, SignJWT } from "jose";
 import type {
 	MutableResponse,
 	TokenRequestIncomingMessage,
@@ -3102,6 +3103,162 @@ describe("oauth2", async () => {
 			expect(callbackURL).toContain(
 				"error_description=Stateless+rejection+test",
 			);
+		});
+	});
+
+	describe("id_token verification", () => {
+		// The forged token carries valid iss/aud/exp claims; only its signing
+		// key is unknown to the provider JWKS, so a rejection isolates
+		// signature verification.
+		async function forgeIdToken() {
+			const { privateKey } = await generateKeyPair("RS256");
+			return new SignJWT({
+				email: "forged@test.com",
+				email_verified: true,
+				name: "Forged User",
+			})
+				.setProtectedHeader({ alg: "RS256" })
+				.setSubject("forged-user")
+				.setIssuer(`http://localhost:${port}`)
+				.setAudience(clientId)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(privateKey);
+		}
+
+		it("should reject an id_token not signed by the discovery JWKS", async () => {
+			const forged = await forgeIdToken();
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "verify-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "forged-access-token",
+									idToken: forged,
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "verify-reject",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
+		it("should use claims from an id_token verified against the discovery JWKS", async () => {
+			const addClaims = (token: { payload: Record<string, unknown> }) => {
+				Object.assign(token.payload, {
+					email: "idtoken-claims@test.com",
+					email_verified: true,
+					name: "Id Token Claims",
+				});
+			};
+			server.service.on("beforeTokenSigning", addClaims);
+			try {
+				const headers = new Headers();
+				const res = await authClient.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL, headers: sessionHeaders } =
+					await simulateOAuthFlow(res.data?.url || "", headers);
+				expect(callbackURL).toBe("http://localhost:3000/new_user");
+				const session = await authClient.getSession({
+					fetchOptions: { headers: sessionHeaders },
+				});
+				expect(session.data?.user.email).toBe("idtoken-claims@test.com");
+			} finally {
+				server.service.off("beforeTokenSigning", addClaims);
+			}
+		});
+
+		it("should sign in with a client-submitted id_token for a discovery provider", async () => {
+			const token = await server.issuer.buildToken({
+				scopesOrTransform: (_header, payload) => {
+					Object.assign(payload, {
+						aud: clientId,
+						sub: "front-channel-user",
+						email: "front-channel@test.com",
+						email_verified: true,
+						name: "Front Channel",
+					});
+				},
+			});
+			const res = await authClient.signIn.social({
+				provider: providerId,
+				idToken: { token },
+			});
+			expect(res.error).toBeNull();
+			expect(res.data).toMatchObject({ token: expect.any(String) });
+		});
+
+		it("should keep the decode posture for providers without discovery", async () => {
+			const forged = await forgeIdToken();
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "no-discovery",
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "opaque-access-token",
+									idToken: forged,
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "no-discovery",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 	});
 });
