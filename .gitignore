@@ -211,3 +211,4 @@ state.txt
 
 .cursor/
 .claude/worktrees
+.deepsec/
