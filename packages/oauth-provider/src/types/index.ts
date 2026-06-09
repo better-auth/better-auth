@@ -53,15 +53,21 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * List of valid audiences if there are multiple.
+	 * List of valid audiences if there are multiple, or an async function
+	 * returning the list (e.g. for a database lookup).
 	 *
 	 * @default baseURL
 	 * @example [
 	 * 	"https://api.example.com",
 	 * 	"https://api.example.com/mcp",
 	 * ]
+	 * @example async (ctx) => {
+	 * 	return db.getValidAudiences();
+	 * }
 	 */
-	validAudiences?: string[];
+	validAudiences?:
+		| string[]
+		| ((ctx: GenericEndpointContext) => Awaitable<string[]>);
 	/**
 	 * Automatically cache trusted clients by client_id.
 	 * Clients are cached at request.

@@ -976,12 +976,22 @@ oauthProvider({
 
 A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
 
+You can pass a static array or an async function — useful when valid audiences are stored in a database and need to be looked up per request.
+
 ```ts title="auth.ts"
+// Static list
 oauthProvider({
   validAudiences: [
     "https://api.example.com",
     "https://api.example.com/mcp",
   ]
+})
+
+// Dynamic lookup
+oauthProvider({
+  validAudiences: async (ctx) => {
+    return db.getValidAudiences();
+  }
 })
 ```
 

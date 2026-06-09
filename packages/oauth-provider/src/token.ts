@@ -434,9 +434,13 @@ async function checkResource(
 			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
 		}
 		// Check valid audiences
+		const resolvedAudiences =
+			typeof opts.validAudiences === "function"
+				? await opts.validAudiences(ctx)
+				: opts.validAudiences;
 		const validAudiences = new Set(
 			[
-				...(opts.validAudiences ?? [ctx.context.baseURL]),
+				...(resolvedAudiences ?? [ctx.context.baseURL]),
 				scopes?.includes("openid")
 					? `${ctx.context.baseURL}/oauth2/userinfo`
 					: undefined,

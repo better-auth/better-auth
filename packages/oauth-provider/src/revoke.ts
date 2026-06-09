@@ -50,7 +50,10 @@ async function revokeJwtAccessToken(
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
 			verifyOptions: {
-				audience: opts.validAudiences ?? ctx.context.baseURL,
+				audience:
+					(typeof opts.validAudiences === "function"
+						? await opts.validAudiences(ctx)
+						: opts.validAudiences) ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			},
 		});

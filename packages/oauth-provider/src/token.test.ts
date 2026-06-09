@@ -2881,3 +2881,132 @@ describe("verificationValueSchema", () => {
 		}
 	});
 });
+
+describe("oauth token - validAudiences as function", async () => {
+	const authServerBaseUrl = "http://localhost:3030";
+	const rpBaseUrl = "http://localhost:5030";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "xyz";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: { issuer: authServerBaseUrl },
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validAudiences: async () => [validAudience],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) throw new Error("Unable to fetch jwks");
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	async function getAuthCode(scopes: string[]) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		return { code: url.searchParams.get("code")!, codeVerifier };
+	}
+
+	async function exchangeCode(
+		code: string,
+		codeVerifier: string,
+		resource?: string,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			...(resource ? { resource } : {}),
+		});
+		return client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", { method: "POST", body, headers });
+	}
+
+	it("accepts a valid audience returned by the function", async () => {
+		const { code, codeVerifier } = await getAuthCode([
+			"openid",
+			"offline_access",
+		]);
+		const tokens = await exchangeCode(code, codeVerifier, validAudience);
+		expect(tokens.data?.access_token).toBeDefined();
+		const accessToken = await jwtVerify(tokens.data!.access_token!, jwks, {
+			audience: validAudience,
+			issuer: authServerBaseUrl,
+		});
+		expect(accessToken.payload.aud).toContain(validAudience);
+	});
+
+	it("rejects an audience not returned by the function", async () => {
+		const { code, codeVerifier } = await getAuthCode(["openid"]);
+		const result = await exchangeCode(
+			code,
+			codeVerifier,
+			"https://not-valid.example.com",
+		);
+		expect(result.error).toBeDefined();
+	});
+});
