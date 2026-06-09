@@ -1,5 +1,21 @@
 # @better-auth/oauth-provider
 
+## 1.6.15
+
+### Patch Changes
+
+- [#9919](https://github.com/better-auth/better-auth/pull/9919) [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Run configured hooks through the whole OAuth sign-in flow
+
+  `hooks.before` / `hooks.after` configured on the auth instance now run for the OAuth authorization that continues after a user signs in, selects an account, or consents. They were being skipped there.
+
+  Headers or cookies a `hooks.before` sets before returning its own response are no longer dropped, and a `hooks.after` that throws an `APIError` no longer loses either its cookies or the error's headers.
+
+- [#9937](https://github.com/better-auth/better-auth/pull/9937) [`fe9600b`](https://github.com/better-auth/better-auth/commit/fe9600bc0734eeb2e6fbb0c53d3b81888bd4247d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The UserInfo endpoint (`/oauth2/userinfo`) now accepts `POST` with the access token in the `Authorization` header, in addition to `GET`.
+
+- Updated dependencies [[`1012b69`](https://github.com/better-auth/better-auth/commit/1012b690466ccd7078441dbfb406eef166fca805), [`ad60333`](https://github.com/better-auth/better-auth/commit/ad60333d1517142d688c61b6ccee14b4c30864ae), [`0933c05`](https://github.com/better-auth/better-auth/commit/0933c050ff8735466a273347c9aab0fdd8cd38ff), [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35)]:
+  - better-auth@1.6.15
+  - @better-auth/core@1.6.15
+
 ## 1.6.14
 
 ### Patch Changes
