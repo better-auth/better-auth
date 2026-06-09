@@ -4,6 +4,7 @@ import type {
 } from "@better-auth/core";
 import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
+import type { User } from "../types";
 import type {
 	HasRequiredKeys,
 	IsAny,
@@ -71,6 +72,41 @@ type RefineAuthResponse<
 	? // Only auth-like responses should get client-side user/session type refinement.
 		ReplaceAuthUserAndSession<Data, ClientOpts>
 	: Data;
+
+type RefineAdditionalFieldsResponse<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = Data extends { users: Array<infer U> }
+	? Omit<Data, "users"> & {
+			users: Array<
+				U & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user">>
+			>;
+		}
+	: Data extends { user: infer U; session: infer S }
+		? Omit<Data, "user" | "session"> & {
+				user: U &
+					UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user">>;
+				session: S &
+					UnionToIntersection<InferAdditionalFromClient<ClientOpts, "session">>;
+			}
+		: Data extends { user: infer U }
+			? Omit<Data, "user"> & {
+					user: U &
+						UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user">>;
+				}
+			: Data extends { sessions: Array<infer S> }
+				? Omit<Data, "sessions"> & {
+						sessions: Array<
+							S &
+								UnionToIntersection<
+									InferAdditionalFromClient<ClientOpts, "session">
+								>
+						>;
+					}
+				: Data extends User
+					? Data &
+							UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user">>
+					: Data;
 
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
@@ -202,7 +238,17 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															user: InferUserFromClient<COpts>;
 															session: InferSessionFromClient<COpts>;
 														} | null
-													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
+													: T["options"]["metadata"] extends {
+																inferAdditionalFields: boolean;
+															}
+														? RefineAdditionalFieldsResponse<
+																NonNullable<Awaited<R>>,
+																COpts
+															>
+														: RefineAuthResponse<
+																NonNullable<Awaited<R>>,
+																COpts
+															>,
 											T["options"]["error"] extends StandardSchemaV1
 												? // InferOutput
 													NonNullable<
