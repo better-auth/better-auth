@@ -123,6 +123,8 @@ function renderCompletion(
 		headers: {
 			"content-type": "text/html; charset=utf-8",
 			"content-security-policy": `default-src 'none'; script-src '${OAUTH_POPUP_SCRIPT_CSP_HASH}'; base-uri 'none'`,
+			"cache-control": "no-store", // The page carries the session token, so keep it out of any cache
+			pragma: "no-cache",
 		},
 	});
 }
