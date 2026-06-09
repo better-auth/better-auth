@@ -4,6 +4,7 @@ import type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
+import { toPascalCase } from "@better-auth/core/utils/string";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -355,7 +356,7 @@ function getResponse(responses?: Record<string, any> | undefined) {
 			description:
 				"Internal Server Error. This is a problem with the server that you cannot fix.",
 		},
-		...responses,
+		...(responses ? structuredClone(responses) : {}),
 	} as any;
 }
 
@@ -419,6 +420,21 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
+	const seenOperationIds = new Set<string>();
+	const uniqueOperationId = (
+		operationId: string | undefined,
+		method: string,
+	) => {
+		if (!operationId) return undefined;
+		const base = seenOperationIds.has(operationId)
+			? `${operationId}${toPascalCase(method)}`
+			: operationId;
+		let result = base;
+		let n = 2;
+		while (seenOperationIds.has(result)) result = `${base}${n++}`;
+		seenOperationIds.add(result);
+		return result;
+	};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
@@ -434,7 +450,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: uniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -454,7 +473,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
+					operationId: uniqueOperationId(
+						options.metadata?.openapi?.operationId,
+						method,
+					),
 					security: [
 						{
 							bearerAuth: [],
@@ -519,7 +541,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: uniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+						),
 						security: [
 							{
 								bearerAuth: [],
@@ -540,7 +565,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
+						operationId: uniqueOperationId(
+							options.metadata?.openapi?.operationId,
+							method,
+						),
 						security: [
 							{
 								bearerAuth: [],

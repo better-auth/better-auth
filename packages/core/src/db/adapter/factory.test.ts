@@ -143,4 +143,29 @@ describe("createAdapterFactory consumeOne fallback", () => {
 
 		expect(result).toBeNull();
 	});
+
+	it("throws when deleteMany returns a non-numeric value", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				findMany: async <T>() =>
+					[
+						{
+							id: "verification-id",
+							identifier_text: "stored-token",
+						},
+					] as T[],
+				// A misbehaving adapter (e.g. a document store returning the raw
+				// delete response) breaks the count-based race gate. The fallback
+				// must surface this instead of reporting a spurious miss.
+				deleteMany: async () => ({ deleted: true }) as unknown as number,
+			}),
+		});
+
+		await expect(
+			adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+			}),
+		).rejects.toThrowError(/non-numeric value from deleteMany/);
+	});
 });
