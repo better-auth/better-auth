@@ -1,3 +1,4 @@
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type {
 	OAuth2Tokens,
@@ -154,6 +155,26 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * tokenEndpointAuth.
 	 */
 	tokenUrlParams?: Record<string, string> | undefined;
+	/**
+	 * Additional body params merged into the token endpoint request when
+	 * refreshing an access token. Useful for multi-tenant OIDC providers that
+	 * need to change `scope`, `audience`, `resource`, or a tenant identifier on
+	 * the refresh call — e.g. Zitadel's `urn:zitadel:iam:org:id:{orgId}` scope
+	 * on workspace switch, Auth0 `audience` rotation, or AWS Cognito per-tenant
+	 * `client_id` overrides — without forcing a new authorization redirect.
+	 *
+	 * The function form is invoked at refresh time and receives the
+	 * `GenericEndpointContext` of the triggering request, so dynamic
+	 * per-request values like an active organization id read from cookies or
+	 * headers can be injected directly. Resolved values are merged into the
+	 * form body; `grant_type` and `refresh_token` are protected from override.
+	 */
+	refreshTokenParams?:
+		| Record<string, string>
+		| ((
+				ctx?: GenericEndpointContext,
+		  ) => Awaitable<Record<string, string> | undefined>)
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

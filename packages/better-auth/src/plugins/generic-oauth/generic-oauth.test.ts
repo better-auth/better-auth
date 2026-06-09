@@ -669,6 +669,246 @@ describe("oauth2", async () => {
 		}
 	});
 
+	/**
+	 * Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`,
+	 * AWS Cognito with per-tenant client overrides) require extra body params on
+	 * the refresh call. `refreshTokenParams` lets a generic-oauth plugin inject
+	 * those params — both statically and via a function evaluated at refresh
+	 * time with the triggering request's `GenericEndpointContext` — without
+	 * forcing a full re-authorization redirect. `grant_type` and `refresh_token`
+	 * are protected from override.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7554
+	 */
+	it("forwards refreshTokenParams (incl. dynamic + ctx + protected keys) to the token endpoint on refresh", async () => {
+		const capturedBodies: URLSearchParams[] = [];
+		const captureRefresh = (
+			_response: MutableResponse,
+			req: TokenRequestIncomingMessage,
+		) => {
+			if (req.body?.grant_type === "refresh_token") {
+				capturedBodies.push(
+					new URLSearchParams(req.body as unknown as Record<string, string>),
+				);
+			}
+		};
+		server.service.on("beforeResponse", captureRefresh);
+
+		let dynamicScope = "urn:zitadel:iam:org:id:org-A";
+		const ctxSeenBy: {
+			providerId: string;
+			hasCtx: boolean;
+			header: string | null;
+		}[] = [];
+
+		try {
+			const { customFetchImpl, cookieSetter: localCookieSetter } =
+				await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "refresh-params-ctx",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: (ctx) => {
+										const header = ctx?.headers?.get("x-active-org") ?? null;
+										ctxSeenBy.push({
+											providerId: "refresh-params-ctx",
+											hasCtx: Boolean(ctx),
+											header,
+										});
+										return header
+											? { scope: `urn:zitadel:iam:org:id:${header}` }
+											: undefined;
+									},
+								},
+								{
+									providerId: "refresh-params-static",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: {
+										audience: "https://api.example.com",
+									},
+								},
+								{
+									providerId: "refresh-params-dynamic",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: async () => ({
+										scope: dynamicScope,
+									}),
+								},
+								{
+									providerId: "refresh-params-noop",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: () => undefined,
+								},
+								{
+									providerId: "refresh-params-protected",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: {
+										grant_type: "client_credentials",
+										refresh_token: "should-not-replace",
+										audience: "https://api.example.com",
+									},
+								},
+							],
+						}),
+					],
+				});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			async function signIn(providerId: string) {
+				server.service.once("beforeUserinfo", (userInfoResponse) => {
+					userInfoResponse.body = {
+						email: `${providerId}@test.com`,
+						name: providerId,
+						sub: providerId,
+						email_verified: true,
+					};
+					userInfoResponse.statusCode = 200;
+				});
+				const headers = new Headers();
+				const signInRes = await client.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: localCookieSetter(headers) },
+				});
+				const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+					signInRes.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				return postCallbackHeaders;
+			}
+
+			const ctxHeaders = await signIn("refresh-params-ctx");
+			const staticHeaders = await signIn("refresh-params-static");
+			const dynamicHeaders = await signIn("refresh-params-dynamic");
+			const noopHeaders = await signIn("refresh-params-noop");
+			const protectedHeaders = await signIn("refresh-params-protected");
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+
+				const ctxHeadersWithOrg = new Headers(ctxHeaders);
+				ctxHeadersWithOrg.set("x-active-org", "org-from-header");
+				const ctxRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-ctx" },
+					{ headers: ctxHeadersWithOrg },
+				);
+				expect(ctxRefresh.data?.accessToken).toBeTruthy();
+
+				const staticRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-static" },
+					{ headers: staticHeaders },
+				);
+				expect(staticRefresh.data?.accessToken).toBeTruthy();
+
+				const firstDynamic = await client.getAccessToken(
+					{ providerId: "refresh-params-dynamic" },
+					{ headers: dynamicHeaders },
+				);
+				expect(firstDynamic.data?.accessToken).toBeTruthy();
+
+				dynamicScope = "urn:zitadel:iam:org:id:org-B";
+				vi.setSystemTime(new Date(Date.now() + 4 * 60 * 60 * 1000));
+				const secondDynamic = await client.getAccessToken(
+					{ providerId: "refresh-params-dynamic" },
+					{ headers: dynamicHeaders },
+				);
+				expect(secondDynamic.data?.accessToken).toBeTruthy();
+
+				const noopRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-noop" },
+					{ headers: noopHeaders },
+				);
+				expect(noopRefresh.data?.accessToken).toBeTruthy();
+
+				const protectedRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-protected" },
+					{ headers: protectedHeaders },
+				);
+				expect(protectedRefresh.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(capturedBodies).toHaveLength(6);
+			const [
+				ctxBody,
+				staticBody,
+				dynamicBodyA,
+				dynamicBodyB,
+				noopBody,
+				protectedBody,
+			] = capturedBodies as [
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+			];
+
+			// ctx is forwarded so headers/cookies on the triggering request
+			// are reachable from inside refreshTokenParams.
+			expect(ctxBody.get("scope")).toBe(
+				"urn:zitadel:iam:org:id:org-from-header",
+			);
+			expect(ctxSeenBy).toHaveLength(1);
+			expect(ctxSeenBy[0]).toEqual({
+				providerId: "refresh-params-ctx",
+				hasCtx: true,
+				header: "org-from-header",
+			});
+
+			expect(staticBody.get("audience")).toBe("https://api.example.com");
+			expect(staticBody.get("grant_type")).toBe("refresh_token");
+
+			expect(dynamicBodyA.get("scope")).toBe("urn:zitadel:iam:org:id:org-A");
+			expect(dynamicBodyB.get("scope")).toBe("urn:zitadel:iam:org:id:org-B");
+
+			// Function returning undefined is treated as no extra params; the
+			// refresh itself still happens.
+			expect(noopBody.get("grant_type")).toBe("refresh_token");
+			expect(noopBody.get("refresh_token")).toBeTruthy();
+			expect(noopBody.get("audience")).toBeNull();
+			expect(noopBody.get("scope")).toBeNull();
+
+			// `grant_type` and `refresh_token` are protected from override; other
+			// keys still pass through.
+			expect(protectedBody.get("grant_type")).toBe("refresh_token");
+			expect(protectedBody.get("refresh_token")).not.toBe("should-not-replace");
+			expect(protectedBody.get("audience")).toBe("https://api.example.com");
+		} finally {
+			server.service.off("beforeResponse", captureRefresh);
+		}
+	});
+
 	it("should redirect to the provider and handle the response after linked", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.social({

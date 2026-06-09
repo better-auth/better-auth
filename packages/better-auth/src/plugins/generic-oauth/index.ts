@@ -1,4 +1,8 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
@@ -19,6 +23,27 @@ import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+
+/**
+ * Strips OAuth refresh-grant body keys that the core refresh flow controls
+ * before forwarding caller-supplied `refreshTokenParams` to the token endpoint.
+ *
+ * RFC 6749 §6 fixes `grant_type=refresh_token` and `refresh_token=<credential>`
+ * for the refresh grant; letting a caller override either one would break the
+ * request or swap the credential out from under the core refresh flow, so they
+ * are dropped here regardless of intent.
+ */
+function stripReservedRefreshParams(
+	params: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+	if (!params) return undefined;
+	const {
+		grant_type: _grant_type,
+		refresh_token: _refresh_token,
+		...rest
+	} = params;
+	return rest;
+}
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -352,6 +377,7 @@ export const genericOAuth = <const ID extends string>(
 					},
 					async refreshAccessToken(
 						refreshToken: string,
+						refreshCtx?: GenericEndpointContext,
 					): Promise<OAuth2Tokens> {
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -359,6 +385,13 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const resolvedRefreshParams =
+							typeof c.refreshTokenParams === "function"
+								? await c.refreshTokenParams(refreshCtx)
+								: c.refreshTokenParams;
+						const extraParams = stripReservedRefreshParams(
+							resolvedRefreshParams,
+						);
 						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
@@ -368,6 +401,7 @@ export const genericOAuth = <const ID extends string>(
 							authentication: c.authentication,
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
+							extraParams,
 						});
 						return applyDefaultAccessTokenExpiry(
 							tokens,
