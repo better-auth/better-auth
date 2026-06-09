@@ -1,3 +1,4 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import {
 	genericOAuthClient,
@@ -411,10 +412,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -967,10 +973,15 @@ describe("oauth", async () => {
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
-		expect(signInResponse.url).toContain(rpBaseUrl);
+		const signInUrl = signInResponse.url;
+		expect(signInUrl).toBeDefined();
+		if (!signInUrl) {
+			throw new Error("Expected sign-in response URL");
+		}
+		expect(signInUrl).toContain(rpBaseUrl);
 
 		let callbackURL = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInUrl, {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -992,6 +1003,7 @@ describe("oauth - prompt", async () => {
 	let forcePostLoginRedirect = false;
 	let bypassReferenceIdCheck = false;
 	let isUserRegistered = true;
+	let authorizeBeforeHookCount = 0;
 	const {
 		auth: authorizationServer,
 		customFetchImpl,
@@ -999,6 +1011,13 @@ describe("oauth - prompt", async () => {
 		cookieSetter,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/oauth2/authorize") {
+					authorizeBeforeHookCount++;
+				}
+			}),
+		},
 		plugins: [
 			jwt(),
 			multiSession(),
@@ -1822,6 +1841,82 @@ describe("oauth - prompt", async () => {
 		expect(selectedAccountRedirectUri).toContain(`code=`);
 
 		enableSelectAccount = false;
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9887
+	 *
+	 * The resumed `/oauth2/authorize` step must run configured hooks. Before the
+	 * fix it called the raw authorize function directly, skipping the dispatch
+	 * pipeline, so hooks ran for the standalone request but not the resume.
+	 */
+	it("runs configured hooks when authorize resumes from continue", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enableSelectAccount = true;
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+			enableSelectAccount = false;
+		});
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const data = await client.signIn.social(
+			{
+				provider: providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		let selectAccountRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(ctx) {
+				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
+				cookieSetter(headers)(ctx);
+				headers.append("Cookie", headers.get("Cookie") || "");
+			},
+		});
+		expect(selectAccountRedirectUri).toContain(`/select-account`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
+			},
+		});
+
+		// The standalone authorize request already ran the hook; the resume must
+		// run it again rather than calling the raw authorize function.
+		const countBeforeResume = authorizeBeforeHookCount;
+		expect(countBeforeResume).toBeGreaterThan(0);
+
+		const selectedAccountRes = await serverClient.oauth2.continue(
+			{
+				selected: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		// Whether the resume lands on consent or the callback, it re-dispatched
+		// `/oauth2/authorize`, so the configured hook must have run once more.
+		expect(selectedAccountRes.redirect).toBeTruthy();
+		expect(authorizeBeforeHookCount).toBe(countBeforeResume + 1);
 	});
 
 	it("none - should return account_selection_required when account selection is required", async () => {

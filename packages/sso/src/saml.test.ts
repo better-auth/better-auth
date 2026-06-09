@@ -20,6 +20,7 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
+import type { RequestInfo } from "samlify/types/src/types";
 import {
 	afterAll,
 	afterEach,
@@ -34,6 +35,7 @@ import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 import { saml } from "./samlify";
+import { normalizePem } from "./utils";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -109,7 +111,18 @@ const idpMetadata = `
     </md:ContactPerson>
     </md:EntityDescriptor>
     `;
-const idPk = `
+/**
+ * Strips the indentation that keeps these PEM fixtures readable in the source.
+ * samlify >= 2.11 parses keys with Node's native crypto (OpenSSL 3), which
+ * rejects leading whitespace in PEM blocks; node-forge previously tolerated it.
+ */
+const dedentPem = (strings: TemplateStringsArray) =>
+	`${(strings[0] ?? "")
+		.split("\n")
+		.map((line) => line.trim())
+		.join("\n")
+		.trim()}\n`;
+const idPk = dedentPem`
     -----BEGIN RSA PRIVATE KEY-----
     MIIJKgIBAAKCAgEA+YIi6C8hA+NSB7dEcQf5OseCtL8wCohnnD8nnUTUdaMor9zm
     JLhuY4ExNsHD2XO5A9RIOXerYdAVh8v6L2jUuZpIJzleoypDGlluLAjEpy52lstL
@@ -163,7 +176,7 @@ const idPk = `
     -----END RSA PRIVATE KEY-----
 
     `;
-const spPrivateKey = `
+const spPrivateKey = dedentPem`
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,9C86371F0420A091
@@ -195,7 +208,7 @@ const spPrivateKey = `
     jnnjCjsK5YzTa4hmbHhPZIW262KoFV9TqxYKkhP5ab7AXRSakrdrY2cwACWN4AMT
     -----END RSA PRIVATE KEY-----
     `;
-const idpPrivateKey = `
+const idpPrivateKey = dedentPem`
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,116B0EBB2F2F0A9D
@@ -250,7 +263,7 @@ const certificate = `
     yyoWAJDUHiAmvFA=
     -----END CERTIFICATE-----
     `;
-const idpEncryptionKey = `
+const idpEncryptionKey = dedentPem`
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -282,7 +295,7 @@ const idpEncryptionKey = `
     ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
     -----END RSA PRIVATE KEY-----
     `;
-const spEncryptionKey = `
+const spEncryptionKey = dedentPem`
     -----BEGIN RSA PRIVATE KEY-----
     Proc-Type: 4,ENCRYPTED
     DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
@@ -493,13 +506,13 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 				emailAddress: emailValue,
 				famName: "hello world",
 			};
-			const { context, entityEndpoint } = await idp.createLoginResponse(
+			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
 				{} as any,
 				saml.Constants.wording.binding.post,
 				user,
 				createTemplateCallback(idp, sp, user.emailAddress),
-			);
+			)) as { context: string; entityEndpoint?: string };
 			res.status(200).json({ samlResponse: context, entityEndpoint });
 		} catch (error) {
 			res.status(500).json({
@@ -587,6 +600,21 @@ beforeAll(async () => {
 
 afterAll(async () => {
 	await sharedMockIdP.stop();
+});
+
+describe("private key normalization", () => {
+	// samlify >= 2.11 parses keys with native crypto (OpenSSL 3), which rejects
+	// indented PEM that node-forge tolerated. normalizePem keeps such keys working.
+	it("loads PEM keys pasted with leading indentation", () => {
+		const indented = idPk
+			.split("\n")
+			.map((line) => `    ${line}`)
+			.join("\n");
+		expect(() => createPrivateKey({ key: indented })).toThrow();
+		expect(() =>
+			createPrivateKey({ key: normalizePem(indented) }),
+		).not.toThrow();
+	});
 });
 
 describe("SAML SSO with defaultSSO array", async () => {
@@ -5293,6 +5321,10 @@ describe("SAML Single Logout (SLO)", () => {
 			const location = initSloRes.headers.get("location");
 			expect(location).toContain("http://localhost:8081/api/sso/saml2/idp/slo");
 			expect(location).toContain("SAMLRequest=");
+
+			// SP-initiated logout must revoke the local session, not just redirect.
+			const sessionAfter = await auth.api.getSession({ headers });
+			expect(sessionAfter).toBeNull();
 		});
 	});
 
@@ -5439,7 +5471,7 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const logoutResponse = idp.createLogoutResponse(
 				sp,
-				null,
+				null as unknown as RequestInfo,
 				saml.Constants.wording.binding.redirect,
 				callbackUrl,
 			) as { context: string };
@@ -5523,7 +5555,7 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const logoutResponse = idp.createLogoutResponse(
 				sp,
-				null,
+				null as unknown as RequestInfo,
 				saml.Constants.wording.binding.redirect,
 				"",
 			) as { context: string };

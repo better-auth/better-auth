@@ -3,6 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 } from "@better-auth/core";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { PACKAGE_VERSION } from "../../version";
 
 declare global {
@@ -257,7 +258,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							});
 
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-								window.location.href = opts?.callbackURL ?? "/";
+								const target = opts?.callbackURL ?? "/";
+								if (isSafeUrlScheme(target)) {
+									window.location.href = target;
+								}
 							}
 						}
 
@@ -303,7 +307,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						});
 
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-							window.location.href = opts?.callbackURL ?? "/";
+							const target = opts?.callbackURL ?? "/";
+							if (isSafeUrlScheme(target)) {
+								window.location.href = target;
+							}
 						}
 					}
 

@@ -205,19 +205,26 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
-	 * Require email verification on session-authenticated recipient invitation
-	 * calls (accept, reject, get, list). Defaults to `true` so unverified
-	 * accounts registered against a victim's email cannot accept, read, or
-	 * enumerate invitations targeted at that email. Server-side
-	 * `listUserInvitations` calls without a session (caller passes
-	 * `ctx.query.email`) continue to bypass the gate because the caller is
-	 * trusted. Set to `false` for backward compatibility on apps that do not
-	 * require email verification; understand the takeover risk before doing so.
+	 * Require email verification before session-authenticated recipient
+	 * invitation calls that carry an invitation ID (accept, reject, get).
 	 *
-	 * @default true
+	 * When unset, Better Auth preserves the normal emailed-invitation flow for
+	 * built-in opaque invitation IDs, including the default generator and
+	 * `advanced.database.generateId: "uuid"`. It requires verification for
+	 * externally controlled or predictable invitation IDs, such as
+	 * `advanced.database.generateId: "serial"` / `false` or custom ID
+	 * generation.
 	 *
-	 * @deprecated The option will be removed on the next minor; the gate will
-	 * become unconditional. Plan to verify emails before invitation acceptance.
+	 * Set this option to `true` when invitation IDs may be visible outside the
+	 * invited user's mailbox, when organization invitation lists are exposed to
+	 * members, or when verified email should be the ownership proof for by-ID
+	 * invitation actions. Client-side `listUserInvitations` calls always require
+	 * a verified session email because they enumerate invitation IDs from
+	 * `session.user.email`. Server-side `listUserInvitations` calls without a
+	 * session (caller passes `ctx.query.email`) continue to bypass the gate
+	 * because the caller is trusted.
+	 *
+	 * @default undefined
 	 */
 	requireEmailVerificationOnInvitation?: boolean | undefined;
 	/**
@@ -385,7 +392,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -416,7 +423,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -426,7 +433,7 @@ export interface OrganizationOptions {
 					data: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};

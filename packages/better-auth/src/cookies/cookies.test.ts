@@ -411,6 +411,18 @@ describe("cookie-utils setRequestCookie", () => {
 			"valid=1; locale=en; better-auth.session_token=abc",
 		);
 	});
+
+	it("percent-encodes reserved cookie-octet bytes when serializing", () => {
+		const headers = new Headers({ cookie: "locale=en" });
+		setRequestCookie(headers, "session", "foo;bar=baz");
+		expect(headers.get("cookie")).toBe("locale=en; session=foo%3Bbar%3Dbaz");
+	});
+
+	it("treats input as semantic and percent-encodes literal double-quotes", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "token", '"abc"');
+		expect(headers.get("cookie")).toBe("token=%22abc%22");
+	});
 });
 
 describe("getSessionCookie", async () => {
@@ -524,6 +536,30 @@ describe("getSessionCookie", async () => {
 				expect(getSessionCookie(request, config)).toBe("token-123");
 			});
 		});
+	});
+
+	it("prefers the __Secure- cookie when a non-secure leftover is also present", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=current",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBe("current");
+	});
+
+	it("does not fall back to a non-secure cookie when the __Secure- value is empty", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBeNull();
 	});
 
 	it("should allow override cookie prefix with secure cookies", async () => {
@@ -1573,6 +1609,18 @@ describe("applySetCookies", () => {
 		const headers = new Headers({ cookie: "a=old; b=keep" });
 		applySetCookies(headers, ["a=new; Path=/"]);
 		expect(headers.get("cookie")).toBe("a=new; b=keep");
+	});
+
+	it("re-encodes Set-Cookie values containing reserved bytes on wire join", () => {
+		const headers = new Headers({ cookie: "session=safe" });
+		applySetCookies(headers, ["pref=foo%3Bbar=hello; Path=/"]);
+		expect(headers.get("cookie")).toBe("session=safe; pref=foo%3Bbar%3Dhello");
+	});
+
+	it("strips RFC 6265 quoted-string wrapping from Set-Cookie values", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ['token="abc"; Path=/']);
+		expect(headers.get("cookie")).toBe("token=abc");
 	});
 });
 

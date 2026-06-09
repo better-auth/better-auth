@@ -1,5 +1,6 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -75,6 +76,7 @@ describe("Admin plugin", async () => {
 		customFetchImpl,
 	} = await getTestInstance(
 		{
+			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
@@ -620,7 +622,44 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(errorLocation).toBeDefined();
-		expect(errorLocation).toContain("error=banned");
+		expect(errorLocation).toContain("error=BANNED_USER");
+	});
+
+	it("should redirect banned social sign-in to a cross-origin errorCallbackURL", async () => {
+		const errorCallbackURL = "https://frontend.example.com/auth-error";
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				errorCallbackURL,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				errorLocation = context.response.headers.get("location");
+			},
+		});
+		expect(errorLocation).toBeTruthy();
+		const url = new URL(errorLocation!);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(`${url.origin}${url.pathname}`).toBe(errorCallbackURL);
+		expect(url.searchParams.get("error")).toBe("BANNED_USER");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Custom banned user message",
+		);
 	});
 
 	it("should change banned user message", async () => {
@@ -678,6 +717,62 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.sessions.length).toBe(1);
+	});
+
+	it("should return 404 from unbanUser when the target user does not exist", async () => {
+		const res = await client.admin.unbanUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from banUser when the target user does not exist", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from setRole when the target user does not exist", async () => {
+		const res = await client.admin.setRole(
+			{
+				userId: "nonexistent-user-id",
+				role: "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from admin.updateUser when the target user does not exist", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: "nonexistent-user-id",
+				data: {
+					name: "John Doe",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
 	});
 
 	it("should not allow non-admin to list user sessions", async () => {
@@ -1933,5 +2028,69 @@ describe("edge cases: userId validation", async () => {
 				},
 			}),
 		).rejects.toThrow("user not found");
+	});
+});
+
+describe("Admin plugin id-token sign-in", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-admin-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const clientId = "admin-idtoken-client.googleusercontent.com";
+
+	const signIdToken = (email: string) =>
+		new SignJWT({
+			email,
+			email_verified: true,
+			name: "Banned ID Token User",
+			sub: "banned-google-sub",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(clientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		server.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it("should return BANNED_USER 403 JSON for id-token sign-in by banned user", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [admin({ bannedUserMessage: "Custom banned user message" })],
+				socialProviders: {
+					google: { clientId, clientSecret: "test-secret" },
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true, banned: true },
+							}),
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idToken = await signIdToken("banned-idtoken@test.com");
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.message).toBe("Custom banned user message");
 	});
 });
