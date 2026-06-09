@@ -533,6 +533,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				.map((role) => role.trim())
 				.filter(Boolean);
 
+			if (roleToSet.length === 0) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
 			const validStaticRoles = new Set([
 				...Object.keys(defaultRoles),
 				...Object.keys(ctx.context.orgOptions.roles || {}),
