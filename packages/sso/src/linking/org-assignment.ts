@@ -1,18 +1,12 @@
 import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
-import type { SSOOptions, SSOProvider } from "../types";
+import type {
+	OrganizationProvisioningOptions,
+	OrganizationRoleResolverData,
+	SSOOptions,
+	SSOProvider,
+} from "../types";
 import { domainMatches } from "../utils";
 import type { NormalizedSSOProfile } from "./types";
-
-export interface OrganizationProvisioningOptions {
-	disabled?: boolean;
-	defaultRole?: string;
-	getRole?: (data: {
-		user: User & Record<string, any>;
-		userInfo: Record<string, any>;
-		token?: OAuth2Tokens;
-		provider: SSOProvider<SSOOptions>;
-	}) => Promise<string>;
-}
 
 export interface AssignOrganizationFromProviderOptions {
 	user: User;
@@ -44,7 +38,10 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const isAlreadyMember = await ctx.context.adapter.findOne({
+	const existingMember = await ctx.context.adapter.findOne<{
+		id: string;
+		role: string;
+	}>({
 		model: "member",
 		where: [
 			{ field: "organizationId", value: provider.organizationId },
@@ -52,18 +49,46 @@ export async function assignOrganizationFromProvider(
 		],
 	});
 
-	if (isAlreadyMember) {
+	if (existingMember) {
+		if (!shouldSyncRoleOnLogin(provisioningOptions)) {
+			return;
+		}
+		const role = await resolveOrganizationRole({
+			provisioningOptions,
+			user,
+			userInfo: profile.rawAttributes || {},
+			claims: profile.claims || profile.rawAttributes || {},
+			token,
+			provider,
+		});
+		if (existingMember.role === role) {
+			return;
+		}
+		if (
+			await wouldRemoveOnlyCreatorRole(ctx, {
+				member: existingMember,
+				organizationId: provider.organizationId,
+				role,
+			})
+		) {
+			return;
+		}
+		await ctx.context.adapter.update({
+			model: "member",
+			where: [{ field: "id", value: existingMember.id }],
+			update: { role },
+		});
 		return;
 	}
 
-	const role = provisioningOptions?.getRole
-		? await provisioningOptions.getRole({
-				user,
-				userInfo: profile.rawAttributes || {},
-				token,
-				provider,
-			})
-		: provisioningOptions?.defaultRole || "member";
+	const role = await resolveOrganizationRole({
+		provisioningOptions,
+		user,
+		userInfo: profile.rawAttributes || {},
+		claims: profile.claims || profile.rawAttributes || {},
+		token,
+		provider,
+	});
 
 	await ctx.context.adapter.create({
 		model: "member",
@@ -156,13 +181,14 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const role = provisioningOptions?.getRole
-		? await provisioningOptions.getRole({
-				user,
-				userInfo: {},
-				provider: ssoProvider,
-			})
-		: provisioningOptions?.defaultRole || "member";
+	const role = await resolveOrganizationRole({
+		provisioningOptions,
+		user,
+		userInfo: {},
+		claims: {},
+		provider: ssoProvider,
+		useClaimsMapper: false,
+	});
 
 	await ctx.context.adapter.create({
 		model: "member",
@@ -173,4 +199,68 @@ export async function assignOrganizationByDomain(
 			createdAt: new Date(),
 		},
 	});
+}
+
+async function resolveOrganizationRole(
+	data: OrganizationRoleResolverData & {
+		provisioningOptions?: OrganizationProvisioningOptions;
+		useClaimsMapper?: boolean;
+	},
+) {
+	const { provisioningOptions, useClaimsMapper = true, ...resolverData } = data;
+	if (useClaimsMapper && provisioningOptions?.mapClaimsToRoles) {
+		return provisioningOptions.mapClaimsToRoles(resolverData);
+	}
+	if (provisioningOptions?.getRole) {
+		return provisioningOptions.getRole(resolverData);
+	}
+	return provisioningOptions?.defaultRole || "member";
+}
+
+function shouldSyncRoleOnLogin(
+	provisioningOptions?: OrganizationProvisioningOptions,
+) {
+	return (
+		provisioningOptions?.syncRoleOnLogin ??
+		Boolean(provisioningOptions?.mapClaimsToRoles)
+	);
+}
+
+function roleIncludes(role: string, targetRole: string) {
+	return role
+		.split(",")
+		.map((entry) => entry.trim())
+		.includes(targetRole);
+}
+
+async function wouldRemoveOnlyCreatorRole(
+	ctx: GenericEndpointContext,
+	data: {
+		member: { id: string; role: string };
+		organizationId: string;
+		role: string;
+	},
+) {
+	const creatorRole =
+		ctx.context.getPlugin("organization")?.options?.creatorRole || "owner";
+	if (
+		!roleIncludes(data.member.role, creatorRole) ||
+		roleIncludes(data.role, creatorRole)
+	) {
+		return false;
+	}
+	const members = await ctx.context.adapter.findMany<{
+		id: string;
+		role: string;
+	}>({
+		model: "member",
+		where: [
+			{ field: "organizationId", value: data.organizationId },
+			{ field: "role", value: creatorRole, operator: "contains" },
+		],
+	});
+	return !members.some(
+		(member) =>
+			member.id !== data.member.id && roleIncludes(member.role, creatorRole),
+	);
 }
