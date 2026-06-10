@@ -408,14 +408,7 @@ describe("updateMemberRole", async () => {
 		);
 	});
 
-	/**
-	 * Regression: a non-owner admin must not be able to escalate to the owner
-	 * (creator) role by submitting a comma-delimited role string such as
-	 * "admin,owner". The single-element array previously slipped past the
-	 * creator-role guard because the guard never split the value on commas,
-	 * yet the downstream permission checks do — granting owner privileges.
-	 */
-	it("should not allow a non-owner admin to escalate to owner via a comma-delimited role string", async () => {
+	it("should not allow a comma-delimited role string", async () => {
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],
