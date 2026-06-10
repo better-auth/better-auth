@@ -561,12 +561,14 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					);
 					if (stillInvalid.length > 0) {
 						throw new APIError("BAD_REQUEST", {
-							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${stillInvalid.join(", ")}`,
+							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
 						});
 					}
 				} else {
 					throw new APIError("BAD_REQUEST", {
-						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${unknownRoles.join(", ")}`,
+						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
 					});
 				}
 			}
