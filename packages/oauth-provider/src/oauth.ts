@@ -287,23 +287,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// With secondaryStorage + preserveSessionInDatabase, deleteSession
-			// keeps the DB row and returns before the session-delete hook runs, so
-			// OAuth token revocation and back-channel logout never fire on session
-			// end. Surface it so operators don't assume sign-out invalidates tokens.
-			// TODO: warning-only is a stopgap. A complete fix needs core to fire
-			// the session-delete hook (or expose a dedicated session-end seam) even
-			// when the row is preserved, so revocation and back-channel dispatch run
-			// for this config. Re-evaluate moving off the delete hook then.
-			if (
-				ctx.options.secondaryStorage &&
-				ctx.options.session?.preserveSessionInDatabase
-			) {
-				logger.warn(
-					"OAuth Provider: `session.preserveSessionInDatabase: true` with secondaryStorage skips the session-delete hook, so OAuth access/refresh tokens are not revoked and back-channel logout is not dispatched on session end.",
-				);
-			}
-
 			// Well-known warnings are best-effort and only make sense with the
 			// JWT plugin. A dynamic baseURL resolves per-request, so there is
 			// nothing to emit at init time for that deployment shape either.

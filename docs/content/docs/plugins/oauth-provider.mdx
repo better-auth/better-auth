@@ -698,10 +698,6 @@ The Logout Token carries the §2.4 claims (`iss`, `aud`, `iat`, `exp`, `jti`, `e
   Delivery runs through `advanced.backgroundTasks.handler` when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`), so a slow RP cannot delay sign-out. Without a handler it completes inline before the sign-out response returns: reliable on persistent servers, but it can add latency when an RP is slow. Configure a handler on serverless runtimes.
 </Callout>
 
-<Callout type="warn">
-  With `secondaryStorage` and `session.preserveSessionInDatabase: true`, session deletion keeps the database row and skips the session-delete hook, so tokens are not revoked and Logout Tokens are not dispatched on session end. Avoid that combination if you rely on back-channel logout.
-</Callout>
-
 <Callout type="info">
   The OP advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. RPs use these fields during dynamic client registration to decide whether to register a `backchannel_logout_uri`.
 </Callout>
