@@ -445,7 +445,21 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						);
 						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
 					}
-					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
+					const rawId =
+						mapUser.id !== undefined && mapUser.id !== null && mapUser.id !== ""
+							? mapUser.id
+							: userInfo.id;
+					const id = rawId !== undefined && rawId !== null ? String(rawId) : "";
+					// A provider must return a stable account id (e.g. `sub`).
+					// Without one, every account would be stored under the same
+					// empty id, letting different users resolve to the same account.
+					if (!id) {
+						ctx.context.logger.error(
+							"Provider did not return an account id (e.g. `sub`). Unable to sign in.",
+							userInfo,
+						);
+						redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
+					}
 					const name = mapUser.name ? mapUser.name : userInfo.name;
 					if (!name) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
@@ -787,6 +801,7 @@ export async function getUserInfo(
 	}
 
 	const userInfo = await betterFetch<{
+		id?: string | number | undefined;
 		email: string;
 		sub?: string | undefined;
 		name: string;
@@ -798,8 +813,14 @@ export async function getUserInfo(
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
+	const subjectId = userInfo.data?.sub ?? userInfo.data?.id;
+	// Without a stable subject id, the account would be stored under an empty
+	// id and could be resolved by a different user on the same provider.
+	if (subjectId === undefined || subjectId === null || subjectId === "") {
+		return null;
+	}
 	return {
-		id: userInfo.data?.sub ?? "",
+		id: subjectId,
 		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,

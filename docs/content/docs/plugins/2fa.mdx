@@ -120,6 +120,10 @@ By default, 2FA sign-in enforcement applies to the credential-based sign-in endp
 
 If your app needs to require 2FA for those sign-in methods, add custom hook handling for those endpoints and redirect users into your 2FA verification flow before treating the sign-in as complete.
 
+<Callout type="warn">
+  When a 2FA-enabled user signs in via a credential endpoint, the plugin issues a 2FA challenge instead of completing the sign-in. As part of this, the pending session is discarded and `ctx.context.newSession` is reset to `null` — there is no authenticated session until the user verifies the second factor. Server-side hooks (e.g. `after` hooks on the sign-in endpoints) that read `ctx.context.newSession` must null-check it before accessing `newSession.user`, otherwise they will throw while a 2FA challenge is in flight.
+</Callout>
+
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
 ```tsx

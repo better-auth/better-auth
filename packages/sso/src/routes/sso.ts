@@ -658,6 +658,27 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
+			// SSO provider ids share the account-linking provider namespace with
+			// social/OAuth providers. Reject ids that collide with a configured
+			// social provider, a trusted provider, or a reserved built-in id so a
+			// user-registered SSO provider can't be confused with one of them.
+			// Trust for SSO providers is established separately via
+			// verified domain ownership, never by this shared namespace.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				...ctx.context.socialProviders.map((p) => p.id),
+				...ctx.context.trustedProviders,
+			]);
+			if (reservedProviderIds.has(body.providerId)) {
+				ctx.context.logger.warn(
+					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+				);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message:
+						"This providerId is reserved and cannot be used for an SSO provider",
+				});
+			}
+
 			const existingProvider = await ctx.context.adapter.findOne({
 				model: "ssoProvider",
 				where: [
@@ -1566,6 +1587,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				redirect: "error",
 			},
 		);
 		if (userInfoResponse.error) {
@@ -1688,6 +1710,11 @@ async function handleOIDCCallback(
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
 			isTrustedProvider,
+			// SSO provider ids are user-controlled and live in the same namespace
+			// as social providers. Never inherit trust from the global
+			// `trustedProviders` list by name — rely solely on the SSO-specific
+			// `isTrustedProvider` (verified domain ownership) computed above.
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
