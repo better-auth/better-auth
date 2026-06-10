@@ -7,6 +7,37 @@ describe("siwe", async () => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
 	const domain = "example.com";
 	const chainId = 1; // Ethereum mainnet
+	const NONCE = "A1b2C3d4E5f6G7h8J";
+
+	// Builds a valid ERC-4361 message bound to the server-issued nonce. The
+	// plugin now parses and validates this message, so tests must sign a real
+	// SIWE message rather than an arbitrary string.
+	const siweMessage = (opts?: {
+		domain?: string;
+		address?: string;
+		chainId?: number;
+		nonce?: string;
+		expirationTime?: string;
+		notBefore?: string;
+	}) => {
+		const d = opts?.domain ?? domain;
+		const a = opts?.address ?? walletAddress;
+		const c = opts?.chainId ?? chainId;
+		const n = opts?.nonce ?? NONCE;
+		let msg =
+			`${d} wants you to sign in with your Ethereum account:\n` +
+			`${a}\n\n` +
+			`Sign in.\n\n` +
+			`URI: https://${d}\n` +
+			`Version: 1\n` +
+			`Chain ID: ${c}\n` +
+			`Nonce: ${n}\n` +
+			`Issued At: 2024-01-01T00:00:00.000Z`;
+		if (opts?.expirationTime)
+			msg += `\nExpiration Time: ${opts.expirationTime}`;
+		if (opts?.notBefore) msg += `\nNot Before: ${opts.notBefore}`;
+		return msg;
+	};
 
 	it("should generate a valid nonce for a valid public key", async () => {
 		const { client } = await getTestInstance(
@@ -17,10 +48,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -47,10 +77,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -79,10 +108,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -112,10 +140,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -127,7 +154,7 @@ describe("siwe", async () => {
 			},
 		);
 		const { error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -148,10 +175,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -179,10 +205,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -211,10 +236,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -241,10 +265,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -274,10 +297,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -290,7 +312,7 @@ describe("siwe", async () => {
 		);
 
 		const { error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			email: undefined,
@@ -312,10 +334,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -330,7 +351,7 @@ describe("siwe", async () => {
 		await client.siwe.nonce({ walletAddress, chainId });
 
 		const { data, error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -350,10 +371,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -366,7 +386,7 @@ describe("siwe", async () => {
 		);
 
 		const { error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			email: "not-an-email",
@@ -386,10 +406,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -403,7 +422,7 @@ describe("siwe", async () => {
 
 		await client.siwe.nonce({ walletAddress, chainId });
 		const { data, error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -421,10 +440,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -436,7 +454,7 @@ describe("siwe", async () => {
 
 		await client.siwe.nonce({ walletAddress, chainId });
 		const first = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -446,7 +464,7 @@ describe("siwe", async () => {
 
 		// Try to verify again with the same nonce
 		const second = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -466,10 +484,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -481,7 +498,7 @@ describe("siwe", async () => {
 
 		await client.siwe.nonce({ walletAddress, chainId });
 		const { error } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -503,10 +520,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -522,7 +538,7 @@ describe("siwe", async () => {
 			chainId,
 		});
 		const { data } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: walletAddress.toLowerCase(),
 			chainId,
@@ -545,7 +561,7 @@ describe("siwe", async () => {
 			chainId,
 		});
 		const { data: data2 } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: walletAddress.toUpperCase(),
 			chainId,
@@ -568,10 +584,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -588,7 +603,7 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		const firstUser = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: testAddress,
 			chainId: testChainId,
@@ -617,7 +632,7 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		const secondUser = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: testAddress,
 			chainId: testChainId,
@@ -660,10 +675,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 						schema: {
 							walletAddress: {
@@ -692,7 +706,7 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		const result = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: testAddress,
 			chainId: testChainId,
@@ -725,10 +739,9 @@ describe("siwe", async () => {
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -743,7 +756,7 @@ describe("siwe", async () => {
 		// First authentication on Ethereum
 		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId1 });
 		const ethereumAuth = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress: testAddress,
 			chainId: chainId1,
@@ -754,7 +767,7 @@ describe("siwe", async () => {
 		// Second authentication on Polygon with same address
 		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId2 });
 		const polygonAuth = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage({ chainId: chainId2 }),
 			signature: "valid_signature",
 			walletAddress: testAddress,
 			chainId: chainId2,
@@ -784,5 +797,138 @@ describe("siwe", async () => {
 		expect(ethereumRecord?.isPrimary).toBe(true); // First address is primary
 		expect(polygonRecord?.isPrimary).toBe(false); // Second address is not primary
 		expect(ethereumRecord?.userId).toBe(polygonRecord?.userId); // Same user ID
+	});
+
+	/**
+	 * The plugin must bind the signed message to the server-issued nonce,
+	 * configured domain, address, and chain id — signature recovery alone (the
+	 * documented viem `verifyMessage`) is not sufficient. Otherwise a valid
+	 * signature the wallet previously produced (stale, for another domain, or
+	 * over an arbitrary string) could be reused with a freshly minted nonce to
+	 * mint a session.
+	 */
+	describe("message binding", () => {
+		const setup = async () => {
+			// Verifier mirrors the documented viem pattern: signature recovery
+			// only, with no inspection of the message body.
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						siwe({
+							domain,
+							async getNonce() {
+								return NONCE;
+							},
+							async verifyMessage({ signature }) {
+								return signature === "valid_signature";
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+			return { client, auth };
+		};
+
+		it("rejects a valid signature over a message with a non-matching nonce", async () => {
+			const { client } = await setup();
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { error } = await client.siwe.verify({
+				message: siweMessage({ nonce: "some-other-nonce" }),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+		});
+
+		it("rejects a message bound to a different domain", async () => {
+			const { client } = await setup();
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { error } = await client.siwe.verify({
+				message: siweMessage({ domain: "other.example.com" }),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+		});
+
+		it("rejects a message whose chain id does not match", async () => {
+			const { client } = await setup();
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { error } = await client.siwe.verify({
+				message: siweMessage({ chainId: 137 }),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+		});
+
+		it("rejects an arbitrary (non-SIWE) message even with a valid signature", async () => {
+			const { client } = await setup();
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { error } = await client.siwe.verify({
+				message: "gm, please sign this to continue",
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+		});
+
+		it("rejects an expired SIWE message", async () => {
+			const { client } = await setup();
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { error } = await client.siwe.verify({
+				message: siweMessage({
+					expirationTime: "2020-01-01T00:00:00.000Z",
+				}),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_EXPIRED");
+		});
+
+		it("does not mint a session for an existing wallet user when an unrelated signature is reused", async () => {
+			const { client, auth } = await setup();
+
+			// The wallet user signs in normally, creating the wallet user.
+			await client.siwe.nonce({ walletAddress, chainId });
+			const legit = await client.siwe.verify({
+				message: siweMessage(),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(legit.data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const sessionsBefore = await ctx.adapter.findMany({
+				model: "session",
+			});
+
+			// A second request mints a fresh nonce and reuses a previously
+			// produced signature over an unrelated message for the same wallet.
+			await client.siwe.nonce({ walletAddress, chainId });
+			const secondAttempt = await client.siwe.verify({
+				message: "Approve transfer of 1 ETH",
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+			expect(secondAttempt.error?.status).toBe(401);
+			expect(secondAttempt.data).toBeNull();
+
+			const sessionsAfter = await ctx.adapter.findMany({ model: "session" });
+			expect(sessionsAfter.length).toBe(sessionsBefore.length);
+		});
 	});
 });
