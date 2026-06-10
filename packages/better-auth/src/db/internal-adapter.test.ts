@@ -1976,5 +1976,43 @@ describe("internal adapter test", async () => {
 			expect(results.find((r) => r !== null)?.value).toBe("fallback-user");
 			expect(store.has("verification:consume:secondary-fallback")).toBe(false);
 		});
+
+		it("warns once when secondary storage cannot consume atomically", async () => {
+			const store = new Map<string, string>();
+			const logs: { level: string; message: string }[] = [];
+			const adapter = await makeAdapter({
+				logger: {
+					log: (level, message) => {
+						logs.push({ level, message });
+					},
+				},
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			for (const id of ["consume:warn-1", "consume:warn-2"]) {
+				await adapter.createVerificationValue({
+					identifier: id,
+					value: "user",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				await adapter.consumeVerificationValue(id);
+			}
+
+			const warnings = logs.filter(
+				(l) => l.level === "warn" && l.message.includes("getAndDelete"),
+			);
+			expect(warnings).toHaveLength(1);
+		});
 	});
 });

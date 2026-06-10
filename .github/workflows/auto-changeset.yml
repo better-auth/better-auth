@@ -256,7 +256,16 @@ jobs:
           IS_FORK=$(echo "$PR_JSON" | jq -r '.isCrossRepository')
           echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
 
-          if [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
+          # The ref is later interpolated into REST API paths
+          # (git/ref/heads/${HEAD_REF}). URI-reserved characters such as '#' or
+          # '%' can pass the protected-branch string checks below but resolve to
+          # a DIFFERENT ref once placed in a URL ('#' truncates as a fragment,
+          # '%2F' decodes to '/'). Reject anything outside a conservative
+          # branch-name allowlist so the guards operate on the literal ref.
+          if [[ ! "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "blocked_reason=Refusing to commit to branch with unsupported characters (${HEAD_REF}) — only letters, digits, '.', '_', '/', and '-' are allowed." >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "blocked_reason=Cannot commit to protected branch (${HEAD_REF}) — this would trigger release automation." >> "$GITHUB_OUTPUT"
           elif [[ "$IS_FORK" == "true" ]]; then
@@ -313,8 +322,18 @@ jobs:
           # This adds pr-N.md and deletes any superseded changeset files
           # in one commit, preventing duplicate changesets on the branch.
 
-          # Get branch head
-          COMMIT_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq '.object.sha')
+          # Get branch head. Verify the API resolved the EXACT ref we asked for:
+          # if URL semantics caused the path to resolve to a different branch
+          # (e.g. a fragment or decoded slash), `.ref` won't match and we abort
+          # before mutating anything. This is an additional check on top of the
+          # branch-name allowlist enforced in the "Get PR details" step.
+          REF_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}")
+          RESOLVED_REF=$(echo "$REF_JSON" | jq -r '.ref')
+          if [ "$RESOLVED_REF" != "refs/heads/${HEAD_REF}" ]; then
+            echo "::error::Ref mismatch: requested 'refs/heads/${HEAD_REF}' but API resolved '${RESOLVED_REF}'. Aborting."
+            exit 1
+          fi
+          COMMIT_SHA=$(echo "$REF_JSON" | jq -r '.object.sha')
           TREE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${COMMIT_SHA}" --jq '.tree.sha')
 
           # Create blob for the new changeset

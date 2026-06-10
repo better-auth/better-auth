@@ -75,7 +75,7 @@ describe("Origin Check", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
-	it("should allow untrusted origin if they don't contain cookies", async (ctx) => {
+	it("should reject untrusted origin even without cookies", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
@@ -89,7 +89,7 @@ describe("Origin Check", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(res.data?.user).toBeDefined();
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should reject untrusted redirectTo", async (ctx) => {
@@ -361,6 +361,68 @@ describe("Fetch Metadata CSRF Protection", async () => {
 		);
 
 		const response = await auth.handler(requestWithoutMetadata);
+
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should reject an untrusted origin on first-login when Fetch Metadata is missing", async (ctx) => {
+		const crossOriginRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(crossOriginRequest);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("should reject an untrusted Referer on first-login when Fetch Metadata is missing", async (ctx) => {
+		const crossRefererRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					referer: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(crossRefererRequest);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("should allow a first-login request that sends no cookies, Fetch Metadata, or origin", async (ctx) => {
+		const nonBrowserRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(nonBrowserRequest);
 
 		expect(response.status).not.toBe(403);
 	});

@@ -166,11 +166,13 @@ describe("organization", async () => {
 			activeOrganizationId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		} & {
 			activeTeamId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		};
 

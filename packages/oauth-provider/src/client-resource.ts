@@ -230,6 +230,20 @@ export interface VerifyAccessTokenRemote {
 	 * is also still active.
 	 */
 	force?: boolean;
+	/**
+	 * Accept introspection responses that omit the `aud` claim even when a
+	 * required `audience` is configured in `verifyOptions`.
+	 *
+	 * By default verification fails closed: if you configure an `audience` and
+	 * the introspection response has no `aud` (or a mismatching one), the token
+	 * is rejected. Some authorization servers legitimately omit `aud` from
+	 * introspection responses (it is OPTIONAL per RFC 7662 §2.2); only enable
+	 * this if you trust the issuer to bind the token to this resource through
+	 * another mechanism, as it skips the audience check in that case.
+	 *
+	 * @default false
+	 */
+	allowMissingAudience?: boolean;
 }
 
 type VerifyAccessTokenOutput<T> = T extends undefined

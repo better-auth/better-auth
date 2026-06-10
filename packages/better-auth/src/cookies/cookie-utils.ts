@@ -179,7 +179,8 @@ export function toCookieOptions(
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6
  */
-export const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
+export const cookieNameRegex =
+	/^[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E\x5F\x60\x61-\x7A\x7C\x7E]+$/;
 
 /**
  * Cookie-value char set per RFC 6265 §4.1.1, plus space and comma.
@@ -187,7 +188,7 @@ export const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
  * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
  * @see https://github.com/golang/go/issues/7243
  */
-const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
+const cookieValueRegex = /^[\x20\x21\x23-\x3A\x3C-\x5B\x5D-\x7E]*$/;
 
 /**
  * Strip surrounding double-quotes per RFC 6265 §4.1.1 quoted-string form.

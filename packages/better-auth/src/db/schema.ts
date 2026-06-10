@@ -40,6 +40,11 @@ function getFields(
 		...coreSchema,
 		...(additionalFields ?? {}),
 	};
+	// FIXME: Plugin-contributed fields are input-by-default, so a plugin-owned
+	// authority field is writable through generic input routes (e.g.
+	// /update-session) unless it sets `input: false`. A future breaking change
+	// should make plugin fields non-input by default and require an explicit
+	// opt-in for client-writable ones.
 	for (const plugin of options.plugins || []) {
 		if (plugin.schema && plugin.schema[modelName]) {
 			schema = {

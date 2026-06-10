@@ -53,6 +53,14 @@ export async function signInWithOAuthIdentity(
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
 		/**
+		 * Whether `providerId` may be matched against the configured
+		 * `trustedProviders` list to infer trust. Defaults to `true` for built-in
+		 * social/OAuth providers. Callers whose `providerId` is user-controlled
+		 * (the SSO plugin) pass `false` so a provider named after a trusted social
+		 * provider can't launder that trust.
+		 */
+		trustProviderByName?: boolean | undefined;
+		/**
 		 * Authentication source metadata forwarded to the `validateUserInfo`
 		 * provisioning gate for create, link, and returning sign-in actions.
 		 */
@@ -75,6 +83,7 @@ export async function signInWithOAuthIdentity(
 		disableSignUp,
 		overrideUserInfo,
 		isTrustedProvider,
+		trustProviderByName,
 		source,
 		grantAuthority,
 	} = opts;
@@ -91,7 +100,12 @@ export async function signInWithOAuthIdentity(
 				userInfo,
 				providerId,
 				source,
-				linkPolicy: { isTrustedProvider, disableSignUp, overrideUserInfo },
+				linkPolicy: {
+					isTrustedProvider,
+					trustProviderByName,
+					disableSignUp,
+					overrideUserInfo,
+				},
 			});
 			// Resolution failed (sign-up disabled, linking gate rejected, or the
 			// user create threw): nothing was written, so there is no account to

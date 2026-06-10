@@ -192,7 +192,9 @@ export async function processSAMLResponse(
 	}
 
 	// 7. SP/IdP construction via helpers
-	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
+	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+		clockSkew: options?.saml?.clockSkew,
+	});
 	const idp = createIdP(parsedSamlConfig);
 
 	const samlRedirectUrl = getSafeRedirectUrl(
@@ -381,11 +383,14 @@ export async function processSAMLResponse(
 	}
 
 	// 16. Session creation
+	// SSO provider ids are user-controlled and share the social-provider account
+	// namespace, so trust must come solely from verified domain ownership, never
+	// from a name match against the global `trustedProviders` list (enforced via
+	// `trustProviderByName: false` below).
 	const isTrustedProvider: boolean =
-		ctx.context.trustedProviders.includes(providerId) ||
-		("domainVerified" in provider &&
-			!!(provider as { domainVerified?: boolean }).domainVerified &&
-			validateEmailDomain(userInfo.email as string, provider.domain));
+		"domainVerified" in provider &&
+		!!(provider as { domainVerified?: boolean }).domainVerified &&
+		validateEmailDomain(userInfo.email as string, provider.domain);
 
 	const postAuthRedirect = relayState?.callbackURL || ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
@@ -409,6 +414,7 @@ export async function processSAMLResponse(
 				sso: { providerId, profile: attributes },
 			},
 			isTrustedProvider,
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

@@ -79,6 +79,19 @@ describe("verifyAccessToken", () => {
 		);
 	}
 
+	function jwksResponse(...publicJWKs: JWK[]) {
+		return new Response(JSON.stringify({ keys: publicJWKs }), {
+			status: 200,
+			headers: { "content-type": "application/json" },
+		});
+	}
+
+	function requestUrl(input: unknown): string {
+		if (typeof input === "string") return input;
+		if (input instanceof Request) return input.url;
+		return String((input as { url?: unknown } | null)?.url ?? input);
+	}
+
 	async function expectUnauthorized(
 		promise: Promise<unknown>,
 		message = "invalid access token",
@@ -199,6 +212,114 @@ describe("verifyAccessToken", () => {
 		);
 	});
 
+	it("should not verify a token against a JWKS cached for a different issuer with a colliding kid", async () => {
+		vi.resetModules();
+		const { verifyAccessToken: verify } = await import("./verify");
+
+		const sharedKid = "shared-kid";
+		const keyA = await createTestJWKS(sharedKid);
+		const keyB = await createTestJWKS(sharedKid);
+
+		const issuerA = "https://issuer-a.example.com";
+		const audienceA = "https://issuer-a.example.com/api";
+		const jwksUrlA = `${issuerA}/jwks`;
+		const issuerB = "https://issuer-b.example.com";
+		const jwksUrlB = `${issuerB}/jwks`;
+
+		mockedFetch.mockImplementation((input: unknown) => {
+			const url = requestUrl(input);
+			return Promise.resolve(
+				url.includes("issuer-b")
+					? jwksResponse(keyB.publicJWK)
+					: jwksResponse(keyA.publicJWK),
+			);
+		});
+
+		// 1. Source B's JWKS gets cached by verifying a token signed with B's key
+		//    against B's own source.
+		const tokenForB = await createSignedToken(keyB.privateKey, sharedKid, {
+			iss: issuerB,
+			aud: issuerB,
+		});
+		await expect(
+			verify(tokenForB, {
+				jwksUrl: jwksUrlB,
+				verifyOptions: { issuer: issuerB, audience: issuerB },
+			}),
+		).resolves.toMatchObject({ iss: issuerB });
+
+		// 2. A token signed with B's key but carrying source A's issuer/audience
+		//    and the same colliding kid.
+		const tokenWithAClaims = await createSignedToken(
+			keyB.privateKey,
+			sharedKid,
+			{ iss: issuerA, aud: audienceA },
+		);
+
+		// Verifying it against source A must fetch A's own key and reject it,
+		// rather than reusing the key set cached for source B.
+		await expectUnauthorized(
+			verify(tokenWithAClaims, {
+				jwksUrl: jwksUrlA,
+				verifyOptions: { issuer: issuerA, audience: audienceA },
+			}),
+		);
+
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
+	it("should refetch a rotated key set once the cache TTL has elapsed", async () => {
+		vi.resetModules();
+		const { verifyAccessToken: verify } = await import("./verify");
+
+		const rotatingKid = "rotating-kid";
+		const oldKey = await createTestJWKS(rotatingKid);
+		const newKey = await createTestJWKS(rotatingKid);
+		const rotateIssuer = "https://rotate.example.com";
+		const rotateJwksUrl = `${rotateIssuer}/jwks`;
+
+		let currentKey = oldKey.publicJWK;
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(currentKey)),
+		);
+
+		const oldToken = await createSignedToken(oldKey.privateKey, rotatingKid, {
+			iss: rotateIssuer,
+			aud: rotateIssuer,
+		});
+		await expect(
+			verify(oldToken, {
+				jwksUrl: rotateJwksUrl,
+				verifyOptions: { issuer: rotateIssuer, audience: rotateIssuer },
+			}),
+		).resolves.toMatchObject({ iss: rotateIssuer });
+
+		// The source rotates its key while keeping the same kid. A token signed
+		// with the rotated-out key must stop verifying once the cache expires.
+		currentKey = newKey.publicJWK;
+		const staleToken = await createSignedToken(oldKey.privateKey, rotatingKid, {
+			iss: rotateIssuer,
+			aud: rotateIssuer,
+		});
+
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(Date.now() + 6 * 60 * 1000);
+			await expectUnauthorized(
+				verify(staleToken, {
+					jwksUrl: rotateJwksUrl,
+					verifyOptions: { issuer: rotateIssuer, audience: rotateIssuer },
+				}),
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
@@ -221,5 +342,79 @@ describe("verifyAccessToken", () => {
 		} finally {
 			vi.resetModules();
 		}
+	});
+
+	describe("remote introspection audience validation", () => {
+		const introspectUrl = `${issuer}/oauth2/introspect`;
+		const remoteVerify = {
+			introspectUrl,
+			clientId: "rs-client",
+			clientSecret: "rs-secret",
+		};
+
+		function mockIntrospection(body: Record<string, unknown>) {
+			mockJSONResponse({ active: true, iss: issuer, sub: "user-123", ...body });
+		}
+
+		it("should reject an active token when audience is required but introspection omits aud", async () => {
+			mockIntrospection({ scope: "read" });
+
+			await expect(
+				verifyAccessToken("opaque-token-for-another-resource", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+			).rejects.toThrow();
+		});
+
+		it("should reject an active token whose introspected aud is for a different resource", async () => {
+			mockIntrospection({
+				aud: "https://api.example.com/other",
+				scope: "read",
+			});
+
+			await expect(
+				verifyAccessToken("token-minted-for-other-api", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+			).rejects.toThrow();
+		});
+
+		it("should accept an active token whose introspected aud matches", async () => {
+			mockIntrospection({ aud: audience, scope: "read" });
+
+			await expect(
+				verifyAccessToken("valid-token", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+			).resolves.toMatchObject({ aud: audience, sub: "user-123" });
+		});
+
+		it("should accept an aud-less introspection response only when allowMissingAudience is enabled", async () => {
+			mockIntrospection({ scope: "read" });
+
+			await expect(
+				verifyAccessToken("opaque-token", {
+					verifyOptions: { issuer, audience },
+					remoteVerify: { ...remoteVerify, allowMissingAudience: true },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+		});
+
+		it("should still enforce a mismatching aud even when allowMissingAudience is enabled", async () => {
+			mockIntrospection({
+				aud: "https://api.example.com/other",
+				scope: "read",
+			});
+
+			await expect(
+				verifyAccessToken("token-minted-for-other-api", {
+					verifyOptions: { issuer, audience },
+					remoteVerify: { ...remoteVerify, allowMissingAudience: true },
+				}),
+			).rejects.toThrow();
+		});
 	});
 });

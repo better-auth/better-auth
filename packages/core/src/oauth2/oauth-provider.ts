@@ -37,6 +37,14 @@ export type OAuthIdTokenConfig =
 			 * which validates it (e.g. Facebook Graph access tokens).
 			 */
 			allowOpaqueToken?: boolean | undefined;
+			/**
+			 * Provider-specific claim check applied after the signature, issuer,
+			 * audience, max-age, and nonce checks pass. Return `false` to reject the
+			 * token. Used to enforce constraints the standard checks cannot express,
+			 * e.g. Google's hosted-domain (`hd`) restriction. Omitted by providers
+			 * that have no extra claim requirement.
+			 */
+			verifyClaims?: ((claims: Record<string, unknown>) => boolean) | undefined;
 	  }
 	| {
 			/**
