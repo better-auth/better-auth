@@ -204,4 +204,68 @@ describe("drizzle-adapter", () => {
 			).rejects.toThrow(/Schema not found/);
 		});
 	});
+
+	describe("updateMany affected-row count", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+
+		/**
+		 * Builds a mock db whose `update().set().where()` chain resolves to the
+		 * raw driver result a given dialect produces for an UPDATE.
+		 */
+		function createUpdateDb(driverResult: unknown) {
+			return {
+				_: { fullSchema: { user: userTable } },
+				update: vi.fn().mockReturnValue({
+					set: vi.fn().mockReturnValue({
+						where: vi.fn().mockResolvedValue(driverResult),
+					}),
+				}),
+			} as any;
+		}
+
+		// updateMany must satisfy the DBAdapter contract: it returns the number
+		// of affected rows, not the raw (dialect-specific) driver result.
+		it.each([
+			{ provider: "sqlite" as const, result: { changes: 2 }, expected: 2 },
+			{ provider: "sqlite" as const, result: { changes: 0 }, expected: 0 },
+			{ provider: "pg" as const, result: { rowCount: 2 }, expected: 2 },
+			{ provider: "pg" as const, result: { rowCount: 0 }, expected: 0 },
+			{
+				provider: "mysql" as const,
+				result: { rowsAffected: 2 },
+				expected: 2,
+			},
+			{
+				provider: "mysql" as const,
+				result: [{ affectedRows: 2 }],
+				expected: 2,
+			},
+		])("returns the affected-row count for $provider ($expected)", async ({
+			provider,
+			result,
+			expected,
+		}) => {
+			const db = createUpdateDb(result);
+			const adapter = drizzleAdapter(db, { provider })({
+				secret: defaultSecret,
+			});
+
+			const count = await adapter.updateMany({
+				model: "user",
+				where: [{ field: "emailVerified", value: false }],
+				update: { emailVerified: true },
+			});
+
+			expect(count).toBe(expected);
+		});
+	});
 });
