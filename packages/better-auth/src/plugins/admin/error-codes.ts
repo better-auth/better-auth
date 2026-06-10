@@ -29,4 +29,8 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to set a non-existent role value",
 	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
 	INVALID_ROLE_TYPE: "Invalid role type",
+	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL:
+		"You are not allowed to update users email",
+	PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER:
+		"Password cannot be updated through update-user. Use the set-user-password endpoint instead",
 });

@@ -1,4 +1,4 @@
-import type { LiteralString } from "@better-auth/core";
+import type { GenerateIdFn, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -78,6 +78,54 @@ type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
 type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
+
+type ConfiguredGenerateIdOption =
+	| GenerateIdFn
+	| false
+	| "serial"
+	| "uuid"
+	| undefined;
+
+const getAdvancedGenerateId = (
+	advancedOptions: unknown,
+): GenerateIdFn | undefined => {
+	if (typeof advancedOptions !== "object" || advancedOptions === null) {
+		return undefined;
+	}
+	const generateId = (advancedOptions as { generateId?: unknown }).generateId;
+	if (typeof generateId !== "function") {
+		return undefined;
+	}
+	return generateId as GenerateIdFn;
+};
+
+const hasBuiltInOpaqueInvitationIdGeneration = ({
+	advancedGenerateId,
+	databaseGenerateId,
+}: {
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
+}) =>
+	advancedGenerateId === undefined &&
+	(databaseGenerateId === undefined || databaseGenerateId === "uuid");
+
+const shouldRequireVerifiedEmailForInvitationIdAction = ({
+	organizationOptions,
+	advancedGenerateId,
+	databaseGenerateId,
+}: {
+	organizationOptions: OrganizationOptions;
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
+}) => {
+	if (organizationOptions.requireEmailVerificationOnInvitation !== undefined) {
+		return organizationOptions.requireEmailVerificationOnInvitation;
+	}
+	return !hasBuiltInOpaqueInvitationIdGeneration({
+		advancedGenerateId,
+		databaseGenerateId,
+	});
+};
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -418,6 +466,22 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ORGANIZATION_ERROR_CODES.INVALID_TEAM_ID,
 					);
 				}
+				// Every requested team must belong to the organization the
+				// invitation is for, so the stored team IDs stay consistent with
+				// the invitation's organization. This runs regardless of whether
+				// a team-size limit is configured.
+				for (const teamId of requestedTeamIds) {
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId,
+					});
+					if (!team) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						);
+					}
+				}
 			}
 
 			if (
@@ -615,13 +679,15 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			// Email-string equality is not ownership proof: a session whose user.email
-			// matches the invitation but has not been verified must not be treated as
-			// the invitation recipient. Gate is on by default; apps that intentionally
-			// allow unverified accept can opt out with `requireEmailVerificationOnInvitation: false`.
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -686,6 +752,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				const onlyOne = teamIds.length === 1;
 
 				for (const teamId of teamIds) {
+					// Confirm the team still belongs to the invitation's
+					// organization before adding the member. This keeps team
+					// membership consistent with the invitation's organization,
+					// including for older invitations and for teams that were
+					// moved or removed between invite and accept.
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId: invitation.organizationId,
+					});
+					if (!team) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						);
+					}
+
 					await adapter.findOrCreateTeamMember({
 						teamId: teamId,
 						userId: session.user.id,
@@ -818,9 +900,15 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1083,9 +1171,15 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				);
 			}
-			// FIXME(next-minor): drop the option and make the gate unconditional.
 			if (
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1276,12 +1370,7 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			// When the caller has a session, require an ownership signal stronger
 			// than the email string before enumerating invitations targeted at it.
 			// Server-side SDK calls without a session are trusted and skip the gate.
-			// FIXME(next-minor): drop the option and make the gate unconditional.
-			if (
-				session &&
-				(ctx.context.orgOptions.requireEmailVerificationOnInvitation ?? true) &&
-				!session.user.emailVerified
-			) {
+			if (session && !session.user.emailVerified) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,

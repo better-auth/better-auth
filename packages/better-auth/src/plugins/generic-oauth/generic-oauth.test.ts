@@ -1,7 +1,10 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
+import { generateKeyPair, SignJWT } from "jose";
 import type {
 	MutableResponse,
 	TokenRequestIncomingMessage,
@@ -3103,5 +3106,379 @@ describe("oauth2", async () => {
 				"error_description=Stateless+rejection+test",
 			);
 		});
+	});
+
+	describe("id_token verification", () => {
+		// The forged token carries valid iss/aud/exp claims; only its signing
+		// key is unknown to the provider JWKS, so a rejection isolates
+		// signature verification.
+		async function forgeIdToken() {
+			const { privateKey } = await generateKeyPair("RS256");
+			return new SignJWT({
+				email: "forged@test.com",
+				email_verified: true,
+				name: "Forged User",
+			})
+				.setProtectedHeader({ alg: "RS256" })
+				.setSubject("forged-user")
+				.setIssuer(`http://localhost:${port}`)
+				.setAudience(clientId)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(privateKey);
+		}
+
+		it("should reject an id_token not signed by the discovery JWKS", async () => {
+			const forged = await forgeIdToken();
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "verify-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "forged-access-token",
+									idToken: forged,
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "verify-reject",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
+		it("should use claims from an id_token verified against the discovery JWKS", async () => {
+			const addClaims = (token: { payload: Record<string, unknown> }) => {
+				Object.assign(token.payload, {
+					email: "idtoken-claims@test.com",
+					email_verified: true,
+					name: "Id Token Claims",
+				});
+			};
+			server.service.on("beforeTokenSigning", addClaims);
+			try {
+				const headers = new Headers();
+				const res = await authClient.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL, headers: sessionHeaders } =
+					await simulateOAuthFlow(res.data?.url || "", headers);
+				expect(callbackURL).toBe("http://localhost:3000/new_user");
+				const session = await authClient.getSession({
+					fetchOptions: { headers: sessionHeaders },
+				});
+				expect(session.data?.user.email).toBe("idtoken-claims@test.com");
+			} finally {
+				server.service.off("beforeTokenSigning", addClaims);
+			}
+		});
+
+		it("should sign in with a client-submitted id_token for a discovery provider", async () => {
+			const token = await server.issuer.buildToken({
+				scopesOrTransform: (_header, payload) => {
+					Object.assign(payload, {
+						aud: clientId,
+						sub: "front-channel-user",
+						email: "front-channel@test.com",
+						email_verified: true,
+						name: "Front Channel",
+					});
+				},
+			});
+			const res = await authClient.signIn.social({
+				provider: providerId,
+				idToken: { token },
+			});
+			expect(res.error).toBeNull();
+			expect(res.data).toMatchObject({ token: expect.any(String) });
+		});
+
+		it("should keep the decode posture for providers without discovery", async () => {
+			const forged = await forgeIdToken();
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "no-discovery",
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "opaque-access-token",
+									idToken: forged,
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "no-discovery",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("forged@test.com");
+		});
+
+		it("should not break provider registration when jwks_uri is malformed", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+						userinfo_endpoint: `http://localhost:${port}/userinfo`,
+						jwks_uri: "http://[malformed",
+						id_token_signing_alg_values_supported: ["RS256"],
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { customFetchImpl, cookieSetter } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "malformed-jwks",
+									discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const headers = new Headers();
+				const res = await client.signIn.social({
+					provider: "malformed-jwks",
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL } = await simulateOAuthFlow(
+					res.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				expect(callbackURL).not.toContain("?error=");
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((err) => (err ? reject(err) : resolve())),
+				);
+			}
+		});
+	});
+
+	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		// A userinfo response that includes email/name but no `sub`/`id`.
+		const respondWithoutSub = (email: string, name: string) => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email,
+					name,
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+		};
+
+		// First user signs in — must be rejected, not stored under an empty id.
+		respondWithoutSub("first-no-sub@test.com", "First No Sub");
+		const firstHeaders = new Headers();
+		const firstSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			firstSignIn.data?.url || "",
+			firstHeaders,
+			customFetchImpl,
+		);
+		// Rejected at the error page rather than landing on a success URL.
+		expect(firstFlow.callbackURL).toContain("error=");
+		expect(firstFlow.callbackURL).not.toContain("/dashboard");
+		expect(firstFlow.callbackURL).not.toContain("/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		expect(firstSession.data).toBeNull();
+
+		// No account should have been created with an empty/undefined account id.
+		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "providerId", value: "no-sub-test" }],
+		});
+		expect(emptyIdAccounts).toHaveLength(0);
+
+		// A second, different user signing in through the same provider must not
+		// resolve to the first user's account.
+		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
+		const secondHeaders = new Headers();
+		const secondSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			secondSignIn.data?.url || "",
+			secondHeaders,
+			customFetchImpl,
+		);
+		expect(secondFlow.callbackURL).toContain("error=");
+		const secondSession = await authClient.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		// Must NOT have resolved to the first user (the collision being fixed).
+		expect(secondSession.data).toBeNull();
+	});
+
+	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "empty-id-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							// A misconfigured custom mapper that yields no account id.
+							getUserInfo: async () => ({
+								id: "",
+								email: "empty-id@test.com",
+								name: "Empty Id",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.social({
+			provider: "empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		// The callback guard rejects the empty resolved account id.
+		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).toBeNull();
+
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-test" }],
+		});
+		expect(accounts).toHaveLength(0);
 	});
 });

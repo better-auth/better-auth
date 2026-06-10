@@ -208,7 +208,8 @@ export const callbackOAuth = createAuthEndpoint(
 		if (
 			!providerResult?.user ||
 			providerResult.user.id === undefined ||
-			providerResult.user.id === null
+			providerResult.user.id === null ||
+			providerResult.user.id === ""
 		) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
