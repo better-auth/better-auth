@@ -4532,12 +4532,13 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			returnHeaders: true,
 		});
 
-		const relayState = new URL(signInRes.response?.url).searchParams.get(
-			"RelayState",
-		);
+		const signInUrl = signInRes.response?.url;
+		expect(signInUrl).toBeTruthy();
+
+		const relayState = new URL(signInUrl!).searchParams.get("RelayState");
 
 		let samlResponse: any;
-		await betterFetch(signInRes.response?.url, {
+		await betterFetch(signInUrl!, {
 			onSuccess: async (context) => {
 				samlResponse = await context.data;
 			},
@@ -4566,10 +4567,17 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		// to match and is rejected.
 		const [first, second] = await Promise.all([submit(), submit()]);
 
+		// Both must redirect; a non-redirect failure leaves an empty location
+		// that would otherwise be miscounted as a success below.
+		expect(first.status).toBe(302);
+		expect(second.status).toBe(302);
+
 		const locations = [first, second].map(
 			(res) => res.headers.get("location") || "",
 		);
-		const succeeded = locations.filter((loc) => !loc.includes("error"));
+		const succeeded = locations.filter(
+			(loc) => loc.includes("dashboard") && !loc.includes("error"),
+		);
 		const failed = locations.filter((loc) => loc.includes("error"));
 
 		expect(succeeded).toHaveLength(1);
