@@ -198,12 +198,16 @@ export async function validateApiKey({
 		});
 	}
 
-	const updated: ApiKey = {
-		...apiKey,
+	const mutations: Partial<ApiKey> = {
 		...update,
 		remaining,
 		lastRefillAt,
 		updatedAt: new Date(),
+	};
+
+	const updated: ApiKey = {
+		...apiKey,
+		...mutations,
 	};
 
 	const performUpdate = async (): Promise<ApiKey | null> => {
@@ -211,7 +215,7 @@ export async function validateApiKey({
 			return ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
+				update: mutations,
 			});
 		} else if (
 			opts.storage === "secondary-storage" &&
@@ -220,15 +224,20 @@ export async function validateApiKey({
 			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
+				update: mutations,
 			});
 			if (dbUpdated) {
 				await setApiKey(ctx, dbUpdated, opts);
 			}
 			return dbUpdated;
 		} else {
-			await setApiKey(ctx, updated, opts);
-			return updated;
+			const fresh = await getApiKey(ctx, hashedKey, opts);
+			if (!fresh) {
+				return null;
+			}
+			const merged: ApiKey = { ...fresh, ...mutations };
+			await setApiKey(ctx, merged, opts);
+			return merged;
 		}
 	};
 

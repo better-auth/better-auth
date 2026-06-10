@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
-import { sessionMiddleware } from "./session";
+import { sensitiveSessionMiddleware } from "./session";
 
 const updateSessionBodySchema = z.record(
 	z.string().meta({
@@ -21,7 +21,7 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "updateSession",
 			body: updateSessionBodySchema,
-			use: [sessionMiddleware],
+			use: [sensitiveSessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalSessionFieldsInput<O>>,
@@ -81,19 +81,26 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				},
 			);
 
-			const newSession = updatedSession ?? {
-				...session.session,
-				...additionalFields,
-				updatedAt: new Date(),
-			};
+			if (!updatedSession) {
+				// The backing session row was revoked or deleted (e.g. the user
+				// was banned or signed out elsewhere) between authentication and
+				// this update. Do not synthesize a replacement session from
+				// cached state and reissue a cookie — that would let a revoked
+				// session keep renewing itself. Clear the cookies and fail.
+				deleteSessionCookie(ctx);
+				throw APIError.from(
+					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
+			}
 
 			await setSessionCookie(ctx, {
-				session: newSession,
+				session: updatedSession,
 				user: session.user,
 			});
 
 			return ctx.json({
-				session: parseSessionOutput(ctx.context.options, newSession),
+				session: parseSessionOutput(ctx.context.options, updatedSession),
 			});
 		},
 	);

@@ -545,8 +545,8 @@ export const getSessionFromCtx = async <
 		returnHeaders: true,
 		returnStatus: false,
 		query: {
-			...config,
 			...ctx.query,
+			...config,
 		},
 	}).catch(() => {
 		return null;

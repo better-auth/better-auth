@@ -1971,7 +1971,11 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=account_not_linked");
 	});
 
-	it("should allow account linking when provider is in trustedProviders", async () => {
+	// SSO trust must come from verified domain ownership, never from a name
+	// match against the global `trustedProviders` list — otherwise a
+	// user-registered SSO provider named after a trusted provider could inherit
+	// that trust. Registering such a colliding id is now rejected outright.
+	it("should reject registering an SSO provider whose id collides with a trustedProviders entry", async () => {
 		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
 			{
 				account: {
@@ -1986,7 +1990,7 @@ describe("SAML SSO", async () => {
 
 		const { headers } = await signInWithTestUser();
 
-		await authWithTrusted.api.registerSSOProvider({
+		const response = await authWithTrusted.api.registerSSOProvider({
 			body: {
 				providerId: "trusted-saml-provider",
 				issuer: "http://localhost:8081",
@@ -2009,47 +2013,10 @@ describe("SAML SSO", async () => {
 				},
 			},
 			headers,
+			asResponse: true,
 		});
 
-		const ctx = await authWithTrusted.$context;
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: "existing-user-id-2",
-				email: "test@email.com",
-				name: "Existing User",
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-		});
-
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-
-		const response = await authWithTrusted.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/trusted-saml-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-					}),
-				},
-			),
-		);
-
-		expect(response.status).toBe(302);
-		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).not.toContain("error");
-		expect(redirectLocation).toContain("dashboard");
+		expect(response.status).toBe(422);
 	});
 
 	it("should reject unsolicited SAML response when allowIdpInitiated is false", async () => {

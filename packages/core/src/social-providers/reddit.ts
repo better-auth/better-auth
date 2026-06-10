@@ -1,5 +1,6 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -105,14 +106,30 @@ export const reddit = (options: RedditOptions) => {
 
 			const userMap = await options.mapProfileToUser?.(profile);
 
+			// Reddit's `identity` scope does not return the user's email address.
+			// The profile only exposes `oauth_client_id`, which identifies the
+			// OAuth *application* and is therefore identical for every user of the
+			// same app. Mapping it to `user.email` (and `has_verified_email` to
+			// `emailVerified`) would collapse all Reddit users onto one shared,
+			// "verified" email and allow implicit account linking/takeover. Require
+			// a real, user-specific email from `mapProfileToUser` instead, and
+			// reject sign-in when none is available.
+			const email = userMap?.email;
+			if (!email) {
+				logger.error(
+					"Reddit did not return an email and `mapProfileToUser` did not provide one. Reddit's `identity` scope does not include an email address; provide a real email via `mapProfileToUser` to sign in with Reddit.",
+				);
+				return null;
+			}
+
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name,
-					email: profile.oauth_client_id,
-					emailVerified: profile.has_verified_email,
 					image: profile.icon_img?.split("?")[0]!,
 					...userMap,
+					email,
+					emailVerified: userMap.emailVerified ?? false,
 				},
 				data: profile,
 			};

@@ -2208,3 +2208,63 @@ describe("updateSession", async () => {
 		});
 	});
 });
+
+describe("updateSession with a revoked session and cookie cache", async () => {
+	const { client, auth, testUser, cookieSetter } = await getTestInstance({
+		session: {
+			additionalFields: {
+				theme: {
+					type: "string",
+					defaultValue: "light",
+				},
+			},
+			cookieCache: {
+				enabled: true,
+				maxAge: 60 * 5,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+
+	it("rejects the update and does not reissue a session when the backing session was revoked", async () => {
+		const headers = new Headers();
+		const signIn = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const userId = signIn.data?.user.id;
+		expect(userId).toBeDefined();
+		// The signed cookie cache must be present, otherwise this would pass for
+		// the wrong reason.
+		expect(headers.get("cookie")).toContain("better-auth.session_data");
+
+		// With a live session, the update works.
+		const ok = await client.updateSession({ theme: "dark" } as any, {
+			headers,
+		});
+		expect((ok.data?.session as any)?.theme).toBe("dark");
+
+		// Revoke the session server-side (as an admin ban / sign-out elsewhere
+		// would) while the client keeps the still-valid signed cookie cache.
+		await ctx.internalAdapter.deleteUserSessions(userId!);
+
+		// The revoked-but-cached session must not be able to renew itself.
+		let renewedCookie: string | null = null;
+		const revoked = await client.updateSession({ theme: "hacked" } as any, {
+			headers,
+			onResponse(context) {
+				renewedCookie = context.response.headers.get("set-cookie");
+			},
+		});
+		expect(revoked.data).toBeNull();
+		expect(revoked.error?.status).toBe(401);
+		// No fresh session/cache cookie should be handed back.
+		expect(renewedCookie ?? "").not.toContain("better-auth.session_data=ey");
+		expect(renewedCookie ?? "").not.toMatch(/better-auth\.session_token=[^;]/);
+	});
+});

@@ -7,6 +7,7 @@ import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { oAuthProxy } from ".";
+import { checkSkipProxy, resolveCurrentURL } from "./utils";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -1576,6 +1577,77 @@ describe("oauth-proxy", async () => {
 			const users = await previewCtx.internalAdapter.listUsers();
 			expect(users.length).toBe(1);
 			expect(users[0]?.email).toBe("user@email.com");
+		});
+	});
+
+	describe("request origin trust", () => {
+		async function getContext() {
+			const { auth } = await getTestInstance({
+				baseURL: "https://app.example.com",
+				trustedOrigins: ["https://*.preview.example.com"],
+				plugins: [oAuthProxy()],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			return auth.$context;
+		}
+
+		function makeCtx(context: unknown, requestURL?: string) {
+			return {
+				request: requestURL ? new Request(requestURL) : undefined,
+				context,
+			} as unknown as Parameters<typeof resolveCurrentURL>[0];
+		}
+
+		it("uses a request origin that is allowlisted in trustedOrigins", async () => {
+			const context = await getContext();
+			const url = resolveCurrentURL(
+				makeCtx(
+					context,
+					"https://abc123.preview.example.com/api/auth/sign-in/social",
+				),
+			);
+			expect(url.origin).toBe("https://abc123.preview.example.com");
+		});
+
+		it("ignores an un-allowlisted request origin and falls back to baseURL", async () => {
+			const context = await getContext();
+			const url = resolveCurrentURL(
+				makeCtx(context, "https://example2.com/api/auth/sign-in/social"),
+			);
+			expect(url.origin).not.toBe("https://example2.com");
+			expect(url.origin).toBe("https://app.example.com");
+		});
+
+		it("always honors an explicit currentURL over the request URL", async () => {
+			const context = await getContext();
+			const url = resolveCurrentURL(
+				makeCtx(context, "https://other.example.com/api/auth/sign-in/social"),
+				{ currentURL: "https://configured.example.com" },
+			);
+			expect(url.origin).toBe("https://configured.example.com");
+		});
+
+		it("does not let an un-allowlisted request origin change the skip-proxy decision", async () => {
+			const context = await getContext();
+			const skip = checkSkipProxy(
+				makeCtx(context, "https://other.example.com/api/auth/sign-in/social"),
+				{ productionURL: "https://app.example.com" },
+			);
+			expect(skip).toBe(false);
+		});
+
+		it("skips the proxy when the trusted request origin is the production origin", async () => {
+			const context = await getContext();
+			const skip = checkSkipProxy(
+				makeCtx(context, "https://app.example.com/api/auth/sign-in/social"),
+				{ productionURL: "https://app.example.com" },
+			);
+			expect(skip).toBe(true);
 		});
 	});
 
