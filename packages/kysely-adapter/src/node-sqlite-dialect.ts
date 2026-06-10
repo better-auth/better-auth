@@ -2,7 +2,7 @@
  * @see {@link https://nodejs.org/api/sqlite.html} - Node.js SQLite API documentation
  */
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
@@ -132,10 +132,21 @@ class NodeSqliteConnection implements DatabaseConnection {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
 
-		const rows = stmt.all(...(parameters as any[])) as O[];
+		// SELECT and RETURNING statements expose columns and return rows.
+		// A plain mutation reports its row count and insert id only through run().
+		if (stmt.columns().length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...(parameters as SQLInputValue[])) as O[],
+			});
+		}
 
+		const { changes, lastInsertRowid } = stmt.run(
+			...(parameters as SQLInputValue[]),
+		);
 		return Promise.resolve({
-			rows,
+			rows: [],
+			numAffectedRows: changes != null ? BigInt(changes) : undefined,
+			insertId: lastInsertRowid != null ? BigInt(lastInsertRowid) : undefined,
 		});
 	}
 

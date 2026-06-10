@@ -2,7 +2,7 @@
  * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
  */
 
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
@@ -132,8 +132,21 @@ class BunSqliteConnection implements DatabaseConnection {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
 
+		// SELECT and RETURNING statements expose columns and return rows.
+		// A plain mutation reports its row count and insert id only through run().
+		if (stmt.columnNames.length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...(parameters as SQLQueryBindings[])) as O[],
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(
+			...(parameters as SQLQueryBindings[]),
+		);
 		return Promise.resolve({
-			rows: stmt.all(parameters as any) as O[],
+			rows: [],
+			numAffectedRows: changes != null ? BigInt(changes) : undefined,
+			insertId: lastInsertRowid != null ? BigInt(lastInsertRowid) : undefined,
 		});
 	}
 
