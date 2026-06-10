@@ -424,11 +424,14 @@ export async function processSAMLResponse(
 	}
 
 	// 15. Session creation
+	// SSO provider ids are user-controlled and share the social-provider account
+	// namespace, so trust must come solely from verified domain ownership —
+	// never from a name match against the global `trustedProviders` list
+	// (enforced via `trustProviderByName: false` below).
 	const isTrustedProvider: boolean =
-		ctx.context.trustedProviders.includes(providerId) ||
-		("domainVerified" in provider &&
-			!!(provider as { domainVerified?: boolean }).domainVerified &&
-			validateEmailDomain(userInfo.email as string, provider.domain));
+		"domainVerified" in provider &&
+		!!(provider as { domainVerified?: boolean }).domainVerified &&
+		validateEmailDomain(userInfo.email as string, provider.domain);
 
 	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
 	// fields. Currently callbackUrl serves both purposes, which means
@@ -458,6 +461,7 @@ export async function processSAMLResponse(
 			callbackURL: callbackUrl,
 			disableSignUp: options?.disableImplicitSignUp,
 			isTrustedProvider,
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
