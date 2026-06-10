@@ -760,6 +760,29 @@ describe("stripe checkout", () => {
 			const testCheckoutSessionId = "cs_test_123";
 			const testCustomerId = "cus_success_test";
 
+			const testStripeSubscription = {
+				id: testSubscriptionId,
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: null,
+				canceled_at: null,
+				trial_start: null,
+				trial_end: null,
+				items: {
+					data: [
+						{
+							price: {
+								id: TEST_PRICES.starter,
+								recurring: { interval: "month" },
+							},
+							quantity: 1,
+							current_period_start: Math.floor(Date.now() / 1000),
+							current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+						},
+					],
+				},
+			};
+
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
 				checkout: {
@@ -770,33 +793,8 @@ describe("stripe checkout", () => {
 				},
 				subscriptions: {
 					...stripeOptions.stripeClient.subscriptions,
-					list: vi.fn().mockResolvedValue({
-						data: [
-							{
-								id: testSubscriptionId,
-								status: "active",
-								cancel_at_period_end: false,
-								cancel_at: null,
-								canceled_at: null,
-								trial_start: null,
-								trial_end: null,
-								items: {
-									data: [
-										{
-											price: {
-												id: TEST_PRICES.starter,
-												recurring: { interval: "month" },
-											},
-											quantity: 1,
-											current_period_start: Math.floor(Date.now() / 1000),
-											current_period_end:
-												Math.floor(Date.now() / 1000) + 30 * 86400,
-										},
-									],
-								},
-							},
-						],
-					}),
+					list: vi.fn().mockResolvedValue({ data: [testStripeSubscription] }),
+					retrieve: vi.fn().mockResolvedValue(testStripeSubscription),
 				},
 			};
 
@@ -851,6 +849,9 @@ describe("stripe checkout", () => {
 			// Mock checkout session to return correct subscriptionId
 			stripeForTest.checkout.sessions.retrieve.mockResolvedValue({
 				id: testCheckoutSessionId,
+				status: "complete",
+				payment_status: "paid",
+				subscription: testSubscriptionId,
 				metadata: {
 					userId: userRes.user.id,
 					subscriptionId: sub.id,
