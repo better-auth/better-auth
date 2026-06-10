@@ -411,6 +411,7 @@ export {
 export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
+export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
 export { getOAuthState } from "./state/oauth";

@@ -1,5 +1,35 @@
 # @better-auth/oauth-provider
 
+## 1.6.16
+
+### Patch Changes
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - The `/oauth2/continue` post-login step no longer treats the client-submitted `postLogin` flag as proof that an interactive gate completed. Completion is now derived from the server-issued, session-bound marker on the signed `oauth_query` (matching the consent endpoint); when it is absent, `authorize` re-runs `postLogin.shouldRedirect` against the current session and redirects back to the gate if selection is still required.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Token introspection now requires JWT access tokens to carry an `azp` (client) claim and resolve to an enabled client before being reported as active. This ensures only tokens issued by the OAuth token endpoint are treated as access tokens, since the JWT plugin can mint session JWTs that share the same issuer, audience, and signing keys.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Enforce per-client grant types at the token endpoint. Previously only the provider-wide `grantTypes` allowlist was checked, so a client registered for `authorization_code` could still request `client_credentials` tokens, turning a user-delegated client into a machine-to-machine client. The `client_credentials` and `authorization_code` grants are now rejected with `unauthorized_client` unless the client declares them. Refresh tokens remain available to any client permitted the `authorization_code` grant (gated by `offline_access`), but are no longer issued to pure `client_credentials` clients. Clients with no recorded `grantTypes` fall back to `["authorization_code"]`, matching the registration default.
+
+- Updated dependencies [[`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`87e7aa5`](https://github.com/better-auth/better-auth/commit/87e7aa5e0fd8f19b326beb5bec409a9ed1f245ca), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`893cf6c`](https://github.com/better-auth/better-auth/commit/893cf6cb3f1f2669b39f6ac8d3d49cf830e5732e), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`5e49c56`](https://github.com/better-auth/better-auth/commit/5e49c56a9e12a9b6b3fd1202bbc7a2fc97aeeafd), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15)]:
+  - better-auth@1.6.16
+  - @better-auth/core@1.6.16
+
+## 1.6.15
+
+### Patch Changes
+
+- [#9919](https://github.com/better-auth/better-auth/pull/9919) [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Run configured hooks through the whole OAuth sign-in flow
+
+  `hooks.before` / `hooks.after` configured on the auth instance now run for the OAuth authorization that continues after a user signs in, selects an account, or consents. They were being skipped there.
+
+  Headers or cookies a `hooks.before` sets before returning its own response are no longer dropped, and a `hooks.after` that throws an `APIError` no longer loses either its cookies or the error's headers.
+
+- [#9937](https://github.com/better-auth/better-auth/pull/9937) [`fe9600b`](https://github.com/better-auth/better-auth/commit/fe9600bc0734eeb2e6fbb0c53d3b81888bd4247d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The UserInfo endpoint (`/oauth2/userinfo`) now accepts `POST` with the access token in the `Authorization` header, in addition to `GET`.
+
+- Updated dependencies [[`1012b69`](https://github.com/better-auth/better-auth/commit/1012b690466ccd7078441dbfb406eef166fca805), [`ad60333`](https://github.com/better-auth/better-auth/commit/ad60333d1517142d688c61b6ccee14b4c30864ae), [`0933c05`](https://github.com/better-auth/better-auth/commit/0933c050ff8735466a273347c9aab0fdd8cd38ff), [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35)]:
+  - better-auth@1.6.15
+  - @better-auth/core@1.6.15
+
 ## 1.6.14
 
 ### Patch Changes

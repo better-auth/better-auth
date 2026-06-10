@@ -188,7 +188,9 @@ export async function processSAMLResponse(
 	}
 
 	// 7. SP/IdP construction via helpers
-	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
+	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+		clockSkew: options?.saml?.clockSkew,
+	});
 	const idp = createIdP(parsedSamlConfig);
 
 	const samlRedirectUrl = getSafeRedirectUrl(
@@ -251,18 +253,19 @@ export async function processSAMLResponse(
 		const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
 
 		if (inResponseTo) {
-			let storedRequest: AuthnRequestRecord | null = null;
-
-			const verification =
-				await ctx.context.internalAdapter.findVerificationValue(
+			// Consume the stored AuthnRequest atomically so two concurrent ACS
+			// submissions cannot both match one outstanding request. The consume
+			// returns null for missing or expired rows, so no separate expiry gate
+			// is needed.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 				);
-			if (verification) {
+
+			let storedRequest: AuthnRequestRecord | null = null;
+			if (consumed) {
 				try {
-					storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
-					if (storedRequest && storedRequest.expiresAt < Date.now()) {
-						storedRequest = null;
-					}
+					storedRequest = JSON.parse(consumed.value) as AuthnRequestRecord;
 				} catch {
 					storedRequest = null;
 				}
@@ -287,17 +290,10 @@ export async function processSAMLResponse(
 						actualProvider: providerId,
 					},
 				);
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-				);
 				throw ctx.redirect(
 					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 				);
 			}
-
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-			);
 		} else if (!allowIdpInitiated) {
 			ctx.context.logger.error(
 				"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
@@ -310,6 +306,11 @@ export async function processSAMLResponse(
 	}
 
 	// 13. Replay protection
+	// FIXME(verification-reserve): the tombstone below is written with a
+	// non-atomic read-then-create. Switch to an adapter-level atomic
+	// create-if-absent (reserve) for verification identifiers once available;
+	// `verification.identifier` is intentionally non-unique, so a unique
+	// constraint is not an option here.
 	const samlContent = (parsedResponse as any).samlContent as string | undefined;
 	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
 
@@ -423,11 +424,14 @@ export async function processSAMLResponse(
 	}
 
 	// 15. Session creation
+	// SSO provider ids are user-controlled and share the social-provider account
+	// namespace, so trust must come solely from verified domain ownership —
+	// never from a name match against the global `trustedProviders` list
+	// (enforced via `trustProviderByName: false` below).
 	const isTrustedProvider: boolean =
-		ctx.context.trustedProviders.includes(providerId) ||
-		("domainVerified" in provider &&
-			!!(provider as { domainVerified?: boolean }).domainVerified &&
-			validateEmailDomain(userInfo.email as string, provider.domain));
+		"domainVerified" in provider &&
+		!!(provider as { domainVerified?: boolean }).domainVerified &&
+		validateEmailDomain(userInfo.email as string, provider.domain);
 
 	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
 	// fields. Currently callbackUrl serves both purposes, which means
@@ -457,6 +461,7 @@ export async function processSAMLResponse(
 			callbackURL: callbackUrl,
 			disableSignUp: options?.disableImplicitSignUp,
 			isTrustedProvider,
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

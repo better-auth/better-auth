@@ -20,7 +20,7 @@ import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-} from "kysely/migration";
+} from "./kysely-migration-tables";
 
 class NodeSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
