@@ -166,11 +166,13 @@ describe("organization", async () => {
 			activeOrganizationId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		} & {
 			activeTeamId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		};
 
@@ -2611,7 +2613,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Params>().toEqualTypeOf<{
 			name: string;
 			slug: string;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;
@@ -2621,7 +2623,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Params2>().toEqualTypeOf<{
 			name: string;
 			slug: string;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;

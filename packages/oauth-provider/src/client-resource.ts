@@ -1,7 +1,10 @@
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { verifyAccessToken } from "better-auth/oauth2";
-import type { Auth, BetterAuthClientPlugin } from "better-auth/types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthOptions,
+} from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { handleMcpErrors } from "./mcp";
@@ -9,7 +12,17 @@ import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
-export const oauthProviderResourceClient = <T extends Auth | undefined>(
+type ResourceClientAuth = {
+	options: {
+		baseURL?: BetterAuthOptions["baseURL"];
+		basePath?: BetterAuthOptions["basePath"];
+	};
+	$context: Promise<unknown>;
+};
+
+export const oauthProviderResourceClient = <
+	T extends ResourceClientAuth | undefined = undefined,
+>(
 	auth?: T,
 ) => {
 	let oauthProviderPlugin:
@@ -18,7 +31,11 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	const getOauthProviderPlugin = async () => {
 		if (!oauthProviderPlugin) {
 			oauthProviderPlugin = auth
-				? getOAuthProviderPlugin(await auth.$context)
+				? getOAuthProviderPlugin(
+						(await auth.$context) as Parameters<
+							typeof getOAuthProviderPlugin
+						>[0],
+					)
 				: undefined;
 		}
 		return oauthProviderPlugin;
@@ -28,7 +45,9 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 		if (!jwtPlugin) {
 			jwtPlugin =
 				auth && !(await getOauthProviderPlugin())?.options?.disableJwtPlugin
-					? getJwtPlugin(await auth.$context)
+					? getJwtPlugin(
+							(await auth.$context) as Parameters<typeof getJwtPlugin>[0],
+						)
 					: undefined;
 		}
 		return jwtPlugin?.options;
@@ -211,16 +230,30 @@ export interface VerifyAccessTokenRemote {
 	 * is also still active.
 	 */
 	force?: boolean;
+	/**
+	 * Accept introspection responses that omit the `aud` claim even when a
+	 * required `audience` is configured in `verifyOptions`.
+	 *
+	 * By default verification fails closed: if you configure an `audience` and
+	 * the introspection response has no `aud` (or a mismatching one), the token
+	 * is rejected. Some authorization servers legitimately omit `aud` from
+	 * introspection responses (it is OPTIONAL per RFC 7662 §2.2); only enable
+	 * this if you trust the issuer to bind the token to this resource through
+	 * another mechanism, as it skips the audience check in that case.
+	 *
+	 * @default false
+	 */
+	allowMissingAudience?: boolean;
 }
 
-type VerifyAccessTokenOutput<T> = T extends Auth
+type VerifyAccessTokenOutput<T> = T extends undefined
 	? (
 			token: string | undefined,
-			opts?: VerifyAccessTokenAuthOpts,
+			opts: VerifyAccessTokenNoAuthOpts,
 		) => Promise<JWTPayload>
 	: (
 			token: string | undefined,
-			opts: VerifyAccessTokenNoAuthOpts,
+			opts?: VerifyAccessTokenAuthOpts,
 		) => Promise<JWTPayload>;
 type VerifyAccessTokenAuthOpts = {
 	verifyOptions?: JWTVerifyOptions &
@@ -251,9 +284,9 @@ type VerifyAccessTokenNoAuthOpts =
 			resourceMetadataMappings?: Record<string, string>;
 	  };
 
-type ProtectedResourceMetadataOutput<T> = T extends Auth
+type ProtectedResourceMetadataOutput<T> = T extends undefined
 	? (
-			overrides?: Partial<ResourceServerMetadata>,
+			overrides: ResourceServerMetadata,
 			opts?: {
 				silenceWarnings?: {
 					oidcScopes?: boolean;
@@ -262,7 +295,7 @@ type ProtectedResourceMetadataOutput<T> = T extends Auth
 			},
 		) => Promise<ResourceServerMetadata>
 	: (
-			overrides: ResourceServerMetadata,
+			overrides?: Partial<ResourceServerMetadata>,
 			opts?: {
 				silenceWarnings?: {
 					oidcScopes?: boolean;

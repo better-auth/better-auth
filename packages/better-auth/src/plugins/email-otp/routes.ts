@@ -532,7 +532,11 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
-			if (currentSession && updatedUser.emailVerified) {
+			if (
+				currentSession &&
+				updatedUser.emailVerified &&
+				currentSession.user.id === updatedUser.id
+			) {
 				const dontRememberMeCookie = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -982,7 +986,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteSessions(user.user.id);
+				await ctx.context.internalAdapter.deleteUserSessions(user.user.id);
 			}
 			return ctx.json({
 				success: true,

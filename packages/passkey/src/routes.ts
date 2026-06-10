@@ -500,6 +500,7 @@ const verifyPasskeyRegistrationBodySchema = z.object({
 	response: z.any(),
 	name: z
 		.string()
+		.trim()
 		.meta({
 			description: "Name of the passkey",
 		})
@@ -560,7 +561,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					verificationToken,
 				);
 			if (!data) {
@@ -610,6 +611,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					displayName: userData.displayName,
 				};
 				let targetUserId = resolvedUser.id;
+				let resolvedName = ctx.body.name || undefined;
 				if (options.registration?.afterVerification) {
 					const result = await options.registration.afterVerification({
 						ctx,
@@ -633,16 +635,19 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 						}
 						targetUserId = result.userId;
 					}
+					if (!resolvedName) {
+						resolvedName = result?.name?.trim() || undefined;
+					}
 				}
 				const pubKey = base64.encode(credential.publicKey);
 				const newPasskey: Omit<Passkey, "id"> = {
-					name: ctx.body.name,
+					name: resolvedName,
 					userId: targetUserId,
 					credentialID: credential.id,
 					publicKey: pubKey,
 					counter: credential.counter,
 					deviceType: credentialDeviceType,
-					transports: resp.response.transports.join(","),
+					transports: resp.response.transports?.join(",") ?? "",
 					backedUp: credentialBackedUp,
 					createdAt: new Date(),
 					aaguid: aaguid,
@@ -654,13 +659,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					model: "passkey",
 					data: newPasskey,
 				});
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					verificationToken,
-				);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
 			} catch (e) {
+				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify registration", e);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -736,7 +739,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					verificationToken,
 				);
 			if (!data) {
@@ -831,9 +834,6 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					verificationToken,
-				);
 
 				return ctx.json(
 					{
@@ -845,6 +845,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					},
 				);
 			} catch (e) {
+				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -992,7 +993,7 @@ const updatePassKeyBodySchema = z.object({
 	id: z.string().meta({
 		description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
 	}),
-	name: z.string().meta({
+	name: z.string().trim().min(1).meta({
 		description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
 	}),
 });
