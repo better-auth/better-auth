@@ -14,6 +14,7 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
+import { authorizationQuerySchema } from "./types/zod";
 
 import {
 	checkResource,
@@ -26,6 +27,32 @@ import {
 	storeToken,
 	toResourceList,
 } from "./utils";
+
+/**
+ * Whether a past authentication is still fresh enough for an OIDC `max_age`
+ * request: true when no more than `maxAge` seconds have elapsed since the user
+ * last authenticated. The caller supplies `now`, keeping this pure.
+ */
+function isWithinMaxAge(
+	sessionCreatedAt: Date,
+	maxAgeSeconds: number,
+	now: Date,
+): boolean {
+	if (maxAgeSeconds === 0) return false;
+	return now.getTime() - sessionCreatedAt.getTime() <= maxAgeSeconds * 1000;
+}
+
+export type OAuthRedirectResult = {
+	redirect: true;
+	url: string;
+};
+
+function removeMaxAgeFromAuthorizationQuery(
+	query: OAuthAuthorizationQuery,
+): OAuthAuthorizationQuery {
+	const { max_age: _maxAge, ...queryWithoutMaxAge } = query;
+	return queryWithoutMaxAge;
+}
 
 /**
  * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
@@ -76,7 +103,10 @@ function deriveResponseMode(
 	return "query";
 }
 
-export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+export const handleRedirect = (
+	ctx: GenericEndpointContext,
+	uri: string,
+): OAuthRedirectResult => {
 	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (fromFetch || acceptJson) {
@@ -245,7 +275,7 @@ async function resolveTrustedRedirectUri(
  */
 export function authorizeRedirectOnError(
 	opts: OAuthOptions<Scope[]>,
-): OAuthRedirectOnError<GenericEndpointContext> {
+): OAuthRedirectOnError<GenericEndpointContext, OAuthRedirectResult> {
 	return async ({ error, error_description, ctx }) => {
 		const raw = (ctx.query ?? {}) as Record<string, unknown>;
 		const clientId =
@@ -282,7 +312,7 @@ export async function authorizeEndpoint(
 		isAuthorize?: boolean;
 		postLogin?: boolean;
 	},
-) {
+): Promise<OAuthRedirectResult> {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
 		throw new APIError("NOT_FOUND");
@@ -294,6 +324,7 @@ export async function authorizeEndpoint(
 			error: "invalid_request",
 		});
 	}
+	const request = ctx.request;
 
 	// Resolve request_uri (PAR) before processing
 	let query: OAuthAuthorizationQuery = ctx.query;
@@ -327,6 +358,16 @@ export async function authorizeEndpoint(
 			query.client_id = urlClientId;
 		}
 	}
+	ctx.query = query;
+	const parsedQuery = authorizationQuerySchema.safeParse(query);
+	if (!parsedQuery.success) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "invalid authorization request",
+			ctx,
+		});
+	}
+	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
@@ -499,7 +540,27 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+	// A stale session under `max_age` requires re-authentication, which the host
+	// login page performs (minting a fresh session whose createdAt becomes the
+	// new auth_time). Reuse the prompt=login redirect rather than deleting the
+	// session, so other relying parties are not back-channel logged out.
+	const maxAgeSeconds = query.max_age;
+	const hasSatisfiedMaxAge =
+		session != null &&
+		maxAgeSeconds !== undefined &&
+		isWithinMaxAge(
+			new Date(session.session.createdAt),
+			maxAgeSeconds,
+			new Date(),
+		);
+	const staleForMaxAge =
+		session != null && maxAgeSeconds !== undefined && !hasSatisfiedMaxAge;
+	if (
+		!session ||
+		staleForMaxAge ||
+		promptSet?.has("login") ||
+		promptSet?.has("create")
+	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(
 				ctx,
@@ -515,6 +576,10 @@ export async function authorizeEndpoint(
 			promptSet?.has("create") ? "create" : "login",
 		);
 	}
+	if (hasSatisfiedMaxAge) {
+		query = removeMaxAgeFromAuthorizationQuery(query);
+		ctx.query = query;
+	}
 
 	// Force account selection (eg. multi-session)
 	if (settings?.isAuthorize && promptSet?.has("select_account")) {
@@ -527,7 +592,7 @@ export async function authorizeEndpoint(
 		opts.selectAccount
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -549,7 +614,7 @@ export async function authorizeEndpoint(
 	// Redirect to complete registration steps
 	if (opts.signup?.shouldRedirect) {
 		const signupRedirect = await opts.signup.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -572,7 +637,7 @@ export async function authorizeEndpoint(
 
 	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,

@@ -4,8 +4,9 @@ import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
-	normalizeTimestampValue,
+	isSessionFreshForSignedQuery,
 	parsePrompt,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 } from "./utils";
@@ -65,7 +66,7 @@ export async function consentEndpoint(
 	const hasLoginPrompt = promptSet.has("login");
 	const hasSatisfiedLoginPrompt =
 		hasLoginPrompt &&
-		sessionSatisfiesLoginPrompt(
+		isSessionFreshForSignedQuery(
 			session?.session.createdAt,
 			oauthRequest?.signedQueryIssuedAt,
 		);
@@ -149,6 +150,7 @@ export async function consentEndpoint(
 	let authorizationQuery = removePromptFromQuery(query, "consent");
 	if (hasSatisfiedLoginPrompt) {
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
+		authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
 	const postLoginClearedForThisSession =
@@ -161,16 +163,4 @@ export async function consentEndpoint(
 		redirect: true,
 		url,
 	};
-}
-
-// Relies on session.createdAt being immutable for the session's lifetime; a
-// refresh path that rewrites it would silently accept a pre-request session.
-function sessionSatisfiesLoginPrompt(
-	sessionCreatedAt: Date | string | undefined,
-	signedQueryIssuedAt: Date | undefined,
-) {
-	if (!signedQueryIssuedAt) return false;
-	const normalized = normalizeTimestampValue(sessionCreatedAt);
-	if (!normalized) return false;
-	return normalized.getTime() >= signedQueryIssuedAt.getTime();
 }
