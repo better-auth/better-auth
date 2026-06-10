@@ -331,6 +331,19 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											}
 										}
 
+										// Reuse a customer matched by email only when the email is
+										// verified and it is not already associated with a
+										// different user. Otherwise create a new one.
+										if (stripeCustomer) {
+											const ownerId = customerMetadata.get(
+												stripeCustomer.metadata,
+											).userId;
+											const ownedByOther = !!ownerId && ownerId !== user.id;
+											if (ownedByOther || !user.emailVerified) {
+												stripeCustomer = undefined;
+											}
+										}
+
 										// If user customer exists, link it to prevent duplicate creation
 										if (stripeCustomer) {
 											await ctx.context.internalAdapter.updateUser(user.id, {

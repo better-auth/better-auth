@@ -492,6 +492,19 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 						}
 
+						// Reuse a customer matched by email only when the email is
+						// verified and it is not already associated with a different
+						// user. Otherwise create a new one.
+						if (stripeCustomer) {
+							const ownerId = customerMetadata.get(
+								stripeCustomer.metadata,
+							).userId;
+							const ownedByOther = !!ownerId && ownerId !== user.id;
+							if (ownedByOther || !user.emailVerified) {
+								stripeCustomer = undefined;
+							}
+						}
+
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({
 								email: user.email,
