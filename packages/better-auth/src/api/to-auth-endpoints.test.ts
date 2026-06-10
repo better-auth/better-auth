@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -1329,5 +1330,53 @@ describe("response headers on APIError", async () => {
 		expect(setCookies).toHaveLength(2);
 		expect(setCookies.some((c) => c.startsWith("session="))).toBe(true);
 		expect(setCookies.some((c) => c.startsWith("session_data="))).toBe(true);
+	});
+});
+
+describe("finally hook", async () => {
+	it("runs even when an earlier phase throws", async () => {
+		const ran: string[] = [];
+		const throwingPlugin = {
+			id: "throwing-after",
+			hooks: {
+				after: [
+					{
+						matcher: (ctx) => ctx.path === "/sign-in/email",
+						handler: createAuthMiddleware(async () => {
+							throw new Error("boom");
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+		const finallyPlugin = {
+			id: "records-finally",
+			hooks: {
+				finally: [
+					{
+						matcher: (ctx) => ctx.path === "/sign-in/email",
+						handler: createAuthMiddleware(async () => {
+							ran.push("finally");
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, testUser } = await getTestInstance({
+			plugins: [throwingPlugin, finallyPlugin],
+		});
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				returnHeaders: true,
+			}),
+		).rejects.toThrow("boom");
+
+		expect(ran).toEqual(["finally"]);
 	});
 });
