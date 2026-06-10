@@ -3379,6 +3379,10 @@ describe("oauth - config", () => {
 								introspectUrl: `${authServerUrl}/oauth2/introspect`,
 								clientId: createdClient?.client_id!,
 								clientSecret: createdClient?.client_secret!,
+								// Tokens minted without a resource (or with the JWT plugin
+								// disabled) carry no `aud`, which the configured `audience`
+								// would otherwise reject by default.
+								allowMissingAudience: !(resource && !disableJwtPlugin),
 							},
 				},
 			);
