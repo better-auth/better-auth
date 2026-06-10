@@ -56,7 +56,10 @@ describe("private_key_jwt e2e", async () => {
 				const nodeHandler = toNodeHandler(auth.handler);
 				return async (req, res) => {
 					if (req.url === "/.well-known/openid-configuration") {
-						const config = await auth.api.getOpenIdConfig();
+						const api = auth.api as typeof auth.api & {
+							getOpenIdConfig: () => Promise<unknown>;
+						};
+						const config = await api.getOpenIdConfig();
 						res.setHeader("Content-Type", "application/json");
 						res.end(JSON.stringify(config));
 						return;

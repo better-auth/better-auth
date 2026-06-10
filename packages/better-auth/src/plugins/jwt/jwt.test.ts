@@ -1,5 +1,5 @@
-import type { JSONWebKeySet } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -66,7 +66,7 @@ describe("jwt", async () => {
 		const jwks = await client.jwks();
 
 		expect(jwks.data?.keys).length.above(0);
-		expect(jwks.data?.keys[0]!.alg).toBe("EdDSA");
+		expect(jwks.data?.keys[0]!.alg).toBe("RS256");
 	});
 
 	it("Signed tokens can be validated with the JWKS", async () => {
@@ -487,17 +487,21 @@ describe("jwt - remote url", async () => {
 	});
 
 	it("should work with different algorithms when remoteUrl is set", async () => {
-		const algorithms = ["ES256", "ES512", "RS256", "PS256", "EdDSA"];
+		const keyPairConfigs: JWKOptions[] = [
+			{ alg: "ES256" },
+			{ alg: "ES512" },
+			{ alg: "RS256" },
+			{ alg: "PS256" },
+			{ alg: "EdDSA" },
+		];
 
-		for (const alg of algorithms) {
+		for (const keyPairConfig of keyPairConfigs) {
 			const { auth } = await getTestInstance({
 				plugins: [
 					jwt({
 						jwks: {
 							remoteUrl: "https://example.com/.well-known/jwks.json",
-							keyPairConfig: {
-								alg: alg as any,
-							},
+							keyPairConfig,
 						},
 					}),
 				],
@@ -543,7 +547,7 @@ describe("jwt - remote url", async () => {
 	});
 
 	it("should work with custom sign function and remoteUrl", async () => {
-		const mockSignFunction = (payload: any) => {
+		const mockSignFunction = (payload: JWTPayload) => {
 			// Mock JWT with test signature
 			const header = Buffer.from(
 				JSON.stringify({ alg: "ES256", typ: "JWT" }),
@@ -746,6 +750,71 @@ describe("jwt - custom adapter", async () => {
 		expect(token?.token).toBeDefined();
 		expect(storage.length).toBe(1);
 	});
+
+	it("creates a default-algorithm key when the latest stored key uses a previous algorithm", async () => {
+		const previousKeyPair = await generateExportedKeyPair({
+			jwks: {
+				keyPairConfig: {
+					alg: "EdDSA",
+					crv: "Ed25519",
+				},
+				disablePrivateKeyEncryption: true,
+			},
+		});
+		const storage: Jwk[] = [
+			{
+				id: crypto.randomUUID(),
+				alg: "EdDSA",
+				crv: "Ed25519",
+				publicKey: JSON.stringify(previousKeyPair.publicWebKey),
+				privateKey: JSON.stringify(previousKeyPair.privateWebKey),
+				createdAt: new Date(Date.now() - 1000),
+			},
+		];
+		const { auth, customFetchImpl } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						disablePrivateKeyEncryption: true,
+					},
+					adapter: {
+						getJwks: async () => {
+							return storage;
+						},
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+								createdAt: new Date(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const jwks = await client.jwks();
+		expect(jwks.data?.keys.some((key) => key.alg === "RS256")).toBe(true);
+
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+				},
+			},
+		});
+		expect(token?.token).toBeDefined();
+		expect(decodeProtectedHeader(token.token!).alg).toBe("RS256");
+	});
 });
 
 describe("jwt - custom jwksPath", async () => {
@@ -827,9 +896,9 @@ describe("toExpJWT", () => {
 
 	describe("with invalid string input", () => {
 		it("should throw TypeError for invalid format", () => {
-			expect(() => toExpJWT("invalid" as any, iat)).toThrow(TypeError);
-			expect(() => toExpJWT("" as any, iat)).toThrow(TypeError);
-			expect(() => toExpJWT("abc123" as any, iat)).toThrow(TypeError);
+			expect(() => toExpJWT("invalid", iat)).toThrow(TypeError);
+			expect(() => toExpJWT("", iat)).toThrow(TypeError);
+			expect(() => toExpJWT("abc123", iat)).toThrow(TypeError);
 		});
 	});
 });

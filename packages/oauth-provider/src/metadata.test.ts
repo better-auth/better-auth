@@ -26,6 +26,11 @@ describe("oauth metadata", async () => {
 		"sid",
 		"scope",
 		"azp",
+		"auth_time",
+		"acr",
+		"amr",
+		"at_hash",
+		"nonce",
 		"email",
 		"email_verified",
 		"name",
@@ -118,9 +123,9 @@ describe("oauth metadata", async () => {
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["EdDSA"],
+			id_token_signing_alg_values_supported: ["RS256"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
-			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+			acr_values_supported: ["0"],
 			prompt_values_supported: [
 				"login",
 				"consent",
@@ -390,6 +395,23 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
+	it("should advertise configured authentication context values", async () => {
+		const acrValuesSupported = ["0", "urn:example:loa:mfa"];
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				authenticationContext: {
+					acrValuesSupported,
+				},
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
+			acr_values_supported: acrValuesSupported,
+		});
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
 	it("should use the remoteJwks url", async () => {
 		const remoteUrl = "http://example.com/.well-known/openid-configuration";
 		const alg = "ES256";
@@ -410,6 +432,16 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	it("advertises the configured RS256 signing algorithm (Config OP)", async () => {
+		const { auth } = await createTestInstance({
+			jwtConfig: { jwks: { keyPairConfig: { alg: "RS256" } } },
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata).toMatchObject({
+			id_token_signing_alg_values_supported: ["RS256"],
+		});
 	});
 
 	it("should support disableJwtPlugin", async () => {

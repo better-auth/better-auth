@@ -6,6 +6,8 @@ import { sec } from "../../utils/time";
 import { getJwksAdapter } from "./adapter";
 import type { Jwk, JwtOptions } from "./types";
 
+export const DEFAULT_JWT_ALGORITHM = "RS256";
+
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
  *
@@ -32,8 +34,7 @@ export async function generateExportedKeyPair(
 	options?: JwtOptions | undefined,
 ) {
 	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
+		alg: DEFAULT_JWT_ALGORITHM,
 	};
 	const { publicKey, privateKey } = await generateKeyPair(alg, {
 		...cfg,

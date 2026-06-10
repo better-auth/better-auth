@@ -360,20 +360,23 @@ describe("private_key_jwt authentication", async () => {
 		const code1 = await getAuthCode(assertionClient.client_id, cv1);
 		const assertion1 = await signAssertion({ jti });
 
-		const result1 = await client.$fetch("/oauth2/token", {
-			method: "POST",
-			body: new URLSearchParams({
-				grant_type: "authorization_code",
-				code: code1,
-				redirect_uri: redirectUri,
-				client_id: assertionClient.client_id,
-				client_assertion_type:
-					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: assertion1,
-				code_verifier: cv1,
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
+		const result1 = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: code1,
+					redirect_uri: redirectUri,
+					client_id: assertionClient.client_id,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: assertion1,
+					code_verifier: cv1,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
 		expect(result1.data?.access_token).toBeDefined();
 
 		// Second request with same jti should fail

@@ -36,7 +36,11 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
+import {
+	authorizationQuerySchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
@@ -118,6 +122,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
+		"auth_time",
+		"acr",
+		"amr",
+		"at_hash",
+		"nonce",
 		...(scopes.has("email") ? ["email", "email_verified"] : []),
 		...(scopes.has("profile")
 			? ["name", "picture", "family_name", "given_name"]
@@ -470,6 +479,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
+						query.delete("max_age");
 						ctx.query = searchParamsToQuery(
 							removePromptFromQuery(query, "login"),
 						);
@@ -547,40 +557,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
-					query: z.object({
-						response_type: z
-							.string()
-							.pipe(z.enum(["code"]))
-							.optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z
-							.string()
-							.pipe(z.enum(["S256"]))
-							.optional(),
-						nonce: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						prompt: z
-							.string()
-							.pipe(
-								z.enum([
-									"none",
-									"consent",
-									"login",
-									"create",
-									"select_account",
-									"login consent",
-									"select_account consent",
-								]),
-							)
-							.optional(),
-					}),
+					query: authorizationQuerySchema,
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },

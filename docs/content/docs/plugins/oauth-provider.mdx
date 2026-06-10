@@ -1121,13 +1121,15 @@ oauthProvider({
 
 ### Claims
 
-Internally, we support the following claims are supported: \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
+Internally, we support the following claims are supported: \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp", "auth\_time", "acr", "amr", "at\_hash", "nonce"].
 
 Id token and user info claims should be namespaced when possible to avoid potential future conflicts.
 
 Claims added inside `customIdTokenClaims` and `customUserInfoClaims` should be added to the `advertisedMetadata.claims_supported` so clients can validate that claim received. In the following example, it would be the base claims plus `locale` and `https://example.com/org`.
 
-Pro tip: these functions can may also throw errors such as a user is no longer a member of the organization or no longer has the requested permissions.
+`customIdTokenClaims` cannot override protocol-owned ID token claims such as `iss`, `sub`, `aud`, `exp`, `iat`, `nonce`, `auth_time`, `acr`, `amr`, `at_hash`, `sid`, or `scope`. Use `authenticationContext` to provide `auth_time`, `acr`, and `amr`.
+
+Pro tip: these functions may also throw errors such as a user is no longer a member of the organization or no longer has the requested permissions.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1150,6 +1152,27 @@ oauthProvider({
     return {
       locale: "en-GB",
     };
+  },
+})
+```
+
+#### Authentication Context
+
+By default, ID tokens include `acr: "0"`, the OpenID Connect level 0 value for no assurance. Use `authenticationContext` when your login flow has established a stronger authentication context, such as MFA.
+
+Only advertise ACR values that your provider can actually issue. The resolved `acr` must be listed in `acrValuesSupported`.
+
+```ts title="auth.ts"
+oauthProvider({
+  authenticationContext: {
+    acrValuesSupported: ["0", "urn:example:loa:mfa"],
+    resolve: ({ defaultContext }) => {
+      return {
+        ...defaultContext,
+        acr: "urn:example:loa:mfa",
+        amr: ["pwd", "otp"],
+      };
+    },
   },
 })
 ```
@@ -2027,6 +2050,20 @@ export const oauthRefreshTokenTableFields = [
     type: "Date",
     description:
       "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    isOptional: true,
+  },
+  {
+    name: "acr",
+    type: "string",
+    description:
+      "Authentication Context Class Reference satisfied at authorization time.",
+    isOptional: true,
+  },
+  {
+    name: "amr",
+    type: "string[]",
+    description:
+      "Authentication Methods References used at authorization time.",
     isOptional: true,
   },
   {

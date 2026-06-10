@@ -233,17 +233,13 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Supported Authentication Context Class Reference values.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
+	 * The default value `"0"` is the OpenID Connect level 0 value for no
+	 * assurance.
 	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
-	 *
-	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * @default ["0"]
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 	 */
 	acr_values_supported: string[];
 	/**
@@ -263,7 +259,7 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * to sharing key vulnerabilities!
 	 *
 	 * @default
-	 * ["EdDSA"]
+	 * ["RS256"]
 	 */
 	id_token_signing_alg_values_supported: JWSAlgorithms[];
 	/**

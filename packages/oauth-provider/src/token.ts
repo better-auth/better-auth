@@ -6,7 +6,13 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	LEVEL_0_ACR,
+	normalizeAuthenticationContext,
+	sanitizeCustomIdTokenClaims,
+} from "./authentication-context";
 import type {
+	OAuthAuthenticationContext,
 	OAuthOptions,
 	OAuthRefreshToken,
 	SchemaClient,
@@ -146,26 +152,31 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 	sessionId?: string,
-	authTime?: Date,
+	authenticationContext?: OAuthAuthenticationContext,
 	accessToken?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+	const resolvedAuthenticationContext = normalizeAuthenticationContext(
+		authenticationContext,
+	);
 	const authTimeSec =
-		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
-	// TODO: this should be validated against the login process
-	// - bronze : password only
-	// - silver : mfa
-	const acr = "urn:mace:incommon:iap:bronze";
+		resolvedAuthenticationContext.authTime != null
+			? Math.floor(resolvedAuthenticationContext.authTime.getTime() / 1000)
+			: undefined;
+	const acr = resolvedAuthenticationContext.acr ?? LEVEL_0_ACR;
+	const amr = resolvedAuthenticationContext.amr;
 
 	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims({
-				user,
-				scopes,
-				metadata: parseClientMetadata(client.metadata),
-			})
+		? sanitizeCustomIdTokenClaims(
+				await opts.customIdTokenClaims({
+					user,
+					scopes,
+					metadata: parseClientMetadata(client.metadata),
+				}),
+			)
 		: {};
 
 	const jwtPluginOptions = opts.disableJwtPlugin
@@ -191,9 +202,10 @@ async function createIdToken(
 	);
 	const payload: JWTPayload = {
 		...userClaims,
+		...customClaims,
 		auth_time: authTimeSec,
 		acr,
-		...customClaims,
+		amr,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: resolvedSub,
@@ -380,7 +392,7 @@ async function createRefreshToken(
 	scopes: string[],
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
-	authTime?: Date,
+	authenticationContext?: OAuthAuthenticationContext,
 	resources?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
@@ -400,7 +412,9 @@ async function createRefreshToken(
 		sessionId,
 		userId: user.id,
 		referenceId,
-		authTime,
+		authTime: authenticationContext?.authTime,
+		acr: authenticationContext?.acr,
+		amr: authenticationContext?.amr,
 		scopes,
 		resources,
 		createdAt: new Date(iat * 1000),
@@ -477,7 +491,7 @@ interface CreateUserTokensParams {
 	sessionId?: string;
 	nonce?: string;
 	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	authTime?: Date;
+	authenticationContext?: OAuthAuthenticationContext;
 	verificationValue?: VerificationValue;
 	resources?: string[];
 	/** Full original authorized resources for the grant, used to seed the refresh token
@@ -499,7 +513,7 @@ async function createUserTokens(
 		sessionId,
 		nonce,
 		refreshToken: existingRefreshToken,
-		authTime,
+		authenticationContext,
 		verificationValue,
 	} = params;
 
@@ -575,7 +589,7 @@ async function createUserTokens(
 						sid: sessionId,
 					},
 					existingRefreshToken,
-					authTime,
+					authenticationContext,
 					refreshResources,
 				)
 			: undefined;
@@ -629,7 +643,7 @@ async function createUserTokens(
 							sid: sessionId,
 						},
 						existingRefreshToken,
-						authTime,
+						authenticationContext,
 						refreshResources,
 					)
 				: undefined,
@@ -645,7 +659,7 @@ async function createUserTokens(
 				scopes,
 				nonce,
 				sessionId,
-				authTime,
+				authenticationContext,
 				accessToken,
 			)
 		: undefined;
@@ -946,6 +960,11 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.authTime != null
 			? normalizeTimestampValue(verificationValue.authTime)
 			: resolveSessionAuthTime(session);
+	const authenticationContext = normalizeAuthenticationContext({
+		authTime,
+		acr: verificationValue.acr,
+		amr: verificationValue.amr,
+	});
 
 	return createUserTokens(ctx, opts, {
 		client,
@@ -955,7 +974,7 @@ async function handleAuthorizationCodeGrant(
 		referenceId: verificationValue.referenceId,
 		sessionId: session.id,
 		nonce: verificationValue.query?.nonce,
-		authTime,
+		authenticationContext,
 		verificationValue,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
@@ -1188,6 +1207,11 @@ async function handleRefreshTokenGrant(
 		refreshToken.authTime != null
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
+	const authenticationContext = normalizeAuthenticationContext({
+		authTime,
+		acr: refreshToken.acr,
+		amr: refreshToken.amr,
+	});
 
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
@@ -1199,6 +1223,6 @@ async function handleRefreshTokenGrant(
 		sessionId: refreshToken.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
-		authTime,
+		authenticationContext,
 	});
 }

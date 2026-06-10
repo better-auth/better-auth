@@ -416,14 +416,13 @@ export const jwksTableFields = [
 
 ### Algorithm of the Key Pair
 
-The algorithm used for the generation of the key pair. The default is **EdDSA** with the **Ed25519** curve. Below are the available options:
+The algorithm used for the generation of the key pair. The default is **RS256**. Below are the available options:
 
 ```ts title="auth.ts"
 jwt({
   jwks: {
     keyPairConfig: {
-      alg: "EdDSA",
-      crv: "Ed25519"
+      alg: "RS256"
     }
   }
 })

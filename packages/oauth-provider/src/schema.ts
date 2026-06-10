@@ -216,6 +216,14 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			acr: {
+				type: "string",
+				required: false,
+			},
+			amr: {
+				type: "string[]",
+				required: false,
+			},
 			// Immutable
 			scopes: {
 				type: "string[]",
