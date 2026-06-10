@@ -629,13 +629,17 @@ Use the `resources` field in `customAccessTokenClaims` to add claims based on th
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
 
-This endpoint revokes the provided token.
+What the endpoint does depends on the token type:
 
-* opaque `access_token`: immediately removes that `access_token` from the database. `refresh_token` is still valid.
-* JWT `access_token`: verifies that token is safe to remove from client storage.
-* `refresh_token`: removes all `access_tokens` granted using that `refresh_token` and removes the `refresh_token` to prevent further token issuance.
+* opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
+* `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
+* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. The endpoint responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)) to make clear that no server-side revocation happened.
 
-For an `access_token` type,
+Because a JWT `access_token` cannot be revoked individually, plan for it:
+
+* Keep its lifetime short. Use `accessTokenExpiresIn`, and `m2mAccessTokenExpiresIn` for `client_credentials` tokens.
+* To cut a user off mid-session, end the session (sign-out, admin revoke, or back-channel logout). A JWT `access_token` that carries a session id (`sid`) is reported `active: false` by `/oauth2/introspect` and rejected by `/oauth2/userinfo` once that session ends, even before the token expires.
+* A `client_credentials` JWT `access_token` has no session to end, so a short expiry is the only control available.
 
 ### End Session Endpoint
 
