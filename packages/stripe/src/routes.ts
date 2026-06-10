@@ -133,6 +133,9 @@ async function retrieveStripeSubscription(
 	return await client.subscriptions
 		.retrieve(stripeSubscriptionId)
 		.catch((e) => {
+			/**
+			 * @see https://docs.stripe.com/error-codes
+			 */
 			if (e?.code === "resource_missing") {
 				return null;
 			}
