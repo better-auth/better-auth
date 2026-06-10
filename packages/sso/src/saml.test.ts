@@ -4489,6 +4489,92 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const acsLocation = acsReplayResponse.headers.get("location") || "";
 		expect(acsLocation).toContain("error=replay_detected");
 	});
+
+	it("should issue only one session when the same SP-initiated assertion is submitted concurrently", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "concurrent-replay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// SP-initiated: signInSSO stores an AuthnRequest keyed by the request ID,
+		// and the mock IdP echoes it back as the response's InResponseTo.
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "concurrent-replay-provider",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const relayState = new URL(signInRes.response?.url).searchParams.get(
+			"RelayState",
+		);
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/concurrent-replay-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Cookie: signInRes.headers.get("set-cookie") ?? "",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: relayState!,
+						}),
+					},
+				),
+			);
+
+		// Both submissions race on the single stored AuthnRequest. Atomic
+		// consumption must let exactly one through; the other finds no request
+		// to match and is rejected.
+		const [first, second] = await Promise.all([submit(), submit()]);
+
+		const locations = [first, second].map(
+			(res) => res.headers.get("location") || "",
+		);
+		const succeeded = locations.filter((loc) => !loc.includes("error"));
+		const failed = locations.filter((loc) => loc.includes("error"));
+
+		expect(succeeded).toHaveLength(1);
+		expect(failed).toHaveLength(1);
+	});
 });
 
 describe("SAML SSO - Single Assertion Validation", () => {
