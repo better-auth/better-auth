@@ -6,7 +6,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
-import type { Client } from "../oidc-provider/types";
+import type { Client, OIDCMetadata } from "../oidc-provider/types";
 import { mcp, withMcpAuth } from ".";
 
 // Pre-verifies any user the RP creates via OAuth signup so the existing-user
@@ -1211,5 +1211,129 @@ describe("mcp discovery metadata (security)", async () => {
 			resource_signing_alg_values_supported: string[];
 		};
 		expect(body.resource_signing_alg_values_supported).not.toContain("none");
+	});
+
+	it("uses oidcConfig metadata overrides for MCP authorization-server discovery", async () => {
+		const authOrigin = "https://auth.example.com";
+		const { auth } = await getTestInstance({
+			baseURL: "https://app.example.com",
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					oidcConfig: {
+						metadata: {
+							issuer: `${authOrigin}/api/auth`,
+							authorization_endpoint: `${authOrigin}/api/auth/mcp/authorize`,
+							token_endpoint: `${authOrigin}/api/auth/mcp/token`,
+							userinfo_endpoint: `${authOrigin}/api/auth/mcp/userinfo`,
+							jwks_uri: `${authOrigin}/api/auth/mcp/jwks`,
+							registration_endpoint: `${authOrigin}/api/auth/mcp/register`,
+						},
+					},
+				}),
+			],
+		});
+
+		const res = await auth.handler(
+			new Request(
+				`${authOrigin}/api/auth/.well-known/oauth-authorization-server`,
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			issuer: string;
+			authorization_endpoint: string;
+			token_endpoint: string;
+			userinfo_endpoint: string;
+			jwks_uri: string;
+			registration_endpoint: string;
+		};
+
+		expect(body.issuer).toBe(`${authOrigin}/api/auth`);
+		expect(body.authorization_endpoint).toBe(
+			`${authOrigin}/api/auth/mcp/authorize`,
+		);
+		expect(body.token_endpoint).toBe(`${authOrigin}/api/auth/mcp/token`);
+		expect(body.userinfo_endpoint).toBe(`${authOrigin}/api/auth/mcp/userinfo`);
+		expect(body.jwks_uri).toBe(`${authOrigin}/api/auth/mcp/jwks`);
+		expect(body.registration_endpoint).toBe(
+			`${authOrigin}/api/auth/mcp/register`,
+		);
+	});
+
+	it("points MCP protected-resource authorization_servers at the configured issuer", async () => {
+		const authOrigin = "https://auth.example.com";
+		const resource = "https://api.example.com/mcp";
+		const { auth } = await getTestInstance({
+			baseURL: "https://app.example.com",
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					resource,
+					oidcConfig: {
+						metadata: {
+							issuer: `${authOrigin}/api/auth`,
+							jwks_uri: `${authOrigin}/api/auth/mcp/jwks`,
+							scopes_supported: ["openid", "mcp:read"],
+						},
+					},
+				}),
+			],
+		});
+
+		const res = await auth.handler(
+			new Request(
+				"https://api.example.com/api/auth/.well-known/oauth-protected-resource",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			resource: string;
+			authorization_servers: string[];
+			jwks_uri: string;
+			scopes_supported: string[];
+		};
+
+		expect(body.resource).toBe(resource);
+		expect(body.authorization_servers).toEqual([`${authOrigin}/api/auth`]);
+		expect(body.jwks_uri).toBe(`${authOrigin}/api/auth/mcp/jwks`);
+		expect(body.scopes_supported).toEqual(["openid", "mcp:read"]);
+	});
+
+	it("allows explicit MCP protected-resource authorization_servers metadata", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://app.example.com",
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					oidcConfig: {
+						metadata: {
+							issuer: "https://auth.example.com/api/auth",
+							authorization_servers: [
+								"https://as-1.example.com",
+								"https://as-2.example.com",
+							],
+						} as Partial<OIDCMetadata> & {
+							authorization_servers: string[];
+						},
+					},
+				}),
+			],
+		});
+
+		const res = await auth.handler(
+			new Request(
+				"https://api.example.com/api/auth/.well-known/oauth-protected-resource",
+				{ method: "GET" },
+			),
+		);
+		const body = (await res.json()) as {
+			authorization_servers: string[];
+		};
+
+		expect(body.authorization_servers).toEqual([
+			"https://as-1.example.com",
+			"https://as-2.example.com",
+		]);
 	});
 });

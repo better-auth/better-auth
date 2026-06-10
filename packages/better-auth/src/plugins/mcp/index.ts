@@ -113,12 +113,20 @@ export const getMCPProtectedResourceMetadata = (
 ) => {
 	const baseURL = ctx.context.baseURL;
 	const origin = new URL(baseURL).origin;
+	const metadata = options?.oidcConfig?.metadata as
+		| (Partial<OIDCMetadata> & {
+				authorization_servers?: string[];
+		  })
+		| undefined;
+	const authorizationServers =
+		metadata?.authorization_servers ??
+		(metadata?.issuer ? [metadata.issuer] : [origin]);
 
 	return {
 		resource: options?.resource ?? origin,
-		authorization_servers: [origin],
-		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
-		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
+		authorization_servers: authorizationServers,
+		jwks_uri: metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		scopes_supported: metadata?.scopes_supported ?? [
 			"openid",
 			"profile",
 			"email",
@@ -273,7 +281,7 @@ export const mcp = (options: MCPOptions) => {
 				},
 				async (c) => {
 					try {
-						const metadata = getMCPProviderMetadata(c, options);
+						const metadata = getMCPProviderMetadata(c, options.oidcConfig);
 						return c.json(metadata);
 					} catch (e) {
 						console.log(e);
