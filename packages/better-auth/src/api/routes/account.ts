@@ -511,9 +511,11 @@ async function getValidAccessToken(
 	let account: Account | undefined = resolvedAccount;
 	if (!account) {
 		const accountData = await getAccountCookie(ctx);
+		const isStateful =
+			!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
 		if (
 			accountData &&
-			accountData.userId === resolvedUserId &&
+			(!isStateful || accountData.userId === resolvedUserId) &&
 			providerId === accountData.providerId &&
 			(!accountId || accountData.accountId === accountId)
 		) {
@@ -760,9 +762,11 @@ export const refreshToken = createAuthEndpoint(
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
 		const accountData = await getAccountCookie(ctx);
+		const isStateful =
+			!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
 		const usedAccountCookie =
 			!!accountData &&
-			accountData.userId === resolvedUserId &&
+			(!isStateful || accountData.userId === resolvedUserId) &&
 			providerId === accountData.providerId &&
 			(!accountId || accountData.accountId === accountId);
 		if (usedAccountCookie) {

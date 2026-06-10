@@ -260,7 +260,10 @@ export async function setCookieCache(
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			if (accountData.userId === session.user.id) {
+			const isStateful =
+				!!ctx.context.options.database ||
+				!!ctx.context.options.secondaryStorage;
+			if (!isStateful || accountData.userId === session.user.id) {
 				await setAccountCookie(ctx, accountData);
 			} else {
 				expireCookie(ctx, ctx.context.authCookies.accountData);
