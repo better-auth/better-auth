@@ -170,7 +170,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(401);
 	});
 
-	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
+	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		const revocation = await client.oauth2.revoke(
 			{
@@ -186,8 +186,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
@@ -268,7 +270,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(400);
 	});
 
-	it("should pass verification without token_type_hint and sent jwt access_token", async () => {
+	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		const revocation = await client.oauth2.revoke(
 			{
@@ -283,8 +285,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification without token_type_hint and sent opaque access_token", async () => {
