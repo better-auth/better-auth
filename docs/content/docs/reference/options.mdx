@@ -377,6 +377,36 @@ export const auth = betterAuth({
 })
 ```
 
+## `routeInputs`
+
+Add custom request body fields to auth routes. Route keys use Better Auth's internal path form, such as `/sign-in/email`, and are independent of `basePath`.
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	routeInputs: {
+		"/sign-in/email": {
+			tenantId: {
+				type: "string",
+				required: true,
+				description: "Tenant identifier",
+			},
+		},
+		"/sign-up/email": {
+			inviteCode: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+})
+```
+
+Custom route inputs are validated before hooks and endpoint handlers run, so they are available on `ctx.body` inside hooks. They are request-only fields and are not persisted to the user, session, account, or verification tables unless you also configure them as additional fields for that model.
+
+Plugins can also define `routeInputs` to extend built-in routes for their own hooks.
+
 ## `user`
 
 User configuration options.

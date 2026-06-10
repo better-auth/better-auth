@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { openAPI } from ".";
@@ -328,5 +329,65 @@ describe("open-api", async () => {
 		expect(signUpProps.rememberMe).toBeDefined();
 		const baseTypes = getBaseType(signUpProps.rememberMe.type);
 		expect(baseTypes).toContain("boolean");
+	});
+
+	it("should include custom route inputs in request body schemas", async () => {
+		const plugin = {
+			id: "open-api-route-input-test",
+			routeInputs: {
+				"/sign-up/email": {
+					referralSource: {
+						type: "string",
+						description: "Referral source",
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI(), plugin],
+				routeInputs: {
+					"/sign-in/email": {
+						tenantId: {
+							type: "string",
+							description: "Tenant identifier",
+						},
+					},
+					"/sign-up/email": {
+						inviteCode: {
+							type: "string",
+							required: false,
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const signInSchema =
+			paths["/sign-in/email"].post.requestBody.content["application/json"]
+				.schema;
+		expect(signInSchema.properties.tenantId).toEqual({
+			type: "string",
+			description: "Tenant identifier",
+		});
+		expect(signInSchema.required).toContain("tenantId");
+
+		const signUpSchema =
+			paths["/sign-up/email"].post.requestBody.content["application/json"]
+				.schema;
+		expect(signUpSchema.properties.inviteCode).toEqual({
+			type: "string",
+		});
+		expect(signUpSchema.required).not.toContain("inviteCode");
+		expect(signUpSchema.properties.referralSource).toEqual({
+			type: "string",
+			description: "Referral source",
+		});
+		expect(signUpSchema.required).toContain("referralSource");
 	});
 });

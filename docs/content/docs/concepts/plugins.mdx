@@ -236,6 +236,40 @@ This will add an `age` field to the `user` table and all `user` returning endpoi
   Don't store sensitive information in the `user` or `session` table. Create a new table if you need to store sensitive information.
 </Callout>
 
+### Route Inputs
+
+Plugins can add validated request body fields to existing auth routes with `routeInputs`. These fields are available on `ctx.body` in hooks and endpoint handlers, but they are not database fields unless you also add schema fields.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const tenantPlugin = () => {
+	return {
+		id: "tenant-plugin",
+		routeInputs: {
+			"/sign-in/email": {
+				tenantId: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		hooks: {
+			before: [
+				{
+					matcher: (ctx) => ctx.path === "/sign-in/email",
+					handler: createAuthMiddleware(async (ctx) => {
+						const tenantId = ctx.body.tenantId;
+						// validate tenant access
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+};
+```
+
 ### Hooks
 
 Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.

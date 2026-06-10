@@ -404,7 +404,11 @@ function toOpenApiPath(path: string) {
 export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const baseEndpoints = getEndpoints(ctx, {
 		...options,
-		plugins: [],
+		plugins:
+			options.plugins?.map((plugin) => ({
+				id: plugin.id,
+				routeInputs: plugin.routeInputs,
+			})) ?? [],
 	});
 
 	const tables = getAuthTables({

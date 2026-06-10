@@ -1,6 +1,7 @@
 import type {
 	BetterAuthClientOptions,
 	ClientFetchOption,
+	InferRouteInputsFromOptions,
 } from "@better-auth/core";
 import type { SocialProviderList } from "@better-auth/core/social-providers";
 import type { BetterFetchResponse } from "@better-fetch/fetch";
@@ -41,6 +42,28 @@ type InferGenericOAuthProviderIds<O extends BetterAuthClientOptions> =
 				? ID & string
 				: never
 			: never);
+
+type InferRouteInputsFromClient<
+	ClientOpts extends BetterAuthClientOptions,
+	Path extends string,
+> = (NonNullable<ClientOpts["$InferAuth"]> extends {
+	routeInputs?: any;
+	plugins?: any;
+}
+	? InferRouteInputsFromOptions<NonNullable<ClientOpts["$InferAuth"]>, Path>
+	: {}) &
+	UnionToIntersection<
+		ClientOpts["plugins"] extends Array<infer Plugin>
+			? Plugin extends { $InferServerPlugin: infer ServerPlugin }
+				? NonNullable<ServerPlugin> extends {
+						routeInputs?: any;
+						plugins?: any;
+					}
+					? InferRouteInputsFromOptions<NonNullable<ServerPlugin>, Path>
+					: {}
+				: {}
+			: {}
+	>;
 
 type KeepNullishFromOriginal<Original, Replaced> =
 	| Replaced
@@ -122,7 +145,10 @@ export type InferSignUpEmailCtx<
 	image?: string | undefined;
 	callbackURL?: string | undefined;
 	fetchOptions?: FetchOptions | undefined;
-} & UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>;
+} & UnionToIntersection<
+	InferAdditionalFromClient<ClientOpts, "user", "input">
+> &
+	InferRouteInputsFromClient<ClientOpts, "/sign-up/email">;
 
 export type InferUserUpdateCtx<
 	ClientOpts extends BetterAuthClientOptions,
@@ -133,7 +159,8 @@ export type InferUserUpdateCtx<
 	fetchOptions?: FetchOptions | undefined;
 } & Partial<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
->;
+> &
+	InferRouteInputsFromClient<ClientOpts, "/update-user">;
 
 type InferCtxQuery<
 	C extends InputContext<any, any>,
@@ -196,7 +223,8 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 										>,
 									>(
 										...data: HasRequiredKeys<
-											InferCtx<C, FetchOptions>
+											InferCtx<C, FetchOptions> &
+												InferRouteInputsFromClient<COpts, T["path"]>
 										> extends true
 											? [
 													Prettify<
@@ -212,8 +240,12 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 																			| InferGenericOAuthProviderIds<COpts>
 																			| (string & {});
 																		fetchOptions?: FetchOptions | undefined;
-																	}
-																: InferCtx<C, FetchOptions>
+																	} & InferRouteInputsFromClient<
+																			COpts,
+																			T["path"]
+																		>
+																: InferCtx<C, FetchOptions> &
+																		InferRouteInputsFromClient<COpts, T["path"]>
 													>,
 													FetchOptions?,
 												]
@@ -221,7 +253,8 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 													Prettify<
 														T["path"] extends `/update-user`
 															? InferUserUpdateCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: InferCtx<C, FetchOptions> &
+																	InferRouteInputsFromClient<COpts, T["path"]>
 													>?,
 													FetchOptions?,
 												]

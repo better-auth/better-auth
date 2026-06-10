@@ -1,5 +1,8 @@
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 
@@ -289,6 +292,195 @@ describe("sign-in with additionalFields", async () => {
 		expect(res.user).toBeDefined();
 		expect(res.user.newField).toBe("signin-value");
 		expect(res.user.isAdmin).toBe(true);
+	});
+});
+
+describe("custom route inputs", async () => {
+	it("should validate required sign-in route inputs and expose them to hooks", async () => {
+		let seenTenantId: string | undefined;
+		const plugin = {
+			id: "route-input-test",
+			routeInputs: {
+				"/sign-in/email": {
+					tenantId: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/sign-in/email",
+						handler: createAuthMiddleware(async (ctx) => {
+							seenTenantId = ctx.body.tenantId;
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth, testUser } = await getTestInstance({
+			plugins: [plugin],
+		});
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				} as any,
+			}),
+		).rejects.toThrow();
+
+		await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+				tenantId: "tenant_123",
+			},
+		});
+		expect(seenTenantId).toBe("tenant_123");
+	});
+
+	it("should not persist sign-up route-only inputs as user fields", async () => {
+		let seenInviteCode: string | undefined;
+		const plugin = {
+			id: "route-input-sign-up-hook-test",
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/sign-up/email",
+						handler: createAuthMiddleware(async (ctx) => {
+							seenInviteCode = ctx.body.inviteCode;
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth } = await getTestInstance(
+			{
+				plugins: [plugin],
+				routeInputs: {
+					"/sign-up/email": {
+						inviteCode: {
+							type: "string",
+							required: true,
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "route-input-signup@test.com",
+				password: "password",
+				name: "Route Input",
+				inviteCode: "invite-123",
+			},
+		});
+
+		expect(seenInviteCode).toBe("invite-123");
+		expect((res.user as any).inviteCode).toBeUndefined();
+	});
+
+	it("should reject route inputs that collide with endpoint body fields", async () => {
+		await expect(
+			getTestInstance({
+				routeInputs: {
+					"/sign-in/email": {
+						email: {
+							type: "string",
+						},
+					},
+				},
+			}),
+		).rejects.toThrow(/conflicts with an existing endpoint body field/);
+	});
+
+	it("should reject duplicate route input fields", async () => {
+		const plugin = {
+			id: "duplicate-route-input-test",
+			routeInputs: {
+				"/sign-in/email": {
+					tenantId: {
+						type: "string",
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				plugins: [plugin],
+				routeInputs: {
+					"/sign-in/email": {
+						tenantId: {
+							type: "string",
+						},
+					},
+				},
+			}),
+		).rejects.toThrow(/Duplicate route input/);
+	});
+
+	it("should infer top-level and plugin route inputs on the client", async () => {
+		const plugin = {
+			id: "typed-route-input-test",
+			routeInputs: {
+				"/sign-in/email": {
+					pluginCode: {
+						type: "string",
+					},
+				},
+			},
+		} satisfies BetterAuthPlugin;
+		const authOptions = {
+			plugins: [plugin],
+			routeInputs: {
+				"/sign-in/email": {
+					tenantId: {
+						type: "string",
+					},
+					optionalCode: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		const client = createAuthClient<{
+			$InferAuth: typeof authOptions;
+			plugins: [
+				{
+					id: "typed-route-input-client-test";
+					$InferServerPlugin: typeof plugin;
+				},
+			];
+		}>({
+			$InferAuth: {} as typeof authOptions,
+			plugins: [
+				{
+					id: "typed-route-input-client-test",
+					$InferServerPlugin: {} as typeof plugin,
+				},
+			],
+		});
+		type SignInInput = Parameters<typeof client.signIn.email>[0];
+		expectTypeOf<SignInInput>().toMatchTypeOf<{
+			tenantId: string;
+			pluginCode: string;
+			optionalCode?: string | null | undefined;
+		}>();
+		expectTypeOf<{
+			email: string;
+			password: string;
+			tenantId: string;
+			pluginCode: string;
+			optionalCode?: string | null | undefined;
+		}>().toMatchTypeOf<SignInInput>();
 	});
 });
 
