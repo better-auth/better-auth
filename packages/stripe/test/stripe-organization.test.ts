@@ -373,14 +373,10 @@ describe("stripe - organization customer", () => {
 		stripeMock,
 	}) => {
 		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
-		stripeMock.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_org_cancel_123",
-					status: "active",
-					cancel_at_period_end: false,
-				},
-			],
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_org_cancel_123",
+			status: "active",
+			cancel_at_period_end: false,
 		});
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -461,15 +457,11 @@ describe("stripe - organization customer", () => {
 		stripeMock,
 	}) => {
 		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
-		stripeMock.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_org_restore_123",
-					status: "active",
-					cancel_at_period_end: true,
-					cancel_at: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-				},
-			],
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_org_restore_123",
+			status: "active",
+			cancel_at_period_end: true,
+			cancel_at: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
 		});
 		stripeMock.subscriptions.update.mockResolvedValueOnce({
 			id: "sub_org_restore_123",

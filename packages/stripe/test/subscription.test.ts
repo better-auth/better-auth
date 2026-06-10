@@ -2092,15 +2092,11 @@ describe("stripe subscription", () => {
 				},
 			});
 
-			stripeMock.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_restore_period_end",
-						status: "active",
-						cancel_at_period_end: true,
-						cancel_at: null,
-					},
-				],
+			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_period_end",
+				status: "active",
+				cancel_at_period_end: true,
+				cancel_at: null,
 			});
 
 			stripeMock.subscriptions.update.mockResolvedValueOnce({
@@ -2185,15 +2181,11 @@ describe("stripe subscription", () => {
 				},
 			});
 
-			stripeMock.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_restore_cancel_at",
-						status: "active",
-						cancel_at_period_end: false,
-						cancel_at: Math.floor(cancelAt.getTime() / 1000),
-					},
-				],
+			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_cancel_at",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: Math.floor(cancelAt.getTime() / 1000),
 			});
 
 			stripeMock.subscriptions.update.mockResolvedValueOnce({
@@ -2410,16 +2402,13 @@ describe("stripe subscription", () => {
 				},
 			});
 
-			// Stripe has the subscription already scheduled to cancel with cancel_at
-			stripeMock.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_missed_webhook",
-						status: "active",
-						cancel_at_period_end: false,
-						cancel_at: cancelAt,
-					},
-				],
+			// Stripe has the subscription already scheduled to cancel with cancel_at.
+			// First retrieve resolves the row's subscription for the cancel flow.
+			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_missed_webhook",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: cancelAt,
 			});
 
 			// Billing portal returns error because subscription is already set to cancel
@@ -2427,7 +2416,7 @@ describe("stripe subscription", () => {
 				new Error("This subscription is already set to be canceled"),
 			);
 
-			// When fallback kicks in, it retrieves from Stripe
+			// When the fallback kicks in, it retrieves the latest state from Stripe.
 			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
 				id: "sub_missed_webhook",
 				status: "active",
@@ -2980,7 +2969,7 @@ describe("stripe subscription", () => {
 			return { userId: userRes.user.id, headers };
 		}
 
-		test("cancel removes only the targeted subscription row when Stripe has none active", async ({
+		test("cancel removes only the targeted subscription row when its Stripe subscription is gone", async ({
 			stripeMock,
 			memory,
 			stripeOptions,
@@ -3018,7 +3007,10 @@ describe("stripe subscription", () => {
 				} as any,
 			});
 
-			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+			// Stripe no longer has the subscription this row points to.
+			stripeMock.subscriptions.retrieve.mockRejectedValue({
+				code: "resource_missing",
+			});
 
 			const reqHeaders = new Headers(headers);
 			reqHeaders.set("content-type", "application/json");
@@ -3070,11 +3062,12 @@ describe("stripe subscription", () => {
 				} as any,
 			});
 
-			stripeMock.subscriptions.list.mockResolvedValue({
-				data: [
-					{ id: "sub_other", status: "active", cancel_at_period_end: true },
-					{ id: "sub_target", status: "active", cancel_at_period_end: true },
-				],
+			// The row points to sub_target; restore must act on that exact
+			// subscription, retrieved by id (not the customer's first active one).
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_target",
+				status: "active",
+				cancel_at_period_end: true,
 			});
 			stripeMock.subscriptions.update.mockResolvedValue({ id: "sub_target" });
 
@@ -3088,6 +3081,9 @@ describe("stripe subscription", () => {
 				}),
 			);
 
+			expect(stripeMock.subscriptions.retrieve).toHaveBeenCalledWith(
+				"sub_target",
+			);
 			expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
 				"sub_target",
 				expect.anything(),

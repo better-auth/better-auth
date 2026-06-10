@@ -120,6 +120,29 @@ function getReferenceId(
 	return user.id;
 }
 
+/**
+ * Retrieve the subscription a row points to, or `null` if it no longer exists
+ * (`resource_missing`) so callers can treat the row as stale.
+ * @internal
+ */
+async function retrieveStripeSubscription(
+	client: Stripe,
+	ctx: GenericEndpointContext,
+	stripeSubscriptionId: string,
+): Promise<Stripe.Subscription | null> {
+	return await client.subscriptions
+		.retrieve(stripeSubscriptionId)
+		.catch((e) => {
+			if (e?.code === "resource_missing") {
+				return null;
+			}
+			throw ctx.error("BAD_REQUEST", {
+				code: e.code,
+				message: e.message,
+			});
+		});
+}
+
 const upgradeSubscriptionBodySchema = z.object({
 	/**
 	 * The name of the plan to subscribe
@@ -1314,17 +1337,19 @@ export const cancelSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			const activeSubscriptions = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
-			if (!activeSubscriptions.length) {
-				/**
-				 * Stripe reports no active subscription for this customer, so the
-				 * selected row is stale. Remove only that row, never other rows that
-				 * share the referenceId.
-				 */
+			if (!subscription.stripeSubscriptionId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
+			}
+			const activeSubscription = await retrieveStripeSubscription(
+				client,
+				ctx,
+				subscription.stripeSubscriptionId,
+			);
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
+				// Stale row: remove only this row, not others sharing the referenceId.
 				await ctx.context.adapter.delete({
 					model: "subscription",
 					where: [
@@ -1334,15 +1359,6 @@ export const cancelSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-				throw APIError.from(
-					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				);
-			}
-			const activeSubscription = activeSubscriptions.find(
-				(sub) => sub.id === subscription.stripeSubscriptionId,
-			);
-			if (!activeSubscription) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1552,20 +1568,19 @@ export const restoreSubscription = (options: StripeOptions) => {
 				return ctx.json(releasedSub);
 			}
 
-			// Handle pending cancellation. Match the subscription this row points
-			// to, not just the customer's first active one.
-			const activeSubscription = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) =>
-					res.data.find(
-						(sub) =>
-							sub.id === subscription.stripeSubscriptionId &&
-							isActiveOrTrialing(sub),
-					),
+			// Handle pending cancellation on the subscription this row points to.
+			if (!subscription.stripeSubscriptionId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
-			if (!activeSubscription) {
+			}
+			const activeSubscription = await retrieveStripeSubscription(
+				client,
+				ctx,
+				subscription.stripeSubscriptionId,
+			);
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
