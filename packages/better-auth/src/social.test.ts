@@ -8,6 +8,7 @@ import type {
 	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
+import { reddit } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -1270,6 +1271,99 @@ describe("Google Provider — multiple client IDs", async () => {
 			where: [{ field: "email", value: "mobile-unverified@example.com" }],
 		});
 		expect(user?.emailVerified).toBe(false);
+	});
+});
+
+/**
+ * The `hd` (hosted domain) authorization parameter is only a UI hint Google
+ * does not enforce, so the id_token sign-in path must check the verified `hd`
+ * claim itself. This exercises the shared verifier's `verifyClaims` hook wired
+ * by the Google provider.
+ */
+describe("Google Provider — hosted domain on id_token sign-in", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-google-hd-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const clientId = "hd-web.googleusercontent.com";
+
+	const signIdToken = (claims: Record<string, unknown>) =>
+		new SignJWT({
+			email: "hd-user@example.com",
+			email_verified: true,
+			name: "HD User",
+			sub: "google-hd-sub",
+			...claims,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(clientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", async () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	const getInstance = () =>
+		getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId,
+						clientSecret: "test-secret",
+						hd: "example.com",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+	it("accepts an id token whose hd claim matches the configured hosted domain", async () => {
+		const idToken = await signIdToken({ hd: "example.com" });
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("hd-user@example.com");
+	});
+
+	it("rejects an id token whose hd claim is a different hosted domain", async () => {
+		const idToken = await signIdToken({ hd: "other.com" });
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("rejects an id token with no hd claim when a hosted domain is configured", async () => {
+		const idToken = await signIdToken({});
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
 	});
 });
 
@@ -3726,5 +3820,70 @@ describe("new-user OAuth sign-in atomicity", async () => {
 		expect(
 			users.find((u) => u.email === "atomic-sub@email.com"),
 		).toBeUndefined();
+	});
+});
+
+/**
+ * Regression tests for the Reddit provider profile mapping. Reddit's `identity`
+ * scope does not return an email; previously the provider mapped the shared
+ * `oauth_client_id` (which identifies the OAuth app, not the user) to
+ * `user.email` and `has_verified_email` to `emailVerified`, collapsing every
+ * Reddit user of the same app onto one "verified" email and enabling implicit
+ * account linking/takeover.
+ */
+describe("Reddit Provider — profile email mapping", async () => {
+	const profile = {
+		id: "reddit-user-123",
+		name: "reddit_user",
+		icon_img: "https://example.com/avatar.png?x=1",
+		has_verified_email: true,
+		oauth_client_id: "shared-reddit-oauth-client-id",
+		verified: true,
+	};
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://oauth.reddit.com/api/v1/me", async () =>
+				HttpResponse.json(profile),
+			),
+		);
+	});
+
+	it("never uses oauth_client_id as the email and falls back to a unique per-user email", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		// Without a mapped email the provider derives a unique, per-user
+		// synthetic email from the Reddit user id rather than falling back to
+		// the shared oauth_client_id, so users can never collide on one address.
+		expect(result?.user.email).toBe("reddit-user-123@reddit.com");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		expect(result?.user.emailVerified).toBe(false);
+	});
+
+	it("uses the email supplied by mapProfileToUser and ignores oauth_client_id", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+			mapProfileToUser: (p) => ({
+				email: `${p.name}@example.com`,
+			}),
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		expect(result?.user.email).toBe("reddit_user@example.com");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		// The synthetic "verified email" flag must not be applied to the mapped
+		// email unless the integrator opts in.
+		expect(result?.user.emailVerified).toBe(false);
 	});
 });

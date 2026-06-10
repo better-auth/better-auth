@@ -14,6 +14,7 @@ import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
 	ClientDiscovery,
+	GrantType,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -503,6 +504,33 @@ function basicToClientCredentials(authorization: string) {
 }
 
 /**
+ * Whether a client is allowed to use a given grant type.
+ *
+ * A client's registered `grantTypes` defaults to the documented default
+ * `["authorization_code"]` when unset (see client registration). Refresh tokens
+ * are only ever issued through the authorization_code flow, so a client allowed
+ * to use `authorization_code` is implicitly allowed to use `refresh_token`.
+ *
+ * @internal
+ */
+export function clientAllowsGrant(
+	client: Pick<SchemaClient<Scope[]>, "grantTypes">,
+	grantType: GrantType,
+) {
+	const allowedGrants =
+		client.grantTypes && client.grantTypes.length > 0
+			? client.grantTypes
+			: (["authorization_code"] as GrantType[]);
+	if (
+		grantType === "refresh_token" &&
+		allowedGrants.includes("authorization_code")
+	) {
+		return true;
+	}
+	return allowedGrants.includes(grantType);
+}
+
+/**
  * Validates client credentials failing on mismatches
  * and incorrectly provided information
  *
@@ -512,9 +540,10 @@ export async function validateClientCredentials(
 	ctx: GenericEndpointContext,
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
-	clientSecret?: string,
-	scopes?: string[],
+	clientSecret?: string, // optional because required if client is confidential or this value is defined
+	scopes?: string[], // checks requested scopes against allowed scopes
 	preVerifiedClient?: SchemaClient<Scope[]>,
+	grantType?: GrantType, // if set, enforces the client is registered for this grant type
 ) {
 	const client = preVerifiedClient ?? (await getClient(ctx, options, clientId));
 	if (!client) {
@@ -589,6 +618,14 @@ export async function validateClientCredentials(
 				});
 			}
 		}
+	}
+
+	// Enforce the client is registered for the requested grant type
+	if (grantType && !clientAllowsGrant(client, grantType)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client is not authorized to use grant type ${grantType}`,
+			error: "unauthorized_client",
+		});
 	}
 
 	return client;

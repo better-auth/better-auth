@@ -147,9 +147,13 @@ async function fetchUserInfo(
 		return null;
 	}
 	const data = userInfo.data;
+	const subjectId = data.sub ?? (data as Record<string, unknown>).id;
+	if (subjectId === undefined || subjectId === null || subjectId === "") {
+		return null;
+	}
 	return {
 		...data,
-		id: data.sub ?? ((data as Record<string, any>).id as string) ?? "",
+		id: String(subjectId),
 		emailVerified: data.email_verified ?? false,
 		email: data.email,
 		image: data.picture,

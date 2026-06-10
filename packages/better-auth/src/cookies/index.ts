@@ -260,7 +260,17 @@ export async function setCookieCache(
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			await setAccountCookie(ctx, accountData);
+			if (accountData.userId === session.user.id) {
+				await setAccountCookie(ctx, accountData);
+			} else {
+				expireCookie(ctx, ctx.context.authCookies.accountData);
+				const accountStore = createAccountStore(
+					ctx.context.authCookies.accountData.name,
+					ctx.context.authCookies.accountData.attributes,
+					ctx,
+				);
+				accountStore.setCookies(accountStore.clean());
+			}
 		}
 	}
 }
@@ -443,9 +453,10 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
 	const parsedCookie = parseCookies(cookies);
+	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
 	const getCookie = (name: string) =>
-		parsedCookie.get(name) ||
-		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
+		parsedCookie.get(name);
 
 	const sessionToken =
 		getCookie(`${cookiePrefix}.${cookieName}`) ||
