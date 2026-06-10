@@ -46,6 +46,9 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	// Warn at most once when a single-use value is consumed through the
+	// non-atomic secondary-storage fallback (see consumeVerificationValue).
+	let warnedNonAtomicConsume = false;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -1238,12 +1241,13 @@ export const createInternalAdapter = (
 		 *
 		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
 		 * only when the configured storage implements `getAndDelete`; otherwise
-		 * it falls back to an in-process lock around `get` then `delete`.
+		 * it falls back to an in-process lock around `get` then `delete` and
+		 * warns once, since that fallback cannot coordinate across processes.
 		 *
 		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
 		 * in the next breaking release, or require database-backed verification
-		 * storage for security-sensitive consume paths. The compatibility
-		 * fallback cannot coordinate across multiple application processes.
+		 * storage for security-sensitive consume paths, so the non-atomic
+		 * fallback can be removed entirely.
 		 */
 		consumeVerificationValue: async (
 			identifier: string,
@@ -1284,6 +1288,12 @@ export const createInternalAdapter = (
 					if (secondaryStorage.getAndDelete) {
 						return hydrateCachedVerification(
 							await secondaryStorage.getAndDelete(key),
+						);
+					}
+					if (!warnedNonAtomicConsume) {
+						warnedNonAtomicConsume = true;
+						logger.warn(
+							"Secondary storage does not implement `getAndDelete`, so single-use verification values cannot be consumed atomically across processes. Implement `getAndDelete` or use database-backed verification storage to guarantee single use.",
 						);
 					}
 					return withVerificationConsumeLock(key, async () => {

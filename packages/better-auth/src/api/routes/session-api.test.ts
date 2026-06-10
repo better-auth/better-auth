@@ -17,6 +17,8 @@ import {
 } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
+import { admin } from "../../plugins/admin";
+import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
 import { freshSessionMiddleware, getSessionFromCtx } from "./session";
@@ -2206,5 +2208,140 @@ describe("updateSession", async () => {
 			const session = await client.getSession();
 			expect((session.data?.session as any).theme).toBe("blue");
 		});
+	});
+});
+
+describe("updateSession plugin authority fields", async () => {
+	// Plugin-owned authority fields must not be writable through the generic
+	// session update route. They are set only by membership/permission-checked
+	// setters (setActiveOrganization, impersonateUser), so /update-session must
+	// reject them even though they live on the session schema.
+	const { client, signInWithTestUser } = await getTestInstance({
+		plugins: [organization({ teams: { enabled: true } }), admin()],
+	});
+
+	it.each([
+		"activeOrganizationId",
+		"activeTeamId",
+		"impersonatedBy",
+	])("should reject forging the %s session field", async (field) => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				[field]: "forged-value",
+			} as any);
+			expect(res.error?.status).toBe(400);
+		});
+	});
+});
+
+describe("update-session cookie cache revocation", async () => {
+	it("fails closed when the backing session is revoked in a stateful deployment", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: { enabled: true, maxAge: 60 },
+				additionalFields: {
+					theme: { type: "string", defaultValue: "light" },
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+		expect(headers.get("cookie")).toContain("session_data");
+
+		// Revoke server-side; only the cookie cache still vouches for the session.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		const update = await client.$fetch("/update-session", {
+			method: "POST",
+			body: { theme: "dark" },
+			headers,
+		});
+		expect(update.error?.status).toBe(401);
+
+		// The database is authoritative and says the session is gone.
+		const strict = await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: { headers },
+		});
+		expect(strict.data).toBeNull();
+	});
+
+	it("still refreshes the cookie in a DB-less deployment when no row exists", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			session: {
+				additionalFields: { theme: { type: "string", defaultValue: "light" } },
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+
+		// Simulate an instance whose in-memory store never held this session: the
+		// cookie is the source of truth, so the update must still apply.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		const update = await client.$fetch("/update-session", {
+			method: "POST",
+			body: { theme: "dark" },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(update.error).toBeNull();
+		expect(
+			(update.data as { session?: { theme?: string } } | null)?.session?.theme,
+		).toBe("dark");
+	});
+});
+
+describe("forced strict session validation", async () => {
+	it("a request cannot re-enable the cookie cache on a route that forces it off", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		// `/change-password` forces strict validation through
+		// `sensitiveSessionMiddleware`. An empty `disableCookieCache` query coerces
+		// to false, which must not weaken that forced check back to the cache.
+		const res = await client.$fetch("/change-password?disableCookieCache=", {
+			method: "POST",
+			body: {
+				currentPassword: testUser.password,
+				newPassword: "new-password-1234",
+			},
+			headers,
+		});
+		expect(res.error?.status).toBe(401);
 	});
 });
