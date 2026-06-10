@@ -145,7 +145,7 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 					? ctx.body.role
 					: [ctx.body.role];
 				for (const role of inputRoles) {
-					if (!roles[role as keyof typeof roles]) {
+					if (!Object.prototype.hasOwnProperty.call(roles, role)) {
 						throw APIError.from(
 							"BAD_REQUEST",
 							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
@@ -382,7 +382,10 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 								ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
 							);
 						}
-						if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
+						if (
+							opts.roles &&
+							!Object.prototype.hasOwnProperty.call(opts.roles, role)
+						) {
 							throw APIError.from(
 								"BAD_REQUEST",
 								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
@@ -437,9 +440,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			// uniformly across createUser and adminUpdateUser is a breaking change
 			// deferred to the next branch.
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
+				...ctx.body.data,
 				email: email,
 				name: ctx.body.name,
-				...ctx.body.data,
 				role:
 					(ctx.body.role && parseRoles(ctx.body.role)) ??
 					opts?.defaultRole ??
@@ -572,7 +575,10 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 							ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
 						);
 					}
-					if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
+					if (
+						opts.roles &&
+						!Object.prototype.hasOwnProperty.call(opts.roles, role)
+					) {
 						throw APIError.from(
 							"BAD_REQUEST",
 							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,

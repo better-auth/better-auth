@@ -2029,6 +2029,40 @@ describe("create-user role escalation", async () => {
 		expect(res.error).toBeNull();
 		expect(res.data?.user.role).toBe("admin");
 	});
+
+	it("keeps email and name authoritative over values in data", async () => {
+		const { headers } = await signInWithUser("root@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "real@test.com",
+				password: "password",
+				name: "Real Name",
+				data: { email: "spoofed@test.com", name: "Spoofed" },
+			},
+			{ headers },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.user.email).toBe("real@test.com");
+		expect(res.data?.user.name).toBe("Real Name");
+	});
+
+	it("rejects role names that are not own properties of the configured roles", async () => {
+		const { headers } = await signInWithUser("root@test.com", "password");
+		const res = await client.admin.createUser(
+			{
+				email: "proto@test.com",
+				password: "password",
+				name: "Proto",
+				// @ts-expect-error intentionally passing a role that is not configured
+				role: "toString",
+			},
+			{ headers },
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
+		);
+	});
 });
 
 describe("admin ban-field authority", async () => {
