@@ -93,9 +93,10 @@ export function parseSiweMessage(message: string): ParsedSiweMessage {
  * scheme and path, lowercases, leaving `host[:port]`.
  */
 export function normalizeSiweDomain(domain: string): string {
-	return domain
+	const withoutScheme = domain
 		.trim()
 		.toLowerCase()
-		.replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
-		.replace(/\/.*$/, "");
+		.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+	const pathStart = withoutScheme.indexOf("/");
+	return pathStart === -1 ? withoutScheme : withoutScheme.slice(0, pathStart);
 }
