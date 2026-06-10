@@ -251,6 +251,54 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	// A delete that fails for any reason other than the record not existing
+	// (constraint violation, connection loss, permission denial) must surface
+	// the error. Reporting success would hide real data-integrity failures.
+	it("delete propagates non-not-found errors instead of swallowing them", async () => {
+		const failure = Object.assign(new Error("connection refused"), {
+			code: "P1001",
+		});
+		const del = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				delete: del,
+			},
+		});
+
+		await expect(
+			adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+			}),
+		).rejects.toThrow("connection refused");
+		expect(del).toHaveBeenCalledTimes(1);
+	});
+
+	// Prisma raises P2025 when the targeted row no longer exists. Deletes are
+	// idempotent, so this specific case is a no-op rather than an error.
+	it("delete treats a not-found (P2025) error as an idempotent no-op", async () => {
+		const failure = Object.assign(
+			new Error("Record to delete does not exist."),
+			{ code: "P2025" },
+		);
+		const del = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				delete: del,
+			},
+		});
+
+		await expect(
+			adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+			}),
+		).resolves.toBeUndefined();
+		expect(del).toHaveBeenCalledTimes(1);
+	});
+
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
 		const target = {
 			id: "verification-id",

@@ -602,9 +602,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
+						// Deletes are idempotent: a missing row (P2025) is a no-op.
+						// Any other failure (constraint, connection, permission) is a
+						// real error and must propagate rather than report success.
 						if (isPrismaNotFoundError(e)) return;
-						// otherwise if it's an unknown error, we want to just log it for debugging.
-						console.log(e);
+						throw e;
 					}
 				},
 				async deleteMany({ model, where }) {
