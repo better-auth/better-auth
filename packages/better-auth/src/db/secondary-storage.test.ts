@@ -235,7 +235,7 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			const store = new Map<string, string>();
 			const deletedSessionIds: string[] = [];
 
-			const { client, db, signInWithTestUser } = await getTestInstance({
+			const { auth, client, db, signInWithTestUser } = await getTestInstance({
 				secondaryStorage: {
 					set(key, value) {
 						store.set(key, value);
@@ -283,6 +283,12 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
 				Date.now(),
 			);
+
+			// Ending an already-ended session must not re-fire the hook. The
+			// preserved row outlives the session, so a repeat delete would
+			// otherwise re-dispatch back-channel logout.
+			await (await auth.$context).internalAdapter.deleteSession(token);
+			expect(deletedSessionIds).toHaveLength(1);
 		});
 	});
 });
