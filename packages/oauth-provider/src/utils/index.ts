@@ -812,6 +812,16 @@ export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
 	return new Date(issuedAt);
 }
 
+export function isSessionFreshForSignedQuery(
+	sessionCreatedAt: Date | string | undefined,
+	signedQueryIssuedAt: Date | undefined,
+) {
+	if (!signedQueryIssuedAt) return false;
+	const normalized = normalizeTimestampValue(sessionCreatedAt);
+	if (!normalized) return false;
+	return normalized.getTime() >= signedQueryIssuedAt.getTime();
+}
+
 export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
 	const nextQuery = new URLSearchParams(query);
 	const prompts = nextQuery.get("prompt")?.split(" ");
@@ -822,6 +832,12 @@ export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
 			? nextQuery.set("prompt", prompts.join(" "))
 			: nextQuery.delete("prompt");
 	}
+	return nextQuery;
+}
+
+export function removeMaxAgeFromQuery(query: URLSearchParams) {
+	const nextQuery = new URLSearchParams(query);
+	nextQuery.delete("max_age");
 	return nextQuery;
 }
 

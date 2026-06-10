@@ -36,13 +36,19 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
+import {
+	authorizationQuerySchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
 	getSignedQueryIssuedAt,
+	isSessionFreshForSignedQuery,
 	mergeDiscoveryMetadata,
 	postLoginClearedParam,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
@@ -65,6 +71,20 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
+
+function getServerContextSignedQueryIssuedAt(value: unknown) {
+	const issuedAtMs =
+		typeof value === "number"
+			? value
+			: typeof value === "string"
+				? Number(value)
+				: undefined;
+	if (!issuedAtMs || !Number.isFinite(issuedAtMs) || issuedAtMs <= 0) {
+		return undefined;
+	}
+	return new Date(issuedAtMs);
+}
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -404,6 +424,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (ctx.path === "/sign-in/social") {
 							await addOAuthServerContext({
 								query: queryParams.toString(),
+								...(signedQueryIssuedAt
+									? {
+											[signedQueryIssuedAtMsKey]: signedQueryIssuedAt.getTime(),
+										}
+									: {}),
 							});
 						}
 					}),
@@ -427,11 +452,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!sessionToken) return;
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
+						const oauthRequest = await oAuthState.get();
+						const oauthState = await getOAuthState();
+						const serverContext = oauthState?.serverContext;
 						const _query =
-							(await oAuthState.get())?.query ??
-							((await getOAuthState())?.serverContext?.query as
-								| string
-								| undefined);
+							oauthRequest?.query ??
+							(serverContext?.query as string | undefined);
 						if (!_query) return;
 						const query = new URLSearchParams(_query);
 
@@ -453,9 +479,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
-						ctx.query = searchParamsToQuery(
-							removePromptFromQuery(query, "login"),
-						);
+						const signedQueryIssuedAt =
+							oauthRequest?.signedQueryIssuedAt ??
+							getServerContextSignedQueryIssuedAt(
+								serverContext?.[signedQueryIssuedAtMsKey],
+							);
+						let authorizationQuery = removePromptFromQuery(query, "login");
+						if (
+							isSessionFreshForSignedQuery(
+								session.session.createdAt,
+								signedQueryIssuedAt,
+							)
+						) {
+							authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
+						}
+						ctx.query = searchParamsToQuery(authorizationQuery);
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
@@ -530,40 +568,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
-					query: z.object({
-						response_type: z
-							.string()
-							.pipe(z.enum(["code"]))
-							.optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z
-							.string()
-							.pipe(z.enum(["S256"]))
-							.optional(),
-						nonce: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						prompt: z
-							.string()
-							.pipe(
-								z.enum([
-									"none",
-									"consent",
-									"login",
-									"create",
-									"select_account",
-									"login consent",
-									"select_account consent",
-								]),
-							)
-							.optional(),
-					}),
+					query: authorizationQuerySchema,
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },
@@ -636,6 +641,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OpenID Connect nonce",
+								},
+								{
+									name: "max_age",
+									in: "query",
+									required: false,
+									schema: { type: "integer", minimum: 0 },
+									description:
+										"Maximum authentication age in seconds; forces re-authentication when exceeded",
 								},
 								{
 									name: "resource",
