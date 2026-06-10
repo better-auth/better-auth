@@ -13,6 +13,13 @@ export interface GoogleRecaptchaOptions extends BaseCaptchaOptions {
 	minScore?: number | undefined;
 }
 
+export interface GoogleRecaptchaEnterpriseOptions extends BaseCaptchaOptions {
+	provider: typeof Providers.GOOGLE_RECAPTCHA_ENTERPRISE;
+	projectId: string;
+	siteKey: string;
+	minScore?: number | undefined;
+}
+
 export interface CloudflareTurnstileOptions extends BaseCaptchaOptions {
 	provider: typeof Providers.CLOUDFLARE_TURNSTILE;
 }
@@ -29,6 +36,7 @@ export interface CaptchaFoxOptions extends BaseCaptchaOptions {
 
 export type CaptchaOptions =
 	| GoogleRecaptchaOptions
+	| GoogleRecaptchaEnterpriseOptions
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
 	| CaptchaFoxOptions;
