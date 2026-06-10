@@ -1011,6 +1011,135 @@ describe("account", async () => {
 		findAccountsSpy.mockRestore();
 	});
 
+	it("should not refresh with a stale account cookie belonging to another user", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const testCtx = await auth.$context;
+
+		let refreshedWith: string | null = null;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const params = new URLSearchParams(await request.text());
+				if (params.get("grant_type") === "refresh_token") {
+					refreshedWith = params.get("refresh_token");
+					// the provider does not rotate the refresh token
+					return HttpResponse.json({
+						access_token: "rotated-access-token",
+					});
+				}
+				const data: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "First User",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "first-google-sub",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "User",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "first-access-token",
+					refresh_token: "first-refresh-token",
+					id_token: testIdToken,
+				});
+			}),
+		);
+
+		// The first user signs in with Google, storing their account_data cookie
+		const headers = new Headers();
+		email = "stale-cookie-first@test.com";
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		await client.signUp.email(
+			{
+				email: "stale-cookie-second@test.com",
+				password: "password123456",
+				name: "Second User",
+			},
+			{
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const session = await auth.api.getSession({ headers });
+		assert(session, "second user should be signed in");
+		expect(session.user.email).toBe("stale-cookie-second@test.com");
+
+		// The second user has their own google account
+		await testCtx.internalAdapter.createAccount({
+			userId: session.user.id,
+			providerId: "google",
+			accountId: "second-google-sub",
+			accessToken: "second-access-token",
+			refreshToken: "second-refresh-token",
+			scope: "email",
+		});
+
+		const res = await client.$fetch<{ refreshToken?: string }>(
+			"/refresh-token",
+			{
+				body: {
+					providerId: "google",
+				},
+				headers,
+				method: "POST",
+			},
+		);
+
+		// The refresh must use the second user's own refresh token, not the
+		// the first user's token from the stale cookie
+		expect(refreshedWith).toBe("second-refresh-token");
+		expect(res.data?.refreshToken).not.toBe("first-refresh-token");
+
+		// The second user's account row must not be overwritten with the
+		// the first user's tokens
+		const accounts = await testCtx.internalAdapter.findAccounts(
+			session.user.id,
+		);
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount?.refreshToken).toBe("second-refresh-token");
+	});
+
 	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {

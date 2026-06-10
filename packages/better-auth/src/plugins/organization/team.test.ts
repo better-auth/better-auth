@@ -1378,3 +1378,130 @@ describe("invitation with team id containing comma", async () => {
 		});
 	});
 });
+
+describe("invitation team ids are scoped to the invited organization", async () => {
+	// Teams are enabled with the default (unlimited) team size, where team/org
+	// scoping previously did not run.
+	const { auth, client, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: { enabled: true },
+					}),
+				],
+				logger: { level: "error" },
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+			},
+			{ testWith: "sqlite" },
+		);
+
+	const ctx = await auth.$context;
+
+	// Org A and its owner.
+	const orgAOwner = await signInWithTestUser();
+	const orgA = await auth.api.createOrganization({
+		headers: orgAOwner.headers,
+		body: { name: "Org A", slug: "org-a" },
+	});
+	if (!orgA) throw new Error("failed to create org A");
+
+	// A separate organization (Org B) with its own owner and team.
+	const inviteeEmail = "team-scope-invitee@email.com";
+	const orgBOwner = {
+		email: "org-b-owner@email.com",
+		password: "password12345",
+		name: "Org B Owner",
+	};
+	await client.signUp.email(orgBOwner);
+	const orgBHeaders = (
+		await signInWithUser(orgBOwner.email, orgBOwner.password)
+	).headers;
+	const orgB = await auth.api.createOrganization({
+		headers: orgBHeaders,
+		body: { name: "Org B", slug: "org-b" },
+	});
+	if (!orgB) throw new Error("failed to create org B");
+	const teamB = await auth.api.createTeam({
+		headers: orgBHeaders,
+		body: { name: "Org B Team", organizationId: orgB.id },
+	});
+	const otherOrgTeamId = teamB.id;
+
+	it("rejects createInvitation when the team belongs to another organization", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers: orgAOwner.headers,
+				body: {
+					email: inviteeEmail,
+					role: "member",
+					organizationId: orgA.id,
+					teamId: otherOrgTeamId,
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "TEAM_NOT_FOUND" },
+		});
+	});
+
+	it("does not add the member to another organization's team when accepting an invitation that stored one", async () => {
+		// An older invitation in Org A that references Org B's team directly,
+		// created before team/org scoping was enforced.
+		const invitationId = `team-scope-invitation-${Date.now()}`;
+		await ctx.adapter.create({
+			model: "invitation",
+			forceAllowId: true,
+			data: {
+				id: invitationId,
+				email: inviteeEmail,
+				role: "member",
+				organizationId: orgA.id,
+				teamId: otherOrgTeamId,
+				status: "pending",
+				inviterId: orgAOwner.user.id,
+				expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+				createdAt: new Date(),
+			},
+		});
+
+		const inviteeHeaders = new Headers();
+		const inviteeSignUp = await client.signUp.email(
+			{
+				email: inviteeEmail,
+				password: "password12345",
+				name: "Invitee",
+			},
+			{ onSuccess: cookieSetter(inviteeHeaders) },
+		);
+		const inviteeUserId = inviteeSignUp.data!.user.id;
+
+		await expect(
+			auth.api.acceptInvitation({
+				headers: inviteeHeaders,
+				body: { invitationId },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "TEAM_NOT_FOUND" },
+		});
+
+		// The member should not be added to Org B's team.
+		const otherOrgTeamMembers = await ctx.adapter.findMany<{ userId: string }>({
+			model: "teamMember",
+			where: [{ field: "teamId", value: otherOrgTeamId }],
+		});
+		expect(otherOrgTeamMembers.some((m) => m.userId === inviteeUserId)).toBe(
+			false,
+		);
+	});
+});

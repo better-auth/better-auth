@@ -688,7 +688,9 @@ describe("SCIM", () => {
 				database: memory,
 				baseURL: "http://localhost:3000",
 				emailAndPassword: { enabled: true },
-				plugins: [scim(), organization()],
+				// This regression test links a pre-existing user by email, which
+				// is now opt-in via `linkExistingUsers`.
+				plugins: [scim({ linkExistingUsers: true }), organization()],
 				secondaryStorage: {
 					set(key, value) {
 						store.set(key, value);
@@ -749,6 +751,68 @@ describe("SCIM", () => {
 			});
 
 			expect(store.has(victimToken)).toBe(false);
+		});
+
+		it("should deprovision (not delete the global user) for an org-scoped DELETE", async () => {
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
+			const organization = await registerOrganization("org:deprovision");
+			const scimToken = await getSCIMToken(
+				"provider-deprovision",
+				organization?.id,
+			);
+
+			const created = await auth.api.createSCIMUser({
+				body: {
+					userName: "scim-user",
+					emails: [{ value: "scim-user@email.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const ctx = await auth.$context;
+
+			// SCIM provisioning created an org membership for the new user.
+			const memberBefore = await ctx.adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: organization!.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(memberBefore).not.toBeNull();
+
+			await auth.api.deleteSCIMUser({
+				params: { userId: created.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			// The global Better Auth user must NOT be deleted by an org-scoped token.
+			const userAfter = await ctx.adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: created.id }],
+			});
+			expect(userAfter).not.toBeNull();
+
+			// The org membership is removed (deprovisioned).
+			const memberAfter = await ctx.adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: organization!.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(memberAfter).toBeNull();
+
+			// The SCIM account link is removed, so the user is no longer
+			// reachable through this provider.
+			await expect(
+				auth.api.getSCIMUser({
+					params: { userId: created.id },
+					headers: { authorization: `Bearer ${scimToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ message: "User not found" }),
+			);
 		});
 	});
 

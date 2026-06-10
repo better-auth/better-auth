@@ -15,6 +15,7 @@ import type {
 } from "./types";
 
 import {
+	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
@@ -260,6 +261,18 @@ export async function authorizeEndpoint(
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
+		);
+	}
+	// The authorize endpoint only serves the authorization_code grant; reject
+	// clients that are not registered for it.
+	if (!clientAllowsGrant(client, "authorization_code")) {
+		return handleRedirect(
+			ctx,
+			getErrorURL(
+				ctx,
+				"unauthorized_client",
+				"client is not authorized to use the authorization_code grant",
+			),
 		);
 	}
 

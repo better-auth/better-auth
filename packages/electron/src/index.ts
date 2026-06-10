@@ -61,12 +61,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			code_challenge_method?: string | undefined;
 		},
 	) => {
-		const {
-			client_id,
-			state,
-			code_challenge,
-			code_challenge_method = "plain",
-		} = payload;
+		const { client_id, state, code_challenge, code_challenge_method } = payload;
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
@@ -77,6 +72,16 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		}
 		if (!code_challenge) {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
+		}
+		// Only S256 is accepted. With `plain` (or a missing/unknown method) the
+		// verifier equals the challenge that already travels in the sign-in URL
+		// query, so it must be rejected rather than silently downgraded to a
+		// plain verifier comparison at exchange time.
+		if (code_challenge_method?.toLowerCase() !== "s256") {
+			throw APIError.from(
+				"BAD_REQUEST",
+				ELECTRON_ERROR_CODES.INVALID_PKCE_METHOD,
+			);
 		}
 
 		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
@@ -89,7 +94,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			value: JSON.stringify({
 				userId,
 				codeChallenge: code_challenge,
-				codeChallengeMethod: code_challenge_method.toLowerCase(),
+				codeChallengeMethod: "s256",
 				state,
 			}),
 			expiresAt,
@@ -160,7 +165,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						const querySchema = z.object({
 							client_id: z.string(),
 							code_challenge: z.string().nonempty(),
-							code_challenge_method: z.string().optional().default("plain"),
+							code_challenge_method: z.string().optional(),
 							state: z.string().nonempty(),
 						});
 						const cookie = ctx.context.createAuthCookie("transfer_token", {

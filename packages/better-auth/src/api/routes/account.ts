@@ -760,11 +760,12 @@ export const refreshToken = createAuthEndpoint(
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
 		const accountData = await getAccountCookie(ctx);
-		if (
-			accountData &&
+		const usedAccountCookie =
+			!!accountData &&
 			accountData.userId === resolvedUserId &&
-			(!providerId || providerId === accountData?.providerId)
-		) {
+			providerId === accountData.providerId &&
+			(!accountId || accountData.accountId === accountId);
+		if (usedAccountCookie) {
 			account = accountData;
 		} else {
 			const accounts =
@@ -779,13 +780,7 @@ export const refreshToken = createAuthEndpoint(
 		if (!account) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
-
-		let refreshToken: string | null | undefined = undefined;
-		if (accountData && providerId === accountData.providerId) {
-			refreshToken = accountData.refreshToken ?? undefined;
-		} else {
-			refreshToken = account.refreshToken ?? undefined;
-		}
+		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
 			throw APIError.from("BAD_REQUEST", {
@@ -823,8 +818,7 @@ export const refreshToken = createAuthEndpoint(
 			}
 
 			if (
-				accountData &&
-				providerId === accountData.providerId &&
+				usedAccountCookie &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
 				const updateData = {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
+import { getCookieCache } from "../../cookies";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
@@ -2200,5 +2202,123 @@ describe("email-otp-resendStrategy", async () => {
 		const secondOtp = otps[1];
 		expect(secondOtp).toBeDefined();
 		expect(secondOtp).not.toBe(firstOtp);
+	});
+});
+
+describe("email-otp verify-email cookie cache isolation", async () => {
+	const secret = "better-auth-secret-1234567890-cookie-cache";
+	let otp = "";
+	const { client, auth } = await getTestInstance(
+		{
+			secret,
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	/**
+	 * Verifying an OTP for one email must not stamp `emailVerified: true` onto the
+	 * cookie cache of a *different* user that happens to be the current session.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9962
+	 */
+	it("should not mark the current session's user as verified when a different user's email is verified", async () => {
+		// User B is signed into their own (unverified) account.
+		const currentUserEmail = "user-b@test.com";
+		const currentUserPassword = "user-b-password";
+		await auth.api.signUpEmail({
+			body: {
+				email: currentUserEmail,
+				password: currentUserPassword,
+				name: "user-b",
+			},
+		});
+
+		const currentUserHeaders = new Headers();
+		await client.signIn.email(
+			{ email: currentUserEmail, password: currentUserPassword },
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const token = cookies.get("better-auth.session_token")?.value;
+					const data = cookies.get("better-auth.session_data")?.value;
+					currentUserHeaders.set(
+						"cookie",
+						`better-auth.session_token=${token}; better-auth.session_data=${data}`,
+					);
+				},
+			},
+		);
+
+		// A separate account whose email the OTP is issued for.
+		const otherEmail = "other@test.com";
+		await auth.api.signUpEmail({
+			body: {
+				email: otherEmail,
+				password: "other-password",
+				name: "other",
+			},
+		});
+		await client.emailOtp.sendVerificationOtp({
+			email: otherEmail,
+			type: "email-verification",
+		});
+
+		// Verify the OTP for the *other* email while still authenticated as
+		// user B. Capture whatever cookie cache verify-email writes.
+		let refreshedSessionData: string | undefined;
+		const verified = await client.emailOtp.verifyEmail(
+			{ email: otherEmail, otp },
+			{
+				headers: currentUserHeaders,
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					refreshedSessionData = cookies.get("better-auth.session_data")?.value;
+				},
+			},
+		);
+		expect(verified.data?.status).toBe(true);
+
+		// Merge any refreshed cache back into user B's cookies, exactly as a
+		// browser would, then read what get-session would trust.
+		if (refreshedSessionData) {
+			const token = currentUserHeaders
+				.get("cookie")
+				?.match(/better-auth\.session_token=([^;]+)/)?.[1];
+			currentUserHeaders.set(
+				"cookie",
+				`better-auth.session_token=${token}; better-auth.session_data=${refreshedSessionData}`,
+			);
+		}
+
+		const cache = await getCookieCache(currentUserHeaders, { secret });
+		expect(cache?.user.email).toBe(currentUserEmail);
+		expect(cache?.user.emailVerified).toBe(false);
+
+		// And the live session must agree: user B is still unverified.
+		const session = await client.getSession({
+			fetchOptions: { headers: currentUserHeaders },
+		});
+		expect(session.data?.user.email).toBe(currentUserEmail);
+		expect(session.data?.user.emailVerified).toBe(false);
 	});
 });

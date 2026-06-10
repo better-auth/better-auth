@@ -8,4 +8,5 @@ export const ELECTRON_ERROR_CODES = defineErrorCodes({
 	INVALID_CODE_VERIFIER: "Invalid code verifier",
 	MISSING_STATE: "state is required",
 	MISSING_PKCE: "pkce is required",
+	INVALID_PKCE_METHOD: "PKCE method must be S256",
 });

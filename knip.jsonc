@@ -16,7 +16,8 @@
 	"ignoreIssues": {
 		"packages/cli/src/commands/init/index.ts": ["exports"],
 		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
-		"packages/sso/src/saml/assertions.ts": ["exports"]
+		"packages/sso/src/saml/assertions.ts": ["exports"],
+		"packages/sso/src/oidc/discovery.ts": ["exports"]
 	},
 	"ignoreDependencies": ["@changesets/cli", "@vitest/coverage-istanbul"],
 	"rules": {

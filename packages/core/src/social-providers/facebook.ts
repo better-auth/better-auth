@@ -24,6 +24,58 @@ export interface FacebookProfile {
 	};
 }
 
+interface FacebookDebugTokenData {
+	app_id?: string;
+	is_valid?: boolean;
+	user_id?: string;
+}
+
+/**
+ * Validate an opaque Facebook access token against the configured app.
+ *
+ * Facebook access tokens are not audience-bound at the Graph `/me` endpoint: a
+ * token minted for any Facebook app returns that app's profile. Without this
+ * check, a token issued to an unrelated app could be presented to this
+ * app's direct sign-in path and accepted as proof of identity. We call the
+ * `debug_token` endpoint and require the token to be valid, bound to one of the
+ * configured client ids, and tied to a user.
+ *
+ * @see https://developers.facebook.com/docs/facebook-login/guides/access-tokens/debugging
+ *
+ * @returns the inspected token's `user_id` when the token is valid and bound to
+ * the configured app, otherwise `null`.
+ */
+async function verifyFacebookAccessToken(
+	accessToken: string,
+	options: FacebookOptions,
+): Promise<string | null> {
+	const primaryClientId = getPrimaryClientId(options.clientId);
+	if (!primaryClientId || !options.clientSecret) {
+		return null;
+	}
+	const clientIds = Array.isArray(options.clientId)
+		? options.clientId
+		: [options.clientId];
+	const appAccessToken = `${primaryClientId}|${options.clientSecret}`;
+	const { data, error } = await betterFetch<{ data?: FacebookDebugTokenData }>(
+		"https://graph.facebook.com/debug_token",
+		{
+			query: {
+				input_token: accessToken,
+				access_token: appAccessToken,
+			},
+		},
+	);
+	if (error || !data?.data) {
+		return null;
+	}
+	const { is_valid, app_id, user_id } = data.data;
+	if (is_valid !== true || !app_id || !clientIds.includes(app_id) || !user_id) {
+		return null;
+	}
+	return user_id;
+}
+
 export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	clientId: string | string[];
 	/**
@@ -117,7 +169,10 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			/* access_token */
-			return true;
+			// An opaque access token carries no app binding of its own, so it
+			// must be validated against the configured app before it can be
+			// trusted as proof of identity.
+			return (await verifyFacebookAccessToken(token, options)) !== null;
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
@@ -178,6 +233,20 @@ export const facebook = (options: FacebookOptions) => {
 				};
 			}
 
+			// The profile is fetched with `accessToken`, which is the credential
+			// that actually proves identity here — and a separate request field
+			// from the `idToken`/token validated by `verifyIdToken`. Since an
+			// opaque token is not app-bound at `/me`, validate this exact token
+			// against the configured app before trusting the profile it returns.
+			const accessToken = token.accessToken;
+			if (!accessToken) {
+				return null;
+			}
+			const tokenUserId = await verifyFacebookAccessToken(accessToken, options);
+			if (!tokenUserId) {
+				return null;
+			}
+
 			const fields = [
 				"id",
 				"name",
@@ -190,11 +259,15 @@ export const facebook = (options: FacebookOptions) => {
 				{
 					auth: {
 						type: "Bearer",
-						token: token.accessToken,
+						token: accessToken,
 					},
 				},
 			);
 			if (error) {
+				return null;
+			}
+			// Bind the validated token to the profile it returned.
+			if (profile.id !== tokenUserId) {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);

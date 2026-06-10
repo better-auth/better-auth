@@ -147,6 +147,8 @@ function sanitizeBetterAuthConfig(config: any): any {
 	// List of sensitive keys to redact
 	const sensitiveKeys = [
 		"secret",
+		"secrets",
+		"secretKey",
 		"clientSecret",
 		"clientId",
 		"authToken",
@@ -239,6 +241,8 @@ function sanitizeBetterAuthConfig(config: any): any {
 				})
 			) {
 				if (typeof value === "string" && value.length > 0) {
+					result[key] = "[REDACTED]";
+				} else if (Array.isArray(value)) {
 					result[key] = "[REDACTED]";
 				} else if (typeof value === "object" && value !== null) {
 					// Still recurse into objects but mark them as potentially sensitive
