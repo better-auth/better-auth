@@ -104,6 +104,7 @@ export function apiKey(
 			fallbackToDatabase: config?.fallbackToDatabase ?? false,
 			customStorage: config?.customStorage,
 			deferUpdates: config?.deferUpdates ?? false,
+			softDelete: config?.softDelete ?? false,
 		})),
 	] as PredefinedApiKeyOptions[];
 
@@ -209,14 +210,15 @@ export function apiKey(
 							expectedConfigId: config.configId,
 						});
 
-						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
-							(err) => {
-								ctx.context.logger.error(
-									"Failed to delete expired API keys:",
-									err,
-								);
-							},
-						);
+						const cleanupTask = deleteAllExpiredApiKeys(
+							ctx.context,
+							configurations,
+						).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
+							);
+						});
 						if (config.deferUpdates) {
 							ctx.context.runInBackground(cleanupTask);
 						}

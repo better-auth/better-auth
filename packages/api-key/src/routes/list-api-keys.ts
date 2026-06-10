@@ -86,6 +86,7 @@ export function listApiKeys({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
@@ -365,7 +366,7 @@ export function listApiKeys({
 				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context, configurations);
 
 			// Build response with parsed metadata (synchronous, no DB calls)
 			const returningApiKeys = paginatedApiKeys.map((apiKey) => {

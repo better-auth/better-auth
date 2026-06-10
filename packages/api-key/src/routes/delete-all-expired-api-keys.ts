@@ -1,11 +1,15 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function deleteAllExpiredApiKeysEndpoint({
+	configurations,
 	deleteAllExpiredApiKeys,
 }: {
+	configurations: PredefinedApiKeyOptions[];
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
@@ -15,7 +19,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 		},
 		async (ctx) => {
 			try {
-				await deleteAllExpiredApiKeys(ctx.context, true);
+				await deleteAllExpiredApiKeys(ctx.context, configurations, true);
 			} catch (error) {
 				ctx.context.logger.error(
 					"[API KEY PLUGIN] Failed to delete expired API keys:",

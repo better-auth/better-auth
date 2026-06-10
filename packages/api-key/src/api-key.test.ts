@@ -4934,6 +4934,195 @@ describe("api-key", async () => {
 	});
 });
 
+describe("soft delete", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				apiKey({
+					softDelete: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+	const { headers, user } = await signInWithTestUser();
+
+	it("should disable key instead of removing it", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: { userId: user.id },
+		});
+
+		const result = await auth.api.deleteApiKey({
+			body: { keyId: apiKey.id },
+			headers,
+		});
+
+		expect(result.success).toBe(true);
+
+		const fetched = await auth.api.getApiKey({
+			query: { id: apiKey.id },
+			headers,
+		});
+
+		expect(fetched.enabled).toBe(false);
+	});
+
+	it("should reject verification of a soft-deleted key", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: { userId: user.id },
+		});
+
+		await auth.api.deleteApiKey({
+			body: { keyId: apiKey.id },
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: { key: apiKey.key },
+		});
+
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe("KEY_DISABLED");
+	});
+
+	it("should disable expired key instead of removing it", async () => {
+		vi.useRealTimers();
+		const apiKey = await auth.api.createApiKey({
+			body: { userId: user.id, expiresIn: 60 * 60 * 24 },
+		});
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24 * 2);
+
+		const result = await auth.api.verifyApiKey({
+			body: { key: apiKey.key },
+		});
+
+		expect(result.error?.code).toBe("KEY_EXPIRED");
+		vi.useRealTimers();
+
+		const fetched = await auth.api.getApiKey({
+			query: { id: apiKey.id },
+			headers,
+		});
+
+		expect(fetched.enabled).toBe(false);
+	});
+
+	it("should disable exhausted key instead of removing it", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: { userId: user.id, remaining: 1 },
+		});
+
+		await auth.api.verifyApiKey({
+			body: { key: apiKey.key },
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: { key: apiKey.key },
+		});
+
+		expect(result.error?.code).toBe("USAGE_EXCEEDED");
+
+		const fetched = await auth.api.getApiKey({
+			query: { id: apiKey.id },
+			headers,
+		});
+
+		expect(fetched.enabled).toBe(false);
+	});
+
+	describe("mixed soft/hard delete configurations", async () => {
+		const { auth: mixedAuth, signInWithTestUser: mixedSignInWithTestUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						apiKey([
+							{
+								configId: "soft",
+								softDelete: true,
+							},
+							{
+								configId: "hard",
+								softDelete: false,
+							},
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+		const { headers: mixedHeaders, user: mixedUser } =
+			await mixedSignInWithTestUser();
+
+		it("should soft-delete expired keys for soft config and hard-delete for hard config", async () => {
+			vi.useRealTimers();
+			const softKey = await mixedAuth.api.createApiKey({
+				body: {
+					configId: "soft",
+					userId: mixedUser.id,
+					expiresIn: 60 * 60 * 24,
+				},
+			});
+			const hardKey = await mixedAuth.api.createApiKey({
+				body: {
+					configId: "hard",
+					userId: mixedUser.id,
+					expiresIn: 60 * 60 * 24,
+				},
+			});
+
+			vi.useFakeTimers();
+			await vi.advanceTimersByTimeAsync(1000 * 60 * 60 * 24 * 2);
+
+			await mixedAuth.api.deleteAllExpiredApiKeys();
+			vi.useRealTimers();
+
+			const softFetched = await mixedAuth.api.getApiKey({
+				query: { id: softKey.id, configId: "soft" },
+				headers: mixedHeaders,
+			});
+
+			expect(softFetched.enabled).toBe(false);
+
+			try {
+				await mixedAuth.api.getApiKey({
+					query: { id: hardKey.id, configId: "hard" },
+					headers: mixedHeaders,
+				});
+				expect.fail("Should have thrown an error");
+			} catch (error: any) {
+				expect(isAPIError(error)).toBe(true);
+				expect(error.body?.code).toBe("KEY_NOT_FOUND");
+			}
+		});
+	});
+
+	it("should still list soft-deleted keys", async () => {
+		const apiKey = await auth.api.createApiKey({
+			body: { userId: user.id },
+		});
+
+		await auth.api.deleteApiKey({
+			body: { keyId: apiKey.id },
+			headers,
+		});
+
+		const list = await auth.api.listApiKeys({ headers });
+		const found = list.apiKeys.find((k) => k.id === apiKey.id);
+
+		expect(found).toBeDefined();
+		expect(found?.enabled).toBe(false);
+	});
+});
+
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(

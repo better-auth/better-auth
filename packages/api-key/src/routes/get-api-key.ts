@@ -34,6 +34,7 @@ export function getApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
@@ -225,7 +226,7 @@ export function getApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context, configurations);
 
 			// Migrate legacy double-stringified metadata if needed
 			const metadata = await migrateDoubleStringifiedMetadata(

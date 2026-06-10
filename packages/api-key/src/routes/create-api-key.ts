@@ -123,6 +123,7 @@ export function createApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
@@ -419,7 +420,7 @@ export function createApiKey({
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.NAME_REQUIRED);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context, configurations);
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,

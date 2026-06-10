@@ -113,6 +113,7 @@ export function updateApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
@@ -475,7 +476,7 @@ export function updateApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context, configurations);
 
 			// Migrate legacy double-stringified metadata if needed
 			const migratedMetadata = await migrateDoubleStringifiedMetadata(

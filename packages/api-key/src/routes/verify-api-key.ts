@@ -83,19 +83,44 @@ export async function validateApiKey({
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			const deleteExpiredKey = async () => {
-				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					await deleteApiKey(ctx, apiKey, opts);
-					await ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
-					});
-				} else if (opts.storage === "secondary-storage") {
-					await deleteApiKey(ctx, apiKey, opts);
+				if (opts.softDelete) {
+					const disabledKey = {
+						...apiKey,
+						enabled: false,
+						updatedAt: new Date(),
+					};
+
+					if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+						await setApiKey(ctx, disabledKey, opts);
+						await ctx.context.adapter.update({
+							model: API_KEY_TABLE_NAME,
+							update: { enabled: false, updatedAt: new Date() },
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else if (opts.storage === "secondary-storage") {
+						await setApiKey(ctx, disabledKey, opts);
+					} else {
+						await ctx.context.adapter.update({
+							model: API_KEY_TABLE_NAME,
+							update: { enabled: false, updatedAt: new Date() },
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					}
 				} else {
-					await ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
-					});
+					if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+						await deleteApiKey(ctx, apiKey, opts);
+						await ctx.context.adapter.delete({
+							model: API_KEY_TABLE_NAME,
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else if (opts.storage === "secondary-storage") {
+						await deleteApiKey(ctx, apiKey, opts);
+					} else {
+						await ctx.context.adapter.delete({
+							model: API_KEY_TABLE_NAME,
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					}
 				}
 			};
 
@@ -135,19 +160,44 @@ export async function validateApiKey({
 
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		const deleteExhaustedKey = async () => {
-			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				await deleteApiKey(ctx, apiKey, opts);
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
-			} else if (opts.storage === "secondary-storage") {
-				await deleteApiKey(ctx, apiKey, opts);
+			if (opts.softDelete) {
+				const disabledKey = {
+					...apiKey,
+					enabled: false,
+					updatedAt: new Date(),
+				};
+
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					await setApiKey(ctx, disabledKey, opts);
+					await ctx.context.adapter.update({
+						model: API_KEY_TABLE_NAME,
+						update: { enabled: false, updatedAt: new Date() },
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				} else if (opts.storage === "secondary-storage") {
+					await setApiKey(ctx, disabledKey, opts);
+				} else {
+					await ctx.context.adapter.update({
+						model: API_KEY_TABLE_NAME,
+						update: { enabled: false, updatedAt: new Date() },
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				}
 			} else {
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					await deleteApiKey(ctx, apiKey, opts);
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				} else if (opts.storage === "secondary-storage") {
+					await deleteApiKey(ctx, apiKey, opts);
+				} else {
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				}
 			}
 		};
 
@@ -282,6 +332,7 @@ export function verifyApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
@@ -336,12 +387,14 @@ export function verifyApiKey({
 
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
-							);
-						}),
+						deleteAllExpiredApiKeys(ctx.context, configurations).catch(
+							(err) => {
+								ctx.context.logger.error(
+									"Failed to delete expired API keys:",
+									err,
+								);
+							},
+						),
 					);
 				}
 			} catch (error) {

@@ -277,6 +277,13 @@ export interface ApiKeyConfigurationOptions {
 	 */
 	deferUpdates?: boolean | undefined;
 	/**
+	 * When enabled, deleting an API key sets `enabled` to `false` instead of
+	 * removing the row. Expired-key cleanup follows the same behavior.
+	 *
+	 * @default false
+	 */
+	softDelete?: boolean | undefined;
+	/**
 	 * What the API key references. This determines ownership over the API key.
 	 *
 	 * @default "user"

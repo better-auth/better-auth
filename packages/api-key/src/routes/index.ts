@@ -31,6 +31,7 @@ export type PredefinedApiKeyOptions = ApiKeyConfigurationOptions &
 			| "storage"
 			| "fallbackToDatabase"
 			| "deferUpdates"
+			| "softDelete"
 		>
 	> & {
 		keyExpiration: Required<
@@ -99,6 +100,7 @@ let lastChecked: Date | null = null;
 
 export async function deleteAllExpiredApiKeys(
 	ctx: AuthContext,
+	configurations: PredefinedApiKeyOptions[],
 	byPassLastCheckTime = false,
 ): Promise<void> {
 	if (lastChecked && !byPassLastCheckTime) {
@@ -109,25 +111,66 @@ export async function deleteAllExpiredApiKeys(
 		}
 	}
 	lastChecked = new Date();
-	await ctx.adapter
-		.deleteMany({
-			model: API_KEY_TABLE_NAME,
-			where: [
-				{
-					field: "expiresAt" satisfies keyof ApiKey,
-					operator: "lt",
-					value: new Date(),
-				},
-				{
-					field: "expiresAt",
-					operator: "ne",
-					value: null,
-				},
-			],
-		})
-		.catch((error) => {
-			ctx.logger.error(`Failed to delete expired API keys:`, error);
-		});
+
+	const expiredWhere = [
+		{
+			field: "expiresAt" satisfies keyof ApiKey,
+			operator: "lt" as const,
+			value: new Date(),
+		},
+		{
+			field: "expiresAt" satisfies keyof ApiKey,
+			operator: "ne" as const,
+			value: null,
+		},
+	];
+
+	const hardDeleteConfigIds = configurations
+		.filter((c) => !c.softDelete)
+		.map((c) => c.configId ?? "default");
+	const softDeleteConfigIds = configurations
+		.filter((c) => c.softDelete)
+		.map((c) => c.configId ?? "default");
+
+	const pending: Promise<unknown>[] = [];
+
+	if (softDeleteConfigIds.length > 0) {
+		pending.push(
+			ctx.adapter.updateMany({
+				model: API_KEY_TABLE_NAME,
+				update: { enabled: false, updatedAt: new Date() },
+				where: [
+					...expiredWhere,
+					{ field: "enabled", value: true },
+					{
+						field: "configId" satisfies keyof ApiKey,
+						operator: "in",
+						value: softDeleteConfigIds,
+					},
+				],
+			}),
+		);
+	}
+
+	if (hardDeleteConfigIds.length > 0) {
+		pending.push(
+			ctx.adapter.deleteMany({
+				model: API_KEY_TABLE_NAME,
+				where: [
+					...expiredWhere,
+					{
+						field: "configId" satisfies keyof ApiKey,
+						operator: "in",
+						value: hardDeleteConfigIds,
+					},
+				],
+			}),
+		);
+	}
+
+	await Promise.all(pending).catch((error) => {
+		ctx.logger.error(`Failed to delete expired API keys:`, error);
+	});
 }
 
 export function createApiKeyRoutes({
@@ -171,6 +214,7 @@ export function createApiKeyRoutes({
 			deleteAllExpiredApiKeys,
 		}),
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
+			configurations,
 			deleteAllExpiredApiKeys,
 		}),
 	};

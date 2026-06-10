@@ -7,6 +7,7 @@ import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
+	setApiKey,
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
@@ -36,6 +37,7 @@ export function deleteApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
+		configurations: PredefinedApiKeyOptions[],
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
@@ -134,36 +136,51 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					await deleteApiKeyFromStorage(ctx, apiKey, opts);
-					await ctx.context.adapter.delete<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
-				} else if (opts.storage === "database") {
-					await ctx.context.adapter.delete<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
+				if (opts.softDelete) {
+					const disabledKey = {
+						...apiKey,
+						enabled: false,
+						updatedAt: new Date(),
+					};
+
+					if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+						await setApiKey(ctx, disabledKey, opts);
+						await ctx.context.adapter.update<ApiKey>({
+							model: API_KEY_TABLE_NAME,
+							update: { enabled: false, updatedAt: new Date() },
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else if (opts.storage === "database") {
+						await ctx.context.adapter.update<ApiKey>({
+							model: API_KEY_TABLE_NAME,
+							update: { enabled: false, updatedAt: new Date() },
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else {
+						await setApiKey(ctx, disabledKey, opts);
+					}
 				} else {
-					await deleteApiKeyFromStorage(ctx, apiKey, opts);
+					if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+						await deleteApiKeyFromStorage(ctx, apiKey, opts);
+						await ctx.context.adapter.delete<ApiKey>({
+							model: API_KEY_TABLE_NAME,
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else if (opts.storage === "database") {
+						await ctx.context.adapter.delete<ApiKey>({
+							model: API_KEY_TABLE_NAME,
+							where: [{ field: "id", value: apiKey.id }],
+						});
+					} else {
+						await deleteApiKeyFromStorage(ctx, apiKey, opts);
+					}
 				}
 			} catch (error: any) {
 				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
 			}
-			deleteAllExpiredApiKeys(ctx.context);
+			deleteAllExpiredApiKeys(ctx.context, configurations);
 			return ctx.json({
 				success: true,
 			});
