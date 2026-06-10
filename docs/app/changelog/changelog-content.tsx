@@ -123,7 +123,7 @@ function MarkdownContent({ content }: { content: string }) {
 						target="_blank"
 						rel="noopener noreferrer"
 						className={cn(
-							"font-medium text-neutral-600 dark:text-neutral-300 underline decoration-dashed underline-offset-4 hover:text-neutral-900 dark:hover:text-white transition-colors",
+							"font-medium text-neutral-600 dark:text-neutral-300 underline decoration-dashed underline-offset-4 hover:text-neutral-900 dark:hover:text-white transition-colors has-[img]:inline-flex has-[img]:align-middle has-[img]:no-underline",
 							className,
 						)}
 						{...props}
@@ -147,7 +147,7 @@ function MarkdownContent({ content }: { content: string }) {
 				hr: () => null,
 				img: (props) => (
 					<img
-						className="inline-block w-5 h-5 rounded-full border opacity-80 mx-0.5 align-text-bottom"
+						className="inline-block size-6 rounded-full border border-foreground/10 bg-background opacity-90 mx-0.5 align-middle shadow-sm"
 						{...props}
 						style={{ maxWidth: "100%" }}
 						alt={props.alt || ""}

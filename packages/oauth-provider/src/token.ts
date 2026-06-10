@@ -18,6 +18,7 @@ import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
 	checkResource,
+	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
@@ -534,8 +535,12 @@ async function createUserTokens(
 		});
 	}
 	const audience = resourceResult.audience;
+	// Only mint a refresh token when the client may use refresh tokens.
+	// Otherwise an `offline_access` scope alone would hand a refresh token to a
+	// pure machine-to-machine client that was never authorized for one.
 	const isRefreshToken =
 		user &&
+		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
@@ -840,6 +845,7 @@ async function handleAuthorizationCodeGrant(
 		client_secret,
 		scopes,
 		preVerifiedClient,
+		"authorization_code",
 	);
 
 	// Parse scopes from the authorization request
@@ -1007,6 +1013,7 @@ async function handleClientCredentialsGrant(
 		client_secret,
 		undefined,
 		preVerifiedClient,
+		"client_credentials",
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -1172,6 +1179,7 @@ async function handleRefreshTokenGrant(
 		client_secret, // Optional for refresh_grant but required on confidential clients
 		requestedScopes ?? scopes,
 		preVerifiedClient,
+		"refresh_token",
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

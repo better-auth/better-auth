@@ -87,7 +87,7 @@ You can view the [API Key plugin options](/docs/plugins/api-key/reference#api-ke
 
 ### Create an API key
 
-<APIMethod path="/api-key/create" method="POST" serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys) or `organizationId` (for organization-owned keys)." clientOnlyNote="You can adjust more specific API key configurations by using the server method instead.">
+<APIMethod path="/api-key/create" method="POST" serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys). For organization-owned keys, pass the `organizationId` together with a `userId` that has permission to create keys in that organization." clientOnlyNote="You can adjust more specific API key configurations by using the server method instead.">
   ```ts
   type createApiKey = {
       /**

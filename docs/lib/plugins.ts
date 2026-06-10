@@ -197,6 +197,11 @@ const pluginMeta: Record<
 		icon: "ChargebeeIcon",
 		tagline: "Chargebee subscription and billing management",
 	},
+	commet: {
+		category: "Payments",
+		icon: "CommetIcon",
+		tagline: "Commet billing, subscriptions and usage-based pricing",
+	},
 };
 
 export const categories = [

@@ -98,6 +98,12 @@ export async function verifyProviderIdToken(
 		) {
 			return false;
 		}
+		// Provider-specific claim check on the now-verified payload (e.g. Google's
+		// hosted-domain `hd`). Standard checks have already passed, so a token that
+		// fails here is authentic but does not meet the provider's extra constraint.
+		if (config.verifyClaims && !config.verifyClaims(payload)) {
+			return false;
+		}
 		return true;
 	} catch {
 		return false;

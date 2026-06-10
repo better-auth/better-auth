@@ -25,8 +25,22 @@ function isJoseInfrastructureError(error: joseErrors.JOSEError) {
 	return joseInfrastructureErrorCodes.has(error.code);
 }
 
-/** Last fetched jwks used locally in getJwks @internal */
-let jwks: JSONWebKeySet | undefined;
+interface JwksCacheEntry {
+	jwks: JSONWebKeySet;
+	fetchedAt: number;
+}
+
+const jwksCache = new Map<
+	string | (() => Promise<JSONWebKeySet | undefined>),
+	JwksCacheEntry
+>();
+
+/**
+ * How long a cached JWKS is trusted before it is refetched
+ *
+ * @internal
+ */
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface VerifyAccessTokenRemote {
 	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
@@ -41,6 +55,20 @@ export interface VerifyAccessTokenRemote {
 	 * is also still active.
 	 */
 	force?: boolean;
+	/**
+	 * Accept introspection responses that omit the `aud` claim even when a
+	 * required `audience` is configured in `verifyOptions`.
+	 *
+	 * By default verification fails closed: if you configure an `audience` and
+	 * the introspection response has no `aud` (or a mismatching one), the token
+	 * is rejected. Some authorization servers legitimately omit `aud` from
+	 * introspection responses (it is OPTIONAL per RFC 7662 §2.2); only enable
+	 * this if you trust the issuer to bind the token to this resource through
+	 * another mechanism, as it skips the audience check in that case.
+	 *
+	 * @default false
+	 */
+	allowMissingAudience?: boolean;
 }
 
 /**
@@ -96,10 +124,21 @@ export async function getJwks(
 	if (!jwtHeaders.kid) {
 		throw new APIError("UNAUTHORIZED", { message: "invalid access token" });
 	}
+	const kid = jwtHeaders.kid;
 
-	// Fetch jwks if not set or has a different kid than the one stored
-	if (!jwks || !jwks.keys.find((jwk) => jwk.kid === jwtHeaders.kid)) {
-		jwks =
+	const cacheKey = opts.jwksFetch;
+	const cached = jwksCache.get(cacheKey);
+	const isFresh = cached
+		? Date.now() - cached.fetchedAt < JWKS_CACHE_TTL_MS
+		: false;
+	const hasKid = cached?.jwks.keys.some((jwk) => jwk.kid === kid) ?? false;
+
+	// Refetch when this source has no cached set, the cached set has expired, or
+	// it does not contain the token's kid (e.g. a newly rotated-in key). The
+	// cache is scoped to `cacheKey`, so a token is only ever matched against the
+	// key set published by its own source.
+	if (!cached || !isFresh || !hasKid) {
+		const jwks =
 			typeof opts.jwksFetch === "string"
 				? await betterFetch<JSONWebKeySet>(opts.jwksFetch, {
 						headers: {
@@ -114,9 +153,11 @@ export async function getJwks(
 					})
 				: await opts.jwksFetch();
 		if (!jwks) throw new Error("No jwks found");
+		jwksCache.set(cacheKey, { jwks, fetchedAt: Date.now() });
+		return jwks;
 	}
 
-	return jwks;
+	return cached.jwks;
 }
 
 /**
@@ -201,13 +242,23 @@ export async function verifyAccessToken(
 			throw new APIError("UNAUTHORIZED", {
 				message: "token inactive",
 			});
-		// Verifies payload using verify options (token valid through introspect)
+		// Verifies payload using verify options (token valid through introspect).
+		// Audience is enforced by default: when `verifyOptions.audience` is set
+		// but the introspection response omits `aud` (or it mismatches),
+		// `UnsecuredJWT.decode` throws and the token is rejected. Otherwise a
+		// token issued for a different resource/client on the same issuer would
+		// also pass. Only drop the audience check when the caller has explicitly
+		// opted in via `remoteVerify.allowMissingAudience`.
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience: _audience, ...verifyOptions } = opts.verifyOptions;
-			const verify = introspect.aud
-				? UnsecuredJWT.decode(unsecuredJwt, opts.verifyOptions)
-				: UnsecuredJWT.decode(unsecuredJwt, verifyOptions);
+			const { audience: _audience, ...verifyOptionsNoAudience } =
+				opts.verifyOptions;
+			const skipAudience =
+				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
+			const verify = UnsecuredJWT.decode(
+				unsecuredJwt,
+				skipAudience ? verifyOptionsNoAudience : opts.verifyOptions,
+			);
 			payload = verify.payload;
 		} catch (error) {
 			throw new Error(error as unknown as string);

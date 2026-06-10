@@ -326,6 +326,14 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 		return await validateOrigin(ctx, true);
 	}
 
-	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
+	// No Fetch Metadata. A present Origin/Referer is still trustworthy evidence of
+	// cross-site intent, so validate it even without cookies. Only requests that carry
+	// no origin header at all (non-browser clients like curl or server-to-server) keep
+	// the permissive fallback.
+	const originHeader = headers.get("origin") || headers.get("referer");
+	if (originHeader) {
+		return await validateOrigin(ctx, true);
+	}
+
 	return;
 }

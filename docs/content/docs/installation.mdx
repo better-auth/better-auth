@@ -161,10 +161,14 @@ description: Learn how to configure Better Auth in your project.
       </Tab>
     </Tabs>
 
+    If your database is not listed above, check out our other supported
+    [databases](/docs/adapters/other-relational-databases) for more information,
+    or use one of the supported ORMs.
+
     <Callout>
-      If your database is not listed above, check out our other supported
-      [databases](/docs/adapters/other-relational-databases) for more information,
-      or use one of the supported ORMs.
+      If you’re using a database adapter (Drizzle, Prisma, MongoDB, or a community adapter),
+      consider importing `betterAuth` from `better-auth/minimal` instead of `better-auth` to reduce bundle size.
+      See [Bundle Size Optimization](/docs/guides/optimizing-for-performance#bundle-size-optimization) for more information.
     </Callout>
   </Step>
 

@@ -538,6 +538,30 @@ describe("getSessionCookie", async () => {
 		});
 	});
 
+	it("prefers the __Secure- cookie when a non-secure leftover is also present", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=current",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBe("current");
+	});
+
+	it("does not fall back to a non-secure cookie when the __Secure- value is empty", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBeNull();
+	});
+
 	it("should allow override cookie prefix with secure cookies", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
@@ -774,6 +798,61 @@ describe("getSessionCookie", async () => {
 
 		// Verify that chunking happened (instead of logging an error and not caching)
 		expect(hasCookieChunks).toBe(true);
+	});
+});
+
+describe("sensitive session middleware cookie cache", () => {
+	/**
+	 * Sensitive endpoints use `sensitiveSessionMiddleware`, which forces a
+	 * database-backed session lookup via `disableCookieCache: true`. A request
+	 * query parameter (e.g. `?disableCookieCache=`, which coerces to `false`)
+	 * must NOT be able to override that internal flag and re-enable the cookie
+	 * cache, otherwise a revoked session could still pass sensitive operations.
+	 */
+	it("should not let request query re-enable cookie cache on sensitive endpoints", async () => {
+		const { client, testUser, cookieSetter, db } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const userId = signInRes.data?.user.id!;
+		expect(userId).toBeDefined();
+
+		// Simulate the server-side session being revoked/deleted while the
+		// still-valid signed session_data cookie remains in the client.
+		await db.deleteMany({
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+		});
+
+		// Set the internal flag to a falsy value through the request query so it
+		// would skip the forced DB lookup if it took effect. The sensitive
+		// endpoint must still reject the request because the session no longer
+		// exists.
+		const res = await client.changePassword(
+			{
+				newPassword: "new-password",
+				currentPassword: testUser.password,
+			},
+			{
+				headers,
+				query: { disableCookieCache: "" },
+			},
+		);
+		expect(res.error?.status).toBe(401);
 	});
 });
 
