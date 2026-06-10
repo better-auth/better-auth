@@ -140,13 +140,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					if (!organization.stripeCustomerId) return;
 
 					try {
-						// Check if organization has any active subscriptions
-						const subscriptions = await client.subscriptions.list({
+						// Auto-paginate across every subscription so an active one on
+						// any page blocks deletion, then stop at the first match.
+						for await (const sub of client.subscriptions.list({
 							customer: organization.stripeCustomerId,
 							status: "all",
-							limit: 100, // 1 ~ 100
-						});
-						for (const sub of subscriptions.data) {
+							limit: 100,
+						})) {
 							if (
 								sub.status !== "canceled" &&
 								sub.status !== "incomplete" &&
