@@ -386,6 +386,27 @@ describe("Fetch Metadata CSRF Protection", async () => {
 		expect(response.status).toBe(403);
 	});
 
+	it("should reject an untrusted Referer on first-login when Fetch Metadata is missing", async (ctx) => {
+		const crossRefererRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					referer: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(crossRefererRequest);
+
+		expect(response.status).toBe(403);
+	});
+
 	it("should allow a first-login request that sends no cookies, Fetch Metadata, or origin", async (ctx) => {
 		const nonBrowserRequest = new Request(
 			"http://localhost:3000/api/auth/sign-in/email",
