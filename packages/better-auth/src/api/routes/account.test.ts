@@ -1895,5 +1895,18 @@ describe("token routes cookie cache revocation", async () => {
 			headers,
 		});
 		expect(res.error?.status).toBe(401);
+
+		// A request must not re-enable the cookie cache to revive the revoked
+		// session. `z.coerce.boolean()` reads an empty value as false, so the
+		// forced strict validation has to ignore it.
+		const bypass = await client.$fetch(
+			"/get-access-token?disableCookieCache=",
+			{
+				method: "POST",
+				body: { providerId: "google" },
+				headers,
+			},
+		);
+		expect(bypass.error?.status).toBe(401);
 	});
 });
