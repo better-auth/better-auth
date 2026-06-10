@@ -5,7 +5,7 @@ import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
-import { sensitiveSessionMiddleware } from "./session";
+import { sessionMiddleware } from "./session";
 
 const updateSessionBodySchema = z.record(
 	z.string().meta({
@@ -21,7 +21,7 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "updateSession",
 			body: updateSessionBodySchema,
-			use: [sensitiveSessionMiddleware],
+			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalSessionFieldsInput<O>>,
@@ -81,12 +81,14 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				},
 			);
 
-			if (!updatedSession) {
-				// The backing session row was revoked or deleted (e.g. the user
-				// was banned or signed out elsewhere) between authentication and
-				// this update. Do not synthesize a replacement session from
-				// cached state and reissue a cookie — that would let a revoked
-				// session keep renewing itself. Clear the cookies and fail.
+			// A cookie-cached session with no backing row in a durable store was
+			// revoked or expired server-side; fail closed instead of re-minting from
+			// stale data, which would extend a revoked session. DB-less deployments
+			// keep the session in the cookie and legitimately have no row to update.
+			const isStateful =
+				!!ctx.context.options.database ||
+				!!ctx.context.options.secondaryStorage;
+			if (!updatedSession && isStateful) {
 				deleteSessionCookie(ctx);
 				throw APIError.from(
 					"UNAUTHORIZED",
@@ -94,13 +96,19 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				);
 			}
 
+			const newSession = updatedSession ?? {
+				...session.session,
+				...additionalFields,
+				updatedAt: new Date(),
+			};
+
 			await setSessionCookie(ctx, {
-				session: updatedSession,
+				session: newSession,
 				user: session.user,
 			});
 
 			return ctx.json({
-				session: parseSessionOutput(ctx.context.options, updatedSession),
+				session: parseSessionOutput(ctx.context.options, newSession),
 			});
 		},
 	);

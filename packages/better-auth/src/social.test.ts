@@ -2600,7 +2600,7 @@ describe("Reddit Provider — profile email mapping", async () => {
 		);
 	});
 
-	it("never uses oauth_client_id as the email and refuses sign-in without a mapped email", async () => {
+	it("never uses oauth_client_id as the email and falls back to a unique per-user email", async () => {
 		const provider = reddit({
 			clientId: "reddit-client-id",
 			clientSecret: "reddit-client-secret",
@@ -2610,10 +2610,12 @@ describe("Reddit Provider — profile email mapping", async () => {
 			accessToken: "reddit-access-token",
 		} as any);
 
-		// Without a real email there is nothing safe to key the account on, so
-		// the provider refuses sign-in rather than falling back to the shared
-		// client id.
-		expect(result).toBeNull();
+		// Without a mapped email the provider derives a unique, per-user
+		// synthetic email from the Reddit user id rather than falling back to
+		// the shared oauth_client_id, so users can never collide on one address.
+		expect(result?.user.email).toBe("reddit-user-123@reddit.com");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		expect(result?.user.emailVerified).toBe(false);
 	});
 
 	it("uses the email supplied by mapProfileToUser and ignores oauth_client_id", async () => {

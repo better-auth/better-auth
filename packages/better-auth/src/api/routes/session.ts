@@ -545,8 +545,16 @@ export const getSessionFromCtx = async <
 		returnHeaders: true,
 		returnStatus: false,
 		query: {
-			...ctx.query,
 			...config,
+			...ctx.query,
+			// `disableCookieCache`/`disableRefresh` only ever make validation
+			// stricter, so OR the caller's intent with the request. A caller that
+			// forces strict validation must not be weakened by a request query
+			// param (e.g. `?disableCookieCache=`), which the plain merge would let
+			// override the forced value back to false.
+			disableCookieCache:
+				config?.disableCookieCache || ctx.query?.disableCookieCache,
+			disableRefresh: config?.disableRefresh || ctx.query?.disableRefresh,
 		},
 	}).catch(() => {
 		return null;
