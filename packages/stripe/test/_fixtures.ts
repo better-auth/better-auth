@@ -58,6 +58,7 @@ export function createStripeMock(
 					url: "https://checkout.stripe.com/mock",
 					id: checkoutSessionId,
 				}),
+				retrieve: vi.fn(),
 			},
 		},
 		billingPortal: {

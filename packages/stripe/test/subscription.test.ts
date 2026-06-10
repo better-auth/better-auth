@@ -2961,4 +2961,315 @@ describe("stripe subscription", () => {
 		// Should still proceed with the upgrade via billing portal
 		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
 	});
+
+	describe("Subscription targeting", () => {
+		async function signUpAndIn(
+			client: any,
+			sessionSetter: any,
+			email = "target@email.com",
+		) {
+			const userRes = await client.signUp.email(
+				{ email, password: "password", name: "Test User" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+			return { userId: userRes.user.id, headers };
+		}
+
+		test("cancel removes only the targeted subscription row when Stripe has none active", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ database: memory, plugins: [stripe(stripeOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const ctx = await auth.$context;
+			const { userId, headers } = await signUpAndIn(client, sessionSetter);
+
+			await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userId,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: "sub_active",
+					status: "active",
+					seats: 1,
+				} as any,
+			});
+			await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "premium",
+					referenceId: userId,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: "sub_history",
+					status: "canceled",
+					seats: 1,
+				} as any,
+			});
+
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+
+			const reqHeaders = new Headers(headers);
+			reqHeaders.set("content-type", "application/json");
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/subscription/cancel", {
+					method: "POST",
+					headers: reqHeaders,
+					body: JSON.stringify({
+						subscriptionId: "sub_active",
+						returnUrl: "/",
+					}),
+				}),
+			);
+
+			const remaining = await ctx.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: userId }],
+			});
+			expect(remaining.map((s) => s.stripeSubscriptionId)).toEqual([
+				"sub_history",
+			]);
+		});
+
+		test("restore clears cancellation on the requested subscription, not the first active one", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ database: memory, plugins: [stripe(stripeOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const ctx = await auth.$context;
+			const { userId, headers } = await signUpAndIn(client, sessionSetter);
+
+			await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userId,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: "sub_target",
+					status: "active",
+					seats: 1,
+					cancelAtPeriodEnd: true,
+				} as any,
+			});
+
+			stripeMock.subscriptions.list.mockResolvedValue({
+				data: [
+					{ id: "sub_other", status: "active", cancel_at_period_end: true },
+					{ id: "sub_target", status: "active", cancel_at_period_end: true },
+				],
+			});
+			stripeMock.subscriptions.update.mockResolvedValue({ id: "sub_target" });
+
+			const reqHeaders = new Headers(headers);
+			reqHeaders.set("content-type", "application/json");
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/subscription/restore", {
+					method: "POST",
+					headers: reqHeaders,
+					body: JSON.stringify({ subscriptionId: "sub_target" }),
+				}),
+			);
+
+			expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+				"sub_target",
+				expect.anything(),
+			);
+		});
+
+		test("success does not activate a subscription when the checkout is unpaid", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ database: memory, plugins: [stripe(stripeOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const ctx = await auth.$context;
+			const { userId, headers } = await signUpAndIn(client, sessionSetter);
+
+			const local = await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userId,
+					stripeCustomerId: "cus_mock123",
+					status: "incomplete",
+					seats: 1,
+				} as any,
+			});
+
+			stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+				id: "cs_unpaid",
+				status: "open",
+				payment_status: "unpaid",
+				subscription: null,
+				metadata: { subscriptionId: (local as any).id },
+			});
+			// An unrelated active subscription exists on the same customer.
+			stripeMock.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: "sub_preexisting",
+						status: "active",
+						cancel_at_period_end: false,
+						items: {
+							data: [
+								{
+									id: "si_pre",
+									price: {
+										id: TEST_PRICES.starter,
+										recurring: { interval: "month" },
+									},
+									quantity: 1,
+									current_period_start: 1_700_000_000,
+									current_period_end: 1_702_000_000,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/subscription/success?callbackURL=%2F&checkoutSessionId=cs_unpaid",
+					{ method: "GET", headers },
+				),
+			);
+
+			const after = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: (local as any).id }],
+			});
+			expect(after?.status).toBe("incomplete");
+		});
+
+		test("success activates using the checkout session's own subscription", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ database: memory, plugins: [stripe(stripeOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const ctx = await auth.$context;
+			const { userId, headers } = await signUpAndIn(client, sessionSetter);
+
+			const local = await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userId,
+					stripeCustomerId: "cus_mock123",
+					status: "incomplete",
+					seats: 1,
+				} as any,
+			});
+
+			stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+				id: "cs_paid",
+				status: "complete",
+				payment_status: "paid",
+				subscription: "sub_from_session",
+				metadata: { subscriptionId: (local as any).id },
+			});
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_from_session",
+				status: "active",
+				cancel_at_period_end: false,
+				items: {
+					data: [
+						{
+							id: "si_1",
+							price: {
+								id: TEST_PRICES.starter,
+								recurring: { interval: "month" },
+							},
+							quantity: 1,
+							current_period_start: 1_700_000_000,
+							current_period_end: 1_702_000_000,
+						},
+					],
+				},
+			});
+
+			await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/subscription/success?callbackURL=%2F&checkoutSessionId=cs_paid",
+					{ method: "GET", headers },
+				),
+			);
+
+			const after = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: (local as any).id }],
+			});
+			expect(after?.status).toBe("active");
+			expect(after?.stripeSubscriptionId).toBe("sub_from_session");
+		});
+
+		test("upgrade rejects a returnUrl that is not a trusted origin", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+					// Origin validation is skipped in test mode by default; enable it
+					// so the returnUrl check is exercised.
+					advanced: { cookies: {}, disableOriginCheck: false },
+				},
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const { headers } = await signUpAndIn(client, sessionSetter);
+
+			const reqHeaders = new Headers(headers);
+			reqHeaders.set("content-type", "application/json");
+			// Matching Origin header so the request's own origin check passes; this
+			// test covers returnUrl validation specifically.
+			reqHeaders.set("origin", "http://localhost:3000");
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/subscription/upgrade", {
+					method: "POST",
+					headers: reqHeaders,
+					body: JSON.stringify({
+						plan: "starter",
+						returnUrl: "https://external.example.com/return",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(403);
+		});
+	});
 });

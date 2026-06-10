@@ -280,7 +280,11 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
 				originCheck((c) => {
-					return [c.body.successUrl as string, c.body.cancelUrl as string];
+					return [
+						c.body.successUrl as string,
+						c.body.cancelUrl as string,
+						c.body.returnUrl as string,
+					];
 				}),
 			],
 		},
@@ -1317,15 +1321,16 @@ export const cancelSubscription = (options: StripeOptions) => {
 				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
 			if (!activeSubscriptions.length) {
 				/**
-				 * If the subscription is not found, we need to delete the subscription
-				 * from the database. This is a rare case and should not happen.
+				 * Stripe reports no active subscription for this customer, so the
+				 * selected row is stale. Remove only that row, never other rows that
+				 * share the referenceId.
 				 */
-				await ctx.context.adapter.deleteMany({
+				await ctx.context.adapter.delete({
 					model: "subscription",
 					where: [
 						{
-							field: "referenceId",
-							value: referenceId,
+							field: "id",
+							value: subscription.id,
 						},
 					],
 				});
@@ -1547,12 +1552,19 @@ export const restoreSubscription = (options: StripeOptions) => {
 				return ctx.json(releasedSub);
 			}
 
-			// Handle pending cancellation
+			// Handle pending cancellation. Match the subscription this row points
+			// to, not just the customer's first active one.
 			const activeSubscription = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,
 				})
-				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub))[0]);
+				.then((res) =>
+					res.data.find(
+						(sub) =>
+							sub.id === subscription.stripeSubscriptionId &&
+							isActiveOrTrialing(sub),
+					),
+				);
 			if (!activeSubscription) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1782,15 +1794,22 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			const customerId =
-				subscription.stripeCustomerId || session.user.stripeCustomerId;
-			if (!customerId) {
+			// Activate from the subscription this checkout session created, not from
+			// whichever active subscription the customer happens to have.
+			// `subscription` is an expandable field, so it can be an id or an object.
+			const stripeSubscriptionId =
+				typeof checkoutSession.subscription === "string"
+					? checkoutSession.subscription
+					: checkoutSession.subscription?.id;
+			if (
+				!stripeSubscriptionId ||
+				checkoutSession.payment_status === "unpaid"
+			) {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
 			const stripeSubscription = await client.subscriptions
-				.list({ customer: customerId, status: "active" })
-				.then((res) => res.data[0])
+				.retrieve(stripeSubscriptionId)
 				.catch((error) => {
 					ctx.context.logger.error(
 						"Error fetching subscription from Stripe",
