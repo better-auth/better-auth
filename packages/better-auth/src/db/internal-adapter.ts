@@ -64,6 +64,38 @@ export const createInternalAdapter = (
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
+	/**
+	 * Ends the live session rows matched by `where` without physically deleting
+	 * them.
+	 *
+	 * Used for `secondaryStorage` + `preserveSessionInDatabase`, where the row is
+	 * kept for audit. The session-delete hooks still run (so OAuth token
+	 * revocation and back-channel logout fire on session end), and the preserved
+	 * row's `expiresAt` is set to now so every liveness check that keys off the
+	 * session row (introspection, `/userinfo`) treats it as ended.
+	 *
+	 * Matching is restricted to still-live rows. The preserved row outlives the
+	 * session, so without this a later delete call (a repeated `deleteSession`,
+	 * or `deleteUserSessions` sweeping a user's accumulated preserved rows) would
+	 * re-match it and re-fire the hooks, re-dispatching back-channel logout.
+	 */
+	const endPreservedSessions = (where: Where[]) => {
+		const liveSessions: Where[] = [
+			...where,
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		return deleteManyWithHooks(liveSessions, "session", {
+			fn: async () => {
+				await (await getCurrentAdapter(adapter)).updateMany({
+					model: "session",
+					where: liveSessions,
+					update: { expiresAt: new Date() },
+				});
+			},
+			executeMainFn: false,
+		});
+	};
+
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
 
@@ -732,10 +764,11 @@ export const createInternalAdapter = (
 
 				await secondaryStorage.delete(token);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "token", value: token }]);
 					return;
 				}
 			}
@@ -789,10 +822,11 @@ export const createInternalAdapter = (
 				}
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "userId", value: userId }]);
 					return;
 				}
 			}
@@ -816,10 +850,13 @@ export const createInternalAdapter = (
 					}
 				}
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([
+						{ field: "token", value: sessionTokens, operator: "in" },
+					]);
 					return;
 				}
 			}

@@ -477,3 +477,124 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
 	});
 });
+
+describe("oauth back-channel logout - secondaryStorage + preserveSessionInDatabase", async () => {
+	// With this topology, sign-out used to delete the secondary-storage entry and
+	// return before the session-delete hook, so OAuth tokens were never revoked
+	// and Logout Tokens were never dispatched while the preserved DB row stayed
+	// live. The hook must still fire on session end when the row is preserved.
+	const baseUrl = "http://localhost:3030";
+	const redirectUri = `${baseUrl}/callback`;
+	const state = "preserve-state";
+	const store = new Map<string, string>();
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		secondaryStorage: {
+			set(key, value) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+		session: {
+			storeSessionInDatabase: true,
+			preserveSessionInDatabase: true,
+		},
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("revokes session-bound access tokens on sign-out when the row is preserved", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				enable_end_session: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw new Error("client registration failed");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${baseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid", "profile"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		if (!code) {
+			throw new Error(`no authorization code in ${callbackRedirectUrl}`);
+		}
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		} satisfies MakeRequired<
+			Parameters<typeof authorizationCodeRequest>[0],
+			"code"
+		>);
+		const tokens = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: tokenHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const ctx = await auth.$context;
+		const before = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		expect(before.length).toBeGreaterThan(0);
+		for (const t of before) expect(t.revoked ?? null).toBeNull();
+
+		await client.signOut({ fetchOptions: { headers } });
+
+		const after = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
+	});
+});

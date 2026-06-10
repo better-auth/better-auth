@@ -230,6 +230,66 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+
+		it("runs the session-delete hook and marks the preserved row ended", async () => {
+			const store = new Map<string, string>();
+			const deletedSessionIds: string[] = [];
+
+			const { auth, client, db, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				databaseHooks: {
+					session: {
+						delete: {
+							before: async (session) => {
+								deletedSessionIds.push(session.id);
+							},
+						},
+					},
+				},
+				rateLimit: { enabled: false },
+			});
+
+			const { headers } = await signInWithTestUser();
+			const token = (await client.getSession({ fetchOptions: { headers } }))
+				.data!.session.token;
+
+			await client.revokeSession({ fetchOptions: { headers }, token });
+
+			// The hook fires even though the row is preserved, so OAuth token
+			// revocation and back-channel logout run on session end.
+			expect(deletedSessionIds).toHaveLength(1);
+
+			// The row is kept for audit but marked ended, so session-row liveness
+			// checks (introspection, /userinfo) treat bound tokens as inactive.
+			const preserved = await db.findOne<{ id: string; expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(preserved).not.toBeNull();
+			expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+
+			// Ending an already-ended session must not re-fire the hook. The
+			// preserved row outlives the session, so a repeat delete would
+			// otherwise re-dispatch back-channel logout.
+			await (await auth.$context).internalAdapter.deleteSession(token);
+			expect(deletedSessionIds).toHaveLength(1);
+		});
 	});
 });
 
