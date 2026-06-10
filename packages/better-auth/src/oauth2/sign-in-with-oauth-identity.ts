@@ -194,18 +194,11 @@ export async function signInWithOAuthIdentity(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id);
-	if (!session) {
-		return {
-			error: "unable to create session",
-			data: null,
-			isRegister,
-		};
-	}
-
+	// Resolution and persistence only: the caller routes `user` through the
+	// sign-in resolver, which owns session creation, AMR recording, and any
+	// two-factor challenge. This function deliberately does not issue a session.
 	return {
 		data: {
-			session,
 			user,
 		},
 		error: null,

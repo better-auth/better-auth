@@ -20,6 +20,26 @@ export const SAML_SESSION_KEY_PREFIX = "saml-session:";
 /** Prefix for reverse lookup of SAML session by Better Auth session ID */
 export const SAML_SESSION_BY_ID_PREFIX = "saml-session-by-id:";
 
+/**
+ * Prefix for paused SAML sign-ins that still need to restore SLO metadata
+ * after two-factor verification creates the final session.
+ */
+export const SAML_PENDING_SESSION_KEY_PREFIX = "saml-pending-session:";
+
+/**
+ * Prefix for paused callback sign-ins that should still trigger domain-based
+ * organization assignment once two-factor verification finalizes the session.
+ */
+export const SSO_PENDING_DOMAIN_ASSIGNMENT_KEY_PREFIX =
+	"sso-pending-domain-assignment:";
+
+/**
+ * Prefix for provider-linked organization assignments that must wait until a
+ * paused SSO sign-in completes two-factor verification.
+ */
+export const SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX =
+	"sso-pending-provider-org-assignment:";
+
 /** Prefix for LogoutRequest IDs used in SP-initiated SLO validation */
 export const LOGOUT_REQUEST_KEY_PREFIX = "saml-logout-request:";
 

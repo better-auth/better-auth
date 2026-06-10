@@ -5,7 +5,7 @@ import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import type { Ref } from "vue";
+import type { DeepReadonly, Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
 	adminClient,
@@ -154,6 +154,7 @@ describe("run time proxy", async () => {
 				token: "session-token-1",
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				amr: [],
 			},
 		});
 
@@ -222,6 +223,7 @@ describe("run time proxy", async () => {
 				token: "token-1",
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				amr: [],
 			},
 		});
 
@@ -242,6 +244,7 @@ describe("run time proxy", async () => {
 				token: "token-2",
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				amr: [],
 			},
 		});
 
@@ -293,6 +296,7 @@ describe("run time proxy", async () => {
 				token: "token-1",
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				amr: [],
 			},
 		};
 
@@ -343,6 +347,7 @@ describe("run time proxy", async () => {
 					token: "token-a",
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					amr: [],
 				},
 			});
 		} finally {
@@ -566,6 +571,7 @@ describe("type", () => {
 				userId: string;
 				expiresAt: Date;
 				token: string;
+				amr: import("@better-auth/core").AuthenticationMethodReference[];
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
 				createdAt: Date;
@@ -582,7 +588,6 @@ describe("type", () => {
 				testField4: string;
 				testField?: string | undefined | null;
 				testField2?: number | undefined | null;
-				twoFactorEnabled: boolean | undefined | null;
 			};
 		}>();
 	});
@@ -600,7 +605,6 @@ describe("type", () => {
 			createdAt: Date;
 			updatedAt: Date;
 			image?: string | undefined | null;
-			twoFactorEnabled: boolean | undefined | null;
 		}>();
 	});
 
@@ -783,7 +787,7 @@ describe("type", () => {
 
 		// Test the function signature directly to avoid overload resolution issues
 		expectTypeOf(client.useSession).toMatchTypeOf<
-			() => Readonly<
+			() => DeepReadonly<
 				Ref<{
 					data: {
 						user: {
@@ -871,8 +875,8 @@ describe("type", () => {
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
-		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
+			client.$ERROR_CODES.CODE_HAS_EXPIRED.code,
+		).toEqualTypeOf<"CODE_HAS_EXPIRED">();
 
 		// Should have email-otp error codes
 		expectTypeOf(

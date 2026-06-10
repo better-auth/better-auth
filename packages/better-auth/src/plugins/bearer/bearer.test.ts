@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { seedVerifiedOtpMethod } from "../../test-utils/two-factor";
+import { twoFactor } from "../two-factor";
 
 describe("bearer", async () => {
 	const { client, auth, testUser } = await getTestInstance(
@@ -101,5 +103,50 @@ describe("bearer", async () => {
 			}),
 		});
 		expect(session?.session).toBeDefined();
+	});
+
+	it("should not expose set-auth-token before two-factor verification completes", async () => {
+		const instance = await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await instance.auth.api.signUpEmail({
+			body: {
+				email: instance.testUser.email,
+				password: instance.testUser.password,
+				name: instance.testUser.name,
+			},
+		});
+
+		await instance.auth.$context.then(async (ctx) => {
+			const user = await ctx.internalAdapter.findUserByEmail(
+				instance.testUser.email,
+			);
+			if (!user) {
+				throw new Error("Expected test user");
+			}
+			await seedVerifiedOtpMethod(instance.db, user.user.id);
+		});
+
+		const response = await instance.auth.api.signInEmail({
+			body: {
+				email: instance.testUser.email,
+				password: instance.testUser.password,
+			},
+			asResponse: true,
+		});
+
+		expect(response.headers.get("set-auth-token")).toBeNull();
 	});
 });

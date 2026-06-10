@@ -628,7 +628,7 @@ describe("getSessionCookie", async () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
-	it("should respect dontRememberMe when storing session in cookie cache", async () => {
+	it("should respect rememberMe=false when storing session in cookie cache", async () => {
 		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {

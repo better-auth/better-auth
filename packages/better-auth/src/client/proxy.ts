@@ -6,6 +6,7 @@ import type {
 import { toKebabCase } from "@better-auth/core/utils/string";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
+import { isSignInChallenge } from "../auth/sign-in-guards";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
 
@@ -96,9 +97,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						 */
 						const matches = atomListeners.filter((s) => s.matcher(routePath));
 						if (!matches.length) return;
+						const pausedChallenge = isSignInChallenge(context.data);
 
 						const visited = new Set<ClientAtomListener["signal"]>();
 						for (const match of matches) {
+							if (pausedChallenge && match.signal === "$sessionSignal") {
+								continue;
+							}
 							const signal = atoms[match.signal as any];
 							if (!signal) return;
 							if (visited.has(match.signal)) {

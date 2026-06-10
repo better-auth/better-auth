@@ -28,7 +28,12 @@ import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
 import { persistOAuthAccount } from "./oauth2";
-import { getTestInstance } from "./test-utils/test-instance";
+import { twoFactor } from "./plugins";
+import {
+	expectNoTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "./test-utils";
 import { DEFAULT_SECRET } from "./utils/constants";
 
 const server = new OAuth2Server();
@@ -250,7 +255,8 @@ describe("Social Providers", async (c) => {
 				hd: "example.com",
 			},
 		});
-		const url = new URL(signInRes.data!.url!);
+		expectNoTwoFactorChallenge(signInRes.data);
+		const url = new URL(signInRes.data.url!);
 		expect(url.searchParams.get("access_type")).toBe("offline");
 		expect(url.searchParams.get("hd")).toBe("example.com");
 	});
@@ -276,7 +282,8 @@ describe("Social Providers", async (c) => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -337,7 +344,8 @@ describe("Social Providers", async (c) => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		// Omit the state cookie so the signed-cookie check fails
 		// (state_security_mismatch) while the verification record still parses.
@@ -367,7 +375,8 @@ describe("Social Providers", async (c) => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/apple", {
 			query: {
 				state,
@@ -398,7 +407,8 @@ describe("Social Providers", async (c) => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining("google.com"),
 			redirect: true,
@@ -437,7 +447,8 @@ describe("Social Providers", async (c) => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -500,7 +511,8 @@ describe("Social Providers", async (c) => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -632,7 +644,8 @@ describe("Disable implicit signup", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -678,7 +691,8 @@ describe("Disable implicit signup", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -727,7 +741,8 @@ describe("Disable signup", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -781,7 +796,8 @@ describe("signin", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -836,7 +852,8 @@ describe("signin", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -901,7 +918,8 @@ describe("signin", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		expect(state).toBeTruthy();
 
 		await client.$fetch("/callback/google", {
@@ -978,7 +996,8 @@ describe("signin", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -1027,7 +1046,8 @@ describe("updateAccountOnSignIn", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -1070,8 +1090,9 @@ describe("updateAccountOnSignIn", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
+		expectNoTwoFactorChallenge(signInRes2.data);
 		const state2 =
-			new URL(signInRes2.data!.url!).searchParams.get("state") || "";
+			new URL(signInRes2.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -1157,7 +1178,8 @@ describe("Google Provider — multiple client IDs", async () => {
 		});
 
 		expect(res.data).toBeDefined();
-		expect(res.data!.redirect).toBe(false);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(false);
 		const data = res.data as { user: { email: string } };
 		expect(data.user.email).toBe("mobile-user@example.com");
 	});
@@ -1202,8 +1224,9 @@ describe("Google Provider — multiple client IDs", async () => {
 			callbackURL: "/callback",
 		});
 
-		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
-		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toContain(encodeURIComponent(webClientId));
+		expect(signInRes.data.url).not.toContain(encodeURIComponent(iosClientId));
 	});
 
 	it("rejects an empty clientId array at sign-in time", async () => {
@@ -1308,7 +1331,8 @@ describe("Multi-client ID support — other widened providers", () => {
 			callbackURL: "/callback",
 		});
 
-		expect(res.data?.url).toContain(firstId);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain(firstId);
 	});
 
 	it.each([
@@ -1378,7 +1402,8 @@ describe("Apple Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/apple", {
 			query: {
@@ -1449,7 +1474,8 @@ describe("Apple Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		const userData = JSON.stringify({
 			name: {
 				firstName: "Better",
@@ -1545,7 +1571,8 @@ describe("Apple Provider", async () => {
 		});
 
 		expect(res.data).toBeDefined();
-		expect(res.data!.redirect).toBe(false);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(false);
 		const data = res.data as {
 			token: string;
 			user: { email: string; name: string };
@@ -1590,7 +1617,8 @@ describe("Apple Provider", async () => {
 		});
 
 		expect(res.data).toBeDefined();
-		expect(res.data!.redirect).toBe(false);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(false);
 		const data = res.data as {
 			token: string;
 			user: { email: string; name: string };
@@ -1681,11 +1709,12 @@ describe("Vercel Provider", async () => {
 		});
 
 		expect(signInRes.data).toBeDefined();
-		expect(signInRes.data?.url).toContain("vercel.com/oauth/authorize");
-		expect(signInRes.data?.redirect).toBe(true);
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toContain("vercel.com/oauth/authorize");
+		expect(signInRes.data.redirect).toBe(true);
 
 		// Verify PKCE parameters are present
-		const authUrl = new URL(signInRes.data!.url!);
+		const authUrl = new URL(signInRes.data.url!);
 		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
 		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
 	});
@@ -1716,7 +1745,8 @@ describe("Vercel Provider", async () => {
 		});
 
 		expect(signInRes.data).toBeDefined();
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/vercel", {
 			query: {
@@ -1816,7 +1846,8 @@ describe("Vercel Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/vercel", {
 			query: { state, code: "vercel_test_code_2" },
@@ -1850,8 +1881,9 @@ describe("Vercel Provider", async () => {
 			callbackURL: "/dashboard",
 		});
 
-		expect(signInRes.data?.url).toBeDefined();
-		const authUrl = new URL(signInRes.data!.url!);
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toBeDefined();
+		const authUrl = new URL(signInRes.data.url!);
 		const scopes = authUrl.searchParams.get("scope");
 
 		expect(scopes).toContain("openid");
@@ -1896,7 +1928,8 @@ describe("Vercel Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/vercel", {
 			query: { state, code: "vercel_test_code_3" },
@@ -1938,8 +1971,9 @@ describe("Vercel Provider", async () => {
 			},
 		});
 
+		expectNoTwoFactorChallenge(signInRes1.data);
 		const state1 =
-			new URL(signInRes1.data!.url!).searchParams.get("state") || "";
+			new URL(signInRes1.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/vercel", {
 			query: { state: state1, code: "vercel_test_code_existing" },
@@ -1961,8 +1995,9 @@ describe("Vercel Provider", async () => {
 			},
 		});
 
+		expectNoTwoFactorChallenge(signInRes2.data);
 		const state2 =
-			new URL(signInRes2.data!.url!).searchParams.get("state") || "";
+			new URL(signInRes2.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/vercel", {
 			query: { state: state2, code: "vercel_test_code_existing_2" },
@@ -1975,6 +2010,116 @@ describe("Vercel Provider", async () => {
 				expect(location).not.toContain("/welcome");
 			},
 		});
+	});
+
+	it("should redirect social callback into two-factor challenge for enabled users", async () => {
+		mswServer.use(
+			http.post("https://api.vercel.com/login/oauth/token", async () => {
+				const profile: VercelProfile = {
+					sub: "vercel_user_123",
+					email: "vercel@test.com",
+					email_verified: true,
+					name: "Vercel User",
+					preferred_username: "verceluser",
+					picture: "https://vercel.com/avatar.png",
+				};
+
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "vercel_access_token",
+					refresh_token: "vercel_refresh_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get("https://api.vercel.com/login/oauth/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "vercel_user_123",
+					email: "vercel@test.com",
+					email_verified: true,
+					name: "Vercel User",
+					preferred_username: "verceluser",
+					picture: "https://vercel.com/avatar.png",
+				});
+			}),
+		);
+
+		const { client, cookieSetter, auth, db, customFetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [
+						twoFactor({
+							otpOptions: {
+								async sendOTP() {},
+							},
+						}),
+					],
+					socialProviders: {
+						vercel: {
+							clientId: "vercel-test-client-id",
+							clientSecret: "vercel-test-client-secret",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+		const context = await auth.$context;
+		const existingUser = await context.internalAdapter.createUser(
+			{
+				email: "vercel@test.com",
+				name: "Vercel User",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		await seedVerifiedOtpMethod(db, existingUser.id);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
+
+		await betterFetch(
+			`http://localhost:3000/api/auth/callback/vercel?state=${state}&code=vercel_test_code_2fa`,
+			{
+				method: "GET",
+				customFetchImpl,
+				headers,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const redirectURL = new URL(
+						context.response.headers.get("location")!,
+						"http://localhost:3000",
+					);
+					expect(redirectURL.pathname).toBe("/dashboard");
+					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+					expect(redirectURL.searchParams.get("methods")).toBeNull();
+
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
+				},
+			},
+		);
+
+		const sessions = await context.internalAdapter.listSessions(
+			existingUser.id,
+		);
+		expect(sessions).toHaveLength(0);
 	});
 });
 
@@ -2037,7 +2182,8 @@ describe("Microsoft Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/microsoft", {
 			query: {
@@ -2127,7 +2273,8 @@ describe("Microsoft Provider", async () => {
 			},
 		});
 
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/microsoft", {
 			query: {
@@ -2206,7 +2353,8 @@ describe("Microsoft Provider", async () => {
 		});
 
 		expect(res.data).toBeDefined();
-		expect(res.data!.redirect).toBe(false);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(false);
 		const data = res.data as {
 			token: string;
 			user: { email: string; name: string };
@@ -2333,7 +2481,8 @@ describe("Microsoft Provider", async () => {
 			idToken: { token: validToken },
 		});
 		expect(validRes.data).toBeDefined();
-		expect(validRes.data!.redirect).toBe(false);
+		expectNoTwoFactorChallenge(validRes.data);
+		expect(validRes.data.redirect).toBe(false);
 
 		const { client: client2 } = await getTestInstance(
 			{
@@ -2373,8 +2522,9 @@ describe("Microsoft Provider", async () => {
 			callbackURL: "/callback",
 		});
 
-		expect(res.data?.url).toContain("public-ms-client");
-		expect(res.data?.redirect).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain("public-ms-client");
+		expect(res.data.redirect).toBe(true);
 	});
 });
 
@@ -2450,10 +2600,11 @@ describe("Railway Provider", async () => {
 		});
 
 		expect(signInRes.data).toBeDefined();
-		expect(signInRes.data?.url).toContain("backboard.railway.com/oauth/auth");
-		expect(signInRes.data?.redirect).toBe(true);
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toContain("backboard.railway.com/oauth/auth");
+		expect(signInRes.data.redirect).toBe(true);
 
-		const authUrl = new URL(signInRes.data!.url!);
+		const authUrl = new URL(signInRes.data.url!);
 		expect(authUrl.searchParams.get("scope")).toContain("openid");
 		expect(authUrl.searchParams.get("scope")).toContain("email");
 		expect(authUrl.searchParams.get("scope")).toContain("profile");
@@ -2489,7 +2640,8 @@ describe("Railway Provider", async () => {
 		});
 
 		expect(signInRes.data).toBeDefined();
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/railway", {
 			query: {
@@ -2563,7 +2715,8 @@ describe("validateUserInfo callback", async () => {
 			callbackURL: "/dashboard",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
@@ -2633,7 +2786,8 @@ describe("validateUserInfo callback", async () => {
 			callbackURL: "/dashboard",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
@@ -2686,7 +2840,8 @@ describe("validateUserInfo callback", async () => {
 			callbackURL: "/dashboard",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
@@ -2768,8 +2923,9 @@ describe("validateUserInfo callback", async () => {
 				callbackURL: "/dashboard",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			await client.$fetch("/callback/google", {
 				query: { state, code: "test" },
 				headers,
@@ -2854,8 +3010,9 @@ describe("validateUserInfo callback", async () => {
 				callbackURL: "/dashboard",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+				new URL(signInRes.data.url!).searchParams.get("state") || "";
 			let redirectLocation = "";
 			await client.$fetch("/callback/google", {
 				query: { state, code: "test" },
@@ -3026,7 +3183,8 @@ describe("validateUserInfo callback", async () => {
 			callbackURL: "/dashboard",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
@@ -3134,7 +3292,8 @@ describe("grantedScopes path-dependent semantics", async () => {
 			...(scopes ? { scopes } : {}),
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
 			method: "GET",
@@ -3602,7 +3761,8 @@ describe("grantedScopes resync auto-trigger (Google include_granted_scopes)", as
 			callbackURL: "/callback",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(res.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(res.data);
+		const state = new URL(res.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
 			method: "GET",
@@ -3712,7 +3872,8 @@ describe("new-user OAuth sign-in atomicity", async () => {
 			callbackURL: "/callback",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
-		const state = new URL(res.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(res.data);
+		const state = new URL(res.data.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
 			method: "GET",

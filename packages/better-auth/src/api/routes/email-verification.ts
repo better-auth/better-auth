@@ -1,10 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
+import {
+	resolveSignIn,
+	respondToSignInChallenge,
+} from "../../auth/resolve-sign-in";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
@@ -352,22 +357,6 @@ export const verifyEmail = createAuthEndpoint(
 				 * User clicks verification -> updates email
 				 */
 				case "change-email-verification": {
-					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
 					const updatedUser =
 						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 							email: parsed.updateTo,
@@ -379,14 +368,32 @@ export const verifyEmail = createAuthEndpoint(
 							ctx.request,
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: true,
-						},
-					});
+					if (session) {
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user: {
+								...session.user,
+								email: parsed.updateTo,
+								emailVerified: true,
+							},
+						});
+					} else {
+						const result = await resolveSignIn(ctx, {
+							user: updatedUser,
+							amr: {
+								method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+								factor: "possession",
+								completedAt: new Date(),
+							},
+						});
+						if (result.kind === "challenge") {
+							return respondToSignInChallenge(
+								ctx,
+								result.challenge,
+								ctx.query.callbackURL,
+							);
+						}
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -402,22 +409,6 @@ export const verifyEmail = createAuthEndpoint(
 				 * - updates email immediately
 				 */
 				default: {
-					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
 					const updatedUser =
 						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 							email: parsed.updateTo,
@@ -442,14 +433,32 @@ export const verifyEmail = createAuthEndpoint(
 							),
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: false,
-						},
-					});
+					if (session) {
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user: {
+								...session.user,
+								email: parsed.updateTo,
+								emailVerified: false,
+							},
+						});
+					} else {
+						const result = await resolveSignIn(ctx, {
+							user: updatedUser,
+							amr: {
+								method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+								factor: "possession",
+								completedAt: new Date(),
+							},
+						});
+						if (result.kind === "challenge") {
+							return respondToSignInChallenge(
+								ctx,
+								result.challenge,
+								ctx.query.callbackURL,
+							);
+						}
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -489,23 +498,25 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession || currentSession.user.email !== parsed.email) {
-				const session = await ctx.context.internalAdapter.createSession(
-					user.user.id,
-				);
-				if (!session) {
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
-				await setSessionCookie(ctx, {
-					session,
+			if (!currentSession || currentSession.user.id !== user.user.id) {
+				const result = await resolveSignIn(ctx, {
 					user: {
 						...user.user,
 						emailVerified: true,
 					},
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
+				if (result.kind === "challenge") {
+					return respondToSignInChallenge(
+						ctx,
+						result.challenge,
+						ctx.query.callbackURL,
+					);
+				}
 			} else {
 				await setSessionCookie(ctx, {
 					session: currentSession.session,

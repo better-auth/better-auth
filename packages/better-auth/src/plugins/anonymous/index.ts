@@ -15,11 +15,7 @@ import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
-import {
-	deleteSessionCookie,
-	parseSetCookieHeader,
-	setSessionCookie,
-} from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import type { Session, User } from "../../types";
 import { PACKAGE_VERSION } from "../../version";
@@ -329,36 +325,20 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			],
 			after: [
 				{
-					matcher(ctx) {
-						return (
-							ctx.path?.startsWith("/sign-in") ||
-							ctx.path?.startsWith("/sign-up") ||
-							ctx.path?.startsWith("/callback") ||
-							ctx.path?.startsWith("/magic-link/verify") ||
-							ctx.path?.startsWith("/email-otp/verify-email") ||
-							ctx.path?.startsWith("/one-tap/callback") ||
-							ctx.path?.startsWith("/passkey/verify-authentication") ||
-							ctx.path?.startsWith("/phone-number/verify") ||
-							ctx.path?.startsWith("/verify-email") ||
-							false
-						);
+					matcher() {
+						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
-
 						/**
-						 * We can consider the user is about to sign in or sign up
-						 * if the response contains a session token.
+						 * Fall back to the issued session for flows (e.g. `/sign-up/email`)
+						 * that publish a session via `setSessionCookie` without going
+						 * through `resolveSignIn` and therefore never populate
+						 * `finalizedSignIn`.
 						 */
-						const sessionTokenName = ctx.context.authCookies.sessionToken.name;
-						/**
-						 * The user is about to link their account.
-						 */
-						const sessionCookie = parseSetCookieHeader(setCookie || "")
-							.get(sessionTokenName)
-							?.value.split(".")[0]!;
-
-						if (!sessionCookie) {
+						const committed =
+							ctx.context.getFinalizedSignIn() ??
+							ctx.context.getIssuedSession();
+						if (!committed) {
 							return;
 						}
 						/**
@@ -371,16 +351,21 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 
-						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-							);
-						}
-						const newSession = ctx.context.newSession;
-						if (!newSession) {
+						const issuedUser = committed.user as
+							| (UserWithAnonymous & Record<string, any>)
+							| undefined;
+						const isSameUser = issuedUser?.id === session.user.id;
+						const issuedUserIsAnonymous = Boolean(issuedUser?.isAnonymous);
+						if (isSameUser || issuedUserIsAnonymous) {
 							return;
 						}
+						const user = {
+							...session.user,
+							// Type hack to ensure `isAnonymous` is correctly inferred as true.
+							// Without this, `isAnonymous` is inferred as `boolean | null` despite
+							// the conditional checks above suggesting otherwise.
+							isAnonymous: session.user.isAnonymous,
+						};
 
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the
@@ -388,24 +373,15 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
 							await options.onLinkAccount({
-								anonymousUser: {
-									session: session.session,
-									user: session.user,
+								anonymousUser: { session: session.session, user },
+								newUser: {
+									session: committed.session,
+									user: committed.user,
 								},
-								newUser: newSession,
 								ctx,
 							});
 						}
-						const newSessionUser = newSession.user as
-							| (UserWithAnonymous & Record<string, any>)
-							| undefined;
-						const isSameUser = newSessionUser?.id === session.user.id;
-						const newSessionIsAnonymous = Boolean(newSessionUser?.isAnonymous);
-						if (
-							options?.disableDeleteAnonymousUser ||
-							isSameUser ||
-							newSessionIsAnonymous
-						) {
+						if (options?.disableDeleteAnonymousUser) {
 							return;
 						}
 						try {

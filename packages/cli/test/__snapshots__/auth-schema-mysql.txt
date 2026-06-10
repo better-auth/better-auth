@@ -5,7 +5,10 @@ import {
   text,
   timestamp,
   boolean,
+  int,
+  json,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const custom_user = mysqlTable("custom_user", {
@@ -19,7 +22,6 @@ export const custom_user = mysqlTable("custom_user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false),
   username: varchar("username", { length: 255 }).unique(),
   displayUsername: text("display_username"),
 });
@@ -39,6 +41,7 @@ export const custom_session = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    amr: json("amr", { mode: "json" }).notNull(),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
@@ -83,27 +86,125 @@ export const custom_verification = mysqlTable(
   (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
 );
 
-export const twoFactor = mysqlTable(
-  "two_factor",
+export const signInAttempt = mysqlTable(
+  "sign_in_attempt",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    secret: varchar("secret", { length: 255 }).notNull(),
-    backupCodes: text("backup_codes").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
-    verified: boolean("verified").default(true),
+    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
+    rememberMe: boolean("remember_me"),
+    amr: json("amr", { mode: "json" }).notNull(),
+    failedVerifications: int("failed_verifications").default(0).notNull(),
+    lockedAt: timestamp("locked_at", { fsp: 3 }),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
   },
   (table) => [
-    index("twoFactor_secret_idx").on(table.secret),
-    index("twoFactor_userId_idx").on(table.userId),
+    index("signInAttempt_userId_idx").on(table.userId),
+    index("signInAttempt_expiresAt_idx").on(table.expiresAt),
+  ],
+);
+
+export const twoFactorMethod = mysqlTable(
+  "two_factor_method",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 255 }).notNull(),
+    label: text("label"),
+    verifiedAt: timestamp("verified_at", { fsp: 3 }),
+    lastUsedAt: timestamp("last_used_at", { fsp: 3 }),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorMethod_userId_idx").on(table.userId),
+    index("twoFactorMethod_kind_idx").on(table.kind),
+    index("twoFactorMethod_verifiedAt_idx").on(table.verifiedAt),
+  ],
+);
+
+export const twoFactorTotp = mysqlTable(
+  "two_factor_totp",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    methodId: varchar("method_id", { length: 36 })
+      .notNull()
+      .unique()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("twoFactorTotp_methodId_uidx").on(table.methodId)],
+);
+
+export const twoFactorRecoveryCode = mysqlTable(
+  "two_factor_recovery_code",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    methodId: varchar("method_id", { length: 36 })
+      .notNull()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    codeHash: varchar("code_hash", { length: 255 }).notNull(),
+    usedAt: timestamp("used_at", { fsp: 3 }),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorRecoveryCode_methodId_idx").on(table.methodId),
+    index("twoFactorRecoveryCode_codeHash_idx").on(table.codeHash),
+  ],
+);
+
+export const trustedDevice = mysqlTable(
+  "trusted_device",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    lookupKeyHash: varchar("lookup_key_hash", { length: 255 })
+      .notNull()
+      .unique(),
+    label: text("label"),
+    userAgent: text("user_agent"),
+    lastUsedAt: timestamp("last_used_at", { fsp: 3 }),
+    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("trustedDevice_userId_idx").on(table.userId),
+    index("trustedDevice_expiresAt_idx").on(table.expiresAt),
   ],
 );
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
   custom_accounts: many(custom_account),
-  twoFactors: many(twoFactor),
+  signInAttempts: many(signInAttempt),
+  twoFactorMethods: many(twoFactorMethod),
+  trustedDevices: many(trustedDevice),
 }));
 
 export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
@@ -120,9 +221,45 @@ export const custom_accountRelations = relations(custom_account, ({ one }) => ({
   }),
 }));
 
-export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+export const signInAttemptRelations = relations(signInAttempt, ({ one }) => ({
   custom_user: one(custom_user, {
-    fields: [twoFactor.userId],
+    fields: [signInAttempt.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorMethodRelations = relations(
+  twoFactorMethod,
+  ({ one, many }) => ({
+    custom_user: one(custom_user, {
+      fields: [twoFactorMethod.userId],
+      references: [custom_user.id],
+    }),
+    twoFactorTotp: many(twoFactorTotp),
+    twoFactorRecoveryCodes: many(twoFactorRecoveryCode),
+  }),
+);
+
+export const twoFactorTotpRelations = relations(twoFactorTotp, ({ one }) => ({
+  twoFactorMethod: one(twoFactorMethod, {
+    fields: [twoFactorTotp.methodId],
+    references: [twoFactorMethod.id],
+  }),
+}));
+
+export const twoFactorRecoveryCodeRelations = relations(
+  twoFactorRecoveryCode,
+  ({ one }) => ({
+    twoFactorMethod: one(twoFactorMethod, {
+      fields: [twoFactorRecoveryCode.methodId],
+      references: [twoFactorMethod.id],
+    }),
+  }),
+);
+
+export const trustedDeviceRelations = relations(trustedDevice, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [trustedDevice.userId],
     references: [custom_user.id],
   }),
 }));

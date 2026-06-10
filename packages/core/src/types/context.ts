@@ -1,10 +1,12 @@
 import type { CookieOptions, EndpointContext } from "better-call";
+import type { AuthenticationMethodReference } from "../auth/amr-methods";
 import type {
 	Account,
 	BetterAuthDBSchema,
 	ModelNames,
 	SecondaryStorage,
 	Session,
+	SignInAttempt,
 	User,
 	Verification,
 } from "../db";
@@ -85,6 +87,151 @@ export type GenericEndpointContext<
 	context: AuthContext<Options>;
 };
 
+/**
+ * A `SignInAttempt` hydrated with the owning user. Used on the request-scoped
+ * `getSignInAttempt()` reader so consumers can act on the paused sign-in
+ * without a second DB lookup.
+ */
+export type SignInAttemptWithUser = SignInAttempt & {
+	user?: User & Record<string, any>;
+};
+
+/**
+ * A pre-bound closure that emits the session cookie on the outgoing response.
+ * `finalizeSignIn` builds it from the handler context so that cookie writes
+ * have access to `getSignedCookie`/`setSignedCookie`; the dispatcher awaits
+ * it after the handler returns and before after-hooks run so plugins that
+ * read `set-cookie` (bearer, oidc-provider, mcp) observe the freshly issued
+ * session. If an after-hook later converts the response into a failure, the
+ * dispatcher rolls back the DB session and appends expiring headers.
+ */
+export type SignInCommit = () => Promise<void> | void;
+
+/**
+ * Undoes handler-side state the finalize path cannot roll back on its own
+ * (e.g. an atomically-consumed `signInAttempt` row). Invoked by the request
+ * dispatcher when a post-handler step converts the response into a failure.
+ */
+export type SignInRollback = () => Promise<void> | void;
+
+/**
+ * Durable side-effects tied to a confirmed successful sign-in: trusted-device
+ * credentials, token rotations, last-login-method stamps. Runs after all
+ * after-hooks complete without converting the response into a failure, so it
+ * observes the final outcome instead of racing it. Errors are logged and do
+ * not revert the sign-in, so side-effects should be designed as best-effort
+ * or idempotent (e.g. a failed trusted-device write is acceptable — the next
+ * sign-in simply re-challenges).
+ */
+export type SignInOnSuccess = () => Promise<void> | void;
+
+export type FinalizedSignIn = {
+	session: Session & Record<string, any>;
+	user: User & Record<string, any>;
+	attemptId?: string | undefined;
+	commit?: SignInCommit | undefined;
+	rollback?: SignInRollback | undefined;
+	onSuccess?: SignInOnSuccess | undefined;
+	/**
+	 * Cookies set by after-hooks that are logically tied to this finalized
+	 * sign-in (e.g. multi-session shards, `last-login-method` marker). If the
+	 * sign-in rolls back, the dispatcher emits an expired `Set-Cookie` for
+	 * each entry alongside the core session cookies, so the browser doesn't
+	 * retain a marker pointing at a sign-in that never completed.
+	 *
+	 * Plugins push into this list from their after-hook immediately after
+	 * writing the cookie; the list is drained only by the rollback path.
+	 */
+	cookiesToExpireOnRollback: BetterAuthCookie[];
+};
+
+/**
+ * Registry of sign-in challenge kinds. Plugins that pause sign-in before a
+ * session is issued augment this interface with their own discriminant key so
+ * the `SignInChallenge` union widens accordingly.
+ *
+ * ## Contract for challenge authors
+ *
+ * 1. Pick a unique string discriminant (e.g. `"two-factor"`) and declare it
+ *    via module augmentation. The value type becomes the shape carried on the
+ *    resume URL and returned to clients.
+ * 2. Include an `attemptId: string` field. The resolver persists the pending
+ *    attempt under this id (`internalAdapter.createSignInAttempt`), and your
+ *    resume endpoint looks it up via `findSignInAttempt`.
+ * 3. Any per-request context needed at resume time goes on the opaque
+ *    `SignInAttempt.payload` bag, not in a cookie.
+ * 4. A primary factor may request that your challenge be skipped by passing
+ *    its discriminant in `resolveSignIn({ satisfiedChallenges: [...] })`.
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *   interface BetterAuthSignInChallengeRegistry {
+ *     "two-factor": {
+ *       attemptId: string;
+ *       factors: {
+ *         id: string;
+ *         kind: "totp" | "otp" | "recovery-code";
+ *         label: string | null;
+ *       }[];
+ *     };
+ *   }
+ * }
+ * ```
+ */
+export interface BetterAuthSignInChallengeRegistry {}
+
+export type SignInChallenge = {
+	[K in keyof BetterAuthSignInChallengeRegistry]: {
+		kind: K;
+	} & BetterAuthSignInChallengeRegistry[K];
+}[keyof BetterAuthSignInChallengeRegistry];
+
+export type CheckSignInChallengeInput = {
+	user: User;
+	/**
+	 * Authentication record for the primary factor the caller just proved.
+	 * Challenge plugins use this to persist the full factor chain when they
+	 * pause sign-in (e.g. password first, OTP second).
+	 */
+	amr: AuthenticationMethodReference;
+	rememberMe?: boolean;
+	/**
+	 * Challenges the primary factor has already satisfied. Plugins consult
+	 * this set before pausing sign-in so a stronger primary factor can bypass
+	 * a downstream challenge it already subsumes.
+	 */
+	satisfiedChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
+};
+
+export type CheckSignInChallengeResult =
+	| {
+			kind: "challenge";
+			challenge: SignInChallenge;
+	  }
+	| {
+			kind: "commit";
+			onSuccess: SignInOnSuccess;
+	  }
+	| null;
+
+/**
+ * Discriminated envelope returned by the sign-in resolver.
+ * `session` means a session was issued; the dispatcher publishes the cookie
+ * after the request body and before after-hooks run.
+ * `challenge` means sign-in is paused pending another step.
+ */
+export type SignInResolution<TUser extends User = User> =
+	| {
+			kind: "session";
+			session: Session & Record<string, any>;
+			user: TUser & Record<string, any>;
+	  }
+	| {
+			kind: "challenge";
+			challenge: SignInChallenge;
+	  };
+
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
@@ -123,7 +270,7 @@ export interface InternalAdapter<
 
 	createSession(
 		userId: string,
-		dontRememberMe?: boolean | undefined,
+		rememberMe?: boolean | undefined,
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
 	): Promise<Session>;
@@ -243,6 +390,71 @@ export interface InternalAdapter<
 	): Promise<Verification>;
 
 	refreshUserSessions(user: User): Promise<void>;
+
+	/**
+	 * Compare-and-swap update of a verification record's `value` column.
+	 * Writes `newValue` only when the current stored value still equals
+	 * `expectedValue`, returning `true` on success and `false` when another
+	 * caller already mutated the row. Use this when you need read-modify-write
+	 * semantics that survive concurrent writers, e.g. bumping an OTP attempt
+	 * counter stored alongside the code. Callers wrap this in a bounded
+	 * retry loop on `false` to re-read and recompute the next value.
+	 *
+	 * The DB path is atomic (the where clause includes the expected value);
+	 * the secondary-storage path is best-effort because generic KV stores
+	 * lack CAS primitives.
+	 */
+	casUpdateVerificationValue(
+		identifier: string,
+		expectedValue: string,
+		newValue: string,
+	): Promise<boolean>;
+
+	createSignInAttempt(
+		data: Omit<
+			SignInAttempt,
+			"amr" | "createdAt" | "failedVerifications" | "id" | "updatedAt"
+		> &
+			Partial<SignInAttempt>,
+	): Promise<SignInAttempt>;
+
+	findSignInAttempt(id: string): Promise<SignInAttempt | null>;
+
+	deleteSignInAttempt(id: string): Promise<void>;
+
+	/**
+	 * Atomically delete a sign-in attempt and return the deleted row. Uses
+	 * `deleteMany` row-count as a concurrency fence: under concurrent callers,
+	 * exactly one observes a delete count of 1 and receives the row; all
+	 * others receive null. Returns null if the attempt does not exist.
+	 *
+	 * Concurrency-only primitive. Callers are responsible for validating
+	 * identity, expiry, and lock state **before** calling consume:
+	 * - Identity. Cross-user submission requires proof of initiator (the
+	 *   signed two-factor cookie that binds the caller to the attempt).
+	 *   The cookie is read through `ctx` which the adapter cannot see,
+	 *   so the check lives at the call site (e.g. `verify-two-factor.ts`).
+	 * - Expiry. Compare `attempt.expiresAt` to `now()` in the caller.
+	 *   A millisecond TOCTOU window between that check and consume is
+	 *   bounded by the fence (only one caller wins) and is not a
+	 *   security boundary: the boundary is the verification code plus
+	 *   the per-attempt rate limit, not `expiresAt`.
+	 * - Lock. Reject when `attempt.lockedAt` is set; consume does not
+	 *   filter locked rows so that `recordSignInAttemptFailure` and
+	 *   `consumeSignInAttempt` can race safely without the delete path
+	 *   shadowing the lock-write path.
+	 */
+	consumeSignInAttempt(id: string): Promise<SignInAttempt | null>;
+
+	/**
+	 * Increment the attempt's `failedVerifications` counter and, when the
+	 * threshold is reached, set `lockedAt`. Returns the updated row or null
+	 * if the attempt no longer exists.
+	 */
+	recordSignInAttemptFailure(
+		id: string,
+		options: { maxAttempts: number },
+	): Promise<SignInAttempt | null>;
 }
 
 type CreateCookieGetterFn = (
@@ -331,26 +543,34 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
-			/**
-			 * New session that will be set after the request
-			 * meaning: there is a `set-cookie` header that will set
-			 * the session cookie. This is the fetched session. And it's set
-			 * by `setNewSession` method.
-			 */
-			newSession: {
-				session: Session & Record<string, any>;
-				user: User & Record<string, any>;
-			} | null;
 			session: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
-			setNewSession: (
-				session: {
-					session: Session & Record<string, any>;
-					user: User & Record<string, any>;
-				} | null,
-			) => void;
+			/**
+			 * Any session issued during the current request, regardless of origin
+			 * (sign-in, sign-up, anonymous upgrade, device-authorization, etc.).
+			 * Cookie publication happens later during request finalization.
+			 * Consumers that care only about "a session exists" (bearer, jwt, mcp,
+			 * multi-session, one-time-token, oidc-provider) read this.
+			 */
+			getIssuedSession: () => {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
+			/**
+			 * Set when a sign-in flow committed in this request. Narrower than
+			 * `getIssuedSession`: sign-up, anonymous upgrades, and device-auth do
+			 * not populate it. Consumers that care about "a sign-in completed"
+			 * (e.g. last-login-method, anonymous linking) read this.
+			 */
+			getFinalizedSignIn: () => FinalizedSignIn | null;
+			/**
+			 * Request-scoped paused sign-in state. Not published auth state;
+			 * exists only so the current request can finalize or replay work for
+			 * the attempt that actually completed.
+			 */
+			getSignInAttempt: () => SignInAttemptWithUser | null;
 			socialProviders: UpstreamProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;

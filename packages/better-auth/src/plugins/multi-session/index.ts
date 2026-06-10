@@ -9,7 +9,6 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	parseCookies,
-	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	setSessionCookie,
 } from "../../cookies";
@@ -316,18 +315,15 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookieString = ctx.context.responseHeaders?.get("set-cookie");
-						if (!cookieString) return;
-						const newSession = ctx.context.newSession;
-						if (!newSession) return;
+						const issuedSession = ctx.context.getIssuedSession();
+						if (!issuedSession) return;
 
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
-						const sessionToken = newSession.session.token;
+						const sessionToken = issuedSession.session.token;
 						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken.toLowerCase()}`;
 
-						const setCookies = parseSetCookieHeader(cookieString);
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
-						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
+						if (cookies.get(cookieName)) return;
 
 						const multiSessionKeys = Object.keys(
 							Object.fromEntries(cookies),
@@ -339,7 +335,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							if (!token) continue;
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
-							if (session?.user.id === newSession.user.id) {
+							if (session?.user.id === issuedSession.user.id) {
 								tokensToDelete.push(token);
 								ctx.setCookie(key, "", {
 									...sessionCookieConfig.attributes,
@@ -352,9 +348,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						}
 
 						const currentCount =
-							multiSessionKeys.length -
-							tokensToDelete.length +
-							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
+							multiSessionKeys.length - tokensToDelete.length + 1;
 
 						if (currentCount > opts.maximumSessions) return;
 
@@ -364,6 +358,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							ctx.context.secret,
 							sessionCookieConfig.attributes,
 						);
+						// Register the shard cookie so the dispatcher expires it
+						// alongside the core session cookies if this sign-in
+						// rolls back. Otherwise the browser keeps a multi-session
+						// pointer to a token that no longer exists server-side.
+						ctx.context.getFinalizedSignIn()?.cookiesToExpireOnRollback.push({
+							name: cookieName,
+							attributes: sessionCookieConfig.attributes,
+						});
 					}),
 				},
 				{

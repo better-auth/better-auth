@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins";
+import { expectNoTwoFactorChallenge } from "better-auth/test";
 import Database from "better-sqlite3";
 import prompts from "prompts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,6 +91,7 @@ describe("create-admin", () => {
 				password: "secure-password",
 			},
 		});
+		expectNoTwoFactorChallenge(signIn);
 		expect(signIn.user.email).toBe("admin@example.com");
 	});
 

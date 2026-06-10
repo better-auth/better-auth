@@ -154,6 +154,59 @@ export async function createAuthServer(
 			return;
 		}
 
+		if (req.url?.startsWith("/debug/sso-provider/verify-domain")) {
+			const requestURL = new URL(
+				req.url,
+				`http://${req.headers.host ?? "localhost"}`,
+			);
+			const providerId = requestURL.searchParams.get("providerId");
+			if (!providerId) {
+				res.statusCode = 400;
+				res.setHeader("Content-Type", "application/json");
+				res.end(JSON.stringify({ error: "providerId is required" }));
+				return;
+			}
+			const context = await auth.$context;
+			await context.adapter.update({
+				model: "ssoProvider",
+				update: {
+					domainVerified: true,
+				},
+				where: [{ field: "providerId", value: providerId }],
+			});
+			res.statusCode = 204;
+			res.end();
+			return;
+		}
+
+		if (req.url?.startsWith("/debug/member-count")) {
+			const requestURL = new URL(
+				req.url,
+				`http://${req.headers.host ?? "localhost"}`,
+			);
+			const email = requestURL.searchParams.get("email");
+			if (!email) {
+				res.statusCode = 400;
+				res.setHeader("Content-Type", "application/json");
+				res.end(JSON.stringify({ error: "email is required" }));
+				return;
+			}
+			const context = await auth.$context;
+			const user = await context.internalAdapter.findUserByEmail(email, {
+				includeAccounts: false,
+			});
+			const members = user
+				? await context.adapter.findMany({
+						model: "member",
+						where: [{ field: "userId", value: user.user.id }],
+					})
+				: [];
+			res.statusCode = 200;
+			res.setHeader("Content-Type", "application/json");
+			res.end(JSON.stringify({ count: members.length }));
+			return;
+		}
+
 		res.statusCode = 404;
 		res.end(JSON.stringify({ error: "Not found" }));
 	});

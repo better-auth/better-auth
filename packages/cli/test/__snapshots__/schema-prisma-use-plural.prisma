@@ -33,6 +33,7 @@ model Sessions {
   userAgent String?
   userId    String
   users     Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amr       Json
 
   @@unique([token])
   @@index([userId])

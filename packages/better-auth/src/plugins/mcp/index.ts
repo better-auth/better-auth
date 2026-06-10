@@ -3,6 +3,7 @@ import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { RFC_8176_AMR_VALUES } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -104,6 +105,7 @@ export const getMCPProviderMetadata = (
 			"name",
 		],
 		...options?.metadata,
+		amr_values_supported: [...RFC_8176_AMR_VALUES],
 	};
 };
 
@@ -235,7 +237,7 @@ export const mcp = (options: MCPOptions) => {
 						}
 						const session =
 							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
-							ctx.context.newSession;
+							ctx.context.getIssuedSession();
 						if (!session) {
 							return;
 						}

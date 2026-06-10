@@ -113,4 +113,68 @@ describe("getAuthTables", () => {
 
 		expect(tables.verification).toBeDefined();
 	});
+
+	describe("signInAttempt schema gate via plugin.signInChallenges", () => {
+		it("activates signInAttempt when any plugin declares signInChallenges", () => {
+			const tables = getAuthTables({
+				plugins: [
+					{
+						id: "fixture-challenge",
+						signInChallenges: ["fixture"] as const,
+					},
+				],
+			});
+			expect(tables.signInAttempt).toBeDefined();
+		});
+
+		it("keeps signInAttempt absent when no plugin declares signInChallenges", () => {
+			const tables = getAuthTables({
+				plugins: [{ id: "fixture-plain" }],
+			});
+			expect(tables.signInAttempt).toBeUndefined();
+		});
+
+		it("keeps signInAttempt absent when a plugin declares empty signInChallenges", () => {
+			const tables = getAuthTables({
+				plugins: [
+					{
+						id: "fixture-empty",
+						signInChallenges: [] as const,
+					},
+				],
+			});
+			expect(tables.signInAttempt).toBeUndefined();
+		});
+
+		it("no longer hardcodes plugin.id === 'two-factor' (A1 gate correction)", () => {
+			const tables = getAuthTables({
+				plugins: [{ id: "two-factor" }],
+			});
+			expect(tables.signInAttempt).toBeUndefined();
+		});
+
+		it("drops the loginMethod column from signInAttempt (collapsed into session.amr)", () => {
+			const tables = getAuthTables({
+				plugins: [
+					{
+						id: "fixture-challenge",
+						signInChallenges: ["fixture"] as const,
+					},
+				],
+			});
+			expect(tables.signInAttempt?.fields.loginMethod).toBeUndefined();
+		});
+	});
+
+	describe("session.amr column", () => {
+		it("adds session.amr as a json column with a [] default", () => {
+			const tables = getAuthTables({});
+			const amrField = tables.session?.fields.amr;
+			expect(amrField).toBeDefined();
+			expect(amrField?.type).toBe("json");
+			expect(amrField?.required).toBe(true);
+			const factory = amrField?.defaultValue as (() => unknown) | undefined;
+			expect(factory?.()).toStrictEqual([]);
+		});
+	});
 });

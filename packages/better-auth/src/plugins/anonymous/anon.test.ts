@@ -1,4 +1,5 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { createOTP } from "@better-auth/utils/otp";
 import { betterFetch } from "@better-fetch/fetch";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -13,10 +14,18 @@ import {
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
-import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader, setCookieToHeader } from "../../cookies";
+import { signJWT, symmetricDecrypt } from "../../crypto";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethodForEmail,
+} from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuth } from "../generic-oauth";
+import { twoFactor } from "../two-factor";
+import type { TwoFactorTotpSecret } from "../two-factor/types";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
 
@@ -177,6 +186,243 @@ describe("anonymous", async () => {
 		linkAccountFn.mockClear();
 	});
 
+	it("defers anonymous account linking cleanup until two-factor verification completes", async () => {
+		let otp = "";
+		const onLinkAccount = vi.fn();
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				anonymous({
+					async onLinkAccount(data) {
+						onLinkAccount(data);
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const anonymousSession = await auth.api.getSession({ headers });
+		if (!anonymousSession) {
+			throw new Error("Expected anonymous session");
+		}
+
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers,
+			asResponse: true,
+		});
+		const challengeBody = await signInRes.clone().json();
+		expect(
+			parseSetCookieHeader(signInRes.headers.get("set-cookie") || "").get(
+				"better-auth.two_factor_challenge",
+			),
+		).toBeDefined();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		expect(onLinkAccount).not.toHaveBeenCalled();
+
+		const challengeHeaders = new Headers(headers);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
+			},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactor({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).toHaveBeenCalledTimes(1);
+		expect(onLinkAccount).toHaveBeenCalledWith(
+			expect.objectContaining({
+				anonymousUser: expect.objectContaining({
+					user: expect.objectContaining({
+						id: anonymousSession.user.id,
+						isAnonymous: true,
+					}),
+				}),
+				newUser: expect.objectContaining({
+					user: expect.objectContaining({
+						email: testUser.email,
+					}),
+				}),
+			}),
+		);
+
+		const context = await auth.$context;
+		const deletedAnonymousUser = await context.internalAdapter.findUserById(
+			anonymousSession.user.id,
+		);
+		expect(deletedAnonymousUser).toBeNull();
+	});
+
+	it("still calls onLinkAccount when anonymous deletion is disabled", async () => {
+		let otp = "";
+		const onLinkAccount = vi.fn();
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				anonymous({
+					disableDeleteAnonymousUser: true,
+					async onLinkAccount(data) {
+						onLinkAccount(data);
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const anonymousSession = await auth.api.getSession({ headers });
+		if (!anonymousSession) {
+			throw new Error("Expected anonymous session");
+		}
+
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers,
+			asResponse: true,
+		});
+		const challengeBody = await signInRes.clone().json();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		expect(onLinkAccount).not.toHaveBeenCalled();
+
+		const challengeHeaders = new Headers(headers);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
+			},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactor({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).toHaveBeenCalledTimes(1);
+
+		const preservedAnonymousUser = await db.findOne<{
+			id: string;
+			isAnonymous: boolean | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: anonymousSession.user.id }],
+		});
+		expect(preservedAnonymousUser).not.toBeNull();
+		expect(preservedAnonymousUser?.isAnonymous).toBe(true);
+	});
+
+	it("does not treat session-scoped two-factor verification as anonymous linking", async () => {
+		const onLinkAccount = vi.fn();
+		const { auth, db } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							onLinkAccount(data);
+						},
+					}),
+					twoFactor(),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("Expected anonymous session");
+		}
+
+		const enableResponse = await auth.api.enableTwoFactorTotp({
+			headers,
+			body: {},
+		});
+		const totpRecord = await db.findOne<TwoFactorTotpSecret>({
+			model: "twoFactorTotp",
+			where: [{ field: "methodId", value: enableResponse.method.id }],
+		});
+		if (!totpRecord) {
+			throw new Error("Expected TOTP record");
+		}
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: totpRecord.secret,
+		});
+		const code = await createOTP(secret).totp();
+
+		const verifyRes = await auth.api.verifyTwoFactor({
+			headers,
+			body: {
+				methodId: enableResponse.method.id,
+				code,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).not.toHaveBeenCalled();
+	});
+
 	it("should link in social sign on", async () => {
 		const headers = new Headers();
 		await client.signIn.anonymous({
@@ -198,7 +444,8 @@ describe("anonymous", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
+		expectNoTwoFactorChallenge(singInRes.data);
+		const state = new URL(singInRes.data.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -233,7 +480,8 @@ describe("anonymous", async () => {
 				headers: anonHeaders,
 			},
 		});
-		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url || "").searchParams.get("state");
 
 		// The in-app browser returns to the callback with the state cookie but
 		// without the session cookie. Linking must still fire via the OAuth state.
@@ -268,7 +516,8 @@ describe("anonymous", async () => {
 				headers: attackerHeaders,
 			},
 		});
-		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
 			headers: attackerHeaders,
@@ -565,49 +814,35 @@ describe("anonymous", async () => {
 
 	describe("anonymous cleanup safeguards", () => {
 		function createMiddlewareContext({
-			newSessionUser,
+			issuedUser,
 			deleteUser,
 			deleteUserSessions,
 		}: {
-			newSessionUser: Record<string, any>;
+			issuedUser: Record<string, any>;
 			deleteUser: ReturnType<typeof vi.fn>;
 			deleteUserSessions?: ReturnType<typeof vi.fn>;
 		}) {
 			return {
 				path: "/sign-in/anonymous",
-				context: {
-					responseHeaders: new Headers({
-						"set-cookie":
-							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
-					}),
-					authCookies: {
-						sessionToken: {
-							name: "better-auth.session_token",
-							options: {},
-						},
-						sessionData: {
-							name: "better-auth.session_data",
-							options: {},
-						},
-						dontRememberToken: {
-							name: "better-auth.dont_remember",
-							options: {},
-						},
-					},
-					newSession: {
-						user: newSessionUser,
+				context: (() => {
+					const finalized = {
+						user: issuedUser,
 						session: {
 							token: "new-token",
 						},
-					},
-					internalAdapter: {
-						deleteUser,
-						deleteUserSessions: deleteUserSessions ?? vi.fn(),
-					},
-					options: {},
-					secret: "secret",
-					setNewSession: vi.fn(),
-				},
+					};
+					return {
+						responseHeaders: new Headers(),
+						getFinalizedSignIn: () => finalized,
+						getIssuedSession: () => null,
+						internalAdapter: {
+							deleteUser,
+							deleteUserSessions: deleteUserSessions ?? vi.fn(),
+						},
+						options: {},
+						secret: "secret",
+					};
+				})(),
 				headers: new Headers(),
 				query: {},
 				error: vi.fn(),
@@ -623,7 +858,7 @@ describe("anonymous", async () => {
 			const handler = plugin.hooks?.after?.[0]?.handler;
 			const deleteUser = vi.fn();
 			const ctx = createMiddlewareContext({
-				newSessionUser: {
+				issuedUser: {
 					id: "anon-user",
 					isAnonymous: true,
 				},
@@ -651,7 +886,7 @@ describe("anonymous", async () => {
 			const deleteUser = vi.fn();
 			const deleteUserSessions = vi.fn();
 			const ctx = createMiddlewareContext({
-				newSessionUser: {
+				issuedUser: {
 					id: "linked-user",
 					isAnonymous: false,
 				},
@@ -758,7 +993,8 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 
 		// Follow the provider redirect to obtain the callback URL (code + state).
 		let callbackLocation: string | null = null;
-		await betterFetch(signInRes.data?.url || "", {
+		expectNoTwoFactorChallenge(signInRes.data);
+		await betterFetch(signInRes.data.url || "", {
 			method: "GET",
 			redirect: "manual",
 			onError(context) {

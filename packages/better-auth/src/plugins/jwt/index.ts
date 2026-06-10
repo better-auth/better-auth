@@ -323,7 +323,8 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 							return;
 						}
 
-						const session = ctx.context.session || ctx.context.newSession;
+						const session =
+							ctx.context.session || ctx.context.getIssuedSession();
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);
 							const exposedHeaders =

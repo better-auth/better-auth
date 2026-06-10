@@ -12,6 +12,14 @@ describe("assignOrganizationByDomain", () => {
 			user: [] as User[],
 			session: [] as { id: string }[],
 			account: [] as { id: string }[],
+			verification: [] as {
+				id: string;
+				identifier: string;
+				value: string;
+				expiresAt: Date;
+				createdAt: Date;
+				updatedAt: Date;
+			}[],
 			ssoProvider: [] as {
 				id: string;
 				providerId: string;
@@ -37,6 +45,11 @@ describe("assignOrganizationByDomain", () => {
 		};
 
 		const memory = memoryAdapter(data);
+		const ssoPlugin = sso({
+			domainVerification: {
+				enabled: true,
+			},
+		});
 
 		const auth = betterAuth({
 			database: memory,
@@ -44,14 +57,7 @@ describe("assignOrganizationByDomain", () => {
 			emailAndPassword: {
 				enabled: true,
 			},
-			plugins: [
-				sso({
-					domainVerification: {
-						enabled: true,
-					},
-				}),
-				organization(),
-			],
+			plugins: [ssoPlugin, organization()],
 		});
 
 		const createContext = async () => {

@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import {
+	expectNoTwoFactorChallenge,
+	seedVerifiedOtpMethod,
+} from "../../test-utils/two-factor";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { twoFactor } from "../two-factor";
 import { magicLink } from ".";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -18,15 +25,16 @@ describe("magic link", async () => {
 		token: "",
 		url: "",
 	};
-	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
-		plugins: [
-			magicLink({
-				async sendMagicLink(data) {
-					verificationEmail = data;
-				},
-			}),
-		],
-	});
+	const { auth, customFetchImpl, testUser, sessionSetter } =
+		await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 	const client = createAuthClient({
 		plugins: [magicLinkClient()],
@@ -79,7 +87,8 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -218,6 +227,46 @@ describe("magic link", async () => {
 		);
 	});
 
+	it("should redirect to errorCallbackURL when final session creation fails", async () => {
+		const errorCallbackURL = new URL("http://localhost:3000/error-page");
+		const context = await auth.$context;
+		const originalCreateSession = context.internalAdapter.createSession;
+		context.internalAdapter.createSession = vi.fn().mockResolvedValue(null);
+
+		try {
+			await client.signIn.magicLink({
+				email: testUser.email,
+			});
+
+			await client.magicLink.verify(
+				{
+					query: {
+						token:
+							new URL(verificationEmail.url).searchParams.get("token") || "",
+						errorCallbackURL: errorCallbackURL.toString(),
+					},
+				},
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+
+						const location = context.response.headers.get("location");
+						expect(location).toBeDefined();
+
+						const url = new URL(location!);
+						expect(url.origin).toBe(errorCallbackURL.origin);
+						expect(url.pathname).toBe(errorCallbackURL.pathname);
+						expect(url.searchParams.get("error")).toBe(
+							"failed_to_create_session",
+						);
+					},
+				},
+			);
+		} finally {
+			context.internalAdapter.createSession = originalCreateSession;
+		}
+	});
+
 	it("should sign up with magic link", async () => {
 		const email = "new-email@email.com";
 		await client.signIn.magicLink({
@@ -313,7 +362,8 @@ describe("magic link", async () => {
 		});
 
 		// Check that the response contains emailVerified: true
-		expect(response.data?.user.emailVerified).toBe(true);
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.user.emailVerified).toBe(true);
 
 		// Also verify session has emailVerified: true
 		const session = await testClient.getSession({
@@ -400,9 +450,10 @@ describe("magic link", async () => {
 			},
 		});
 
-		expect(response.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.user).toBeDefined();
 		// @ts-expect-error
-		expect(response.data?.user.foo).toBeNull();
+		expect(response.data.user.foo).toBeNull();
 
 		await auth.api.updateUser({
 			body: {
@@ -424,8 +475,9 @@ describe("magic link", async () => {
 				},
 			});
 
+			expectNoTwoFactorChallenge(response.data);
 			// @ts-expect-error
-			expect(response.data?.user.foo).toBe("bar");
+			expect(response.data.user.foo).toBe("bar");
 		}
 	});
 });
@@ -476,7 +528,8 @@ describe("magic link verify", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -668,7 +721,8 @@ describe("magic link single-use semantics", async () => {
 			query: { token },
 			fetchOptions: { onSuccess: sessionSetter(headers) },
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 		expect(headers.get("set-cookie")).toBeDefined();
 
 		await client.magicLink.verify(
@@ -697,7 +751,8 @@ describe("magic link single-use semantics", async () => {
 			query: { token },
 			fetchOptions: { onSuccess: sessionSetter(headers) },
 		});
-		expect(response.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(response.data);
+		expect(response.data.token).toBeDefined();
 
 		await client.magicLink.verify(
 			{ query: { token } },
@@ -766,8 +821,214 @@ describe("magic link single-use semantics", async () => {
 		]);
 
 		const sessionTokens = responses
-			.map((r) => r.data?.token)
+			.map((r) => (r.data && "token" in r.data ? r.data.token : undefined))
 			.filter((t): t is string => typeof t === "string" && t.length > 0);
 		expect(sessionTokens).toHaveLength(1);
+	});
+});
+
+describe("magic link two-factor challenge", async () => {
+	it("should redirect through two-factor for enabled users", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const { auth, db, customFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							verificationEmail = data;
+						},
+					}),
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const context = await auth.$context;
+		const existingUser = await context.internalAdapter.createUser(
+			{
+				email: "magic-2fa@test.com",
+				name: "Magic Link User",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		await seedVerifiedOtpMethod(db, existingUser.id);
+
+		await client.signIn.magicLink({
+			email: "magic-2fa@test.com",
+		});
+
+		const verifyURL = new URL(verificationEmail.url);
+		await client.$fetch(`/magic-link/verify${verifyURL.search}`, {
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				const redirectURL = new URL(location!, "http://localhost:3000");
+				expect(redirectURL.pathname).toBe("/");
+				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+				expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+				expect(redirectURL.searchParams.get("methods")).toBeNull();
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(
+					cookies.get("better-auth.two_factor_challenge")?.value,
+				).toBeDefined();
+			},
+		});
+
+		const sessions = await context.internalAdapter.listSessions(
+			existingUser.id,
+		);
+		expect(sessions).toHaveLength(0);
+	});
+
+	it("should preserve inherited session_only state after two-factor verification", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		let otp = "";
+
+		const { auth, db, customFetchImpl, testUser } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							verificationEmail = data;
+						},
+					}),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: false,
+			},
+		);
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const existingUser = await auth.$context.then((context) =>
+			context.internalAdapter.createUser(
+				{
+					email: "magic-remember-2fa@test.com",
+					name: "Magic Remember Me User",
+					emailVerified: true,
+				},
+				{ method: "test" },
+			),
+		);
+		await seedVerifiedOtpMethod(db, existingUser.id);
+
+		const sessionOnlyResponse = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			asResponse: true,
+		});
+		const sessionOnlyCookies = parseSetCookieHeader(
+			sessionOnlyResponse.headers.get("set-cookie") || "",
+		);
+		const sessionOnlyCookie = sessionOnlyCookies.get(
+			"better-auth.session_only",
+		)?.value;
+		expect(sessionOnlyCookie).toBeDefined();
+
+		await client.signIn.magicLink({
+			email: existingUser.email,
+		});
+
+		const challengeHeaders = new Headers();
+		challengeHeaders.set(
+			"cookie",
+			`better-auth.session_only=${sessionOnlyCookie}`,
+		);
+
+		const verifyURL = new URL(verificationEmail.url);
+		let challengeCookie = "";
+		await client.$fetch(`/magic-link/verify${verifyURL.search}`, {
+			headers: challengeHeaders,
+			onError(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				challengeCookie =
+					cookies.get("better-auth.two_factor_challenge")?.value || "";
+			},
+		});
+		expect(challengeCookie).toBeTruthy();
+		challengeHeaders.set(
+			"cookie",
+			`better-auth.session_only=${sessionOnlyCookie}; better-auth.two_factor_challenge=${challengeCookie}`,
+		);
+
+		const pendingChallenge = await auth.api.getPendingTwoFactorChallenge({
+			headers: challengeHeaders,
+		});
+		const otpMethodId = pendingChallenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		await auth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: { methodId: otpMethodId },
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyResponse = await auth.api.verifyTwoFactor({
+			headers: challengeHeaders,
+			body: {
+				methodId: otpMethodId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		const cookies = parseSetCookieHeader(
+			verifyResponse.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+		expect(
+			cookies.get("better-auth.session_token")?.["max-age"],
+		).not.toBeDefined();
+		expect(cookies.get("better-auth.session_only")?.value).toBeDefined();
 	});
 });

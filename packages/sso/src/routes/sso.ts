@@ -1,10 +1,12 @@
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
+	GenericEndpointContext,
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
 } from "better-auth";
 import {
+	amrForProvider,
 	createAuthorizationURL,
 	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
@@ -21,8 +23,9 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
-import { generateRandomString } from "better-auth/crypto";
+import { resolveSignInWithRedirect } from "better-auth/auth/resolve-sign-in";
+import { deleteSessionCookie } from "better-auth/cookies";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
 	signInWithOAuthIdentity,
@@ -1171,7 +1174,7 @@ const callbackSSOQuerySchema = z.object({
  *   parsed from the request context.
  */
 async function handleOIDCCallback(
-	ctx: any,
+	ctx: GenericEndpointContext,
 	options: SSOOptions | undefined,
 	providerId: string,
 	stateData?: Awaited<ReturnType<typeof parseState>>,
@@ -1512,7 +1515,7 @@ async function handleOIDCCallback(
 		const sep = baseURL.includes("?") ? "&" : "?";
 		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
-	const { session, user } = linked.data!;
+	const { user } = linked.data!;
 
 	if (
 		options?.provisionUser &&
@@ -1525,11 +1528,10 @@ async function handleOIDCCallback(
 			provider,
 		});
 	}
-
-	await assignOrganizationFromProvider(ctx as any, {
+	const providerOrganizationAssignment = {
 		user,
 		profile: {
-			providerType: "oidc",
+			providerType: "oidc" as const,
 			providerId: provider.providerId,
 			accountId: userInfo.id,
 			email: userInfo.email,
@@ -1539,20 +1541,68 @@ async function handleOIDCCallback(
 		provider,
 		token: tokenResponse,
 		provisioningOptions: options?.organizationProvisioning,
-	});
+	};
 
-	await setSessionCookie(ctx, {
-		session,
-		user,
-	});
-	let toRedirectTo: string;
+	const redirectTarget = (() => {
+		try {
+			const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
+			return url.toString();
+		} catch {
+			return linked.isRegister ? newUserURL || callbackURL : callbackURL;
+		}
+	})();
 	try {
-		const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
-		toRedirectTo = url.toString();
-	} catch {
-		toRedirectTo = linked.isRegister ? newUserURL || callbackURL : callbackURL;
+		await resolveSignInWithRedirect(ctx, {
+			signIn: {
+				user,
+				amr: amrForProvider(provider.providerId),
+			},
+			redirectTarget,
+			onFailedToCreateSession() {
+				throw ctx.redirect(
+					`${errorURL || callbackURL}?error=failed_to_create_session`,
+				);
+			},
+			onChallenge: async (challenge) => {
+				if (challenge.kind !== "two-factor" || !provider.organizationId) {
+					return;
+				}
+				const attempt = ctx.context.getSignInAttempt();
+				const expiresAt =
+					attempt?.id === challenge.attemptId
+						? attempt.expiresAt
+						: new Date(Date.now() + 10 * 60 * 1000);
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `${constants.SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${challenge.attemptId}`,
+					value: await symmetricEncrypt({
+						key: ctx.context.secretConfig,
+						data: JSON.stringify({
+							userId: user.id,
+							providerId: provider.providerId,
+							profile: providerOrganizationAssignment.profile,
+							token: tokenResponse,
+						}),
+					}),
+					expiresAt,
+				});
+			},
+		});
+	} catch (e) {
+		// A session/database hook (e.g. ban enforcement) can throw an APIError
+		// while the resolver creates the session. Forward its code to the error
+		// redirect; the two-factor challenge redirect carries no `body.code`, so
+		// it re-throws untouched.
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
 	}
-	throw ctx.redirect(toRedirectTo);
+	await assignOrganizationFromProvider(ctx, providerOrganizationAssignment);
+	throw ctx.redirect(redirectTarget);
 }
 
 const callbackSSOEndpointConfig = {

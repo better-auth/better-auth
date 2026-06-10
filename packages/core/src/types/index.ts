@@ -1,12 +1,21 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
+export type { SignInAttempt } from "../db";
 export type {
 	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	BetterAuthSignInChallengeRegistry,
+	CheckSignInChallengeInput,
+	CheckSignInChallengeResult,
+	FinalizedSignIn,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
 	PluginContext,
+	SignInAttemptWithUser,
+	SignInChallenge,
+	SignInCommit,
+	SignInResolution,
 } from "./context";
 export type {
 	BetterAuthCookie,

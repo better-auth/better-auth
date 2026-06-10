@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { amrSchema } from "../../auth/amr-methods";
 import type { BetterAuthOptions, Prettify } from "../../types";
 import type {
 	InferDBFieldsFromOptions,
@@ -12,6 +13,13 @@ export const sessionSchema = coreSchema.extend({
 	token: z.string(),
 	ipAddress: z.string().nullish(),
 	userAgent: z.string().nullish(),
+	/**
+	 * Session-scoped Authentication Methods References (OIDC §2, RFC 8176).
+	 * Every factor verification that contributed to this session appears here
+	 * in completion order. Consumers MUST treat this as the canonical record;
+	 * cookies like `last_used_login_method` are projections of `amr[0]`.
+	 */
+	amr: amrSchema.default(() => []),
 });
 
 export type BaseSession = z.infer<typeof sessionSchema>;

@@ -3,10 +3,15 @@ import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { originCheck } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { isFailedToCreateSessionError } from "../../auth/finalize-sign-in";
+import {
+	resolveSignIn,
+	resolveSignInWithRedirect,
+} from "../../auth/resolve-sign-in";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import { isAPIError } from "../../utils/is-api-error";
@@ -434,29 +439,50 @@ export const magicLink = (options: MagicLinkOptions) => {
 						});
 					}
 
-					const session = await ctx.context.internalAdapter.createSession(
-						user.id,
-					);
-
-					if (!session) {
-						redirectWithError("failed_to_create_session");
-					}
-
-					await setSessionCookie(ctx, {
-						session,
-						user,
-					});
-					if (!ctx.query.callbackURL) {
-						return ctx.json({
-							token: session.token,
-							user: parseUserOutput(ctx.context.options, user),
-							session: parseSessionOutput(ctx.context.options, session),
+					let result: Awaited<ReturnType<typeof resolveSignIn>> | null = null;
+					if (ctx.query.callbackURL) {
+						await resolveSignInWithRedirect(ctx, {
+							signIn: {
+								user,
+								amr: {
+									method: BUILTIN_AMR_METHOD.MAGIC_LINK,
+									factor: "possession",
+									completedAt: new Date(),
+								},
+							},
+							redirectTarget: isNewUser ? newUserCallbackURL : callbackURL,
+							onFailedToCreateSession() {
+								return redirectWithError("failed_to_create_session");
+							},
 						});
+						if (isNewUser) {
+							throw ctx.redirect(newUserCallbackURL);
+						}
+						throw ctx.redirect(callbackURL);
 					}
-					if (isNewUser) {
-						throw ctx.redirect(newUserCallbackURL);
+					try {
+						result = await resolveSignIn(ctx, {
+							user,
+							amr: {
+								method: BUILTIN_AMR_METHOD.MAGIC_LINK,
+								factor: "possession",
+								completedAt: new Date(),
+							},
+						});
+					} catch (error) {
+						if (isFailedToCreateSessionError(error)) {
+							redirectWithError("failed_to_create_session");
+						}
+						throw error;
 					}
-					throw ctx.redirect(callbackURL);
+					if (result?.kind === "challenge") {
+						return ctx.json(result);
+					}
+					return ctx.json({
+						token: result.session.token,
+						user: parseUserOutput(ctx.context.options, result.user),
+						session: parseSessionOutput(ctx.context.options, result.session),
+					});
 				},
 			),
 		},

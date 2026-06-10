@@ -1,11 +1,18 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { betterFetch } from "@better-fetch/fetch";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { parseJSON } from "../../client/parser";
+import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
+import {
+	expectNoTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { twoFactor } from "../two-factor";
 import { oAuthProxy } from ".";
 
 let testIdToken: string;
@@ -80,6 +87,7 @@ describe("oauth-proxy", async () => {
 			},
 		);
 
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
@@ -120,6 +128,7 @@ describe("oauth-proxy", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			headers,
@@ -158,6 +167,7 @@ describe("oauth-proxy", async () => {
 				throw: true,
 			},
 		);
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
@@ -199,6 +209,7 @@ describe("oauth-proxy", async () => {
 				throw: true,
 			},
 		);
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			onError(context) {
@@ -237,6 +248,7 @@ describe("oauth-proxy", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 		await client.$fetch(`/callback/google?code=test&state=${state}`, {
 			headers,
@@ -278,6 +290,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 			expect(state).toBeTruthy();
 
@@ -313,6 +326,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const encryptedState = new URL(res.url!).searchParams.get("state");
 			expect(encryptedState).toBeTruthy();
 
@@ -362,6 +376,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const encryptedState = new URL(res.url!).searchParams.get("state");
 			expect(encryptedState).toBeTruthy();
 
@@ -412,6 +427,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			// On same origin, state should NOT be encrypted package
@@ -459,6 +475,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			let encryptedProfile: string | null = null;
@@ -542,6 +559,7 @@ describe("oauth-proxy", async () => {
 					throw: true,
 				},
 			);
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			let encryptedProfile: string | null = null;
@@ -606,6 +624,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			// Step 2: Complete OAuth callback on production - passthrough mode
@@ -707,6 +726,7 @@ describe("oauth-proxy", async () => {
 				},
 				{ throw: true },
 			);
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			let encryptedProfile: string | null = null;
@@ -738,6 +758,127 @@ describe("oauth-proxy", async () => {
 			expect(proxyRedirect).toBeTruthy();
 			const url = new URL(proxyRedirect!);
 			expect(url.searchParams.get("error")).toBe("signup_disabled");
+		});
+
+		it("should redirect oauth proxy callback into two-factor challenge for enabled preview users", async () => {
+			const production = await getTestInstance({
+				baseURL: "https://myapp.com",
+				plugins: [
+					oAuthProxy({
+						productionURL: "https://login.myapp.com",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "https://myapp.com",
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview-localhost:3000",
+							productionURL: "https://login.myapp.com",
+						}),
+						twoFactor({
+							otpOptions: {
+								async sendOTP() {},
+							},
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const existingUser = await previewCtx.internalAdapter.createUser(
+				{
+					email: "user@email.com",
+					name: "First Last",
+					emailVerified: true,
+				},
+				{ method: "test" },
+			);
+			await seedVerifiedOtpMethod(preview.db, existingUser.id);
+
+			const headers = new Headers();
+			const signInRes = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+					onSuccess: production.cookieSetter(headers),
+				},
+			);
+			expectNoTwoFactorChallenge(signInRes);
+			const state = new URL(signInRes.url!).searchParams.get("state");
+			if (!state) {
+				throw new Error("Expected oauth state");
+			}
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (!location) {
+							throw new Error("Expected proxy redirect location");
+						}
+						const url = new URL(location);
+						encryptedProfile = url.searchParams.get("profile");
+						callbackURL = url.searchParams.get("callbackURL");
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+			expect(callbackURL).toBeTruthy();
+
+			let redirectLocation = "";
+			let setCookieHeader = "";
+			await betterFetch(
+				`http://preview-localhost:3000/api/auth/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					customFetchImpl: preview.customFetchImpl,
+					onError(context) {
+						redirectLocation = context.response.headers.get("location") || "";
+						setCookieHeader = context.response.headers.get("set-cookie") || "";
+					},
+				},
+			);
+
+			const redirectURL = new URL(redirectLocation, "http://localhost:3000");
+			expect(redirectURL.pathname).toBe("/dashboard");
+			expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+			expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+			expect(redirectURL.searchParams.get("methods")).toBeNull();
+
+			const cookies = parseSetCookieHeader(setCookieHeader);
+			const twoFactorCookie =
+				cookies.get("better-auth.two_factor_challenge") ??
+				cookies.get("__Secure-better-auth.two_factor_challenge");
+			expect(twoFactorCookie?.value).toBeDefined();
+
+			const previewSessions = await previewCtx.internalAdapter.listSessions(
+				existingUser.id,
+			);
+			expect(previewSessions).toHaveLength(0);
 		});
 
 		it("should reject expired profile payloads", async () => {
@@ -884,6 +1025,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			// Complete OAuth callback - this should work without UUID format errors
@@ -1081,6 +1223,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			// Step 2: Complete OAuth callback on production
@@ -1269,6 +1412,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const state = new URL(res.url!).searchParams.get("state");
 
 			// Step 2: Complete OAuth callback to get encrypted profile
@@ -1451,6 +1595,7 @@ describe("oauth-proxy", async () => {
 			);
 
 			// The state is encrypted with preview's secret
+			expectNoTwoFactorChallenge(res);
 			const encryptedState = new URL(res.url!).searchParams.get("state");
 			expect(encryptedState).toBeTruthy();
 
@@ -1533,6 +1678,7 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
+			expectNoTwoFactorChallenge(res);
 			const encryptedState = new URL(res.url!).searchParams.get("state");
 			expect(encryptedState).toBeTruthy();
 
@@ -1611,6 +1757,7 @@ describe("oauth-proxy", async () => {
 			},
 		);
 
+		expectNoTwoFactorChallenge(res);
 		const encryptedState = new URL(res.url!).searchParams.get("state");
 		expect(encryptedState).toBeTruthy();
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	seedVerifiedOtpMethod,
+} from "../../test-utils/two-factor";
+import { twoFactor } from "../two-factor";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
@@ -51,7 +58,9 @@ describe("username", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.token).toBeDefined();
+		const signInData = res.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
 	});
 
 	/**
@@ -63,9 +72,10 @@ describe("username", async () => {
 			password: "new-password",
 			callbackURL: "/dashboard",
 		});
-		expect(res.data?.redirect).toBe(true);
-		expect(res.data?.url).toBe("/dashboard");
-		expect(res.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(true);
+		expect(res.data.url).toBe("/dashboard");
+		expect(res.data.token).toBeDefined();
 	});
 
 	it("should not set redirect when callbackURL is omitted", async () => {
@@ -73,8 +83,9 @@ describe("username", async () => {
 			username: "new_username",
 			password: "new-password",
 		});
-		expect(res.data?.redirect).toBe(false);
-		expect(res.data?.url).toBeUndefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.redirect).toBe(false);
+		expect(res.data.url).toBeUndefined();
 	});
 
 	it("should update username", async () => {
@@ -343,8 +354,10 @@ describe("username", async () => {
 			username: "Custom_User",
 			password: "test-password",
 		});
-		expect(res2.data?.user.username).toBe("custom_user");
-		expect(res2.data?.user.displayUsername).toBe("Custom_User");
+		const signInData = res2.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.user.username).toBe("custom_user");
+		expect(signInData.user.displayUsername).toBe("Custom_User");
 	});
 });
 
@@ -866,5 +879,70 @@ describe("username sign-in verify-email callbackURL", async () => {
 		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
 			callbackURL,
 		);
+	});
+});
+
+describe("username two-factor challenge", async () => {
+	const email = "two-factor-username@example.com";
+	const password = "correct-password";
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				username(),
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	const signUp = await client.signUp.email({
+		email,
+		username: "two_factor_user",
+		password,
+		name: "Two Factor User",
+	});
+
+	if (!signUp.data) {
+		throw new Error("sign up failed");
+	}
+
+	await seedVerifiedOtpMethod(db, signUp.data.user.id);
+
+	it("should return a challenge and clear the session cookies", async () => {
+		let setCookieHeader = "";
+		const res = await client.signIn.username(
+			{
+				username: "two_factor_user",
+				password,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.methods).toEqual([
+			expect.objectContaining({
+				kind: "otp",
+				label: null,
+			}),
+		]);
 	});
 });

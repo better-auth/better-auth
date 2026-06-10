@@ -71,3 +71,6 @@ resyncs
 unioned
 bpchar
 vbscript
+Referer
+Finalizer
+Finalizers

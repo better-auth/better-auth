@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { TwoFactorMethodLinks } from "@/components/forms/two-factor-method-links";
 import { TwoFactorTotpForm } from "@/components/forms/two-factor-totp-form";
-import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
@@ -29,11 +28,7 @@ export default function Page() {
 					<TwoFactorTotpForm onSuccess={() => router.push("/dashboard")} />
 				</CardContent>
 				<CardFooter className="text-sm text-muted-foreground gap-2">
-					<Link href="/two-factor/otp">
-						<Button variant="link" size="sm">
-							Switch to Email Verification
-						</Button>
-					</Link>
+					<TwoFactorMethodLinks current="totp" />
 				</CardFooter>
 			</Card>
 		</main>

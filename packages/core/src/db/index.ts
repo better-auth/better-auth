@@ -16,6 +16,11 @@ export {
 	sessionSchema,
 } from "./schema/session";
 export { coreSchema } from "./schema/shared";
+export {
+	type BaseSignInAttempt,
+	type SignInAttempt,
+	signInAttemptSchema,
+} from "./schema/sign-in-attempt";
 export { type BaseUser, type User, userSchema } from "./schema/user";
 export {
 	type BaseVerification,

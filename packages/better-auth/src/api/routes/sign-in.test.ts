@@ -1,7 +1,7 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 
 /**
  * More test can be found in `session.test.ts`
@@ -286,6 +286,7 @@ describe("sign-in with additionalFields", async () => {
 		});
 
 		// additionalFields should be returned in API response
+		expectNoTwoFactorChallenge(res);
 		expect(res.user).toBeDefined();
 		expect(res.user.newField).toBe("signin-value");
 		expect(res.user.isAdmin).toBe(true);
@@ -405,6 +406,7 @@ describe("email case insensitivity", async () => {
 				password,
 			},
 		});
+		expectNoTwoFactorChallenge(signInLowercase);
 		expect(signInLowercase.user).toBeDefined();
 		expect(signInLowercase.user.email).toBe(mixedCaseEmail.toLowerCase());
 
@@ -414,6 +416,7 @@ describe("email case insensitivity", async () => {
 				password,
 			},
 		});
+		expectNoTwoFactorChallenge(signInUppercase);
 		expect(signInUppercase.user).toBeDefined();
 		expect(signInUppercase.user.email).toBe(mixedCaseEmail.toLowerCase());
 
@@ -423,6 +426,7 @@ describe("email case insensitivity", async () => {
 				password,
 			},
 		});
+		expectNoTwoFactorChallenge(signInOriginal);
 		expect(signInOriginal.user).toBeDefined();
 		expect(signInOriginal.user.email).toBe(mixedCaseEmail.toLowerCase());
 	});

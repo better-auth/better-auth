@@ -1,6 +1,6 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { emailOTP } from "../email-otp";
 import { emailOTPClient } from "../email-otp/client";
 import { captcha } from ".";
@@ -44,7 +44,8 @@ describe("captcha", async () => {
 			},
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("Should return a 500 when missing secret key", async () => {
@@ -150,7 +151,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
 		});
@@ -220,7 +222,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
@@ -320,7 +323,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
@@ -398,7 +402,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
@@ -481,8 +486,9 @@ describe("captcha", async () => {
 
 			// Captcha must be bypassed; the sign-in flow completes and yields a session.
 			expect(res.error).toBeNull();
-			expect(res.data?.token).toEqual(expect.any(String));
-			expect(res.data?.user?.email).toBe("test@test.com");
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.token).toEqual(expect.any(String));
+			expect(res.data.user?.email).toBe("test@test.com");
 		});
 
 		it("should still apply captcha when /sign-in/email-otp is explicitly opted in", async () => {

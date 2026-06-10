@@ -519,7 +519,11 @@ function tsxifyBackticks(input: string): JSX.Element {
 function parseCode(children: JSX.Element) {
 	// These two variables are essentially taking the `children` JSX shiki code, and converting them to
 	// an array string purely of it's code content.
-	const arrayOfJSXCode = children?.props.children.props.children.props.children
+	// Shiki renders multi-line code as an array of line nodes; a single-line block
+	// (e.g. a no-parameter endpoint typed `type X = {}`) yields a single node, so
+	// normalize to an array before mapping.
+	const lineNodes = children?.props.children.props.children.props.children;
+	const arrayOfJSXCode = (Array.isArray(lineNodes) ? lineNodes : [lineNodes])
 		.map((x: any) =>
 			x === "\n" ? { props: { children: { props: { children: "\n" } } } } : x,
 		)

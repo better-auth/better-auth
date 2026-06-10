@@ -1,85 +1,197 @@
-import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
+import type {
+	Awaitable,
+	BetterAuthSignInChallengeRegistry,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { InferOptionSchema, User } from "../../types";
-import type { BackupCodeOptions } from "./backup-codes";
-import type { OTPOptions } from "./otp";
 import type { schema } from "./schema";
-import type { TOTPOptions } from "./totp";
+
+/**
+ * Input passed to `twoFactor({ enforcement: { decide } })`. `primaryMethod` is the
+ * primary factor the caller just proved (e.g. `"password"`, `"passkey"`, or a
+ * provider id); `request` is the in-flight HTTP request so the hook can
+ * consult headers, IP, or geo to make policy decisions.
+ *
+ * `request` is `undefined` when the pipeline is invoked directly via
+ * `auth.api.*` on the server (there is no real fetch `Request` in that
+ * path). Hooks that key on headers/IP/geo must handle the undefined case.
+ */
+export interface TwoFactorEnforcementDecideInput {
+	challenge: keyof BetterAuthSignInChallengeRegistry;
+	user: User;
+	primaryMethod: string;
+	request?: Request;
+}
+
+export type TwoFactorEnforcementDecision =
+	| "enforce"
+	| "skip"
+	| undefined
+	| { decision: "enforce" | "skip"; reason?: string };
+
+export type TwoFactorEnforcementDecide = (
+	input: TwoFactorEnforcementDecideInput,
+) => TwoFactorEnforcementDecision | Promise<TwoFactorEnforcementDecision>;
+
+export interface TwoFactorEnforcementOptions {
+	decide?: TwoFactorEnforcementDecide | undefined;
+}
+
+export interface TwoFactorTrustDeviceOptions {
+	/**
+	 * Maximum age (in seconds) for the trusted-device cookie.
+	 *
+	 * @default 604800 (7 days)
+	 */
+	maxAge?: number | undefined;
+	/**
+	 * Endpoint paths (exact matches against `ctx.path`) that force a fresh
+	 * two-factor challenge even when the trust-device cookie is valid.
+	 */
+	requireReverificationFor?: readonly string[] | undefined;
+}
+
+export interface TOTPOptions {
+	issuer?: string | undefined;
+	digits?: (6 | 8) | undefined;
+	period?: number | undefined;
+	disable?: boolean | undefined;
+}
+
+export interface OTPOptions {
+	period?: number | undefined;
+	digits?: number | undefined;
+	sendOTP?:
+		| ((
+				data: {
+					user: User;
+					otp: string;
+				},
+				ctx?: GenericEndpointContext,
+		  ) => Awaitable<void>)
+		| undefined;
+	allowedAttempts?: number | undefined;
+	storeOTP?:
+		| (
+				| "plain"
+				| "encrypted"
+				| "hashed"
+				| { hash: (token: string) => Promise<string> }
+				| {
+						encrypt: (token: string) => Promise<string>;
+						decrypt: (token: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
+}
+
+export interface RecoveryCodeOptions {
+	/**
+	 * The number of recovery codes to issue when a recovery method is created
+	 * or replaced.
+	 *
+	 * @default 10
+	 */
+	amount?: number | undefined;
+	/**
+	 * Number of random alphanumeric characters in each recovery code.
+	 *
+	 * @default 12
+	 */
+	length?: number | undefined;
+	customGenerate?: (() => string[]) | undefined;
+}
 
 export interface TwoFactorOptions {
-	/**
-	 * Application Name
-	 */
 	issuer?: string | undefined;
-	/**
-	 * The name of the table that stores the two factor
-	 * authentication data.
-	 *
-	 * @default "twoFactor"
-	 */
-	twoFactorTable?: string | undefined;
-	/**
-	 * TOTP OPtions
-	 */
 	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;
-	/**
-	 * OTP Options
-	 */
 	otpOptions?: OTPOptions | undefined;
+	recoveryCodeOptions?: RecoveryCodeOptions | undefined;
 	/**
-	 * Backup code options
-	 */
-	backupCodeOptions?: BackupCodeOptions | undefined;
-	/**
-	 * Skip verification on enabling two factor authentication.
+	 * Skip interactive verification for freshly created methods.
+	 * TOTP/OTP methods are marked verified immediately when enabled.
+	 *
 	 * @default false
 	 */
 	skipVerificationOnEnable?: boolean | undefined;
-	/**
-	 * Allow enabling and managing 2FA without a password when the user does not
-	 * have a credential account (e.g. passkey-only users).
-	 * When enabled, password is still required if a credential account exists.
-	 * @default false
-	 */
-	allowPasswordless?: boolean | undefined;
-	/**
-	 * Custom schema for the two factor plugin
-	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;
 	/**
-	 * Maximum age (in seconds) for the two-factor verification cookie.
-	 * This controls how long users have to complete the 2FA flow
-	 * after signing in.
+	 * Maximum age (in seconds) for the pending two-factor cookie.
 	 *
 	 * @default 600 (10 minutes)
 	 */
-	twoFactorCookieMaxAge?: number | undefined;
+	pendingChallengeMaxAge?: number | undefined;
+	trustDevice?: TwoFactorTrustDeviceOptions | undefined;
+	enforcement?: TwoFactorEnforcementOptions | undefined;
 	/**
-	 * Maximum age (in seconds) for the trusted device cookie.
-	 * When a user opts to trust a device, this controls how long
-	 * the device stays trusted before requiring 2FA again.
+	 * Maximum number of failed verification attempts allowed against a single
+	 * sign-in attempt before it is locked.
 	 *
-	 * @default 2592000 (30 days)
+	 * @default 5
 	 */
-	trustDeviceMaxAge?: number | undefined;
+	maxVerificationAttempts?: number | undefined;
 }
 
-export interface UserWithTwoFactor extends User {
-	/**
-	 * If the user has enabled two factor authentication.
-	 */
-	twoFactorEnabled: boolean;
+export const TWO_FACTOR_METHOD_KIND = {
+	TOTP: "totp",
+	OTP: "otp",
+	RECOVERY_CODE: "recovery-code",
+} as const;
+
+export type TwoFactorMethodKind =
+	(typeof TWO_FACTOR_METHOD_KIND)[keyof typeof TWO_FACTOR_METHOD_KIND];
+
+export interface TwoFactorMethodDescriptor {
+	id: string;
+	kind: TwoFactorMethodKind;
+	label: string | null;
 }
 
-export interface TwoFactorProvider {
-	id: LiteralString;
-	version?: string | undefined;
-	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
+declare module "@better-auth/core" {
+	interface BetterAuthSignInChallengeRegistry {
+		"two-factor": {
+			attemptId: string;
+			methods: TwoFactorMethodDescriptor[];
+		};
+	}
 }
 
-export interface TwoFactorTable {
+export interface TwoFactorMethod {
 	id: string;
 	userId: string;
+	kind: TwoFactorMethodKind;
+	label?: string | null;
+	verifiedAt?: Date | null;
+	lastUsedAt?: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export interface TwoFactorTotpSecret {
+	id: string;
+	methodId: string;
 	secret: string;
-	backupCodes: string;
-	verified: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export interface TwoFactorRecoveryCode {
+	id: string;
+	methodId: string;
+	codeHash: string;
+	usedAt?: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export interface TrustedDevice {
+	id: string;
+	userId: string;
+	lookupKeyHash: string;
+	label?: string | null;
+	userAgent?: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+	lastUsedAt?: Date | null;
+	expiresAt: Date;
 }

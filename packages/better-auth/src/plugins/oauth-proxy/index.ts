@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 	SecretConfig,
 } from "@better-auth/core";
+import { amrForProvider } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -12,8 +13,8 @@ import { unionGrantedScopes } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
+import { resolveSignInWithRedirect } from "../../auth/resolve-sign-in";
 import { parseJSON } from "../../client/parser";
-import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
@@ -315,12 +316,36 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
-					await setSessionCookie(ctx, result.data);
-
 					// Redirect to final callback URL
 					const finalURL = result.isRegister
 						? payload.newUserURL || payload.callbackURL
 						: payload.callbackURL;
+					try {
+						await resolveSignInWithRedirect(ctx, {
+							signIn: {
+								user: result.data.user,
+								amr: amrForProvider(payload.account.providerId),
+							},
+							redirectTarget: finalURL,
+							onFailedToCreateSession() {
+								throw redirectOnError(
+									ctx,
+									errorURL,
+									"failed_to_create_session",
+								);
+							},
+						});
+					} catch (e) {
+						// A session/database hook (e.g. ban enforcement) can throw an
+						// APIError while the resolver creates the session. Forward its code
+						// to the OAuth error URL instead of surfacing a raw 500; the
+						// two-factor challenge redirect carries no `body.code`, so it
+						// re-throws and reaches the client unchanged.
+						if (isAPIError(e) && e.body?.code) {
+							throw redirectOnError(ctx, errorURL, e.body.code);
+						}
+						throw e;
+					}
 
 					throw ctx.redirect(finalURL);
 				},

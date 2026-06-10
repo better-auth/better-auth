@@ -15,7 +15,12 @@ import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
+import {
+	expectNoTwoFactorChallenge,
+	seedVerifiedOtpMethod,
+} from "../../test-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { twoFactor } from "../two-factor";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
@@ -139,9 +144,10 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		const { setCookieHeader } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 		);
 
@@ -162,12 +168,13 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
@@ -191,6 +198,247 @@ describe("oauth2", async () => {
 		});
 	});
 
+	it("should redirect generic oauth callback into two-factor challenge for enabled users", async () => {
+		const {
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			auth: localAuth,
+			db,
+		} = await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const context = await localAuth.$context;
+		const existingUser = await context.internalAdapter.createUser(
+			{
+				email: "oauth2@test.com",
+				name: "OAuth2 Test",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		await seedVerifiedOtpMethod(db, existingUser.id);
+
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.social({
+			provider: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+		expectNoTwoFactorChallenge(signInRes.data);
+
+		let location: string | null = null;
+		await betterFetch(signInRes.data.url || "", {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) {
+			throw new Error("No redirect location found");
+		}
+
+		let callbackURL = "";
+		let setCookieHeader = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const redirectURL = new URL(callbackURL);
+		expect(redirectURL.pathname).toBe("/dashboard");
+		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+		expect(redirectURL.searchParams.get("methods")).toBeNull();
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
+
+		const sessions = await context.internalAdapter.listSessions(
+			existingUser.id,
+		);
+		expect(sessions).toHaveLength(0);
+	});
+
+	it("should finalize paused OAuth sign-ins without persisting callback request snapshots", async () => {
+		let otp = "";
+		let observedCallbackContext:
+			| {
+					path?: string;
+					providerId?: string;
+					state?: string;
+					url?: string;
+			  }
+			| undefined;
+		const {
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			auth: localAuth,
+			db,
+		} = await getTestInstance(
+			{
+				databaseHooks: {
+					session: {
+						create: {
+							before: async (_session, ctx) => {
+								if (!ctx?.path.startsWith("/oauth2/callback/")) {
+									return;
+								}
+								observedCallbackContext = {
+									path: ctx.path,
+									providerId:
+										typeof ctx.params?.providerId === "string"
+											? ctx.params.providerId
+											: undefined,
+									state:
+										typeof ctx.query?.state === "string"
+											? ctx.query.state
+											: undefined,
+									url: ctx.request?.url,
+								};
+							},
+						},
+					},
+				},
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const context = await localAuth.$context;
+		const existingUser = await context.internalAdapter.createUser(
+			{
+				email: "oauth2@test.com",
+				name: "OAuth2 Test",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		await seedVerifiedOtpMethod(db, existingUser.id);
+
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.social({
+			provider: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+		expectNoTwoFactorChallenge(signInRes.data);
+		const {
+			callbackURL,
+			headers: challengeHeaders,
+			setCookieHeader,
+		} = await simulateOAuthFlow(signInRes.data.url || "", headers, localFetch);
+
+		const redirectURL = new URL(callbackURL, "http://localhost:3000");
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
+			"better-auth.two_factor_challenge",
+		)?.value;
+		expect(signedTwoFactorCookie).toBeTruthy();
+		const attemptId = signedTwoFactorCookie!.slice(
+			0,
+			signedTwoFactorCookie!.lastIndexOf("."),
+		);
+		const pendingAttempt =
+			await context.internalAdapter.findSignInAttempt(attemptId);
+		expect(pendingAttempt).toBeTruthy();
+		expect(observedCallbackContext).toBeUndefined();
+
+		const pendingChallenge = await localAuth.api.getPendingTwoFactorChallenge({
+			headers: challengeHeaders,
+		});
+		const otpMethodId = pendingChallenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		await localAuth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: { methodId: otpMethodId },
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyResponse = await localAuth.api.verifyTwoFactor({
+			headers: challengeHeaders,
+			body: {
+				methodId: otpMethodId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyResponse.status).toBe(200);
+		expect(observedCallbackContext).toBeUndefined();
+	});
+
 	it("should redirect to the provider and handle the response for a new user", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
@@ -212,12 +460,13 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
@@ -298,7 +547,8 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
+		expectNoTwoFactorChallenge(signInRes.data);
+		await simulateOAuthFlow(signInRes.data.url || "", headers, localFetch);
 
 		expect(capturedUrl).not.toBe("");
 		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
@@ -369,10 +619,11 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		const { headers: postCallbackHeaders, setCookieHeader } =
 			await simulateOAuthFlow(
-				signInRes.data?.url || "",
+				signInRes.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -467,8 +718,9 @@ describe("oauth2", async () => {
 				newUserCallbackURL: "http://localhost:3000/new_user",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
-				signInRes.data?.url || "",
+				signInRes.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -557,8 +809,9 @@ describe("oauth2", async () => {
 				newUserCallbackURL: "http://localhost:3000/new_user",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
-				signInRes.data?.url || "",
+				signInRes.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -638,8 +891,9 @@ describe("oauth2", async () => {
 				newUserCallbackURL: "http://localhost:3000/new_user",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(signInRes.data);
 			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
-				signInRes.data?.url || "",
+				signInRes.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -682,8 +936,9 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
@@ -733,9 +988,10 @@ describe("oauth2", async () => {
 				},
 			},
 		);
+		expectNoTwoFactorChallenge(res.data);
 
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 		);
 		expect(callbackURL).toContain("?error=");
@@ -775,9 +1031,10 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -827,9 +1084,10 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -884,8 +1142,9 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 		const { callbackURL, setCookieHeader } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -938,9 +1197,10 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1011,8 +1271,9 @@ describe("oauth2", async () => {
 			errorCallbackURL: "https://frontend.example.com/auth-error",
 			fetchOptions: { onSuccess: cookieSetter(headers) },
 		});
+		expectNoTwoFactorChallenge(res.data);
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1068,9 +1329,10 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
+		await simulateOAuthFlow(res.data.url || "", headers, customFetchImpl);
 
 		expect(receivedHeaders).toHaveProperty("x-custom-header");
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
@@ -1116,6 +1378,7 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		expect(signInRes.data).toMatchObject({
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
@@ -1123,7 +1386,7 @@ describe("oauth2", async () => {
 		});
 
 		const { headers: newHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1208,10 +1471,11 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
+		expectNoTwoFactorChallenge(firstSignIn.data);
 
 		const { callbackURL: firstCallbackURL, headers: firstHeaders } =
 			await simulateOAuthFlow(
-				firstSignIn.data?.url || "",
+				firstSignIn.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -1251,10 +1515,11 @@ describe("oauth2", async () => {
 			provider: "numeric-test",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
+		expectNoTwoFactorChallenge(secondSignIn.data);
 
 		const { callbackURL: secondCallbackURL, headers: secondHeaders } =
 			await simulateOAuthFlow(
-				secondSignIn.data?.url || "",
+				secondSignIn.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -1317,9 +1582,10 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1392,9 +1658,10 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1472,13 +1739,14 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
-		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(signInRes.data.url).toContain(`http://localhost:${port}/authorize`);
 		// we missed the `activity:read_all`
-		expect(signInRes.data?.url).toContain("scope=read+activity");
+		expect(signInRes.data.url).toContain("scope=read+activity");
 
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1550,9 +1818,10 @@ describe("oauth2", async () => {
 			provider: "no-email-unresolved",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
+		expectNoTwoFactorChallenge(signInRes.data);
 
 		const { callbackURL } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
+			signInRes.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1607,10 +1876,11 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -1666,7 +1936,8 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(victimHeaders),
 			},
 		});
-		expect(signInRes.data?.url).toBeTruthy();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.url).toBeTruthy();
 
 		const res = await customFetchImpl(
 			"http://localhost:3000/api/auth/callback/test-cookie-csrf?code=dummy&state=attacker-controlled-state",
@@ -2187,12 +2458,13 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 
 		// Complete the OAuth flow
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -2254,18 +2526,49 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 
 		// Attempt to complete the OAuth flow - should redirect to error URL
 		const { callbackURL } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
 
 		expect(callbackURL).toContain("http://localhost:3000/error");
 		expect(callbackURL).toContain("error=");
+	});
+
+	it("should redirect callback failures when final session creation fails", async () => {
+		const context = await auth.$context;
+		const originalCreateSession = context.internalAdapter.createSession;
+		context.internalAdapter.createSession = vi.fn().mockResolvedValue(null);
+
+		try {
+			const headers = new Headers();
+			const res = await authClient.signIn.social({
+				provider: providerId,
+				callbackURL: "http://localhost:3000/dashboard",
+				errorCallbackURL: "http://localhost:3000/error",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			expectNoTwoFactorChallenge(res.data);
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("http://localhost:3000/error");
+			expect(callbackURL).toContain("error=failed_to_create_session");
+		} finally {
+			context.internalAdapter.createSession = originalCreateSession;
+		}
 	});
 
 	it("should support GET-based token endpoints for non-standard providers", async () => {
@@ -2353,15 +2656,16 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 
-		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 		const scopeParam = new URL(res.data!.url!).searchParams.get("scope") || "";
 		expect(scopeParam).toContain("profile");
 		expect(scopeParam).toContain("openid");
 
 		// Complete the OAuth flow
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
-			res.data?.url || "",
+			res.data.url || "",
 			headers,
 			customFetchImpl,
 		);
@@ -2593,11 +2897,12 @@ describe("oauth2", async () => {
 					onSuccess: cookieSetter(headers),
 				},
 			});
+			expectNoTwoFactorChallenge(res.data);
 
-			expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+			expect(res.data.url).toContain(`http://localhost:${port}/authorize`);
 
 			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
+				res.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -2639,8 +2944,9 @@ describe("oauth2", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
+		expectNoTwoFactorChallenge(res.data);
 
-		const url = res.data?.url || "";
+		const url = res.data.url || "";
 		const scopeParam = new URL(url).searchParams.get("scope") || "";
 		const scopes = scopeParam.split(" ");
 		expect(scopes).toContain("custom_scope");
@@ -2744,9 +3050,10 @@ describe("oauth2", async () => {
 					onSuccess: cookieSetter(headers),
 				},
 			});
+			expectNoTwoFactorChallenge(res.data);
 
 			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
+				res.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -3025,9 +3332,10 @@ describe("oauth2", async () => {
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(res.data);
 
 			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
+				res.data.url || "",
 				headers,
 				customFetchImpl,
 			);
@@ -3094,9 +3402,10 @@ describe("oauth2", async () => {
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
 			});
+			expectNoTwoFactorChallenge(res.data);
 
 			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
+				res.data.url || "",
 				headers,
 				customFetchImpl,
 			);

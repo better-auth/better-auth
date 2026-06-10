@@ -3,9 +3,14 @@ import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { betterAuth } from "../auth/minimal";
+import {
+	isSignInChallenge,
+	isSignInChallengeOfKind,
+} from "../auth/sign-in-guards";
 import type { InferCtx } from "../client/path-to-object";
 import { tanstackStartCookies } from "../integrations/tanstack-start";
 import { admin, organization, twoFactor } from "../plugins";
+import { username } from "../plugins/username";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -13,6 +18,26 @@ import type { HasRequiredKeys } from "./helper";
 type TestTypeOptions = {
 	test: boolean;
 };
+
+type HasTwoFactorChallengeBranch<T> =
+	Extract<T, { kind: "challenge" }> extends {
+		challenge: infer Challenge;
+	}
+		? Extract<
+				Challenge,
+				{
+					kind: "two-factor";
+					attemptId: string;
+					methods: {
+						id: string;
+						kind: "totp" | "otp" | "recovery-code";
+						label: string | null;
+					}[];
+				}
+			> extends never
+			? false
+			: true
+		: false;
 
 const pingEndpoint = createAuthEndpoint(
 	"/test-type-ping",
@@ -63,6 +88,7 @@ describe("general types", async () => {
 				userId: string;
 				expiresAt: Date;
 				token: string;
+				amr: import("@better-auth/core").AuthenticationMethodReference[];
 				ipAddress?: string | null | undefined;
 				userAgent?: string | null | undefined;
 			};
@@ -200,6 +226,45 @@ describe("general types", async () => {
 		expectTypeOf<Body>().toEqualTypeOf<"no-body">();
 	});
 
+	it("should preserve the two-factor challenge branch for sign-in APIs in multi-plugin configs", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [twoFactor(), username()],
+		});
+
+		type SignInEmailReturn = Awaited<ReturnType<typeof auth.api.signInEmail>>;
+		type SignInSocialReturn = Awaited<ReturnType<typeof auth.api.signInSocial>>;
+
+		expectTypeOf<
+			HasTwoFactorChallengeBranch<SignInEmailReturn>
+		>().toEqualTypeOf<true>();
+		expectTypeOf<
+			HasTwoFactorChallengeBranch<SignInSocialReturn>
+		>().toEqualTypeOf<true>();
+	});
+
+	it("narrows sign-in responses via exported guards", async () => {
+		const { auth } = await getTestInstance({ plugins: [twoFactor()] });
+		type SignInEmailReturn = Awaited<ReturnType<typeof auth.api.signInEmail>>;
+
+		const value = {} as SignInEmailReturn;
+		if (isSignInChallenge(value)) {
+			expectTypeOf(value.kind).toEqualTypeOf<"challenge">();
+			expectTypeOf(value.challenge.kind).toEqualTypeOf<
+				"two-factor" | "test-challenge"
+			>();
+		}
+		if (isSignInChallengeOfKind(value, "two-factor")) {
+			expectTypeOf(value.challenge.attemptId).toEqualTypeOf<string>();
+			expectTypeOf(value.challenge.methods).toEqualTypeOf<
+				{
+					id: string;
+					kind: "totp" | "otp" | "recovery-code";
+					label: string | null;
+				}[]
+			>();
+		}
+	});
+
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [twoFactor(), organization()],
@@ -212,7 +277,6 @@ describe("general types", async () => {
 			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;
-			twoFactorEnabled: boolean | undefined | null;
 		}>();
 
 		expectTypeOf<typeof auth.$Infer.Session.session>().toMatchObjectType<{

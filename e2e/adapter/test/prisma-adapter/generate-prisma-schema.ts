@@ -12,6 +12,8 @@ export async function generatePrismaSchema(
 	iteration: number,
 	dialect: Dialect,
 ) {
+	const tmpDir = join(import.meta.dirname, ".tmp");
+	const schemaFilePath = join(tmpDir, `schema-${dialect}-${iteration}.prisma`);
 	const i = async (x: string) => await import(x);
 	const { generateSchema } = (await i(
 		join(
@@ -31,8 +33,8 @@ export async function generatePrismaSchema(
 	};
 
 	const prismaDB = prismaAdapter(db, { provider: dialect });
-	let { fileName, code } = await generateSchema({
-		file: join(import.meta.dirname, `schema-${dialect}.prisma`),
+	let { code } = await generateSchema({
+		file: schemaFilePath,
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
@@ -47,11 +49,14 @@ export async function generatePrismaSchema(
 		.map((line, index) => {
 			if (index === 2) {
 				return (
-					line + `\n  output   = "./.tmp/prisma-client-${dialect}-${iteration}"`
+					line + `\n  output   = "./prisma-client-${dialect}-${iteration}"`
 				);
 			}
 			return line;
 		})
 		.join("\n");
-	await fs.writeFile(fileName, code || "", "utf-8");
+	await fs.mkdir(tmpDir, { recursive: true });
+	await fs.writeFile(schemaFilePath, code || "", "utf-8");
+
+	return schemaFilePath;
 }
