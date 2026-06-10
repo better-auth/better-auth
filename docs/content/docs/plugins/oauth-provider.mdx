@@ -2178,25 +2178,21 @@ export const oauthConsentTableFields = [
 
 Table Name: `oauthClientAssertion`
 
-Records each `private_key_jwt` client assertion `jti` so it can only be used once. The unique `identifier` lets the database reject a replayed or concurrent assertion atomically, which holds even across multiple server processes. Rows are inert once past `expiresAt`; no scheduled job prunes them, so remove expired rows with your own cleanup if the table grows.
+Records each `private_key_jwt` client assertion `jti` so it can only be used once. The row id is a digest of the per-client assertion identifier, so a replayed or concurrent assertion collides on the primary key and the database rejects it atomically, even across multiple server processes. A row keeps blocking its id until deleted; `expiresAt` marks when removal is safe, because the assertion it guards has already expired. No scheduled job prunes these rows, so remove expired rows with your own cleanup if the table grows.
 
 export const oauthClientAssertionTableFields = [
   {
     name: "id",
     type: "string",
-    description: "Database ID of the assertion record",
+    description:
+      "Digest of the per-client assertion identifier (`private_key_jwt:<clientId>:<jti>`)",
     isPrimaryKey: true,
-  },
-  {
-    name: "identifier",
-    type: "string",
-    description: "Per-client assertion key (`private_key_jwt:<clientId>:<jti>`)",
-    isUnique: true,
   },
   {
     name: "expiresAt",
     type: "Date",
-    description: "When the assertion expires and the row becomes inert",
+    description:
+      "When the guarded assertion expires and the row becomes safe to delete",
   },
 ];
 

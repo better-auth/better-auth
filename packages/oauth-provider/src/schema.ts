@@ -349,22 +349,20 @@ export const schema = {
 		},
 	},
 	/**
-	 * Single-use record for `private_key_jwt` client assertion `jti` values.
-	 * The unique `identifier` makes the database the atomic gate: a replayed or
-	 * concurrent assertion fails the insert, so no two token requests can both
-	 * consume the same assertion. A row is inert once past `expiresAt`.
+	 * Single-use record for `private_key_jwt` client assertion `jti` values. The
+	 * row id is a digest of the per-client assertion identifier, so a replayed or
+	 * concurrent assertion collides on the primary key and the insert fails
+	 * atomically on every adapter (SQL primary key, MongoDB `_id`), including
+	 * across multiple server processes.
 	 *
+	 * A row keeps blocking its id until deleted; `expiresAt` marks when removal
+	 * is safe, since the assertion it guards has expired and is rejected earlier.
 	 * TODO: no scheduled job prunes expired rows yet; like the verification
 	 * table, they accumulate until a deployment-level sweep removes them.
 	 */
 	oauthClientAssertion: {
 		modelName: "oauthClientAssertion",
 		fields: {
-			identifier: {
-				type: "string",
-				required: true,
-				unique: true,
-			},
 			expiresAt: {
 				type: "date",
 				required: true,
