@@ -6,6 +6,7 @@ import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
+import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -525,11 +526,52 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? ctx.body.role
-				: ctx.body.role
-					? [ctx.body.role]
-					: [];
+			const roleToSet: string[] = (
+				Array.isArray(ctx.body.role) ? ctx.body.role : [ctx.body.role]
+			)
+				.flatMap((role) => role.split(","))
+				.map((role) => role.trim())
+				.filter(Boolean);
+
+			if (roleToSet.length === 0) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
+			const validStaticRoles = new Set([
+				...Object.keys(defaultRoles),
+				...Object.keys(ctx.context.orgOptions.roles || {}),
+			]);
+			const unknownRoles = roleToSet.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany<{
+						role: string;
+					}>({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
+					});
+				}
+			}
 
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -647,7 +689,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const previousRole = toBeUpdatedMember.role;
-			const newRole = parseRoles(ctx.body.role as string | string[]);
+			const newRole = parseRoles(roleToSet);
 
 			// Run beforeUpdateMemberRole hook
 			if (option?.organizationHooks?.beforeUpdateMemberRole) {
