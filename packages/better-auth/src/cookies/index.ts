@@ -21,6 +21,7 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
+import { hasPersistentStore } from "../utils/has-persistent-store";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
@@ -260,9 +261,7 @@ export async function setCookieCache(
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			const isStateful =
-				!!ctx.context.options.database ||
-				!!ctx.context.options.secondaryStorage;
+			const isStateful = hasPersistentStore(ctx.context.options);
 			if (!isStateful || accountData.userId === session.user.id) {
 				await setAccountCookie(ctx, accountData);
 			} else {

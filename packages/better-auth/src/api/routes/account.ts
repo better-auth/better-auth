@@ -16,6 +16,7 @@ import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import { hasPersistentStore } from "../../utils/has-persistent-store";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -456,8 +457,7 @@ async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const isStateful =
-		!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+	const isStateful = hasPersistentStore(ctx.context.options);
 	const session = await getSessionFromCtx(ctx, {
 		disableCookieCache: isStateful,
 	});
@@ -511,8 +511,7 @@ async function getValidAccessToken(
 	let account: Account | undefined = resolvedAccount;
 	if (!account) {
 		const accountData = await getAccountCookie(ctx);
-		const isStateful =
-			!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+		const isStateful = hasPersistentStore(ctx.context.options);
 		if (
 			accountData &&
 			(!isStateful || accountData.userId === resolvedUserId) &&
@@ -762,8 +761,7 @@ export const refreshToken = createAuthEndpoint(
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
 		const accountData = await getAccountCookie(ctx);
-		const isStateful =
-			!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+		const isStateful = hasPersistentStore(ctx.context.options);
 		const usedAccountCookie =
 			!!accountData &&
 			(!isStateful || accountData.userId === resolvedUserId) &&

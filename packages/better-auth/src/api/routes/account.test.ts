@@ -15,7 +15,7 @@ import {
 	vi,
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseSetCookieHeader, setCookieCache } from "../../cookies";
 import { signJWT, symmetricDecodeJWT } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2080,7 +2080,7 @@ describe("account resolution in stateless mode", async () => {
 				cookieCache: {
 					enabled: true,
 					maxAge: 60 * 60 * 24,
-					refreshCache: true,
+					refreshCache: { updateAge: 60 },
 				},
 			},
 			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
@@ -2108,7 +2108,7 @@ describe("account resolution in stateless mode", async () => {
 	type Jar = Map<string, string>;
 	const collect = (res: Response, jar: Jar) => {
 		for (const cookie of res.headers.getSetCookie()) {
-			const [pair] = cookie.split(";");
+			const [pair = ""] = cookie.split(";");
 			const idx = pair.indexOf("=");
 			jar.set(pair.slice(0, idx), pair.slice(idx + 1));
 		}
@@ -2146,13 +2146,14 @@ describe("account resolution in stateless mode", async () => {
 	// On serverless, separate stateless instances mint different ids for the same IdP user, so
 	// the session cookie and the account cookie can end up carrying different user ids.
 	const signInOnTwoInstances = async () => {
-		const a = await signIn(makeStatelessAuth());
+		const authA = makeStatelessAuth();
+		const a = await signIn(authA);
 		const b = await signIn(makeStatelessAuth());
 		assert(a.userId && b.userId);
 		expect(a.userId).not.toBe(b.userId);
 
-		const accountCookieName = (await makeStatelessAuth().$context).authCookies
-			.accountData.name;
+		const accountCookieName = (await authA.$context).authCookies.accountData
+			.name;
 		// Browser keeps the session cookie from A but the account cookie was rewritten by B.
 		const mixed: Jar = new Map(a.jar);
 		for (const key of [...mixed.keys()]) {
@@ -2161,7 +2162,7 @@ describe("account resolution in stateless mode", async () => {
 		for (const [key, value] of b.jar) {
 			if (key.startsWith(accountCookieName)) mixed.set(key, value);
 		}
-		return { mixed, sessionUserId: a.userId, accountCookieName };
+		return { mixed, sessionUserId: a.userId, accountCookieName, authA };
 	};
 
 	it("resolves a valid account cookie whose userId differs from the session user", async () => {
@@ -2175,5 +2176,45 @@ describe("account resolution in stateless mode", async () => {
 		});
 
 		expect(result.accessToken).toBe("idp-access-token");
+	});
+
+	it("does not expire the account cookie when setCookieCache runs with a mismatched userId", async () => {
+		const authA = makeStatelessAuth();
+		const a = await signIn(authA);
+		const b = await signIn(makeStatelessAuth());
+		assert(a.userId && b.userId && a.userId !== b.userId);
+
+		const context = await authA.$context;
+		const accountCookieName = context.authCookies.accountData.name;
+		const accountCookieValue = b.jar.get(accountCookieName);
+		const sessionA = await authA.api.getSession({
+			headers: new Headers({ cookie: cookieHeader(a.jar) }),
+		});
+		assert(accountCookieValue && sessionA);
+
+		// Drive setCookieCache with A's session but B's account cookie (different userId).
+		const written = new Map<string, { value: string; maxAge?: number }>();
+		const ctx = {
+			context,
+			headers: new Headers({
+				cookie: `${accountCookieName}=${accountCookieValue}`,
+			}),
+			getCookie: (name: string) =>
+				name === accountCookieName ? accountCookieValue : undefined,
+			setCookie: (
+				name: string,
+				value: string,
+				attributes?: { maxAge?: number },
+			) => written.set(name, { value, maxAge: attributes?.maxAge }),
+		} as unknown as Parameters<typeof setCookieCache>[0];
+
+		await setCookieCache(ctx, sessionA, false);
+
+		const accountWrite = written.get(accountCookieName);
+		assert(
+			accountWrite,
+			"expected the account cookie to be re-set, not dropped",
+		);
+		expect(accountWrite.maxAge).not.toBe(0);
 	});
 });
