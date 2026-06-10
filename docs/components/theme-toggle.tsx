@@ -4,13 +4,23 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
-	const { setTheme, resolvedTheme } = useTheme();
+	const { resolvedTheme, setTheme, systemTheme, theme } = useTheme();
+
+	// this toggles "system <> opposite theme" instead of "dark <> light"
+	const isExplicitTheme = theme === "light" || theme === "dark";
+	const isSameAsSystem = theme === systemTheme;
+	const nextTheme =
+		isExplicitTheme && !isSameAsSystem
+			? "system"
+			: resolvedTheme === "dark"
+				? "light"
+				: "dark";
 
 	return (
 		<Button
 			variant="link"
 			size="icon"
-			onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+			onClick={() => setTheme(nextTheme)}
 			suppressHydrationWarning
 		>
 			{/* Sun icon - visible in light mode */}
