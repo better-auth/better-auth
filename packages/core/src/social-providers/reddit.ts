@@ -116,15 +116,15 @@ export const reddit = (options: RedditOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			const email = userMap?.email || `${profile.id}@reddit.com`;
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name,
-					email: profile.oauth_client_id,
-					emailVerified: profile.has_verified_email,
 					image: profile.icon_img?.split("?")[0]!,
 					...userMap,
+					email,
+					emailVerified: userMap?.emailVerified ?? false,
 				},
 				data: profile,
 			};

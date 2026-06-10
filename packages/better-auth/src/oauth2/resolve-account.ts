@@ -18,6 +18,17 @@ export interface OAuthLinkPolicy {
 	 * `c.context.trustedProviders`.
 	 */
 	isTrustedProvider?: boolean | undefined;
+	/**
+	 * Whether `providerId` may be matched against the configured
+	 * `trustedProviders` list to infer trust. Defaults to `true` for built-in
+	 * social/OAuth providers, whose `providerId` namespace is controlled by the
+	 * developer's config. Callers whose `providerId` is user-controlled (the SSO
+	 * plugin, where any authenticated user can register a provider with an
+	 * arbitrary id) must pass `false` so a provider named after a trusted social
+	 * provider can't launder that trust; they supply their own
+	 * `isTrustedProvider` signal instead.
+	 */
+	trustProviderByName?: boolean | undefined;
 	/** Disable sign-up: error out instead of creating a new user. */
 	disableSignUp?: boolean | undefined;
 	/**
@@ -138,6 +149,7 @@ export async function resolveOAuthUser(
 			providerEmailVerified: userInfo.emailVerified,
 			localEmailVerified: dbUser.user.emailVerified,
 			isTrustedProvider: linkPolicy.isTrustedProvider,
+			trustProviderByName: linkPolicy.trustProviderByName,
 		});
 		if (!gate) {
 			if (isDevelopment()) {
@@ -213,12 +225,19 @@ export function canLinkImplicitly(
 		providerEmailVerified: boolean;
 		localEmailVerified: boolean;
 		isTrustedProvider?: boolean | undefined;
+		/**
+		 * Whether `providerId` may be matched against the configured
+		 * `trustedProviders` list to infer trust. Defaults to `true`; SSO callers
+		 * with user-controlled `providerId` pass `false`.
+		 */
+		trustProviderByName?: boolean | undefined;
 	},
 ): boolean {
 	const accountLinking = c.context.options.account?.accountLinking;
 	const isTrustedProvider =
 		opts.isTrustedProvider ||
-		c.context.trustedProviders.includes(opts.providerId);
+		(opts.trustProviderByName !== false &&
+			c.context.trustedProviders.includes(opts.providerId));
 	// FIXME(next-minor): drop `requireLocalEmailVerified` option and make the
 	// gate unconditional.
 	const requireLocalEmailVerified =

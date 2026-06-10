@@ -1,6 +1,31 @@
 # @better-auth/core
 
 ## 1.7.0-beta.4
+## 1.6.16
+
+### Patch Changes
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Validate Facebook opaque access tokens against the configured app. Previously `verifyIdToken` returned `true` for any non-JWT token and `getUserInfo` called Graph `/me` with the caller-supplied token without checking which app issued it, so tokens issued for other Facebook apps were not distinguished on the direct sign-in path. Facebook tokens are now inspected via the `debug_token` endpoint, requiring `is_valid`, an `app_id` that matches one of the configured client ids, and a `user_id` that matches the returned profile, before the token is accepted. A client secret must be configured for access-token sign-in to work.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Enforce the Google `hd` (hosted domain) option against the id token. Previously `hd` was only sent to Google as an authorization hint, which does not by itself restrict sign-in to the configured Workspace domain. When `hd` is set, the `hd` claim on the verified id token (`verifyIdToken`) and the decoded callback profile (`getUserInfo`) must be present and match, otherwise sign-in is rejected.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Scope the JWKS cache per source. Access-token verification previously kept a single global key set and reused it whenever it contained a key matching the token's `kid`, without considering which JWKS source the verification was for. When verifying tokens against more than one source, a token could end up matched against keys fetched for a different source if the two shared a `kid`. The cache is now keyed per JWKS source and honors a TTL, so each verification uses the keys for its own source and rotated or removed keys are no longer used after the TTL elapses.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Cryptographically verify PayPal ID tokens on direct sign-in. Previously `verifyIdToken` only decoded the JWT and checked that a `sub` claim was present, performing no signature, issuer, audience, or expiration checks, so any well-formed token paired with a valid access token would be accepted. The token is now verified against PayPal's issuer and published JWKS (RS256) or the client secret (HS256), with the `aud` pinned to the configured `clientId`, a `maxTokenAge` bound, and the `nonce` checked when supplied.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Stop mapping the Reddit `oauth_client_id` to the user's email. Reddit's `identity` scope does not return an email address, and the provider previously stored `oauth_client_id` (which identifies the OAuth application and is the same for every user of the app) as `user.email` with `has_verified_email` as `emailVerified`. This collapsed all Reddit users of the same app onto a single "verified" email, which could enable implicit account linking/takeover. The Reddit provider now uses the email returned from `mapProfileToUser` when provided, otherwise falls back to a unique per-user synthetic address (`<reddit-user-id>@reddit.com`), and no longer marks it as verified. Provide a real email via `mapProfileToUser` if you need the actual address.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Fix `verifyAccessToken` silently dropping the configured audience check during remote introspection. Previously, when a required `audience` was set in `verifyOptions` but the introspection response omitted the `aud` claim, audience validation was skipped and any active token from the issuer was accepted — so a token issued for a different resource or client on the same issuer could also pass verification. Verification now requires the claim: a missing or mismatching `aud` is rejected. Authorization servers that legitimately omit `aud` from introspection responses (it is OPTIONAL per RFC 7662) can opt back into the old behavior with the new `remoteVerify.allowMissingAudience: true` flag, which still rejects mismatching audiences.
+
+## 1.6.15
+
+## 1.6.14
+
+### Patch Changes
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+## 1.6.13
 
 ### Minor Changes
 

@@ -3319,4 +3319,166 @@ describe("oauth2", async () => {
 			}
 		});
 	});
+
+	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		// A userinfo response that includes email/name but no `sub`/`id`.
+		const respondWithoutSub = (email: string, name: string) => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email,
+					name,
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+		};
+
+		// First user signs in — must be rejected, not stored under an empty id.
+		respondWithoutSub("first-no-sub@test.com", "First No Sub");
+		const firstHeaders = new Headers();
+		const firstSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			firstSignIn.data?.url || "",
+			firstHeaders,
+			customFetchImpl,
+		);
+		// Rejected at the error page rather than landing on a success URL.
+		expect(firstFlow.callbackURL).toContain("error=");
+		expect(firstFlow.callbackURL).not.toContain("/dashboard");
+		expect(firstFlow.callbackURL).not.toContain("/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		expect(firstSession.data).toBeNull();
+
+		// No account should have been created with an empty/undefined account id.
+		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "providerId", value: "no-sub-test" }],
+		});
+		expect(emptyIdAccounts).toHaveLength(0);
+
+		// A second, different user signing in through the same provider must not
+		// resolve to the first user's account.
+		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
+		const secondHeaders = new Headers();
+		const secondSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			secondSignIn.data?.url || "",
+			secondHeaders,
+			customFetchImpl,
+		);
+		expect(secondFlow.callbackURL).toContain("error=");
+		const secondSession = await authClient.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		// Must NOT have resolved to the first user (the collision being fixed).
+		expect(secondSession.data).toBeNull();
+	});
+
+	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "empty-id-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							// A misconfigured custom mapper that yields no account id.
+							getUserInfo: async () => ({
+								id: "",
+								email: "empty-id@test.com",
+								name: "Empty Id",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.social({
+			provider: "empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		// The callback guard rejects the empty resolved account id.
+		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).toBeNull();
+
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-test" }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
 });
