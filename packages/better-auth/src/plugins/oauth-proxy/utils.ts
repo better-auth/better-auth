@@ -26,46 +26,18 @@ function getVendorBaseURL() {
 }
 
 /**
- * Returns `ctx.request.url` only when its origin is explicitly trusted.
- */
-function getTrustedRequestURL(ctx: GenericEndpointContext): string | undefined {
-	const requestURL = ctx.request?.url;
-	if (!requestURL) {
-		return undefined;
-	}
-	if (ctx.context.isTrustedOrigin(requestURL, { allowRelativePaths: false })) {
-		return requestURL;
-	}
-	return undefined;
-}
-
-/**
- * Resolve the current URL from various sources.
- *
- * The raw request URL is only honored when its origin is allowlisted in
- * `trustedOrigins`; otherwise it falls back to the vendor/base URL so an
- * un-allowlisted request origin isn't used as the proxy callback origin.
+ * Resolve the current URL from various sources
  */
 export function resolveCurrentURL(
 	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
-	// An explicit `currentURL` is developer-provided config and always trusted.
-	if (opts?.currentURL) {
-		return new URL(opts.currentURL);
-	}
-	const trustedRequestURL = getTrustedRequestURL(ctx);
-	if (trustedRequestURL) {
-		return new URL(trustedRequestURL);
-	}
-	if (ctx.request?.url) {
-		ctx.context.logger.warn(
-			`OAuth proxy: request origin "${getOrigin(
-				ctx.request.url,
-			)}" is not in \`trustedOrigins\`; falling back to the configured URL. Add it (or a matching wildcard) to \`trustedOrigins\`, or set the \`currentURL\` option, to use it as the proxy callback origin.`,
-		);
-	}
-	return new URL(getVendorBaseURL() || ctx.context.baseURL);
+	return new URL(
+		opts?.currentURL ||
+			ctx.request?.url ||
+			getVendorBaseURL() ||
+			ctx.context.baseURL,
+	);
 }
 
 /**
@@ -88,11 +60,8 @@ export function checkSkipProxy(
 		return false;
 	}
 
-	// Determine current URL from config, a trusted request origin, or vendor env
-	// vars. The raw request URL is only used when its origin is allowlisted,
-	// so an un-allowlisted request origin doesn't affect the proxy decision.
-	const currentURL =
-		opts?.currentURL || getTrustedRequestURL(ctx) || getVendorBaseURL();
+	// Determine current URL from request or vendor env vars
+	const currentURL = opts?.currentURL || ctx.request?.url || getVendorBaseURL();
 	if (!currentURL) {
 		return false;
 	}

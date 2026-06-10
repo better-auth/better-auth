@@ -111,10 +111,6 @@ The encrypted profile data is passed via URL query parameters and can only be de
 
 **currentURL**: The application's current URL is automatically determined by the plugin. It first checks the request URL, then vendor-specific environment variables from popular hosting providers, and finally falls back to the `baseURL` in your auth config. You only need to set this if the URL isn't being inferred correctly in your environment.
 
-<Callout type="warn">
-  The request URL is only used when its origin is listed in `trustedOrigins` (wildcard patterns are supported). Because `request.url` is derived from the `Host`/forwarded-host headers on many platforms, an un-allowlisted origin is ignored and the plugin falls back to your configured `baseURL`/vendor URL. Make sure your preview/development origins are in `trustedOrigins` (see Step 3 above), or set `currentURL` explicitly.
-</Callout>
-
 **maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
 
 **secret**: A dedicated secret used for encrypting and decrypting data during the OAuth proxy flow. When set, this is used **instead of** the global `BETTER_AUTH_SECRET`, limiting the blast radius if the key is shared across environments — a leaked proxy secret cannot forge sessions or decrypt other data protected by the main secret. All environments participating in the proxy flow must share the same `secret` value.
