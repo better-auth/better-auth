@@ -2383,14 +2383,15 @@ describe("owner can update roles", async () => {
 	});
 
 	it("allows an org owner to remove their own creator role if not sole owner", async () => {
-		await auth.api.updateMemberRole({
+		const updated = await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
 			body: {
 				organizationId: org.id,
 				memberId: ownerId,
-				role: [],
+				role: ["custom"],
 			},
 		});
+		expect(updated.role).toBe("custom");
 	});
 
 	it("should throw error if sole org owner tries to remove creator role"),

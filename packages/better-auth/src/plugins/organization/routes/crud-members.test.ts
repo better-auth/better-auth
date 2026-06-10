@@ -525,6 +525,55 @@ describe("updateMemberRole", async () => {
 			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 		);
 	});
+
+	it("should reject updating a member to an empty role list", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "empty-role",
+			slug: "empty-role",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "empty-role@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		for (const role of [[], ","] as ("admin" | "admin"[])[]) {
+			const updated = await client.organization.updateMemberRole(
+				{
+					organizationId: org.data?.id as string,
+					memberId: member?.id as string,
+					role,
+				},
+				{
+					headers,
+				},
+			);
+			expect(updated.error?.status).toBe(400);
+		}
+	});
 });
 
 describe("activeMemberRole", async () => {
