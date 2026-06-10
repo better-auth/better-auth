@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
@@ -3259,6 +3261,62 @@ describe("oauth2", async () => {
 				fetchOptions: { headers: sessionHeaders },
 			});
 			expect(session.data?.user.email).toBe("forged@test.com");
+		});
+
+		it("should not break provider registration when jwks_uri is malformed", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+						userinfo_endpoint: `http://localhost:${port}/userinfo`,
+						jwks_uri: "http://[malformed",
+						id_token_signing_alg_values_supported: ["RS256"],
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { customFetchImpl, cookieSetter } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "malformed-jwks",
+									discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const headers = new Headers();
+				const res = await client.signIn.social({
+					provider: "malformed-jwks",
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL } = await simulateOAuthFlow(
+					res.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				expect(callbackURL).not.toContain("?error=");
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((err) => (err ? reject(err) : resolve())),
+				);
+			}
 		});
 	});
 });

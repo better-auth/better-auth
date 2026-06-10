@@ -218,12 +218,22 @@ export const genericOAuth = <const ID extends string>(
 							discovered.id_token_signing_alg_values_supported;
 						isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
 						if (discovered.jwks_uri && discovered.issuer) {
-							idTokenConfig = {
-								jwks: createRemoteJWKSet(new URL(discovered.jwks_uri)),
-								issuer: discovered.issuer,
-								audience: c.clientId,
-								algorithms: isOidc ? signingAlgs : undefined,
-							};
+							try {
+								idTokenConfig = {
+									jwks: createRemoteJWKSet(
+										new URL(discovered.jwks_uri, c.discoveryUrl),
+									),
+									issuer: discovered.issuer,
+									audience: c.clientId,
+									algorithms: isOidc ? signingAlgs : undefined,
+								};
+							} catch (err) {
+								// A malformed jwks_uri must not break provider registration;
+								// fall back to the decode posture used by non-discovery providers.
+								ctx.logger.error(
+									`Provider "${c.providerId}": invalid jwks_uri in discovery document, skipping id_token verification: ${err}`,
+								);
+							}
 						}
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
