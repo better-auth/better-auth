@@ -3,12 +3,13 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
+import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { User } from "../../types";
+import type { Session, User, Verification } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
-import { twoFactor } from ".";
+import { TWO_FACTOR_ERROR_CODES, twoFactor } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 /**
@@ -399,5 +400,144 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 
 		const session = await auth.api.getSession({ headers: replay });
 		expect(session).toBeNull();
+	});
+});
+
+/**
+ * The signed `two_factor` challenge is a single-use, time-bounded credential:
+ * exactly one verification may complete it, and only within its expiry window.
+ *
+ * Two failures violated that contract. The challenge row was loaded with a
+ * plain existence check that never inspected `expiresAt`, so a replayed cookie
+ * pointing at an expired-but-not-yet-cleaned row could still mint a session
+ * once a valid TOTP was supplied. And the row was deleted only after the
+ * session was created, so two concurrent verifications of the same cookie
+ * could both pass the stale read and each mint a separate session. Consuming
+ * the row atomically before session creation closes both: expiry is rejected
+ * because the consume returns null for expired rows, and the race is rejected
+ * because only the first caller wins the delete-and-return.
+ */
+describe("two-factor security: 2FA challenge is single-use and expiry-bounded", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [twoFactor()],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser?.id as string;
+
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers,
+	});
+	if (!enrollment.totpURI) {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	await auth.api.verifyTOTP({ body: { code: enrollCode }, headers });
+	const verified = await db.findOne<UserWithTwoFactor>({
+		model: "user",
+		where: [{ field: "id", value: userId }],
+	});
+	if (!verified?.twoFactorEnabled) {
+		throw new Error("failed to enable 2FA for test user");
+	}
+
+	async function startChallenge(): Promise<Headers> {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		return convertSetCookieToCookie(res.headers);
+	}
+
+	function countSessions(): Promise<Session[]> {
+		return db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+		});
+	}
+
+	it("rejects an expired two-factor sign-in challenge even with a valid TOTP", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "value", value: userId }],
+		});
+		expect(challengeRow).not.toBeNull();
+
+		// Force the challenge past its expiry while leaving the row present, so
+		// the only thing standing between a stale cookie and a session is the
+		// server-side expiry gate.
+		await db.update({
+			model: "verification",
+			where: [{ field: "id", value: challengeRow!.id }],
+			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
+		});
+
+		const sessionsBefore = await countSessions();
+		const freshCode = await createOTP(secret).totp();
+		const res = await auth.api.verifyTOTP({
+			body: { code: freshCode },
+			headers: challengeHeaders,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(401);
+		const json = (await res.json()) as { message: string };
+		expect(json.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+
+		const setCookies = res.headers.getSetCookie();
+		const tokenEntries = setCookies.filter((entry) =>
+			entry.startsWith("better-auth.session_token="),
+		);
+		for (const entry of tokenEntries) {
+			const firstSegment = entry.split(";")[0] ?? "";
+			const eq = firstSegment.indexOf("=");
+			expect(eq > 0 ? firstSegment.slice(eq + 1) : "").toBe("");
+		}
+
+		const sessionsAfter = await countSessions();
+		expect(sessionsAfter.length).toBe(sessionsBefore.length);
+	});
+
+	it("two concurrent verifications of the same challenge yield exactly one session", async () => {
+		const challengeHeaders = await startChallenge();
+		const sessionsBefore = await countSessions();
+		const code = await createOTP(secret).totp();
+
+		const [first, second] = await Promise.all([
+			auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeHeaders,
+				asResponse: true,
+			}),
+			auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeHeaders,
+				asResponse: true,
+			}),
+		]);
+
+		const statuses = [first.status, second.status].sort();
+		expect(statuses).toEqual([200, 401]);
+
+		const sessionsAfter = await countSessions();
+		expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);
 	});
 });
