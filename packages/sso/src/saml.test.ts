@@ -4783,7 +4783,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 	it("should issue only one session when the same IdP-initiated assertion is submitted concurrently", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { allowIdpInitiated: true } })],
 		});
 
 		const { headers } = await signInWithTestUser();
