@@ -431,6 +431,109 @@ describe("siwe", async () => {
 		expect(data?.success).toBe(true);
 	});
 
+	// The nonce is single-use. Two requests presenting the same valid nonce at
+	// the same time must collapse to exactly one authenticated session: the
+	// first request to consume the row wins, the racer sees the row already
+	// gone. Without an atomic consume, both reads observe the row before either
+	// delete lands and both mint a session, replaying a single-use login.
+	it("should mint exactly one session when the same nonce is verified concurrently", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							// Stall inside signature verification to widen the window
+							// between the two requests. With a non-atomic nonce read both
+							// requests would already have passed the nonce check and would
+							// both mint a session; the atomic consume rejects the racer
+							// before it ever reaches this point.
+							await new Promise((resolve) => setTimeout(resolve, 50));
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+
+		const ctx = await auth.$context;
+		const sessionsBefore = await ctx.adapter.findMany({ model: "session" });
+
+		const verifyOnce = () =>
+			client.siwe.verify({
+				message: siweMessage(),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			});
+
+		const [first, second] = await Promise.all([verifyOnce(), verifyOnce()]);
+
+		const successes = [first, second].filter((r) => r.data?.success === true);
+		const failures = [first, second].filter((r) => r.error != null);
+		expect(successes.length).toBe(1);
+		expect(failures.length).toBe(1);
+		expect(failures[0]?.error?.status).toBe(401);
+
+		// Exactly one wallet record and one new session for the SIWE login.
+		const wallets = await ctx.adapter.findMany({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: walletAddress }],
+		});
+		expect(wallets.length).toBe(1);
+		const sessionsAfter = await ctx.adapter.findMany({ model: "session" });
+		expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);
+	});
+
+	// An expired nonce must be rejected even before any signature work, and the
+	// expired row must still be burned so it can never be replayed later.
+	it("should reject an expired nonce and consume the row", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		const ctx = await auth.$context;
+		const identifier = `siwe:${walletAddress}:${chainId}`;
+		await ctx.internalAdapter.createVerificationValue({
+			identifier,
+			value: NONCE,
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+		expect(error?.status).toBe(401);
+		expect(error?.code).toBe("UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE");
+
+		// The expired row is gone, so a retry cannot replay it.
+		const remaining =
+			await ctx.internalAdapter.findVerificationValue(identifier);
+		expect(remaining).toBeNull();
+	});
+
 	it("should not allow nonce reuse", async () => {
 		const { client } = await getTestInstance(
 			{
