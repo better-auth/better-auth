@@ -578,6 +578,65 @@ describe("expo", async () => {
 		expect(originHeader).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9900
+	 */
+	it("should send cookie for link-social ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await client.linkSocial({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toContain("better-auth.session_token=existing-token");
+		expect(expoOriginHeader).toBeNull();
+	});
+
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
 			email: testUser.email,
