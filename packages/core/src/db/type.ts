@@ -139,26 +139,44 @@ export type InferDBFieldsFromPluginsInput<
 			: InferDBFieldsFromPluginsInput<ModelName, Rest>
 		: {};
 
+/**
+ * Infers the `deletedAt` field for models marked as soft-deletable by a
+ * plugin schema (`softDelete: true`).
+ */
+export type InferPluginSoftDeleteField<
+	ModelName extends string,
+	P,
+> = P extends {
+	schema: {
+		[key in ModelName]: {
+			softDelete: true;
+		};
+	};
+}
+	? { deletedAt?: Date | null | undefined }
+	: {};
+
 export type InferDBFieldsFromPlugins<
 	ModelName extends string,
 	Plugins extends unknown[] | undefined,
 > = Plugins extends []
 	? {}
 	: Plugins extends [infer P, ...infer Rest]
-		? P extends {
-				schema: {
-					[key in ModelName]: {
-						fields: infer Fields;
+		? InferPluginSoftDeleteField<ModelName, P> &
+				(P extends {
+					schema: {
+						[key in ModelName]: {
+							fields: infer Fields;
+						};
 					};
-				};
-			}
-			? Fields extends Record<string, DBFieldAttribute>
-				? UnionToIntersection<
-						InferDBFieldsOutput<Fields> &
-							InferDBFieldsFromPlugins<ModelName, Rest>
-					>
-				: InferDBFieldsFromPlugins<ModelName, Rest>
-			: InferDBFieldsFromPlugins<ModelName, Rest>
+				}
+					? Fields extends Record<string, DBFieldAttribute>
+						? UnionToIntersection<
+								InferDBFieldsOutput<Fields> &
+									InferDBFieldsFromPlugins<ModelName, Rest>
+							>
+						: InferDBFieldsFromPlugins<ModelName, Rest>
+					: InferDBFieldsFromPlugins<ModelName, Rest>)
 		: {};
 
 export type DBFieldType =
@@ -301,6 +319,17 @@ export type BetterAuthDBSchema = Record<
 		 * The order of the table
 		 */
 		order?: number | undefined;
+		/**
+		 * Whether the model supports soft deletion.
+		 *
+		 * When enabled, a `deletedAt` field is added to the table schema and
+		 * delete operations performed through the adapter will set `deletedAt`
+		 * to the current date instead of removing the row. Queries automatically
+		 * exclude soft-deleted rows unless `withDeleted` is passed.
+		 *
+		 * @default false
+		 */
+		softDelete?: boolean | undefined;
 	}
 >;
 

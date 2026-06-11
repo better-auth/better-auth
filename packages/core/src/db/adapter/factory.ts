@@ -192,6 +192,33 @@ export const createAdapterFactory =
 			customIdGenerator: config.customIdGenerator,
 		});
 
+		const isSoftDeleteEnabled = (model: string) =>
+			schema[getDefaultModelName(model)]?.softDelete === true;
+
+		/**
+		 * Appends a `deletedAt = null` filter to the where clause so that
+		 * soft-deleted rows are excluded. No-op when the model doesn't have soft
+		 * delete enabled, when `withDeleted` is set, or when the caller already
+		 * filters on `deletedAt` explicitly.
+		 */
+		const excludeSoftDeleted = <W extends Where[] | undefined>(
+			model: string,
+			where: W,
+			withDeleted: boolean | undefined,
+		): W | Where[] => {
+			if (withDeleted || !isSoftDeleteEnabled(model)) return where;
+			if (where?.some((w) => w.field === "deletedAt")) return where;
+			return [
+				...(where ?? []),
+				{
+					field: "deletedAt",
+					value: null,
+					operator: "eq",
+					connector: "AND",
+				},
+			];
+		};
+
 		const transformInput = async (
 			data: Record<string, any>,
 			defaultModelName: string,
@@ -949,10 +976,12 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				update: unsafeData,
+				withDeleted = false,
 			}: {
 				model: string;
 				where: Where[];
 				update: Record<string, any>;
+				withDeleted?: boolean;
 			}): Promise<T | null> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -960,7 +989,7 @@ export const createAdapterFactory =
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: excludeSoftDeleted(unsafeModel, unsafeWhere, withDeleted),
 					action: "update",
 				});
 				debugLog(
@@ -1019,17 +1048,19 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				update: unsafeData,
+				withDeleted = false,
 			}: {
 				model: string;
 				where: Where[];
 				update: Record<string, any>;
+				withDeleted?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: excludeSoftDeleted(unsafeModel, unsafeWhere, withDeleted),
 					action: "updateMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
@@ -1090,18 +1121,20 @@ export const createAdapterFactory =
 				where: unsafeWhere,
 				select,
 				join: unsafeJoin,
+				withDeleted = false,
 			}: {
 				model: string;
 				where: Where[];
 				select?: string[];
 				join?: JoinOption;
+				withDeleted?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: excludeSoftDeleted(unsafeModel, unsafeWhere, withDeleted),
 					action: "findOne",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
@@ -1171,6 +1204,7 @@ export const createAdapterFactory =
 				sortBy,
 				offset,
 				join: unsafeJoin,
+				withDeleted = false,
 			}: {
 				model: string;
 				where?: Where[];
@@ -1179,6 +1213,7 @@ export const createAdapterFactory =
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
 				join?: JoinOption;
+				withDeleted?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1189,7 +1224,7 @@ export const createAdapterFactory =
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: excludeSoftDeleted(unsafeModel, unsafeWhere, withDeleted),
 					action: "findMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
@@ -1260,23 +1295,28 @@ export const createAdapterFactory =
 			delete: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
+				hardDelete = false,
 			}: {
 				model: string;
 				where: Where[];
+				hardDelete?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const softDelete = isSoftDeleteEnabled(unsafeModel) && !hardDelete;
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: softDelete
+						? excludeSoftDeleted(unsafeModel, unsafeWhere, false)
+						: unsafeWhere,
 					action: "delete",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
-					`${formatMethod("delete")}:`,
+					`${formatMethod("delete")}${softDelete ? ` ${formatAction("Soft Delete")}` : ""}:`,
 					{ model, where },
 				);
 				await withSpan(
@@ -1285,7 +1325,17 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "delete",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.delete({ model, where }),
+					async () => {
+						if (softDelete) {
+							let update: Record<string, any> = { deletedAt: new Date() };
+							if (!config.disableTransformInput) {
+								update = await transformInput(update, unsafeModel, "update");
+							}
+							await adapterInstance.update({ model, where, update });
+							return;
+						}
+						await adapterInstance.delete({ model, where });
+					},
 				);
 				debugLog(
 					{ method: "delete" },
@@ -1297,23 +1347,28 @@ export const createAdapterFactory =
 			deleteMany: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
+				hardDelete = false,
 			}: {
 				model: string;
 				where: Where[];
+				hardDelete?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				const softDelete = isSoftDeleteEnabled(unsafeModel) && !hardDelete;
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: softDelete
+						? excludeSoftDeleted(unsafeModel, unsafeWhere, false)
+						: unsafeWhere,
 					action: "deleteMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
-					`${formatMethod("deleteMany")} ${formatAction("DeleteMany")}:`,
+					`${formatMethod("deleteMany")} ${formatAction(softDelete ? "Soft DeleteMany" : "DeleteMany")}:`,
 					{ model, where },
 				);
 				const res = await withSpan(
@@ -1322,7 +1377,20 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "deleteMany",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.deleteMany({ model, where }),
+					async () => {
+						if (softDelete) {
+							let update: Record<string, any> = { deletedAt: new Date() };
+							if (!config.disableTransformInput) {
+								update = await transformInput(update, unsafeModel, "update");
+							}
+							return await adapterInstance.updateMany({
+								model,
+								where,
+								update,
+							});
+						}
+						return await adapterInstance.deleteMany({ model, where });
+					},
 				);
 				debugLog(
 					{ method: "deleteMany" },
@@ -1355,19 +1423,80 @@ export const createAdapterFactory =
 					{ model, where },
 				);
 
-				if (typeof adapterInstance.consumeOne !== "function") {
+				if (
+					!isSoftDeleteEnabled(unsafeModel) &&
+					typeof adapterInstance.consumeOne !== "function"
+				) {
 					throw new BetterAuthError(
 						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
 					);
 				}
-				const res = await withSpan(
-					`db consumeOne ${model}`,
-					{
-						[ATTR_DB_OPERATION_NAME]: "consumeOne",
-						[ATTR_DB_COLLECTION_NAME]: model,
-					},
-					() => adapterInstance.consumeOne<T>({ model, where }),
-				);
+
+				let res: T | null;
+				let resultNeedsOutputTransform = true;
+				// Native `consumeOne` implementations physically delete the consumed
+				// row, so soft-deletable models always take the transactional
+				// fallback: its `trx.findMany` excludes soft-deleted rows and its
+				// `trx.deleteMany` soft-deletes the consumed row.
+				if (adapterInstance.consumeOne && !isSoftDeleteEnabled(unsafeModel)) {
+					res = await withSpan(
+						`db consumeOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() => adapterInstance.consumeOne!<T>({ model, where }),
+					);
+				} else {
+					// TODO(consume-one-required): adapters without native `consumeOne`
+					// fall back to `transaction(findMany + deleteMany)`. Race-safe on
+					// engines with real transaction isolation; race window narrows
+					// (does not close) on adapters that fall through to sequential
+					// execution. Remove this branch when consumeOne becomes required.
+					// FIXME(consume-one-nested-transaction): custom adapters without a
+					// native consumeOne have no portable signal for "already inside a
+					// transaction". First-party adapters mark transaction-scoped
+					// adapters as as-is; make that capability explicit in the next
+					// breaking adapter contract.
+					res = await withSpan(
+						`db consumeOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapter.transaction(async (trx) => {
+								const rows = await trx.findMany<Record<string, any>>({
+									model: unsafeModel,
+									where: unsafeWhere,
+									limit: 1,
+								});
+								const target = rows[0];
+								if (!target) return null;
+								const deleted = await trx.deleteMany({
+									model: unsafeModel,
+									where: [
+										...unsafeWhere,
+										{
+											field: "id",
+											value: target.id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+								});
+								// A non-numeric count coerces to a false miss, so fail loud.
+								if (typeof deleted !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from deleteMany during the consumeOne fallback. Return the number of deleted rows, or implement a native consumeOne for atomic single-use consumption.`,
+									);
+								}
+								return deleted > 0 ? (target as T) : null;
+							}),
+					);
+					resultNeedsOutputTransform = false;
+				}
 
 				debugLog(
 					{ method: "consumeOne" },
@@ -1376,7 +1505,11 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				let transformed: any = res;
-				if (!config.disableTransformOutput && res) {
+				if (
+					!config.disableTransformOutput &&
+					resultNeedsOutputTransform &&
+					res
+				) {
 					transformed = await transformOutput(
 						res as Record<string, any>,
 						unsafeModel,
@@ -1406,6 +1539,10 @@ export const createAdapterFactory =
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
+				// Mutating `unsafeWhere` covers both the native path and the
+				// transactional fallback below; `excludeSoftDeleted` is idempotent,
+				// so the fallback's `trx` calls won't append the filter twice.
+				unsafeWhere = excludeSoftDeleted(unsafeModel, unsafeWhere, false);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
@@ -1478,16 +1615,18 @@ export const createAdapterFactory =
 			count: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
+				withDeleted = false,
 			}: {
 				model: string;
 				where?: Where[];
+				withDeleted?: boolean;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
-					where: unsafeWhere,
+					where: excludeSoftDeleted(unsafeModel, unsafeWhere, withDeleted),
 					action: "count",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);

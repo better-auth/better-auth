@@ -1012,6 +1012,10 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
+Plugins may also mark the models they define or extend as soft-deletable.
+In that case the table carries a nullable `deletedAt` column, and deleting through that plugin flags rows as deleted instead of removing them.
+This is controlled by the plugin author, not by your auth config - see [Soft Delete](/docs/concepts/plugins#soft-delete) in the plugin development docs.
+
 ## Experimental Joins
 
 Since Better-Auth version `1.4` we've introduced experimental database joins support.

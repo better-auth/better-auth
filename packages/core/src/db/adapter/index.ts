@@ -414,6 +414,13 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where: Where[];
 		select?: string[] | undefined;
 		join?: JoinOption | undefined;
+		/**
+		 * Include soft-deleted rows in the result. Only applies to models with
+		 * soft delete enabled.
+		 *
+		 * @default false
+		 */
+		withDeleted?: boolean | undefined;
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -428,10 +435,24 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			| undefined;
 		offset?: number | undefined;
 		join?: JoinOption | undefined;
+		/**
+		 * Include soft-deleted rows in the result. Only applies to models with
+		 * soft delete enabled.
+		 *
+		 * @default false
+		 */
+		withDeleted?: boolean | undefined;
 	}) => Promise<T[]>;
 	count: (data: {
 		model: string;
 		where?: Where[] | undefined;
+		/**
+		 * Include soft-deleted rows in the count. Only applies to models with
+		 * soft delete enabled.
+		 *
+		 * @default false
+		 */
+		withDeleted?: boolean | undefined;
 	}) => Promise<number>;
 	/**
 	 * ⚠︎ Update may not return the updated data
@@ -441,14 +462,50 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where: Where[];
 		update: Record<string, any>;
+		/**
+		 * Allow updating soft-deleted rows. Only applies to models with soft
+		 * delete enabled. This can be used to restore a soft-deleted row by
+		 * setting `deletedAt` to `null`.
+		 *
+		 * @default false
+		 */
+		withDeleted?: boolean | undefined;
 	}) => Promise<T | null>;
 	updateMany: (data: {
 		model: string;
 		where: Where[];
 		update: Record<string, any>;
+		/**
+		 * Allow updating soft-deleted rows. Only applies to models with soft
+		 * delete enabled. This can be used to restore soft-deleted rows by
+		 * setting `deletedAt` to `null`.
+		 *
+		 * @default false
+		 */
+		withDeleted?: boolean | undefined;
 	}) => Promise<number>;
-	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
-	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
+	delete: <_T>(data: {
+		model: string;
+		where: Where[];
+		/**
+		 * Permanently delete the row even when the model has soft delete
+		 * enabled. Has no effect on models without soft delete.
+		 *
+		 * @default false
+		 */
+		hardDelete?: boolean | undefined;
+	}) => Promise<void>;
+	deleteMany: (data: {
+		model: string;
+		where: Where[];
+		/**
+		 * Permanently delete the rows even when the model has soft delete
+		 * enabled. Has no effect on models without soft delete.
+		 *
+		 * @default false
+		 */
+		hardDelete?: boolean | undefined;
+	}) => Promise<number>;
 	/**
 	 * Atomically consume a single row matching the where clause: delete it and
 	 * return the deleted row, or return `null` if no row matched.
