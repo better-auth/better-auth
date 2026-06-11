@@ -10,6 +10,7 @@ import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
+	isStateful,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
@@ -619,7 +620,12 @@ export const deleteUserCallback = createAuthEndpoint(
 				code: "NOT_FOUND",
 			});
 		}
-		const session = await getSessionFromCtx(ctx);
+		// Account deletion is sensitive: bypass the cookie cache on stateful
+		// deployments so a revoked-but-cached session cannot complete the deletion
+		// even when paired with a valid delete-account token.
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
 		if (!session) {
 			throw APIError.from(
 				"NOT_FOUND",

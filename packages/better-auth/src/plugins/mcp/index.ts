@@ -449,6 +449,17 @@ export const mcp = (options: MCPOptions) => {
 								error: "invalid_grant",
 							});
 						}
+						// A refresh token is only legitimate when the original grant
+						// included offline_access. Rejecting redemption otherwise makes a
+						// refresh token that was stored without offline_access (and may be
+						// exposed to its access-token holder) unusable for escalation.
+						if (!token.scopes?.split(" ").includes("offline_access")) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"refresh token was not issued for the offline_access scope",
+								error: "invalid_grant",
+							});
+						}
 						const refreshClient = await ctx.context.adapter
 							.findOne<Record<string, any>>({
 								model: modelName.oauthClient,
@@ -1029,6 +1040,14 @@ export const mcp = (options: MCPOptions) => {
 							],
 						});
 					if (!accessTokenData) {
+						return c.json(null);
+					}
+					// An access token authorizes a protected resource only while it is
+					// unexpired. Without this gate an expired bearer token keeps
+					// authorizing handlers until its row is deleted (RFC 6750 §3.1
+					// treats an expired token as `invalid_token`).
+					if (accessTokenData.accessTokenExpiresAt < new Date()) {
+						c.headers?.set("WWW-Authenticate", "Bearer");
 						return c.json(null);
 					}
 					return c.json(accessTokenData);

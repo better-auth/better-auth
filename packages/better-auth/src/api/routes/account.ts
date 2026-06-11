@@ -19,6 +19,7 @@ import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	isStateful,
 	sessionMiddleware,
 } from "./session";
 
@@ -456,10 +457,8 @@ async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const isStateful =
-		!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
 	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful,
+		disableCookieCache: isStateful(ctx),
 	});
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");

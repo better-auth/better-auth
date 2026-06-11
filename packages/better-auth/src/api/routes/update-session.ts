@@ -5,7 +5,7 @@ import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
-import { sessionMiddleware } from "./session";
+import { isStateful, sessionMiddleware } from "./session";
 
 const updateSessionBodySchema = z.record(
 	z.string().meta({
@@ -85,10 +85,7 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 			// revoked or expired server-side; fail closed instead of re-minting from
 			// stale data, which would extend a revoked session. DB-less deployments
 			// keep the session in the cookie and legitimately have no row to update.
-			const isStateful =
-				!!ctx.context.options.database ||
-				!!ctx.context.options.secondaryStorage;
-			if (!updatedSession && isStateful) {
+			if (!updatedSession && isStateful(ctx)) {
 				deleteSessionCookie(ctx);
 				throw APIError.from(
 					"UNAUTHORIZED",

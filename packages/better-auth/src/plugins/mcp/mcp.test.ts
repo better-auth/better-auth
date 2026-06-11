@@ -1213,3 +1213,119 @@ describe("mcp discovery metadata (security)", async () => {
 		expect(body.resource_signing_alg_values_supported).not.toContain("none");
 	});
 });
+
+describe("mcp session freshness (security)", () => {
+	async function seedToken(
+		db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+		userId: string,
+		overrides: Record<string, unknown>,
+	) {
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: "freshness-test-client",
+				clientSecret: "freshness-secret",
+				type: "web",
+				name: "Freshness Test Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: "freshness-access-token",
+				refreshToken: "freshness-refresh-token",
+				accessTokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: "freshness-test-client",
+				userId,
+				scopes: "openid profile email offline_access",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				...overrides,
+			},
+		});
+	}
+
+	it("rejects an expired access token and does not invoke the handler", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedToken(db, user.id, {
+			accessToken: "expired-access-token",
+			accessTokenExpiresAt: new Date(Date.now() - 60 * 1000),
+		});
+
+		let handlerCalled = false;
+		const response = await withMcpAuth(auth, async () => {
+			handlerCalled = true;
+			return new Response("ok");
+		})(
+			new Request("http://localhost:3000/mcp", {
+				headers: { Authorization: "Bearer expired-access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(handlerCalled).toBe(false);
+	});
+
+	it("accepts an unexpired access token", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedToken(db, user.id, { accessToken: "live-access-token" });
+
+		const response = await withMcpAuth(
+			auth,
+			async () => new Response("ok"),
+		)(
+			new Request("http://localhost:3000/mcp", {
+				headers: { Authorization: "Bearer live-access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
+	it("rejects a refresh_token grant whose original scopes lack offline_access", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedToken(db, user.id, {
+			refreshToken: "no-offline-refresh-token",
+			scopes: "openid profile email",
+		});
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/mcp/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: "no-offline-refresh-token",
+					client_id: "freshness-test-client",
+					client_secret: "freshness-secret",
+				}).toString(),
+			},
+		);
+		const body = await response.json().catch(() => null);
+
+		expect(response.status).toBe(401);
+		expect(body?.error).toBe("invalid_grant");
+		expect(body?.access_token).toBeUndefined();
+	});
+});
