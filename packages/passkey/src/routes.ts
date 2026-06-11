@@ -589,7 +589,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				userData,
 				context,
 			} = JSON.parse(data.value) as StoredChallengeValue;
-			if (ceremony !== "registration") {
+			// A challenge minted before this marker existed has no `type`; accept it
+			// so in-flight verifications survive an upgrade. Only reject a challenge
+			// explicitly tagged for the other ceremony.
+			if (ceremony !== undefined && ceremony !== "registration") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -779,7 +782,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			const { type: ceremony, expectedChallenge } = JSON.parse(
 				data.value,
 			) as StoredChallengeValue;
-			if (ceremony !== "authentication") {
+			// A challenge minted before this marker existed has no `type`; accept it
+			// so in-flight verifications survive an upgrade. Only reject a challenge
+			// explicitly tagged for the other ceremony.
+			if (ceremony !== undefined && ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
