@@ -256,8 +256,12 @@ export async function setCookieCache(
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
 
-	// Refresh account cookie to keep it in sync
-	if (ctx.context.options.account?.storeAccountCookie) {
+	// Keep the account cookie in sync, unless this response already set a
+	// fresh one that the stale request copy would downgrade or expire.
+	if (
+		ctx.context.options.account?.storeAccountCookie &&
+		!hasPendingSetCookie(ctx, ctx.context.authCookies.accountData.name)
+	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
 			if (accountData.userId === session.user.id) {
@@ -376,6 +380,39 @@ function removeSetCookieEntries(
 			headers.append("set-cookie", entry);
 		}
 	}
+}
+
+/**
+ * Whether the response already has a pending `Set-Cookie` for `cookieName`
+ * or a chunked variant.
+ */
+function hasPendingSetCookie(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): boolean {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (
+			existing.some(
+				(entry) => entry.startsWith(exact) || entry.startsWith(chunk),
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**

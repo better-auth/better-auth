@@ -49,6 +49,9 @@ async function revokeJwtAccessToken(
 						// @ts-expect-error response is a JSONWebKeySet but within the response field
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
 			verifyOptions: {
 				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
