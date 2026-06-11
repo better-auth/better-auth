@@ -25,6 +25,35 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+/**
+ * Resolves the configured per-team member cap to a concrete number for a given
+ * team-add. Returns `undefined` only when no cap is configured. Throws when the
+ * cap is a function but no session is available to evaluate it, so a sessionless
+ * server-side add fails closed instead of silently bypassing the limit.
+ */
+export async function resolveMaximumMembersPerTeam(
+	teams: OrganizationOptions["teams"],
+	context: {
+		teamId: string;
+		organizationId: string;
+		session: { user: User; session: Session } | null;
+	},
+): Promise<number | undefined> {
+	const maximumMembersPerTeam = teams?.maximumMembersPerTeam;
+	if (maximumMembersPerTeam === undefined) return undefined;
+	if (typeof maximumMembersPerTeam === "number") return maximumMembersPerTeam;
+	if (!context.session) {
+		throw new BetterAuthError(
+			"`teams.maximumMembersPerTeam` is configured as a function but no session is available to evaluate it. Provide a session-bearing request or configure a numeric limit.",
+		);
+	}
+	return await maximumMembersPerTeam({
+		teamId: context.teamId,
+		session: context.session,
+		organizationId: context.organizationId,
+	});
+}
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
@@ -894,10 +923,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		/**
 		 * Adds a user to a team only when the team is below its member limit,
-		 * reading the count and creating the membership in one transaction so
-		 * concurrent accepts cannot both pass the check. Returns the existing
-		 * membership unchanged (no capacity charge) when the user already
-		 * belongs to the team.
+		 * reading the count and creating the membership in one transaction.
+		 * Returns the existing membership unchanged (no capacity charge) when the
+		 * user already belongs to the team.
+		 *
+		 * FIXME(team-cap-race): the count-then-create is not atomic under READ
+		 * COMMITTED, so two concurrent adds can both pass the count check and
+		 * exceed maximumMembersPerTeam. A durable fix needs a unique constraint on
+		 * teamMember(teamId, userId) or serializable isolation. Affects every
+		 * caller (acceptInvitation, addMember, addTeamMember).
 		 */
 		addTeamMemberWithLimit: async (data: {
 			teamId: string;

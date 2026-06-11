@@ -7,7 +7,7 @@ import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import { defaultRoles } from "../access/statement";
-import { getOrgAdapter } from "../adapter";
+import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -194,14 +194,43 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				}
 			}
 
-			const createdMember = await adapter.createMember(memberData);
+			const maximumMembersPerTeam = teamId
+				? await resolveMaximumMembersPerTeam(ctx.context.orgOptions.teams, {
+						teamId,
+						organizationId: orgId,
+						session,
+					})
+				: undefined;
 
+			// Charge team capacity before creating the organization member so a full
+			// team rejects the request before any row is written.
+			// FIXME(team-add-atomicity): addTeamMemberWithLimit commits on its own
+			// transaction, so on adapters without isolated transactions a later
+			// createMember failure can orphan the teamMember row. Same residual as
+			// acceptInvitation; closed by the planned isolated-transaction adapter
+			// contract.
 			if (teamId) {
-				await adapter.findOrCreateTeamMember({
-					userId: user.id,
-					teamId,
-				});
+				if (maximumMembersPerTeam !== undefined) {
+					const result = await adapter.addTeamMemberWithLimit({
+						teamId,
+						userId: user.id,
+						maximumMembersPerTeam,
+					});
+					if (result.status === "limitReached") {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+						);
+					}
+				} else {
+					await adapter.findOrCreateTeamMember({
+						userId: user.id,
+						teamId,
+					});
+				}
 			}
+
+			const createdMember = await adapter.createMember(memberData);
 
 			// Run afterAddMember hook
 			if (option?.organizationHooks?.afterAddMember) {
