@@ -15,7 +15,7 @@ import {
 	vi,
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
-import { parseSetCookieHeader, setCookieCache } from "../../cookies";
+import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2057,15 +2057,25 @@ describe("account resolution in stateless mode", async () => {
 				jwks_uri: `${IDP}/jwks`,
 			}),
 		),
-		http.post(`${IDP}/token`, () =>
-			HttpResponse.json({
+		http.post(`${IDP}/token`, async ({ request }) => {
+			const params = new URLSearchParams(await request.text());
+			if (params.get("grant_type") === "refresh_token") {
+				return HttpResponse.json({
+					token_type: "Bearer",
+					access_token: "idp-refreshed-access-token",
+					refresh_token: "idp-rotated-refresh-token",
+					expires_in: 3600,
+					scope: "openid profile email",
+				});
+			}
+			return HttpResponse.json({
 				token_type: "Bearer",
 				access_token: "idp-access-token",
 				refresh_token: "idp-refresh-token",
 				expires_in: 3600,
 				scope: "openid profile email",
-			}),
-		),
+			});
+		}),
 	];
 
 	beforeEach(() => server.use(...idpHandlers));
@@ -2075,12 +2085,12 @@ describe("account resolution in stateless mode", async () => {
 			secret: STATELESS_SECRET,
 			baseURL: "http://localhost:3000",
 			trustedOrigins: ["http://localhost:3000"],
-			// No database -> stateless: account and session live in cookies only.
 			session: {
 				cookieCache: {
 					enabled: true,
-					maxAge: 60 * 60 * 24,
-					refreshCache: { updateAge: 60 },
+					strategy: "jwe",
+					maxAge: 60,
+					refreshCache: { updateAge: 60 * 60 },
 				},
 			},
 			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
@@ -2093,11 +2103,12 @@ describe("account resolution in stateless mode", async () => {
 							clientSecret: "client-secret",
 							scopes: ["openid", "profile", "email"],
 							discoveryUrl: `${IDP}/.well-known/openid-configuration`,
-							getUserInfo: async () => ({
+							getUserInfo: async (tokens) => ({
 								id: "shared-idp-user",
 								email: "user@stateless.test",
 								name: "Stateless User",
 								emailVerified: true,
+								accessTokenSeen: tokens.accessToken,
 							}),
 						},
 					],
@@ -2106,17 +2117,26 @@ describe("account resolution in stateless mode", async () => {
 		});
 
 	type Jar = Map<string, string>;
-	const collect = (res: Response, jar: Jar) => {
+
+	const collectCookies = (res: Response, jar: Jar) => {
 		for (const cookie of res.headers.getSetCookie()) {
 			const [pair = ""] = cookie.split(";");
 			const idx = pair.indexOf("=");
-			jar.set(pair.slice(0, idx), pair.slice(idx + 1));
+			if (idx > 0) {
+				jar.set(pair.slice(0, idx), pair.slice(idx + 1));
+			}
 		}
 	};
+
 	const cookieHeader = (jar: Jar) =>
 		[...jar].map(([name, value]) => `${name}=${value}`).join("; ");
 
-	// Sign the shared IdP user in on a fresh stateless instance, returning its cookie jar.
+	const requestHeaders = (jar: Jar) =>
+		new Headers({
+			cookie: cookieHeader(jar),
+			host: "localhost:3000",
+		});
+
 	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
 		const jar: Jar = new Map();
 		let res = await auth.handler(
@@ -2126,35 +2146,34 @@ describe("account resolution in stateless mode", async () => {
 				body: JSON.stringify({ providerId: "idp", callbackURL: "/" }),
 			}),
 		);
-		collect(res, jar);
+		collectCookies(res, jar);
 		const { url } = (await res.json()) as { url: string };
 		const state = new URL(url).searchParams.get("state");
 		assert(state, "expected an OAuth state to be issued");
+
 		res = await auth.handler(
 			new Request(
 				`http://localhost:3000/api/auth/oauth2/callback/idp?code=test-code&state=${state}`,
-				{ headers: { cookie: cookieHeader(jar) }, redirect: "manual" },
+				{ headers: requestHeaders(jar), redirect: "manual" },
 			),
 		);
-		collect(res, jar);
+		collectCookies(res, jar);
+
 		const session = (await auth.api.getSession({
-			headers: new Headers({ cookie: cookieHeader(jar) }),
+			headers: requestHeaders(jar),
 		})) as { user: { id: string } } | null;
-		return { jar, userId: session?.user.id };
+		assert(session?.user.id, "expected OAuth sign-in to create a session");
+		return { jar, userId: session.user.id };
 	};
 
-	// On serverless, separate stateless instances mint different ids for the same IdP user, so
-	// the session cookie and the account cookie can end up carrying different user ids.
 	const signInOnTwoInstances = async () => {
 		const authA = makeStatelessAuth();
 		const a = await signIn(authA);
 		const b = await signIn(makeStatelessAuth());
-		assert(a.userId && b.userId);
 		expect(a.userId).not.toBe(b.userId);
 
 		const accountCookieName = (await authA.$context).authCookies.accountData
 			.name;
-		// Browser keeps the session cookie from A but the account cookie was rewritten by B.
 		const mixed: Jar = new Map(a.jar);
 		for (const key of [...mixed.keys()]) {
 			if (key.startsWith(accountCookieName)) mixed.delete(key);
@@ -2162,59 +2181,75 @@ describe("account resolution in stateless mode", async () => {
 		for (const [key, value] of b.jar) {
 			if (key.startsWith(accountCookieName)) mixed.set(key, value);
 		}
-		return { mixed, sessionUserId: a.userId, accountCookieName, authA };
+
+		return {
+			accountCookieName,
+			mixed,
+			sessionUserId: a.userId,
+		};
 	};
 
-	it("resolves a valid account cookie whose userId differs from the session user", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves getAccessToken with a valid account cookie whose userId differs from the session user", async () => {
 		const { mixed, sessionUserId } = await signInOnTwoInstances();
 
-		// A fresh instance has an empty in-memory store, so resolution depends entirely on the
-		// account cookie (mirrors a serverless instance that didn't handle the sign-in).
 		const result = await makeStatelessAuth().api.getAccessToken({
 			body: { providerId: "idp", userId: sessionUserId },
-			headers: new Headers({ cookie: cookieHeader(mixed) }),
+			headers: requestHeaders(mixed),
 		});
 
 		expect(result.accessToken).toBe("idp-access-token");
 	});
 
-	it("does not expire the account cookie when setCookieCache runs with a mismatched userId", async () => {
-		const authA = makeStatelessAuth();
-		const a = await signIn(authA);
-		const b = await signIn(makeStatelessAuth());
-		assert(a.userId && b.userId && a.userId !== b.userId);
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves accountInfo with a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
 
-		const context = await authA.$context;
-		const accountCookieName = context.authCookies.accountData.name;
-		const accountCookieValue = b.jar.get(accountCookieName);
-		const sessionA = await authA.api.getSession({
-			headers: new Headers({ cookie: cookieHeader(a.jar) }),
+		const info = await makeStatelessAuth().api.accountInfo({
+			query: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
 		});
-		assert(accountCookieValue && sessionA);
 
-		// Drive setCookieCache with A's session but B's account cookie (different userId).
-		const written = new Map<string, { value: string; maxAge?: number }>();
-		const ctx = {
-			context,
-			headers: new Headers({
-				cookie: `${accountCookieName}=${accountCookieValue}`,
+		assert(info, "expected accountInfo to resolve from the account cookie");
+		expect(info.user.id).toBe("shared-idp-user");
+		expect(info.data.accessTokenSeen).toBe("idp-access-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("refreshes a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const result = await makeStatelessAuth().api.refreshToken({
+			body: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		expect(result.accessToken).toBe("idp-refreshed-access-token");
+		expect(result.refreshToken).toBe("idp-rotated-refresh-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("preserves a valid mismatched account cookie during stateless session refresh", async () => {
+		const { accountCookieName, mixed } = await signInOnTwoInstances();
+
+		const res = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: requestHeaders(mixed),
 			}),
-			getCookie: (name: string) =>
-				name === accountCookieName ? accountCookieValue : undefined,
-			setCookie: (
-				name: string,
-				value: string,
-				attributes?: { maxAge?: number },
-			) => written.set(name, { value, maxAge: attributes?.maxAge }),
-		} as unknown as Parameters<typeof setCookieCache>[0];
-
-		await setCookieCache(ctx, sessionA, false);
-
-		const accountWrite = written.get(accountCookieName);
-		assert(
-			accountWrite,
-			"expected the account cookie to be re-set, not dropped",
 		);
-		expect(accountWrite.maxAge).not.toBe(0);
+		expect(res.status).toBe(200);
+
+		const cookies = parseSetCookieHeader(res.headers.get("set-cookie") || "");
+		const accountCookie = cookies.get(accountCookieName);
+		expect(accountCookie?.value).toBeTruthy();
+		expect(accountCookie?.maxAge).not.toBe(0);
 	});
 });
