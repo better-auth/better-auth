@@ -234,7 +234,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? userMap.id
 							: isNonEmptyOAuthId(userInfo.id)
 								? userInfo.id
-								: undefined;
+								: isNonEmptyOAuthId(userInfo.sub)
+									? userInfo.sub
+									: undefined;
 						if (rawId === undefined) {
 							return null;
 						}

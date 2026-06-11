@@ -492,6 +492,45 @@ describe("verifyAccessToken", () => {
 		vi.resetModules();
 	});
 
+	it("should not repeatedly refetch a fresh jwks source for invalid no-kid tokens", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const validKey = await createTestJWKS();
+		const invalidKey = await createTestJWKS();
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(validKey.publicJWK)),
+		);
+
+		const validToken = await createSignedToken(validKey.privateKey, undefined);
+		await expect(
+			verify(validToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		const invalidToken = await createSignedToken(
+			invalidKey.privateKey,
+			undefined,
+		);
+		await expect(
+			verify(invalidToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toThrow();
+		await expect(
+			verify(invalidToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toThrow();
+
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
 	it("should cache a string jwks source across verifications within the TTL", async () => {
 		vi.resetModules();
 		const { verifyJwsAccessToken: verify } = await import("./verify");

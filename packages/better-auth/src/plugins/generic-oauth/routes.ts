@@ -461,7 +461,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						? mapUser.id
 						: isNonEmptyOAuthId(userInfo.id)
 							? userInfo.id
-							: undefined;
+							: isNonEmptyOAuthId(userInfo.sub)
+								? userInfo.sub
+								: undefined;
 					const id = rawId !== undefined ? String(rawId) : "";
 					// A provider must return a stable account id (e.g. `sub`).
 					// Without one, every account would be stored under the same

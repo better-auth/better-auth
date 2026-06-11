@@ -29,6 +29,7 @@ function isJoseInfrastructureError(error: joseErrors.JOSEError) {
 interface JwksCacheEntry {
 	jwks: JSONWebKeySet;
 	fetchedAt: number;
+	noKidRefetchedAt?: number | undefined;
 }
 
 type JwksFetchOptions = {
@@ -46,6 +47,7 @@ type ResolvedJwks = {
 	jwks: JSONWebKeySet;
 	fromCache: boolean;
 	kid: string | undefined;
+	noKidRefetchedAt?: number | undefined;
 };
 
 /**
@@ -65,6 +67,7 @@ const functionJwksCache = new WeakMap<object, JwksCacheEntry>();
  * @internal
  */
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const JWKS_NO_KID_REFETCH_COOLDOWN_MS = 30 * 1000;
 
 /**
  * Returns the cached key set when it is within the TTL. When the token carries
@@ -87,11 +90,15 @@ function shouldRefetchCachedJwksWithoutKid(
 	error: unknown,
 	resolved: ResolvedJwks,
 ) {
-	return (
+	const isRetryableNoKidFailure =
 		resolved.fromCache &&
 		!resolved.kid &&
 		(error instanceof joseErrors.JWKSNoMatchingKey ||
-			error instanceof joseErrors.JWSSignatureVerificationFailed)
+			error instanceof joseErrors.JWSSignatureVerificationFailed);
+	if (!isRetryableNoKidFailure) return false;
+	if (!resolved.noKidRefetchedAt) return true;
+	return (
+		Date.now() - resolved.noKidRefetchedAt >= JWKS_NO_KID_REFETCH_COOLDOWN_MS
 	);
 }
 
@@ -223,29 +230,53 @@ async function getJwksForVerification(
 			if (!jwks) throw new Error("No jwks found");
 			return { jwks, fromCache: false, kid };
 		}
+		const cached = functionJwksCache.get(cacheKey);
 		const cachedJwks = opts.forceRefresh
 			? undefined
-			: getFreshJwksWithKid(functionJwksCache.get(cacheKey), kid);
-		if (cachedJwks) return { jwks: cachedJwks, fromCache: true, kid };
+			: getFreshJwksWithKid(cached, kid);
+		if (cachedJwks) {
+			return {
+				jwks: cachedJwks,
+				fromCache: true,
+				kid,
+				noKidRefetchedAt: cached?.noKidRefetchedAt,
+			};
+		}
 		const jwks = await opts.jwksFetch();
 		if (!jwks) throw new Error("No jwks found");
-		functionJwksCache.set(cacheKey, { jwks, fetchedAt: Date.now() });
+		const fetchedAt = Date.now();
+		functionJwksCache.set(cacheKey, {
+			jwks,
+			fetchedAt,
+			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
+		});
 		return { jwks, fromCache: false, kid };
 	}
 
 	// The cache is scoped to `cacheKey`, so a token is only ever matched
 	// against the key set published by its own source.
 	const cacheKey = opts.jwksFetch;
+	const cached = jwksCache.get(cacheKey);
 	const cachedJwks = opts.forceRefresh
 		? undefined
-		: getFreshJwksWithKid(jwksCache.get(cacheKey), kid);
+		: getFreshJwksWithKid(cached, kid);
 	if (!cachedJwks) {
 		const jwks = await fetchJwks(opts.jwksFetch);
-		jwksCache.set(cacheKey, { jwks, fetchedAt: Date.now() });
+		const fetchedAt = Date.now();
+		jwksCache.set(cacheKey, {
+			jwks,
+			fetchedAt,
+			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
+		});
 		return { jwks, fromCache: false, kid };
 	}
 
-	return { jwks: cachedJwks, fromCache: true, kid };
+	return {
+		jwks: cachedJwks,
+		fromCache: true,
+		kid,
+		noKidRefetchedAt: cached?.noKidRefetchedAt,
+	};
 }
 
 /**

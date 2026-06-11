@@ -1356,6 +1356,79 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
+	it("falls back to sub when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter, client } =
+			await getTestInstance(
+				{
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => ({
+									data: { ...user, emailVerified: true },
+								}),
+							},
+						},
+					},
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "empty-id-with-sub-test",
+									authorizationUrl: `http://localhost:${port}/authorize`,
+									tokenUrl: `http://localhost:${port}/token`,
+									clientId: clientId,
+									clientSecret: clientSecret,
+									pkce: true,
+									getUserInfo: async () => ({
+										id: "",
+										sub: "custom-sub-id",
+										email: "custom-sub@test.com",
+										name: "Custom Sub",
+										emailVerified: true,
+									}),
+								},
+							],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [genericOAuthClient()],
+					},
+				},
+			);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.oauth2({
+			providerId: "empty-id-with-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(flow.callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await client.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "empty-id-with-sub-test",
+			accountId: "custom-sub-id",
+		});
+	});
+
 	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
@@ -2119,6 +2192,42 @@ describe("oauth2", async () => {
 		});
 
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
+	});
+
+	it("falls back to sub when provider wrapper getUserInfo returns an empty id", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-wrapper-sub",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							getUserInfo: async () => ({
+								id: "",
+								sub: "wrapped-sub",
+								email: "wrapped-sub@test.com",
+								name: "Wrapped Sub",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+		const context = await auth.$context;
+		const provider = await getAwaitableValue(context.socialProviders, {
+			value: "test-wrapper-sub",
+		});
+
+		const result = await provider!.getUserInfo({
+			accessToken: "test-access-token",
+			idToken: undefined,
+			refreshToken: undefined,
+		});
+
+		expect(result?.user.id).toBe("wrapped-sub");
 	});
 
 	describe("Okta Provider Helper", () => {
