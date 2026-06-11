@@ -1448,7 +1448,7 @@ describe("expo authorization proxy", async () => {
 
 	it("rejects a same-origin authorizationURL (login-CSRF bounce)", async () => {
 		const res = await proxy(
-			"https://app.example/api/auth/callback/google?state=attacker",
+			"https://app.example/api/auth/callback/google?state=x",
 		);
 		expect(res.status).toBe(400);
 	});
@@ -1467,7 +1467,7 @@ describe("expo authorization proxy", async () => {
 
 	it("rejects an authorizationURL with a fragment", async () => {
 		const withFragment = await proxy(
-			"https://accounts.google.com/o/oauth2/v2/auth?state=x#evil",
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment",
 		);
 		expect(withFragment.status).toBe(400);
 		const bareFragment = await proxy(

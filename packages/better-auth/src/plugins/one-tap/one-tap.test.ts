@@ -389,7 +389,7 @@ describe("one-tap callbackURL origin validation", async () => {
 			method: "POST",
 			body: {
 				idToken: "stub-id-token",
-				callbackURL: "https://evil.example/steal",
+				callbackURL: "https://untrusted.example/callback",
 			},
 		});
 

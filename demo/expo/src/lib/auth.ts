@@ -22,7 +22,7 @@ export const auth = betterAuth({
 	},
 	// Trust the app-specific scheme only. The expo() plugin adds the broad
 	// `exp://` development scheme automatically when NODE_ENV is development;
-	// trusting it in production would let an attacker-controlled deep link
-	// receive the session cookie.
+	// trusting it in production could leak the session cookie to a deep link
+	// the app does not control.
 	trustedOrigins: ["better-auth://"],
 });

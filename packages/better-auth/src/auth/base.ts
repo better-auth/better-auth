@@ -46,8 +46,8 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				// mutates the shared context. This isolates a request-dependent
 				// `trustedOrigins`/`trustedProviders` callback from concurrent
 				// requests, and (for the no-baseURL case) stops the first request's
-				// attacker-influenceable origin from being memoized onto the shared
-				// context where it would poison every later request's token links.
+				// host from being memoized onto the shared context, where it would
+				// be reused for every later request's token links.
 				handlerCtx = Object.create(
 					Object.getPrototypeOf(ctx),
 					Object.getOwnPropertyDescriptors(ctx),

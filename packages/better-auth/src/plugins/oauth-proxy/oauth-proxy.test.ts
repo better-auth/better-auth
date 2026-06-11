@@ -1651,10 +1651,10 @@ describe("oauth-proxy current URL trust", () => {
 			},
 		});
 
-		// Sign-in initiated from an attacker-influenced request host that is not
+		// Sign-in initiated from a request host that is not
 		// a trusted origin.
 		const signInResponse = await auth.handler(
-			new Request("https://attacker.example/api/auth/sign-in/social", {
+			new Request("https://untrusted.example/api/auth/sign-in/social", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
@@ -1671,8 +1671,8 @@ describe("oauth-proxy current URL trust", () => {
 		);
 		const location = callbackResponse.headers.get("location");
 		expect(location).toBeTruthy();
-		// Falls back to the configured base URL, never the attacker origin.
-		expect(location).not.toContain("attacker.example");
+		// Falls back to the configured base URL, never the untrusted request origin.
+		expect(location).not.toContain("untrusted.example");
 		expect(location).toContain(
 			"https://myapp.com/api/auth/oauth-proxy-callback",
 		);
@@ -1723,7 +1723,7 @@ describe("oauth-proxy current URL trust", () => {
 			});
 
 			const signInResponse = await auth.handler(
-				new Request("https://attacker.example/api/auth/sign-in/social", {
+				new Request("https://untrusted.example/api/auth/sign-in/social", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({

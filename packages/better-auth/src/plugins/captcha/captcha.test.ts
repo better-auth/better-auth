@@ -552,7 +552,7 @@ describe("captcha", async () => {
 				],
 			});
 			mockBetterFetch.mockResolvedValue({
-				data: { success: true, hostname: "evil.example" },
+				data: { success: true, hostname: "untrusted.example" },
 			});
 			const res = await client.signIn.email({
 				email: "test@test.com",

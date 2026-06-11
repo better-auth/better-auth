@@ -721,7 +721,7 @@ describe("origin check middleware", async () => {
 				body: JSON.stringify({
 					email: "test@test.com",
 					password: "password12345",
-					callbackURL: { evil: true },
+					callbackURL: { object: true },
 				}),
 			},
 		);
@@ -1226,7 +1226,7 @@ describe("request-scoped trusted origin isolation", async () => {
 });
 
 describe("inferred baseURL is not persisted across requests", async () => {
-	it("does not let one request's host poison a later request's token links", async () => {
+	it("does not reuse one request's host for a later request's token links", async () => {
 		const resetURLs: string[] = [];
 		const { auth, testUser } = await getTestInstance({
 			baseURL: undefined,
@@ -1238,9 +1238,9 @@ describe("inferred baseURL is not persisted across requests", async () => {
 			},
 		});
 
-		// First request arrives from an attacker-influenced host.
+		// First request arrives from one host.
 		await auth.handler(
-			new Request("https://attacker.example/api/auth/request-password-reset", {
+			new Request("https://untrusted.example/api/auth/request-password-reset", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ email: testUser.email, redirectTo: "/" }),
@@ -1248,7 +1248,7 @@ describe("inferred baseURL is not persisted across requests", async () => {
 		);
 
 		// A later request from the legitimate host must build its link from its
-		// own host, not the attacker host memoized by the first request.
+		// own host, not the host carried by the first request.
 		await auth.handler(
 			new Request("https://app.example/api/auth/request-password-reset", {
 				method: "POST",
@@ -1260,6 +1260,6 @@ describe("inferred baseURL is not persisted across requests", async () => {
 		const legitURL = resetURLs.at(-1);
 		expect(legitURL).toBeDefined();
 		expect(legitURL).toContain("https://app.example");
-		expect(legitURL).not.toContain("attacker.example");
+		expect(legitURL).not.toContain("untrusted.example");
 	});
 });
