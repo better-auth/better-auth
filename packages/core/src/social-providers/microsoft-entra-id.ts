@@ -153,10 +153,12 @@ export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
 	// Trim any trailing slash so endpoint URLs and the issuer comparison below
 	// never produce a double slash (e.g. a configured `https://host/` would make
-	// the expected issuer `https://host//<tid>/v2.0` and reject every token).
-	const authority = (
-		options.authority || "https://login.microsoftonline.com"
-	).replace(/\/+$/, "");
+	// the expected issuer `https://host//<tid>/v2.0` and reject every token). A
+	// loop avoids a trailing-slash regex, which is a polynomial-ReDoS shape.
+	let authority = options.authority || "https://login.microsoftonline.com";
+	while (authority.endsWith("/")) {
+		authority = authority.slice(0, -1);
+	}
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
 	return {
