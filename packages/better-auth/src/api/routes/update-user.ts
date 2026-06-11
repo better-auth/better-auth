@@ -314,7 +314,7 @@ export const changePassword = createAuthEndpoint(
 	},
 );
 
-export const setPassword = createAuthEndpoint(
+export const setPassword = createAuthEndpoint.serverOnly(
 	{
 		method: "POST",
 		body: z.object({
