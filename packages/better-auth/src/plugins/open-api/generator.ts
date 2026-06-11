@@ -130,8 +130,12 @@ function getParameters(options: EndpointOptions) {
 		parameters.push(...options.metadata.openapi.parameters);
 		return parameters;
 	}
-	if (options.query instanceof z.ZodObject) {
-		Object.entries(options.query.shape).forEach(([key, value]) => {
+	const querySchema =
+		options.query instanceof z.ZodOptional
+			? options.query.unwrap()
+			: options.query;
+	if (querySchema instanceof z.ZodObject) {
+		Object.entries(querySchema.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				parameters.push({
 					name: key,
@@ -156,12 +160,12 @@ function getRequestBody(options: EndpointOptions): any {
 		return options.metadata.openapi.requestBody;
 	}
 	if (!options.body) return undefined;
-	if (
-		options.body instanceof z.ZodObject ||
+	const bodySchema =
 		options.body instanceof z.ZodOptional
-	) {
-		// @ts-expect-error
-		const shape = options.body.shape;
+			? options.body.unwrap()
+			: options.body;
+	if (bodySchema instanceof z.ZodObject) {
+		const shape = bodySchema.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
 		const required: string[] = [];

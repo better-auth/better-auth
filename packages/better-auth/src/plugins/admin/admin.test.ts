@@ -1,4 +1,4 @@
-import { BetterAuthError } from "@better-auth/core/error";
+import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -485,6 +485,252 @@ describe("Admin plugin", async () => {
 		});
 		expect(res.data?.users.length).toBe(1);
 		expect(res.data?.users[0]!.email).toBe("test@test.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow POST multi-field search and filters through the client", async () => {
+		const createdUserIds: string[] = [];
+
+		try {
+			const alpha = await client.admin.createUser(
+				{
+					name: "Issue 5990 Alpha",
+					email: "issue-5990-alpha@test.com",
+					password: "password",
+					role: "admin",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (alpha.data?.user.id) {
+				createdUserIds.push(alpha.data.user.id);
+			}
+
+			const beta = await client.admin.createUser(
+				{
+					name: "Issue 5990 Beta",
+					email: "issue-5990-beta@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (beta.data?.user.id) {
+				createdUserIds.push(beta.data.user.id);
+			}
+
+			const res = await client.admin.listUsers({
+				search: [
+					{
+						field: "email",
+						operator: "contains",
+						value: "issue-5990-alpha",
+						connector: "OR",
+					},
+					{
+						field: "name",
+						operator: "contains",
+						value: "Issue 5990 Beta",
+						connector: "OR",
+					},
+				],
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: "admin",
+				fetchOptions: {
+					headers: adminHeaders,
+				},
+			});
+
+			expect(res.data?.total).toBe(1);
+			expect(res.data?.users.map((user) => user.email)).toEqual([
+				"issue-5990-alpha@test.com",
+			]);
+		} finally {
+			for (const userId of createdUserIds) {
+				await client.admin.removeUser(
+					{ userId },
+					{
+						headers: adminHeaders,
+					},
+				);
+			}
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow POST multi-field search through the server API", async () => {
+		const createdUserIds: string[] = [];
+
+		try {
+			const match = await client.admin.createUser(
+				{
+					name: "Issue 5990 Gamma Match",
+					email: "issue-5990-gamma@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (match.data?.user.id) {
+				createdUserIds.push(match.data.user.id);
+			}
+
+			const nonMatch = await client.admin.createUser(
+				{
+					name: "Issue 5990 Gamma Other",
+					email: "issue-5990-other@test.com",
+					password: "password",
+					role: "user",
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+			if (nonMatch.data?.user.id) {
+				createdUserIds.push(nonMatch.data.user.id);
+			}
+
+			const res = await auth.api.listUsers({
+				method: "POST",
+				headers: adminHeaders,
+				body: {
+					search: [
+						{
+							field: "email",
+							operator: "contains",
+							value: "issue-5990-gamma",
+							connector: "AND",
+						},
+						{
+							field: "name",
+							operator: "contains",
+							value: "Match",
+							connector: "AND",
+						},
+					],
+					limit: 5,
+					sortBy: "email",
+					sortDirection: "asc",
+				},
+			});
+
+			expect(res.total).toBe(1);
+			expect(res.users.map((user) => user.email)).toEqual([
+				"issue-5990-gamma@test.com",
+			]);
+		} finally {
+			for (const userId of createdUserIds) {
+				await client.admin.removeUser(
+					{ userId },
+					{
+						headers: adminHeaders,
+					},
+				);
+			}
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users search fields", async () => {
+		const res = await client.admin.listUsers({
+			search: [
+				{
+					field: "notAUserField",
+					operator: "eq",
+					value: "test",
+				},
+			],
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users filter fields when filter value is provided", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+				filterValue: "test",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should ignore list users filter field when filter value is undefined", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.total).toBeGreaterThan(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject invalid list users sort fields", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				sortBy: "notAUserField",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(BASE_ERROR_CODES.VALIDATION_ERROR.code);
+		expect(res.error?.message).toBe("Invalid list users field");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should reject non-admin list users requests before validating fields", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "notAUserField",
+				filterValue: "test",
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should allow to set user role", async () => {
@@ -1568,6 +1814,56 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.data?.email).toBe("updated-email@test.com");
 		expect(res.data?.emailVerified).toBe(false);
+	});
+});
+
+describe("admin list users custom field names", async () => {
+	const { signInWithTestUser, auth } = await getTestInstance(
+		{
+			plugins: [admin()],
+			user: {
+				fields: {
+					email: "email_address",
+				},
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+				email: "admin-field-name@test.com",
+			},
+		},
+	);
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/5990
+	 */
+	it("should allow list users filters using configured field names", async () => {
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "email_address",
+				filterOperator: "eq",
+				filterValue: "admin-field-name@test.com",
+			},
+		});
+
+		expect(res.total).toBe(1);
+		expect(res.users[0]?.email).toBe("admin-field-name@test.com");
 	});
 });
 

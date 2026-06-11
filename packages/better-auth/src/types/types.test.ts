@@ -359,6 +359,42 @@ describe("any-poisoning guards", () => {
 		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
 	});
 
+	it("InferCtx should preserve optional query when body is present", () => {
+		type Result = InferCtx<
+			{
+				body: { search?: string } | undefined;
+				query: { limit?: number } | undefined;
+				method: ("GET" | "POST")[];
+			},
+			{}
+		>;
+
+		expectTypeOf<Result>().toMatchTypeOf<{
+			search?: string;
+			query?: { limit?: number } | undefined;
+		}>();
+	});
+
+	it("InferCtx should require query when query has required keys", () => {
+		type Result = InferCtx<
+			{ body: undefined; query: { id: string }; method: "GET" },
+			{}
+		>;
+
+		expectTypeOf<Result>().toMatchTypeOf<{
+			query: { id: string };
+		}>();
+	});
+
+	it("InferCtx should not require catch-all query records", () => {
+		type Result = InferCtx<
+			{ body: { email: string }; query: Record<string, any> | undefined },
+			{}
+		>;
+
+		expectTypeOf<{ email: string }>().toMatchTypeOf<Result>();
+	});
+
 	/**
 	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
 	 * should not collapse auth.$Infer to `any`.
