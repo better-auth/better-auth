@@ -10,10 +10,11 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
-import { getOrgAdapter } from "../adapter";
+import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import type { TeamMember } from "../schema";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -1163,10 +1164,35 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
-			const teamMember = await adapter.findOrCreateTeamMember({
-				teamId: ctx.body.teamId,
-				userId: ctx.body.userId,
-			});
+			const maximumMembersPerTeam = await resolveMaximumMembersPerTeam(
+				ctx.context.orgOptions.teams,
+				{
+					teamId: ctx.body.teamId,
+					organizationId,
+					session,
+				},
+			);
+
+			let teamMember: TeamMember;
+			if (maximumMembersPerTeam !== undefined) {
+				const result = await adapter.addTeamMemberWithLimit({
+					teamId: ctx.body.teamId,
+					userId: ctx.body.userId,
+					maximumMembersPerTeam,
+				});
+				if (result.status === "limitReached") {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+					);
+				}
+				teamMember = result.member;
+			} else {
+				teamMember = await adapter.findOrCreateTeamMember({
+					teamId: ctx.body.teamId,
+					userId: ctx.body.userId,
+				});
+			}
 
 			// Run afterAddTeamMember hook
 			if (options?.organizationHooks?.afterAddTeamMember) {

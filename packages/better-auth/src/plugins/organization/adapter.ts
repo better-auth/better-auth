@@ -25,6 +25,31 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+/**
+ * Resolves the configured per-team member cap to a concrete number for a given
+ * team-add. Returns `undefined` when no cap is configured, or when the cap is a
+ * function but no session is available to evaluate it (a sessionless server-side
+ * add), in which case the caller falls back to an uncapped add.
+ */
+export async function resolveMaximumMembersPerTeam(
+	teams: OrganizationOptions["teams"],
+	context: {
+		teamId: string;
+		organizationId: string;
+		session: { user: User; session: Session } | null;
+	},
+): Promise<number | undefined> {
+	const maximumMembersPerTeam = teams?.maximumMembersPerTeam;
+	if (maximumMembersPerTeam === undefined) return undefined;
+	if (typeof maximumMembersPerTeam === "number") return maximumMembersPerTeam;
+	if (!context.session) return undefined;
+	return await maximumMembersPerTeam({
+		teamId: context.teamId,
+		session: context.session,
+		organizationId: context.organizationId,
+	});
+}
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
