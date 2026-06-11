@@ -541,3 +541,174 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);
 	});
 });
+
+/**
+ * The two-factor OTP attempt counter must survive a burst of concurrent
+ * submissions. The counter used to be tracked with a read-counter then
+ * write-counter pair, so concurrent wrong guesses could all read the same
+ * value before any write landed and exhaust far more than `allowedAttempts`
+ * guesses against a single code. Consuming the OTP row atomically before the
+ * code comparison makes the row itself the race gate: every wrong guess burns
+ * the row and re-arms it with the next counter, so only one submission can act
+ * on each counter value and the budget cannot be raced past. The same gate
+ * guarantees a single correct code mints at most one session.
+ */
+describe("two-factor security: OTP attempts are atomic under concurrency", async () => {
+	const allowedAttempts = 3;
+	let currentOTP = "";
+
+	// A secondary storage whose reads of the OTP row are deliberately slow and
+	// whose writes are instant. Without an atomic consume gate, every concurrent
+	// verification finishes its slow read of the same counter before any write
+	// lands, so they would all pass the budget check against a stale value. The
+	// fix consumes the row under a per-key lock, so the slow reads serialize and
+	// the budget holds. `getAndDelete` is intentionally absent so the consume
+	// path exercises that lock rather than a single storage primitive.
+	const store = new Map<string, { value: string; expiresAt: number }>();
+	const isOtpRow = (key: string) => key.includes("2fa-otp");
+	const secondaryStorage = {
+		async get(key: string) {
+			if (isOtpRow(key)) {
+				await new Promise((resolve) => setTimeout(resolve, 25));
+			}
+			const entry = store.get(key);
+			if (!entry) return null;
+			if (entry.expiresAt < Date.now()) {
+				store.delete(key);
+				return null;
+			}
+			return entry.value;
+		},
+		async set(key: string, value: string, ttl?: number) {
+			store.set(key, {
+				value,
+				expiresAt: Date.now() + (ttl ?? 60) * 1000,
+			});
+		},
+		async delete(key: string) {
+			store.delete(key);
+		},
+	};
+
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		secondaryStorage,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					allowedAttempts,
+					sendOTP({ otp }) {
+						currentOTP = otp;
+					},
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser?.id as string;
+
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers,
+	});
+	if (!enrollment.totpURI) {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	await auth.api.verifyTOTP({ body: { code: enrollCode }, headers });
+	const verified = await db.findOne<UserWithTwoFactor>({
+		model: "user",
+		where: [{ field: "id", value: userId }],
+	});
+	if (!verified?.twoFactorEnabled) {
+		throw new Error("failed to enable 2FA for test user");
+	}
+
+	async function startChallengeWithOtp(): Promise<Headers> {
+		const signIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(signIn.status).toBe(200);
+		const challengeHeaders = convertSetCookieToCookie(signIn.headers);
+		await auth.api.sendTwoFactorOTP({ headers: challengeHeaders });
+		return challengeHeaders;
+	}
+
+	function verifyOtp(challengeHeaders: Headers, code: string) {
+		return auth.api.verifyTwoFactorOTP({
+			body: { code },
+			headers: challengeHeaders,
+			asResponse: true,
+		});
+	}
+
+	it("counts wrong guesses up to the limit then locks out", async () => {
+		const challengeHeaders = await startChallengeWithOtp();
+
+		for (let i = 0; i < allowedAttempts; i++) {
+			const res = await verifyOtp(challengeHeaders, "000000");
+			expect(res.status).toBe(401);
+			const json = (await res.json()) as { message: string };
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		}
+
+		// The budget is spent: even the correct code is locked out.
+		const locked = await verifyOtp(challengeHeaders, currentOTP);
+		expect(locked.status).toBe(400);
+		const lockedJson = (await locked.json()) as { message: string };
+		expect(lockedJson.message).toBe(
+			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
+		);
+	});
+
+	it("a concurrent burst of wrong guesses cannot exceed the attempt budget", async () => {
+		const challengeHeaders = await startChallengeWithOtp();
+		const burst = allowedAttempts * 4;
+
+		const results = await Promise.all(
+			Array.from({ length: burst }, () =>
+				verifyOtp(challengeHeaders, "111111"),
+			),
+		);
+		const bodies = await Promise.all(
+			results.map((res) => res.json() as Promise<{ message?: string }>),
+		);
+
+		const invalidCount = bodies.filter(
+			(body) => body.message === TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		).length;
+
+		// Each wrong guess consumes exactly one counter slot, so no matter how
+		// many race in at once the number of accepted guesses is capped by the
+		// budget. The remaining racers lose the consume and are rejected.
+		expect(invalidCount).toBeLessThanOrEqual(allowedAttempts);
+	});
+
+	it("concurrent correct codes mint at most one session", async () => {
+		const challengeHeaders = await startChallengeWithOtp();
+
+		const results = await Promise.all([
+			verifyOtp(challengeHeaders, currentOTP),
+			verifyOtp(challengeHeaders, currentOTP),
+			verifyOtp(challengeHeaders, currentOTP),
+		]);
+		// Only the racer that wins the OTP consume may complete; the others lose
+		// the consume and never reach session creation, so at most one 200.
+		const successCount = results.filter((res) => res.status === 200).length;
+		expect(successCount).toBeLessThanOrEqual(1);
+	});
+});
