@@ -51,7 +51,15 @@ export function resolveCurrentURL(
 		}
 	}
 
-	return new URL(getVendorBaseURL() || ctx.context.baseURL);
+	// getVendorBaseURL() returns a full URL on some platforms (Vercel, Netlify,
+	// Render) but a bare function name on others (AWS Lambda, GCP, Azure). Only
+	// use it when it parses as a URL; otherwise fall back to the base URL.
+	const vendorBaseURL = getVendorBaseURL();
+	return new URL(
+		vendorBaseURL && getOrigin(vendorBaseURL)
+			? vendorBaseURL
+			: ctx.context.baseURL,
+	);
 }
 
 /**

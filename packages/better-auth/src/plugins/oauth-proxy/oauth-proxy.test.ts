@@ -1,7 +1,15 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1700,5 +1708,45 @@ describe("oauth-proxy current URL trust", () => {
 		expect(location).toContain(
 			"https://preview.myapp.com/api/auth/oauth-proxy-callback",
 		);
+	});
+
+	it("falls back to the base URL when the platform vendor value is not a URL", async () => {
+		// AWS Lambda / GCP / Azure expose a bare function name, not a URL.
+		vi.stubEnv("AWS_LAMBDA_FUNCTION_NAME", "my-lambda-function");
+		try {
+			const { auth } = await getTestInstance({
+				baseURL: "https://myapp.com",
+				plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+				socialProviders: {
+					google: { clientId: "test", clientSecret: "test" },
+				},
+			});
+
+			const signInResponse = await auth.handler(
+				new Request("https://attacker.example/api/auth/sign-in/social", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						provider: "google",
+						callbackURL: "/dashboard",
+					}),
+				}),
+			);
+			const { url } = (await signInResponse.json()) as { url: string };
+			const state = new URL(url).searchParams.get("state");
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+					{ method: "GET" },
+				),
+			);
+			const location = callbackResponse.headers.get("location");
+			expect(location).toContain(
+				"https://myapp.com/api/auth/oauth-proxy-callback",
+			);
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 });
