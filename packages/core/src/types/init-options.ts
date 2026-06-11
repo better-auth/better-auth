@@ -102,13 +102,15 @@ export interface BetterAuthRateLimitStorage {
 		update?: boolean | undefined,
 	) => Promise<void>;
 	/**
-	 * Atomically records one request against `key` within the rolling `window`
+	 * Atomically records one request against `key` within the `window`
 	 * (in seconds) and reports whether it is allowed.
 	 *
-	 * When `allowed` is true the count was incremented within the active window,
-	 * or the window had elapsed and was reset to start at 1. When `allowed` is
-	 * false the limit was already reached and `retryAfter` is the number of
-	 * seconds until the window frees up.
+	 * When `allowed` is true the request was counted within the active window;
+	 * when `allowed` is false the limit was already reached and `retryAfter` is
+	 * the number of seconds until the window frees up. Whether the window slides
+	 * or is fixed depends on the backing storage: the database backend resets
+	 * once the window elapses, while secondary storage uses a fixed time-to-live
+	 * set when the window first opens.
 	 *
 	 * Performing the check and the increment in a single step closes the
 	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
