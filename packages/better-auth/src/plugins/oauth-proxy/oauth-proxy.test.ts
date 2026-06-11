@@ -1632,3 +1632,73 @@ describe("oauth-proxy", async () => {
 		});
 	});
 });
+
+describe("oauth-proxy current URL trust", () => {
+	it("does not use an untrusted request origin as the proxy callback receiver", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+
+		// Sign-in initiated from an attacker-influenced request host that is not
+		// a trusted origin.
+		const signInResponse = await auth.handler(
+			new Request("https://attacker.example/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
+			}),
+		);
+		const { url } = (await signInResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+
+		const callbackResponse = await auth.handler(
+			new Request(
+				`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+				{ method: "GET" },
+			),
+		);
+		const location = callbackResponse.headers.get("location");
+		expect(location).toBeTruthy();
+		// Falls back to the configured base URL, never the attacker origin.
+		expect(location).not.toContain("attacker.example");
+		expect(location).toContain(
+			"https://myapp.com/api/auth/oauth-proxy-callback",
+		);
+	});
+
+	it("uses an explicitly trusted request origin as the proxy callback receiver", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			trustedOrigins: ["https://preview.myapp.com"],
+			plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+
+		const signInResponse = await auth.handler(
+			new Request("https://preview.myapp.com/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
+			}),
+		);
+		const { url } = (await signInResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+
+		const callbackResponse = await auth.handler(
+			new Request(
+				`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+				{ method: "GET" },
+			),
+		);
+		const location = callbackResponse.headers.get("location");
+		expect(location).toContain(
+			"https://preview.myapp.com/api/auth/oauth-proxy-callback",
+		);
+	});
+});
