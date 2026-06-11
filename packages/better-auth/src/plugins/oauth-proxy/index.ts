@@ -417,7 +417,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						if (!code) {
-							ctx.context.logger.error(
+							ctx.context.logger.warn(
 								"OAuth callback missing authorization code",
 							);
 							throw redirectOnError(ctx, errorURL, "no_code");
@@ -429,7 +429,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							(p) => p.id === providerId,
 						);
 						if (!provider) {
-							ctx.context.logger.error("OAuth provider not found", providerId);
+							ctx.context.logger.warn("OAuth provider not found", {
+								providerId,
+							});
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
