@@ -1099,17 +1099,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "pending" | "accepted" | "canceled" | "rejected";
+			/**
+			 * Only transition when the invitation is currently in this status. The
+			 * guarded update is atomic, so a concurrent caller racing the same
+			 * transition gets `null` instead of both proceeding.
+			 */
+			fromStatus?: "pending";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [{ field: "id", value: data.invitationId }];
+			if (data.fromStatus) {
+				where.push({ field: "status", value: data.fromStatus });
+			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "id",
-						value: data.invitationId,
-					},
-				],
+				where,
 				update: {
 					status: data.status,
 				},

@@ -1652,4 +1652,37 @@ describe("accept-invitation validates team capacity before adding the member", a
 		});
 		expect(orgMembers.some((m) => m.userId === userId)).toBe(false);
 	});
+
+	it("accepts only once when the same invitation is accepted concurrently", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Concurrent Team", organizationId: org.id },
+		});
+		const { invitationId, inviteeHeaders, userId } = await inviteAndSignUp(
+			team.id,
+			"concurrent-accept@email.com",
+		);
+
+		const results = await Promise.allSettled([
+			auth.api.acceptInvitation({
+				headers: inviteeHeaders,
+				body: { invitationId },
+			}),
+			auth.api.acceptInvitation({
+				headers: inviteeHeaders,
+				body: { invitationId },
+			}),
+		]);
+
+		// One request wins the claim; the other observes the invitation is no
+		// longer pending and is rejected, never running the side effects twice.
+		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+		expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+
+		const orgMembers = await ctx.adapter.findMany<{ userId: string }>({
+			model: "member",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+		expect(orgMembers.filter((m) => m.userId === userId)).toHaveLength(1);
+	});
 });
