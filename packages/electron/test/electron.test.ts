@@ -231,6 +231,62 @@ describe("Electron", () => {
 		expect(mockElectron.safeStorage.encryptString).toHaveBeenCalled();
 	});
 
+	// The Electron authorization code is single-use. Two concurrent exchanges of
+	// the same valid token/state/code_verifier must yield exactly one session;
+	// the losing racer must be rejected because the code is consumed atomically.
+	it("should mint only one session for concurrent exchanges of the same code", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				email: "concurrent-exchange@test.com",
+				password: "password",
+				name: "Concurrent Exchange",
+			},
+		});
+
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = base64Url.encode(
+			await createHash("SHA-256").digest(codeVerifier),
+		);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge,
+					codeChallengeMethod: "s256",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		const exchange = () =>
+			client.$fetch<any>("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				},
+			});
+
+		const results = await Promise.all([exchange(), exchange()]);
+
+		const succeeded = results.filter((r) => r.data?.token);
+		const failed = results.filter((r) => r.error);
+
+		expect(succeeded).toHaveLength(1);
+		expect(failed).toHaveLength(1);
+		expect(failed[0]?.error?.status).toBe(404);
+	});
+
 	it("should emit authenticated event on success", async ({
 		setProcessType,
 	}) => {
@@ -660,7 +716,6 @@ describe("Electron", () => {
 		});
 
 		const ctx = await auth.$context;
-		const spy = vi.spyOn(ctx.internalAdapter, "deleteVerificationByIdentifier");
 
 		const { data } = await client.$fetch<any>("/electron/token", {
 			method: "POST",
@@ -673,7 +728,11 @@ describe("Electron", () => {
 
 		expect(data?.token).toBeDefined();
 		expect(data?.user.id).toBe(user.id);
-		expect(spy).toHaveBeenCalled();
+
+		const remaining = await ctx.internalAdapter.findVerificationValue(
+			`electron:${identifier}`,
+		);
+		expect(remaining).toBeNull();
 	});
 
 	describe("transferUser", () => {
