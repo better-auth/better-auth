@@ -1,6 +1,5 @@
 import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -203,35 +202,35 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					})
 				: undefined;
 
-			const createdMember = await runWithTransaction(
-				ctx.context.adapter,
-				async () => {
-					// Charge team capacity before creating the organization member so a
-					// full team rejects the request without leaving an orphan member on
-					// adapters that cannot roll back the transaction.
-					if (teamId) {
-						if (maximumMembersPerTeam !== undefined) {
-							const result = await adapter.addTeamMemberWithLimit({
-								teamId,
-								userId: user.id,
-								maximumMembersPerTeam,
-							});
-							if (result.status === "limitReached") {
-								throw APIError.from(
-									"FORBIDDEN",
-									ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-								);
-							}
-						} else {
-							await adapter.findOrCreateTeamMember({
-								userId: user.id,
-								teamId,
-							});
-						}
+			// Charge team capacity before creating the organization member so a full
+			// team rejects the request before any row is written.
+			// FIXME(team-add-atomicity): addTeamMemberWithLimit commits on its own
+			// transaction, so on adapters without isolated transactions a later
+			// createMember failure can orphan the teamMember row. Same residual as
+			// acceptInvitation; closed by the planned isolated-transaction adapter
+			// contract.
+			if (teamId) {
+				if (maximumMembersPerTeam !== undefined) {
+					const result = await adapter.addTeamMemberWithLimit({
+						teamId,
+						userId: user.id,
+						maximumMembersPerTeam,
+					});
+					if (result.status === "limitReached") {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+						);
 					}
-					return await adapter.createMember(memberData);
-				},
-			);
+				} else {
+					await adapter.findOrCreateTeamMember({
+						userId: user.id,
+						teamId,
+					});
+				}
+			}
+
+			const createdMember = await adapter.createMember(memberData);
 
 			// Run afterAddMember hook
 			if (option?.organizationHooks?.afterAddMember) {

@@ -27,9 +27,9 @@ import type { OrganizationOptions } from "./types";
 
 /**
  * Resolves the configured per-team member cap to a concrete number for a given
- * team-add. Returns `undefined` when no cap is configured, or when the cap is a
- * function but no session is available to evaluate it (a sessionless server-side
- * add), in which case the caller falls back to an uncapped add.
+ * team-add. Returns `undefined` only when no cap is configured. Throws when the
+ * cap is a function but no session is available to evaluate it, so a sessionless
+ * server-side add fails closed instead of silently bypassing the limit.
  */
 export async function resolveMaximumMembersPerTeam(
 	teams: OrganizationOptions["teams"],
@@ -42,7 +42,11 @@ export async function resolveMaximumMembersPerTeam(
 	const maximumMembersPerTeam = teams?.maximumMembersPerTeam;
 	if (maximumMembersPerTeam === undefined) return undefined;
 	if (typeof maximumMembersPerTeam === "number") return maximumMembersPerTeam;
-	if (!context.session) return undefined;
+	if (!context.session) {
+		throw new BetterAuthError(
+			"`teams.maximumMembersPerTeam` is configured as a function but no session is available to evaluate it. Provide a session-bearing request or configure a numeric limit.",
+		);
+	}
 	return await maximumMembersPerTeam({
 		teamId: context.teamId,
 		session: context.session,
