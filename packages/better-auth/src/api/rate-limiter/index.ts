@@ -149,9 +149,15 @@ function createDatabaseStorageWrapper(
 					data: { key, count: 1, lastRequest: now },
 				});
 				return { allowed: true, retryAfter: null };
-			} catch {
-				// Lost the create race against a concurrent request. Re-read and
-				// re-decide against the freshest row.
+			} catch (error) {
+				// The create either lost a race against a concurrent opener (the row
+				// now exists) or failed for a real reason. Re-read once: re-decide
+				// only when the row is now present, otherwise surface the original
+				// error rather than retrying a genuine failure indefinitely.
+				const existing = await readRow(key);
+				if (!existing) {
+					throw error;
+				}
 				return consume(key, rule);
 			}
 		}
