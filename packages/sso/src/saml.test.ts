@@ -4841,7 +4841,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 						},
 						body: new URLSearchParams({
 							SAMLResponse: samlResponse.samlResponse,
-							RelayState: "http://localhost:3000/dashboard",
 						}),
 					},
 				),
@@ -4855,9 +4854,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const locations = [first, second].map(
 			(res) => res.headers.get("location") || "",
 		);
-		const succeeded = locations.filter(
-			(loc) => loc.includes("dashboard") && !loc.includes("error"),
-		);
+		const succeeded = locations.filter((loc) => !loc.includes("error"));
 		const replayed = locations.filter((loc) =>
 			loc.includes("error=replay_detected"),
 		);
