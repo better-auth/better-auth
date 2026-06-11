@@ -243,7 +243,7 @@ const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
 });
 
-async function checkProviderAccess(
+export async function checkProviderAccess(
 	ctx: {
 		context: AuthContext & {
 			session: { user: { id: string } };

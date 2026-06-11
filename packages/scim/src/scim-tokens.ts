@@ -1,7 +1,11 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { GenericEndpointContext } from "better-auth";
-import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
+import {
+	constantTimeEqual,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "better-auth/crypto";
 import type { SCIMOptions } from "./types";
 
 const defaultKeyHasher = async (token: string) => {
@@ -48,23 +52,24 @@ export async function verifySCIMToken(
 	scimToken: string,
 ): Promise<boolean> {
 	if (opts.storeSCIMToken === "encrypted") {
-		return (
-			(await symmetricDecrypt({
+		return constantTimeEqual(
+			await symmetricDecrypt({
 				key: ctx.context.secretConfig,
 				data: storedSCIMToken,
-			})) === scimToken
+			}),
+			scimToken,
 		);
 	}
 	if (opts.storeSCIMToken === "hashed") {
 		const hashedSCIMToken = await defaultKeyHasher(scimToken);
-		return hashedSCIMToken === storedSCIMToken;
+		return constantTimeEqual(hashedSCIMToken, storedSCIMToken);
 	}
 	if (
 		typeof opts.storeSCIMToken === "object" &&
 		"hash" in opts.storeSCIMToken
 	) {
 		const hashedSCIMToken = await opts.storeSCIMToken.hash(scimToken);
-		return hashedSCIMToken === storedSCIMToken;
+		return constantTimeEqual(hashedSCIMToken, storedSCIMToken);
 	}
 	if (
 		typeof opts.storeSCIMToken === "object" &&
@@ -72,8 +77,8 @@ export async function verifySCIMToken(
 	) {
 		const decryptedSCIMToken =
 			await opts.storeSCIMToken.decrypt(storedSCIMToken);
-		return decryptedSCIMToken === scimToken;
+		return constantTimeEqual(decryptedSCIMToken, scimToken);
 	}
 
-	return scimToken === storedSCIMToken;
+	return constantTimeEqual(scimToken, storedSCIMToken);
 }
