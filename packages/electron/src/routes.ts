@@ -58,10 +58,14 @@ export const electronToken = (_opts: ElectronOptions) =>
 			},
 		},
 		async (ctx) => {
-			const token = await ctx.context.internalAdapter.findVerificationValue(
+			// Consume the single-use authorization code up front so concurrent
+			// exchanges of the same code cannot both mint a session: the first
+			// caller receives the row, every racer gets null. consume also gates
+			// expiry, so no separate expiresAt check is needed.
+			const token = await ctx.context.internalAdapter.consumeVerificationValue(
 				`electron:${ctx.body.token}`,
 			);
-			if (!token || token.expiresAt < new Date()) {
+			if (!token) {
 				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 
@@ -108,10 +112,6 @@ export const electronToken = (_opts: ElectronOptions) =>
 					ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
 				);
 			}
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`electron:${ctx.body.token}`,
-			);
-
 			const user = await ctx.context.internalAdapter.findUserById(
 				tokenRecord.userId,
 			);

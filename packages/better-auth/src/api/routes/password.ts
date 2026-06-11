@@ -291,9 +291,12 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
+		// Consume the single-use reset token before any password change so two
+		// concurrent requests with the same token cannot both proceed: the first
+		// caller wins, every racer (and any expired token) gets null.
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(id);
-		if (!verification || verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
@@ -310,7 +313,6 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);

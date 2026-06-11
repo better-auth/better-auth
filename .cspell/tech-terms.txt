@@ -69,5 +69,10 @@ fffe
 UIURL
 describedby
 labelledby
+apng
+jfif
+pcss
+pjpeg
+styl
 vbscript
 unvalidated

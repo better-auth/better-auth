@@ -1427,3 +1427,59 @@ describe("ExpoOnlineManager duplicate notification prevention", () => {
 		expect(listener).toHaveBeenCalledTimes(2);
 	});
 });
+
+describe("expo authorization proxy", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "https://app.example",
+		socialProviders: {
+			google: { clientId: "test", clientSecret: "test" },
+		},
+		plugins: [expo()],
+	});
+
+	const proxy = (authorizationURL: string) =>
+		auth.handler(
+			new Request(
+				`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					authorizationURL,
+				)}`,
+			),
+		);
+
+	it("rejects a same-origin authorizationURL (login-CSRF bounce)", async () => {
+		const res = await proxy(
+			"https://app.example/api/auth/callback/google?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a non-https authorizationURL", async () => {
+		const res = await proxy(
+			"http://accounts.google.com/o/oauth2/v2/auth?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a malformed authorizationURL", async () => {
+		const res = await proxy("not-a-url");
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects an authorizationURL with a fragment", async () => {
+		const withFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment",
+		);
+		expect(withFragment.status).toBe(400);
+		const bareFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#",
+		);
+		expect(bareFragment.status).toBe(400);
+	});
+
+	it("redirects to an external https provider authorization endpoint", async () => {
+		const target =
+			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
+		const res = await proxy(target);
+		expect(res.headers.get("location")).toBe(target);
+	});
+});
