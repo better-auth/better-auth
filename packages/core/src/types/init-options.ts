@@ -101,6 +101,30 @@ export interface BetterAuthRateLimitStorage {
 		value: RateLimit,
 		update?: boolean | undefined,
 	) => Promise<void>;
+	/**
+	 * Atomically records one request against `key` within the rolling `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the count was incremented within the active window,
+	 * or the window had elapsed and was reset to start at 1. When `allowed` is
+	 * false the limit was already reached and `retryAfter` is the number of
+	 * seconds until the window frees up.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Optional for backwards compatibility. A storage without it falls back to
+	 * the legacy non-atomic `get`/`set` path, which is best-effort under
+	 * concurrency.
+	 *
+	 * TODO(rate-limit-consume-required): make this the sole required member on
+	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 */
+	consume?: (
+		key: string,
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
