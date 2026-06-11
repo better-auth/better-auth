@@ -15,7 +15,6 @@ export async function generateRelayState(
 				userId: string;
 		  }
 		| undefined,
-	additionalData: Record<string, any> | false | undefined,
 ) {
 	const callbackURL = c.body.callbackURL;
 	if (!callbackURL) {
@@ -25,8 +24,10 @@ export async function generateRelayState(
 	}
 
 	const codeVerifier = generateRandomString(128);
+	// SAML relay state does not carry `serverContext`: no plugin sets server
+	// context on the SAML sign-in path. If that changes, merge
+	// `getOAuthServerContext()` here as `generateState` does.
 	const stateData: StateData = {
-		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body.errorCallbackURL,

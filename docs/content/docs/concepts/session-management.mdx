@@ -338,7 +338,7 @@ export const auth = betterAuth({
 ### Preserving Sessions
 
 When a session is revoked, it will be removed from the secondary storage, however if you enable `preserveSessionInDatabase`,
-the session will be preserved in the database and not be deleted.
+the session row will be kept in the database instead of deleted. The preserved row is marked ended (its `expiresAt` is set to the revocation time), so it is never restored as a live session and any token bound to it (for example OAuth Provider access tokens) is treated as ended.
 
 This is useful if you want to keep track of the sessions that have been revoked.
 

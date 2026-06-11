@@ -55,6 +55,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
+		hydrateSession,
 		$fetch,
 		$store,
 		atomListeners,
@@ -118,6 +119,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		hydrateSession,
 		useSession,
 		$fetch,
 		$store,
@@ -134,6 +136,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
+			hydrateSession: (session: NonNullable<Session> | null) => void;
 			useSession: typeof useSession;
 			$Infer: {
 				Session: NonNullable<Session>;

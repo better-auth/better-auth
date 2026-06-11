@@ -1283,3 +1283,54 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 });
+
+// The provisioning gate reaches phone-number sign-up through the createUser
+// seam, even though this plugin never calls the gate itself.
+describe("phone-number validateUserInfo provisioning gate", async () => {
+	let otp = "";
+	const { client } = await getTestInstance(
+		{
+			user: {
+				validateUserInfo({ source }) {
+					if (source.method !== "phone-number") {
+						return;
+					}
+					expect(source.action).toBe("create-user");
+					return {
+						error: "phone_blocked",
+						errorDescription: "Phone sign-up is not allowed",
+					};
+				},
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+			disableTestUser: true,
+		},
+	);
+
+	it("rejects phone-number sign-up when validateUserInfo returns error", async () => {
+		const blockedPhone = "+251900000000";
+		await client.phoneNumber.sendOtp({ phoneNumber: blockedPhone });
+		const res = await client.phoneNumber.verify({
+			phoneNumber: blockedPhone,
+			code: otp,
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("phone_blocked");
+	});
+});

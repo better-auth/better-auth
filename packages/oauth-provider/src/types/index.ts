@@ -33,6 +33,53 @@ export type AuthorizePrompt =
 	| "login consent"
 	| "select_account consent";
 
+/**
+ * Describes how to resolve a `client_id` from an external source (a URL-based
+ * metadata document, a federated registry, an attestation header, etc.) and
+ * what fields that source contributes to discovery metadata.
+ *
+ * Plugins install one of these onto {@link OAuthOptions.clientDiscovery}.
+ * The host walks the configured entries in order and returns the first
+ * non-null `resolve()` result.
+ */
+export interface ClientDiscovery<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * Stable identifier used in error messages and diagnostics. Convention
+	 * is to match the plugin id (for example `"cimd"`).
+	 */
+	readonly id: string;
+	/**
+	 * Return `true` if this discovery handles the given `client_id`. Called
+	 * on every `getClient()` lookup for every configured discovery, so keep
+	 * it cheap and synchronous.
+	 */
+	matches: (clientId: string) => boolean;
+	/**
+	 * Resolve a client when this discovery matches. Receives the existing DB
+	 * record (or `null`) so an implementation can decide between creating,
+	 * refreshing, or passing through to the database result.
+	 *
+	 * Return:
+	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
+	 * - `null`: `getClient()` falls through to the next matching discovery
+	 *   or to the database record (if any).
+	 */
+	resolve: (
+		ctx: GenericEndpointContext,
+		clientId: string,
+		existing: SchemaClient<Scopes> | null,
+	) => Awaitable<SchemaClient<Scopes> | null>;
+	/**
+	 * Fields merged into `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses. Useful for advertising
+	 * RFC-registered discovery flags like
+	 * `client_id_metadata_document_supported`.
+	 */
+	discoveryMetadata?: Record<string, unknown>;
+}
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -120,6 +167,13 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
+	 * Maximum lifetime in seconds for client assertion JWTs
+	 * used with `private_key_jwt` authentication.
+	 *
+	 * @default 300 (5 minutes)
+	 */
+	assertionMaxLifetime?: number;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -127,10 +181,13 @@ export interface OAuthOptions<
 	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
-	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
-	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
-	 * As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
-	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+	 * When enabled, the `/oauth2/register` endpoint accepts requests
+	 * without a session, but only for public clients
+	 * (`token_endpoint_auth_method: "none"`).
+	 *
+	 * For verified client discovery (MCP), consider installing the
+	 * `@better-auth/cimd` plugin, which verifies client identity through
+	 * domain ownership via Client ID Metadata Documents.
 	 *
 	 * @default false
 	 */
@@ -141,6 +198,21 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * Discovery implementations consulted by `getClient()` when resolving
+	 * a `client_id`. Each entry decides whether it handles the `client_id`
+	 * via {@link ClientDiscovery.matches}, then creates, refreshes, or
+	 * passes on a client record. Entries run in order; the first one to
+	 * return a client wins.
+	 *
+	 * Each entry also contributes {@link ClientDiscovery.discoveryMetadata}
+	 * into the `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses.
+	 *
+	 * Plugins such as `@better-auth/cimd` install an entry here at init
+	 * time; users can also pass discovery implementations directly.
+	 */
+	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
@@ -494,8 +566,8 @@ export interface OAuthOptions<
 		referenceId?: string;
 		/** Scopes granted for this token */
 		scopes: Scopes;
-		/** The resource requesting. Provided by the token endpoint. */
-		resource?: string;
+		/** The resources requested. */
+		resources?: string[];
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
@@ -841,6 +913,10 @@ export interface OAuthAuthorizationQuery {
 	 * with the Claim Value being the nonce value sent in the Authentication Request.
 	 */
 	nonce?: string;
+	/**
+	 * Resource parameter as specified by [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)
+	 */
+	resource?: string | string[];
 }
 
 /**
@@ -855,6 +931,7 @@ export interface VerificationValue {
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
+	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
 }
@@ -931,12 +1008,33 @@ export interface SchemaClient<
 	 * For example, `https://example.com/logout/callback`
 	 */
 	postLogoutRedirectUris?: string[];
+	/**
+	 * RP URL that will receive a signed Logout Token when the end-user's OP
+	 * session ends. Registering it is the per-client opt-in for back-channel
+	 * logout. Must be absolute, without a fragment, and HTTPS for confidential
+	 * clients.
+	 *
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
+	 */
+	backchannelLogoutUri?: string;
+	/**
+	 * When true, the RP requires the `sid` claim in every Logout Token.
+	 * User-scoped (sid-less) logouts are not dispatched to such a client.
+	 *
+	 * @default false
+	 */
+	backchannelLogoutSessionRequired?: boolean;
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
+	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	jwks?: string;
+	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
+	jwksUri?: string;
 	//---- RFC6749 Spec ----//
 	/**
 	 * Indicates whether the client is public or confidential.
@@ -1027,11 +1125,21 @@ export interface OAuthOpaqueAccessToken<
 	/** The creation date of the access token. */
 	createdAt: Date;
 	/**
+	 * When the access token was revoked. Set by session-end dispatch, the
+	 * revoke endpoint, and back-channel logout. Introspection and protected
+	 * endpoints MUST treat a revoked token as inactive.
+	 */
+	revoked?: Date | null;
+	/**
 	 * Scope granted for the access token.
 	 *
 	 * Shall match the refreshId.scopes if refreshId is provided.
 	 */
 	scopes: Scopes;
+	/**
+	 * Resources allowed for this access token.
+	 */
+	resources?: string[];
 }
 
 /**
@@ -1062,6 +1170,10 @@ export interface OAuthRefreshToken<
 	 * Considered Immutable once granted.
 	 */
 	scopes: Scopes;
+	/**
+	 * Resources allowed for this refresh token
+	 */
+	resources?: string[];
 }
 
 /**
@@ -1073,6 +1185,7 @@ export type OAuthConsent<
 	id: string;
 	clientId: string;
 	userId: string;
+	resources?: string[];
 	referenceId?: string;
 	scopes: Scopes;
 	createdAt: Date;

@@ -1,16 +1,16 @@
-import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
 import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
-	createRefreshAccessTokenRequest,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
+import { base64url, createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -58,7 +58,7 @@ describe("oauth token - authorization_code", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -97,7 +97,7 @@ describe("oauth token - authorization_code", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -119,7 +119,7 @@ describe("oauth token - authorization_code", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -127,7 +127,7 @@ describe("oauth token - authorization_code", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -484,7 +484,7 @@ describe("oauth token - refresh_token", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -523,7 +523,7 @@ describe("oauth token - refresh_token", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -545,7 +545,7 @@ describe("oauth token - refresh_token", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -553,7 +553,7 @@ describe("oauth token - refresh_token", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -629,7 +629,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -679,7 +679,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(originalIdToken.auth_time).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -718,7 +718,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -776,7 +776,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -823,7 +823,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -881,7 +881,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -924,7 +924,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -962,7 +962,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -1008,7 +1008,7 @@ describe("oauth token - refresh_token", async () => {
 
 		// New tokens should not work either
 		const { body: newBody, headers: newHeaders } =
-			createRefreshAccessTokenRequest({
+			await refreshAccessTokenRequest({
 				refreshToken: newTokens?.data?.refresh_token!,
 				options: {
 					clientId: oauthClient.client_id,
@@ -1054,7 +1054,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		async function refresh(refreshToken: string) {
-			const { body, headers } = createRefreshAccessTokenRequest({
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
@@ -1112,7 +1112,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		async function refresh(refreshToken: string) {
-			const { body, headers } = createRefreshAccessTokenRequest({
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
@@ -1190,7 +1190,7 @@ describe("oauth token - refresh_token", async () => {
 		// Reusing the revoked refresh token must trip the family-invalidation
 		// guard in handleRefreshTokenGrant (revoked flag → invalidate family).
 		const { body: replayBody, headers: replayHeaders } =
-			createRefreshAccessTokenRequest({
+			await refreshAccessTokenRequest({
 				refreshToken: tokens!.refresh_token!,
 				options: {
 					clientId: oauthClient.client_id,
@@ -1228,8 +1228,8 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 		const parentToken = tokens!.refresh_token!;
 
-		const refresh = () => {
-			const { body, headers } = createRefreshAccessTokenRequest({
+		const refresh = async () => {
+			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: parentToken,
 				options: {
 					clientId: oauthClient!.client_id,
@@ -1328,7 +1328,7 @@ describe("oauth token - client_credentials", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
 	// Registers a confidential client application to work with
@@ -1367,7 +1367,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -1402,7 +1402,7 @@ describe("oauth token - client_credentials", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -1437,7 +1437,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -1519,7 +1519,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 	let oauthClient: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -1557,7 +1557,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 		const scopes = ["openid", "profile"];
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -1587,7 +1587,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		expect(code).toBeTruthy();
 		expect(returnedState).toBe(state);
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code: code!,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -1626,7 +1626,7 @@ describe("oauth token - config", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	const state = "123";
 	const scopes = [
@@ -1706,7 +1706,7 @@ describe("oauth token - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: credentials,
 			redirectURI: redirectUri,
@@ -2017,7 +2017,7 @@ describe("oauth token - client secret validation", async () => {
 	const rpBaseUrl = "http://localhost:5010";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
 		"openid",
 		"email",
@@ -2211,7 +2211,7 @@ describe("id token claim override security", async () => {
 
 	let oauthClient: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	beforeAll(async () => {
@@ -2240,7 +2240,7 @@ describe("id token claim override security", async () => {
 
 		const scopes = ["openid", "profile"];
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -2270,7 +2270,7 @@ describe("id token claim override security", async () => {
 		expect(code).toBeTruthy();
 		expect(returnedState).toBe(state);
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code: code!,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2354,7 +2354,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2377,7 +2377,7 @@ describe("loopback redirect URI matching", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: requestedUri,
@@ -2405,7 +2405,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2428,7 +2428,7 @@ describe("loopback redirect URI matching", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: requestedUri,
@@ -2449,8 +2449,8 @@ describe("loopback redirect URI matching", async () => {
 	it("non-loopback with different ports should be rejected", async ({
 		expect,
 	}) => {
-		const registeredUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-		const requestedUri = "http://localhost:9999/api/auth/oauth2/callback/test";
+		const registeredUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+		const requestedUri = "http://localhost:9999/api/auth/callback/test";
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -2458,7 +2458,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2492,7 +2492,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2543,7 +2543,7 @@ describe("scope preservation through authorization code flow", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	it("scopes from authorization request should survive into token response", async ({
@@ -2556,7 +2556,7 @@ describe("scope preservation through authorization code flow", async () => {
 
 		const requestedScopes = ["openid", "profile", "email"];
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2579,7 +2579,7 @@ describe("scope preservation through authorization code flow", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2596,6 +2596,241 @@ describe("scope preservation through authorization code flow", async () => {
 			headers: reqHeaders,
 		});
 		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});
+
+describe("at_hash in id tokens", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validAudiences: [validAudience],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getTokens(scopes: string[], resource?: string) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const params = new URLSearchParams(body.toString());
+		if (resource) {
+			params.set("resource", resource);
+		}
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: params.toString(),
+			headers: reqHeaders,
+		});
+
+		return tokens.data!;
+	}
+
+	it("should include at_hash when id token is issued with access token", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		expect(tokens.id_token).toBeDefined();
+		expect(tokens.access_token).toBeDefined();
+
+		const decoded = decodeJwt(tokens.id_token!);
+		expect(decoded.at_hash).toBeDefined();
+		expect(typeof decoded.at_hash).toBe("string");
+		expect((decoded.at_hash as string).length).toBeGreaterThan(0);
+	});
+
+	/**
+	 * EdDSA (Ed25519) uses SHA-512 per RFC 8032.
+	 * at_hash = base64url(left-half(SHA-512(access_token)))
+	 */
+	it("at_hash should match manual computation for EdDSA", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		const decoded = decodeJwt(tokens.id_token!);
+
+		const digest = new Uint8Array(
+			await crypto.subtle.digest(
+				"SHA-512",
+				new TextEncoder().encode(tokens.access_token!),
+			),
+		);
+		const expectedAtHash = base64url.encode(digest.slice(0, digest.length / 2));
+
+		expect(decoded.at_hash).toBe(expectedAtHash);
+	});
+
+	it("at_hash should not be present without openid scope", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["offline_access"], validAudience);
+		expect(tokens.id_token).toBeUndefined();
+	});
+
+	it("customIdTokenClaims should not receive accessToken", async ({
+		expect,
+	}) => {
+		let receivedKeys: string[] = [];
+		const {
+			auth: testAuth,
+			signInWithTestUser: signIn,
+			customFetchImpl: fetchImpl,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customIdTokenClaims: (info) => {
+						receivedKeys = Object.keys(info);
+						return {};
+					},
+				}),
+			],
+		});
+
+		const { headers: testHeaders } = await signIn();
+		const testClient = createAuthClient({
+			plugins: [oauthProviderClient(), jwtClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl: fetchImpl, headers: testHeaders },
+		});
+
+		const testOauthClient = await testAuth.api.adminCreateOAuthClient({
+			headers: testHeaders,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackUrl = "";
+		await testClient.$fetch(url.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		await testClient.$fetch("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(receivedKeys).toContain("user");
+		expect(receivedKeys).toContain("scopes");
+		expect(receivedKeys).toContain("metadata");
+		expect(receivedKeys).not.toContain("accessToken");
 	});
 });
 
@@ -2667,7 +2902,7 @@ describe("customTokenResponseFields", async () => {
 		}
 
 		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -2691,7 +2926,7 @@ describe("customTokenResponseFields", async () => {
 		const url = new URL(callbackRedirectUrl);
 		const code = url.searchParams.get("code")!;
 
-		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2763,7 +2998,7 @@ describe("customTokenResponseFields", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: response!.client_id!,
@@ -2785,7 +3020,7 @@ describe("customTokenResponseFields", async () => {
 		});
 
 		const code = new URL(callbackUrl).searchParams.get("code")!;
-		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -2817,7 +3052,7 @@ describe("customTokenResponseFields", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers: tokenHeaders } = createClientCredentialsTokenRequest(
+		const { body, headers: tokenHeaders } = await clientCredentialsTokenRequest(
 			{
 				options: {
 					clientId: oauthClient.client_id,
@@ -2925,6 +3160,86 @@ describe("verificationValueSchema", () => {
 			);
 		}
 	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject empty max_age values in stored authorization queries", () => {
+		for (const maxAge of ["", "   "]) {
+			const result = verificationValueSchema.safeParse({
+				type: "authorization_code",
+				query: {
+					client_id: "test",
+					redirect_uri: "https://example.com",
+					max_age: maxAge,
+				},
+				userId: "u1",
+				sessionId: "s1",
+			});
+
+			expect(result.success).toBe(false);
+		}
+	});
+
+	it("should accept valid prompt values in any order", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "consent login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject prompt=none combined with other prompt values", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "none login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
 });
 
 describe("oauth token - per-client grant_type enforcement", async () => {
@@ -2971,13 +3286,13 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 	// The core fix: a user-delegated (authorization_code) client must not be
 	// able to mint machine-to-machine tokens.
 	it("rejects client_credentials for an authorization_code-only client", async () => {
-		const { body, headers: reqHeaders } = createClientCredentialsTokenRequest({
-			options: {
-				clientId: authCodeOnlyClient!.client_id!,
-				clientSecret: authCodeOnlyClient!.client_secret!,
-				redirectURI: redirectUri,
-			},
-		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${authCodeOnlyClient!.client_id!}:${authCodeOnlyClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
 		const res = await client.$fetch<{ access_token?: string }>(
 			"/oauth2/token",
 			{ method: "POST", body, headers: reqHeaders },
@@ -2994,7 +3309,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 	// having to also register the refresh_token grant explicitly.
 	it("still issues refresh tokens to an authorization_code client with offline_access", async () => {
 		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: authCodeOnlyClient!.client_id!,
@@ -3016,7 +3331,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 		});
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -3047,13 +3362,13 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 				skip_consent: true,
 			},
 		});
-		const { body, headers: reqHeaders } = createClientCredentialsTokenRequest({
-			options: {
-				clientId: ccClient!.client_id!,
-				clientSecret: ccClient!.client_secret!,
-				redirectURI: redirectUri,
-			},
-		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${ccClient!.client_id!}:${ccClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
 		const res = await client.$fetch<{ access_token?: string }>(
 			"/oauth2/token",
 			{ method: "POST", body, headers: reqHeaders },
@@ -3074,7 +3389,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			},
 		});
 		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: ccClient!.client_id!,

@@ -66,12 +66,15 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("account", async () => {
+	const googleVerifyIdTokenMock =
+		vi.fn<(token: string, nonce?: string) => Promise<boolean>>();
 	const { auth, signInWithTestUser, client } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
+				verifyIdToken: googleVerifyIdTokenMock,
 			},
 		},
 		account: {
@@ -84,13 +87,11 @@ describe("account", async () => {
 
 	const ctx = await auth.$context;
 
-	let googleVerifyIdTokenMock: MockInstance;
 	let googleGetUserInfoMock: MockInstance;
 	beforeAll(() => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		expect(googleProvider).toBeTruthy();
 
-		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
 
@@ -312,10 +313,13 @@ describe("account", async () => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 		const sharedAccountId = "shared-provider-account-id";
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other User",
-			email: "other-account-info@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other User",
+				email: "other-account-info@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
@@ -454,10 +458,13 @@ describe("account", async () => {
 		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
 		const sharedAccountId = "shared-server-side-account-id";
 
-		const user = await ctx.internalAdapter.createUser({
-			name: "Server Side User",
-			email: "server-side-disambiguate@example.com",
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				name: "Server Side User",
+				email: "server-side-disambiguate@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
@@ -573,6 +580,47 @@ describe("account", async () => {
 					: new URL("");
 			const scopesParam = url.searchParams.get("scope");
 			expect(scopesParam).toContain(customScope);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/2351
+	 */
+	it("should forward additionalParams and loginHint to the authorization URL", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				loginHint: "user@example.com",
+				additionalParams: {
+					access_type: "offline",
+					prompt: "consent",
+				},
+			});
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const url = new URL(linkAccountRes.data!.url);
+			expect(url.searchParams.get("access_type")).toBe("offline");
+			expect(url.searchParams.get("prompt")).toBe("consent");
+			expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+		});
+	});
+
+	it("should reject additionalParams that override reserved OAuth params", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				additionalParams: {
+					state: "attacker-controlled",
+				},
+			});
+			expect(linkAccountRes.error?.status).toBe(400);
 		});
 	});
 
@@ -1449,6 +1497,125 @@ describe("account", async () => {
 		expect(refreshTokenCalls).toBeGreaterThan(0);
 	});
 
+	it("refreshes the account cookie with the rotated token and the preserved grant after a narrower refresh response", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "stale-cookie-refresh@test.com";
+		const idToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: 1234567890,
+				sub: "stale-cookie-refresh",
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+		// Initial sign-in echoes the full grant.
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const grantType = new URLSearchParams(await request.text()).get(
+					"grant_type",
+				);
+				if (grantType === "refresh_token") {
+					// Refresh rotates the access token but echoes a narrower scope.
+					return HttpResponse.json({
+						access_token: "rotated-access-token",
+						refresh_token: "rotated-refresh-token",
+						token_type: "Bearer",
+						expires_in: 3600,
+						scope: "openid email",
+					});
+				}
+				return HttpResponse.json({
+					access_token: "initial-access-token",
+					refresh_token: "initial-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					id_token: idToken,
+					scope:
+						"openid email profile https://www.googleapis.com/auth/drive.readonly",
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)({ response: context.response } as any);
+			},
+		});
+
+		let refreshedAccountCookie: string | undefined;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			(await client.getSession({ fetchOptions: { headers } })).data!.user.id,
+		);
+		await client.$fetch("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onSuccess(context) {
+				cookieSetter(headers)(context as any);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				refreshedAccountCookie =
+					cookies.get(accountDataCookieName)?.value || undefined;
+			},
+		});
+
+		// The cookie is rewritten (not stale): it carries the rotated token and the
+		// full grant from sign-in survives the narrower refresh echo.
+		expect(refreshedAccountCookie).toBeDefined();
+		const decoded = (await symmetricDecodeJWT(
+			refreshedAccountCookie!,
+			ctx.secret,
+			"better-auth-account",
+		)) as { accessToken?: string; grantedScopes?: string[] };
+		expect(decoded.grantedScopes).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
 		const { client, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
@@ -1995,6 +2162,91 @@ describe("account", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9732
+ */
+describe("validateUserInfo account linking", async () => {
+	const { signInWithTestUser, client } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.action !== "link-account") {
+					return;
+				}
+				expect(source.method).toBe("oauth");
+				expect(source.oauth?.providerId).toBe("google");
+				return {
+					error: "domain_blocked",
+					errorDescription: "This email domain is not allowed",
+				};
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		account: {
+			accountLinking: {
+				allowDifferentEmails: true,
+			},
+		},
+	});
+
+	const { runWithUser } = await signInWithTestUser();
+
+	it("should reject account linking when validateUserInfo returns error", async () => {
+		await runWithUser(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+				},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						const state = cookies.get("better-auth.state")?.value;
+						headers.set(
+							"cookie",
+							`${headers.get("cookie") || ""}; better-auth.state=${state}`,
+						);
+					},
+				},
+			);
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "blocked@example.com";
+			let redirectLocation = "";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=domain_blocked");
+			expect(redirectLocation).toContain(
+				"error_description=This+email+domain+is+not+allowed",
+			);
+
+			const accounts = await client.listAccounts();
+			expect(accounts.data).toHaveLength(1);
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9967
+ */
 describe("token routes cookie cache revocation", async () => {
 	it("get-access-token fails closed after the session is revoked in a stateful deployment", async () => {
 		const { auth, client, testUser, cookieSetter } = await getTestInstance({

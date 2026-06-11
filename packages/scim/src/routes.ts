@@ -84,14 +84,6 @@ function resolveRequiredRoles(
 	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
 }
 
-// TODO(scim-provider-ownership-default-on): flip default to `true` on next so
-// new non-org SCIM tokens are owner-locked by default. Coupled with the
-// `scimProvider.userId` schema column. Tracks the SCIM provider-ownership
-// advisory.
-function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
-	return opts.providerOwnership?.enabled ?? false;
-}
-
 async function getSCIMUserOrgMemberships(
 	ctx: GenericEndpointContext,
 	userId: string,
@@ -223,7 +215,7 @@ async function assertSCIMProviderAccess(
 				message: "Insufficient role for this operation",
 			});
 		}
-	} else if (provider.userId && provider.userId !== userId) {
+	} else if (provider.userId !== userId) {
 		throw new APIError("FORBIDDEN", {
 			message: "You must be the owner to access this provider",
 		});
@@ -409,7 +401,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					providerId,
 					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
-					...(isProviderOwnershipEnabled(opts) ? { userId: user.id } : {}),
+					userId: user.id,
 				},
 			});
 
@@ -494,8 +486,7 @@ export const listSCIMProviderConnections = (opts: SCIMOptions) =>
 								roles.some((role) => requiredRole.includes(role))
 						: false;
 				}
-				// Owned by this user, or legacy provider without ownership tracking
-				return p.userId === userId || !p.userId;
+				return p.userId === userId;
 			});
 
 			const providers = accessibleProviders.map((p) =>
@@ -684,10 +675,13 @@ export const createSCIMUser = (
 				});
 
 			const createUser = () =>
-				ctx.context.internalAdapter.createUser({
-					email,
-					name,
-				});
+				ctx.context.internalAdapter.createUser(
+					{
+						email,
+						name,
+					},
+					{ method: "scim" },
+				);
 
 			const createOrgMembership = async (userId: string) => {
 				const organizationId = ctx.context.scimProvider.organizationId;

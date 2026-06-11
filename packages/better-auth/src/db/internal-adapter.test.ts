@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -139,48 +140,152 @@ describe("internal adapter test", async () => {
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
 
-	it("should create oauth user with custom generate id", async () => {
-		const user = await internalAdapter.createOAuthUser(
+	it("creates a user and linked account with custom generated ids, firing user-create hooks", async () => {
+		const user = await internalAdapter.createUser(
 			{
 				email: "email@email.com",
 				name: "name",
 				emailVerified: false,
 			},
-			{
-				providerId: "provider",
-				accountId: "account",
-				accessTokenExpiresAt: new Date(),
-				refreshTokenExpiresAt: new Date(),
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
+			{ method: "test" },
 		);
-		expect(user).toMatchObject({
-			user: {
-				id: "1",
-				name: "name",
-				email: "email@email.com",
-				emailVerified: false,
-				image: null,
-				createdAt: expect.any(Date),
-				updatedAt: expect.any(Date),
-			},
-			account: {
-				id: "2",
-				userId: expect.any(String),
-				providerId: "provider",
-				accountId: "account",
-				accessToken: null,
-				refreshToken: null,
-				refreshTokenExpiresAt: expect.any(Date),
-				accessTokenExpiresAt: expect.any(Date),
-			},
+		const account = await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "provider",
+			accountId: "account",
+			accessTokenExpiresAt: new Date(),
+			refreshTokenExpiresAt: new Date(),
 		});
-		expect(user?.user.id).toBe(user?.account.userId);
+		expect(user).toMatchObject({
+			id: "1",
+			name: "name",
+			email: "email@email.com",
+			emailVerified: false,
+			image: null,
+			createdAt: expect.any(Date),
+			updatedAt: expect.any(Date),
+		});
+		expect(account).toMatchObject({
+			id: "2",
+			userId: "1",
+			providerId: "provider",
+			accountId: "account",
+			accessToken: null,
+			refreshToken: null,
+			refreshTokenExpiresAt: expect.any(Date),
+			accessTokenExpiresAt: expect.any(Date),
+		});
+		expect(account.userId).toBe(user.id);
 		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("rejects createUser outside an endpoint context when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+
+		await expect(
+			context.internalAdapter.createUser(
+				{
+					email: "missing-context@example.com",
+					name: "Missing Context",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			),
+		).rejects.toMatchObject({
+			body: { code: "validation_context_missing" },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("requires a provisioning source when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const missingSource = undefined as unknown as Parameters<
+			typeof context.internalAdapter.createUser
+		>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await expect(
+					context.internalAdapter.createUser(
+						{
+							email: "missing-source@example.com",
+							name: "Missing Source",
+							emailVerified: false,
+						},
+						missingSource,
+					),
+				).rejects.toMatchObject({
+					body: { code: "validation_source_missing" },
+				});
+			},
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("forces create-user as the createUser validation action", async () => {
+		let capturedAction: string | undefined;
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedAction = source.action;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const spoofedSource = {
+			method: "test",
+			action: "sign-in",
+		} as unknown as Parameters<typeof context.internalAdapter.createUser>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUser(
+					{
+						email: "canonical-action@example.com",
+						name: "Canonical Action",
+						emailVerified: false,
+					},
+					spoofedSource,
+				);
+			},
+		);
+
+		expect(capturedAction).toBe("create-user");
 	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
@@ -500,7 +605,7 @@ describe("internal adapter test", async () => {
 		};
 
 		// Create a user in the database first
-		await ctx.context.internalAdapter.createUser(testUser);
+		await ctx.context.internalAdapter.createUser(testUser, { method: "test" });
 
 		// Test case 1: Session with fractional seconds in TTL
 		const expiresAt = new Date(Date.now() + 3599500); // 59 minutes and 59.5 seconds from now
@@ -606,10 +711,13 @@ describe("internal adapter test", async () => {
 		// Create session
 		const now = Date.now();
 		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
-		const user = await internalAdapter.createUser({
-			name: "test-user",
-			email: "test@email.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "test-user",
+				email: "test@email.com",
+			},
+			{ method: "test" },
+		);
 		const session = await internalAdapter.createSession(user.id);
 
 		// Session should always have an id, even with secondary storage only
@@ -710,10 +818,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete a single account", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Account Delete User",
-			email: "account.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Account Delete User",
+				email: "account.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
@@ -737,10 +848,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete multiple accounts for a user", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Accounts Delete User",
-			email: "accounts.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Accounts Delete User",
+				email: "accounts.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		await internalAdapter.createAccount({
 			userId: user.id,
@@ -786,10 +900,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-skip",
-			email: "test-skip@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-skip",
+				email: "test-skip@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -834,10 +951,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-malformed",
-			email: "test-malformed@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-malformed",
+				email: "test-malformed@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -878,10 +998,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-corrupt",
-			email: "test-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-corrupt",
+				email: "test-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -921,10 +1044,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-all-corrupt",
-			email: "test-all-corrupt@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-all-corrupt",
+				email: "test-all-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 2 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -962,10 +1088,13 @@ describe("internal adapter test", async () => {
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-find",
-			email: "test-find@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-find",
+				email: "test-find@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create 3 sessions
 		const session1 = await testInternalAdapter.createSession(user.id);
@@ -1017,10 +1146,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testCtx.internalAdapter;
 
 		// Create a user first
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-update",
-			email: "test-update@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-update",
+				email: "test-update@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -1120,10 +1252,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testAuthContext.internalAdapter;
 
 		// Create a user
-		const user = await testInternalAdapter.createUser({
-			name: "corrupt-sessions-test-user",
-			email: "corrupt-sessions-test@example.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "corrupt-sessions-test-user",
+				email: "corrupt-sessions-test@example.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);

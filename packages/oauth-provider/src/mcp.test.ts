@@ -91,7 +91,7 @@ describe("mcp - server-client flows", async () => {
 	const mcpServerUrl = `${apiServerBaseUrl}/mcp`;
 	const resource = mcpServerUrl;
 	const providerId = "test";
-	const redirectUri = `${apiServerBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${apiServerBaseUrl}/api/auth/callback/${providerId}`;
 	let codeVerifier: string | undefined;
 	let oAuthTokens: OAuthTokens | undefined;
 	const state = generateRandomString(32);

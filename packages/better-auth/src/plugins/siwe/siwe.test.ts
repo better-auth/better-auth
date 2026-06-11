@@ -361,6 +361,52 @@ describe("siwe", async () => {
 		expect(data?.success).toBe(true);
 	});
 
+	it("should reject new SIWE user when validateUserInfo returns error", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.method).toBe("siwe");
+						return {
+							error: "siwe_blocked",
+							errorDescription: "SIWE sign-up is not allowed",
+						};
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+			email: "siwe@example.com",
+		});
+
+		expect(error?.code).toBe("siwe_blocked");
+		expect(error?.message).toBe("SIWE sign-up is not allowed");
+	});
+
 	it("should reject invalid email format when anonymous is false", async () => {
 		const { client } = await getTestInstance(
 			{

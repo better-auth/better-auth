@@ -1,11 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 
@@ -137,8 +139,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the
 					// Google `sub` wins, never whichever local user happens to share the
-					// token's email.
-					const result = await handleOAuthUserInfo(ctx, {
+					// token's email. One Tap is a fixed-grant credential flow, so the
+					// recorded grant is the ID token's openid/profile/email.
+					const result = await signInWithOAuthIdentity(ctx, {
 						userInfo: {
 							id: sub,
 							email,
@@ -146,15 +149,27 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							name: name ?? "",
 							image: picture,
 						},
-						account: {
-							providerId: "google",
-							accountId: sub,
-							idToken,
-							scope: "openid,profile,email",
-						},
+						providerId: "google",
+						accountId: sub,
+						tokens: { idToken, scopes: ["openid", "profile", "email"] },
 						disableSignUp: options?.disableSignup,
+						source: {
+							method: "oauth",
+							oauth: {
+								providerId: "google",
+								profile: payload as Record<string, unknown>,
+							},
+						},
 					});
 					if (result.error) {
+						if (
+							result.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
+						) {
+							throw APIError.from(
+								"FORBIDDEN",
+								BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+							);
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: result.error,
 						});

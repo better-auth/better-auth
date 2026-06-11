@@ -1,0 +1,66 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
+
+/**
+ * Options for the Client ID Metadata Document plugin.
+ *
+ * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+ */
+export interface CimdOptions {
+	/**
+	 * How frequently to re-fetch a client's metadata document to pick up
+	 * changes from the client.
+	 *
+	 * Accepts a number of seconds or a duration string (e.g. `"60m"`,
+	 * `"1d"`).
+	 *
+	 * @default "60m"
+	 */
+	refreshRate?: number | string;
+	/**
+	 * Metadata fields whose URL values must share the same origin as the
+	 * `client_id` URL. Prevents a client from claiming URIs on a different
+	 * domain.
+	 *
+	 * Pass an empty array to disable origin binding (not recommended for
+	 * production).
+	 *
+	 * @default ["redirect_uris", "post_logout_redirect_uris", "client_uri"]
+	 */
+	originBoundFields?: string[];
+	/**
+	 * Pre-fetch gate called before a metadata document is requested. Return
+	 * `false` to reject the `client_id` URL.
+	 *
+	 * Use this for origin allowlists, per-host rate limiting, or integrating
+	 * with an external trust service. Hostname-based DNS defenses (beyond
+	 * the built-in IP-literal check) belong here, since the plugin is
+	 * runtime-agnostic and does not perform DNS resolution.
+	 *
+	 * @default always allow
+	 */
+	allowFetch?: (
+		url: string,
+		ctx: GenericEndpointContext,
+	) => boolean | Promise<boolean>;
+	/**
+	 * Called after a client is created from a metadata document for the
+	 * first time. Use this to assign trust levels, prefetch logos, or
+	 * perform other post-creation processing.
+	 */
+	onClientCreated?: (data: {
+		client: SchemaClient<Scope[]>;
+		metadata: Record<string, unknown>;
+		ctx: GenericEndpointContext;
+	}) => void | Promise<void>;
+	/**
+	 * Called after a client is refreshed from a re-fetched metadata
+	 * document. Use this for change-detection logging or updating derived
+	 * fields.
+	 */
+	onClientRefreshed?: (data: {
+		client: SchemaClient<Scope[]>;
+		metadata: Record<string, unknown>;
+		ctx: GenericEndpointContext;
+	}) => void | Promise<void>;
+}

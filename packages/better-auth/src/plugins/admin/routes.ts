@@ -432,15 +432,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				...userData,
-				email: email,
-				name: ctx.body.name,
-				role:
-					requestedRole !== undefined
-						? parseRoles(requestedRole as string | string[])
-						: (opts?.defaultRole ?? "user"),
-			});
+			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+				{
+					...userData,
+					email: email,
+					name: ctx.body.name,
+					role:
+						requestedRole !== undefined
+							? parseRoles(requestedRole as string | string[])
+							: (opts?.defaultRole ?? "user"),
+				},
+				{ method: "admin" },
+			);
 
 			if (!user) {
 				throw APIError.from(

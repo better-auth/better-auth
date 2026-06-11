@@ -74,5 +74,10 @@ jfif
 pcss
 pjpeg
 styl
+resync
+resynced
+resyncs
+unioned
+bpchar
 vbscript
 unvalidated

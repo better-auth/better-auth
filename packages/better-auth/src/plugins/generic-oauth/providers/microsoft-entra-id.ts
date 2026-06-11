@@ -45,7 +45,7 @@ interface MicrosoftEntraIdProfile {
  */
 export function microsoftEntraId(
 	options: MicrosoftEntraIdOptions,
-): GenericOAuthConfig {
+): GenericOAuthConfig<"microsoft-entra-id"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	const tenantId = options.tenantId;
@@ -92,6 +92,7 @@ export function microsoftEntraId(
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

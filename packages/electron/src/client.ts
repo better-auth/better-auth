@@ -108,10 +108,10 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 					options ||= {};
 					options.credentials = "omit";
 					options.headers = {
+						origin: `${scheme}:/`,
 						...options.headers,
 						cookie,
 						"user-agent": app.userAgentFallback,
-						"electron-origin": `${scheme}:/`,
 						"x-skip-oauth-proxy": "true",
 					};
 

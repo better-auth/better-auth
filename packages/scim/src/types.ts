@@ -19,13 +19,6 @@ export type SCIMEmail = { value?: string; primary?: boolean };
 
 export type SCIMOptions = {
 	/**
-	 * SCIM provider ownership configuration. When enabled, each provider
-	 * connection is linked to the user who generated its token.
-	 */
-	providerOwnership?: {
-		enabled: boolean;
-	};
-	/**
 	 * Minimum organization role(s) required for SCIM management operations
 	 * (generate-token, list/get/delete provider connections).
 	 *

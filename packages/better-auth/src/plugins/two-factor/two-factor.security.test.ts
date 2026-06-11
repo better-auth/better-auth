@@ -114,7 +114,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -226,7 +226,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const dbUser = await db.findOne<User>({
@@ -328,7 +328,7 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({

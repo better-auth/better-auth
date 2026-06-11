@@ -413,7 +413,7 @@ export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { addOAuthServerContext, getOAuthState } from "./state/oauth";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,
