@@ -287,4 +287,39 @@ describe("session-refresh", () => {
 		sessionSignal.set(!sessionSignal.get());
 		expect(mockFetchSession).not.toHaveBeenCalled();
 	});
+
+	it("should remove global setup listeners on cleanup", () => {
+		const sessionSignal = atom(false);
+		const mockFetchSession = vi.fn(async () => {});
+		const storageEvent = () =>
+			new StorageEvent("storage", {
+				key: "better-auth.message",
+				newValue: JSON.stringify({
+					event: "session",
+					data: { trigger: "getSession" },
+					clientId: "test-client",
+					timestamp: 1,
+				}),
+			});
+
+		const firstManager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		firstManager.init();
+		firstManager.cleanup();
+
+		const secondManager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		secondManager.init();
+		window.dispatchEvent(storageEvent());
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		secondManager.cleanup();
+	});
 });

@@ -100,7 +100,7 @@ describe("withEquality", () => {
 		expect(store.get()).toEqual({ a: 2 });
 	});
 
-	it("returns an unbindscribe function that removes the gate", () => {
+	it("returns an unsubscribe function that removes the gate", () => {
 		const store = atom({ a: 1 });
 		const unbind = withEquality(store, isJsonEqual);
 

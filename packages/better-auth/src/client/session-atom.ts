@@ -85,6 +85,22 @@ export function getSessionAtom(
 	});
 	withEquality(session, isSessionAtomEqual);
 
+	const settleAbortedFetch = (controller: AbortController) => {
+		if (abortController !== controller) return;
+
+		const current = session.get();
+		abortController = undefined;
+
+		if (!current.isPending && !current.isRefetching) return;
+
+		session.set({
+			...current,
+			isPending: false,
+			isRefetching: false,
+			refetch,
+		});
+	};
+
 	const fetchSession = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => {
@@ -107,7 +123,10 @@ export function getSessionAtom(
 				query: queryParams?.query,
 				signal: controller.signal,
 			});
-			if (controller.signal.aborted) return;
+			if (controller.signal.aborted) {
+				settleAbortedFetch(controller);
+				return;
+			}
 
 			let { data, error } = normalizeSessionResponse(res);
 
@@ -117,10 +136,16 @@ export function getSessionAtom(
 						method: "POST",
 						signal: controller.signal,
 					});
-					if (controller.signal.aborted) return;
+					if (controller.signal.aborted) {
+						settleAbortedFetch(controller);
+						return;
+					}
 					({ data, error } = normalizeSessionResponse(refreshRes));
 				} catch {
-					if (controller.signal.aborted) return;
+					if (controller.signal.aborted) {
+						settleAbortedFetch(controller);
+						return;
+					}
 				}
 			}
 
@@ -153,7 +178,10 @@ export function getSessionAtom(
 				refetch,
 			});
 		} catch (fetchError) {
-			if (controller.signal.aborted) return;
+			if (controller.signal.aborted) {
+				settleAbortedFetch(controller);
+				return;
+			}
 			const latest = session.get();
 			session.set({
 				data: latest.data,
@@ -189,7 +217,9 @@ export function getSessionAtom(
 
 		return () => {
 			if (timeoutId) clearTimeout(timeoutId);
-			abortController?.abort();
+			const controller = abortController;
+			controller?.abort();
+			if (controller) settleAbortedFetch(controller);
 			refreshManager.cleanup();
 		};
 	});

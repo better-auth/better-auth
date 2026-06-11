@@ -19,12 +19,16 @@ export interface SessionRefreshOptions {
 }
 
 interface SessionRefreshState {
+	isInitialized: boolean;
 	lastSessionRequest: number;
 	pollInterval?: ReturnType<typeof setInterval> | undefined;
 	unsubscribeBroadcast?: (() => void) | undefined;
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
 	unsubscribeSignal?: (() => void) | undefined;
+	cleanupBroadcastSetup?: (() => void) | undefined;
+	cleanupFocusSetup?: (() => void) | undefined;
+	cleanupOnlineSetup?: (() => void) | undefined;
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
@@ -42,6 +46,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		options.sessionOptions?.refetchWhenOffline ?? false;
 
 	const state: SessionRefreshState = {
+		isInitialized: false,
 		lastSessionRequest: 0,
 	};
 
@@ -131,18 +136,23 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	};
 
 	const init = () => {
+		if (state.isInitialized) return;
+		state.isInitialized = true;
+
 		setupPolling();
 		setupBroadcast();
 		setupFocusRefetch();
 		setupOnlineRefetch();
 		setupSignalSubscription();
 
-		getGlobalBroadcastChannel().setup();
-		getGlobalFocusManager().setup();
-		getGlobalOnlineManager().setup();
+		state.cleanupBroadcastSetup = getGlobalBroadcastChannel().setup();
+		state.cleanupFocusSetup = getGlobalFocusManager().setup();
+		state.cleanupOnlineSetup = getGlobalOnlineManager().setup();
 	};
 
 	const cleanup = () => {
+		if (!state.isInitialized) return;
+
 		if (state.pollInterval) {
 			clearInterval(state.pollInterval);
 			state.pollInterval = undefined;
@@ -163,6 +173,19 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.unsubscribeSignal();
 			state.unsubscribeSignal = undefined;
 		}
+		if (state.cleanupBroadcastSetup) {
+			state.cleanupBroadcastSetup();
+			state.cleanupBroadcastSetup = undefined;
+		}
+		if (state.cleanupFocusSetup) {
+			state.cleanupFocusSetup();
+			state.cleanupFocusSetup = undefined;
+		}
+		if (state.cleanupOnlineSetup) {
+			state.cleanupOnlineSetup();
+			state.cleanupOnlineSetup = undefined;
+		}
+		state.isInitialized = false;
 		state.lastSessionRequest = 0;
 	};
 

@@ -5,6 +5,7 @@ import { atom } from "nanostores";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
 import { useAuthQuery } from "./query";
+import { getSessionAtom } from "./session-atom";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
 
@@ -261,6 +262,31 @@ describe("useAuthQuery - error handling", () => {
 
 		// Reference should be preserved because data is structurally identical
 		expect(session().data).toBe(initialData);
+	});
+
+	it("should clear loading flags when an unmounted session request is aborted", async () => {
+		let fetchSignal: AbortSignal | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchSignal = init?.signal ?? undefined;
+				return new Promise<Response>(() => {});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(session.get().isPending).toBe(true);
+		expect(session.get().isRefetching).toBe(true);
+
+		unsubscribe();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		expect(fetchSignal?.aborted).toBe(true);
+		expect(session.get().isPending).toBe(false);
+		expect(session.get().isRefetching).toBe(false);
 	});
 
 	/**
