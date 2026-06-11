@@ -10,12 +10,13 @@ import type {
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
-import type { OAuthProvider } from "../oauth2";
+import type { UpstreamProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	UserProvisioningSource,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
 import type { SecretConfig } from "./secret";
@@ -87,16 +88,15 @@ export type GenericEndpointContext<
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
-	createOAuthUser(
-		user: Omit<User, "id" | "createdAt" | "updatedAt">,
-		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-			Partial<Account>,
-	): Promise<{ user: User; account: Account }>;
-
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
+		/**
+		 * Provisioning source. The creation seam adds `action: "create-user"` and
+		 * runs the `user.validateUserInfo` gate.
+		 */
+		source: UserProvisioningSource,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
@@ -351,7 +351,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: OAuthProvider[];
+			socialProviders: UpstreamProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {

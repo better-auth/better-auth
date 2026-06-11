@@ -133,6 +133,47 @@ describe("SCIM provider management", () => {
 			);
 		});
 
+		it("should deny personal token creation when canGenerateToken returns false", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				canGenerateToken: ({ organizationId }) => !!organizationId,
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const generateSCIMToken = () =>
+				auth.api.generateSCIMToken({
+					body: { providerId: "personal-provider" },
+					headers,
+				});
+
+			await expect(generateSCIMToken()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "You are not allowed to generate a SCIM token",
+				}),
+			);
+		});
+
+		it("should allow token creation when canGenerateToken returns true (member is null for personal)", async () => {
+			let received: { providerId: string; member: unknown } | null = null;
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				canGenerateToken: ({ providerId, member }) => {
+					received = { providerId, member };
+					return true;
+				},
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: { providerId: "personal-provider" },
+				headers,
+			});
+
+			expect(scimToken).toBeTruthy();
+			expect(received).toEqual({
+				providerId: "personal-provider",
+				member: null,
+			});
+		});
+
 		it("should fail if the authenticated user does not belong to the given org", async () => {
 			const { auth, getAuthCookieHeaders } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
@@ -494,10 +535,11 @@ describe("SCIM provider management", () => {
 			});
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
+		 */
 		it("should deny regenerate when user is not the owner of a personal provider", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				providerOwnership: { enabled: true },
-			});
+			const { auth, getAuthCookieHeaders } = createTestInstance();
 
 			const [headersUserA, headersUserB] = await Promise.all([
 				getAuthCookieHeaders(policyUserA),
@@ -607,9 +649,7 @@ describe("SCIM provider management", () => {
 		});
 
 		it("should return owned non-org providers in list for the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				providerOwnership: { enabled: true },
-			});
+			const { auth, getAuthCookieHeaders } = createTestInstance();
 
 			const [headersUserA, headersUserB] = await Promise.all([
 				getAuthCookieHeaders(policyUserA),
@@ -675,10 +715,11 @@ describe("SCIM provider management", () => {
 			});
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
+		 */
 		it("should deny access to non-org provider when user is not the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				providerOwnership: { enabled: true },
-			});
+			const { auth, getAuthCookieHeaders } = createTestInstance();
 
 			const [headersUserA, headersUserB] = await Promise.all([
 				getAuthCookieHeaders(policyUserA),
@@ -884,10 +925,11 @@ describe("SCIM provider management", () => {
 			});
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
+		 */
 		it("should deny delete of non-org provider when user is not the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				providerOwnership: { enabled: true },
-			});
+			const { auth, getAuthCookieHeaders } = createTestInstance();
 
 			const [headersUserA, headersUserB] = await Promise.all([
 				getAuthCookieHeaders(policyUserA),

@@ -532,7 +532,11 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
-			if (currentSession && updatedUser.emailVerified) {
+			if (
+				currentSession &&
+				updatedUser.emailVerified &&
+				currentSession.user.id === updatedUser.id
+			) {
 				const dontRememberMeCookie = await ctx.getSignedCookie(
 					ctx.context.authCookies.dontRememberToken.name,
 					ctx.context.secret,
@@ -651,13 +655,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser({
-					...additionalFields,
-					email,
-					emailVerified: true,
-					name: name || "",
-					image,
-				});
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						...additionalFields,
+						email,
+						emailVerified: true,
+						name: name || "",
+						image,
+					},
+					{ method: "email-otp" },
+				);
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);

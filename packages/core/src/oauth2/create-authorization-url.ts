@@ -1,6 +1,26 @@
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
-import { generateCodeChallenge } from "./utils";
+import { generateCodeChallenge, getPrimaryClientId } from "./utils";
+
+/**
+ * Query-parameter names that are populated by the framework as part of the
+ * authorization request and must not be overridden by caller-supplied
+ * `additionalParams`. Overriding `state`, PKCE, or `redirect_uri` would
+ * break the callback correlation and session pinning guarantees.
+ */
+export const RESERVED_AUTHORIZATION_PARAMS = [
+	"state",
+	"client_id",
+	"redirect_uri",
+	"response_type",
+	"code_challenge",
+	"code_challenge_method",
+	"scope",
+] as const;
+
+export const RESERVED_AUTHORIZATION_PARAMS_SET: ReadonlySet<string> = new Set(
+	RESERVED_AUTHORIZATION_PARAMS,
+);
 
 export async function createAuthorizationURL({
 	id,
@@ -44,12 +64,13 @@ export async function createAuthorizationURL({
 	options = typeof options === "function" ? await options() : options;
 	const url = new URL(options.authorizationEndpoint || authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
-	const primaryClientId = Array.isArray(options.clientId)
-		? options.clientId[0]
-		: options.clientId;
+	const primaryClientId = getPrimaryClientId(options.clientId);
+	if (!primaryClientId) {
+		throw new Error("OAuth provider requires clientId");
+	}
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
-	if (scopes) {
+	if (scopes?.length) {
 		url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
 	}
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
@@ -81,9 +102,10 @@ export async function createAuthorizationURL({
 		);
 	}
 	if (additionalParams) {
-		Object.entries(additionalParams).forEach(([key, value]) => {
+		for (const [key, value] of Object.entries(additionalParams)) {
+			if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 			url.searchParams.set(key, value);
-		});
+		}
 	}
-	return url;
+	return { url, requestedScopes: scopes ?? [] };
 }

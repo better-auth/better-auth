@@ -1,10 +1,11 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
+	resolveRequestedScopes,
 } from "../oauth2";
 
 export interface RedditProfile {
@@ -21,22 +22,33 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 	duration?: string | undefined;
 }
 
+const REDDIT_DEFAULT_SCOPES = ["identity"];
+
 export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
 		name: "Reddit",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["identity"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+		callbackPath: "/callback/reddit",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				REDDIT_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "reddit",
 				options,
 				authorizationEndpoint: "https://www.reddit.com/api/v1/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				duration: options.duration,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -104,19 +116,19 @@ export const reddit = (options: RedditOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			const email = userMap?.email || `${profile.id}@reddit.com`;
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name,
-					email: profile.oauth_client_id,
-					emailVerified: profile.has_verified_email,
 					image: profile.icon_img?.split("?")[0]!,
 					...userMap,
+					email,
+					emailVerified: userMap?.emailVerified ?? false,
 				},
 				data: profile,
 			};
 		},
 		options,
-	} satisfies OAuthProvider<RedditProfile>;
+	} satisfies UpstreamProvider<RedditProfile>;
 };

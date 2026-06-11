@@ -4,7 +4,7 @@ import type { JWTPayload } from "jose";
 import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
-import type { JwtOptions } from "./types";
+import type { JwtOptions, ResolvedSigningKey } from "./types";
 import { createJwk, toExpJWT } from "./utils";
 
 type JWTPayloadWithOptional = {
@@ -61,11 +61,63 @@ type JWTPayloadWithOptional = {
 	[propName: string]: unknown | undefined;
 };
 
+/**
+ * Resolves the JWKS signing key, decrypts it, and imports it
+ * for use with jose's SignJWT. Returns null when signing is
+ * delegated to a custom jwt.sign callback.
+ *
+ * Callers that need the signing algorithm before constructing
+ * the JWT payload (e.g. for OIDC at_hash) should call this
+ * first, read `.alg`, then pass the result to `signJWT` via
+ * the `resolvedKey` option to avoid a redundant DB lookup.
+ */
+export async function resolveSigningKey(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+): Promise<ResolvedSigningKey | null> {
+	if (options?.jwt?.sign) {
+		return null;
+	}
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	let key = await adapter.getLatestKey(ctx);
+	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
+		key = await createJwk(ctx, options);
+	}
+	const privateKeyEncryptionEnabled =
+		!options?.jwks?.disablePrivateKeyEncryption;
+	const privateWebKey = privateKeyEncryptionEnabled
+		? await symmetricDecrypt({
+				key: ctx.context.secretConfig,
+				data: JSON.parse(key.privateKey),
+			}).catch(() => {
+				throw new BetterAuthError(
+					"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either clean up your JWKS or disable private key encryption.",
+				);
+			})
+		: key.privateKey;
+	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
+	return { alg, kid: key.id, privateKey };
+}
+
 export async function signJWT(
 	ctx: GenericEndpointContext,
 	config: {
 		options?: JwtOptions | undefined;
 		payload: JWTPayloadWithOptional;
+		/** Pre-resolved key from resolveSigningKey. Skips redundant DB lookup. */
+		resolvedKey?: ResolvedSigningKey;
+		/**
+		 * Extra JWS Protected Header parameters to merge with the defaults
+		 * (`alg` and `kid`). Used by token profiles that require an explicit
+		 * media type, such as OIDC Back-Channel Logout's `typ: "logout+jwt"`.
+		 *
+		 * @see https://www.rfc-editor.org/rfc/rfc8725#section-3.11
+		 */
+		header?: {
+			typ?: string;
+			cty?: string;
+		};
 	},
 ) {
 	const { options } = config;
@@ -110,34 +162,22 @@ export async function signJWT(
 			iss: iss ?? defaultIss,
 			aud: aud ?? defaultAud,
 		};
-		return options.jwt.sign(jwtPayload);
+		// Forward extra protected-header parameters (e.g. `typ: "logout+jwt"`)
+		// so profiles that require an explicit media type stay conformant even
+		// with a remote signer. The signer still owns `alg`/`kid`.
+		return options.jwt.sign(jwtPayload, config.header);
 	}
 
-	const adapter = getJwksAdapter(ctx.context.adapter, options);
-	let key = await adapter.getLatestKey(ctx);
-	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
-		key = await createJwk(ctx, options);
-	}
-	const privateKeyEncryptionEnabled =
-		!options?.jwks?.disablePrivateKeyEncryption;
-
-	const privateWebKey = privateKeyEncryptionEnabled
-		? await symmetricDecrypt({
-				key: ctx.context.secretConfig,
-				data: JSON.parse(key.privateKey),
-			}).catch(() => {
-				throw new BetterAuthError(
-					"Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either clean up your JWKS or disable private key encryption.",
-				);
-			})
-		: key.privateKey;
-	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
+	// Use pre-resolved key if available, otherwise resolve from DB
+	const { alg, kid, privateKey } =
+		config.resolvedKey ?? (await resolveSigningKey(ctx, options))!;
 
 	const jwt = new SignJWT(payload)
 		.setProtectedHeader({
+			// Spread caller header first so the resolved `alg`/`kid` always win.
+			...config.header,
 			alg,
-			kid: key.id,
+			kid,
 		})
 		.setExpirationTime(exp)
 		.setIssuer(iss ?? defaultIss)

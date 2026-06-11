@@ -84,14 +84,6 @@ function resolveRequiredRoles(
 	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
 }
 
-// TODO(scim-provider-ownership-default-on): flip default to `true` on next so
-// new non-org SCIM tokens are owner-locked by default. Coupled with the
-// `scimProvider.userId` schema column. Tracks the SCIM provider-ownership
-// advisory.
-function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
-	return opts.providerOwnership?.enabled ?? false;
-}
-
 async function getSCIMUserOrgMemberships(
 	ctx: GenericEndpointContext,
 	userId: string,
@@ -136,6 +128,62 @@ async function findOrganizationMember(
 	});
 }
 
+/**
+ * Decides whether SCIM provisioning may attach to a pre-existing user that
+ * matched by email. Linking by email alone would give the SCIM token full
+ * read/write/delete access to a user it never provisioned, so this returns
+ * `false` unless `opts.linkExistingUsers` explicitly opts in and every
+ * configured constraint passes.
+ */
+async function canLinkExistingUser(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+	existingUser: User,
+	email: string,
+): Promise<boolean> {
+	const policy = opts.linkExistingUsers;
+	if (!policy) return false;
+	if (policy === true) return true;
+
+	const { organizationId, providerId } = ctx.context.scimProvider;
+
+	// An empty policy object must not silently allow linking — require at least
+	// one positive constraint to be configured.
+	const hasConstraint =
+		(policy.trustedDomains?.length ?? 0) > 0 ||
+		policy.requireExistingOrgMembership === true ||
+		typeof policy.shouldLinkUser === "function";
+	if (!hasConstraint) return false;
+
+	if (policy.requireExistingOrgMembership) {
+		if (!organizationId) return false;
+		const member = await findOrganizationMember(
+			ctx,
+			existingUser.id,
+			organizationId,
+		);
+		if (!member) return false;
+	}
+
+	if (policy.trustedDomains?.length) {
+		const domain = email.split("@")[1]?.toLowerCase();
+		const allowed =
+			!!domain && policy.trustedDomains.some((d) => d.toLowerCase() === domain);
+		if (!allowed) return false;
+	}
+
+	if (policy.shouldLinkUser) {
+		const ok = await policy.shouldLinkUser({
+			user: existingUser,
+			email,
+			provider: { providerId, organizationId },
+		});
+		if (!ok) return false;
+	}
+
+	return true;
+}
+
 async function assertSCIMProviderAccess(
 	ctx: GenericEndpointContext,
 	userId: string,
@@ -167,7 +215,7 @@ async function assertSCIMProviderAccess(
 				message: "Insufficient role for this operation",
 			});
 		}
-	} else if (provider.userId && provider.userId !== userId) {
+	} else if (provider.userId !== userId) {
 		throw new APIError("FORBIDDEN", {
 			message: "You must be the owner to access this provider",
 		});
@@ -294,6 +342,23 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				}
 			}
 
+			// Optional app-level gate. Personal (non-org) tokens otherwise have no
+			// authorization beyond a valid session, so this is the hook to
+			// restrict who can mint them.
+			if (opts.canGenerateToken) {
+				const allowed = await opts.canGenerateToken({
+					user,
+					providerId,
+					organizationId,
+					member,
+				});
+				if (!allowed) {
+					throw new APIError("FORBIDDEN", {
+						message: "You are not allowed to generate a SCIM token",
+					});
+				}
+			}
+
 			const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 				model: "scimProvider",
 				where: [
@@ -336,7 +401,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					providerId,
 					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
-					...(isProviderOwnershipEnabled(opts) ? { userId: user.id } : {}),
+					userId: user.id,
 				},
 			});
 
@@ -421,8 +486,7 @@ export const listSCIMProviderConnections = (opts: SCIMOptions) =>
 								roles.some((role) => requiredRole.includes(role))
 						: false;
 				}
-				// Owned by this user, or legacy provider without ownership tracking
-				return p.userId === userId || !p.userId;
+				return p.userId === userId;
 			});
 
 			const providers = accessibleProviders.map((p) =>
@@ -542,7 +606,10 @@ export const deleteSCIMProviderConnection = (opts: SCIMOptions) =>
 		},
 	);
 
-export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
+export const createSCIMUser = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
 	createAuthEndpoint(
 		"/scim/v2/Users",
 		{
@@ -608,10 +675,13 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 
 			const createUser = () =>
-				ctx.context.internalAdapter.createUser({
-					email,
-					name,
-				});
+				ctx.context.internalAdapter.createUser(
+					{
+						email,
+						name,
+					},
+					{ method: "scim" },
+				);
 
 			const createOrgMembership = async (userId: string) => {
 				const organizationId = ctx.context.scimProvider.organizationId;
@@ -643,6 +713,21 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			let account: Account;
 
 			if (existingUser) {
+				// Do not auto-link a pre-existing user by email alone — that would
+				// grant this SCIM token access to an account it never provisioned.
+				// Require an explicit, configured policy to allow it.
+				const allowLink = await canLinkExistingUser(
+					ctx,
+					opts,
+					existingUser,
+					email,
+				);
+				if (!allowLink) {
+					throw new SCIMAPIError("CONFLICT", {
+						detail: "User already exists",
+						scimType: "uniqueness",
+					});
+				}
 				user = existingUser;
 				account = await ctx.context.adapter.transaction<Account>(async () => {
 					const account = await createAccount(user.id);
@@ -1038,7 +1123,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const providerId = ctx.context.scimProvider.providerId;
 			const organizationId = ctx.context.scimProvider.organizationId;
 
-			const { user } = await findUserById(ctx.context.adapter, {
+			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
 				providerId,
 				organizationId,
@@ -1048,6 +1133,32 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				throw new SCIMAPIError("NOT_FOUND", {
 					detail: "User not found",
 				});
+			}
+
+			// Organization-scoped SCIM must not delete the *global* Better Auth
+			// user — that would remove the person's access to every other
+			// organization and identity, well outside this token's boundary.
+			// Deprovision instead: drop their membership in this organization and
+			// the SCIM account link for this provider, leaving the user intact.
+			if (organizationId) {
+				await ctx.context.adapter.transaction(async () => {
+					await ctx.context.adapter.deleteMany({
+						model: "member",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "userId", value: userId },
+						],
+					});
+					if (account) {
+						await ctx.context.adapter.delete({
+							model: "account",
+							where: [{ field: "id", value: account.id }],
+						});
+					}
+				});
+
+				ctx.setStatus(204);
+				return;
 			}
 
 			await ctx.context.internalAdapter.deleteUserSessions(userId);

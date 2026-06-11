@@ -11,7 +11,11 @@ import {
 	mapDiscoveryErrorToAPIError,
 	validateSkipDiscoveryEndpoints,
 } from "../oidc";
-import { validateConfigAlgorithms } from "../saml";
+import {
+	resolveSigningCerts,
+	validateCertSources,
+	validateConfigAlgorithms,
+} from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
@@ -32,6 +36,23 @@ const ADMIN_ROLES = ["owner", "admin"];
 
 export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
 	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+}
+
+type ParsedCert = ReturnType<typeof parseCertificate>;
+type SanitizedCert = ParsedCert | { error: string };
+
+function parseCertOrError(cert: string): SanitizedCert {
+	try {
+		return parseCertificate(cert);
+	} catch {
+		return { error: "Failed to parse certificate" };
+	}
+}
+
+function sanitizeSigningCerts(config: SAMLConfig): SanitizedCert[] | undefined {
+	const certs = resolveSigningCerts(config);
+	if (certs === undefined) return undefined;
+	return certs.map(parseCertOrError);
 }
 
 async function isOrgAdmin(
@@ -139,20 +160,13 @@ function sanitizeProvider(
 		samlConfig: samlConfig
 			? {
 					entryPoint: samlConfig.entryPoint,
-					callbackUrl: samlConfig.callbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
-					certificate: (() => {
-						try {
-							return parseCertificate(samlConfig.cert);
-						} catch {
-							return { error: "Failed to parse certificate" };
-						}
-					})(),
+					certificate: sanitizeSigningCerts(samlConfig),
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
@@ -172,7 +186,8 @@ export const listSSOProviders = () => {
 					description: "Returns a list of SSO providers the user has access to",
 					responses: {
 						"200": {
-							description: "List of SSO providers",
+							description:
+								"List of SSO providers. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 					},
 				},
@@ -298,7 +313,8 @@ export const getSSOProvider = () => {
 					description: "Returns sanitized details for a specific SSO provider",
 					responses: {
 						"200": {
-							description: "SSO provider details",
+							description:
+								"SSO provider details. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -349,7 +365,6 @@ function mergeSAMLConfig(
 		issuer,
 		entryPoint: updates.entryPoint ?? current.entryPoint,
 		cert: updates.cert ?? current.cert,
-		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
 		spMetadata: updates.spMetadata ?? current.spMetadata,
 		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
 		mapping: updates.mapping ?? current.mapping,
@@ -388,6 +403,9 @@ function mergeOIDCConfig(
 		tokenEndpointAuthentication:
 			updates.tokenEndpointAuthentication ??
 			current.tokenEndpointAuthentication,
+		privateKeyId: updates.privateKeyId ?? current.privateKeyId,
+		privateKeyAlgorithm:
+			updates.privateKeyAlgorithm ?? current.privateKeyAlgorithm,
 	};
 }
 
@@ -408,7 +426,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
-							description: "SSO provider updated successfully",
+							description:
+								"SSO provider updated successfully. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -485,6 +504,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
+				validateCertSources(updatedSamlConfig);
+
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}
 
@@ -512,6 +533,31 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						currentOidcConfig.issuer ||
 						existingProvider.issuer,
 				);
+
+				// Validate: clientSecret is required for non-private_key_jwt auth
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication !== "private_key_jwt" &&
+					!updatedOidcConfig.clientSecret
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+					});
+				}
+				// Validate: private_key_jwt requires a key source at runtime
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication === "private_key_jwt" &&
+					!options?.resolvePrivateKey &&
+					!options?.defaultSSO?.some(
+						(p: Record<string, unknown>) =>
+							p.providerId === providerId && "privateKey" in p && p.privateKey,
+					)
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+					});
+				}
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 			}

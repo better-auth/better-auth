@@ -5123,6 +5123,130 @@ describe("soft delete", async () => {
 	});
 });
 
+describe("verify should not write back stale state", async () => {
+	let onValidate: (() => Promise<void>) | null = null;
+	const customAPIKeyValidator = async () => {
+		const fn = onValidate;
+		onValidate = null;
+		if (fn) await fn();
+		return true;
+	};
+
+	describe("database storage", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey({ customAPIKeyValidator })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("should not re-enable a key disabled during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.updateApiKey({
+					body: { keyId: created.id, enabled: false },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			// the verification read the key before the disable, so it passes,
+			// but its write-back must not revert the disable
+			expect(result.valid).toBe(true);
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.enabled).toBe(false);
+		});
+	});
+
+	describe("secondary storage", async () => {
+		const store = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					apiKey({ storage: "secondary-storage", customAPIKeyValidator }),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		beforeEach(() => {
+			store.clear();
+		});
+
+		it("should not re-enable a key disabled during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.updateApiKey({
+					body: { keyId: created.id, enabled: false },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(result.valid).toBe(true);
+
+			const stored = store.get(`api-key:by-id:${created.id}`);
+			expect(stored).toBeDefined();
+			expect(JSON.parse(stored!).enabled).toBe(false);
+		});
+
+		it("should not recreate a key deleted during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.deleteApiKey({
+					body: { keyId: created.id },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(result.valid).toBe(false);
+
+			const apiKeyEntries = [...store.keys()].filter((k) =>
+				k.startsWith("api-key:"),
+			);
+			expect(apiKeyEntries).toEqual([]);
+		});
+	});
+});
+
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(
@@ -5148,5 +5272,71 @@ describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 
 		expect(result.total).toBeGreaterThan(0);
 		expect(result.apiKeys.find((k) => k.id === created.id)).toBeDefined();
+	});
+});
+
+describe("api key creation uses a fresh session", async () => {
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			session: {
+				cookieCache: { enabled: true, maxAge: 60 * 5 },
+			},
+			plugins: [apiKey()],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+
+	// Capture every cookie the response sets, including `session_data` (the
+	// signed cookie-cache snapshot), not just `session_token`.
+	function captureCookies(headers: Headers) {
+		return (context: { response: Response }) => {
+			const setCookies = context.response.headers.getSetCookie?.() ?? [];
+			for (const setCookie of setCookies) {
+				const pair = setCookie.split(";")[0]!;
+				const eq = pair.indexOf("=");
+				if (eq === -1) continue;
+				const name = pair.slice(0, eq).trim();
+				const value = pair.slice(eq + 1).trim();
+				if (!value) continue;
+				const current = headers.get("cookie");
+				headers.set(
+					"cookie",
+					current ? `${current}; ${name}=${value}` : `${name}=${value}`,
+				);
+			}
+		};
+	}
+
+	it("rejects creation when the session was revoked but the cookie cache is still valid", async () => {
+		const headers = new Headers();
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: captureCookies(headers) },
+		});
+		const userId = signIn.data?.user.id;
+		expect(userId).toBeDefined();
+		// The cookie cache must actually be present, otherwise this test would
+		// pass for the wrong reason.
+		expect(headers.get("cookie")).toContain("better-auth.session_data");
+
+		// With a live session, creation succeeds.
+		const first = await client.apiKey.create({}, { headers });
+		expect(first.data?.key).toBeDefined();
+
+		// Simulate an admin ban / session revocation: the database sessions are
+		// deleted while the client still holds the valid signed cookie cache.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUserSessions(userId!);
+
+		// Creation must re-check the authoritative store and reject, rather than
+		// minting a fresh key from the stale cookie-cache session.
+		const second = await client.apiKey.create({}, { headers });
+		expect(second.data).toBeNull();
+		expect(second.error?.status).toBe(401);
 	});
 });

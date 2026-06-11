@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
@@ -12,6 +13,8 @@ import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
+	ClientDiscovery,
+	GrantType,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -134,6 +137,71 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 	);
 }
 
+/**
+ * Normalizes OAuth resource values into a non-empty string array.
+ */
+export function toResourceList(
+	value: string | string[] | undefined,
+): string[] | undefined {
+	if (typeof value === "string") return [value];
+	if (!value?.length) return undefined;
+	return value;
+}
+
+/**
+ * Normalizes audience values for JWT claims.
+ */
+export function toAudienceClaim(
+	audience: string | string[] | undefined,
+): string | string[] | undefined {
+	if (typeof audience === "string") return audience;
+	if (!audience?.length) return undefined;
+	return audience.length === 1 ? audience.at(0) : audience;
+}
+
+/**
+ * Checks the resource parameter, if provided,
+ * and returns either a valid audience or a tagged validation error.
+ */
+export async function checkResource(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	resource: string | string[] | undefined,
+	scopes: string[],
+) {
+	const normalizedResource = toResourceList(resource);
+	const audience = normalizedResource ? [...normalizedResource] : undefined;
+	if (audience) {
+		// Adds /userinfo to audience
+		const hasOpenId = scopes.includes("openid");
+		const baseUrl = ctx.context.baseURL;
+		const userInfoEndpoint = `${baseUrl}/oauth2/userinfo`;
+		if (hasOpenId && !audience.includes(userInfoEndpoint)) {
+			audience.push(userInfoEndpoint);
+		}
+		// Check valid audiences
+		const filteredValidAudiences = opts.validAudiences?.filter(
+			(aud) => aud.length,
+		);
+		const validAudiences = new Set(
+			filteredValidAudiences?.length ? filteredValidAudiences : [baseUrl],
+		);
+		if (hasOpenId) validAudiences.add(userInfoEndpoint);
+		for (const aud of audience) {
+			if (!validAudiences.has(aud)) {
+				return {
+					success: false,
+					error: "invalid_resource",
+				};
+			}
+		}
+	}
+	return {
+		success: true,
+		audience: toAudienceClaim(audience),
+	};
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
 export async function verifyOAuthQueryParams(
@@ -165,16 +233,56 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+	let dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 		where: [{ field: "clientId", value: clientId }],
 	});
+
+	const discoveries = toClientDiscoveryArray(options.clientDiscovery);
+	for (const discovery of discoveries) {
+		if (!discovery.matches(clientId)) continue;
+		const resolved = await discovery.resolve(ctx, clientId, dbClient);
+		if (resolved) {
+			dbClient = resolved;
+			break;
+		}
+	}
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
 	}
 
 	return dbClient;
+}
+
+/**
+ * Normalize the `clientDiscovery` option into an array. Accepts a single
+ * {@link ClientDiscovery}, an array of them, or `undefined`.
+ *
+ * @internal
+ */
+export function toClientDiscoveryArray(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): ClientDiscovery<Scope[]>[] {
+	if (!discovery) return [];
+	return Array.isArray(discovery) ? discovery : [discovery];
+}
+
+/**
+ * Merge `discoveryMetadata` from every configured {@link ClientDiscovery}
+ * into a single object. Entries are spread in order; later entries override
+ * earlier ones on key collisions.
+ *
+ * @internal
+ */
+export function mergeDiscoveryMetadata(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): Record<string, unknown> {
+	const discoveries = toClientDiscoveryArray(discovery);
+	return discoveries.reduce<Record<string, unknown>>(
+		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
+		{},
+	);
 }
 
 /**
@@ -375,30 +483,51 @@ export async function getStoredToken(
  *
  * @internal
  */
-export function basicToClientCredentials(authorization: string) {
-	if (authorization.startsWith("Basic ")) {
-		const encoded = authorization.replace("Basic ", "");
-		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		const separatorIndex = decoded.indexOf(":");
-		if (separatorIndex === -1) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		const id = decoded.slice(0, separatorIndex);
-		const secret = decoded.slice(separatorIndex + 1);
-		if (!id || !secret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		return {
-			client_id: id,
-			client_secret: secret,
-		};
+// RFC 7235 §2.1: the auth scheme is case-insensitive and is followed by
+// one or more SP. Match liberally so requests using `basic` or extra
+// spaces aren't rejected before reaching the spec-correct decoder.
+const BASIC_SCHEME_PREFIX = /^Basic +/i;
+
+function basicToClientCredentials(authorization: string) {
+	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
+		return undefined;
 	}
+	try {
+		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
+		return { client_id: clientId, client_secret: clientSecret };
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid authorization header format",
+			error: "invalid_client",
+		});
+	}
+}
+
+/**
+ * Whether a client is allowed to use a given grant type.
+ *
+ * A client's registered `grantTypes` defaults to the documented default
+ * `["authorization_code"]` when unset (see client registration). Refresh tokens
+ * are only ever issued through the authorization_code flow, so a client allowed
+ * to use `authorization_code` is implicitly allowed to use `refresh_token`.
+ *
+ * @internal
+ */
+export function clientAllowsGrant(
+	client: Pick<SchemaClient<Scope[]>, "grantTypes">,
+	grantType: GrantType,
+) {
+	const allowedGrants =
+		client.grantTypes && client.grantTypes.length > 0
+			? client.grantTypes
+			: (["authorization_code"] as GrantType[]);
+	if (
+		grantType === "refresh_token" &&
+		allowedGrants.includes("authorization_code")
+	) {
+		return true;
+	}
+	return allowedGrants.includes(grantType);
 }
 
 /**
@@ -413,8 +542,10 @@ export async function validateClientCredentials(
 	clientId: string,
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes
+	preVerifiedClient?: SchemaClient<Scope[]>,
+	grantType?: GrantType, // if set, enforces the client is registered for this grant type
 ) {
-	const client = await getClient(ctx, options, clientId);
+	const client = preVerifiedClient ?? (await getClient(ctx, options, clientId));
 	if (!client) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing client",
@@ -428,36 +559,52 @@ export async function validateClientCredentials(
 		});
 	}
 
-	// Require secret for confidential clients
-	if (!client.public && !clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client secret must be provided",
-			error: "invalid_client",
-		});
-	}
-
-	// Secret should not be received
-	if (clientSecret && !client.clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "public client, client secret should not be received",
-			error: "invalid_client",
-		});
-	}
-
-	// Compare Secrets when secret is provided
+	// Enforce registered auth method: private_key_jwt clients must use assertion
 	if (
-		clientSecret &&
-		!(await verifyStoredClientSecret(
-			ctx,
-			options,
-			client.clientSecret!,
-			clientSecret,
-		))
+		client.tokenEndpointAuthMethod === "private_key_jwt" &&
+		!preVerifiedClient
 	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "invalid client_secret",
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"client registered for private_key_jwt must use client_assertion",
 			error: "invalid_client",
 		});
+	}
+
+	// Skip secret checks for pre-verified clients (already authenticated via assertion)
+	if (!preVerifiedClient) {
+		// Require secret for confidential clients
+		if (!client.public && !clientSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "client secret must be provided",
+				error: "invalid_client",
+			});
+		}
+
+		// Secret should not be received
+		if (clientSecret && !client.clientSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"public client, client secret should not be received",
+				error: "invalid_client",
+			});
+		}
+
+		// Compare Secrets when secret is provided
+		if (
+			clientSecret &&
+			!(await verifyStoredClientSecret(
+				ctx,
+				options,
+				client.clientSecret!,
+				clientSecret,
+			))
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "invalid client_secret",
+				error: "invalid_client",
+			});
+		}
 	}
 
 	// If scopes set, check against client allowed scopes
@@ -471,6 +618,14 @@ export async function validateClientCredentials(
 				});
 			}
 		}
+	}
+
+	// Enforce the client is registered for the requested grant type
+	if (grantType && !clientAllowsGrant(client, grantType)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client is not authorized to use grant type ${grantType}`,
+			error: "unauthorized_client",
+		});
 	}
 
 	return client;
@@ -487,6 +642,115 @@ export function parseClientMetadata(
 ): object | undefined {
 	if (!metadata) return undefined;
 	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+}
+
+export type ExtractedCredentials =
+	| {
+			method: "client_secret_basic" | "client_secret_post";
+			clientId: string;
+			clientSecret: string;
+	  }
+	| {
+			method: "private_key_jwt";
+			clientId: string;
+			client: SchemaClient<Scope[]>;
+	  }
+	| {
+			method: "none";
+			clientId: string;
+	  };
+
+/** Unwraps ExtractedCredentials into the fields each grant handler needs. */
+export function destructureCredentials(
+	credentials: ExtractedCredentials | null,
+) {
+	return {
+		clientId: credentials?.clientId,
+		clientSecret:
+			credentials?.method === "client_secret_basic" ||
+			credentials?.method === "client_secret_post"
+				? credentials.clientSecret
+				: undefined,
+		preVerifiedClient:
+			credentials?.method === "private_key_jwt"
+				? credentials.client
+				: undefined,
+	};
+}
+
+/**
+ * Extracts and resolves client credentials from the request.
+ * Supports: client_secret_basic, client_secret_post, private_key_jwt, and none (public).
+ */
+export async function extractClientCredentials(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	expectedAudience?: string,
+): Promise<ExtractedCredentials | null> {
+	const body = (ctx.body ?? {}) as Record<string, unknown>;
+	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
+
+	// 1. Check for private_key_jwt assertion
+	if (body.client_assertion_type || body.client_assertion) {
+		if (!body.client_assertion || !body.client_assertion_type) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"client_assertion and client_assertion_type must both be provided",
+				error: "invalid_client",
+			});
+		}
+		if (body.client_secret || authorization?.startsWith("Basic ")) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"client_assertion cannot be combined with client_secret or Basic auth",
+				error: "invalid_client",
+			});
+		}
+		const { verifyClientAssertion: verify } = await import(
+			"./client-assertion"
+		);
+		const result = await verify(
+			ctx,
+			opts,
+			body.client_assertion as string,
+			body.client_assertion_type as string,
+			body.client_id as string | undefined,
+			expectedAudience,
+		);
+		return {
+			method: "private_key_jwt",
+			clientId: result.clientId,
+			client: result.client,
+		};
+	}
+
+	// 2. Check for Basic auth header
+	if (authorization?.startsWith("Basic ")) {
+		const res = basicToClientCredentials(authorization);
+		if (res) {
+			return {
+				method: "client_secret_basic",
+				clientId: res.client_id,
+				clientSecret: res.client_secret,
+			};
+		}
+	}
+
+	// 3. Check body params
+	if (body.client_id && body.client_secret) {
+		return {
+			method: "client_secret_post",
+			clientId: body.client_id as string,
+			clientSecret: body.client_secret as string,
+		};
+	}
+
+	// 4. client_id only (public client)
+	if (body.client_id) {
+		return { method: "none", clientId: body.client_id as string };
+	}
+
+	return null;
 }
 
 /**
@@ -585,6 +849,16 @@ export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
 	return new Date(issuedAt);
 }
 
+export function isSessionFreshForSignedQuery(
+	sessionCreatedAt: Date | string | undefined,
+	signedQueryIssuedAt: Date | undefined,
+) {
+	if (!signedQueryIssuedAt) return false;
+	const normalized = normalizeTimestampValue(sessionCreatedAt);
+	if (!normalized) return false;
+	return normalized.getTime() >= signedQueryIssuedAt.getTime();
+}
+
 export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
 	const nextQuery = new URLSearchParams(query);
 	const prompts = nextQuery.get("prompt")?.split(" ");
@@ -595,6 +869,12 @@ export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
 			? nextQuery.set("prompt", prompts.join(" "))
 			: nextQuery.delete("prompt");
 	}
+	return nextQuery;
+}
+
+export function removeMaxAgeFromQuery(query: URLSearchParams) {
+	const nextQuery = new URLSearchParams(query);
+	nextQuery.delete("max_age");
 	return nextQuery;
 }
 

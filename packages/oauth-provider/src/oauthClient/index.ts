@@ -31,10 +31,26 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				backchannel_logout_uri: SafeUrlSchema.optional(),
+				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+					.enum([
+						"none",
+						"client_secret_basic",
+						"client_secret_post",
+						"private_key_jwt",
+					])
 					.default("client_secret_basic")
 					.optional(),
+				jwks: z
+					.union([
+						z.array(z.record(z.string(), z.unknown())).min(1),
+						z.object({
+							keys: z.array(z.record(z.string(), z.unknown())).min(1),
+						}),
+					])
+					.optional(),
+				jwks_uri: z.string().optional(),
 				grant_types: z
 					.array(
 						z.enum([
@@ -244,10 +260,26 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				backchannel_logout_uri: SafeUrlSchema.optional(),
+				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+					.enum([
+						"none",
+						"client_secret_basic",
+						"client_secret_post",
+						"private_key_jwt",
+					])
 					.default("client_secret_basic")
 					.optional(),
+				jwks: z
+					.union([
+						z.array(z.record(z.string(), z.unknown())).min(1),
+						z.object({
+							keys: z.array(z.record(z.string(), z.unknown())).min(1),
+						}),
+					])
+					.optional(),
+				jwks_uri: z.string().optional(),
 				grant_types: z
 					.array(
 						z.enum([
@@ -522,6 +554,8 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					backchannel_logout_uri: SafeUrlSchema.optional(),
+					backchannel_logout_session_required: z.boolean().optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: z
 						.array(
@@ -576,6 +610,8 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					backchannel_logout_uri: SafeUrlSchema.optional(),
+					backchannel_logout_session_required: z.boolean().optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: z
 						.array(

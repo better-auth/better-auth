@@ -16,7 +16,6 @@
  * decodes to the freshly created account.
  */
 
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { symmetricDecodeJWT } from "better-auth/crypto";
 import { genericOAuth } from "better-auth/plugins";
@@ -100,26 +99,23 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 	});
 
 	it("emits a decodable account_data cookie on first-time OAuth callback", async () => {
-		const { client, auth } = await getTestInstance(
-			{
-				database: undefined,
-				advanced: { useSecureCookies: true },
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: PROVIDER_ID,
-								discoveryUrl: `${IDP_ORIGIN}/.well-known/openid-configuration`,
-								clientId: CLIENT_ID,
-								clientSecret: CLIENT_SECRET,
-								pkce: true,
-							},
-						],
-					}),
-				],
-			},
-			{ clientOptions: { plugins: [genericOAuthClient()] } },
-		);
+		const { client, auth } = await getTestInstance({
+			database: undefined,
+			advanced: { useSecureCookies: true },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: PROVIDER_ID,
+							discoveryUrl: `${IDP_ORIGIN}/.well-known/openid-configuration`,
+							clientId: CLIENT_ID,
+							clientSecret: CLIENT_SECRET,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
 
 		// Guard: the test is meaningless unless we're on the stateless path.
 		// Stateless mode is `!options.database` (see create-context.ts), which
@@ -131,26 +127,24 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 		// 1. Initiate sign-in. The server returns the IdP authorize URL and
 		//    emits state/PKCE cookies that must be forwarded to the callback.
 		const sessionCookies = new Headers();
-		const signInRes = await client.signIn.oauth2(
-			{
-				providerId: PROVIDER_ID,
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new_user",
-			},
-			{
+		const signInRes = await client.signIn.social({
+			provider: PROVIDER_ID,
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
 				onSuccess(context) {
 					const setCookie = context.response.headers.get("set-cookie");
 					if (setCookie) sessionCookies.set("cookie", setCookie);
 				},
 			},
-		);
+		});
 		const state = new URL(signInRes.data?.url ?? "").searchParams.get("state");
 		expect(state).toBeTruthy();
 
-		// 2. Simulate the IdP redirect back to /oauth2/callback/<provider>.
+		// 2. Simulate the IdP redirect back to /callback/<provider>.
 		//    better-fetch surfaces the 302 via onError; capture set-cookie there.
 		let setCookieHeader = "";
-		await client.$fetch(`/oauth2/callback/${PROVIDER_ID}`, {
+		await client.$fetch(`/callback/${PROVIDER_ID}`, {
 			query: { state, code: "test-auth-code" },
 			headers: sessionCookies,
 			method: "GET",

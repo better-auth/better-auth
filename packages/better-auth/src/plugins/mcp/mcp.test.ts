@@ -4,7 +4,6 @@ import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
 import { mcp, withMcpAuth } from ".";
@@ -83,9 +82,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-public-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-public",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-public"],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -101,9 +98,7 @@ describe("mcp", async () => {
 			client_id: expect.any(String),
 			client_name: "test-public-client",
 			logo_uri: "",
-			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-public",
-			],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test-public"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "none",
@@ -134,7 +129,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-confidential-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+					"http://localhost:3000/api/auth/callback/test-confidential",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
@@ -147,7 +142,7 @@ describe("mcp", async () => {
 			client_name: "test-confidential-client",
 			logo_uri: "",
 			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+				"http://localhost:3000/api/auth/callback/test-confidential",
 			],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -199,16 +194,15 @@ describe("mcp", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test-public",
+				provider: "test-public",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -223,14 +217,14 @@ describe("mcp", async () => {
 		expect(data.url).toContain("code_challenge_method=S256");
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-public?code=",
+			"http://localhost:3000/api/auth/callback/test-public?code=",
 		);
 
 		let callbackURL = "";
@@ -296,16 +290,15 @@ describe("mcp", async () => {
 			});
 		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test-confidential",
+				provider: "test-confidential",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -318,14 +311,14 @@ describe("mcp", async () => {
 		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-confidential?code=",
+			"http://localhost:3000/api/auth/callback/test-confidential?code=",
 		);
 
 		let callbackURL = "";
@@ -376,18 +369,17 @@ describe("mcp", async () => {
 			});
 		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5004",
 			fetchOptions: { customFetchImpl: customFetchImplRP },
 		});
 
-		const data = await client.signIn.oauth2(
-			{ providerId: "test-confidential", callbackURL: "/dashboard" },
+		const data = await client.signIn.social(
+			{ provider: "test-confidential", callbackURL: "/dashboard" },
 			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
 		);
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -485,9 +477,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-refresh-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-refresh",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-refresh"],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -525,7 +515,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-userinfo-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-userinfo",
+					"http://localhost:3000/api/auth/callback/test-userinfo",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -564,7 +554,6 @@ describe("mcp", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5003",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -572,9 +561,9 @@ describe("mcp", async () => {
 		});
 
 		// Perform OAuth flow
-		await client.signIn.oauth2(
+		await client.signIn.social(
 			{
-				providerId: "test-userinfo",
+				provider: "test-userinfo",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -605,9 +594,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-idtoken-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-idtoken",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-idtoken"],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -644,9 +631,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-consent-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-consent",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-consent"],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -750,7 +735,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-no-consent-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-no-consent",
+					"http://localhost:3000/api/auth/callback/test-no-consent",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -795,7 +780,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-no-state-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-no-state",
+					"http://localhost:3000/api/auth/callback/test-no-state",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -879,7 +864,7 @@ describe("mcp", async () => {
 				body: {
 					client_name: "test-magiclink-client",
 					redirect_uris: [
-						"http://localhost:3000/api/auth/oauth2/callback/magiclink-test",
+						"http://localhost:3000/api/auth/callback/magiclink-test",
 					],
 					token_endpoint_auth_method: "none",
 				},

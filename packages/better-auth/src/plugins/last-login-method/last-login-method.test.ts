@@ -15,7 +15,6 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
 import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
@@ -28,6 +27,23 @@ let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
 
 const server = setupServer();
+
+const SIWE_WALLET = "0x000000000000000000000000000000000000dEaD";
+const SIWE_CHAIN_ID = 1;
+const SIWE_DOMAIN = "example.com";
+const SIWE_NONCE = "A1b2C3d4E5f6G7h8J";
+// The siwe plugin now parses and validates the ERC-4361 message body (binding it
+// to the server-issued nonce), so these tests must sign a real SIWE message
+// rather than an arbitrary placeholder string.
+const siweMessage = () =>
+	`${SIWE_DOMAIN} wants you to sign in with your Ethereum account:\n` +
+	`${SIWE_WALLET}\n\n` +
+	`Sign in.\n\n` +
+	`URI: https://${SIWE_DOMAIN}\n` +
+	`Version: 1\n` +
+	`Chain ID: ${SIWE_CHAIN_ID}\n` +
+	`Nonce: ${SIWE_NONCE}\n` +
+	`Issued At: 2024-01-01T00:00:00.000Z`;
 
 beforeAll(async () => {
 	const data: GoogleProfile = {
@@ -81,12 +97,10 @@ describe("lastLoginMethod", async () => {
 				siwe({
 					domain: "example.com",
 					async getNonce() {
-						return "A1b2C3d4E5f6G7h8J";
+						return SIWE_NONCE;
 					},
-					async verifyMessage({ message, signature }) {
-						return (
-							signature === "valid_signature" && message === "valid_message"
-						);
+					async verifyMessage({ signature }) {
+						return signature === "valid_signature";
 					},
 				}),
 			],
@@ -117,12 +131,12 @@ describe("lastLoginMethod", async () => {
 
 	it("should set the last login method cookie for siwe", async () => {
 		const headers = new Headers();
-		const walletAddress = "0x000000000000000000000000000000000000dEaD";
-		const chainId = 1;
+		const walletAddress = SIWE_WALLET;
+		const chainId = SIWE_CHAIN_ID;
 		await client.siwe.nonce({ walletAddress, chainId });
 		await client.siwe.verify(
 			{
-				message: "valid_message",
+				message: siweMessage(),
 				signature: "valid_signature",
 				walletAddress,
 				chainId,
@@ -260,21 +274,19 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("should set the last login method for siwe in the database", async () => {
-		const walletAddress = "0x000000000000000000000000000000000000dEaD";
-		const chainId = 1;
+		const walletAddress = SIWE_WALLET;
+		const chainId = SIWE_CHAIN_ID;
 		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					lastLoginMethod({ storeInDatabase: true }),
 					siwe({
-						domain: "example.com",
+						domain: SIWE_DOMAIN,
 						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
+							return SIWE_NONCE;
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -287,7 +299,7 @@ describe("lastLoginMethod", async () => {
 		);
 		await client.siwe.nonce({ walletAddress, chainId });
 		const { data } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -608,7 +620,7 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe("google");
 	});
 
-	it("should set the last login method for generic OAuth provider with /oauth2/callback/:providerId", async () => {
+	it("should set the last login method for generic OAuth provider with /callback/:providerId", async () => {
 		const { client, cookieSetter } = await getTestInstance(
 			{
 				plugins: [
@@ -639,14 +651,14 @@ describe("lastLoginMethod", async () => {
 			},
 			{
 				clientOptions: {
-					plugins: [lastLoginMethodClient(), genericOAuthClient()],
+					plugins: [lastLoginMethodClient()],
 				},
 			},
 		);
 
 		const oAuthHeaders = new Headers();
-		const signInRes = await client.signIn.oauth2({
-			providerId: "my-provider-id",
+		const signInRes = await client.signIn.social({
+			provider: "my-provider-id",
 			fetchOptions: {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
@@ -654,7 +666,7 @@ describe("lastLoginMethod", async () => {
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 
 		const headers = new Headers();
-		await client.$fetch("/oauth2/callback/my-provider-id", {
+		await client.$fetch("/callback/my-provider-id", {
 			query: {
 				state,
 				code: "test",

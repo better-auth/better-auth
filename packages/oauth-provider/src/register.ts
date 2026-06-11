@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -6,6 +7,7 @@ import { assertClientPrivileges } from "./oauthClient/privileges";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
+import { isPrivateHostname } from "./utils/client-assertion";
 
 /**
  * Resolves the auth method and type for unauthenticated DCR.
@@ -79,6 +81,7 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		isRegister?: boolean;
+		ctx?: GenericEndpointContext;
 	},
 ) {
 	// Determine whether registration request for public client
@@ -194,6 +197,132 @@ export async function checkOAuthClient(
 			error_description: `pkce is required for registered clients.`,
 		});
 	}
+
+	// Validate private_key_jwt requirements
+	if (client.token_endpoint_auth_method === "private_key_jwt") {
+		if (client.jwks && client.jwks_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "jwks and jwks_uri are mutually exclusive",
+			});
+		}
+		if (!client.jwks && !client.jwks_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "private_key_jwt requires either jwks or jwks_uri",
+			});
+		}
+		if (client.jwks_uri) {
+			try {
+				const uri = new URL(client.jwks_uri);
+				if (uri.protocol !== "https:") {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must use HTTPS",
+					});
+				}
+				if (isPrivateHostname(uri.hostname)) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description:
+							"jwks_uri must not point to a private or reserved address",
+					});
+				}
+				if (settings?.ctx && !settings.ctx.context.isTrustedOrigin(uri.href)) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must belong to a trusted origin",
+					});
+				}
+			} catch (e) {
+				if (e instanceof APIError) throw e;
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description: "jwks_uri must be a valid URL",
+				});
+			}
+		}
+		if (client.jwks) {
+			// Accept both RFC 7517 JWKS object {"keys":[...]} and bare key array
+			const keys = Array.isArray(client.jwks)
+				? client.jwks
+				: (client.jwks as { keys?: unknown[] }).keys;
+			if (!Array.isArray(keys) || keys.length === 0) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"jwks must be a non-empty array of JWK objects or a JWKS document {keys:[...]}",
+				});
+			}
+		}
+	} else if (client.jwks || client.jwks_uri) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"jwks and jwks_uri are only allowed with private_key_jwt authentication",
+		});
+	}
+
+	if (client.backchannel_logout_uri !== undefined) {
+		if (opts.disableJwtPlugin) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
+			});
+		}
+		let url: URL;
+		try {
+			url = new URL(client.backchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// Only http/https make sense for a POST target and the server will
+		// refuse anything else at fetch time; reject up front to avoid storing
+		// unreachable URIs.
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must use http or https",
+			});
+		}
+		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
+		// component." Check the raw value rather than `url.hash`, which is empty
+		// for a bare trailing `#` and would let that fragment delimiter through.
+		if (client.backchannel_logout_uri.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not include a fragment component",
+			});
+		}
+		const loopback = isLoopbackHost(url.hostname);
+		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
+		// confidential clients, with a loopback carve-out (RFC 8252 §7.3) so
+		// local development against http://127.0.0.1:<port> works.
+		if (!isPublic && url.protocol !== "https:" && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must use https for confidential clients",
+			});
+		}
+		// SSRF guard: the OP issues an outbound POST to this URI on every
+		// session end, so reject any host that is not publicly routable.
+		// Loopback is exempt for local development (e.g.
+		// http://127.0.0.1:<port> or https://localhost); non-loopback private,
+		// link-local, tunneled, and cloud-metadata targets are always rejected.
+		if (isPrivateHostname(url.hostname) && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not point to a private or reserved address",
+			});
+		}
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -224,16 +353,21 @@ export async function createOAuthClientEndpoint(
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = body.token_endpoint_auth_method === "none";
+	const isPrivateKeyJwt = body.token_endpoint_auth_method === "private_key_jwt";
 
 	// Check if client parameters are valid combination
-	await checkOAuthClient(ctx.body, opts, settings);
+	await checkOAuthClient(ctx.body, opts, {
+		...settings,
+		ctx,
+	});
 
 	// Generate clientId and clientSecret based on its type
 	const clientId =
 		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
-	const clientSecret = isPublic
-		? undefined
-		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
+	const clientSecret =
+		isPublic || isPrivateKeyJwt
+			? undefined
+			: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
@@ -250,9 +384,6 @@ export async function createOAuthClientEndpoint(
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
-		// Jwks unsupported
-		jwks: undefined,
-		jwks_uri: undefined,
 		// Required if client secret is issued
 		client_secret_expires_at: storedClientSecret
 			? settings.isRegister && opts?.clientRegistrationClientSecretExpiration
@@ -317,8 +448,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tos_uri: tos,
 		policy_uri: policy,
 		// Jwks (only one can be used)
-		jwks: _jwks,
-		jwks_uri: _jwksUri,
+		jwks: inputJwks,
+		jwks_uri: jwksUri,
 		// User Software Identifiers
 		software_id: softwareId,
 		software_version: softwareVersion,
@@ -326,6 +457,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirect_uris: redirectUris,
 		post_logout_redirect_uris: postLogoutRedirectUris,
+		backchannel_logout_uri: backchannelLogoutUri,
+		backchannel_logout_session_required: backchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -382,9 +515,20 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
+		// Jwks for private_key_jwt
+		jwks: inputJwks
+			? JSON.stringify({
+					keys: Array.isArray(inputJwks)
+						? inputJwks
+						: (inputJwks as { keys: unknown[] }).keys,
+				})
+			: undefined,
+		jwksUri: jwksUri,
 		// RFC6749 Spec
 		public: _public,
 		type,
@@ -430,12 +574,17 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
 		// RFC6749 Spec
 		public: _public,
 		type,
+		// Jwks
+		jwks,
+		jwksUri,
 		// All other metadata
 		skipConsent,
 		enableEndSession,
@@ -474,8 +623,10 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		tos_uri: tos ?? undefined,
 		policy_uri: policy ?? undefined,
 		// Jwks (only one can be used)
-		// jwks, // Not Stored
-		// jwks_uri: jwksUri, // Not Stored
+		jwks: jwks
+			? (JSON.parse(jwks) as { keys: Record<string, unknown>[] }).keys
+			: undefined,
+		jwks_uri: jwksUri ?? undefined,
 		// User Software Identifiers
 		software_id: softwareId ?? undefined,
 		software_version: softwareVersion ?? undefined,
@@ -483,6 +634,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
+		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
+		backchannel_logout_session_required:
+			backchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,

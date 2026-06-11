@@ -371,3 +371,232 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(memberEmails).toContain(VICTIM_EMAIL);
 	});
 });
+
+/**
+ * An invitation's teamId must be scoped to the invitation's organization at
+ * creation AND acceptance, and team read endpoints must verify organization
+ * membership rather than relying on a teamMember row alone.
+ */
+describe("invitation teamId must belong to the invitation's organization", async () => {
+	const OTHER_USER_EMAIL = "user-b@example.com";
+	const INVITEE_EMAIL = "invitee@example.com";
+	const PASSWORD = "test-password-123";
+
+	function setup() {
+		return getTestInstance(
+			{
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+				plugins: [
+					organization({
+						teams: { enabled: true },
+						async sendInvitationEmail() {},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+	}
+
+	it("rejects creating an invitation with a teamId from another organization", async () => {
+		const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+			await setup();
+
+		// First org owner (default test user) creates an org and a team.
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const firstOrg = await client.organization.create({
+			name: "Org A",
+			slug: "org-a",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		const firstTeam = await client.organization.createTeam({
+			name: "Team A",
+			organizationId: firstOrg.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const firstTeamId = firstTeam.data!.id;
+
+		// A second user creates their own organization.
+		await client.signUp.email({
+			email: OTHER_USER_EMAIL,
+			password: PASSWORD,
+			name: "User B",
+		});
+		const { headers: secondUserHeaders } = await signInWithUser(
+			OTHER_USER_EMAIL,
+			PASSWORD,
+		);
+		const otherOrg = await client.organization.create({
+			name: "Org B",
+			slug: "org-b",
+			fetchOptions: {
+				headers: secondUserHeaders,
+				onSuccess: cookieSetter(secondUserHeaders),
+			},
+		});
+
+		// The second user invites into their own org with a teamId from the first org.
+		const invite = await client.organization.inviteMember({
+			organizationId: otherOrg.data!.id,
+			email: INVITEE_EMAIL,
+			role: "member",
+			teamId: firstTeamId,
+			fetchOptions: { headers: secondUserHeaders },
+		});
+
+		expect(invite.data).toBeNull();
+		expect(invite.error?.code).toBe("TEAM_NOT_FOUND");
+	});
+
+	it("rejects accepting an invitation whose teamId points at another org", async () => {
+		const { client, signInWithTestUser, signInWithUser, cookieSetter, db } =
+			await setup();
+
+		// First org + team.
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const firstOrg = await client.organization.create({
+			name: "Org A",
+			slug: "org-a",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		const firstTeam = await client.organization.createTeam({
+			name: "Team A",
+			organizationId: firstOrg.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const firstTeamId = firstTeam.data!.id;
+
+		// Second org with its OWN team so the invitation passes the create-side check.
+		await client.signUp.email({
+			email: OTHER_USER_EMAIL,
+			password: PASSWORD,
+			name: "User B",
+		});
+		const { headers: secondUserHeaders } = await signInWithUser(
+			OTHER_USER_EMAIL,
+			PASSWORD,
+		);
+		const otherOrg = await client.organization.create({
+			name: "Org B",
+			slug: "org-b",
+			fetchOptions: {
+				headers: secondUserHeaders,
+				onSuccess: cookieSetter(secondUserHeaders),
+			},
+		});
+		const otherTeam = await client.organization.createTeam({
+			name: "Team B",
+			organizationId: otherOrg.data!.id,
+			fetchOptions: { headers: secondUserHeaders },
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: otherOrg.data!.id,
+			email: INVITEE_EMAIL,
+			role: "member",
+			teamId: otherTeam.data!.id,
+			fetchOptions: { headers: secondUserHeaders },
+		});
+		const invitationId = String(invite.data!.id);
+
+		// Update the persisted invitation directly in the database to point at
+		// the first org's team, standing in for a stale or moved team that the
+		// create-side check did not cover.
+		await db.update({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+			update: { teamId: firstTeamId },
+		});
+
+		// The invited recipient accepts.
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		const { headers: inviteeHeaders } = await signInWithUser(
+			INVITEE_EMAIL,
+			PASSWORD,
+		);
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: inviteeHeaders },
+		});
+
+		expect(accept.error?.code).toBe("TEAM_NOT_FOUND");
+
+		// No teamMember row may exist against the first org's team.
+		const firstTeamMembers = await db.findMany({
+			model: "teamMember",
+			where: [{ field: "teamId", value: firstTeamId }],
+		});
+		expect(firstTeamMembers.length).toBe(0);
+	});
+
+	it("does not list another organization's team members from a mismatched teamMember row", async () => {
+		const { client, signInWithTestUser, signInWithUser, cookieSetter, db } =
+			await setup();
+
+		// First org + team.
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const firstOrg = await client.organization.create({
+			name: "Org A",
+			slug: "org-a",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		const firstTeam = await client.organization.createTeam({
+			name: "Team A",
+			organizationId: firstOrg.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const firstTeamId = firstTeam.data!.id;
+
+		// The second user is NOT a member of the first organization.
+		await client.signUp.email({
+			email: OTHER_USER_EMAIL,
+			password: PASSWORD,
+			name: "User B",
+		});
+		const { headers: secondUserHeaders, res: secondUserRes } =
+			await signInWithUser(OTHER_USER_EMAIL, PASSWORD);
+
+		// Insert a teamMember row directly in the database tying the second user
+		// to the first org's team, standing in for a stale or mismatched row.
+		await db.create({
+			model: "teamMember",
+			data: {
+				teamId: firstTeamId,
+				userId: secondUserRes.user.id,
+				createdAt: new Date(),
+			},
+		});
+
+		const list = await client.organization.listTeamMembers({
+			query: { teamId: firstTeamId },
+			fetchOptions: { headers: secondUserHeaders },
+		});
+
+		expect(list.data).toBeNull();
+		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
+	});
+});

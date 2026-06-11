@@ -788,9 +788,22 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list-user-teams",
 		{
 			method: "GET",
+			query: z
+				.object({
+					userId: z.string().optional().meta({
+						description:
+							"The user ID to list teams for. Defaults to the current session user.",
+					}),
+					organizationId: z.string().optional().meta({
+						description:
+							"The organization ID to scope the team list to. When omitted on a self-query, teams are returned across every organization the user belongs to. When querying another user, falls back to the session's active organization and is required if there is no active organization.",
+					}),
+				})
+				.optional(),
 			metadata: {
 				openapi: {
-					description: "List all teams that the current user is a part of.",
+					description:
+						"List teams for a user. Without parameters, returns teams for the current user across every organization they belong to. Pass `organizationId` to scope the result to a specific organization. Pass `userId` to list teams for another member; this requires `member:update` permission in the target organization (the explicit `organizationId` if provided, otherwise the session's active organization).",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",
@@ -818,11 +831,124 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const targetUserId = ctx.query?.userId || session.user.id;
+			const isSelf = targetUserId === session.user.id;
+			const organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
+			const isExplicitOrg = Boolean(ctx.query?.organizationId);
+
+			if (!isSelf) {
+				if (!organizationId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					);
+				}
+
+				const requesterMember = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
+				});
+
+				if (!requesterMember) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					);
+				}
+
+				// Listing another user's teams exposes membership data, so we
+				// gate it behind the `member:update` permission — i.e. only
+				// roles that can manage members are allowed to view another
+				// member's team affiliations.
+				const canManageMembers = await hasPermission(
+					{
+						role: requesterMember.role,
+						options: ctx.context.orgOptions,
+						permissions: { member: ["update"] },
+						organizationId,
+					},
+					ctx,
+				);
+
+				if (!canManageMembers) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+					);
+				}
+
+				const targetMember = await adapter.findMemberByOrgId({
+					userId: targetUserId,
+					organizationId,
+				});
+
+				if (!targetMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
+
+				const teams = await adapter.listTeamsByUser({
+					userId: targetUserId,
+				});
+
+				return ctx.json(
+					teams.filter((t) => t.organizationId === organizationId),
+				);
+			}
+
+			// Self-query: when an explicit `organizationId` is provided, verify
+			// the caller is a member of that org and scope the result to it.
+			// Without an explicit org, return all of the caller's teams across
+			// every organization (preserves original behavior).
+			if (isExplicitOrg && organizationId) {
+				const requesterMember = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
+				});
+
+				if (!requesterMember) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					);
+				}
+
+				const teams = await adapter.listTeamsByUser({
+					userId: session.user.id,
+				});
+
+				return ctx.json(
+					teams.filter((t) => t.organizationId === organizationId),
+				);
+			}
+
 			const teams = await adapter.listTeamsByUser({
 				userId: session.user.id,
 			});
 
-			return ctx.json(teams);
+			// Only return teams that belong to an organization the caller is
+			// actually a member of. A teamMember row on its own is not enough —
+			// a stray row could otherwise surface another organization's team
+			// metadata.
+			const orgIds = [...new Set(teams.map((team) => team.organizationId))];
+			const memberships = await Promise.all(
+				orgIds.map((organizationId) =>
+					adapter.checkMembership({
+						userId: session.user.id,
+						organizationId,
+					}),
+				),
+			);
+			const memberOrgIds = new Set(
+				orgIds.filter((_, index) => memberships[index]),
+			);
+
+			return ctx.json(
+				teams.filter((team) => memberOrgIds.has(team.organizationId)),
+			);
 		},
 	);
 
@@ -896,6 +1022,28 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+				);
+			}
+			// Resolve the team to its organization and confirm the caller is a
+			// member of that organization. A teamMember row alone is not
+			// sufficient: a stray row pointing at another organization's team
+			// would otherwise return that team's member list. Organization
+			// membership is the requirement here.
+			const team = await adapter.findTeamById({ teamId });
+			if (!team) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				);
+			}
+			const isOrgMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: team.organizationId,
+			});
+			if (!isOrgMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				);
 			}
 			const member = await adapter.findTeamMember({

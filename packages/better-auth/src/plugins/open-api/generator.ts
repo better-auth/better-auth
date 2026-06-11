@@ -90,7 +90,9 @@ function getTypeFromZodType(zodType: z.ZodType<any>) {
 }
 
 export type FieldSchema = {
-	type: DBFieldType;
+	type: DBFieldType | "array";
+	/** Element schema for `type: "array"` (JSON Schema / OpenAPI array shape). */
+	items?: { type: string };
 	default?:
 		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
 		| undefined;
@@ -105,10 +107,20 @@ export type OpenAPIModelSchema = {
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
-	const schema: FieldSchema = {
-		type: field.type === "date" ? "string" : field.type,
-		...(field.type === "date" && { format: "date-time" }),
-	};
+	// Array DB field types ("string[]"/"number[]") map to a JSON Schema array,
+	// not the literal type string (which is not a valid OpenAPI type keyword).
+	// TODO: the enum form (Array<LiteralString>) is not yet translated to an
+	// OpenAPI `enum`; no core field uses it today.
+	const arrayMatch =
+		typeof field.type === "string"
+			? /^(string|number)\[\]$/.exec(field.type)
+			: null;
+	const schema: FieldSchema = arrayMatch
+		? { type: "array", items: { type: arrayMatch[1]! } }
+		: {
+				type: field.type === "date" ? "string" : field.type,
+				...(field.type === "date" && { format: "date-time" }),
+			};
 
 	if (field.defaultValue !== undefined) {
 		schema.default =
@@ -226,6 +238,26 @@ function processZodType(zodType: z.ZodType<any>): any {
 			default: defaultValue,
 		};
 	}
+	// record: map to an open-ended object with typed values
+	if (zodType instanceof z.ZodRecord) {
+		const valueType = (zodType as any)._zod?.def?.valueType;
+		const additionalProperties =
+			valueType instanceof z.ZodType
+				? processZodType(valueType as z.ZodType<any>)
+				: {};
+		return {
+			type: "object",
+			additionalProperties,
+			description: (zodType as any).description,
+		};
+	}
+
+	// unconstrained value types: emit an empty schema so consumers don't
+	// infer a narrower shape than the runtime accepts
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
+		return { description: (zodType as any).description };
+	}
+
 	// object unwrapping
 	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape;

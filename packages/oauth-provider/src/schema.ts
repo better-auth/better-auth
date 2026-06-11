@@ -100,7 +100,23 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
+			backchannelLogoutUri: {
+				type: "string",
+				required: false,
+			},
+			backchannelLogoutSessionRequired: {
+				type: "boolean",
+				required: false,
+			},
 			tokenEndpointAuthMethod: {
+				type: "string",
+				required: false,
+			},
+			jwks: {
+				type: "string",
+				required: false,
+			},
+			jwksUri: {
 				type: "string",
 				required: false,
 			},
@@ -182,6 +198,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			expiresAt: {
 				type: "date",
 			},
@@ -257,6 +277,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			refreshId: {
 				type: "string",
 				required: false,
@@ -271,6 +295,10 @@ export const schema = {
 			},
 			createdAt: {
 				type: "date",
+			},
+			revoked: {
+				type: "date",
+				required: false,
 			},
 			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
@@ -304,6 +332,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: true,
@@ -313,6 +345,27 @@ export const schema = {
 			},
 			updatedAt: {
 				type: "date",
+			},
+		},
+	},
+	/**
+	 * Single-use record for `private_key_jwt` client assertion `jti` values. The
+	 * row id is a digest of the per-client assertion identifier, so a replayed or
+	 * concurrent assertion collides on the primary key and the insert fails
+	 * atomically on every adapter (SQL primary key, MongoDB `_id`), including
+	 * across multiple server processes.
+	 *
+	 * A row keeps blocking its id until deleted; `expiresAt` marks when removal
+	 * is safe, since the assertion it guards has expired and is rejected earlier.
+	 * TODO: no scheduled job prunes expired rows yet; like the verification
+	 * table, they accumulate until a deployment-level sweep removes them.
+	 */
+	oauthClientAssertion: {
+		modelName: "oauthClientAssertion",
+		fields: {
+			expiresAt: {
+				type: "date",
+				required: true,
 			},
 		},
 	},
