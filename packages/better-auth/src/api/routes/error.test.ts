@@ -37,7 +37,7 @@ describe("error page security", async () => {
 		);
 		const text = await res.text();
 
-		expect(text).toContain("We could not complete that request");
+		expect(text).toContain("Something Went Wrong");
 		expect(text).toContain("INVALID_CALLBACK_URL");
 		expect(text).toContain("Try again");
 		expect(text).toContain('href="./sign-in"');

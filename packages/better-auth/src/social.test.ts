@@ -647,7 +647,7 @@ describe("Disable implicit signup", async () => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain(
-					"http://localhost:3000/api/auth/error?error=signup_disabled",
+					"http://localhost:3000/auth/error?error=signup_disabled",
 				);
 			},
 		});
@@ -742,7 +742,7 @@ describe("Disable signup", async () => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain(
-					"http://localhost:3000/api/auth/error?error=signup_disabled",
+					"http://localhost:3000/auth/error?error=signup_disabled",
 				);
 			},
 		});
@@ -921,7 +921,7 @@ describe("signin", async () => {
 			codeVerifier: expect.any(String),
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
-			errorURL: "http://localhost:3000/api/auth/error",
+			errorURL: "http://localhost:3000/auth/error",
 			oauthState: state,
 			requestedScopes: expect.any(Array),
 		});
