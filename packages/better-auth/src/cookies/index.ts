@@ -260,7 +260,17 @@ export async function setCookieCache(
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			await setAccountCookie(ctx, accountData);
+			if (accountData.userId === session.user.id) {
+				await setAccountCookie(ctx, accountData);
+			} else {
+				expireCookie(ctx, ctx.context.authCookies.accountData);
+				const accountStore = createAccountStore(
+					ctx.context.authCookies.accountData.name,
+					ctx.context.authCookies.accountData.attributes,
+					ctx,
+				);
+				accountStore.setCookies(accountStore.clean());
+			}
 		}
 	}
 }

@@ -466,6 +466,22 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ORGANIZATION_ERROR_CODES.INVALID_TEAM_ID,
 					);
 				}
+				// Every requested team must belong to the organization the
+				// invitation is for, so the stored team IDs stay consistent with
+				// the invitation's organization. This runs regardless of whether
+				// a team-size limit is configured.
+				for (const teamId of requestedTeamIds) {
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId,
+					});
+					if (!team) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						);
+					}
+				}
 			}
 
 			if (
@@ -736,6 +752,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				const onlyOne = teamIds.length === 1;
 
 				for (const teamId of teamIds) {
+					// Confirm the team still belongs to the invitation's
+					// organization before adding the member. This keeps team
+					// membership consistent with the invitation's organization,
+					// including for older invitations and for teams that were
+					// moved or removed between invite and accept.
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId: invitation.organizationId,
+					});
+					if (!team) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						);
+					}
+
 					await adapter.findOrCreateTeamMember({
 						teamId: teamId,
 						userId: session.user.id,

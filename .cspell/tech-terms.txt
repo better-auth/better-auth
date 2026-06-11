@@ -13,6 +13,7 @@ base64urlnopad
 remoteip
 noreferrer
 noopener
+Referer
 pcre
 llms
 svgjs
@@ -69,3 +70,4 @@ UIURL
 describedby
 labelledby
 vbscript
+unvalidated
