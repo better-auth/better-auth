@@ -58,5 +58,8 @@
     "drizzle-orm": "^0.45.2",
     "tsdown": "catalog:",
     "typescript": "catalog:"
+  },
+  "bugs": {
+    "url": "https://github.com/better-auth/better-auth/issues"
   }
 }
