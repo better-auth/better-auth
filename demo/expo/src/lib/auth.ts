@@ -20,5 +20,9 @@ export const auth = betterAuth({
 			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
 		},
 	},
-	trustedOrigins: ["exp://"],
+	// Trust the app-specific scheme only. The expo() plugin adds the broad
+	// `exp://` development scheme automatically when NODE_ENV is development;
+	// trusting it in production would let an attacker-controlled deep link
+	// receive the session cookie.
+	trustedOrigins: ["better-auth://"],
 });
