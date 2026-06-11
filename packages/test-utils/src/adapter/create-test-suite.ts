@@ -283,6 +283,16 @@ export const createTestSuite = <
 						adapter: ({ getDefaultModelName }) => {
 							adapter.transaction = undefined as any;
 							return {
+								consumeOne: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.consumeOne(args);
+									return res as any;
+								},
+								incrementOne: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.incrementOne(args);
+									return res as any;
+								},
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
 									const res = await adapter.count(args);
