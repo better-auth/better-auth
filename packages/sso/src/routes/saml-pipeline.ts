@@ -20,7 +20,11 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	parseProviderEmailVerified,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
@@ -306,11 +310,10 @@ export async function processSAMLResponse(
 	}
 
 	// 13. Replay protection
-	// FIXME(verification-reserve): the tombstone below is written with a
-	// non-atomic read-then-create. Switch to an adapter-level atomic
-	// create-if-absent (reserve) for verification identifiers once available;
-	// `verification.identifier` is intentionally non-unique, so a unique
-	// constraint is not an option here.
+	// Reserve the assertion id atomically: the first caller writes the tombstone
+	// and proceeds, every later caller (including a concurrent submission) finds
+	// the row already present and is rejected. The deterministic primary key is
+	// the gate, so no separate find/expiry check is needed.
 	const samlContent = (parsedResponse as any).samlContent as string | undefined;
 	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
 
@@ -325,27 +328,21 @@ export async function processSAMLResponse(
 			? new Date(conditions.notOnOrAfter).getTime() + clockSkew
 			: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
 
-		const existingAssertion =
-			await ctx.context.internalAdapter.findVerificationValue(
-				`${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-			);
-
-		let isReplay = false;
-		if (existingAssertion) {
-			try {
-				const stored = JSON.parse(existingAssertion.value);
-				if (stored.expiresAt >= Date.now()) {
-					isReplay = true;
-				}
-			} catch (error) {
-				ctx.context.logger.warn("Failed to parse stored assertion record", {
+		const reserved = await ctx.context.internalAdapter.reserveVerificationValue(
+			{
+				identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+				value: JSON.stringify({
 					assertionId,
-					error,
-				});
-			}
-		}
+					issuer,
+					providerId,
+					usedAt: Date.now(),
+					expiresAt,
+				}),
+				expiresAt: new Date(expiresAt),
+			},
+		);
 
-		if (isReplay) {
+		if (!reserved) {
 			ctx.context.logger.error(
 				"SAML assertion replay detected: assertion ID already used",
 				{ assertionId, issuer, providerId },
@@ -354,18 +351,6 @@ export async function processSAMLResponse(
 				`${samlRedirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 			);
 		}
-
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-			value: JSON.stringify({
-				assertionId,
-				issuer,
-				providerId,
-				usedAt: Date.now(),
-				expiresAt,
-			}),
-			expiresAt: new Date(expiresAt),
-		});
 	} else {
 		ctx.context.logger.warn(
 			"Could not extract assertion ID for replay protection",
@@ -408,7 +393,7 @@ export async function processSAMLResponse(
 			extract.nameID,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? ((attr(mapping.emailVerified) || false) as boolean)
+				? parseProviderEmailVerified(attr(mapping.emailVerified))
 				: false,
 	};
 	if (!userInfo.id || !userInfo.email) {
@@ -450,7 +435,7 @@ export async function processSAMLResponse(
 				email: userInfo.email as string,
 				name: (userInfo.name || userInfo.email) as string,
 				id: userInfo.id as string,
-				emailVerified: Boolean(userInfo.emailVerified),
+				emailVerified: userInfo.emailVerified,
 			},
 			account: {
 				providerId,
@@ -501,7 +486,7 @@ export async function processSAMLResponse(
 			providerId,
 			accountId: userInfo.id as string,
 			email: userInfo.email as string,
-			emailVerified: Boolean(userInfo.emailVerified),
+			emailVerified: userInfo.emailVerified,
 			rawAttributes: attributes,
 		},
 		provider,

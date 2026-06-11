@@ -2079,6 +2079,7 @@ describe("Microsoft Provider", async () => {
 		)
 			.setProtectedHeader({ alg: "RS256", kid: msKid })
 			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-789/v2.0")
 			.setAudience("test-ms-client-id-token")
 			.setExpirationTime("1h")
 			.sign(rsaKeyPair.privateKey);
@@ -2189,6 +2190,7 @@ describe("Microsoft Provider", async () => {
 			sub: "ms-tenant-user",
 			email: "tenant@outlook.com",
 			name: "Tenant User",
+			tid: tenantId,
 		};
 
 		const validToken = await new SignJWT(
@@ -2613,7 +2615,8 @@ describe("Reddit Provider — profile email mapping", async () => {
 		// Without a mapped email the provider derives a unique, per-user
 		// synthetic email from the Reddit user id rather than falling back to
 		// the shared oauth_client_id, so users can never collide on one address.
-		expect(result?.user.email).toBe("reddit-user-123@reddit.com");
+		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
+		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
 		expect(result?.user.email).not.toBe(profile.oauth_client_id);
 		expect(result?.user.emailVerified).toBe(false);
 	});

@@ -132,14 +132,17 @@ export const siwe = (options: SIWEPluginOptions) => {
 					}
 
 					try {
-						// Find stored nonce with wallet address and chain ID context
+						// Atomically consume the single-use nonce before any signature
+						// work or state mutation. The first concurrent request wins; every
+						// racer gets null, so the same nonce can never replay a login.
+						// Consuming here (not after verification) also burns the record on
+						// a failed attempt and applies the built-in expiry gate.
 						const verification =
-							await ctx.context.internalAdapter.findVerificationValue(
+							await ctx.context.internalAdapter.consumeVerificationValue(
 								`siwe:${walletAddress}:${chainId}`,
 							);
 
-						// Ensure nonce is valid and not expired
-						if (!verification || new Date() > verification.expiresAt) {
+						if (!verification) {
 							throw APIError.fromStatus("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid or expired nonce",
 								status: 401,
@@ -230,11 +233,6 @@ export const siwe = (options: SIWEPluginOptions) => {
 								status: 401,
 							});
 						}
-
-						// Clean up used nonce
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`siwe:${walletAddress}:${chainId}`,
-						);
 
 						// Look for existing user by their wallet addresses
 						let user: User | null = null;

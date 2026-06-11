@@ -38,6 +38,91 @@ describe("mongodb-adapter", () => {
 			expect.objectContaining({ includeResultMetadata: true }),
 		);
 	});
+
+	const rateLimitOptions = { rateLimit: { storage: "database" } } as any;
+
+	it("incrementOne applies $inc and $set atomically against the guard filter", async () => {
+		const findOneAndUpdate = vi.fn(async () => ({
+			value: { _id: "counter-id", count: 4, lastRequest: 1700000000000 },
+		}));
+		const db = {
+			collection: vi.fn(() => ({
+				findOneAndUpdate,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })(
+			rateLimitOptions,
+		);
+
+		const result = await adapter.incrementOne({
+			model: "rateLimit",
+			where: [{ field: "count", value: 5, operator: "lt" }],
+			increment: { count: 1 },
+			set: { lastRequest: 1700000000000 },
+		});
+
+		expect(result).toMatchObject({
+			id: "counter-id",
+			count: 4,
+			lastRequest: 1700000000000,
+		});
+		expect(findOneAndUpdate).toHaveBeenCalledWith(
+			{ count: { $lt: 5 } },
+			{ $inc: { count: 1 }, $set: { lastRequest: 1700000000000 } },
+			expect.objectContaining({
+				returnDocument: "after",
+				includeResultMetadata: true,
+			}),
+		);
+	});
+
+	it("incrementOne omits $set when no absolute assignments are provided", async () => {
+		const findOneAndUpdate = vi.fn(async () => ({
+			value: { _id: "counter-id", count: 11 },
+		}));
+		const db = {
+			collection: vi.fn(() => ({
+				findOneAndUpdate,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })(
+			rateLimitOptions,
+		);
+
+		await adapter.incrementOne({
+			model: "rateLimit",
+			where: [{ field: "key", value: "a" }],
+			increment: { count: 1 },
+		});
+
+		expect(findOneAndUpdate).toHaveBeenCalledWith(
+			{ key: "a" },
+			{ $inc: { count: 1 } },
+			expect.anything(),
+		);
+		const updateArg = (findOneAndUpdate.mock.calls[0] as any[])[1];
+		expect(updateArg).not.toHaveProperty("$set");
+	});
+
+	it("incrementOne returns null when the guard matches no document", async () => {
+		const findOneAndUpdate = vi.fn(async () => ({ value: null }));
+		const db = {
+			collection: vi.fn(() => ({
+				findOneAndUpdate,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })(
+			rateLimitOptions,
+		);
+
+		const result = await adapter.incrementOne({
+			model: "rateLimit",
+			where: [{ field: "count", value: 5, operator: "lt" }],
+			increment: { count: 1 },
+		});
+
+		expect(result).toBeNull();
+	});
 });
 
 describe("uuid support", () => {

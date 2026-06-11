@@ -20,6 +20,7 @@ import { hasPersistentStore } from "../../utils/has-persistent-store";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	isStateful,
 	sessionMiddleware,
 } from "./session";
 
@@ -457,9 +458,8 @@ async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const isStateful = hasPersistentStore(ctx.context.options);
 	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful,
+		disableCookieCache: isStateful(ctx),
 	});
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");

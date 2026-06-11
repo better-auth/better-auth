@@ -10,6 +10,7 @@ import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
+	isStateful,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
@@ -313,7 +314,7 @@ export const changePassword = createAuthEndpoint(
 	},
 );
 
-export const setPassword = createAuthEndpoint(
+export const setPassword = createAuthEndpoint.serverOnly(
 	{
 		method: "POST",
 		body: z.object({
@@ -619,20 +620,26 @@ export const deleteUserCallback = createAuthEndpoint(
 				code: "NOT_FOUND",
 			});
 		}
-		const session = await getSessionFromCtx(ctx);
+		// Account deletion is sensitive: bypass the cookie cache on stateful
+		// deployments so a revoked-but-cached session cannot complete the deletion
+		// even when paired with a valid delete-account token.
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
 		if (!session) {
 			throw APIError.from(
 				"NOT_FOUND",
 				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			);
 		}
-		const token = await ctx.context.internalAdapter.findVerificationValue(
+		// Consume the single-use delete token atomically before any
+		// destructive work so concurrent callbacks with the same token can
+		// only delete the account once: the first caller wins, later racers
+		// get null. A wrong-owner token is still burned by this consume.
+		const token = await ctx.context.internalAdapter.consumeVerificationValue(
 			`delete-account-${ctx.query.token}`,
 		);
-		if (!token || token.expiresAt < new Date()) {
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
-		}
-		if (token.value !== session.user.id) {
+		if (!token || token.value !== session.user.id) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
@@ -642,9 +649,6 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			`delete-account-${ctx.query.token}`,
-		);
 
 		deleteSessionCookie(ctx);
 
