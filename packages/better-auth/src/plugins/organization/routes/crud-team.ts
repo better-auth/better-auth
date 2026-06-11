@@ -1,4 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
@@ -342,7 +346,39 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			await adapter.deleteTeam(team.id);
+			await runWithTransaction(ctx.context.adapter, async () => {
+				await adapter.deleteTeam(team.id);
+
+				// Drop the removed team from pending invitations so they stay
+				// acceptable; an emptied list degrades to an org-level invitation.
+				const pendingInvitations = await adapter.findPendingInvitations({
+					organizationId,
+				});
+				const trx = await getCurrentAdapter(ctx.context.adapter);
+				for (const invitation of pendingInvitations) {
+					if (!("teamId" in invitation) || !invitation.teamId) {
+						continue;
+					}
+					const teamIds = (invitation.teamId as string).split(",");
+					if (!teamIds.includes(team.id)) {
+						continue;
+					}
+					const remainingTeamIds = teamIds.filter((id) => id !== team.id);
+					await trx.update({
+						model: "invitation",
+						where: [
+							{
+								field: "id",
+								value: invitation.id,
+							},
+						],
+						update: {
+							teamId:
+								remainingTeamIds.length > 0 ? remainingTeamIds.join(",") : null,
+						},
+					});
+				}
+			});
 
 			// Run afterDeleteTeam hook
 			if (options?.organizationHooks?.afterDeleteTeam) {
