@@ -323,6 +323,21 @@ export interface SecondaryStorage {
 	 * security-sensitive consume paths.
 	 */
 	getAndDelete?: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically increment the counter at `key` by one, returning the
+	 * post-increment value.
+	 *
+	 * When the key is absent, it is created with a value of `1` and the given
+	 * `ttl` (in SECONDS). The TTL is applied only on creation; later increments
+	 * never extend it, so the counter expires a fixed window after it was first
+	 * created.
+	 *
+	 * This is optional for backwards compatibility with existing secondary
+	 * storage implementations. TODO(secondary-storage-increment-required): make
+	 * this required for secondary-storage-backed rate limiting in the next minor
+	 * on `next`.
+	 */
+	increment?: (key: string, ttl: number) => Awaitable<number>;
 	set: (
 		/**
 		 * Key to store

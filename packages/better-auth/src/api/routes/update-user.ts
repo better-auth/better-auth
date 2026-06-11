@@ -626,13 +626,14 @@ export const deleteUserCallback = createAuthEndpoint(
 				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			);
 		}
-		const token = await ctx.context.internalAdapter.findVerificationValue(
+		// Consume the single-use delete token atomically before any
+		// destructive work so concurrent callbacks with the same token can
+		// only delete the account once: the first caller wins, later racers
+		// get null. A wrong-owner token is still burned by this consume.
+		const token = await ctx.context.internalAdapter.consumeVerificationValue(
 			`delete-account-${ctx.query.token}`,
 		);
-		if (!token || token.expiresAt < new Date()) {
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
-		}
-		if (token.value !== session.user.id) {
+		if (!token || token.value !== session.user.id) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
@@ -642,9 +643,6 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			`delete-account-${ctx.query.token}`,
-		);
 
 		deleteSessionCookie(ctx);
 

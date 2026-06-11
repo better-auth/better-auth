@@ -101,6 +101,71 @@ describe("rate-limiter", async () => {
 	});
 });
 
+describe("atomic concurrent enforcement", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { client, testUser } = await getTestInstance({
+				rateLimit: {
+					enabled: true,
+					storage,
+					customRules: {
+						"/sign-in/email": { window: 10, max: 1 },
+					},
+				},
+			});
+
+			// The memory backend keeps a process-global store shared across test
+			// instances. Fake timers let each case advance the clock far past any
+			// prior 10s window so it starts from a clean window for this key. Each
+			// case advances by a distinct offset so frozen fake clocks across cases
+			// never collide on the same instant.
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("lets exactly one of two simultaneous requests through", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(120000);
+				const [a, b] = await Promise.all([
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+				]);
+				const statuses = [a.error?.status, b.error?.status].sort();
+				expect(statuses).toEqual([429, undefined]);
+			});
+
+			it("resets the count once the window elapses", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(240000);
+				// Exhaust the max=1 budget, confirm the next request is blocked.
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(11000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
+		});
+	}
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
