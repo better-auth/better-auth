@@ -1,18 +1,17 @@
-export interface McpAuthClientOptions {
+import type { JWTPayload } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+export interface McpResourceClientOptions {
 	authURL: string;
 	resource?: string;
 	allowedOrigin?: string;
 	fetch?: typeof globalThis.fetch;
 }
 
-export interface McpSession {
-	accessToken: string;
-	refreshToken: string;
-	accessTokenExpiresAt: string;
-	refreshTokenExpiresAt: string;
-	clientId: string;
-	userId: string;
-	scopes: string;
+export interface McpSession extends JWTPayload {
+	sub?: string;
+	scope?: string;
+	client_id?: string;
 }
 
 interface OAuthDiscoveryMetadata {
@@ -46,7 +45,7 @@ interface NodeLikeResponse {
 	end?: (body: string) => void;
 }
 
-export interface McpAuthClient {
+export interface McpResourceClient {
 	verifyToken: (token: string) => Promise<McpSession | null>;
 	handler: (
 		fn: (req: Request, session: McpSession) => Response | Promise<Response>,
@@ -136,40 +135,52 @@ function send401Node(
 	}
 }
 
-export function createMcpAuthClient(
-	options: McpAuthClientOptions,
-): McpAuthClient {
+export function createMcpResourceClient(
+	options: McpResourceClientOptions,
+): McpResourceClient {
 	const authURL = options.authURL.endsWith("/")
 		? options.authURL.slice(0, -1)
 		: options.authURL;
 	const fetchFn = options.fetch ?? globalThis.fetch;
 	const corsHeaders = buildCorsHeaders(authURL, options.allowedOrigin);
+	const audience = options.resource ?? authURL;
+
+	let discovery: { issuer: string; jwks_uri: string } | null = null;
+	let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+	const loadVerifier = async () => {
+		if (discovery && jwks) {
+			return { discovery, jwks };
+		}
+		const response = await fetchFn(
+			`${authURL}/.well-known/oauth-authorization-server`,
+		);
+		if (!response.ok) {
+			throw new Error("Failed to fetch discovery metadata");
+		}
+		const metadata = (await response.json()) as OAuthDiscoveryMetadata;
+		if (!metadata.jwks_uri || !metadata.issuer) {
+			throw new Error("Discovery metadata missing jwks_uri or issuer");
+		}
+		discovery = { issuer: metadata.issuer, jwks_uri: metadata.jwks_uri };
+		jwks = createRemoteJWKSet(new URL(metadata.jwks_uri));
+		return { discovery, jwks };
+	};
 
 	const verifyToken = async (token: string): Promise<McpSession | null> => {
 		try {
-			const response = await fetchFn(`${authURL}/mcp/get-session`, {
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
+			const { discovery: meta, jwks: keySet } = await loadVerifier();
+			const { payload } = await jwtVerify(token, keySet, {
+				issuer: meta.issuer,
+				audience,
 			});
-
-			if (!response.ok) {
-				return null;
-			}
-
-			const data = await response.json();
-			if (!data || !data.userId) {
-				return null;
-			}
-
-			return data as McpSession;
+			return payload as McpSession;
 		} catch {
 			return null;
 		}
 	};
 
-	const handler: McpAuthClient["handler"] = (fn) => {
+	const handler: McpResourceClient["handler"] = (fn) => {
 		return async (req: Request) => {
 			if (req.method === "OPTIONS") {
 				return new Response(null, { status: 204, headers: corsHeaders });
@@ -190,7 +201,7 @@ export function createMcpAuthClient(
 		};
 	};
 
-	const discoveryHandler: McpAuthClient["discoveryHandler"] = () => {
+	const discoveryHandler: McpResourceClient["discoveryHandler"] = () => {
 		let cachedMetadata: OAuthDiscoveryMetadata | null = null;
 		let cacheTime = 0;
 		const CACHE_TTL = 60_000;
@@ -223,23 +234,22 @@ export function createMcpAuthClient(
 		};
 	};
 
-	const protectedResourceHandler: McpAuthClient["protectedResourceHandler"] = (
-		serverURL: string,
-	) => {
-		const resource = options.resource ?? new URL(serverURL).origin;
-		const metadata = {
-			resource,
-			authorization_servers: [authURL],
-			bearer_methods_supported: ["header"],
-			scopes_supported: ["openid", "profile", "email", "offline_access"],
+	const protectedResourceHandler: McpResourceClient["protectedResourceHandler"] =
+		(serverURL: string) => {
+			const resource = options.resource ?? new URL(serverURL).origin;
+			const metadata = {
+				resource,
+				authorization_servers: [authURL],
+				bearer_methods_supported: ["header"],
+				scopes_supported: ["openid", "profile", "email", "offline_access"],
+			};
+
+			return async (_req: Request) => {
+				return Response.json(metadata, { headers: corsHeaders });
+			};
 		};
 
-		return async (_req: Request) => {
-			return Response.json(metadata, { headers: corsHeaders });
-		};
-	};
-
-	const middleware: McpAuthClient["middleware"] = () => {
+	const middleware: McpResourceClient["middleware"] = () => {
 		return async (
 			req: NodeLikeRequest,
 			res: NodeLikeResponse,

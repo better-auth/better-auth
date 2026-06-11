@@ -1,9 +1,9 @@
 import type {
-	McpAuthClient,
-	McpAuthClientOptions,
+	McpResourceClient,
+	McpResourceClientOptions,
 	McpSession,
-} from "./index.js";
-import { createMcpAuthClient } from "./index.js";
+} from "./index";
+import { createMcpResourceClient } from "./index";
 
 interface HonoContext {
 	req: { header: (name: string) => string | undefined; raw: Request };
@@ -25,12 +25,12 @@ interface HonoApp {
 	get: (path: string, handler: (c: HonoContext) => Promise<Response>) => void;
 }
 
-export function mcpAuthHono(options: McpAuthClientOptions): {
-	client: McpAuthClient;
+export function mcpAuthHono(options: McpResourceClientOptions): {
+	client: McpResourceClient;
 	middleware: HonoMiddleware;
 	discoveryRoutes: (app: HonoApp, serverURL: string) => void;
 } {
-	const client = createMcpAuthClient(options);
+	const client = createMcpResourceClient(options);
 
 	const resourceBase = options.resource ?? client.authURL;
 
@@ -104,12 +104,12 @@ export function mcpAuthHono(options: McpAuthClientOptions): {
 	return { client, middleware, discoveryRoutes };
 }
 
-export function mcpAuthOfficial(options: McpAuthClientOptions): {
-	client: McpAuthClient;
-	handler: McpAuthClient["handler"];
-	verifyToken: McpAuthClient["verifyToken"];
+export function mcpAuthOfficial(options: McpResourceClientOptions): {
+	client: McpResourceClient;
+	handler: McpResourceClient["handler"];
+	verifyToken: McpResourceClient["verifyToken"];
 } {
-	const client = createMcpAuthClient(options);
+	const client = createMcpResourceClient(options);
 	return {
 		client,
 		handler: client.handler,
@@ -155,7 +155,7 @@ export function mcpAuthMcpUse(config: McpUseBetterAuthConfig): OAuthProvider {
 		);
 	}
 
-	const client = createMcpAuthClient({ authURL });
+	const client = createMcpResourceClient({ authURL });
 
 	return {
 		async verifyToken(
@@ -173,13 +173,13 @@ export function mcpAuthMcpUse(config: McpUseBetterAuthConfig): OAuthProvider {
 				return config.getUserInfo(payload);
 			}
 			const scopes =
-				typeof payload.scopes === "string" ? payload.scopes.split(" ") : [];
+				typeof payload.scope === "string" ? payload.scope.split(" ") : [];
 			return {
-				userId: payload.userId as string,
+				userId: payload.sub as string,
 				roles: [],
 				permissions: scopes,
-				scopes: payload.scopes as string | undefined,
-				clientId: payload.clientId as string | undefined,
+				scopes: payload.scope as string | undefined,
+				clientId: (payload.azp ?? payload.client_id) as string | undefined,
 			};
 		},
 
@@ -188,11 +188,11 @@ export function mcpAuthMcpUse(config: McpUseBetterAuthConfig): OAuthProvider {
 		},
 
 		getAuthEndpoint() {
-			return `${authURL}/mcp/authorize`;
+			return `${authURL}/oauth2/authorize`;
 		},
 
 		getTokenEndpoint() {
-			return `${authURL}/mcp/token`;
+			return `${authURL}/oauth2/token`;
 		},
 
 		getScopesSupported() {
@@ -208,7 +208,7 @@ export function mcpAuthMcpUse(config: McpUseBetterAuthConfig): OAuthProvider {
 		},
 
 		getRegistrationEndpoint() {
-			return `${authURL}/mcp/register`;
+			return `${authURL}/oauth2/register`;
 		},
 	};
 }
@@ -218,4 +218,4 @@ function normalizeURL(url: string | undefined | null): string | undefined {
 	return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-export type { McpSession, McpAuthClient, McpAuthClientOptions };
+export type { McpSession, McpResourceClient, McpResourceClientOptions };

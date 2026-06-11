@@ -60,6 +60,18 @@ import {
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
+/**
+ * Default scopes advertised and accepted when a configuration sets none. Shared
+ * with the MCP preset so the resource metadata it serves matches what the
+ * authorization-server metadata advertises.
+ */
+export const DEFAULT_OAUTH_SCOPES = [
+	"openid",
+	"profile",
+	"email",
+	"offline_access",
+] as const;
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oauth-provider": {
@@ -110,9 +122,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 	// Validate scopes
 	const scopes = new Set(
-		(options.scopes ?? ["openid", "profile", "email", "offline_access"]).filter(
-			(val) => val.length,
-		),
+		(options.scopes ?? DEFAULT_OAUTH_SCOPES).filter((val) => val.length),
 	);
 	if (clientRegistrationAllowedScopes) {
 		for (const sc of clientRegistrationAllowedScopes) {
