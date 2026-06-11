@@ -1012,6 +1012,80 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.returning();
 					return (deleted[0] as any) ?? null;
 				},
+				async incrementOne({ model, where, increment, set }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+
+					// Build `field = field + delta` for each increment plus the absolute
+					// `set` assignments. The where clause is both selector and guard, so
+					// the database applies the mutation only while the predicates hold.
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model, field });
+						const column = schemaModel[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${delta}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model, field });
+							if (!schemaModel[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+
+					if (config.provider === "mysql") {
+						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
+						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
+						// serialize, then read the mutated row back by id.
+						const idField = getFieldName({ model, field: "id" });
+						const idColumn = schemaModel[idField];
+						const mutateInTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							await tx
+								.update(schemaModel)
+								.set(assignments)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const updated = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(idColumn, targetId))
+								.limit(1)
+								.execute();
+							return (updated[0] as any) ?? null;
+						};
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
+					}
+
+					const updated = await db
+						.update(schemaModel)
+						.set(assignments)
+						.where(...clause)
+						.returning();
+					return (updated[0] as any) ?? null;
+				},
 				options: config,
 			};
 		};

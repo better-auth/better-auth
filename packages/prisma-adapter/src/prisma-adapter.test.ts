@@ -8,6 +8,20 @@ describe("prisma-adapter", () => {
 			provider: "sqlite",
 		})({} as BetterAuthOptions);
 
+	// incrementOne mutates numeric counters; declare the fields it touches on an
+	// existing model so the factory's where/input transforms recognize them.
+	const createCounterAdapter = (prisma: Record<string, unknown>) =>
+		prismaAdapter(prisma as never, {
+			provider: "sqlite",
+		})({
+			verification: {
+				additionalFields: {
+					remaining: { type: "number" },
+					lastRefill: { type: "number", required: false },
+				},
+			},
+		} as BetterAuthOptions);
+
 	it("should create prisma adapter", () => {
 		const prisma = {
 			$transaction: vi.fn(),
@@ -297,6 +311,129 @@ describe("prisma-adapter", () => {
 			}),
 		).resolves.toBeUndefined();
 		expect(del).toHaveBeenCalledTimes(1);
+	});
+
+	it("incrementOne applies a positive delta via Prisma's increment operator", async () => {
+		const target = { id: "counter-id", remaining: 3 };
+		const txClient = {
+			verification: {
+				findFirst: vi
+					.fn()
+					.mockResolvedValueOnce(target)
+					.mockResolvedValueOnce({ id: "counter-id", remaining: 4 }),
+				updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+		expect(txClient.verification.updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: { remaining: { increment: 1 } },
+			}),
+		);
+	});
+
+	it("incrementOne decrements with a negative delta and applies set values", async () => {
+		const target = { id: "counter-id", remaining: 2 };
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValueOnce(target).mockResolvedValueOnce({
+					id: "counter-id",
+					remaining: 1,
+					lastRefill: 1700,
+				}),
+				updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+			set: { lastRefill: 1700 },
+		});
+
+		expect(result).toEqual({
+			id: "counter-id",
+			remaining: 1,
+			lastRefill: 1700,
+		});
+		expect(txClient.verification.updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					lastRefill: 1700,
+					remaining: { increment: -1 },
+				}),
+				where: {
+					AND: [{ remaining: { gt: 0 } }, { id: { equals: "counter-id" } }],
+				},
+			}),
+		);
+	});
+
+	it("incrementOne returns null when the guard matches no row", async () => {
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(null),
+				updateMany: vi.fn(),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toBeNull();
+		expect(txClient.verification.updateMany).not.toHaveBeenCalled();
+	});
+
+	it("incrementOne returns null when a racer invalidated the guard between read and write", async () => {
+		const target = { id: "counter-id", remaining: 1 };
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				// The guarded updateMany matches no row because a concurrent caller
+				// already drove `remaining` to 0 after the read.
+				updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toBeNull();
+		expect(txClient.verification.updateMany).toHaveBeenCalledTimes(1);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {

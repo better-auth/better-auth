@@ -688,6 +688,77 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
 				},
+				async incrementOne({ model, where, increment, set }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// Prisma applies `{ [field]: { increment: delta } }` server-side, so
+					// the read of the current value and the write of `value + delta`
+					// happen in a single statement. The `where` clause doubles as the
+					// guard (operators like `gt`/`lt` are honored), so a racer that
+					// invalidated it (e.g. remaining dropped to 0) cannot be updated.
+					const data: Record<string, unknown> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						data[field] = { increment: delta };
+					}
+
+					// updateMany returns only a count, never the row. We re-read the
+					// mutated row by id inside the same atomic boundary consumeOne uses
+					// so a concurrent mutation between the update and the read cannot
+					// surface a value from a different transaction.
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const guardWhere = convertWhereClause({
+							model,
+							where,
+							action: "updateMany",
+						});
+						const target = await (tx as any)[model].findFirst({
+							where: guardWhere,
+						});
+						if (!target) return null;
+						const result = await (tx as any)[model].updateMany({
+							where: convertWhereClause({
+								model,
+								where: [
+									...where,
+									{
+										field: "id",
+										value: (target as any).id,
+										operator: "eq",
+										connector: "AND",
+										mode: "sensitive",
+									},
+								],
+								action: "updateMany",
+							}),
+							data,
+						});
+						if (!result?.count) return null;
+						const updated = await (tx as any)[model].findFirst({
+							where: convertWhereClause({
+								model,
+								where: [
+									{
+										field: "id",
+										value: (target as any).id,
+										operator: "eq",
+										connector: "AND",
+										mode: "sensitive",
+									},
+								],
+								action: "findOne",
+							}),
+						});
+						return (updated as any) ?? null;
+					};
+
+					return inTransaction || typeof db.$transaction !== "function"
+						? mutateInTransaction(db)
+						: db.$transaction(mutateInTransaction);
+				},
 				options: config,
 			};
 		};

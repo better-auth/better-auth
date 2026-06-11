@@ -16,6 +16,8 @@ const widgetPlugin = {
 			fields: {
 				name: { type: "string" as const, required: false },
 				tag: { type: "string" as const, required: false },
+				count: { type: "number" as const, required: false },
+				remaining: { type: "number" as const, required: false },
 			},
 		},
 	},
@@ -104,6 +106,166 @@ describe("memory adapter updateMany return shape", () => {
 			update: { tag: "everyone" },
 		});
 		expect(all).toBe(3);
+	});
+});
+
+describe("memory adapter incrementOne", () => {
+	it("applies a positive delta and returns the updated row", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", count: 5 },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementOne<{ id: string; count: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+			increment: { count: 3 },
+		});
+
+		expect(updated?.count).toBe(8);
+		const row = await adapter.findOne<{ count: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+		});
+		expect(row?.count).toBe(8);
+	});
+
+	it("applies a negative delta to decrement", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", remaining: 2 },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementOne<{ remaining: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(updated?.remaining).toBe(1);
+	});
+
+	it("treats a missing counter field as zero before applying the delta", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice" },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementOne<{ count: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+			increment: { count: 4 },
+		});
+
+		expect(updated?.count).toBe(4);
+	});
+
+	it("applies absolute set assignments alongside increments", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", count: 1 },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementOne<{
+			count: number;
+			tag: string;
+		}>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+			increment: { count: 1 },
+			set: { tag: "touched" },
+		});
+
+		expect(updated?.count).toBe(2);
+		expect(updated?.tag).toBe("touched");
+	});
+
+	it("mutates only the single guarded row matching the where clause", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", count: 0 },
+			forceAllowId: true,
+		});
+		await adapter.create({
+			model: "widget",
+			data: { id: "2", name: "bob", count: 0 },
+			forceAllowId: true,
+		});
+
+		await adapter.incrementOne({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+			increment: { count: 10 },
+		});
+
+		const rows = await adapter.findMany<{ id: string; count: number }>({
+			model: "widget",
+		});
+		const byId = Object.fromEntries(rows.map((r) => [r.id, r.count]));
+		expect(byId["1"]).toBe(10);
+		expect(byId["2"]).toBe(0);
+	});
+
+	it("when the guard matches no row, returns null and mutates nothing", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", remaining: 0 },
+			forceAllowId: true,
+		});
+
+		// The guard `remaining > 0` excludes the row, so no mutation may occur.
+		const updated = await adapter.incrementOne<{ remaining: number }>({
+			model: "widget",
+			where: [
+				{ field: "id", value: "1" },
+				{ field: "remaining", value: 0, operator: "gt" },
+			],
+			increment: { remaining: -1 },
+		});
+
+		expect(updated).toBeNull();
+		const row = await adapter.findOne<{ remaining: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+		});
+		expect(row?.remaining).toBe(0);
+	});
+
+	it("participates in copy-on-write so a failed transaction discards the increment", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "1", name: "alice", count: 5 },
+			forceAllowId: true,
+		});
+
+		const failed = await adapter
+			.transaction(async (trx) => {
+				await trx.incrementOne({
+					model: "widget",
+					where: [{ field: "id", value: "1" }],
+					increment: { count: 100 },
+				});
+				throw new Error("Simulated failure");
+			})
+			.catch((error) => error);
+
+		expect(failed).toBeInstanceOf(Error);
+		const row = await adapter.findOne<{ count: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "1" }],
+		});
+		expect(row?.count).toBe(5);
 	});
 });
 

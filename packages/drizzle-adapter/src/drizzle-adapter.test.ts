@@ -1,3 +1,4 @@
+import { is, SQL } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -266,6 +267,116 @@ describe("drizzle-adapter", () => {
 			});
 
 			expect(count).toBe(expected);
+		});
+	});
+
+	describe("incrementOne", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		// `attempts` is a plain numeric column the increment targets; the rest
+		// mirror the default user table so the factory's schema validation passes.
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			attempts: { name: "attempts" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+
+		/**
+		 * Builds a mock db whose `update().set().where().returning()` chain resolves
+		 * to `returned`, capturing the `set` payload and `where` predicate count so a
+		 * test can assert the compiled `field = field + delta` expression and that the
+		 * where clause is forwarded as the guard.
+		 */
+		function createIncrementDb(returned: unknown[]) {
+			const calls: { set?: Record<string, unknown>; whereArgs?: unknown[] } =
+				{};
+			const returning = vi.fn().mockResolvedValue(returned);
+			const where = vi.fn((...args: unknown[]) => {
+				calls.whereArgs = args;
+				return { returning };
+			});
+			const set = vi.fn((payload: Record<string, unknown>) => {
+				calls.set = payload;
+				return { where };
+			});
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				update: vi.fn().mockReturnValue({ set }),
+			} as any;
+			return { db, calls };
+		}
+
+		function createAdapter(db: any) {
+			return drizzleAdapter(db, { provider: "sqlite" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+		}
+
+		it("compiles each increment to a `column + delta` expression", async () => {
+			const { db, calls } = createIncrementDb([{ id: "user-1", attempts: 4 }]);
+			const adapter = createAdapter(db);
+
+			const result = await adapter.incrementOne<{
+				id: string;
+				attempts: number;
+			}>({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 3 },
+			});
+
+			expect(result).toEqual({ id: "user-1", attempts: 4 });
+			const expr = calls.set?.attempts;
+			expect(is(expr, SQL)).toBe(true);
+			const chunks = (expr as SQL).queryChunks;
+			// The compiled expression embeds the target column, a " + " separator,
+			// and the raw delta operand, proving the update is `attempts + 3`.
+			expect(chunks).toContainEqual(userTable.attempts);
+			expect(chunks).toContainEqual({ value: [" + "] });
+			expect(chunks).toContain(3);
+			// The where clause is forwarded as the guard (one predicate here).
+			expect(calls.whereArgs).toHaveLength(1);
+		});
+
+		it("applies absolute `set` assignments alongside increments", async () => {
+			const { db, calls } = createIncrementDb([
+				{ id: "user-1", attempts: 1, name: "Renamed" },
+			]);
+			const adapter = createAdapter(db);
+
+			await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
+				set: { name: "Renamed" },
+			});
+
+			expect(is(calls.set?.attempts, SQL)).toBe(true);
+			// Absolute assignments are written verbatim, not wrapped in arithmetic.
+			expect(calls.set?.name).toBe("Renamed");
+		});
+
+		it("returns null when the guard matches no row", async () => {
+			const { db } = createIncrementDb([]);
+			const adapter = createAdapter(db);
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				// A `gt` guard that no row satisfies must yield null, never a row.
+				where: [{ field: "attempts", value: 100, operator: "gt" }],
+				increment: { attempts: -1 },
+			});
+
+			expect(result).toBeNull();
 		});
 	});
 });
