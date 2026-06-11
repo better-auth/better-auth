@@ -131,7 +131,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 	const setupSignalSubscription = () => {
 		state.unsubscribeSignal = sessionSignal.listen(() => {
-			triggerRefetch();
+			void fetchSession();
 		});
 	};
 

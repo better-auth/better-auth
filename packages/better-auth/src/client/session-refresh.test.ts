@@ -221,6 +221,32 @@ describe("session-refresh", () => {
 		manager.cleanup();
 	});
 
+	it("should refetch on $sessionSignal even when offline", async () => {
+		const onlineManager = getGlobalOnlineManager();
+		onlineManager.setOnline(false);
+		const sessionSignal = atom(false);
+		const mockFetchSession = vi.fn(async () => {});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+			options: {
+				sessionOptions: {
+					refetchWhenOffline: false,
+				},
+			},
+		});
+
+		manager.init();
+
+		sessionSignal.set(!sessionSignal.get());
+		await vi.runAllTimersAsync();
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		manager.cleanup();
+	});
+
 	it("should broadcast session update with signout", () => {
 		const channel = getGlobalBroadcastChannel();
 		const postSpy = vi.spyOn(channel, "post");
