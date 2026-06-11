@@ -638,6 +638,23 @@ export const mongodbAdapter = (
 					});
 					return ((doc as any)?.value as any) ?? null;
 				},
+				async incrementOne({ model, where, increment, set }) {
+					const clause = convertWhereClause({ where, model });
+					const update: { $inc: Record<string, number>; $set?: any } = {
+						$inc: increment,
+					};
+					if (set && Object.keys(set).length > 0) {
+						update.$set = set;
+					}
+					const res = await db
+						.collection(model)
+						.findOneAndUpdate(clause, update, {
+							session,
+							returnDocument: "after",
+							includeResultMetadata: true,
+						});
+					return ((res as any)?.value as any) ?? null;
+				},
 			};
 		};
 

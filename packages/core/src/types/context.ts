@@ -237,6 +237,23 @@ export interface InternalAdapter<
 	 */
 	consumeVerificationValue(identifier: string): Promise<Verification | null>;
 
+	/**
+	 * First-writer-wins create keyed by a deterministic primary key derived from
+	 * `identifier`. Returns `true` when this caller created the row and `false`
+	 * when a row for the same identifier already existed.
+	 *
+	 * The dual of `consumeVerificationValue`: reserve races to create a marker
+	 * exactly once, where consume races to delete one exactly once. Use it for
+	 * replay tombstones (a SAML assertion id, a JWT `jti`) where the first caller
+	 * wins. The database path is atomic via the primary key; the
+	 * secondary-storage-only path is best-effort under concurrency.
+	 */
+	reserveVerificationValue(data: {
+		identifier: string;
+		value: string;
+		expiresAt: Date;
+	}): Promise<boolean>;
+
 	updateVerificationByIdentifier(
 		identifier: string,
 		data: Partial<Verification>,

@@ -38,6 +38,17 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	/**
+	 * Sent so the global origin-check middleware validates the post-login
+	 * redirect target against `trustedOrigins`. Without it the client performs
+	 * an unvalidated `window.location` redirect, which is an open redirect.
+	 */
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect to after a successful sign-in",
+		})
+		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>

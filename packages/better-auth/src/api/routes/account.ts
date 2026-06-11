@@ -445,12 +445,22 @@ export const unlinkAccount = createAuthEndpoint(
  * `userId` directly. Throws `UNAUTHORIZED` when an HTTP caller is
  * unauthenticated, and `USER_ID_OR_SESSION_REQUIRED` when neither a session
  * nor a `userId` is available.
+ *
+ * When a durable store is authoritative, bypasses the cookie cache: these
+ * routes mint or refresh provider access tokens, so a server-side session
+ * revocation must take effect immediately rather than waiting for the cached
+ * cookie to expire. DB-less deployments keep the session in the cookie itself,
+ * so the cache is left in place for them.
  */
 async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const session = await getSessionFromCtx(ctx);
+	const isStateful =
+		!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+	const session = await getSessionFromCtx(ctx, {
+		disableCookieCache: isStateful,
+	});
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");
 	}
@@ -750,11 +760,12 @@ export const refreshToken = createAuthEndpoint(
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
 		const accountData = await getAccountCookie(ctx);
-		if (
-			accountData &&
+		const usedAccountCookie =
+			!!accountData &&
 			accountData.userId === resolvedUserId &&
-			(!providerId || providerId === accountData?.providerId)
-		) {
+			providerId === accountData.providerId &&
+			(!accountId || accountData.accountId === accountId);
+		if (usedAccountCookie) {
 			account = accountData;
 		} else {
 			const accounts =
@@ -769,13 +780,7 @@ export const refreshToken = createAuthEndpoint(
 		if (!account) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
-
-		let refreshToken: string | null | undefined = undefined;
-		if (accountData && providerId === accountData.providerId) {
-			refreshToken = accountData.refreshToken ?? undefined;
-		} else {
-			refreshToken = account.refreshToken ?? undefined;
-		}
+		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
 			throw APIError.from("BAD_REQUEST", {
@@ -813,8 +818,7 @@ export const refreshToken = createAuthEndpoint(
 			}
 
 			if (
-				accountData &&
-				providerId === accountData.providerId &&
+				usedAccountCookie &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
 				const updateData = {
