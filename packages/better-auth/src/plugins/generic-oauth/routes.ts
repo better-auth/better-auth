@@ -801,9 +801,9 @@ export async function getUserInfo(
 	}
 
 	const userInfo = await betterFetch<{
-		id?: string | number | undefined;
+		id?: string | number | null | undefined;
 		email: string;
-		sub?: string | undefined;
+		sub?: string | null | undefined;
 		name: string;
 		email_verified: boolean;
 		picture: string;
@@ -813,18 +813,19 @@ export async function getUserInfo(
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
-	const subjectId = userInfo.data?.sub ?? userInfo.data?.id;
-	// Without a stable subject id, the account would be stored under an empty
-	// id and could be resolved by a different user on the same provider.
-	if (subjectId === undefined || subjectId === null || subjectId === "") {
-		return null;
-	}
+	const profile = userInfo.data;
+	// Non-empty `id` wins over `sub` to keep stored account ids stable. Empty
+	// is allowed here: `mapProfileToUser` and the callback guard decide later.
+	const subjectId =
+		profile?.id !== undefined && profile.id !== null && profile.id !== ""
+			? profile.id
+			: profile?.sub;
 	return {
-		id: subjectId,
-		emailVerified: userInfo.data?.email_verified ?? false,
-		email: userInfo.data?.email,
-		image: userInfo.data?.picture,
-		name: userInfo.data?.name,
-		...userInfo.data,
+		...profile,
+		id: subjectId ?? "",
+		email: profile?.email,
+		emailVerified: profile?.email_verified ?? false,
+		image: profile?.picture,
+		name: profile?.name,
 	};
 }

@@ -30,10 +30,16 @@ interface JwksCacheEntry {
 	fetchedAt: number;
 }
 
-const jwksCache = new Map<
-	string | (() => Promise<JSONWebKeySet | undefined>),
-	JwksCacheEntry
->();
+/**
+ * @internal
+ */
+export const jwksCache = new Map<string, JwksCacheEntry>();
+
+/**
+ * Cache for function jwks sources, keyed by a caller-provided stable object.
+ * Entries are released with their key, so per-request keys cannot accumulate.
+ */
+const functionJwksCache = new WeakMap<object, JwksCacheEntry>();
 
 /**
  * How long a cached JWKS is trusted before it is refetched
@@ -41,6 +47,21 @@ const jwksCache = new Map<
  * @internal
  */
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Returns the cached key set when it is within the TTL and contains `kid`.
+ * Anything else (no entry, expired, or a kid absent from the set, e.g. a
+ * newly rotated-in key) requires a refetch.
+ */
+function getFreshJwksWithKid(
+	cached: JwksCacheEntry | undefined,
+	kid: string,
+): JSONWebKeySet | undefined {
+	if (!cached) return undefined;
+	if (Date.now() - cached.fetchedAt >= JWKS_CACHE_TTL_MS) return undefined;
+	if (!cached.jwks.keys.some((jwk) => jwk.kid === kid)) return undefined;
+	return cached.jwks;
+}
 
 export interface VerifyAccessTokenRemote {
 	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
@@ -81,6 +102,12 @@ export async function verifyJwsAccessToken(
 	opts: {
 		/** Jwks url or promise of a Jwks */
 		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
+		/**
+		 * Stable object to cache the result of a function `jwksFetch` under,
+		 * with the same TTL and kid-miss refetch rules as string sources.
+		 * Without it, a function source is fetched on every verification.
+		 */
+		jwksCacheKey?: object;
 		/** Verify options */
 		verifyOptions: JWTVerifyOptions &
 			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
@@ -110,6 +137,12 @@ export async function getJwks(
 	opts: {
 		/** Jwks url or promise of a Jwks */
 		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
+		/**
+		 * Stable object to cache the result of a function `jwksFetch` under,
+		 * with the same TTL and kid-miss refetch rules as string sources.
+		 * Without it, a function source is fetched on every verification.
+		 */
+		jwksCacheKey?: object;
 	},
 ) {
 	// Attempt to decode the token and find a matching kid in jwks
@@ -126,38 +159,49 @@ export async function getJwks(
 	}
 	const kid = jwtHeaders.kid;
 
-	const cacheKey = opts.jwksFetch;
-	const cached = jwksCache.get(cacheKey);
-	const isFresh = cached
-		? Date.now() - cached.fetchedAt < JWKS_CACHE_TTL_MS
-		: false;
-	const hasKid = cached?.jwks.keys.some((jwk) => jwk.kid === kid) ?? false;
+	// Function sources have no usable identity of their own (callers pass
+	// fresh closures per request), so they are cached only under a stable
+	// caller-provided key object.
+	if (typeof opts.jwksFetch !== "string") {
+		const cacheKey = opts.jwksCacheKey;
+		if (!cacheKey) {
+			const jwks = await opts.jwksFetch();
+			if (!jwks) throw new Error("No jwks found");
+			return jwks;
+		}
+		const cachedJwks = getFreshJwksWithKid(
+			functionJwksCache.get(cacheKey),
+			kid,
+		);
+		if (cachedJwks) return cachedJwks;
+		const jwks = await opts.jwksFetch();
+		if (!jwks) throw new Error("No jwks found");
+		functionJwksCache.set(cacheKey, { jwks, fetchedAt: Date.now() });
+		return jwks;
+	}
 
-	// Refetch when this source has no cached set, the cached set has expired, or
-	// it does not contain the token's kid (e.g. a newly rotated-in key). The
-	// cache is scoped to `cacheKey`, so a token is only ever matched against the
-	// key set published by its own source.
-	if (!cached || !isFresh || !hasKid) {
-		const jwks =
-			typeof opts.jwksFetch === "string"
-				? await betterFetch<JSONWebKeySet>(opts.jwksFetch, {
-						headers: {
-							Accept: "application/json",
-						},
-					}).then(async (res) => {
-						if (res.error)
-							throw new Error(
-								`Jwks failed: ${res.error.message ?? res.error.statusText}`,
-							);
-						return res.data;
-					})
-				: await opts.jwksFetch();
+	// The cache is scoped to `cacheKey`, so a token is only ever matched
+	// against the key set published by its own source.
+	const cacheKey = opts.jwksFetch;
+	const cachedJwks = getFreshJwksWithKid(jwksCache.get(cacheKey), kid);
+	if (!cachedJwks) {
+		const jwks = await betterFetch<JSONWebKeySet>(opts.jwksFetch, {
+			headers: {
+				Accept: "application/json",
+			},
+		}).then(async (res) => {
+			if (res.error)
+				throw new Error(
+					`Jwks failed: ${res.error.message ?? res.error.statusText}`,
+				);
+			return res.data;
+		});
 		if (!jwks) throw new Error("No jwks found");
 		jwksCache.set(cacheKey, { jwks, fetchedAt: Date.now() });
 		return jwks;
 	}
 
-	return cached.jwks;
+	return cachedJwks;
 }
 
 /**

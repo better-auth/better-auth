@@ -1356,6 +1356,293 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
+	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				username: "derived-id-user",
+				email: "derived-id@test.com",
+				name: "Derived Id User",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "derived-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								return {
+									id: profile.username,
+									email: profile.email,
+									name: profile.name,
+									emailVerified: profile.email_verified,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "derived-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "derived-id-test",
+			accountId: "derived-id-user",
+		});
+	});
+
+	it("falls back to sub when the userinfo id field is empty", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "abc",
+				id: "",
+				email: "sub-over-empty-id@test.com",
+				name: "Sub Over Empty Id",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "sub-over-empty-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "sub-over-empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "sub-over-empty-id-test",
+			accountId: "abc",
+		});
+	});
+
+	it("falls back to sub when the userinfo id field is null", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "null-id-sub",
+				id: null,
+				email: "sub-over-null-id@test.com",
+				name: "Sub Over Null Id",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "sub-over-null-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "sub-over-null-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "sub-over-null-id-test",
+			accountId: "null-id-sub",
+		});
+	});
+
+	it("keeps a non-empty id field as the account id when the userinfo response also has sub", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "subject-1",
+				id: "raw-id-1",
+				email: "id-over-sub@test.com",
+				name: "Id Over Sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "id-over-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "id-over-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "id-over-sub-test",
+			accountId: "raw-id-1",
+		});
+	});
+
 	it("should handle custom getUserInfo returning numeric ID", async () => {
 		const numericId = 987654321;
 

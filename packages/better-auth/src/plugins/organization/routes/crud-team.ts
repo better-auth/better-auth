@@ -344,6 +344,35 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 
 			await adapter.deleteTeam(team.id);
 
+			// Drop the removed team from pending invitations so they stay
+			// acceptable; an emptied list degrades to an org-level invitation.
+			const pendingInvitations = await adapter.findPendingInvitations({
+				organizationId,
+			});
+			for (const invitation of pendingInvitations) {
+				if (!("teamId" in invitation) || !invitation.teamId) {
+					continue;
+				}
+				const teamIds = (invitation.teamId as string).split(",");
+				if (!teamIds.includes(team.id)) {
+					continue;
+				}
+				const remainingTeamIds = teamIds.filter((id) => id !== team.id);
+				await ctx.context.adapter.update({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: invitation.id,
+						},
+					],
+					update: {
+						teamId:
+							remainingTeamIds.length > 0 ? remainingTeamIds.join(",") : null,
+					},
+				});
+			}
+
 			// Run afterDeleteTeam hook
 			if (options?.organizationHooks?.afterDeleteTeam) {
 				await options?.organizationHooks.afterDeleteTeam({
