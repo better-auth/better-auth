@@ -120,6 +120,28 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBeNull();
 	});
 
+	it("should preserve non-null session responses without a session object", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: { id: "1", email: "test@test.com" },
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		expect(session().data).toMatchObject({
+			user: { id: "1", email: "test@test.com" },
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */

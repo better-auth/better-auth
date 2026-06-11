@@ -48,7 +48,9 @@ function normalizeSessionResponse(res: unknown): {
 function normalizeSessionData(
 	data: SessionResponse | null,
 ): SessionData | null {
-	return data?.session && data?.user ? (data as SessionData) : null;
+	if (!data) return null;
+	if (data.session === null && data.user === null) return null;
+	return data as SessionData;
 }
 
 function isSessionAtomEqual(
