@@ -12,6 +12,14 @@ import {
 } from "../oauth2";
 
 /**
+ * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
+ * personal-account token carries it as the `tid` claim, so it distinguishes the
+ * consumer account class from work/school tenants.
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+ */
+const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+/**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
  */
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
@@ -226,6 +234,30 @@ export const microsoft = (options: MicrosoftOptions) => {
 				);
 
 				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				// The multi-tenant endpoints (common/organizations/consumers) skip
+				// jose's issuer check above because the issuer varies per tenant, and
+				// the organizations and consumers JWKS sets overlap. Enforce the tenant
+				// binding explicitly so a token from a disallowed account class cannot
+				// pass: the issuer must name the token's own tenant, and the account
+				// class must match the configured restriction.
+				// @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+				const tid = jwtClaims.tid;
+				if (
+					typeof tid !== "string" ||
+					jwtClaims.iss !== `${authority}/${tid}/v2.0`
+				) {
+					return false;
+				}
+				if (
+					tenant === "organizations" &&
+					tid === MICROSOFT_CONSUMER_TENANT_ID
+				) {
+					return false;
+				}
+				if (tenant === "consumers" && tid !== MICROSOFT_CONSUMER_TENANT_ID) {
 					return false;
 				}
 
