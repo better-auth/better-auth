@@ -51,6 +51,18 @@ export function addSvelteKitVirtualModules(aliases: Record<string, string>) {
 }
 
 /**
+ * `$app/env` is SvelteKit's alias for `$app/environment` with an identical
+ * export surface, so both specifiers share this body.
+ * @see https://github.com/sveltejs/kit/pull/15934
+ */
+const environmentStub = `
+export const browser = false;
+export const building = false;
+export const dev = false;
+export const version = "";
+`;
+
+/**
  * Specifier → module source for the inert `$app/*` and `$service-worker`
  * stubs. The bodies do nothing (the CLI never serves a request); they exist
  * only so every name a config might import resolves. Keep each entry aligned
@@ -60,12 +72,8 @@ export function addSvelteKitVirtualModules(aliases: Record<string, string>) {
  * @see https://svelte.dev/docs/kit/$service-worker
  */
 const appModuleStubs: Record<string, string> = {
-	"$app/environment": `
-export const browser = false;
-export const building = false;
-export const dev = false;
-export const version = "";
-`,
+	"$app/environment": environmentStub,
+	"$app/env": environmentStub,
 	"$app/server": `
 export function getRequestEvent() {}
 export function read() {}

@@ -1682,6 +1682,45 @@ describe("SvelteKit virtual modules and Vite asset imports (user-reported scenar
 	);
 
 	/**
+	 * `$app/env` is SvelteKit's alias for `$app/environment` with the same
+	 * `browser`/`building`/`dev`/`version` surface, so it must resolve identically.
+	 * @see https://github.com/sveltejs/kit/pull/15934
+	 */
+	tmpdirTest(
+		"resolves the $app/env alias surface",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { browser, building, dev, version } from "$app/env";
+					export const auth = betterAuth({
+						appName:
+							browser === false &&
+							building === false &&
+							dev === false &&
+							typeof version === "string"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
 	 * Locks the enumerated `$app/paths` and `$app/server` export surfaces against
 	 * SvelteKit's real modules (e.g. `match`, added in 2.52, and `read`).
 	 */
