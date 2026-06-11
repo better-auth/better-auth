@@ -550,6 +550,15 @@ export const getCookieCache = async <
 
 		const strategy = config?.strategy || "compact";
 
+		// A valid signature/encryption only proves integrity, not freshness. Mirror
+		// the in-route session reader and reject a snapshot whose embedded session
+		// has already expired, so a caller using this helper as an auth gate cannot
+		// treat a stale-but-signed cookie as a live session.
+		const isEmbeddedSessionExpired = (payload: S): boolean => {
+			const expiresAt = payload.session?.expiresAt;
+			return !!expiresAt && new Date(expiresAt).getTime() < Date.now();
+		};
+
 		if (strategy === "jwe") {
 			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
@@ -573,6 +582,9 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
+				}
 				return payload;
 			}
 			return null;
@@ -594,6 +606,9 @@ export const getCookieCache = async <
 					if (cookieVersion !== expectedVersion) {
 						return null;
 					}
+				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
 				}
 				return payload;
 			}
@@ -636,6 +651,19 @@ export const getCookieCache = async <
 				if (cookieVersion !== expectedVersion) {
 					return null;
 				}
+			}
+
+			// The compact strategy carries no `exp` claim, so the outer cache window
+			// and the embedded session lifetime must be checked explicitly (the
+			// jwt/jwe strategies get the outer window from their `exp` claim).
+			if (
+				typeof sessionDataPayload.expiresAt === "number" &&
+				sessionDataPayload.expiresAt < Date.now()
+			) {
+				return null;
+			}
+			if (isEmbeddedSessionExpired(sessionDataPayload.session)) {
+				return null;
 			}
 
 			return sessionDataPayload.session;

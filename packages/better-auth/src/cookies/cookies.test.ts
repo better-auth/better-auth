@@ -1,4 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHMAC } from "@better-auth/utils/hmac";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	expireCookie,
@@ -1737,5 +1739,82 @@ describe("expireCookie", () => {
 		expect(setCookieHeader).not.toContain("target=valid");
 		expect(setCookieHeader).not.toContain("target.0=chunk");
 		expect(setCookieHeader).toContain("target=; Path=/; Max-Age=0");
+	});
+});
+
+describe("getCookieCache expiry (compact strategy)", () => {
+	const SECRET = "better-auth.secret";
+
+	// Build a validly-signed compact session_data cookie, mirroring the encoding
+	// in setCookieCache, so the only variable under test is freshness.
+	async function buildCompactCookie(
+		embeddedExpiresAt: Date,
+		outerExpiresAt: number | undefined,
+	) {
+		const sessionData = {
+			session: {
+				id: "s1",
+				token: "session-token",
+				userId: "u1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				expiresAt: embeddedExpiresAt,
+			},
+			user: {
+				id: "u1",
+				email: "cache@test.com",
+				emailVerified: true,
+				name: "Cache User",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			updatedAt: Date.now(),
+			version: "1",
+		};
+		const signature = await createHMAC("SHA-256", "base64urlnopad").sign(
+			SECRET,
+			JSON.stringify({ ...sessionData, expiresAt: outerExpiresAt }),
+		);
+		return base64Url.encode(
+			JSON.stringify({
+				session: sessionData,
+				expiresAt: outerExpiresAt,
+				signature,
+			}),
+			{ padding: false },
+		);
+	}
+
+	function requestWith(cookieValue: string) {
+		const headers = new Headers();
+		headers.set("cookie", `better-auth.session_data=${cookieValue}`);
+		return new Request("https://example.com/api/auth/session", { headers });
+	}
+
+	it("returns the session for a fresh snapshot", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() + 60 * 60 * 1000),
+			Date.now() + 5 * 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache?.user?.email).toBe("cache@test.com");
+	});
+
+	it("returns null when the embedded session has expired", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() - 60 * 1000),
+			Date.now() + 5 * 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache).toBeNull();
+	});
+
+	it("returns null when the cache window has elapsed", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() + 60 * 60 * 1000),
+			Date.now() - 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache).toBeNull();
 	});
 });
