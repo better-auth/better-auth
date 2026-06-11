@@ -66,5 +66,10 @@ Oligo
 febf
 fdff
 fffe
+apng
+jfif
+pcss
+pjpeg
+styl
 vbscript
 unvalidated

@@ -716,8 +716,10 @@ describe("getConfig", async () => {
 	it("should resolve SvelteKit $lib/server imports correctly", async () => {
 		const authPath = path.join(tmpDir, "src");
 		const libServerPath = path.join(tmpDir, "src", "lib", "server");
+		const svelteKitDir = path.join(tmpDir, ".svelte-kit");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(libServerPath, { recursive: true });
+		await fs.mkdir(svelteKitDir, { recursive: true });
 
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
@@ -727,6 +729,24 @@ describe("getConfig", async () => {
 					"@sveltejs/kit": "^2.0.0",
 				},
 			}),
+		);
+
+		// `$lib` resolves through the tsconfig `paths` that `svelte-kit sync`
+		// generates, exactly as in a real project.
+		await fs.writeFile(
+			path.join(svelteKitDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"$lib": ["../src/lib"],
+						"$lib/*": ["../src/lib/*"]
+					}
+				}
+			}`,
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{ "extends": "./.svelte-kit/tsconfig.json" }`,
 		);
 
 		await fs.writeFile(
@@ -896,6 +916,49 @@ describe("getConfig", async () => {
 
 		expect(config).not.toBe(null);
 		expect(config?.emailAndPassword?.enabled).toBe(true);
+	});
+
+	it("should load configs importing cloudflare class and proxy exports", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {}
+			}`,
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import {
+				 WorkerEntrypoint,
+				 WorkflowEntrypoint,
+				 env,
+			 } from "cloudflare:workers";
+
+			 class AuthService extends WorkerEntrypoint {}
+			 class AuthWorkflow extends WorkflowEntrypoint {}
+
+			 export const auth = betterAuth({
+					appName:
+						new AuthService({}, {}) instanceof WorkerEntrypoint &&
+						new AuthWorkflow({}, {}) instanceof WorkflowEntrypoint
+							? "ok"
+							: "bad",
+					emailAndPassword: {
+						enabled: !!env.FLAG,
+					},
+			 });`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth.ts",
+		});
+
+		expect(config).toMatchObject({
+			appName: "ok",
+			emailAndPassword: { enabled: true },
+		});
 	});
 
 	/**
@@ -1557,6 +1620,360 @@ describe("tsconfig paths resolution (user-reported scenarios)", () => {
 
 			expect(config).toMatchObject({
 				appName: ext.slice(1),
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+});
+
+describe("SvelteKit virtual modules and Vite asset imports (user-reported scenarios)", () => {
+	async function writeTree(
+		root: string,
+		files: Record<string, string>,
+	): Promise<void> {
+		for (const [relPath, content] of Object.entries(files)) {
+			const abs = path.join(root, relPath);
+			await fs.mkdir(path.dirname(abs), { recursive: true });
+			await fs.writeFile(abs, content);
+		}
+	}
+
+	const sveltekitPackageJson = JSON.stringify({
+		name: "test-sveltekit",
+		devDependencies: { "@sveltejs/kit": "^2.0.0" },
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	/**
+	 * A config importing the truly-virtual `$app/environment` module (no file on
+	 * disk; synthesized by the Vite plugin at runtime).
+	 * @see https://github.com/better-auth/better-auth/issues/8933#issuecomment-4225087144
+	 */
+	tmpdirTest(
+		"resolves $app/environment imports in a SvelteKit project",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { building, dev } from "$app/environment";
+					import { getRequestEvent } from "$app/server";
+					export const auth = betterAuth({
+						appName: building || dev ? "build-or-dev" : "runtime",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "runtime",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * `$app/env` is SvelteKit's alias for `$app/environment` with the same
+	 * `browser`/`building`/`dev`/`version` surface, so it must resolve identically.
+	 * @see https://github.com/sveltejs/kit/pull/15934
+	 */
+	tmpdirTest(
+		"resolves the $app/env alias surface",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { browser, building, dev, version } from "$app/env";
+					export const auth = betterAuth({
+						appName:
+							browser === false &&
+							building === false &&
+							dev === false &&
+							typeof version === "string"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * Locks the enumerated `$app/paths` and `$app/server` export surfaces against
+	 * SvelteKit's real modules (e.g. `match`, added in 2.52, and `read`).
+	 */
+	tmpdirTest(
+		"resolves the full $app/paths and $app/server export surface",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { resolve, asset, match } from "$app/paths";
+					import { read, getRequestEvent } from "$app/server";
+					export const auth = betterAuth({
+						appName: [resolve, asset, match, read, getRequestEvent].every(
+							(value) => typeof value === "function",
+						)
+							? "ok"
+							: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * `$app/stores` exposes Svelte stores, including `updated.check()`, so a
+	 * config touching them at load time must not crash.
+	 */
+	tmpdirTest(
+		"resolves $app/stores with store-shaped exports",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { getStores, page, updated } from "$app/stores";
+					export const auth = betterAuth({
+						appName:
+							typeof page.subscribe === "function" &&
+							typeof updated.check === "function" &&
+							typeof getStores === "function"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * A Vite `?inline` query import reached through a custom `kit.alias`. The
+	 * alias resolves to a real file, but the `?inline` suffix means there is no
+	 * literal file on disk for jiti to load.
+	 * @see https://github.com/better-auth/better-auth/issues/8933#issuecomment-4225087144
+	 */
+	tmpdirTest(
+		"resolves Vite ?inline query imports reached through a custom kit.alias",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"svelte.config.js": `export default { kit: { alias: { $src: "src" } } };`,
+				"src/app.css": `body { color: red; }`,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import styles from "$src/app.css?inline";
+					export const auth = betterAuth({
+						appName: typeof styles,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "string",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * A Vite `?raw` query import of a relative asset.
+	 * @see https://github.com/better-auth/better-auth/pull/9107#issuecomment-4226242067
+	 */
+	tmpdirTest(
+		"resolves Vite ?raw query imports of a relative asset",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/email.html": `<p>hello</p>`,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import template from "./email.html?raw";
+					export const auth = betterAuth({
+						appName: typeof template,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "string",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * A plain asset import with no query (Vite treats known asset extensions as
+	 * URL modules) and a side-effect-only stylesheet import.
+	 * @see https://github.com/better-auth/better-auth/pull/9107#issuecomment-4226242067
+	 */
+	tmpdirTest(
+		"resolves plain asset and side-effect stylesheet imports",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/logo.svg": `<svg></svg>`,
+				"src/app.css": `body { color: red; }`,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import logoUrl from "../../logo.svg";
+					import "../../app.css";
+					export const auth = betterAuth({
+						appName: typeof logoUrl,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "string",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * `$env/dynamic/public` exposes only `PUBLIC_`-prefixed vars; `private`
+	 * exposes the rest, mirroring SvelteKit. The stub reads `process.env` live.
+	 * @see https://svelte.dev/docs/kit/$env-dynamic-public
+	 */
+	tmpdirTest(
+		"filters $env/dynamic by public/private prefix",
+		async ({ tmpdir, expect }) => {
+			vi.stubEnv("PUBLIC_BA_ENV_TEST", "pub");
+			vi.stubEnv("BA_ENV_TEST_SECRET", "secret");
+
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { env as pub } from "$env/dynamic/public";
+					import { env as priv } from "$env/dynamic/private";
+					export const auth = betterAuth({
+						appName:
+							pub.PUBLIC_BA_ENV_TEST === "pub" &&
+							pub.BA_ENV_TEST_SECRET === undefined &&
+							priv.BA_ENV_TEST_SECRET === "secret" &&
+							priv.PUBLIC_BA_ENV_TEST === undefined
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * Vite `?worker` resolves to a constructor and `.wasm?init` to an init
+	 * function; both must load without a file on disk.
+	 */
+	tmpdirTest(
+		"resolves Vite ?worker and .wasm?init imports",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/worker.ts": `export {};`,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import MyWorker from "./worker.ts?worker";
+					import initWasm from "./module.wasm?init";
+					export const auth = betterAuth({
+						appName:
+							typeof MyWorker === "function" && typeof initWasm === "function"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
 				emailAndPassword: { enabled: true },
 			});
 		},
