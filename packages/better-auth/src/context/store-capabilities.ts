@@ -4,7 +4,7 @@ export function hasServerSessionStore(options: BetterAuthOptions): boolean {
 	return !!options.database || !!options.secondaryStorage;
 }
 
-export function hasServerAccountStore(options: BetterAuthOptions): boolean {
+function hasServerAccountStore(options: BetterAuthOptions): boolean {
 	return !!options.database;
 }
 
