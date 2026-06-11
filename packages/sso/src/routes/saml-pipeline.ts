@@ -20,7 +20,11 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	parseProviderEmailVerified,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
@@ -389,7 +393,7 @@ export async function processSAMLResponse(
 			extract.nameID,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? ((attr(mapping.emailVerified) || false) as boolean)
+				? parseProviderEmailVerified(attr(mapping.emailVerified))
 				: false,
 	};
 	if (!userInfo.id || !userInfo.email) {
@@ -431,7 +435,7 @@ export async function processSAMLResponse(
 				email: userInfo.email as string,
 				name: (userInfo.name || userInfo.email) as string,
 				id: userInfo.id as string,
-				emailVerified: Boolean(userInfo.emailVerified),
+				emailVerified: userInfo.emailVerified,
 			},
 			account: {
 				providerId,
@@ -482,7 +486,7 @@ export async function processSAMLResponse(
 			providerId,
 			accountId: userInfo.id as string,
 			email: userInfo.email as string,
-			emailVerified: Boolean(userInfo.emailVerified),
+			emailVerified: userInfo.emailVerified,
 			rawAttributes: attributes,
 		},
 		provider,
