@@ -23,6 +23,14 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 		// FIXME(next): bind the redirect to a server-generated, signed proxy
 		// token (or validate against the configured provider authorization
 		// endpoints) to also close redirects to unrelated external https hosts.
+		//
+		// A fragment is never part of a valid OAuth authorization endpoint, and a
+		// bare trailing "#" parses to an empty url.hash, so reject on the raw value.
+		if (authorizationURL.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid authorizationURL",
+			});
+		}
 		let url: URL;
 		try {
 			url = new URL(authorizationURL);

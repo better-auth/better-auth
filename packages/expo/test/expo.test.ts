@@ -1465,6 +1465,17 @@ describe("expo authorization proxy", async () => {
 		expect(res.status).toBe(400);
 	});
 
+	it("rejects an authorizationURL with a fragment", async () => {
+		const withFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#evil",
+		);
+		expect(withFragment.status).toBe(400);
+		const bareFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#",
+		);
+		expect(bareFragment.status).toBe(400);
+	});
+
 	it("redirects to an external https provider authorization endpoint", async () => {
 		const target =
 			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
