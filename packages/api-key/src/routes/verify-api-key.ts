@@ -202,12 +202,18 @@ async function claimUsageInDatabase({
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.
-	const finalRow =
-		(await ctx.context.adapter.update<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: row.id }],
-			update: { updatedAt: new Date() },
-		})) ?? row;
+	const finalRow = await ctx.context.adapter.update<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [{ field: "id", value: row.id }],
+		update: { updatedAt: new Date() },
+	});
+
+	// A null result means the row was deleted concurrently (for example the key
+	// was revoked). Do not fall back to the in-memory row and re-cache a key
+	// whose authoritative record is gone.
+	if (!finalRow) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
 
 	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 		await setApiKey(ctx, finalRow, opts);

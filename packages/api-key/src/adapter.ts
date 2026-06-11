@@ -257,14 +257,15 @@ function withRefListLock<T>(
 ): Promise<T> {
 	const previous = refListLocks.get(refKey) ?? Promise.resolve();
 	const run = previous.then(task, task);
-	refListLocks.set(
-		refKey,
-		run.finally(() => {
-			if (refListLocks.get(refKey) === run) {
-				refListLocks.delete(refKey);
-			}
-		}),
-	);
+	// The map holds the `.finally()` chain, so the cleanup must compare against
+	// that same promise (not `run`) or the entry is never removed and the map
+	// grows without bound.
+	const tracked = run.finally(() => {
+		if (refListLocks.get(refKey) === tracked) {
+			refListLocks.delete(refKey);
+		}
+	});
+	refListLocks.set(refKey, tracked);
 	return run;
 }
 
