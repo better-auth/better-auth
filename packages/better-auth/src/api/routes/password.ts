@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
+import { getUIErrorURL } from "../../ui";
 import { getDate } from "../../utils/date";
 import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
@@ -15,7 +16,7 @@ function redirectError(
 ): string {
 	const url = callbackURL
 		? new URL(callbackURL, ctx.baseURL)
-		: new URL(`${ctx.baseURL}/error`);
+		: new URL(getUIErrorURL(ctx));
 	if (query)
 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
 	return url.href;
@@ -290,9 +291,12 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
+		// Consume the single-use reset token before any password change so two
+		// concurrent requests with the same token cannot both proceed: the first
+		// caller wins, every racer (and any expired token) gets null.
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(id);
-		if (!verification || verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
@@ -309,7 +313,6 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);

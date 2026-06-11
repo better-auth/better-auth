@@ -11,6 +11,8 @@ import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
 import { createCookieGetter, getCookies } from "../cookies";
 import { createInternalAdapter } from "../db";
+import { authUI } from "../plugins/auth-ui";
+import { authErrorUI } from "../ui/plugins/auth-error-ui";
 import { isPromise } from "../utils/is-promise";
 import {
 	getBaseURL,
@@ -98,7 +100,11 @@ export async function runPluginInit(context: AuthContext) {
 }
 
 export function getInternalPlugins(options: BetterAuthOptions) {
-	const plugins: BetterAuthPlugin[] = [];
+	const defaultPlugins: BetterAuthPlugin[] = [authErrorUI()];
+	if (!options.plugins?.some((plugin) => plugin.id === "auth-ui")) {
+		defaultPlugins.unshift(authUI());
+	}
+	const plugins: BetterAuthPlugin[] = [...defaultPlugins];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		// TODO: add internal plugin
 	}

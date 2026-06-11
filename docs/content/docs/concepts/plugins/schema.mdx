@@ -1,0 +1,97 @@
+---
+title: Plugin Schema
+description: Learn how to define Better Auth plugin schemas, fields, references, migration behavior, and inferred types.
+---
+
+## Schema
+
+You can define a database schema for your plugin by passing a `schema` object. The schema object should have the table name as the key and the schema definition as the value.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        schema: {
+            myTable: {
+                fields: {
+                    name: {
+                        type: "string"
+                    }
+                },
+                modelName: "myTable" // optional if you want to use a different name than the key
+            }
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+**Fields**
+
+By default better-auth will create an `id` field for each table. You can add additional fields to the table by adding them to the `fields` object.
+
+The key is the column name and the value is the column definition. The column definition can have the following properties:
+
+`type`: The type of the field. It can be `string`, `number`, `boolean`, `date`.
+
+`required`:  if the field should be required on a new record. (default: `true`)
+
+`unique`: if the field should be unique. (default: `false`)
+
+`references`: if the field is a reference to another table. (optional) It takes an object with the following properties:
+
+* `model`: The table name to reference.
+* `field`: The field name to reference.
+* `onDelete`: The action to take when the referenced record is deleted. (default: `cascade`)
+
+**Other Schema Properties**
+
+`disableMigration`: if the table should not be migrated. (default: `false`)
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = (opts: PluginOptions) => {
+    return {
+        id: "my-plugin",
+        schema: {
+            rateLimit: {
+                fields: {
+                    key: {
+                        type: "string",
+                    },
+                },
+                disableMigration: opts.storage.provider !== "database", // [!code highlight]
+            },
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+if you add additional fields to a `user` or `session` table, the types will be inferred automatically on `getSession` and `signUpEmail` calls.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        schema: {
+            user: {
+                fields: {
+                    age: {
+                        type: "number",
+                    },
+                },
+            },
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+This will add an `age` field to the `user` table and all `user` returning endpoints will include the `age` field and it'll be inferred properly by typescript.
+
+<Callout type="warn">
+  Don't store sensitive information in the `user` or `session` table. Create a new table if you need to store sensitive information.
+</Callout>

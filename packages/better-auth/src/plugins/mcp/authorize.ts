@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import { getUIErrorURL } from "../../ui";
 import type { OAuthApplication } from "../oidc-provider/schema";
 import type {
 	AuthorizationQuery,
@@ -63,13 +64,13 @@ export async function authorizeMCPOAuth(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw ctx.redirect(`${getUIErrorURL(ctx.context)}?error=invalid_client`);
 	}
 
 	if (!query.response_type) {
 		throw ctx.redirect(
 			redirectErrorURL(
-				`${ctx.context.baseURL}/error`,
+				getUIErrorURL(ctx.context),
 				"invalid_request",
 				"response_type is required",
 			),
@@ -97,7 +98,7 @@ export async function authorizeMCPOAuth(
 			} as Client;
 		});
 	if (!client) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw ctx.redirect(`${getUIErrorURL(ctx.context)}?error=invalid_client`);
 	}
 	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
@@ -112,12 +113,12 @@ export async function authorizeMCPOAuth(
 		});
 	}
 	if (client.disabled) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=client_disabled`);
+		throw ctx.redirect(`${getUIErrorURL(ctx.context)}?error=client_disabled`);
 	}
 
 	if (query.response_type !== "code") {
 		throw ctx.redirect(
-			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
+			`${getUIErrorURL(ctx.context)}?error=unsupported_response_type`,
 		);
 	}
 

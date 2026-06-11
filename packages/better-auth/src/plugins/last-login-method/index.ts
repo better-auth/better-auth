@@ -206,6 +206,18 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		ui: {
+			capabilities: {
+				"last-login-method": {
+					id: "last-login-method",
+					enabled: true,
+					metadata: {
+						cookieName: config.cookieName,
+						storeInDatabase: Boolean(config.storeInDatabase),
+					},
+				},
+			},
+		},
 		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

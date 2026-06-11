@@ -3,6 +3,7 @@ import { APIError } from "@better-auth/core/error";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import { getUIErrorURL } from "../../ui";
 import { InvalidClient, InvalidRequest } from "./error";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
@@ -19,8 +20,7 @@ function getErrorURL(
 	error: string,
 	description: string,
 ) {
-	const baseURL =
-		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+	const baseURL = getUIErrorURL(ctx.context);
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
 }

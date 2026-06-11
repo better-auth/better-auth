@@ -31,6 +31,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
+import type { BetterAuthUIOptions } from "./ui";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type Optional<T> = {
@@ -193,6 +194,32 @@ export interface BetterAuthRateLimitStorage {
 		value: RateLimit,
 		update?: boolean | undefined,
 	) => Promise<void>;
+	/**
+	 * Atomically records one request against `key` within the `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the request was counted within the active window;
+	 * when `allowed` is false the limit was already reached and `retryAfter` is
+	 * the number of seconds until the window frees up. Whether the window slides
+	 * or is fixed depends on the backing storage: the database backend resets
+	 * once the window elapses, while secondary storage uses a fixed time-to-live
+	 * set when the window first opens.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Optional for backwards compatibility. A storage without it falls back to
+	 * the legacy non-atomic `get`/`set` path, which is best-effort under
+	 * concurrency.
+	 *
+	 * TODO(rate-limit-consume-required): make this the sole required member on
+	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 */
+	consume?: (
+		key: string,
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -520,6 +547,13 @@ export type BetterAuthOptions = {
 	 * @default "/api/auth"
 	 */
 	basePath?: string | undefined;
+	/**
+	 * Configure the Better Auth UI handler.
+	 *
+	 * The UI handler is mounted separately from the API handler and defaults to
+	 * `/auth`.
+	 */
+	ui?: BetterAuthUIOptions | undefined;
 	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.

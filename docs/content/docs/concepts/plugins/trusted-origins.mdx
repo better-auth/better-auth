@@ -1,0 +1,45 @@
+---
+title: Plugin Trusted Origins
+description: Learn how Better Auth plugins validate URLs with trusted origins from custom endpoints.
+---
+
+## Trusted origins
+
+If you're building custom plugins or endpoints, you can use the `isTrustedOrigin()` method available on the auth context to validate URLs against your trusted origins configuration.
+This ensures your custom endpoints respect the same security settings as Better Auth's built-in endpoints.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint, APIError } from "better-auth/api";
+import * as z from "zod"
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        trustedOrigins: [
+            "http://trusted.com"
+        ],
+        endpoints: {
+            getTrustedHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
+                method: "GET",
+                query: z.object({
+                    url: z.string()
+                }),
+            }, async (ctx) => {
+                // The allowRelativePaths option can be used to either allow or disallow relative paths
+                if (!ctx.context.isTrustedOrigin(ctx.query.url, { allowRelativePaths: false })) {
+                    throw new APIError("FORBIDDEN", {
+                        message: "origin is not trusted."
+                    });
+                }
+
+                return ctx.json({
+                    message: "Hello World"
+                })
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+See the [trusted origins and security](/docs/reference/security#trusted-origins) docs for more info.

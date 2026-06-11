@@ -21,8 +21,7 @@ const symbol = Symbol.for("better-auth:global");
 let bind: BetterAuthGlobal | null = null;
 
 const __context: Record<string, AsyncLocalStorage<unknown>> = {};
-const __betterAuthVersion: string = import.meta.env
-	.BETTER_AUTH_VERSION as string;
+const __betterAuthVersion = import.meta.env?.BETTER_AUTH_VERSION ?? "0.0.0-dev";
 
 /**
  * We store context instance in the globalThis.

@@ -21,6 +21,7 @@ import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identit
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
+import { getUIErrorURL } from "../../ui";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -178,13 +179,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
-					const baseURLStr =
-						typeof ctx.context.options.baseURL === "string"
-							? ctx.context.options.baseURL
-							: getOrigin(ctx.context.baseURL) || "";
-					const defaultErrorURL =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
+					const defaultErrorURL = getUIErrorURL(ctx.context);
 
 					const encryptedProfile = ctx.query.profile;
 					if (!encryptedProfile) {
@@ -433,10 +428,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						const errorURL =
-							stateData.errorURL ||
-							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.baseURL}/error`;
+						const errorURL = stateData.errorURL || getUIErrorURL(ctx.context);
 
 						if (
 							stateData.oauthState !== undefined &&

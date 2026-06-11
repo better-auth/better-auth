@@ -496,6 +496,7 @@
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
+    "@better-auth/ui": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.1.1",

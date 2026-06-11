@@ -217,7 +217,11 @@ Most of the features of Better Auth will not work correctly.`,
 				if (config.enabled === false) {
 					return null;
 				}
-				if (!config.clientId) {
+				const hasClientIdentifier =
+					key === "tiktok"
+						? "clientKey" in config && Boolean(config.clientKey)
+						: Boolean(config.clientId);
+				if (!hasClientIdentifier) {
 					logger.warn(
 						`Social provider ${key} is missing clientId or clientSecret`,
 					);

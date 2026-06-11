@@ -8,6 +8,7 @@ import {
 	createAuthorizationURL,
 	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
+	getUIErrorURL,
 	HIDE_METADATA,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
@@ -1202,9 +1203,7 @@ async function handleOIDCCallback(
 		stateData = await parseState(ctx);
 	}
 	if (!stateData) {
-		const errorURL =
-			ctx.context.options.onAPIError?.errorURL ||
-			`${ctx.context.baseURL}/error`;
+		const errorURL = getUIErrorURL(ctx.context);
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
 	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
@@ -1744,9 +1743,7 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 		async (ctx) => {
 			const stateData = await parseState(ctx);
 			if (!stateData) {
-				const errorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
+				const errorURL = getUIErrorURL(ctx.context);
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
@@ -1817,8 +1814,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			if (isGetRequest) {
 				const session = await getSessionFromCtx(ctx);
 				if (!session?.session) {
-					const errorURL =
-						ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
+					const errorURL = getUIErrorURL(ctx.context);
 					throw ctx.redirect(`${errorURL}?error=invalid_request`);
 				}
 				const relayState = ctx.query?.RelayState as string | undefined;

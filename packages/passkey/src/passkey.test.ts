@@ -951,6 +951,212 @@ describe("passkey", async () => {
 	});
 });
 
+describe("passkey ceremony and identity gating", async () => {
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
+	});
+
+	// A challenge minted for one ceremony must never be accepted by the other
+	// verifier: the stored challenge carries a ceremony-type marker, and a
+	// registration ceremony cannot consume an authentication challenge.
+	it("rejects a registration that reuses an authentication challenge in pre-auth mode", async () => {
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "resolved-user-id",
+							name: "resolved@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		// Unauthenticated caller obtains an authentication challenge.
+		await preAuthClient.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "CHALLENGE_NOT_FOUND" },
+		});
+
+		// The registration verifier must reject before touching the WebAuthn
+		// library or persisting a passkey row.
+		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+
+		const context = await preAuth.$context;
+		const rows = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: mockRegistrationResponse.id }],
+		});
+		expect(rows.length).toBe(0);
+	});
+
+	it("rejects an authentication that reuses a registration challenge", async () => {
+		const {
+			auth: sessionAuth,
+			client: sessionClient,
+			cookieSetter,
+			signInWithTestUser,
+		} = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		const { headers, user } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		const context = await sessionAuth.$context;
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "cross-ceremony-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-ceremony-credential-id",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// Obtain a registration challenge, then try to spend it on authentication.
+		await sessionClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		await expect(
+			sessionAuth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: {
+						id: "cross-ceremony-credential-id",
+						rawId: "cross-ceremony-credential-id",
+						response: {
+							clientDataJSON: "mockClientDataJSON",
+							authenticatorData: "mockAuthenticatorData",
+							signature: "mockSignature",
+							userHandle: "mockUserHandle",
+						},
+						type: "public-key" as const,
+						clientExtensionResults: {},
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "CHALLENGE_NOT_FOUND" },
+		});
+
+		expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+	});
+
+	// Even a well-formed registration challenge must not persist a passkey when
+	// the resolved target user id is empty; an empty userId would dangle without
+	// an owning account.
+	it("rejects registration when the resolved target user id is empty", async () => {
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "seed-user-id",
+							name: "seed@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		// Generate a real registration challenge, then overwrite the stored target
+		// user id with an empty string to exercise the final persistence guard.
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		const context = await preAuth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+		const challenge = verifications[verifications.length - 1];
+		assert(challenge);
+		const parsed = JSON.parse(challenge.value);
+		await context.adapter.update({
+			model: "verification",
+			where: [{ field: "id", value: challenge.id }],
+			update: {
+				value: JSON.stringify({
+					...parsed,
+					userData: { ...parsed.userData, id: "" },
+				}),
+			},
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "RESOLVED_USER_INVALID" },
+		});
+
+		const rows = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: mockRegistrationResponse.id }],
+		});
+		expect(rows.length).toBe(0);
+	});
+});
+
 const buildRegistrationVerification = (
 	aaguid: string,
 	credentialID: string,

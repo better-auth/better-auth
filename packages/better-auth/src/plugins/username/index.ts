@@ -620,6 +620,32 @@ export const username = (options?: UsernameOptions | undefined) => {
 				},
 			),
 		},
+		ui: {
+			capabilities: {
+				username: {
+					id: "username",
+					enabled: true,
+					metadata: {
+						minUsernameLength,
+						maxUsernameLength,
+						supportsDisplayUsername: true,
+						displayUsernameLabel: "Display name",
+					},
+					routes: {
+						signInUsername: {
+							type: "auth-route",
+							path: "/sign-in/username",
+							method: "POST",
+						},
+						isUsernameAvailable: {
+							type: "auth-route",
+							path: "/is-username-available",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		schema: mergeSchema(
 			getSchema({
 				username: normalizer,

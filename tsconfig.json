@@ -16,6 +16,9 @@
       "path": "./packages/core/tsconfig.json"
     },
     {
+      "path": "./packages/ui/tsconfig.json"
+    },
+    {
       "path": "./packages/expo/tsconfig.json"
     },
     {

@@ -1306,20 +1306,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     },
     "/error": {
       "get": {
-        "description": "Displays an error page",
+        "description": "Redirects to the configured auth error page",
         "operationId": undefined,
         "parameters": [],
         "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "description": "The HTML content of the error page",
-                  "type": "string",
-                },
-              },
-            },
-            "description": "Success",
+          "302": {
+            "description": "Redirect",
           },
           "400": {
             "content": {

@@ -7,6 +7,10 @@ import type { InferPluginContext, InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
+	ui: {
+		handler: (request: Request) => Promise<Response>;
+		basePath: string;
+	};
 	/**
 	 * Alias for {@link Auth.handler}.
 	 */

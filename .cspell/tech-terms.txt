@@ -66,6 +66,14 @@ Oligo
 febf
 fdff
 fffe
+UIURL
+describedby
+labelledby
+apng
+jfif
+pcss
+pjpeg
+styl
 resync
 resynced
 resyncs

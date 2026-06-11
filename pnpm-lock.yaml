@@ -10,8 +10,8 @@ catalogs:
       specifier: 0.4.1
       version: 0.4.1
     '@better-fetch/fetch':
-      specifier: 1.2.2
-      version: 1.2.2
+      specifier: 1.3.0
+      version: 1.3.0
     better-call:
       specifier: 1.3.6
       version: 1.3.6
@@ -113,6 +113,9 @@ importers:
       '@arethetypeswrong/cli':
         specifier: ^0.18.2
         version: 0.18.2
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@biomejs/biome':
         specifier: 2.4.4
         version: 2.4.4
@@ -178,7 +181,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.4))
@@ -885,12 +888,15 @@ importers:
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       '@noble/ciphers':
         specifier: ^2.1.1
         version: 2.1.1
@@ -1152,7 +1158,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260226.1
@@ -1206,7 +1212,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       better-call:
         specifier: 'catalog:'
         version: 1.3.6(zod@4.3.6)
@@ -1240,7 +1246,7 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       better-call:
         specifier: 'catalog:'
         version: 1.3.6(zod@4.3.6)
@@ -1346,7 +1352,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       better-call:
         specifier: 'catalog:'
         version: 1.3.6(zod@4.3.6)
@@ -1380,7 +1386,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       '@simplewebauthn/browser':
         specifier: ^13.2.2
         version: 13.2.2
@@ -1482,7 +1488,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       fast-xml-parser:
         specifier: ^5.8.0
         version: 5.8.0
@@ -1502,6 +1508,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1559,7 +1568,7 @@ importers:
         version: 0.4.1
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1586,6 +1595,19 @@ importers:
         specifier: catalog:vitest
         version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
 
+  packages/ui:
+    dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+      vitest:
+        specifier: catalog:vitest
+        version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
+
   test:
     devDependencies:
       '@better-auth/core':
@@ -1593,7 +1615,7 @@ importers:
         version: link:../packages/core
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.2.2
+        version: 1.3.0
       better-auth:
         specifier: workspace:*
         version: link:../packages/better-auth
@@ -2311,11 +2333,11 @@ packages:
   '@better-auth/utils@0.4.1':
     resolution: {integrity: sha512-SZBPRPF3z0nBvE5ygOkxae35wnnXPRShmqFo78S+qslLeFoPu/pMgnXAuNKFMMybac3tiLaVg1e3MQW5MC+1iA==}
 
-  '@better-fetch/fetch@1.1.21':
-    resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
-
   '@better-fetch/fetch@1.2.2':
     resolution: {integrity: sha512-xlgQcYROGFgKg5FY7ZLppFmG7rR5Hkmz7tgDuQeR79i5KhKRjr2QC9xsBG2qEGPJJjf9bxzg/NMW2hEUWs5OnA==}
+
+  '@better-fetch/fetch@1.3.0':
+    resolution: {integrity: sha512-Lgkl18IrUURFqa1nE38GNDWXf7XGzfxXQDCE/alCQV0yZ98YrPGtlmW61ch1T4YRt3lxrSAGA+Ft73FzuWWb3A==}
 
   '@biomejs/biome@2.4.4':
     resolution: {integrity: sha512-tigwWS5KfJf0cABVd52NVaXyAVv4qpUXOWJ1rxFL8xF1RVoeS2q/LK+FHgYoKMclJCuRoCWAPy1IXaN9/mS61Q==}
@@ -15287,9 +15309,9 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.0.1
 
-  '@better-fetch/fetch@1.1.21': {}
-
   '@better-fetch/fetch@1.2.2': {}
+
+  '@better-fetch/fetch@1.3.0': {}
 
   '@biomejs/biome@2.4.4':
     optionalDependencies:
@@ -20894,7 +20916,7 @@ snapshots:
   better-call@1.3.6(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.4.1
-      '@better-fetch/fetch': 1.1.21
+      '@better-fetch/fetch': 1.2.2
       rou3: 0.7.12
       set-cookie-parser: 3.1.0
     optionalDependencies:
