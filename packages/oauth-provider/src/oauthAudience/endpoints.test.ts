@@ -405,6 +405,37 @@ describe("client/audience linking", () => {
 		expect(links?.length).toBe(1);
 		expect(links?.[0]?.audienceId).toBe("https://api.example.com/race");
 	});
+
+	// The link endpoint's client lookup must resolve through the configured
+	// `schema.oauthClient.modelName` (like the shared `getClient` helper and the
+	// audience/link model helpers) rather than assuming a fixed model name, so a
+	// deployment that remaps the client model can still link audiences.
+	it("link resolves the client through a custom oauthClient model name", async () => {
+		const instance = await boot({
+			schema: { oauthClient: { modelName: "customOauthClient" } },
+		});
+		const headers = await signedInHeaders(instance);
+		await seedClient(instance.ctx, "remapped-client");
+		await instance.auth.api.adminCreateAudience({
+			body: { identifier: "https://api.example.com/remapped" },
+			headers,
+		});
+
+		await instance.auth.api.adminLinkClientAudience({
+			params: {
+				identifier: "https://api.example.com/remapped",
+				client_id: "remapped-client",
+			},
+			headers,
+		});
+
+		const links = await instance.ctx.adapter.findMany<OAuthClientAudience>({
+			model: "oauthClientAudience",
+			where: [{ field: "clientId", value: "remapped-client" }],
+		});
+		expect(links?.length).toBe(1);
+		expect(links?.[0]?.audienceId).toBe("https://api.example.com/remapped");
+	});
 });
 
 describe("audience admin CRUD — signingAlgorithm validation (bug #10)", () => {

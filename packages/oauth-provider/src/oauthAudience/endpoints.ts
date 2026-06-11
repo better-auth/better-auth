@@ -65,6 +65,9 @@ const audienceModel = (opts: OAuthOptions<Scope[]>) =>
 const linkModel = (opts: OAuthOptions<Scope[]>) =>
 	opts.schema?.oauthClientAudience?.modelName ?? "oauthClientAudience";
 
+const clientModel = (opts: OAuthOptions<Scope[]>) =>
+	opts.schema?.oauthClient?.modelName ?? "oauthClient";
+
 /**
  * Decode a URL path-segment parameter.
  *
@@ -318,7 +321,7 @@ export async function linkClientAudienceEndpoint(
 		});
 	}
 	const client = await ctx.context.adapter.findOne({
-		model: "oauthClient",
+		model: clientModel(opts),
 		where: [{ field: "clientId", value: clientId }],
 	});
 	if (!client) {
