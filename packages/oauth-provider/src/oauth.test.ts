@@ -1,3 +1,4 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import {
 	genericOAuthClient,
@@ -280,6 +281,11 @@ describe("oauth", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -727,6 +733,11 @@ describe("oauth", async () => {
 		const tempClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers: adminHeaders,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -818,6 +829,11 @@ describe("oauth", async () => {
 		const tempClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers: adminHeaders,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1002,6 +1018,7 @@ describe("oauth - prompt", async () => {
 	let forcePostLoginRedirect = false;
 	let bypassReferenceIdCheck = false;
 	let isUserRegistered = true;
+	let authorizeBeforeHookCount = 0;
 	const {
 		auth: authorizationServer,
 		customFetchImpl,
@@ -1009,6 +1026,13 @@ describe("oauth - prompt", async () => {
 		cookieSetter,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === "/oauth2/authorize") {
+					authorizeBeforeHookCount++;
+				}
+			}),
+		},
 		plugins: [
 			jwt(),
 			multiSession(),
@@ -1124,6 +1148,11 @@ describe("oauth - prompt", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 			},
 		});
@@ -1358,6 +1387,11 @@ describe("oauth - prompt", async () => {
 		const tempClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 			},
 		});
@@ -1834,6 +1868,82 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9887
+	 *
+	 * The resumed `/oauth2/authorize` step must run configured hooks. Before the
+	 * fix it called the raw authorize function directly, skipping the dispatch
+	 * pipeline, so hooks ran for the standalone request but not the resume.
+	 */
+	it("runs configured hooks when authorize resumes from continue", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enableSelectAccount = true;
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+			enableSelectAccount = false;
+		});
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const data = await client.signIn.social(
+			{
+				provider: providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		let selectAccountRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(ctx) {
+				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
+				cookieSetter(headers)(ctx);
+				headers.append("Cookie", headers.get("Cookie") || "");
+			},
+		});
+		expect(selectAccountRedirectUri).toContain(`/select-account`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
+			},
+		});
+
+		// The standalone authorize request already ran the hook; the resume must
+		// run it again rather than calling the raw authorize function.
+		const countBeforeResume = authorizeBeforeHookCount;
+		expect(countBeforeResume).toBeGreaterThan(0);
+
+		const selectedAccountRes = await serverClient.oauth2.continue(
+			{
+				selected: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		// Whether the resume lands on consent or the callback, it re-dispatched
+		// `/oauth2/authorize`, so the configured hook must have run once more.
+		expect(selectedAccountRes.redirect).toBeTruthy();
+		expect(authorizeBeforeHookCount).toBe(countBeforeResume + 1);
+	});
+
 	it("none - should return account_selection_required when account selection is required", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -2283,6 +2393,82 @@ describe("oauth - prompt", async () => {
 
 		selectedPostLogin = false;
 		enablePostLogin = false;
+	});
+
+	it("shall not let a client self-attest post login completion via continue", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		// Return a default reference instead of throwing, so the only thing that
+		// can stop token issuance is the post-login gate itself — isolating the
+		// self-attestation behavior under test.
+		bypassReferenceIdCheck = true;
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				headers,
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+
+		// Authorize redirects to the post-login gate (no org selected yet).
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(headers)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain(`/select-organization`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+			bypassReferenceIdCheck = false;
+			selectedPostLogin = false;
+			enablePostLogin = false;
+		});
+
+		// Skip the actual selection: resubmit the signed oauth_query and claim
+		// the gate completed by posting `postLogin: true`. The server must re-run
+		// the gate against the live (still-unselected) session and redirect back
+		// rather than mint an authorization code.
+		selectedPostLogin = false;
+		const continueRes = await serverClient.oauth2.continue(
+			{
+				postLogin: true,
+			},
+			{
+				headers,
+				throw: true,
+				onResponse: cookieSetter(headers),
+			},
+		);
+		expect(continueRes.url).toContain(`/select-organization`);
+		expect(continueRes.url).not.toContain(`code=`);
 	});
 
 	it("shall allow user to select an organization/team post login and consent", async ({
@@ -2776,6 +2962,11 @@ describe("oauth - config", () => {
 		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2855,6 +3046,11 @@ describe("oauth - config", () => {
 		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2957,6 +3153,11 @@ describe("oauth - config", () => {
 		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -3068,6 +3269,11 @@ describe("oauth - config", () => {
 		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: publicClient ? "none" : undefined,
 				skip_consent: true,
@@ -3173,6 +3379,10 @@ describe("oauth - config", () => {
 								introspectUrl: `${authServerUrl}/oauth2/introspect`,
 								clientId: createdClient?.client_id!,
 								clientSecret: createdClient?.client_secret!,
+								// Tokens minted without a resource (or with the JWT plugin
+								// disabled) carry no `aud`, which the configured `audience`
+								// would otherwise reject by default.
+								allowMissingAudience: !(resource && !disableJwtPlugin),
 							},
 				},
 			);
@@ -3393,6 +3603,11 @@ describe("oauth - rate limiting", () => {
 		const client = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: ["http://localhost:5000/callback"],
 			},
 		});
@@ -3453,6 +3668,11 @@ describe("oauth - rate limiting", () => {
 		const client = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: ["http://localhost:5000/callback"],
 			},
 		});

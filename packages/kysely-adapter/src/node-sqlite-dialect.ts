@@ -2,7 +2,7 @@
  * @see {@link https://nodejs.org/api/sqlite.html} - Node.js SQLite API documentation
  */
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
@@ -20,7 +20,7 @@ import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-} from "kysely/migration";
+} from "./kysely-migration-tables";
 
 class NodeSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
@@ -131,11 +131,27 @@ class NodeSqliteConnection implements DatabaseConnection {
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
+		const params = parameters as SQLInputValue[];
 
-		const rows = stmt.all(...(parameters as any[])) as O[];
+		// Row-producing statements (SELECT, RETURNING) expose columns, so they
+		// must read through `all()`. Plain mutations expose none; running them
+		// through `all()` would discard node:sqlite's change metadata, leaving
+		// Kysely to report zero affected rows even when writes occurred.
+		if (stmt.columns().length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...params) as O[],
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(...params);
 
 		return Promise.resolve({
-			rows,
+			rows: [],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid),
 		});
 	}
 
