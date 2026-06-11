@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the request should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -146,7 +152,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
-					userId: null,
+					userId: ctx.body.user_id ?? null,
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),

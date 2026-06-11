@@ -115,6 +115,12 @@ To initiate device authorization, call `device.code` with the client ID:
        * Space-separated list of requested scopes (optional)
        */
       scope?: string;
+      /**
+       * The user_id to which the device code should be pre-bound. 
+       * This can be used to prevent another authenticated user from
+       * claiming a device code before the intended user verifies it. (optional)
+       */
+      user_id?: string;
   }
   ```
 </APIMethod>
@@ -127,6 +133,7 @@ import { authClient } from "@/lib/auth-client"
 const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
+  user_id: "your-user-id"
 });
 
 if (data) {

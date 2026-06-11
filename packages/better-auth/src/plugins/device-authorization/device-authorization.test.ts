@@ -890,6 +890,117 @@ describe("device authorization ownership gate", () => {
 		});
 	});
 
+	it("rejects approve from a different user if the code was generated for a different user_id", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						deviceAuthorization({
+							expiresIn: "5min",
+							interval: "2s",
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+
+		const { user } = await signInWithTestUser();
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+	});
+
+	it("allows approve when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
+	it("allows deny when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const deny = await auth.api.deviceDeny({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+
+		expect(deny).toMatchObject({ success: true });
+	});
+
 	it("does not overwrite a device code claimed after verify reads it", async () => {
 		let adapter: DBAdapter<BetterAuthOptions> | null = null;
 		let concurrentOwnerId: string | undefined;
