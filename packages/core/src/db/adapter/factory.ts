@@ -1466,12 +1466,16 @@ export const createAdapterFactory =
 				let res: T | null;
 				let resultNeedsOutputTransform = true;
 				if (adapterInstance.incrementOne) {
-					// Map each increment key to its DB column name, keeping the numeric
-					// delta unchanged: deltas are arithmetic operands, not stored values,
-					// so they must never be value-transformed.
+					// Map each increment key to its DB column name, honoring a custom
+					// `mapKeysTransformInput` override the same way `transformInput`
+					// does, and keep the numeric delta unchanged: deltas are arithmetic
+					// operands, not stored values, so they must never be value-transformed.
+					const mappedKeys = config.mapKeysTransformInput ?? {};
 					const increment: Record<string, number> = {};
 					for (const [field, delta] of Object.entries(unsafeIncrement)) {
-						increment[getFieldName({ model: unsafeModel, field })] = delta;
+						increment[
+							mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+						] = delta;
 					}
 					let set: Record<string, unknown> | undefined;
 					if (unsafeSet && !config.disableTransformInput) {
