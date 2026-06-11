@@ -285,6 +285,79 @@ describe("database rate-limit pruning", async () => {
 	});
 });
 
+describe("database rate-limit pruning with dynamic rules", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": () => ({ window: 120, max: 10 }),
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes stale rows using the longest observed dynamic window", async () => {
+		const now = Date.now();
+		const activeDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-active");
+		const staleDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-stale");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: activeDynamicKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleDynamicKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: activeDynamicKey }],
+		});
+		expect(activeDynamicRow).not.toBeNull();
+
+		const staleDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleDynamicKey }],
+		});
+		expect(staleDynamicRow).toBeNull();
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();

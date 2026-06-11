@@ -1998,6 +1998,8 @@ The teams feature supports several configuration options:
   }
   ```
 
+  `maximumMembersPerTeam` is enforced when accepting team invitations, when adding an existing organization member to a team, and when adding a new organization member with a `teamId`.
+
 * `allowRemovingAllTeams`: Control whether the last team can be removed
   ```ts
   teams: {
@@ -2037,6 +2039,11 @@ export const teamsFeatureTeamTableFields = [
 		name: "name",
 		type: "string",
 		description: "The name of the team",
+	},
+	{
+		name: "memberCount",
+		type: "number",
+		description: "Durable member count used to enforce team capacity",
 	},
 	{
 		name: "organizationId",
@@ -2082,6 +2089,12 @@ export const teamsFeatureTeamMemberTableFields = [
 		description: "The ID of the user",
 		isForeignKey: true,
 		references: { model: "user", field: "id" },
+	},
+	{
+		name: "membershipKey",
+		type: "string",
+		description: "Internal unique key for the team and user membership pair",
+		isOptional: true,
 	},
 	{
 		name: "createdAt",
@@ -2329,6 +2342,11 @@ export const optionalTeamTableFields = [
 		description: "The name of the team",
 	},
 	{
+		name: "memberCount",
+		type: "number",
+		description: "Durable member count used to enforce team capacity",
+	},
+	{
 		name: "organizationId",
 		type: "string",
 		description: "The ID of the organization",
@@ -2372,6 +2390,12 @@ export const teamsFeatureTeamTableFields0 = [
 		description: "The ID of the user",
 		isForeignKey: true,
 		references: { model: "user", field: "id" },
+	},
+	{
+		name: "membershipKey",
+		type: "string",
+		description: "Internal unique key for the team and user membership pair",
+		isOptional: true,
 	},
 	{
 		name: "createdAt",

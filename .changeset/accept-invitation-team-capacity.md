@@ -1,5 +1,5 @@
 ---
-"better-auth": patch
+"better-auth": minor
 ---
 
-Accepting a team invitation now checks the team's member limit before adding the member and releases the invitation claim back to pending if the membership work fails. Previously the member was created first and the count compared afterward, so a team one slot below its limit wrongly rejected the member that should have fit and left an orphaned membership row. Full cross-adapter concurrent capacity enforcement still requires a durable per-team capacity lock/counter.
+Team capacity now uses a durable `team.memberCount` counter and an internal unique `teamMember.membershipKey` so `maximumMembersPerTeam` is enforced atomically across invitation acceptance, direct team-member adds, and add-member-with-team calls. Previously the team limit relied on count-then-create checks that could admit multiple concurrent members into one remaining slot.

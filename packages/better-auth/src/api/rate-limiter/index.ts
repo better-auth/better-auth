@@ -119,7 +119,6 @@ function createDatabaseStorageWrapper(
 	const model = "rateLimit";
 	const db = ctx.adapter;
 	let longestObservedWindow = Math.max(...getConfiguredRateLimitWindows(ctx));
-	const shouldPruneRows = !hasDynamicRateLimitWindows(ctx);
 	const readRow = async (key: string) => {
 		const res = await db.findMany<RateLimit>({
 			model,
@@ -228,9 +227,6 @@ function createDatabaseStorageWrapper(
 	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
 	// here never blocks the request.
 	const deleteExpiredRows = (now: number) => {
-		if (!shouldPruneRows) {
-			return;
-		}
 		const cutoff = now - longestObservedWindow * 1000;
 		ctx.runInBackground(
 			db
@@ -246,12 +242,6 @@ function createDatabaseStorageWrapper(
 	return {
 		consume,
 	};
-}
-
-function hasDynamicRateLimitWindows(ctx: AuthContext) {
-	return Object.values(ctx.rateLimit.customRules ?? {}).some(
-		(rule) => typeof rule === "function",
-	);
 }
 
 function getConfiguredRateLimitWindows(ctx: AuthContext) {

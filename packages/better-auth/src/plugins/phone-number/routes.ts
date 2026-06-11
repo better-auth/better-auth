@@ -891,9 +891,11 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED);
 	}
 
-	const allowedAttempts = opts?.allowedAttempts || 3;
-	const [, peekedAttempts] = existing.value.split(":");
-	if (peekedAttempts && parseInt(peekedAttempts) >= allowedAttempts) {
+	const allowedAttempts = opts?.allowedAttempts ?? 3;
+	const peekedAttempts = parseVerificationAttempts(
+		existing.value.split(":")[1],
+	);
+	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			identifier,
 		);
@@ -909,8 +911,9 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, attempts] = consumed.value.split(":");
-	if (attempts && parseInt(attempts) >= allowedAttempts) {
+	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const attempts = parseVerificationAttempts(rawAttempts);
+	if (attempts >= allowedAttempts) {
 		throw APIError.from(
 			"FORBIDDEN",
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
@@ -918,12 +921,17 @@ async function verifyPhoneNumberOTP(
 	}
 	if (otpValue !== providedCode) {
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+			value: `${otpValue}:${attempts + 1}`,
 			identifier,
 			expiresAt: consumed.expiresAt,
 		});
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+}
+
+function parseVerificationAttempts(value: string | undefined) {
+	const attempts = Number(value ?? 0);
+	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
 }
 
 function generateOTP(size: number) {
