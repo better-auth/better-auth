@@ -60,4 +60,46 @@ describe("kysely-adapter", () => {
 		);
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
 	});
+
+	it("consumeOne uses a top(1) subquery and OUTPUT on mssql", async () => {
+		// SQL Server rejects `LIMIT`; the single-row subquery must compile to
+		// `select top(1) ...` and the delete must return the row via `OUTPUT`.
+		const selectQuery = {
+			select: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			top: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+		};
+		const deleted = {
+			id: "verification-1",
+			identifier: "same-identifier",
+			value: "first",
+		};
+		const deleteQuery = {
+			where: vi.fn(() => deleteQuery),
+			outputAll: vi.fn(() => deleteQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(deleted),
+		};
+		const db = {
+			selectFrom: vi.fn(() => selectQuery),
+			deleteFrom: vi.fn(() => deleteQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql" })({});
+
+		const result = await adapter.consumeOne({
+			model: "verification",
+			where: [{ field: "identifier", value: "same-identifier" }],
+		});
+
+		expect(result).toEqual(deleted);
+		expect(selectQuery.top).toHaveBeenCalledTimes(1);
+		expect(selectQuery.top).toHaveBeenCalledWith(1);
+		expect(selectQuery.limit).not.toHaveBeenCalled();
+		expect(deleteQuery.where).toHaveBeenCalledWith(
+			"verification.id",
+			"in",
+			selectQuery,
+		);
+		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
+	});
 });

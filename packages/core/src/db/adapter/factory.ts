@@ -138,6 +138,11 @@ export const createAdapterFactory =
 							!config.debugLogs.consumeOne
 						) {
 							return;
+						} else if (
+							method === "incrementOne" &&
+							!config.debugLogs.incrementOne
+						) {
+							return;
 						} else if (method === "count" && !config.debugLogs.count) {
 							return;
 						}
@@ -491,6 +496,7 @@ export const createAdapterFactory =
 				| "delete"
 				| "deleteMany"
 				| "consumeOne"
+				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -1426,6 +1432,152 @@ export const createAdapterFactory =
 					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
 					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
+			incrementOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+			}: {
+				model: string;
+				where: Where[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "incrementOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`,
+					{ model, where, increment: unsafeIncrement, set: unsafeSet },
+				);
+
+				let res: T | null;
+				let resultNeedsOutputTransform = true;
+				if (adapterInstance.incrementOne) {
+					// Map each increment key to its DB column name, honoring a custom
+					// `mapKeysTransformInput` override the same way `transformInput`
+					// does, and keep the numeric delta unchanged: deltas are arithmetic
+					// operands, not stored values, so they must never be value-transformed.
+					const mappedKeys = config.mapKeysTransformInput ?? {};
+					const increment: Record<string, number> = {};
+					for (const [field, delta] of Object.entries(unsafeIncrement)) {
+						increment[
+							mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+						] = delta;
+					}
+					let set: Record<string, unknown> | undefined;
+					if (unsafeSet && !config.disableTransformInput) {
+						set = await transformInput(unsafeSet, unsafeModel, "update");
+					} else {
+						set = unsafeSet;
+					}
+					res = await withSpan(
+						`db incrementOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "incrementOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapterInstance.incrementOne!<T>({
+								model,
+								where,
+								increment,
+								set,
+							}),
+					);
+				} else {
+					// FIXME(increment-one-required): remove this fallback when
+					// incrementOne becomes required on `next`. Adapters without a native
+					// incrementOne fall back to `transaction(findMany + updateMany)`.
+					res = await withSpan(
+						`db incrementOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "incrementOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapter.transaction(async (trx) => {
+								const rows = await trx.findMany<Record<string, any>>({
+									model: unsafeModel,
+									where: unsafeWhere,
+									limit: 1,
+								});
+								const target = rows[0];
+								if (!target) return null;
+								const nextValues: Record<string, unknown> = {
+									...(unsafeSet ?? {}),
+								};
+								for (const [field, delta] of Object.entries(unsafeIncrement)) {
+									const current =
+										typeof target[field] === "number" ? target[field] : 0;
+									nextValues[field] = current + delta;
+								}
+								// Re-applying `unsafeWhere` in the update's where is the
+								// compare-and-swap guard: under an adapter whose transaction
+								// lacks real isolation, it still rejects a racer that
+								// invalidated the guard between the read and the write (e.g.
+								// remaining dropped to 0).
+								const updated = await trx.updateMany({
+									model: unsafeModel,
+									where: [
+										...unsafeWhere,
+										{
+											field: "id",
+											value: target.id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									update: nextValues,
+								});
+								// A non-numeric count coerces to a false miss, so fail loud.
+								if (typeof updated !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from updateMany during the incrementOne fallback. Return the number of updated rows, or implement a native incrementOne for atomic guarded counter updates.`,
+									);
+								}
+								return updated > 0 ? ({ ...target, ...nextValues } as T) : null;
+							}),
+					);
+					resultNeedsOutputTransform = false;
+				}
+
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (
+					!config.disableTransformOutput &&
+					resultNeedsOutputTransform &&
+					res
+				) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed as T | null;
