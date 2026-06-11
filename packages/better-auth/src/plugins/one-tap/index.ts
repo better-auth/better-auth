@@ -94,21 +94,33 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
+					const googleProvider =
+						typeof ctx.context.options.socialProviders?.google === "function"
+							? await ctx.context.options.socialProviders?.google()
+							: ctx.context.options.socialProviders?.google;
+					// Fail closed on a missing audience: without an expected client ID,
+					// jose verifies Google's signature and issuer but not that the token
+					// was minted for this relying party, so a token issued to a different
+					// Google client would be accepted. Resolve and require it before
+					// verification.
+					const audience = options?.clientId || googleProvider?.clientId;
+					if (!audience || (Array.isArray(audience) && audience.length === 0)) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
+						});
+					}
 					let payload: any;
 					try {
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
-						const googleProvider =
-							typeof ctx.context.options.socialProviders?.google === "function"
-								? await ctx.context.options.socialProviders?.google()
-								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience: options?.clientId || googleProvider?.clientId,
+								audience,
 							},
 						);
 						payload = verifiedPayload;
