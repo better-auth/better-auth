@@ -768,17 +768,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						);
 					}
 
-					await adapter.findOrCreateTeamMember({
-						teamId: teamId,
-						userId: session.user.id,
-					});
-
 					if (
 						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
 						"undefined"
 					) {
-						const members = await adapter.countTeamMembers({ teamId });
-
 						const maximumMembersPerTeam =
 							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
 							"function"
@@ -789,12 +782,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 									})
 								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 
-						if (members >= maximumMembersPerTeam) {
+						const result = await adapter.addTeamMemberWithLimit({
+							teamId,
+							userId: session.user.id,
+							maximumMembersPerTeam,
+						});
+						if (result.status === "limitReached") {
 							throw APIError.from(
 								"FORBIDDEN",
 								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
 							);
 						}
+					} else {
+						await adapter.findOrCreateTeamMember({
+							teamId: teamId,
+							userId: session.user.id,
+						});
 					}
 				}
 
