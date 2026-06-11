@@ -206,6 +206,61 @@ describe("forgot password", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	// A single reset token is single-use: two requests racing the same valid
+	// token must yield exactly one password change. Otherwise a leaked token
+	// could still be replayed during the window between validating and deleting
+	// the verification row, letting an attacker overwrite the chosen password.
+	it("should reject a concurrent reset using the same token", async () => {
+		const email = "race-reset@email.com";
+		await client.signUp.email({
+			name: "Race Reset User",
+			email,
+			password: "originalPassword123",
+		});
+
+		await client.requestPasswordReset({
+			email,
+			redirectTo: "http://localhost:3000",
+		});
+		const raceToken = token;
+
+		const attackerPassword = "attacker-password-123";
+		const legitimatePassword = "legitimate-password-123";
+		const [first, second] = await Promise.all([
+			client.resetPassword(
+				{ newPassword: legitimatePassword },
+				{ query: { token: raceToken } },
+			),
+			client.resetPassword(
+				{ newPassword: attackerPassword },
+				{ query: { token: raceToken } },
+			),
+		]);
+
+		const results = [first, second];
+		const succeeded = results.filter((res) => res.data?.status === true);
+		const rejected = results.filter((res) => res.error?.status === 400);
+		expect(succeeded).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+
+		const winningPassword =
+			first.data?.status === true ? legitimatePassword : attackerPassword;
+		const losingPassword =
+			first.data?.status === true ? attackerPassword : legitimatePassword;
+
+		const winSignIn = await client.signIn.email({
+			email,
+			password: winningPassword,
+		});
+		expect(winSignIn.data?.user).toBeDefined();
+
+		const loseSignIn = await client.signIn.email({
+			email,
+			password: losingPassword,
+		});
+		expect(loseSignIn.error?.status).toBe(401);
+	});
+
 	it("should expire", async () => {
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {

@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
@@ -326,6 +326,43 @@ describe("oauth introspect", async () => {
 			iat: expect.any(Number),
 			sid: expect.any(String),
 		});
+	});
+
+	it("should read the signing keys once across repeated jwt introspections", async () => {
+		const tokens = await getTokens(undefined, {
+			resource: validAudience,
+		});
+		const ctx = await auth.$context;
+		const findMany = vi.spyOn(ctx.adapter, "findMany");
+		// Shift only Date past the JWKS cache TTL so any entry cached by earlier
+		// introspections is stale and exactly one fresh read is expected.
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 6 * 60 * 1000 });
+		try {
+			for (let i = 0; i < 2; i++) {
+				const introspection = await client.oauth2.introspect(
+					{
+						client_id: oauthClient?.client_id,
+						client_secret: oauthClient?.client_secret,
+						token: tokens.data?.access_token!,
+						token_type_hint: "access_token",
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+				expect(introspection.data).toMatchObject({ active: true });
+			}
+			const jwksReads = findMany.mock.calls.filter(
+				([args]) => args.model === "jwks",
+			);
+			expect(jwksReads).toHaveLength(1);
+		} finally {
+			vi.useRealTimers();
+			findMany.mockRestore();
+		}
 	});
 
 	it("should pass without token_type_hint and sent opaque access_token", async () => {

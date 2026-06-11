@@ -24,8 +24,14 @@ function asBunLikeDatabase(db: DatabaseSync) {
 		prepare(sql: string) {
 			const stmt = db.prepare(sql);
 			return {
-				all(params: SQLInputValue[]) {
-					return stmt.all(...(params ?? []));
+				get columnNames() {
+					return stmt.columns().map((column) => column.name);
+				},
+				all(...params: SQLInputValue[]) {
+					return stmt.all(...params);
+				},
+				run(...params: SQLInputValue[]) {
+					return stmt.run(...params);
 				},
 			};
 		},

@@ -44,6 +44,15 @@ if value ~= false then
 end
 return value
 `;
+	// INCR then set EXPIRE only when the counter was just created (value == 1),
+	// so the TTL window is fixed from first creation and never extended.
+	const incrementScript = `
+local value = redis.call("INCR", KEYS[1])
+if value == 1 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return value
+`;
 
 	const prefixKey = (key: string): string => {
 		return `${keyPrefix}${key}`;
@@ -72,6 +81,11 @@ return value
 			// TODO(redis-6.2-required): require Redis >= 6.2 in the next
 			// breaking branch and remove this Lua compatibility fallback.
 			return client.eval(getAndDeleteScript, 1, prefixedKey);
+		},
+
+		async increment(key: string, ttl: number) {
+			const value = await client.eval(incrementScript, 1, prefixKey(key), ttl);
+			return Number(value);
 		},
 
 		async set(key: string, value: string, ttl?: number | undefined) {

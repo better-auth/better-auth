@@ -41,6 +41,60 @@ export interface DB {
 	[key: string]: any;
 }
 
+/**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle's drivers report affected rows under different shapes: postgres-js
+ * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
+ * the first element of a result-header array), and better-sqlite3 uses
+ * `changes`. This normalizes those so `updateMany` and `deleteMany` honor the
+ * `Promise<number>` adapter contract instead of leaking the raw driver result.
+ */
+function getAffectedRowCount(
+	result: unknown,
+	operation: "updateMany" | "deleteMany",
+	context: { model: string; where: Where[] },
+): number {
+	let count: unknown = 0;
+	if (result && typeof result === "object" && "rowCount" in result) {
+		count = (result as { rowCount: unknown }).rowCount;
+	} else if (Array.isArray(result)) {
+		count =
+			result.length > 0 && hasDriverRowCount(result[0])
+				? readDriverRowCount(result[0])
+				: result.length;
+	} else if (hasDriverRowCount(result)) {
+		count = readDriverRowCount(result);
+	}
+	if (typeof count !== "number") {
+		logger.error(
+			`[Drizzle Adapter] The result of the ${operation} operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			{ result, ...context },
+		);
+		return 0;
+	}
+	return count;
+}
+
+function hasDriverRowCount(result: unknown): boolean {
+	return (
+		!!result &&
+		typeof result === "object" &&
+		("affectedRows" in result ||
+			"rowsAffected" in result ||
+			"changes" in result)
+	);
+}
+
+function readDriverRowCount(result: unknown): unknown {
+	const r = result as {
+		affectedRows?: unknown;
+		rowsAffected?: unknown;
+		changes?: unknown;
+	};
+	return r.affectedRows ?? r.rowsAffected ?? r.changes;
+}
+
 export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
@@ -888,7 +942,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
-					return await builder;
+					const res = await builder;
+					return getAffectedRowCount(res, "updateMany", { model, where });
 				},
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -901,21 +956,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
 					const res = await builder;
-					let count = 0;
-					if (res && "rowCount" in res) count = res.rowCount;
-					else if (Array.isArray(res)) count = res.length;
-					else if (
-						res &&
-						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
-					if (typeof count !== "number") {
-						logger.error(
-							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
-							{ res, model, where },
-						);
-					}
-					return count;
+					return getAffectedRowCount(res, "deleteMany", { model, where });
 				},
 				async consumeOne({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -970,6 +1011,91 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(inArray(idColumn, targetIds))
 						.returning();
 					return (deleted[0] as any) ?? null;
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					// Build `field = field + delta` for each increment plus the absolute
+					// `set` assignments. The where clause selects and guards the row, but
+					// the mutation is pinned to a single id so a non-unique guard cannot
+					// touch more than one row (single-row contract, like consumeOne).
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model, field });
+						const column = schemaModel[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${delta}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model, field });
+							if (!schemaModel[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+
+					if (config.provider === "mysql") {
+						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
+						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
+						// serialize, then read the mutated row back by id.
+						const mutateInTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							await tx
+								.update(schemaModel)
+								.set(assignments)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const updated = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(idColumn, targetId))
+								.limit(1)
+								.execute();
+							return (updated[0] as any) ?? null;
+						};
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
+					}
+
+					if (!idColumn) {
+						return null;
+					}
+					// Pin the update to one selected id so a non-unique guard mutates at
+					// most one row, mirroring consumeOne's single-row selection.
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const updated = await db
+						.update(schemaModel)
+						.set(assignments)
+						.where(inArray(idColumn, targetIds))
+						.returning();
+					return (updated[0] as any) ?? null;
 				},
 				options: config,
 			};

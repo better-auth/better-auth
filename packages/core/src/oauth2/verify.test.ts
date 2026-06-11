@@ -177,17 +177,18 @@ describe("verifyAccessToken", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
-	it("should translate missing kid failures to unauthorized API errors", async () => {
-		const { privateKey } = await createTestJWKS();
+	it("should verify a JWS without kid using the fetched JWKS", async () => {
+		const { publicJWK, privateKey } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, undefined);
+		mockJWKSResponse(publicJWK);
 
-		await expectUnauthorized(
+		await expect(
 			verifyAccessToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
-		);
-		expect(mockedFetch).not.toHaveBeenCalled();
+		).resolves.toMatchObject({ sub: "user-123" });
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
 	});
 
 	/**
@@ -316,6 +317,243 @@ describe("verifyAccessToken", () => {
 			vi.useRealTimers();
 		}
 
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
+	it("should not retain function jwks sources in the cache", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify, jwksCache } = await import(
+			"./verify"
+		);
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+
+		// A fresh closure per call, like per-request callers do.
+		for (let i = 0; i < 3; i++) {
+			await expect(
+				verify(token, {
+					jwksFetch: async () => ({ keys: [publicJWK] }),
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+		}
+
+		expect(jwksCache.size).toBe(0);
+		vi.resetModules();
+	});
+
+	it("should invoke a function jwks source on every verification", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const jwksFetch = vi.fn(async () => ({ keys: [publicJWK] }));
+
+		await expect(
+			verify(token, { jwksFetch, verifyOptions: { issuer, audience } }),
+		).resolves.toMatchObject({ sub: "user-123" });
+		await expect(
+			verify(token, { jwksFetch, verifyOptions: { issuer, audience } }),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(jwksFetch).toHaveBeenCalledTimes(2);
+		vi.resetModules();
+	});
+
+	it("should fetch a function jwks source once across verifications sharing a jwksCacheKey", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const jwksCacheKey = {};
+		let fetchCount = 0;
+
+		// A fresh closure per call, like per-request callers do.
+		for (let i = 0; i < 3; i++) {
+			await expect(
+				verify(token, {
+					jwksFetch: async () => {
+						fetchCount++;
+						return { keys: [publicJWK] };
+					},
+					jwksCacheKey,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+		}
+
+		expect(fetchCount).toBe(1);
+		vi.resetModules();
+	});
+
+	it("should isolate cached function jwks sources by jwksCacheKey object", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const sourceA = await createTestJWKS();
+		const sourceB = await createTestJWKS();
+		const tokenA = await createSignedToken(sourceA.privateKey, sourceA.kid);
+		const tokenB = await createSignedToken(sourceB.privateKey, sourceB.kid);
+		const cacheKeyA = {};
+		const cacheKeyB = {};
+		const fetchA = vi.fn(async () => ({ keys: [sourceA.publicJWK] }));
+		const fetchB = vi.fn(async () => ({ keys: [sourceB.publicJWK] }));
+
+		await expect(
+			verify(tokenA, {
+				jwksFetch: fetchA,
+				jwksCacheKey: cacheKeyA,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+		await expect(
+			verify(tokenB, {
+				jwksFetch: fetchB,
+				jwksCacheKey: cacheKeyB,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+		// Source B's fetch must not have evicted source A's entry.
+		await expect(
+			verify(tokenA, {
+				jwksFetch: fetchA,
+				jwksCacheKey: cacheKeyA,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(fetchA).toHaveBeenCalledTimes(1);
+		expect(fetchB).toHaveBeenCalledTimes(1);
+		vi.resetModules();
+	});
+
+	it("should refetch a function jwks source when the token kid is missing from the cached set", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const oldKey = await createTestJWKS();
+		const newKey = await createTestJWKS();
+		const jwksCacheKey = {};
+		let currentKeys = [oldKey.publicJWK];
+		const jwksFetch = vi.fn(async () => ({ keys: currentKeys }));
+
+		const oldToken = await createSignedToken(oldKey.privateKey, oldKey.kid);
+		await expect(
+			verify(oldToken, {
+				jwksFetch,
+				jwksCacheKey,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		// A newly rotated-in kid is absent from the cached set and must refetch.
+		currentKeys = [oldKey.publicJWK, newKey.publicJWK];
+		const newToken = await createSignedToken(newKey.privateKey, newKey.kid);
+		await expect(
+			verify(newToken, {
+				jwksFetch,
+				jwksCacheKey,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(jwksFetch).toHaveBeenCalledTimes(2);
+		vi.resetModules();
+	});
+
+	it("should refetch a cached jwks source when a no-kid token fails against the cached set", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const oldKey = await createTestJWKS();
+		const newKey = await createTestJWKS();
+		let currentKey = oldKey.publicJWK;
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(currentKey)),
+		);
+
+		const oldToken = await createSignedToken(oldKey.privateKey, undefined);
+		await expect(
+			verify(oldToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		currentKey = newKey.publicJWK;
+		const newToken = await createSignedToken(newKey.privateKey, undefined);
+		await expect(
+			verify(newToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
+	it("should not repeatedly refetch a fresh jwks source for invalid no-kid tokens", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const validKey = await createTestJWKS();
+		const invalidKey = await createTestJWKS();
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(validKey.publicJWK)),
+		);
+
+		const validToken = await createSignedToken(validKey.privateKey, undefined);
+		await expect(
+			verify(validToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		const invalidToken = await createSignedToken(
+			invalidKey.privateKey,
+			undefined,
+		);
+		await expect(
+			verify(invalidToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toThrow();
+		await expect(
+			verify(invalidToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toThrow();
+
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
+	it("should cache a string jwks source across verifications within the TTL", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(publicJWK)),
+		);
+
+		await expect(
+			verify(token, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+		await expect(
+			verify(token, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
 		mockedFetch.mockReset();
 		vi.resetModules();
 	});
