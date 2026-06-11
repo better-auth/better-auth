@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
@@ -242,9 +242,7 @@ describe("Electron", () => {
 		});
 
 		const codeVerifier = base64Url.encode(randomBytes(32));
-		const codeChallenge = base64Url.encode(
-			await createHash("SHA-256").digest(codeVerifier),
-		);
+		const codeChallenge = await s256Challenge(codeVerifier);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
