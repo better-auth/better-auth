@@ -63,14 +63,14 @@ export const inferAdditionalFields = <
 					version: string;
 					schema: {
 						user: {
-							fields: Opts["user"] extends {
+							fields: NonNullable<Opts["user"]> extends {
 								additionalFields: infer U;
 							}
 								? U
 								: {};
 						};
 						session: {
-							fields: Opts["session"] extends {
+							fields: NonNullable<Opts["session"]> extends {
 								additionalFields: infer U;
 							}
 								? U
@@ -80,11 +80,13 @@ export const inferAdditionalFields = <
 				}
 			: never;
 
+	type AdditionalFieldsClientPlugin = BetterAuthClientPlugin & {
+		$InferServerPlugin: Plugin extends BetterAuthPlugin ? Plugin : never;
+	};
+
 	return {
 		id: "additional-fields-client",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as Plugin extends BetterAuthPlugin
-			? Plugin
-			: undefined,
-	} satisfies BetterAuthClientPlugin;
+		$InferServerPlugin: {} as Plugin extends BetterAuthPlugin ? Plugin : never,
+	} as AdditionalFieldsClientPlugin;
 };
