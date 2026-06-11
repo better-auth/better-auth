@@ -13,6 +13,7 @@ const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
 	fetchSession: () => Promise<void>;
+	shouldPollSession?: () => boolean;
 	sessionSignal: WritableAtom<boolean>;
 	options?: BetterAuthClientOptions | undefined;
 }
@@ -27,7 +28,12 @@ interface SessionRefreshState {
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
-	const { fetchSession, sessionSignal, options = {} } = opts;
+	const {
+		fetchSession,
+		shouldPollSession = () => true,
+		sessionSignal,
+		options = {},
+	} = opts;
 
 	const refetchInterval = options.sessionOptions?.refetchInterval ?? 0;
 	const refetchOnWindowFocus =
@@ -89,7 +95,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const setupPolling = () => {
 		if (refetchInterval && refetchInterval > 0) {
 			state.pollInterval = setInterval(() => {
-				triggerRefetch({ event: "poll" });
+				if (shouldPollSession()) {
+					triggerRefetch({ event: "poll" });
+				}
 			}, refetchInterval * 1000);
 		}
 	};

@@ -47,6 +47,30 @@ describe("session-refresh", () => {
 		manager.cleanup();
 	});
 
+	it("should not poll when shouldPollSession returns false", async () => {
+		const sessionSignal = atom(false);
+		const mockFetchSession = vi.fn(async () => {});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			shouldPollSession: () => false,
+			sessionSignal,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetchSession).not.toHaveBeenCalled();
+
+		manager.cleanup();
+	});
+
 	it("should rate limit refetch on focus if a session request was made recently", () => {
 		const sessionSignal = atom(false);
 		const mockFetchSession = vi.fn(async () => {});

@@ -45,6 +45,12 @@ function normalizeSessionResponse(res: unknown): {
 	return { data: res as SessionResponse, error: null };
 }
 
+function normalizeSessionData(
+	data: SessionResponse | null,
+): SessionData | null {
+	return data?.session && data?.user ? (data as SessionData) : null;
+}
+
 function isSessionAtomEqual(
 	a: AuthQueryState<SessionData>,
 	b: AuthQueryState<SessionData>,
@@ -131,7 +137,7 @@ export function getSessionAtom(
 				return;
 			}
 
-			const sessionData = (data ?? null) as SessionData | null;
+			const sessionData = normalizeSessionData(data);
 			const current = session.get();
 			const stableData =
 				current.data != null &&
@@ -174,6 +180,7 @@ export function getSessionAtom(
 
 		const refreshManager = createSessionRefreshManager({
 			fetchSession,
+			shouldPollSession: () => session.get().data != null,
 			sessionSignal: $signal,
 			options,
 		});

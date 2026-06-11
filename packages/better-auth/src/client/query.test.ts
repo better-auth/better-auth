@@ -103,6 +103,22 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBeNull();
 	});
 
+	it("should normalize null session responses to null data", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(JSON.stringify({ session: null, user: null })),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		expect(session().data).toBeNull();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */
@@ -247,6 +263,9 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBe(initialData);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9613
+	 */
 	it("should avoid an extra post-focus session fetch when the refreshed payload is unchanged", async () => {
 		let fetchCallCount = 0;
 		const getSessionPayload = () => ({
