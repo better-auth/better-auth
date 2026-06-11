@@ -138,20 +138,11 @@ function createDatabaseStorageWrapper(
 		const data = await readRow(key);
 		const now = Date.now();
 
-		// Fresh key: open the window guarded so a concurrent opener cannot be
-		// silently overwritten.
+		// Fresh key: open the window only by creating the row. An update here
+		// would reset the count for a key a concurrent request already opened,
+		// letting every racer pass; creating instead means one request opens the
+		// window and the rest fall through to re-read and be counted.
 		if (!data) {
-			const started = await db
-				.incrementOne<RateLimit>({
-					model,
-					where: [{ field: "key", value: key }],
-					increment: {},
-					set: { count: 1, lastRequest: now },
-				})
-				.catch(() => null);
-			if (started) {
-				return { allowed: true, retryAfter: null };
-			}
 			try {
 				await db.create({
 					model,
