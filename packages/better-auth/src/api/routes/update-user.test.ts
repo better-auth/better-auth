@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { anonymous } from "../../plugins/anonymous";
+import { anonymousClient } from "../../plugins/anonymous/client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
@@ -216,6 +218,60 @@ describe("updateUser", async () => {
 		expect(new Date(newUpdatedAt).getTime()).toBeGreaterThan(
 			new Date(initialUpdatedAt).getTime(),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9994
+	 */
+	it("should set password for a session without a credential account", async () => {
+		const { client, sessionSetter, db } = await getTestInstance(
+			{
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const anonymousSignIn = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const userId = anonymousSignIn.data?.user.id;
+
+		expect(anonymousSignIn.error).toBeNull();
+		expect(userId).toBeDefined();
+
+		const res = await client.setPassword({
+			newPassword: "securepassword123",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.status).toBe(true);
+
+		const credentialAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(credentialAccounts).toHaveLength(1);
+		expect(credentialAccounts[0]?.password).toBeTruthy();
 	});
 
 	it("should not update password if current password is wrong", async () => {

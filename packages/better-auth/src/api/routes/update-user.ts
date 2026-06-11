@@ -315,8 +315,10 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
+	"/set-password",
 	{
 		method: "POST",
+		operationId: "setPassword",
 		body: z.object({
 			/**
 			 * The new password to set
@@ -326,6 +328,31 @@ export const setPassword = createAuthEndpoint(
 			}),
 		}),
 		use: [sensitiveSessionMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "setPassword",
+				description: "Set the password for the user",
+				responses: {
+					"200": {
+						description: "Password successfully set",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+											description: "Indicates if the password was set",
+										},
+									},
+									required: ["status"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	async (ctx) => {
 		const { newPassword } = ctx.body;
