@@ -176,21 +176,16 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				async (c) => {
 					const { token } = c.body;
 					const storedToken = await storeToken(c, token);
+					// Atomically burn the single-use record before issuing a session,
+					// so two concurrent redemptions of the same token resolve to one
+					// success. A null return means missing or expired (already burned).
 					const verificationValue =
-						await c.context.internalAdapter.findVerificationValue(
+						await c.context.internalAdapter.consumeVerificationValue(
 							`one-time-token:${storedToken}`,
 						);
 					if (!verificationValue) {
 						throw c.error("BAD_REQUEST", {
 							message: "Invalid token",
-						});
-					}
-					await c.context.internalAdapter.deleteVerificationByIdentifier(
-						`one-time-token:${storedToken}`,
-					);
-					if (verificationValue.expiresAt < new Date()) {
-						throw c.error("BAD_REQUEST", {
-							message: "Token expired",
 						});
 					}
 					const session = await c.context.internalAdapter.findSession(
