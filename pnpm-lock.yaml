@@ -114,6 +114,9 @@ importers:
       '@arethetypeswrong/cli':
         specifier: ^0.18.2
         version: 0.18.2
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@biomejs/biome':
         specifier: 2.4.4
         version: 2.4.4

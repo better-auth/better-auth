@@ -15,7 +15,7 @@ export const ssoConfigPage = createUIPage({
 	id: "sso.config",
 	path: "/sso-config",
 	title: "SSO Configuration",
-	render() {
+	render(_ctx) {
 		return (
 			<main class="ba-page">
 				<Card>
