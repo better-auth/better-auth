@@ -847,6 +847,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				await adapter.updateInvitation({
 					invitationId: ctx.body.invitationId,
 					status: "pending",
+					fromStatus: "accepted",
 				});
 				throw error;
 			});

@@ -68,7 +68,7 @@ function decideConsume(
 		};
 	}
 	const timeSinceLastRequest = now - data.lastRequest;
-	if (timeSinceLastRequest > windowInMs) {
+	if (timeSinceLastRequest >= windowInMs) {
 		return {
 			next: { ...data, count: 1, lastRequest: now },
 			update: true,
@@ -118,6 +118,8 @@ function createDatabaseStorageWrapper(
 ): BetterAuthRateLimitStorage {
 	const model = "rateLimit";
 	const db = ctx.adapter;
+	let longestObservedWindow = Math.max(...getConfiguredRateLimitWindows(ctx));
+	const shouldPruneRows = !hasDynamicRateLimitWindows(ctx);
 	const readRow = async (key: string) => {
 		const res = await db.findMany<RateLimit>({
 			model,
@@ -134,6 +136,9 @@ function createDatabaseStorageWrapper(
 		key: string,
 		rule: { window: number; max: number },
 	): Promise<{ allowed: boolean; retryAfter: number | null }> => {
+		if (rule.window > longestObservedWindow) {
+			longestObservedWindow = rule.window;
+		}
 		const windowInMs = rule.window * 1000;
 		const data = await readRow(key);
 		const now = Date.now();
@@ -166,7 +171,7 @@ function createDatabaseStorageWrapper(
 
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
-		if (timeSinceLastRequest > windowInMs) {
+		if (timeSinceLastRequest >= windowInMs) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
 				where: [
@@ -211,7 +216,7 @@ function createDatabaseStorageWrapper(
 		if (!fresh) {
 			return consume(key, rule);
 		}
-		if (now - fresh.lastRequest > windowInMs) {
+		if (now - fresh.lastRequest >= windowInMs) {
 			return consume(key, rule);
 		}
 		return {
@@ -223,11 +228,10 @@ function createDatabaseStorageWrapper(
 	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
 	// here never blocks the request.
 	const deleteExpiredRows = (now: number) => {
-		const longestWindow = Math.max(
-			ctx.rateLimit.window,
-			...getDefaultSpecialRules().map((r) => r.window),
-		);
-		const cutoff = now - longestWindow * 1000;
+		if (!shouldPruneRows) {
+			return;
+		}
+		const cutoff = now - longestObservedWindow * 1000;
 		ctx.runInBackground(
 			db
 				.deleteMany({
@@ -242,6 +246,35 @@ function createDatabaseStorageWrapper(
 	return {
 		consume,
 	};
+}
+
+function hasDynamicRateLimitWindows(ctx: AuthContext) {
+	return Object.values(ctx.rateLimit.customRules ?? {}).some(
+		(rule) => typeof rule === "function",
+	);
+}
+
+function getConfiguredRateLimitWindows(ctx: AuthContext) {
+	const windows = [
+		ctx.rateLimit.window,
+		...getDefaultSpecialRules().map((rule) => rule.window),
+	];
+	for (const plugin of ctx.options.plugins || []) {
+		if (plugin.rateLimit) {
+			windows.push(...plugin.rateLimit.map((rule) => rule.window));
+		}
+	}
+	if (ctx.rateLimit.customRules) {
+		for (const customRule of Object.values(ctx.rateLimit.customRules)) {
+			if (customRule && typeof customRule !== "function") {
+				windows.push(customRule.window);
+			}
+		}
+	}
+	const validWindows = windows.filter(
+		(window) => Number.isFinite(window) && window > 0,
+	);
+	return validWindows.length > 0 ? validWindows : [ctx.rateLimit.window];
 }
 
 function getRateLimitStorage(

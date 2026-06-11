@@ -2023,4 +2023,50 @@ describe("accept-invitation validates team capacity before adding the member", a
 		});
 		expect(orgMembers.filter((m) => m.userId === userId)).toHaveLength(1);
 	});
+
+	it("does not reopen an invitation when a stale rollback loses its status guard", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Rollback Guard Team", organizationId: org.id },
+		});
+		const { invitationId } = await inviteAndSignUp(
+			team.id,
+			"rollback-guard@email.com",
+		);
+
+		const accepted = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "pending" },
+			],
+			update: { status: "accepted" },
+		});
+		expect(accepted?.status).toBe("accepted");
+		const rejected = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "accepted" },
+			],
+			update: { status: "rejected" },
+		});
+		expect(rejected?.status).toBe("rejected");
+
+		const staleRollback = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "accepted" },
+			],
+			update: { status: "pending" },
+		});
+		expect(staleRollback).toBeNull();
+
+		const invitationAfter = await ctx.adapter.findOne<{ status: string }>({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+		});
+		expect(invitationAfter?.status).toBe("rejected");
+	});
 });

@@ -894,10 +894,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		/**
 		 * Adds a user to a team only when the team is below its member limit,
-		 * reading the count and creating the membership in one transaction so
-		 * concurrent accepts cannot both pass the check. Returns the existing
-		 * membership unchanged (no capacity charge) when the user already
-		 * belongs to the team.
+		 * reading the count and creating the membership in one transaction where
+		 * the adapter supports one. Returns the existing membership unchanged
+		 * (no capacity charge) when the user already belongs to the team.
+		 *
+		 * FIXME(organization-team-capacity-atomic): this count/create sequence is
+		 * not a portable aggregate-capacity lock on adapters without isolated
+		 * transactions. A full fix needs a durable per-team counter/lock boundary
+		 * and composite teamMember uniqueness.
 		 */
 		addTeamMemberWithLimit: async (data: {
 			teamId: string;
@@ -1105,7 +1109,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			 * guarded update is atomic, so a concurrent caller racing the same
 			 * transition gets `null` instead of both proceeding.
 			 */
-			fromStatus?: "pending";
+			fromStatus?: "pending" | "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const where = [{ field: "id", value: data.invitationId }];

@@ -1,5 +1,5 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
-import { normalizeIP } from "@better-auth/core/utils/ip";
+import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
@@ -201,8 +201,88 @@ describe("atomic concurrent enforcement", () => {
 				});
 				expect(allowed.error?.status).not.toBe(429);
 			});
+
+			it("resets the count at the exact window boundary", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(360000);
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(10000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
 		});
 	}
+});
+
+describe("database rate-limit pruning", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/get-session": { window: 120, max: 10 },
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("keeps active rows from longer configured windows", async () => {
+		const now = Date.now();
+		const longWindowKey = createRateLimitKey("127.0.0.1", "/get-session");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: longWindowKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 11_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeLongWindowRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: longWindowKey }],
+		});
+		expect(activeLongWindowRow).not.toBeNull();
+	});
 });
 
 describe("custom rate limiting storage", async () => {

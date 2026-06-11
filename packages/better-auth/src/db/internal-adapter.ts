@@ -1408,9 +1408,10 @@ export const createInternalAdapter = (
 		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
-		 * re-reading the row rather than matching adapter-specific errors. The
-		 * secondary-storage-only path has no primary key to enforce uniqueness, so
-		 * it is best-effort under concurrency.
+		 * re-reading the row rather than matching adapter-specific errors.
+		 * Secondary-storage-only verification cannot enforce the deterministic
+		 * primary-key gate, so this operation fails closed unless verification is
+		 * backed by the database.
 		 *
 		 * The atomic guarantee requires the configured adapter to reject a
 		 * duplicate primary key on insert, which every real database enforces. The

@@ -1,5 +1,5 @@
 ---
-"@better-auth/core": patch
+"@better-auth/core": minor
 ---
 
-Add the `incrementOne` adapter primitive and the optional `SecondaryStorage.increment` method. `incrementOne` atomically applies signed numeric deltas to a single row under a where-clause guard (for example, decrementing a remaining-uses counter only while it is still positive) and returns the updated row, or null when the guard matched no row. Adapters that do not implement it natively get a transaction-based compare-and-swap fallback. `SecondaryStorage.increment` atomically increments a counter and sets its time-to-live only when the key is first created.
+Add the required `incrementOne` adapter primitive and required `SecondaryStorage.increment` method. `incrementOne` atomically applies signed numeric deltas to a single row under a where-clause guard (for example, decrementing a remaining-uses counter only while it is still positive) and returns the updated row, or null when the guard matched no row. Custom adapters must implement this primitive natively; Better Auth no longer provides a transaction-based fallback for guarded increments. `SecondaryStorage.increment` atomically increments a counter and sets its time-to-live only when the key is first created.
