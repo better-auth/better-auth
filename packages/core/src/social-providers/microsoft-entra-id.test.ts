@@ -117,6 +117,16 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(false);
 	});
 
+	it("accepts a valid token when the authority is configured with a trailing slash", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			authority: `${AUTHORITY}/`,
+		});
+		const token = await signMicrosoftToken({ tid: WORK_TENANT_ID });
+		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(true);
+	});
+
 	it("rejects a token with a non-string tid", async () => {
 		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
 		const token = await new SignJWT({ sub: "ms-user-1" })

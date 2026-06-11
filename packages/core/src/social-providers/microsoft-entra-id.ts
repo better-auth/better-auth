@@ -151,7 +151,12 @@ export interface MicrosoftOptions
 
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
-	const authority = options.authority || "https://login.microsoftonline.com";
+	// Trim any trailing slash so endpoint URLs and the issuer comparison below
+	// never produce a double slash (e.g. a configured `https://host/` would make
+	// the expected issuer `https://host//<tid>/v2.0` and reject every token).
+	const authority = (
+		options.authority || "https://login.microsoftonline.com"
+	).replace(/\/+$/, "");
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
 	return {
