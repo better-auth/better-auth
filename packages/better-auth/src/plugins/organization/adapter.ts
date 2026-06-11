@@ -923,10 +923,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		/**
 		 * Adds a user to a team only when the team is below its member limit,
-		 * reading the count and creating the membership in one transaction so
-		 * concurrent accepts cannot both pass the check. Returns the existing
-		 * membership unchanged (no capacity charge) when the user already
-		 * belongs to the team.
+		 * reading the count and creating the membership in one transaction.
+		 * Returns the existing membership unchanged (no capacity charge) when the
+		 * user already belongs to the team.
+		 *
+		 * FIXME(team-cap-race): the count-then-create is not atomic under READ
+		 * COMMITTED, so two concurrent adds can both pass the count check and
+		 * exceed maximumMembersPerTeam. A durable fix needs a unique constraint on
+		 * teamMember(teamId, userId) or serializable isolation. Affects every
+		 * caller (acceptInvitation, addMember, addTeamMember).
 		 */
 		addTeamMemberWithLimit: async (data: {
 			teamId: string;
