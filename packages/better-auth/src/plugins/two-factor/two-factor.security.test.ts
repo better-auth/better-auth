@@ -434,7 +434,7 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp" || !enrollment.totpURI) {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -616,7 +616,7 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp" || !enrollment.totpURI) {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({

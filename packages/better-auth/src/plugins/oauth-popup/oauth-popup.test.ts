@@ -7,7 +7,6 @@ import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import {
 	OAUTH_POPUP_COMPLETE_SCRIPT,
 	OAUTH_POPUP_DATA_ELEMENT_ID,
@@ -68,7 +67,6 @@ describe("oauth popup server flow", async () => {
 	});
 
 	const authClient = createAuthClient({
-		plugins: [genericOAuthClient()],
 		baseURL: popupOrigin,
 		fetchOptions: { customFetchImpl },
 	});
@@ -161,8 +159,8 @@ describe("oauth popup server flow", async () => {
 
 	it("keeps the redirect when it is not a popup flow", async () => {
 		const signInHeaders = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId,
+		const signInRes = await authClient.signIn.social({
+			provider: providerId,
 			callbackURL: `${popupOrigin}/dashboard`,
 			fetchOptions: { onSuccess: cookieSetter(signInHeaders) },
 		});
@@ -199,7 +197,7 @@ describe("oauth popup server flow", async () => {
 		).searchParams.get("state");
 
 		const callbackRes = await customFetchImpl(
-			`${popupOrigin}/api/auth/oauth2/callback/${providerId}?state=${state}&error=access_denied`,
+			`${popupOrigin}/api/auth/callback/${providerId}?state=${state}&error=access_denied`,
 			{ method: "GET", headers: cookies, redirect: "manual" },
 		);
 

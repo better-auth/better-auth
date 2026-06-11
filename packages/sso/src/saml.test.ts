@@ -4796,7 +4796,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
