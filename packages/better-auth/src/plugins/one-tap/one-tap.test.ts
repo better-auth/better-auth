@@ -367,3 +367,51 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBe(0);
 	});
 });
+
+describe("one-tap callbackURL origin validation", async () => {
+	const googleProvider = {
+		clientId: "test-client",
+		clientSecret: "test-secret",
+		enabled: true,
+	};
+
+	it("rejects an untrusted callbackURL via the global origin check", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+			advanced: { disableOriginCheck: false },
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: {
+				idToken: "stub-id-token",
+				callbackURL: "https://evil.example/steal",
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("accepts a relative callbackURL (origin check passes)", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+			advanced: { disableOriginCheck: false },
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", callbackURL: "/dashboard" },
+		});
+
+		// The origin check must not block a same-app relative redirect target.
+		expect(res.error?.status).not.toBe(403);
+	});
+});
