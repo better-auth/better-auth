@@ -878,9 +878,22 @@ export const kyselyAdapter = (
 							: db.transaction().execute(incrementInTransaction);
 					}
 
-					const updateQuery = applyWhere(
-						db.updateTable(model).set(assignments),
+					// Scope the update to a single matching row by targeting
+					// `id IN (SELECT id WHERE guard LIMIT 1)`, mirroring consumeOne. A
+					// bare guarded UPDATE would mutate every matching row, violating the
+					// single-row contract when the guard is non-unique.
+					const selectIds = applyWhere(
+						db.selectFrom(model).select(`${model}.${idField}`),
 					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
+					const updateQuery = db
+						.updateTable(model)
+						.set(assignments)
+						.where(`${model}.${idField}`, "in", targetIds);
 					if (config?.type === "mssql") {
 						return (
 							(await updateQuery.outputAll("inserted").executeTakeFirst()) ??

@@ -135,6 +135,63 @@ describe("kysely incrementOne native", () => {
 		expect(result?.status).toBe("closed");
 	});
 
+	it("mutates exactly one row when the guard matches multiple", async () => {
+		await db
+			.insertInto("counters")
+			.values([
+				{
+					id: "d1",
+					name: "shared",
+					remaining: 5,
+					used: 0,
+					status: "open",
+				},
+				{
+					id: "d2",
+					name: "shared",
+					remaining: 5,
+					used: 0,
+					status: "open",
+				},
+				{
+					id: "d3",
+					name: "shared",
+					remaining: 5,
+					used: 0,
+					status: "open",
+				},
+			])
+			.execute();
+		const adapter = buildAdapter();
+
+		// The guard (`remaining > 0`) matches all three rows, but the single-row
+		// contract requires that at most one row is mutated and returned.
+		const result = await adapter.incrementOne<CountersTable>({
+			model: "counters",
+			where: [
+				{ field: "name", value: "shared" },
+				{ field: "remaining", value: 0, operator: "gt" },
+			],
+			increment: { remaining: -1, used: 1 },
+		});
+
+		expect(result?.remaining).toBe(4);
+		expect(result?.used).toBe(1);
+
+		const rows = await db
+			.selectFrom("counters")
+			.selectAll()
+			.where("name", "=", "shared")
+			.orderBy("id")
+			.execute();
+		const mutated = rows.filter((r) => r.remaining === 4 && r.used === 1);
+		const untouched = rows.filter((r) => r.remaining === 5 && r.used === 0);
+		expect(mutated).toHaveLength(1);
+		expect(untouched).toHaveLength(2);
+		// The returned row is the one that was actually mutated.
+		expect(mutated[0]?.id).toBe(result?.id);
+	});
+
 	it("returns null when the guard matches no row and leaves data untouched", async () => {
 		await db
 			.insertInto("counters")

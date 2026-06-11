@@ -1015,10 +1015,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				async incrementOne({ model, where, increment, set }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
 
 					// Build `field = field + delta` for each increment plus the absolute
-					// `set` assignments. The where clause is both selector and guard, so
-					// the database applies the mutation only while the predicates hold.
+					// `set` assignments. The where clause selects and guards the row, but
+					// the mutation is pinned to a single id so a non-unique guard cannot
+					// touch more than one row (single-row contract, like consumeOne).
 					const assignments: Record<string, unknown> = {};
 					for (const [field, delta] of Object.entries(increment)) {
 						const columnName = getFieldName({ model, field });
@@ -1046,8 +1049,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
 						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
 						// serialize, then read the mutated row back by id.
-						const idField = getFieldName({ model, field: "id" });
-						const idColumn = schemaModel[idField];
 						const mutateInTransaction = async (tx: DB) => {
 							const rows = await tx
 								.select()
@@ -1079,10 +1080,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							: db.transaction(mutateInTransaction);
 					}
 
+					if (!idColumn) {
+						return null;
+					}
+					// Pin the update to one selected id so a non-unique guard mutates at
+					// most one row, mirroring consumeOne's single-row selection.
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
 					const updated = await db
 						.update(schemaModel)
 						.set(assignments)
-						.where(...clause)
+						.where(inArray(idColumn, targetIds))
 						.returning();
 					return (updated[0] as any) ?? null;
 				},

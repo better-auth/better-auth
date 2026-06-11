@@ -697,62 +697,72 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// Prisma applies `{ [field]: { increment: delta } }` server-side, so
 					// the read of the current value and the write of `value + delta`
-					// happen in a single statement. The `where` clause doubles as the
-					// guard (operators like `gt`/`lt` are honored), so a racer that
-					// invalidated it (e.g. remaining dropped to 0) cannot be updated.
+					// happen in a single statement. The contract mutates at most one
+					// row, so we resolve a single target id and key the write on it the
+					// same way `consumeOne` does, never `updateMany`.
 					const data: Record<string, unknown> = { ...(set ?? {}) };
 					for (const [field, delta] of Object.entries(increment)) {
 						data[field] = { increment: delta };
 					}
 
-					// updateMany returns only a count, never the row. We re-read the
-					// mutated row by id inside the same atomic boundary consumeOne uses
-					// so a concurrent mutation between the update and the read cannot
-					// surface a value from a different transaction.
-					const mutateInTransaction = async (tx: PrismaClient) => {
-						const guardWhere = convertWhereClause({
+					// `prisma.model.update` requires a WhereUniqueInput and returns the
+					// mutated row. When the caller keys on the primary key we update in a
+					// single round trip; otherwise we resolve the target id inside a
+					// transaction and update by id. Either way the original guard stays in
+					// the where, so a racer that invalidated it (e.g. remaining dropped to
+					// 0) yields P2025 and we report no mutation.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
 							model,
 							where,
-							action: "updateMany",
+							action: "update",
 						});
+						try {
+							const row = await db[model]!.update({
+								where: whereClause,
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
+					const mutateInTransaction = async (tx: PrismaClient) => {
 						const target = await (tx as any)[model].findFirst({
-							where: guardWhere,
+							where: findWhere,
 						});
 						if (!target) return null;
-						const result = await (tx as any)[model].updateMany({
-							where: convertWhereClause({
-								model,
-								where: [
-									...where,
-									{
-										field: "id",
-										value: (target as any).id,
-										operator: "eq",
-										connector: "AND",
-										mode: "sensitive",
-									},
-								],
-								action: "updateMany",
-							}),
-							data,
-						});
-						if (!result?.count) return null;
-						const updated = await (tx as any)[model].findFirst({
-							where: convertWhereClause({
-								model,
-								where: [
-									{
-										field: "id",
-										value: (target as any).id,
-										operator: "eq",
-										connector: "AND",
-										mode: "sensitive",
-									},
-								],
-								action: "findOne",
-							}),
-						});
-						return (updated as any) ?? null;
+						try {
+							const row = await (tx as any)[model].update({
+								where: convertWhereClause({
+									model,
+									where: [
+										...where,
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "update",
+								}),
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
 					};
 
 					return inTransaction || typeof db.$transaction !== "function"

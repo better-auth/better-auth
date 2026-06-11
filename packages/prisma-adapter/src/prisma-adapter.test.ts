@@ -313,21 +313,14 @@ describe("prisma-adapter", () => {
 		expect(del).toHaveBeenCalledTimes(1);
 	});
 
-	it("incrementOne applies a positive delta via Prisma's increment operator", async () => {
-		const target = { id: "counter-id", remaining: 3 };
-		const txClient = {
-			verification: {
-				findFirst: vi
-					.fn()
-					.mockResolvedValueOnce(target)
-					.mockResolvedValueOnce({ id: "counter-id", remaining: 4 }),
-				updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-			},
-		};
-		const transaction = vi.fn(async (cb) => cb(txClient));
+	it("incrementOne keyed on the primary key updates that one row in a single round trip", async () => {
+		const update = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const findFirst = vi.fn();
 		const adapter = createCounterAdapter({
-			$transaction: transaction,
-			verification: {},
+			$transaction: vi.fn(),
+			verification: { findFirst, update },
 		});
 
 		const result = await adapter.incrementOne({
@@ -337,23 +330,24 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toEqual({ id: "counter-id", remaining: 4 });
-		expect(txClient.verification.updateMany).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: { remaining: { increment: 1 } },
-			}),
-		);
+		// No transaction or pre-read: the unique key resolves a single row directly.
+		expect(findFirst).not.toHaveBeenCalled();
+		expect(update).toHaveBeenCalledWith({
+			where: { id: "counter-id" },
+			data: { remaining: { increment: 1 } },
+		});
 	});
 
 	it("incrementOne decrements with a negative delta and applies set values", async () => {
 		const target = { id: "counter-id", remaining: 2 };
 		const txClient = {
 			verification: {
-				findFirst: vi.fn().mockResolvedValueOnce(target).mockResolvedValueOnce({
+				findFirst: vi.fn().mockResolvedValue(target),
+				update: vi.fn().mockResolvedValue({
 					id: "counter-id",
 					remaining: 1,
 					lastRefill: 1700,
 				}),
-				updateMany: vi.fn().mockResolvedValue({ count: 1 }),
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -374,24 +368,63 @@ describe("prisma-adapter", () => {
 			remaining: 1,
 			lastRefill: 1700,
 		});
-		expect(txClient.verification.updateMany).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({
-					lastRefill: 1700,
-					remaining: { increment: -1 },
-				}),
-				where: {
-					AND: [{ remaining: { gt: 0 } }, { id: { equals: "counter-id" } }],
-				},
+		expect(txClient.verification.update).toHaveBeenCalledWith({
+			where: {
+				id: "counter-id",
+				AND: [{ remaining: { gt: 0 } }],
+			},
+			data: expect.objectContaining({
+				lastRefill: 1700,
+				remaining: { increment: -1 },
 			}),
-		);
+		});
+	});
+
+	// A non-unique guard (e.g. `remaining > 0`) can match many rows, but the
+	// contract mutates at most one. The adapter resolves a single target id and
+	// keys the write on it, so `update` (single-row) runs and `updateMany` never
+	// does, leaving every other matching row untouched.
+	it("incrementOne with a non-unique guard mutates exactly one matching row", async () => {
+		const target = { id: "row-1", remaining: 5 };
+		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+		const updateMany = vi.fn();
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				update,
+				updateMany,
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toEqual({ id: "row-1", remaining: 4 });
+		expect(updateMany).not.toHaveBeenCalled();
+		expect(update).toHaveBeenCalledTimes(1);
+		expect(update).toHaveBeenCalledWith({
+			where: {
+				id: "row-1",
+				AND: [{ remaining: { gt: 0 } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
 	});
 
 	it("incrementOne returns null when the guard matches no row", async () => {
+		const update = vi.fn();
 		const txClient = {
 			verification: {
 				findFirst: vi.fn().mockResolvedValue(null),
-				updateMany: vi.fn(),
+				update,
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -407,17 +440,20 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toBeNull();
-		expect(txClient.verification.updateMany).not.toHaveBeenCalled();
+		expect(update).not.toHaveBeenCalled();
 	});
 
 	it("incrementOne returns null when a racer invalidated the guard between read and write", async () => {
 		const target = { id: "counter-id", remaining: 1 };
+		const notFound = Object.assign(new Error("Record to update not found."), {
+			code: "P2025",
+		});
 		const txClient = {
 			verification: {
 				findFirst: vi.fn().mockResolvedValue(target),
-				// The guarded updateMany matches no row because a concurrent caller
-				// already drove `remaining` to 0 after the read.
-				updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+				// The guarded update matches no row because a concurrent caller
+				// already drove `remaining` to 0 after the read; Prisma raises P2025.
+				update: vi.fn().mockRejectedValue(notFound),
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -433,7 +469,7 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toBeNull();
-		expect(txClient.verification.updateMany).toHaveBeenCalledTimes(1);
+		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
