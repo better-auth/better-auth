@@ -1637,5 +1637,19 @@ describe("accept-invitation validates team capacity before adding the member", a
 		});
 		expect(members).toHaveLength(2);
 		expect(members.some((m) => m.userId === userId)).toBe(false);
+
+		// The invitation must stay pending so the invitee can retry; a capacity
+		// failure cannot leave them marked accepted with no membership.
+		const invitationAfter = await ctx.adapter.findOne<{ status: string }>({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+		});
+		expect(invitationAfter?.status).toBe("pending");
+
+		const orgMembers = await ctx.adapter.findMany<{ userId: string }>({
+			model: "member",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+		expect(orgMembers.some((m) => m.userId === userId)).toBe(false);
 	});
 });

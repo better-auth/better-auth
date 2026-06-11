@@ -732,23 +732,17 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const acceptedI = await adapter.updateInvitation({
-				invitationId: ctx.body.invitationId,
-				status: "accepted",
-			});
-			if (!acceptedI) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
-				);
-			}
+			// Mark the invitation accepted only after the membership work below
+			// succeeds. A capacity failure must leave the invitation pending so
+			// the invitee can retry, rather than stranding them as "accepted"
+			// with no team or organization membership.
 			if (
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
-				"teamId" in acceptedI &&
-				acceptedI.teamId
+				"teamId" in invitation &&
+				invitation.teamId
 			) {
-				const teamIds = (acceptedI.teamId as string).split(",");
+				const teamIds = (invitation.teamId as string).split(",");
 				const onlyOne = teamIds.length === 1;
 
 				for (const teamId of teamIds) {
@@ -828,6 +822,18 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 				ctx,
 			);
+
+			const acceptedI = await adapter.updateInvitation({
+				invitationId: ctx.body.invitationId,
+				status: "accepted",
+			});
+			if (!acceptedI) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+				);
+			}
+
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,
