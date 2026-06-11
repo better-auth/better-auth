@@ -518,4 +518,97 @@ describe("captcha", async () => {
 			});
 		});
 	});
+
+	describe("action and hostname binding", async () => {
+		it("rejects a Turnstile token whose action does not match expectedAction", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						expectedAction: "login",
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({
+				data: { success: true, action: "signup", hostname: "myapp.com" },
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("rejects a Turnstile token from a hostname outside allowedHostnames", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						allowedHostnames: ["myapp.com"],
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({
+				data: { success: true, hostname: "evil.example" },
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("rejects a reCAPTCHA v3 token whose action does not match expectedAction", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "google-recaptcha",
+						secretKey: "xx-secret-key",
+						expectedAction: "login",
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({
+				data: {
+					success: true,
+					score: 0.9,
+					action: "signup",
+					hostname: "myapp.com",
+					challenge_ts: "2022-02-28T15:14:30.096Z",
+				},
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("accepts a token when action and hostname match", async () => {
+			const { client, testUser } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						expectedAction: "login",
+						allowedHostnames: ["myapp.com"],
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({
+				data: { success: true, action: "login", hostname: "myapp.com" },
+			});
+			const res = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+			expect(res.error?.status).not.toBe(403);
+		});
+	});
 });
