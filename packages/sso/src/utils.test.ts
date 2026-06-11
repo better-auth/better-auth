@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { getHostnameFromDomain, validateEmailDomain } from "./utils";
+import {
+	getHostnameFromDomain,
+	parseProviderEmailVerified,
+	validateEmailDomain,
+} from "./utils";
+
+describe("parseProviderEmailVerified", () => {
+	it('treats only boolean true and the string "true" as verified', () => {
+		expect(parseProviderEmailVerified(true)).toBe(true);
+		expect(parseProviderEmailVerified("true")).toBe(true);
+	});
+
+	it('treats the string "false" as unverified (the coercion bug)', () => {
+		expect(parseProviderEmailVerified("false")).toBe(false);
+	});
+
+	it("treats every other value as unverified", () => {
+		for (const value of [
+			false,
+			"False",
+			"TRUE",
+			"0",
+			"1",
+			0,
+			1,
+			"",
+			" ",
+			undefined,
+			null,
+			{},
+			[],
+			["true"],
+		]) {
+			expect(parseProviderEmailVerified(value)).toBe(false);
+		}
+	});
+});
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/7324
