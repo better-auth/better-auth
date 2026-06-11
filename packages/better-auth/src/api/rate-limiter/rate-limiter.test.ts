@@ -311,11 +311,10 @@ describe("custom rate limiting storage", async () => {
 			lastRequest = rateLimitData.lastRequest;
 			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
-				expect(rateLimitData.count).toBe(3);
 			} else {
 				expect(response.error).toBeNull();
-				expect(rateLimitData.count).toBe(i + 1);
 			}
+			expect(rateLimitData.count).toBe(i + 1);
 			const rateLimitExp = expirationMap.get("127.0.0.1|/sign-in/email");
 			expect(rateLimitExp).toBe(10);
 		}
