@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Approved device codes are now claimed atomically during token polling, so concurrent polls can no longer redeem the same device code more than once.
+Polling for a device-authorization token can no longer redeem the same approved device code more than once when several polls arrive together.

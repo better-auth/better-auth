@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Accepting a team invitation now checks the team's member limit before adding the member, inside a transaction. Previously the member was created first and the count compared afterward, so a team one slot below its limit wrongly rejected the member that should have fit and left an orphaned membership row; concurrent accepts could also exceed the limit.
+When a team had a single open slot, accepting an invitation into it was wrongly rejected as over the member limit and left a dangling membership record. Two invitations accepted into a nearly-full team at the same time could also push it past its limit. Both are fixed.

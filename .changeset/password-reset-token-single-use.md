@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Password reset tokens are now consumed atomically before the password changes, so two concurrent reset requests carrying the same token can no longer both succeed.
+A password reset token can no longer change the password more than once when used from several requests at the same time.

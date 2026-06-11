@@ -2,4 +2,4 @@
 "@better-auth/redis-storage": patch
 ---
 
-Redis secondary storage now implements `increment`, an atomic counter for rate limiting that sets the key's time-to-live only when the key is first created, so a window can no longer be extended by sustained traffic.
+A rate-limit window backed by Redis secondary storage can no longer be extended by continued traffic; its expiry is set once when the window opens. Redis secondary storage gains an atomic `increment` method used for this enforcement.
