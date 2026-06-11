@@ -1,5 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
+import { CAPTCHA_VERIFY_TIMEOUT_MS } from "../constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
 import { encodeToURLParams } from "../utils";
 
@@ -48,6 +49,7 @@ export const googleRecaptcha = async ({
 		siteVerifyURL,
 		{
 			method: "POST",
+			timeout: CAPTCHA_VERIFY_TIMEOUT_MS,
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: encodeToURLParams({
 				secret: secretKey,
