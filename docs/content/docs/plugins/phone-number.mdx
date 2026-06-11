@@ -110,6 +110,33 @@ After the OTP is sent, users can verify their phone number by providing the code
   ```
 </APIMethod>
 
+### Consume an OTP on the Server
+
+For custom sign-up or account-linking flows, consume an OTP without creating or
+updating a user or session. This server-only API is exposed through `auth.api`;
+it does not register an HTTP route or generate an `authClient` method.
+
+```ts title="auth.ts"
+const result = await auth.api.consumePhoneNumberOTP({
+    body: {
+        phoneNumber: "+1234567890",
+        code: "123456"
+    }
+})
+```
+
+This method uses the same validation and consumption behavior as
+`verifyPhoneNumber`; it does not introduce a stronger concurrency guarantee.
+If your server flow can receive parallel redemption attempts and requires
+strict single-use acceptance, configure [`verifyOTP`](#verifyotp) with a
+provider that atomically consumes accepted codes.
+
+Call this method inside the server-side flow that uses the verification result;
+it does not return a session or reusable proof of verification. Validate any
+inputs that do not depend on successful OTP verification first. If you expose
+this capability through your own public endpoint, apply rate limiting and
+appropriate abuse protection there.
+
 ### Allow Sign-Up with Phone Number
 
 To allow users to sign up using their phone number, you can pass `signUpOnVerification` option to your plugin configuration. It requires you to pass `getTempEmail` function to generate a temporary email for the user.
