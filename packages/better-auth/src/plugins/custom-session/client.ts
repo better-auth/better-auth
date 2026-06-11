@@ -1,10 +1,10 @@
-import type { Auth } from "better-auth";
 import { InferServerPlugin } from "../../client/plugins";
-import type { BetterAuthOptions } from "../../types";
+import type { Auth, BetterAuthOptions } from "../../types";
 
 export const customSessionClient = <
 	A extends
 		| Auth
+		| BetterAuthOptions
 		| {
 				options: BetterAuthOptions;
 		  },
