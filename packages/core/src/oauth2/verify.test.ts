@@ -177,17 +177,18 @@ describe("verifyAccessToken", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
-	it("should translate missing kid failures to unauthorized API errors", async () => {
-		const { privateKey } = await createTestJWKS();
+	it("should verify a JWS without kid using the fetched JWKS", async () => {
+		const { publicJWK, privateKey } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, undefined);
+		mockJWKSResponse(publicJWK);
 
-		await expectUnauthorized(
+		await expect(
 			verifyAccessToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
-		);
-		expect(mockedFetch).not.toHaveBeenCalled();
+		).resolves.toMatchObject({ sub: "user-123" });
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
 	});
 
 	/**
@@ -456,6 +457,38 @@ describe("verifyAccessToken", () => {
 		).resolves.toMatchObject({ sub: "user-123" });
 
 		expect(jwksFetch).toHaveBeenCalledTimes(2);
+		vi.resetModules();
+	});
+
+	it("should refetch a cached jwks source when a no-kid token fails against the cached set", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const oldKey = await createTestJWKS();
+		const newKey = await createTestJWKS();
+		let currentKey = oldKey.publicJWK;
+		mockedFetch.mockImplementation(() =>
+			Promise.resolve(jwksResponse(currentKey)),
+		);
+
+		const oldToken = await createSignedToken(oldKey.privateKey, undefined);
+		await expect(
+			verify(oldToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		currentKey = newKey.publicJWK;
+		const newToken = await createSignedToken(newKey.privateKey, undefined);
+		await expect(
+			verify(newToken, {
+				jwksFetch: jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		mockedFetch.mockReset();
 		vi.resetModules();
 	});
 

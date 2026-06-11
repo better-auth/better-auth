@@ -1148,7 +1148,14 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			// Deprovision instead: drop their membership in this organization and
 			// the SCIM account link for this provider, leaving the user intact.
 			if (organizationId) {
-				const orgOptions = ctx.context.getPlugin("organization")?.options;
+				const organizationPlugin = ctx.context.getPlugin("organization");
+				if (!organizationPlugin) {
+					throw new SCIMAPIError("BAD_REQUEST", {
+						detail:
+							"Organization-scoped SCIM deprovisioning requires the organization plugin",
+					});
+				}
+				const orgOptions = organizationPlugin.options;
 				const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
 				const member = await findOrganizationMember(
 					ctx,
@@ -1167,19 +1174,39 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 					});
 				}
 
-				if (member) {
-					await orgAdapter.deleteMember({
-						memberId: member.id,
-						organizationId,
-						userId,
-					});
-				}
-				if (account) {
-					await ctx.context.adapter.delete({
-						model: "account",
-						where: [{ field: "id", value: account.id }],
-					});
-				}
+				await ctx.context.adapter.transaction(async (trx) => {
+					if (member) {
+						await trx.delete({
+							model: "member",
+							where: [{ field: "id", value: member.id }],
+						});
+						if (orgOptions?.teams?.enabled) {
+							const teams = await trx.findMany<{ id: string }>({
+								model: "team",
+								where: [{ field: "organizationId", value: organizationId }],
+							});
+							if (teams.length > 0) {
+								await trx.deleteMany({
+									model: "teamMember",
+									where: [
+										{ field: "userId", value: userId },
+										{
+											field: "teamId",
+											value: teams.map((team) => team.id),
+											operator: "in",
+										},
+									],
+								});
+							}
+						}
+					}
+					if (account) {
+						await trx.delete({
+							model: "account",
+							where: [{ field: "id", value: account.id }],
+						});
+					}
+				});
 
 				if (member && organization) {
 					await orgOptions?.organizationHooks?.afterRemoveMember?.({

@@ -25,6 +25,18 @@ import { isAPIError } from "../../utils/is-api-error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
 
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: string | number | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
+function isNonEmptyOAuthId(
+	id: string | number | null | undefined,
+): id is string | number {
+	return id !== undefined && id !== null && id !== "";
+}
+
 const signInWithOAuth2BodySchema = z.object({
 	providerId: z.string().meta({
 		description: "The provider ID for the OAuth provider",
@@ -426,7 +438,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						providerConfig.getUserInfo
 							? await providerConfig.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as OAuth2UserInfo | null;
+					) as GenericOAuthUserInfo | null;
 					if (!userInfo) {
 						redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
 					}
@@ -445,11 +457,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						);
 						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
 					}
-					const rawId =
-						mapUser.id !== undefined && mapUser.id !== null && mapUser.id !== ""
-							? mapUser.id
-							: userInfo.id;
-					const id = rawId !== undefined && rawId !== null ? String(rawId) : "";
+					const rawId = isNonEmptyOAuthId(mapUser.id)
+						? mapUser.id
+						: isNonEmptyOAuthId(userInfo.id)
+							? userInfo.id
+							: undefined;
+					const id = rawId !== undefined ? String(rawId) : "";
 					// A provider must return a stable account id (e.g. `sub`).
 					// Without one, every account would be stored under the same
 					// empty id, letting different users resolve to the same account.
@@ -775,7 +788,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 export async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
-): Promise<OAuth2UserInfo | null> {
+): Promise<GenericOAuthUserInfo | null> {
 	if (tokens.idToken) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
@@ -814,15 +827,21 @@ export async function getUserInfo(
 		},
 	});
 	const profile = userInfo.data;
-	// Non-empty `id` wins over `sub` to keep stored account ids stable. Empty
-	// is allowed here: `mapProfileToUser` and the callback guard decide later.
-	const subjectId =
-		profile?.id !== undefined && profile.id !== null && profile.id !== ""
-			? profile.id
-			: profile?.sub;
+	if (!profile) {
+		return null;
+	}
+	const { id: profileId, ...profileFields } = profile;
+	// Non-empty `id` wins over `sub` to keep stored account ids stable. OIDC
+	// UserInfo responses must include `sub`; generic OAuth profiles may omit it
+	// and let `mapProfileToUser` derive the account id from another field.
+	const subjectId = isNonEmptyOAuthId(profileId)
+		? profileId
+		: isNonEmptyOAuthId(profile.sub)
+			? profile.sub
+			: undefined;
 	return {
-		...profile,
-		id: subjectId ?? "",
+		...profileFields,
+		...(subjectId !== undefined ? { id: subjectId } : {}),
 		email: profile?.email,
 		emailVerified: profile?.email_verified ?? false,
 		image: profile?.picture,
