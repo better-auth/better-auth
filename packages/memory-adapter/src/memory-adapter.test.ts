@@ -308,6 +308,104 @@ describe("memory adapter transaction isolation", () => {
 		expect(rows.map((r) => r.id).sort()).toEqual(["outside"]);
 	});
 
+	it("a committing transaction must not erase a write made by a concurrent in-flight operation", async () => {
+		const { adapter } = setup();
+
+		let releaseGate: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			releaseGate = resolve;
+		});
+
+		const committingTransaction = adapter.transaction(async (tx) => {
+			await tx.create({
+				model: "widget",
+				data: { id: "tx", name: "in-transaction" },
+				forceAllowId: true,
+			});
+			// Yield so the concurrent write below lands on the live db before
+			// this transaction commits.
+			await gate;
+			return "committed";
+		});
+
+		// Concurrent write against the live db while the transaction is in flight.
+		await seedWidget(adapter, "outside", "outside-write");
+		releaseGate();
+
+		const result = await committingTransaction;
+		expect(result).toBe("committed");
+
+		const rows = await adapter.findMany<{ id: string; name: string }>({
+			model: "widget",
+		});
+		// The commit applied the transaction's own write and preserved the
+		// concurrent outside write made while it was in flight.
+		expect(rows.map((r) => r.id).sort()).toEqual(["outside", "tx"]);
+	});
+
+	it("a committing transaction's update to one row does not clobber a concurrent update to a different row", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "a", "a-original");
+		await seedWidget(adapter, "b", "b-original");
+
+		let releaseGate: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			releaseGate = resolve;
+		});
+
+		const tx = adapter.transaction(async (trx) => {
+			await trx.update({
+				model: "widget",
+				where: [{ field: "id", value: "a" }],
+				update: { name: "a-from-tx" },
+			});
+			await gate;
+			return "done";
+		});
+
+		// Concurrent update of a different row while the transaction is in flight.
+		await adapter.update({
+			model: "widget",
+			where: [{ field: "id", value: "b" }],
+			update: { name: "b-from-outside" },
+		});
+		releaseGate();
+		await tx;
+
+		const rows = await adapter.findMany<{ id: string; name: string }>({
+			model: "widget",
+		});
+		const byId = Object.fromEntries(rows.map((r) => [r.id, r.name]));
+		expect(byId.a).toBe("a-from-tx");
+		expect(byId.b).toBe("b-from-outside");
+	});
+
+	it("a committing transaction's delete is applied while a concurrent insert survives", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "doomed", "to-be-deleted");
+
+		let releaseGate: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			releaseGate = resolve;
+		});
+
+		const tx = adapter.transaction(async (trx) => {
+			await trx.delete({
+				model: "widget",
+				where: [{ field: "id", value: "doomed" }],
+			});
+			await gate;
+			return "done";
+		});
+
+		await seedWidget(adapter, "fresh", "concurrent-insert");
+		releaseGate();
+		await tx;
+
+		const rows = await adapter.findMany<{ id: string }>({ model: "widget" });
+		expect(rows.map((r) => r.id).sort()).toEqual(["fresh"]);
+	});
+
 	it("uncommitted transaction writes are invisible to operations outside the transaction", async () => {
 		const { adapter } = setup();
 

@@ -24,20 +24,99 @@ export interface MemoryAdapterConfig {
 }
 
 /**
- * Replace the contents of `target` with the contents of `source`, mutating
- * `target` in place so any reference held elsewhere (for example the `db`
- * object the caller passed to `memoryAdapter`) stays valid. Used to commit a
- * transaction-local clone back onto the live database on success.
+ * Index a table's rows by their `id` for row-level reconciliation. Every
+ * better-auth row carries an `id` (the adapter's join logic already keys on
+ * `record.id`), so the id is a stable identity for the three-way merge.
  */
-function commitInto(target: MemoryDB, source: MemoryDB): void {
-	for (const key of Object.keys(target)) {
-		if (!(key in source)) {
-			delete target[key];
+function indexById(rows: any[]): Map<unknown, any> {
+	const byId = new Map<unknown, any>();
+	for (const row of rows) {
+		byId.set(row.id, row);
+	}
+	return byId;
+}
+
+/**
+ * Commit a transaction onto the live database with a three-way merge so a
+ * concurrent write that interleaved at an `await` point survives.
+ *
+ * `base` is the snapshot taken when the transaction started; `clone` is that
+ * snapshot after the transaction mutated it; `target` is the live database as
+ * it stands now (possibly carrying concurrent writes). Replaying only the
+ * `base -> clone` delta onto `target` applies the transaction's own creates,
+ * updates, and deletes without disturbing rows or tables the transaction never
+ * touched. A row the transaction did not change keeps the live version, so a
+ * concurrent edit to a different row is preserved. A row the transaction did
+ * change wins last-writer-wins over a concurrent edit to the same row, which is
+ * acceptable for an in-memory development adapter; isolation is guaranteed only
+ * at row/table granularity.
+ *
+ * `target` is mutated in place so any reference held elsewhere (for example the
+ * `db` object the caller passed to `memoryAdapter`) stays valid.
+ */
+function mergeTransactionInto(
+	target: MemoryDB,
+	base: MemoryDB,
+	clone: MemoryDB,
+): void {
+	const models = new Set([...Object.keys(base), ...Object.keys(clone)]);
+
+	for (const model of models) {
+		// A table present at start but absent after commit was dropped wholesale
+		// by the transaction; mirror that on the live db.
+		if (!(model in clone)) {
+			delete target[model];
+			continue;
 		}
+
+		const baseById = indexById(base[model] ?? []);
+		const cloneRows = clone[model] ?? [];
+		const cloneById = indexById(cloneRows);
+		const liveRows = target[model] ?? [];
+
+		const merged: any[] = [];
+		const placed = new Set<unknown>();
+		for (const liveRow of liveRows) {
+			const id = liveRow.id;
+			const baseRow = baseById.get(id);
+			const cloneRow = cloneById.get(id);
+
+			// Removed by the transaction (present at start, gone after commit):
+			// drop it. A row absent from base was created concurrently and is kept.
+			if (baseRow !== undefined && cloneRow === undefined) {
+				continue;
+			}
+			// Changed by the transaction: take the transaction's version. Unchanged
+			// rows keep the live version, preserving any concurrent edit to them.
+			if (cloneRow !== undefined && rowChanged(baseRow, cloneRow)) {
+				merged.push(cloneRow);
+			} else {
+				merged.push(liveRow);
+			}
+			placed.add(id);
+		}
+
+		// Rows created inside the transaction (absent from base, never seen on the
+		// live db): append in the transaction's insertion order.
+		for (const cloneRow of cloneRows) {
+			if (!baseById.has(cloneRow.id) && !placed.has(cloneRow.id)) {
+				merged.push(cloneRow);
+			}
+		}
+
+		target[model] = merged;
 	}
-	for (const key of Object.keys(source)) {
-		target[key] = source[key]!;
-	}
+}
+
+/**
+ * Whether the transaction mutated a row, comparing its pre-transaction
+ * snapshot to its post-transaction state. Rows hold scalar columns and
+ * adapter-serializable values, so JSON equality reliably tells a
+ * transaction-made edit apart from an untouched row.
+ */
+function rowChanged(baseRow: any, cloneRow: any): boolean {
+	if (baseRow === undefined) return true;
+	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
 export const memoryAdapter = (
@@ -50,9 +129,13 @@ export const memoryAdapter = (
 	 * Build an adapter factory whose operations read and write `activeDb`.
 	 * The non-transactional adapter targets the live `db`. A transaction
 	 * targets an isolated clone so its uncommitted writes are invisible to
-	 * concurrent operations against the live `db`, and a failed transaction
-	 * leaves the live `db` (and any concurrent write made against it)
-	 * untouched.
+	 * concurrent operations against the live `db`. A failed transaction leaves
+	 * the live `db` untouched, and a committed one replays only its own
+	 * row/table changes, so a concurrent write that interleaved at an `await`
+	 * point survives either outcome. Isolation is at row/table granularity:
+	 * the in-memory adapter does not serialize writes, so two operations that
+	 * edit the same row resolve last-writer-wins. It is built for development
+	 * and tests, not production concurrency control.
 	 */
 	const buildAdapterFactory = (activeDb: MemoryDB) =>
 		createAdapterFactory({
@@ -76,13 +159,16 @@ export const memoryAdapter = (
 				},
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then
-					// commit the clone back into the live db on success. On failure the
-					// clone is discarded and the live db is never overwritten, so writes
-					// made concurrently outside the transaction cannot be erased.
+					// replay its delta onto the live db on success. On failure the clone
+					// is discarded and the live db is never touched. `base` captures the
+					// pre-transaction state so the commit can apply only the rows the
+					// transaction changed, preserving writes that interleaved at an
+					// `await` point.
+					const base = structuredClone(activeDb);
 					const clone = structuredClone(activeDb);
 					const trxAdapter = buildAdapterFactory(clone)(lazyOptions!);
 					const result = await cb(trxAdapter);
-					commitInto(activeDb, clone);
+					mergeTransactionInto(activeDb, base, clone);
 					return result;
 				},
 			},
