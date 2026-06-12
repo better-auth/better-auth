@@ -18,7 +18,7 @@ describe("access", () => {
 		const response = role2.authorize({
 			project: ["create"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 	});
 
 	it("should preserve exact role statement types", () => {
@@ -35,7 +35,7 @@ describe("access", () => {
 		const failedResponse = role2.authorize({
 			project: ["delete-many"],
 		});
-		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.error).not.toBeNull();
 	});
 
 	it("should reject invalid role statements at type level", () => {
@@ -57,19 +57,19 @@ describe("access", () => {
 		const response = dynamicRole.authorize({
 			project: ["create"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 	});
 
 	it("should validate permissions", async () => {
 		const response = role1.authorize({
 			project: ["create"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 
 		const failedResponse = role1.authorize({
 			project: ["delete-many"],
 		});
-		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.error).not.toBeNull();
 	});
 
 	it("should validate multiple resource permissions", async () => {
@@ -77,13 +77,13 @@ describe("access", () => {
 			project: ["create"],
 			ui: ["view"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 
 		const failedResponse = role1.authorize({
 			project: ["delete-many"],
 			ui: ["view"],
 		});
-		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.error).not.toBeNull();
 	});
 
 	it("should validate multiple resource multiple permissions", async () => {
@@ -91,12 +91,12 @@ describe("access", () => {
 			project: ["create", "delete"],
 			ui: ["view", "edit"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 		const failedResponse = role1.authorize({
 			project: ["create", "delete-many"],
 			ui: ["view", "edit"],
 		});
-		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.error).not.toBeNull();
 	});
 
 	it("should validate using or connector", () => {
@@ -107,7 +107,7 @@ describe("access", () => {
 			},
 			"OR",
 		);
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 	});
 
 	it("should validate using or connector for a specific resource", () => {
@@ -118,7 +118,7 @@ describe("access", () => {
 			},
 			ui: ["view", "edit"],
 		});
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 
 		const failedResponse = role1.authorize({
 			project: {
@@ -127,32 +127,32 @@ describe("access", () => {
 			},
 			ui: ["view", "edit", "hide"],
 		});
-		expect(failedResponse.success).toBe(false);
+		expect(failedResponse.error).not.toBeNull();
 	});
 
 	it("should fail when a resource is requested with an empty action list (array form)", () => {
 		const responseAnd = role1.authorize({ project: [] });
-		expect(responseAnd.success).toBe(false);
+		expect(responseAnd.error).not.toBeNull();
 
 		const responseOr = role1.authorize({ project: [] }, "OR");
-		expect(responseOr.success).toBe(false);
+		expect(responseOr.error).not.toBeNull();
 	});
 
 	it("should fail when a resource is requested with an empty action list (object form)", () => {
 		const responseAnd = role1.authorize({
 			project: { actions: [], connector: "AND" },
 		});
-		expect(responseAnd.success).toBe(false);
+		expect(responseAnd.error).not.toBeNull();
 
 		const responseOr = role1.authorize({
 			project: { actions: [], connector: "OR" },
 		});
-		expect(responseOr.success).toBe(false);
+		expect(responseOr.error).not.toBeNull();
 	});
 
 	it("should fail when every requested resource is empty under OR across multiple resources", () => {
 		const response = role1.authorize({ project: [], ui: [] }, "OR");
-		expect(response.success).toBe(false);
+		expect(response.error).not.toBeNull();
 	});
 
 	const looseStatements: Record<string, readonly string[]> = {
@@ -166,7 +166,7 @@ describe("access", () => {
 			{ audit: ["read"], project: ["create"] },
 			"OR",
 		);
-		expect(response.success).toBe(true);
+		expect(response.error).toBeNull();
 	});
 
 	it("should still fail under OR when no resource matches, including unknown ones", () => {
@@ -174,7 +174,7 @@ describe("access", () => {
 			{ audit: ["read"], project: ["delete-many"] },
 			"OR",
 		);
-		expect(response.success).toBe(false);
+		expect(response.error).not.toBeNull();
 	});
 
 	it("should fail under AND when a resource is unknown to the role", () => {
@@ -182,9 +182,7 @@ describe("access", () => {
 			audit: ["read"],
 			project: ["create"],
 		});
-		expect(response.success).toBe(false);
-		if (!response.success) {
-			expect(response.error).toContain("audit");
-		}
+		expect(response.error).not.toBeNull();
+		expect(response.error).toContain("audit");
 	});
 });

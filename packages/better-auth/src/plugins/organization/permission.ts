@@ -19,7 +19,7 @@ export const hasPermissionFn = (
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
 		const result = _role?.authorize(input.permissions);
-		if (result?.success) {
+		if (result?.error === null) {
 			return true;
 		}
 	}
