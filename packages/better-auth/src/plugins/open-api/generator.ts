@@ -191,11 +191,17 @@ function addNullType(schema: OpenAPISchema): OpenAPISchema {
 	};
 }
 
-function getZodStringMinLength(zodType: z.ZodType<unknown>) {
+function getZodStringSchemaConstraints(zodType: z.ZodType<unknown>) {
 	const minLength = (
 		zodType as z.ZodType<unknown> & { minLength?: number | null }
 	).minLength;
-	return typeof minLength === "number" ? minLength : undefined;
+	const maxLength = (
+		zodType as z.ZodType<unknown> & { maxLength?: number | null }
+	).maxLength;
+	return {
+		...(typeof minLength === "number" ? { minLength } : {}),
+		...(typeof maxLength === "number" ? { maxLength } : {}),
+	};
 }
 
 function getZodPipeSchema(zodType: z.ZodType<unknown>) {
@@ -218,14 +224,10 @@ function getParameters(options: EndpointOptions) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
-				const minLength = getZodStringMinLength(value as z.ZodType<unknown>);
 				parameters.push({
 					name: key,
 					in: "query",
-					schema: {
-						...parameterSchema,
-						...(minLength !== undefined ? { minLength } : {}),
-					},
+					schema: parameterSchema,
 				});
 			}
 		});
@@ -300,6 +302,19 @@ function areSchemasEqual(left: OpenAPISchema, right: OpenAPISchema) {
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function areSchemaMembersCompatible(
+	left: boolean | OpenAPISchema | undefined,
+	right: boolean | OpenAPISchema | undefined,
+) {
+	if (left === undefined || right === undefined) {
+		return true;
+	}
+	if (typeof left === "boolean" || typeof right === "boolean") {
+		return left === right;
+	}
+	return areSchemasEqual(left, right);
+}
+
 function mergeObjectSchemas(
 	left: OpenAPISchema,
 	right: OpenAPISchema,
@@ -324,28 +339,21 @@ function mergeObjectSchemas(
 	const leftAdditionalProperties = left.additionalProperties;
 	const rightAdditionalProperties = right.additionalProperties;
 	if (
-		typeof leftAdditionalProperties !== "boolean" &&
-		typeof rightAdditionalProperties !== "boolean" &&
-		leftAdditionalProperties !== undefined &&
-		rightAdditionalProperties !== undefined &&
-		!areSchemasEqual(leftAdditionalProperties, rightAdditionalProperties)
+		!areSchemaMembersCompatible(
+			leftAdditionalProperties,
+			rightAdditionalProperties,
+		)
 	) {
 		return undefined;
 	}
-	if (
-		typeof leftAdditionalProperties === "boolean" &&
-		typeof rightAdditionalProperties === "boolean" &&
-		leftAdditionalProperties !== rightAdditionalProperties
-	) {
+	const leftPropertyNames = left.propertyNames;
+	const rightPropertyNames = right.propertyNames;
+	if (!areSchemaMembersCompatible(leftPropertyNames, rightPropertyNames)) {
 		return undefined;
 	}
-	if (
-		typeof leftAdditionalProperties !== typeof rightAdditionalProperties &&
-		leftAdditionalProperties !== undefined &&
-		rightAdditionalProperties !== undefined
-	) {
-		return undefined;
-	}
+	const additionalProperties =
+		leftAdditionalProperties ?? rightAdditionalProperties;
+	const propertyNames = leftPropertyNames ?? rightPropertyNames;
 
 	const type: OpenAPISchema["type"] =
 		schemaAllowsNull(left) && schemaAllowsNull(right)
@@ -356,13 +364,8 @@ function mergeObjectSchemas(
 		type,
 		...(Object.keys(properties).length > 0 ? { properties } : {}),
 		...(required.length > 0 ? { required } : {}),
-		...(leftAdditionalProperties !== undefined ||
-		rightAdditionalProperties !== undefined
-			? {
-					additionalProperties:
-						leftAdditionalProperties ?? rightAdditionalProperties,
-				}
-			: {}),
+		...(additionalProperties !== undefined ? { additionalProperties } : {}),
+		...(propertyNames !== undefined ? { propertyNames } : {}),
 		...((description ?? left.description ?? right.description)
 			? {
 					description: description ?? left.description ?? right.description,
@@ -538,6 +541,9 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 
 	const baseSchema = {
 		type: getOpenApiTypeFromZodType(zodType),
+		...(zodType instanceof z.ZodString
+			? getZodStringSchemaConstraints(zodType)
+			: {}),
 	};
 
 	return withDescription(baseSchema, zodType);

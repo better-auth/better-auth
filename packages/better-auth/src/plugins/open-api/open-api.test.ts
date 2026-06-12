@@ -39,6 +39,16 @@ function getComposedSchemaItem(
 	return schema;
 }
 
+function getPathParameter(path: Path | undefined, parameterName: string) {
+	const parameter = path?.get?.parameters?.find(
+		(parameter) => parameter.name === parameterName,
+	);
+	if (!parameter) {
+		throw new Error(`Expected path to define ${parameterName} parameter`);
+	}
+	return parameter;
+}
+
 const nullableIntersectionPlugin = {
 	id: "nullable-intersection-test",
 	endpoints: {
@@ -159,6 +169,51 @@ const unionIntersectionPlugin = {
 	},
 } satisfies BetterAuthPlugin;
 
+const recordIntersectionPlugin = {
+	id: "record-intersection-test",
+	endpoints: {
+		updateFields: createAuthEndpoint(
+			"/test/update-fields",
+			{
+				method: "POST",
+				body: z
+					.object({
+						knownField: z.string(),
+					})
+					.and(
+						z.record(
+							z
+								.string()
+								.min(2)
+								.describe("Custom field names must be at least two characters"),
+							z.boolean(),
+						),
+					),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+const queryConstraintsPlugin = {
+	id: "query-constraints-test",
+	endpoints: {
+		constrainedQuery: createAuthEndpoint(
+			"/test/query-constraints",
+			{
+				method: "GET",
+				query: z.object({
+					direct: z.string().min(3),
+					optional: z.string().min(4).optional(),
+					defaulted: z.string().min(5).default("abcde"),
+					bounded: z.string().min(6).max(12),
+				}),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
 let defaultFactoryCallCount = 0;
 
 const defaultFactoryBodyPlugin = {
@@ -245,6 +300,12 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithUnionIntersection } = await getTestInstance({
 		plugins: [openAPI(), unionIntersectionPlugin],
+	});
+	const { auth: authWithRecordIntersection } = await getTestInstance({
+		plugins: [openAPI(), recordIntersectionPlugin],
+	});
+	const { auth: authWithQueryConstraints } = await getTestInstance({
+		plugins: [openAPI(), queryConstraintsPlugin],
 	});
 	const { auth: authWithDefaultFactoryBody } = await getTestInstance({
 		plugins: [openAPI(), defaultFactoryBodyPlugin],
@@ -668,6 +729,53 @@ describe("open-api", async () => {
 					required: ["roleId"],
 				},
 			],
+		});
+	});
+
+	it("should preserve record key schemas when merging object intersections", async () => {
+		const schema = await authWithRecordIntersection.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/update-fields");
+		const requestBodySchema = requestBody.content["application/json"].schema;
+
+		expect(requestBodySchema.type).toBe("object");
+		expect(requestBodySchema.required).toEqual(["knownField"]);
+		expect(getSchemaProperty(requestBodySchema, "knownField").type).toBe(
+			"string",
+		);
+		expect(requestBodySchema.additionalProperties).toEqual({
+			type: "boolean",
+		});
+		expect(requestBodySchema.propertyNames).toEqual({
+			description: "Custom field names must be at least two characters",
+			minLength: 2,
+			type: "string",
+		});
+	});
+
+	it("should preserve string length constraints for wrapped query parameters", async () => {
+		const schema = await authWithQueryConstraints.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const path = paths["/test/query-constraints"];
+		expect(path).toBeDefined();
+
+		expect(getPathParameter(path, "direct").schema).toMatchObject({
+			minLength: 3,
+			type: "string",
+		});
+		expect(getPathParameter(path, "optional").schema).toMatchObject({
+			minLength: 4,
+			type: "string",
+		});
+		expect(getPathParameter(path, "defaulted").schema).toMatchObject({
+			minLength: 5,
+			type: "string",
+		});
+		expect(getPathParameter(path, "bounded").schema).toMatchObject({
+			maxLength: 12,
+			minLength: 6,
+			type: "string",
 		});
 	});
 
