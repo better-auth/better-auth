@@ -17,7 +17,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth introspect", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -29,7 +29,7 @@ describe("oauth introspect", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [validAudience],
+				resources: [validResource],
 				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -176,7 +176,7 @@ describe("oauth introspect", async () => {
 
 	it("should pass with token_type_hint access_token and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, {
-			resource: validAudience,
+			resource: validResource,
 		});
 		const introspection = await client.oauth2.introspect(
 			{
@@ -300,7 +300,7 @@ describe("oauth introspect", async () => {
 
 	it("should pass without token_type_hint and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, {
-			resource: validAudience,
+			resource: validResource,
 		});
 		const introspection = await client.oauth2.introspect(
 			{
@@ -329,7 +329,7 @@ describe("oauth introspect", async () => {
 
 	it("should read the signing keys once across repeated jwt introspections", async () => {
 		const tokens = await getTokens(undefined, {
-			resource: validAudience,
+			resource: validResource,
 		});
 		const ctx = await auth.$context;
 		const findMany = vi.spyOn(ctx.adapter, "findMany");
@@ -526,7 +526,7 @@ describe("oauth introspect", async () => {
 		const tokens = await getTokens(
 			undefined,
 			{
-				resource: validAudience,
+				resource: validResource,
 			},
 			testHeaders,
 		);
@@ -590,7 +590,7 @@ describe("oauth introspect", async () => {
 describe("oauth introspect - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
@@ -614,7 +614,7 @@ describe("oauth introspect - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						resources: [validAudience],
+						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
@@ -845,7 +845,7 @@ describe("oauth introspect - config", async () => {
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
 				scope: testScopes.join(" "),
-				resource: validAudience,
+				resource: validResource,
 				redirect_uri: redirectUri,
 			},
 			{
@@ -873,7 +873,7 @@ describe("oauth introspect - config", async () => {
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
-			aud: [validAudience, `${authServerBaseUrl}/api/auth/oauth2/userinfo`],
+			aud: [validResource, `${authServerBaseUrl}/api/auth/oauth2/userinfo`],
 		});
 	});
 
@@ -915,7 +915,7 @@ describe("oauth introspect - config", async () => {
 				client_id: jwtInstance.oauthClient?.client_id,
 				client_secret: jwtInstance.oauthClient?.client_secret,
 				scope: testScopes.join(" "),
-				resource: validAudience,
+				resource: validResource,
 				redirect_uri: redirectUri,
 			},
 			{
@@ -942,7 +942,7 @@ describe("oauth introspect - config", async () => {
 		expect(jwtIntrospection.data).toMatchObject({
 			active: true,
 			resource_count: 1,
-			first_resource: validAudience,
+			first_resource: validResource,
 		});
 
 		const opaqueInstance = await createTestInstance({
@@ -974,7 +974,7 @@ describe("oauth introspect - config", async () => {
 				client_id: opaqueInstance.oauthClient?.client_id,
 				client_secret: opaqueInstance.oauthClient?.client_secret,
 				scope: testScopes.join(" "),
-				resource: validAudience,
+				resource: validResource,
 				redirect_uri: redirectUri,
 			},
 			{
@@ -1001,7 +1001,7 @@ describe("oauth introspect - config", async () => {
 		expect(opaqueIntrospection.data).toMatchObject({
 			active: true,
 			resource_count: 1,
-			first_resource: validAudience,
+			first_resource: validResource,
 		});
 	});
 });
@@ -1012,10 +1012,10 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
-	// The JWT plugin shares issuer, audience, and signing keys with the OAuth
-	// provider. We deliberately make the auth-server origin a valid OAuth
-	// audience so a plain session JWT satisfies the signature/issuer/audience
-	// checks — isolating the `azp` gate as the only thing that should reject it.
+	// The JWT plugin shares issuer, `aud` verifier value, and signing keys with
+	// the OAuth provider. We deliberately make the auth-server origin a valid
+	// OAuth resource so a plain session JWT satisfies the signature/issuer/`aud`
+	// checks, isolating the `azp` gate as the only thing that should reject it.
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -1132,9 +1132,9 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 	});
 
 	/**
-	 * A JWT-plugin session token shares the issuer, audience, and signing keys
-	 * but has no `azp`/client binding and was never issued through the OAuth
-	 * token endpoint. It must not introspect as an active access token.
+	 * A JWT-plugin session token shares the issuer, `aud` verifier value, and
+	 * signing keys but has no `azp`/client binding and was never issued through
+	 * the OAuth token endpoint. It must not introspect as an active access token.
 	 */
 	it("rejects a JWT plugin session token presented as an access token", async () => {
 		const { token: sessionJwt } = await auth.api.getToken({ headers });

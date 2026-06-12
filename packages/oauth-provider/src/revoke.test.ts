@@ -17,7 +17,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth revoke", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -29,7 +29,7 @@ describe("oauth revoke", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [validAudience],
+				resources: [validResource],
 				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -172,7 +172,7 @@ describe("oauth revoke", async () => {
 	});
 
 	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens(undefined, validResource);
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: oauthClient?.client_id,
@@ -272,7 +272,7 @@ describe("oauth revoke", async () => {
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens(undefined, validResource);
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: oauthClient?.client_id,
@@ -334,7 +334,7 @@ describe("oauth revoke", async () => {
 describe("oauth revoke - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
@@ -358,7 +358,7 @@ describe("oauth revoke - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						resources: [validAudience],
+						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {

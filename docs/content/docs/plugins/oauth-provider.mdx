@@ -633,7 +633,7 @@ What the endpoint does depends on the token type:
 
 * opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
 * `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
-* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries a different audience is treated as an invalid token and returns a `200` no-op.
+* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries a mismatched `aud` claim is treated as an invalid token and returns a `200` no-op.
 
 Because a JWT `access_token` cannot be revoked individually, plan for it:
 
@@ -1669,7 +1669,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   <Step>
     ### Handle MCP Errors for your API
 
-    Always verify against a specified `audience` matching your protected resource. If omitted, the resource client falls back to the authorization server base URL.
+    Set `verifyOptions.audience` to your protected resource identifier. If omitted, the resource client falls back to the authorization server base URL and checks that value against the token's `aud` claim.
 
     * Using the client `verifyAccessToken` function
 

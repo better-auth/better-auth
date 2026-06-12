@@ -1,9 +1,5 @@
 import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
-import {
-	multiSessionClient,
-	organizationClient,
-} from "better-auth/client/plugins";
 import { toNodeHandler } from "better-auth/node";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
@@ -43,11 +39,32 @@ function isRedirectResult(
 	);
 }
 
+function expectUrl(url: string | undefined): string {
+	expect(url).toBeDefined();
+	if (!url) {
+		throw new Error("missing authorization URL");
+	}
+	return url;
+}
+
+function getFetchData(response: unknown): unknown {
+	if (typeof response === "object" && response !== null && "data" in response) {
+		return response.data;
+	}
+	return response;
+}
+
 describe("oauth - init", () => {
 	const createSecondaryStorage = () => ({
 		set(key: string, value: string, ttl?: number) {},
 		get(key: string) {
 			return null;
+		},
+		getAndDelete(key: string) {
+			return null;
+		},
+		increment(key: string, ttl: number) {
+			return 1;
 		},
 		delete(key: string) {},
 	});
@@ -385,7 +402,7 @@ describe("oauth", async () => {
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -461,7 +478,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -535,7 +552,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -608,7 +625,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -679,7 +696,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -772,7 +789,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -867,7 +884,7 @@ describe("oauth", async () => {
 		);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -948,7 +965,7 @@ describe("oauth", async () => {
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -1081,11 +1098,7 @@ describe("oauth - prompt", async () => {
 	}
 
 	const serverClient = createAuthClient({
-		plugins: [
-			oauthProviderClient(),
-			organizationClient(),
-			multiSessionClient(),
-		],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -1256,7 +1269,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(context) {
 				loginRedirectUri = context.response.headers.get("Location") || "";
@@ -1301,7 +1314,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /signup
 		let signupRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(context) {
 				signupRedirectUri = context.response.headers.get("Location") || "";
@@ -1348,7 +1361,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /setup
 		let setupRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1430,7 +1443,7 @@ describe("oauth - prompt", async () => {
 		);
 
 		let setupRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1503,7 +1516,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /consent
 		let consentRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1594,7 +1607,7 @@ describe("oauth - prompt", async () => {
 
 		// No redirect and user should get code
 		let callbackRedirectUrl = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1661,7 +1674,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /consent
 		let consentRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1707,7 +1720,7 @@ describe("oauth - prompt", async () => {
 		expect(data.url).toContain(`prompt=consent`);
 
 		let consentRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1809,7 +1822,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -1891,7 +1904,7 @@ describe("oauth - prompt", async () => {
 		);
 
 		let selectAccountRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -1957,7 +1970,7 @@ describe("oauth - prompt", async () => {
 			expect(data.url).toContain(`prompt=none`);
 
 			let callbackRedirectUri = "";
-			await serverClient.$fetch(data.url, {
+			await serverClient.$fetch(expectUrl(data.url), {
 				method: "GET",
 				headers,
 				onError(context) {
@@ -2008,7 +2021,7 @@ describe("oauth - prompt", async () => {
 			expect(data.url).toContain(`prompt=none`);
 
 			let callbackRedirectUri = "";
-			await serverClient.$fetch(data.url, {
+			await serverClient.$fetch(expectUrl(data.url), {
 				method: "GET",
 				headers,
 				onError(context) {
@@ -2067,7 +2080,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -2178,7 +2191,7 @@ describe("oauth - prompt", async () => {
 		}
 
 		let loginRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers: rpHeaders,
 			onError(context) {
@@ -2251,7 +2264,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -2332,7 +2345,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-organization
 		let selectOrgRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -2409,7 +2422,7 @@ describe("oauth - prompt", async () => {
 
 		// Authorize redirects to the post-login gate (no org selected yet).
 		let selectOrgRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -2486,7 +2499,7 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -2511,23 +2524,26 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Select Account and continue auth flow
-		const setActiveResponse = await serverClient.organization.setActive(
+		const setActiveResponse = await serverClient.$fetch(
+			"/organization/set-active",
 			{
-				organizationId: org.id,
-				organizationSlug: org.slug,
-			},
-			{
+				method: "POST",
+				body: {
+					organizationId: org.id,
+					organizationSlug: org.slug,
+				},
 				headers,
 				throw: true,
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(isRedirectResult(setActiveResponse)).toBe(true);
-		if (!isRedirectResult(setActiveResponse)) {
+		const setActiveResult = getFetchData(setActiveResponse);
+		expect(isRedirectResult(setActiveResult)).toBe(true);
+		if (!isRedirectResult(setActiveResult)) {
 			expect.unreachable();
 		}
-		expect(setActiveResponse.redirect).toBe(true);
-		const consentRedirectUri = setActiveResponse.url;
+		expect(setActiveResult.redirect).toBe(true);
+		const consentRedirectUri = setActiveResult.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
@@ -2598,7 +2614,7 @@ describe("oauth - prompt", async () => {
 		}
 
 		let selectOrgRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers: freshHeaders,
 			onError(context) {
@@ -2616,18 +2632,21 @@ describe("oauth - prompt", async () => {
 			vi.unstubAllGlobals();
 		});
 
-		const setActiveResponse = await serverClient.organization.setActive(
-			{ organizationId: org.id, organizationSlug: org.slug },
+		const setActiveResponse = await serverClient.$fetch(
+			"/organization/set-active",
 			{
+				method: "POST",
+				body: { organizationId: org.id, organizationSlug: org.slug },
 				headers: freshHeaders,
 				throw: true,
 				onSuccess: cookieSetter(freshHeaders),
 			},
 		);
-		if (!isRedirectResult(setActiveResponse)) {
+		const setActiveResult = getFetchData(setActiveResponse);
+		if (!isRedirectResult(setActiveResult)) {
 			expect.unreachable();
 		}
-		const consentRedirectUri = setActiveResponse.url;
+		const consentRedirectUri = setActiveResult.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		vi.stubGlobal("window", {
 			location: {
@@ -2691,7 +2710,7 @@ describe("oauth - prompt", async () => {
 		}
 
 		let selectOrgRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			headers: freshHeaders,
 			onError(context) {
@@ -2779,14 +2798,21 @@ describe("oauth - prompt", async () => {
 			},
 		});
 
-		const setActiveResponse = await serverClient.organization.setActive(
-			{ organizationId: org.id, organizationSlug: org.slug },
-			{ headers: headersA, throw: true, onSuccess: cookieSetter(headersA) },
+		const setActiveResponse = await serverClient.$fetch(
+			"/organization/set-active",
+			{
+				method: "POST",
+				body: { organizationId: org.id, organizationSlug: org.slug },
+				headers: headersA,
+				throw: true,
+				onSuccess: cookieSetter(headersA),
+			},
 		);
-		if (!isRedirectResult(setActiveResponse)) {
+		const setActiveResult = getFetchData(setActiveResponse);
+		if (!isRedirectResult(setActiveResult)) {
 			expect.unreachable();
 		}
-		const consentUrlWithMarker = setActiveResponse.url;
+		const consentUrlWithMarker = setActiveResult.url;
 		expect(consentUrlWithMarker).toContain("/consent");
 
 		// Session B: a fresh sign-in for the same user. A new session row, no active org.
@@ -3066,7 +3092,7 @@ describe("oauth - config", () => {
 		expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
 		let redirectUriResponse = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(context) {
 				redirectUriResponse = context.response.headers.get("Location") || "";
@@ -3171,7 +3197,7 @@ describe("oauth - config", () => {
 		expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
 		let redirectUriResponse = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(context) {
 				redirectUriResponse = context.response.headers.get("Location") || "";
@@ -3205,7 +3231,7 @@ describe("oauth - config", () => {
 		publicClient,
 		resource,
 	}) => {
-		const validAudience = disableJwtPlugin
+		const validResource = disableJwtPlugin
 			? `${authServerBaseUrl}/api/auth`
 			: "https://api.example.com";
 		const {
@@ -3220,7 +3246,7 @@ describe("oauth - config", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					disableJwtPlugin: disableJwtPlugin,
-					resources: resource ? [validAudience] : undefined,
+					resources: resource ? [validResource] : undefined,
 					enforcePerClientResources: false,
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
@@ -3270,7 +3296,7 @@ describe("oauth - config", () => {
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
 			tokenUrlParams: resource
 				? {
-						resource: validAudience,
+						resource: validResource,
 					}
 				: undefined,
 		});
@@ -3297,7 +3323,7 @@ describe("oauth - config", () => {
 		expect(data.url).toContain(`client_id=${oauthClient?.client_id}`);
 
 		let redirectUriResponse = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(expectUrl(data.url), {
 			method: "GET",
 			onError(context) {
 				redirectUriResponse = context.response.headers.get("Location") || "";
@@ -3335,7 +3361,7 @@ describe("oauth - config", () => {
 			await expect(
 				client.verifyAccessToken(tokens.data?.accessToken!, {
 					verifyOptions: {
-						audience: validAudience,
+						audience: validResource,
 						issuer: authServerUrl,
 					},
 					jwksUrl: (disableJwtPlugin ? undefined : `${authServerUrl}/jwks`)!,
@@ -3346,7 +3372,7 @@ describe("oauth - config", () => {
 				tokens.data?.accessToken!,
 				{
 					verifyOptions: {
-						audience: validAudience,
+						audience: validResource,
 						issuer: authServerUrl,
 					},
 					jwksUrl: (disableJwtPlugin ? undefined : `${authServerUrl}/jwks`)!,
@@ -3373,7 +3399,7 @@ describe("oauth - config", () => {
 			});
 			if (resource) {
 				expect(payload?.aud).toStrictEqual([
-					validAudience,
+					validResource,
 					`${authServerUrl}/oauth2/userinfo`,
 				]);
 			} else {

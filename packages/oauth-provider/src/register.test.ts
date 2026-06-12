@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/client";
-import { organizationClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
@@ -759,7 +758,7 @@ describe("oauth register - organization", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient(), organizationClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: baseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -778,16 +777,24 @@ describe("oauth register - organization", async () => {
 		});
 		expect(_org).toBeDefined();
 		org = _org!;
-		await serverClient.organization.setActive({
-			organizationId: org.id,
-			organizationSlug: org.slug,
+		await serverClient.$fetch("/organization/set-active", {
+			method: "POST",
+			body: {
+				organizationId: org.id,
+				organizationSlug: org.slug,
+			},
+			headers,
+			throw: true,
 		});
 		const session = await serverClient.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(org?.id);
+		const sessionData = session.data?.session as
+			| { activeOrganizationId?: string }
+			| undefined;
+		expect(sessionData?.activeOrganizationId).toBe(org?.id);
 	});
 
 	it("should create organizational oauthClient", async () => {

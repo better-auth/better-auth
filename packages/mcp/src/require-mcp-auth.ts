@@ -6,8 +6,8 @@ import type { JWTPayload } from "jose";
 
 interface RequireMcpAuthOptions {
 	/**
-	 * The protected resource identifier the access token must be audience-bound
-	 * to. Defaults to the server's resolved base URL.
+	 * The protected resource identifier the access token must carry in `aud`.
+	 * Defaults to the server's resolved base URL.
 	 */
 	resource?: string;
 	/**
@@ -55,7 +55,7 @@ const unauthorized = (
 /**
  * Protects an MCP server route handler. Verifies the bearer access token
  * against the authorization server's JWKS (checking signature, issuer,
- * audience, and expiry) and forwards the verified JWT payload to the handler.
+ * `aud` claim, and expiry) and forwards the verified JWT payload to the handler.
  * Unauthenticated requests receive a JSON-RPC 401 with the RFC 9728
  * `WWW-Authenticate` header so MCP clients can start the authorization flow.
  *
@@ -77,13 +77,14 @@ export const requireMcpAuth = <
 ) => {
 	if (opts?.resource !== undefined) {
 		// RFC 8707 / RFC 9728: reject a non-absolute or fragment-containing
-		// resource up front, so it never reaches the metadata URL or the audience.
+		// resource up front, so it never reaches the metadata URL or `aud`
+		// verifier.
 		ResourceUriSchema.parse(opts.resource);
 	}
 	return async (req: Request): Promise<Response> => {
-		// The provider stamps tokens with, and binds their audience to, its
-		// resolved base URL (which includes the base path). Read that value from
-		// the auth context so the verified issuer and audience match what the
+		// The provider stamps tokens with its resolved base URL (which includes
+		// the base path) as both issuer and default resource. Read that value from
+		// the auth context so the verified issuer and `aud` claim match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
 		const { baseURL } = await auth.$context;

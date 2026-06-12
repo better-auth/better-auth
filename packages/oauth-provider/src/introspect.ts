@@ -89,7 +89,7 @@ async function validateJwtAccessToken(
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
-				// audience or issuer mismatch
+				// `aud` claim or issuer mismatch
 				return {
 					active: false,
 				};
@@ -109,7 +109,7 @@ async function validateJwtAccessToken(
 	// All-must-resolve semantics matter for the deleted-resource contract: a
 	// token issued with `aud: [<resource>, userInfoAud]` and then having
 	// `<resource>` deleted from the AS must hard-reject. "Any valid"
-	// semantics would let the always-valid userinfo audience claim mask the
+	// semantics would let the always-valid userinfo `aud` value mask the
 	// deletion.
 	const rawAud = jwtPayload.aud;
 	if (!(await isAudienceClaimAllowed(ctx, opts, rawAud, [userInfoAud]))) {
@@ -118,9 +118,9 @@ async function validateJwtAccessToken(
 
 	// An OAuth access token issued by this provider always carries an `azp`
 	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
-	// JWT plugin shares the same issuer, audience, and signing keys, so a plain
+	// JWT plugin shares the same issuer, `aud` verifier value, and signing keys, so a plain
 	// session JWT (e.g. from its `/token` endpoint) can otherwise satisfy the
-	// signature/issuer/audience checks above. Such a token was never issued
+	// signature/issuer/`aud` checks above. Such a token was never issued
 	// through the OAuth token endpoint and has no client or consent binding, so
 	// it must not be reported as an active access token. Require `azp` and a
 	// matching, enabled client before considering the token active.
@@ -260,11 +260,11 @@ async function validateOpaqueAccessToken(
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
 		: undefined;
-	const audience = resources ? [...resources] : undefined;
-	if (audience?.length && accessToken.scopes?.includes("openid")) {
+	const audienceClaim = resources ? [...resources] : undefined;
+	if (audienceClaim?.length && accessToken.scopes?.includes("openid")) {
 		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
-		if (!audience.includes(userInfoEndpoint)) {
-			audience.push(userInfoEndpoint);
+		if (!audienceClaim.includes(userInfoEndpoint)) {
+			audienceClaim.push(userInfoEndpoint);
 		}
 	}
 
@@ -289,7 +289,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		aud: toAudienceClaim(audience),
+		aud: toAudienceClaim(audienceClaim),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,

@@ -756,8 +756,8 @@ describe("oauth authorize - authenticated", async () => {
 describe("oauth authorize - consented resources", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://api.example.com";
-	const secondValidAudience = "https://api.secondary.example.com";
+	const validResource = "https://api.example.com";
+	const secondValidResource = "https://api.secondary.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
@@ -767,7 +767,7 @@ describe("oauth authorize - consented resources", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [validAudience, secondValidAudience],
+				resources: [validResource, secondValidResource],
 				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -852,7 +852,7 @@ describe("oauth authorize - consented resources", async () => {
 		authUrl.searchParams.set("response_type", "code");
 		authUrl.searchParams.set("scope", "openid");
 		authUrl.searchParams.set("state", "legacy-consent-no-resource");
-		authUrl.searchParams.set("resource", validAudience);
+		authUrl.searchParams.set("resource", validResource);
 		authUrl.searchParams.set("code_challenge", generateRandomString(43));
 		authUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -880,8 +880,8 @@ describe("oauth authorize - consented resources", async () => {
 		authUrl.searchParams.set("response_type", "code");
 		authUrl.searchParams.set("scope", "openid");
 		authUrl.searchParams.set("state", "multiple-resources-persist");
-		authUrl.searchParams.append("resource", validAudience);
-		authUrl.searchParams.append("resource", secondValidAudience);
+		authUrl.searchParams.append("resource", validResource);
+		authUrl.searchParams.append("resource", secondValidResource);
 		authUrl.searchParams.set("code_challenge", generateRandomString(43));
 		authUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -930,8 +930,8 @@ describe("oauth authorize - consented resources", async () => {
 		});
 
 		expect(savedConsent?.resources).toEqual([
-			validAudience,
-			secondValidAudience,
+			validResource,
+			secondValidResource,
 		]);
 	});
 
@@ -963,7 +963,7 @@ describe("oauth authorize - consented resources", async () => {
 		authUrl.searchParams.set("scope", "openid");
 		authUrl.searchParams.set("state", "prompt-none-resource-consent");
 		authUrl.searchParams.set("prompt", "none");
-		authUrl.searchParams.set("resource", validAudience);
+		authUrl.searchParams.set("resource", validResource);
 		authUrl.searchParams.set("code_challenge", generateRandomString(43));
 		authUrl.searchParams.set("code_challenge_method", "S256");
 

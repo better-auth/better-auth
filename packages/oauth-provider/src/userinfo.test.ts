@@ -17,7 +17,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -29,7 +29,7 @@ describe("oauth userinfo", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [validAudience],
+				resources: [validResource],
 				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -279,7 +279,7 @@ describe("oauth userinfo", async () => {
 	});
 
 	it("should pass provide all user information - jwt", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens(undefined, validResource);
 		expect(tokens.data?.access_token).toBeDefined();
 		const userinfo = await client.$fetch<Record<string, string>>(
 			"/oauth2/userinfo",
