@@ -174,7 +174,7 @@ export interface SSOOptions {
 	organizationProvisioning?:
 		| {
 				disabled?: boolean;
-				defaultRole?: "member" | "admin";
+				defaultRole?: "member" | "admin" | "owner";
 				getRole?: (data: {
 					/**
 					 * The user object from the database
@@ -192,7 +192,7 @@ export interface SSOOptions {
 					 * The SSO provider
 					 */
 					provider: SSOProvider<SSOOptions>;
-				}) => Promise<"member" | "admin">;
+				}) => Promise<"member" | "admin" | "owner">;
 		  }
 		| undefined;
 	/**
