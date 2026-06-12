@@ -581,42 +581,6 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
-			const validStaticRoles = new Set([
-				...Object.keys(defaultRoles),
-				...Object.keys(ctx.context.orgOptions.roles || {}),
-			]);
-			const unknownRoles = roleToSet.filter(
-				(role) => !validStaticRoles.has(role),
-			);
-			if (unknownRoles.length > 0) {
-				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
-					const foundRoles = await ctx.context.adapter.findMany<{
-						role: string;
-					}>({
-						model: "organizationRole",
-						where: [
-							{ field: "organizationId", value: organizationId },
-							{ field: "role", value: unknownRoles, operator: "in" },
-						],
-					});
-					const foundRoleNames = foundRoles.map((role) => role.role);
-					const stillInvalid = unknownRoles.filter(
-						(role) => !foundRoleNames.includes(role),
-					);
-					if (stillInvalid.length > 0) {
-						throw new APIError("BAD_REQUEST", {
-							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
-							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
-						});
-					}
-				} else {
-					throw new APIError("BAD_REQUEST", {
-						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
-						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
-					});
-				}
-			}
-
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
@@ -713,6 +677,42 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
 				);
+			}
+
+			const validStaticRoles = new Set([
+				...Object.keys(defaultRoles),
+				...Object.keys(ctx.context.orgOptions.roles || {}),
+			]);
+			const unknownRoles = roleToSet.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany<{
+						role: string;
+					}>({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((role) => role.role);
+					const stillInvalid = unknownRoles.filter(
+						(role) => !foundRoleNames.includes(role),
+					);
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
+					});
+				}
 			}
 
 			const organization = await adapter.findOrganizationById(organizationId);
