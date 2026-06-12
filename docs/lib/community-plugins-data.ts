@@ -152,17 +152,6 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@commet/better-auth",
-		url: "https://github.com/commet-labs/commet",
-		description:
-			"Billing and payments plugin for Commet with customer sync, subscriptions, feature access, usage tracking, seats, and customer portal support.",
-		author: {
-			name: "Commet Labs",
-			github: "commet-labs",
-			avatar: "https://github.com/commet-labs.png",
-		},
-	},
-	{
 		name: "stargate-better-auth",
 		url: "https://github.com/neiii/stargate-better-auth",
 		description:
@@ -279,6 +268,27 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "efiz.near",
 			github: "elliotBraem",
 			avatar: "https://github.com/elliotBraem.png",
+		},
+	},
+	{
+		name: "ton-better-auth",
+		url: "https://github.com/mhbdev/ton-better-auth",
+		description: "Sign in with Ton Connect",
+		author: {
+			name: "mhbdev",
+			github: "mhbdev",
+			avatar: "https://github.com/mhbdev.png",
+		},
+	},
+	{
+		name: "@dbsc-toolkit/better-auth",
+		url: "https://www.npmjs.com/package/@dbsc-toolkit/better-auth",
+		description:
+			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+		author: {
+			name: "SulimanAbdulrazzaq",
+			github: "SulimanAbdulrazzaq",
+			avatar: "https://github.com/SulimanAbdulrazzaq.png",
 		},
 	},
 ];

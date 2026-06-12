@@ -17,6 +17,7 @@ export {
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
+	validateSkipDiscoveryEndpoints,
 } from "./discovery";
 
 export { mapDiscoveryErrorToAPIError } from "./errors";

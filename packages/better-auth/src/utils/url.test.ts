@@ -8,9 +8,31 @@ import {
 	matchesHostPattern,
 	resolveBaseURL,
 	resolveDynamicBaseURL,
+	trimTrailingSlashes,
 } from "./url";
 
+describe("trimTrailingSlashes", () => {
+	it("should remove trailing slashes", () => {
+		expect(trimTrailingSlashes("https://example.com///")).toBe(
+			"https://example.com",
+		);
+		expect(trimTrailingSlashes("///")).toBe("");
+	});
+
+	it("should leave non-trailing slashes unchanged", () => {
+		const value = `https://example.com/${"/".repeat(10_000)}a`;
+
+		expect(trimTrailingSlashes(value)).toBe(value);
+	});
+});
+
 describe("getBaseURL", () => {
+	it("should append the auth path after trailing slashes", () => {
+		expect(
+			getBaseURL("https://example.com////", "/auth", undefined, false),
+		).toBe("https://example.com/auth");
+	});
+
 	describe("trustedProxyHeaders validation", () => {
 		it("should reject malicious protocol in X-Forwarded-Proto", () => {
 			const request = new Request("http://localhost:3000/test", {
