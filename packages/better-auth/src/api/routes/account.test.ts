@@ -8,13 +8,16 @@ import {
 	afterEach,
 	assert,
 	beforeAll,
+	beforeEach,
 	describe,
 	expect,
 	it,
 	vi,
 } from "vitest";
+import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT } from "../../crypto";
+import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -1011,6 +1014,135 @@ describe("account", async () => {
 		findAccountsSpy.mockRestore();
 	});
 
+	it("should not refresh with a stale account cookie belonging to another user", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const testCtx = await auth.$context;
+
+		let refreshedWith: string | null = null;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const params = new URLSearchParams(await request.text());
+				if (params.get("grant_type") === "refresh_token") {
+					refreshedWith = params.get("refresh_token");
+					// the provider does not rotate the refresh token
+					return HttpResponse.json({
+						access_token: "rotated-access-token",
+					});
+				}
+				const data: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "First User",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "first-google-sub",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "User",
+				};
+				const testIdToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "first-access-token",
+					refresh_token: "first-refresh-token",
+					id_token: testIdToken,
+				});
+			}),
+		);
+
+		// The first user signs in with Google, storing their account_data cookie
+		const headers = new Headers();
+		email = "stale-cookie-first@test.com";
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		await client.signUp.email(
+			{
+				email: "stale-cookie-second@test.com",
+				password: "password123456",
+				name: "Second User",
+			},
+			{
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const session = await auth.api.getSession({ headers });
+		assert(session, "second user should be signed in");
+		expect(session.user.email).toBe("stale-cookie-second@test.com");
+
+		// The second user has their own google account
+		await testCtx.internalAdapter.createAccount({
+			userId: session.user.id,
+			providerId: "google",
+			accountId: "second-google-sub",
+			accessToken: "second-access-token",
+			refreshToken: "second-refresh-token",
+			scope: "email",
+		});
+
+		const res = await client.$fetch<{ refreshToken?: string }>(
+			"/refresh-token",
+			{
+				body: {
+					providerId: "google",
+				},
+				headers,
+				method: "POST",
+			},
+		);
+
+		// The refresh must use the second user's own refresh token, not the
+		// the first user's token from the stale cookie
+		expect(refreshedWith).toBe("second-refresh-token");
+		expect(res.data?.refreshToken).not.toBe("first-refresh-token");
+
+		// The second user's account row must not be overwritten with the
+		// the first user's tokens
+		const accounts = await testCtx.internalAdapter.findAccounts(
+			session.user.id,
+		);
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount?.refreshToken).toBe("second-refresh-token");
+	});
+
 	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
@@ -1863,5 +1995,261 @@ describe("account", async () => {
 
 		expect(refreshedSessionCookie).toBe(true);
 		expect(refreshedAccountCookie).toBe(true);
+	});
+});
+
+describe("token routes cookie cache revocation", async () => {
+	it("get-access-token fails closed after the session is revoked in a stateful deployment", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+		expect(headers.get("cookie")).toContain("session_data");
+
+		// Revoke server-side; the cookie cache is the only thing still vouching.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		// resolveUserId validates against the database before any account lookup,
+		// so the revoked session is rejected outright rather than minting a token.
+		const res = await client.$fetch("/get-access-token", {
+			method: "POST",
+			body: { providerId: "google" },
+			headers,
+		});
+		expect(res.error?.status).toBe(401);
+
+		// A request must not re-enable the cookie cache to revive the revoked
+		// session. `z.coerce.boolean()` reads an empty value as false, so the
+		// forced strict validation has to ignore it.
+		const bypass = await client.$fetch(
+			"/get-access-token?disableCookieCache=",
+			{
+				method: "POST",
+				body: { providerId: "google" },
+				headers,
+			},
+		);
+		expect(bypass.error?.status).toBe(401);
+	});
+});
+
+describe("account resolution in stateless mode", async () => {
+	const IDP = "https://idp.stateless.test";
+	const STATELESS_SECRET = "stateless-test-secret-stateless-test-secret";
+
+	const idpHandlers = [
+		http.get(`${IDP}/.well-known/openid-configuration`, () =>
+			HttpResponse.json({
+				issuer: IDP,
+				authorization_endpoint: `${IDP}/authorize`,
+				token_endpoint: `${IDP}/token`,
+				userinfo_endpoint: `${IDP}/userinfo`,
+				jwks_uri: `${IDP}/jwks`,
+			}),
+		),
+		http.post(`${IDP}/token`, async ({ request }) => {
+			const params = new URLSearchParams(await request.text());
+			if (params.get("grant_type") === "refresh_token") {
+				return HttpResponse.json({
+					token_type: "Bearer",
+					access_token: "idp-refreshed-access-token",
+					refresh_token: "idp-rotated-refresh-token",
+					expires_in: 3600,
+					scope: "openid profile email",
+				});
+			}
+			return HttpResponse.json({
+				token_type: "Bearer",
+				access_token: "idp-access-token",
+				refresh_token: "idp-refresh-token",
+				expires_in: 3600,
+				scope: "openid profile email",
+			});
+		}),
+	];
+
+	beforeEach(() => server.use(...idpHandlers));
+
+	const makeStatelessAuth = () =>
+		betterAuth({
+			secret: STATELESS_SECRET,
+			baseURL: "http://localhost:3000",
+			trustedOrigins: ["http://localhost:3000"],
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 60,
+					refreshCache: { updateAge: 60 * 60 },
+				},
+			},
+			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "idp",
+							clientId: "client-id",
+							clientSecret: "client-secret",
+							scopes: ["openid", "profile", "email"],
+							discoveryUrl: `${IDP}/.well-known/openid-configuration`,
+							getUserInfo: async (tokens) => ({
+								id: "shared-idp-user",
+								email: "user@stateless.test",
+								name: "Stateless User",
+								emailVerified: true,
+								accessTokenSeen: tokens.accessToken,
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+	type Jar = Map<string, string>;
+
+	const collectCookies = (res: Response, jar: Jar) => {
+		for (const cookie of res.headers.getSetCookie()) {
+			const [pair = ""] = cookie.split(";");
+			const idx = pair.indexOf("=");
+			if (idx > 0) {
+				jar.set(pair.slice(0, idx), pair.slice(idx + 1));
+			}
+		}
+	};
+
+	const cookieHeader = (jar: Jar) =>
+		[...jar].map(([name, value]) => `${name}=${value}`).join("; ");
+
+	const requestHeaders = (jar: Jar) =>
+		new Headers({
+			cookie: cookieHeader(jar),
+			host: "localhost:3000",
+		});
+
+	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
+		const jar: Jar = new Map();
+		let res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/oauth2", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ providerId: "idp", callbackURL: "/" }),
+			}),
+		);
+		collectCookies(res, jar);
+		const { url } = (await res.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+		assert(state, "expected an OAuth state to be issued");
+
+		res = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/oauth2/callback/idp?code=test-code&state=${state}`,
+				{ headers: requestHeaders(jar), redirect: "manual" },
+			),
+		);
+		collectCookies(res, jar);
+
+		const session = (await auth.api.getSession({
+			headers: requestHeaders(jar),
+		})) as { user: { id: string } } | null;
+		assert(session?.user.id, "expected OAuth sign-in to create a session");
+		return { jar, userId: session.user.id };
+	};
+
+	const signInOnTwoInstances = async () => {
+		const authA = makeStatelessAuth();
+		const a = await signIn(authA);
+		const b = await signIn(makeStatelessAuth());
+		expect(a.userId).not.toBe(b.userId);
+
+		const accountCookieName = (await authA.$context).authCookies.accountData
+			.name;
+		const mixed: Jar = new Map(a.jar);
+		for (const key of [...mixed.keys()]) {
+			if (key.startsWith(accountCookieName)) mixed.delete(key);
+		}
+		for (const [key, value] of b.jar) {
+			if (key.startsWith(accountCookieName)) mixed.set(key, value);
+		}
+
+		return {
+			accountCookieName,
+			mixed,
+			sessionUserId: a.userId,
+		};
+	};
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves getAccessToken with a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const result = await makeStatelessAuth().api.getAccessToken({
+			body: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		expect(result.accessToken).toBe("idp-access-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves accountInfo with a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const info = await makeStatelessAuth().api.accountInfo({
+			query: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		assert(info, "expected accountInfo to resolve from the account cookie");
+		expect(info.user.id).toBe("shared-idp-user");
+		expect(info.data.accessTokenSeen).toBe("idp-access-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("refreshes a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const result = await makeStatelessAuth().api.refreshToken({
+			body: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		expect(result.accessToken).toBe("idp-refreshed-access-token");
+		expect(result.refreshToken).toBe("idp-rotated-refresh-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("preserves a valid mismatched account cookie during stateless session refresh", async () => {
+		const { accountCookieName, mixed } = await signInOnTwoInstances();
+
+		const res = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: requestHeaders(mixed),
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const cookies = parseSetCookieHeader(res.headers.get("set-cookie") || "");
+		const accountCookie = cookies.get(accountCookieName);
+		expect(accountCookie?.value).toBeTruthy();
+		expect(accountCookie?.maxAge).not.toBe(0);
 	});
 });

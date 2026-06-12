@@ -8,6 +8,7 @@ import type {
 	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
+import { reddit } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -2078,6 +2079,7 @@ describe("Microsoft Provider", async () => {
 		)
 			.setProtectedHeader({ alg: "RS256", kid: msKid })
 			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-789/v2.0")
 			.setAudience("test-ms-client-id-token")
 			.setExpirationTime("1h")
 			.sign(rsaKeyPair.privateKey);
@@ -2188,6 +2190,7 @@ describe("Microsoft Provider", async () => {
 			sub: "ms-tenant-user",
 			email: "tenant@outlook.com",
 			name: "Tenant User",
+			tid: tenantId,
 		};
 
 		const validToken = await new SignJWT(
@@ -2444,5 +2447,197 @@ describe("Railway Provider", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
+	});
+});
+
+/**
+ * Regression tests for PayPal ID token verification. Previously
+ * `verifyIdToken` only decoded the JWT and checked that a `sub` claim was
+ * present, performing no signature/issuer/audience checks, so any well-formed
+ * token paired with a valid access token would be accepted.
+ */
+describe("PayPal Provider — id token verification", async () => {
+	const paypalKeyPair = await generateKeyPair("RS256");
+	const paypalJwk = await exportJWK(paypalKeyPair.publicKey);
+	const paypalKid = "test-paypal-kid";
+	paypalJwk.kid = paypalKid;
+	paypalJwk.alg = "RS256";
+	paypalJwk.use = "sig";
+
+	// A key that is not in the provider's published JWKS, used to sign tokens
+	// that must be rejected.
+	const otherKeyPair = await generateKeyPair("RS256");
+
+	const clientId = "paypal-client-id";
+
+	const userInfo = {
+		user_id: "paypal-user-123",
+		name: "PayPal User",
+		email: "paypal-user@example.com",
+		email_verified: true,
+		picture: "https://example.com/avatar.png",
+	};
+
+	const buildToken = (
+		signingKey: CryptoKey,
+		overrides: {
+			audience?: string;
+			issuer?: string;
+			kid?: string;
+		} = {},
+	) =>
+		new SignJWT({ sub: "paypal-user-123" })
+			.setProtectedHeader({ alg: "RS256", kid: overrides.kid ?? paypalKid })
+			.setIssuedAt()
+			.setIssuer(overrides.issuer ?? "https://www.paypal.com")
+			.setAudience(overrides.audience ?? clientId)
+			.setExpirationTime("1h")
+			.sign(signingKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://api.paypal.com/v1/oauth2/certs", async () =>
+				HttpResponse.json({ keys: [paypalJwk] }),
+			),
+			http.get(
+				"https://api-m.paypal.com/v1/identity/oauth2/userinfo",
+				async () => HttpResponse.json(userInfo),
+			),
+		);
+	});
+
+	const getInstance = () =>
+		getTestInstance(
+			{
+				socialProviders: {
+					paypal: {
+						clientId,
+						clientSecret: "paypal-client-secret",
+						environment: "live",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+	it("accepts a properly signed id token", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey);
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "paypal-access-token" },
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("paypal-user@example.com");
+	});
+
+	it("rejects a token signed by a key not in the provider's JWKS", async () => {
+		const idToken = await buildToken(otherKeyPair.privateKey);
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("rejects a token whose audience is a different client", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey, {
+			audience: "some-other-client",
+		});
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("rejects a token with an unexpected issuer", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey, {
+			issuer: "https://not-paypal.example.com",
+		});
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+});
+
+/**
+ * Regression tests for the Reddit provider profile mapping. Reddit's `identity`
+ * scope does not return an email; previously the provider mapped the shared
+ * `oauth_client_id` (which identifies the OAuth app, not the user) to
+ * `user.email` and `has_verified_email` to `emailVerified`, collapsing every
+ * Reddit user of the same app onto one "verified" email and enabling implicit
+ * account linking/takeover.
+ */
+describe("Reddit Provider — profile email mapping", async () => {
+	const profile = {
+		id: "reddit-user-123",
+		name: "reddit_user",
+		icon_img: "https://example.com/avatar.png?x=1",
+		has_verified_email: true,
+		oauth_client_id: "shared-reddit-oauth-client-id",
+		verified: true,
+	};
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://oauth.reddit.com/api/v1/me", async () =>
+				HttpResponse.json(profile),
+			),
+		);
+	});
+
+	it("never uses oauth_client_id as the email and falls back to a unique per-user email", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		// Without a mapped email the provider derives a unique, per-user
+		// synthetic email from the Reddit user id rather than falling back to
+		// the shared oauth_client_id, so users can never collide on one address.
+		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
+		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		expect(result?.user.emailVerified).toBe(false);
+	});
+
+	it("uses the email supplied by mapProfileToUser and ignores oauth_client_id", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+			mapProfileToUser: (p) => ({
+				email: `${p.name}@example.com`,
+			}),
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		expect(result?.user.email).toBe("reddit_user@example.com");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		// The synthetic "verified email" flag must not be applied to the mapped
+		// email unless the integrator opts in.
+		expect(result?.user.emailVerified).toBe(false);
 	});
 });

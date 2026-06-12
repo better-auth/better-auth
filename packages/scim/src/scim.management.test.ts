@@ -133,6 +133,47 @@ describe("SCIM provider management", () => {
 			);
 		});
 
+		it("should deny personal token creation when canGenerateToken returns false", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				canGenerateToken: ({ organizationId }) => !!organizationId,
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const generateSCIMToken = () =>
+				auth.api.generateSCIMToken({
+					body: { providerId: "personal-provider" },
+					headers,
+				});
+
+			await expect(generateSCIMToken()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "You are not allowed to generate a SCIM token",
+				}),
+			);
+		});
+
+		it("should allow token creation when canGenerateToken returns true (member is null for personal)", async () => {
+			let received: { providerId: string; member: unknown } | null = null;
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				canGenerateToken: ({ providerId, member }) => {
+					received = { providerId, member };
+					return true;
+				},
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: { providerId: "personal-provider" },
+				headers,
+			});
+
+			expect(scimToken).toBeTruthy();
+			expect(received).toEqual({
+				providerId: "personal-provider",
+				member: null,
+			});
+		});
+
 		it("should fail if the authenticated user does not belong to the given org", async () => {
 			const { auth, getAuthCookieHeaders } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
@@ -424,6 +465,40 @@ describe("SCIM provider management", () => {
 				});
 
 			await expect(createUser()).resolves.toBeTruthy();
+		});
+
+		it("rejects a SCIM token whose secret does not match the stored value", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "hashed",
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			const [secret, ...rest] = Buffer.from(response.scimToken, "base64url")
+				.toString()
+				.split(":");
+			// Tamper the secret while preserving its length, so verification cannot
+			// short-circuit on a length mismatch and must reject the value itself
+			// through the constant-time comparison.
+			const forgedSecret = `${secret.slice(0, -1)}${
+				secret.endsWith("x") ? "y" : "x"
+			}`;
+			const forgedToken = Buffer.from(
+				[forgedSecret, ...rest].join(":"),
+			).toString("base64url");
+
+			await expect(
+				auth.api.createSCIMUser({
+					body: { userName: "the-username" },
+					headers: { authorization: `Bearer ${forgedToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ status: "UNAUTHORIZED" }),
+			);
 		});
 
 		it("should generate a new scim token associated to an org", async () => {

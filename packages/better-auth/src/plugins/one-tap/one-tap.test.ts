@@ -367,3 +367,98 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBe(0);
 	});
 });
+
+describe("one-tap callbackURL origin validation", async () => {
+	const googleProvider = {
+		clientId: "test-client",
+		clientSecret: "test-secret",
+		enabled: true,
+	};
+
+	it("rejects an untrusted callbackURL via the global origin check", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+			advanced: { disableOriginCheck: false },
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: {
+				idToken: "stub-id-token",
+				callbackURL: "https://untrusted.example/callback",
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("accepts a relative callbackURL (origin check passes)", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+			advanced: { disableOriginCheck: false },
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", callbackURL: "/dashboard" },
+		});
+
+		// The origin check must not block a same-app relative redirect target.
+		expect(res.error?.status).not.toBe(403);
+	});
+});
+
+describe("one-tap audience enforcement", async () => {
+	it("rejects the callback when no Google client ID is configured", async () => {
+		// No `socialProviders.google` and no `oneTap({ clientId })`, so there is no
+		// expected audience. Without one, jose would verify Google's signature but
+		// not that the token was minted for this app, so the request must fail
+		// closed before verification rather than accept a cross-client token.
+		// (`socialProviders: {}` overrides the test default, which configures
+		// google with a client id.)
+		const { client } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Google client ID is required");
+	});
+
+	it("accepts the oneTap-level clientId as the audience without a Google provider", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		// The audience guard is satisfied, so the request is not rejected for a
+		// missing client ID (verification proceeds via the mocked jose).
+		expect(res.error?.message ?? "").not.toContain(
+			"Google client ID is required",
+		);
+	});
+});

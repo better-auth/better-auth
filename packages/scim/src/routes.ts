@@ -13,6 +13,7 @@ import {
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
+import { getOrgAdapter } from "better-auth/plugins";
 import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import type { AuthMiddleware } from "./middlewares";
@@ -134,6 +135,62 @@ async function findOrganizationMember(
 			},
 		],
 	});
+}
+
+/**
+ * Decides whether SCIM provisioning may attach to a pre-existing user that
+ * matched by email. Linking by email alone would give the SCIM token full
+ * read/write/delete access to a user it never provisioned, so this returns
+ * `false` unless `opts.linkExistingUsers` explicitly opts in and every
+ * configured constraint passes.
+ */
+async function canLinkExistingUser(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+	existingUser: User,
+	email: string,
+): Promise<boolean> {
+	const policy = opts.linkExistingUsers;
+	if (!policy) return false;
+	if (policy === true) return true;
+
+	const { organizationId, providerId } = ctx.context.scimProvider;
+
+	// An empty policy object must not silently allow linking — require at least
+	// one positive constraint to be configured.
+	const hasConstraint =
+		(policy.trustedDomains?.length ?? 0) > 0 ||
+		policy.requireExistingOrgMembership === true ||
+		typeof policy.shouldLinkUser === "function";
+	if (!hasConstraint) return false;
+
+	if (policy.requireExistingOrgMembership) {
+		if (!organizationId) return false;
+		const member = await findOrganizationMember(
+			ctx,
+			existingUser.id,
+			organizationId,
+		);
+		if (!member) return false;
+	}
+
+	if (policy.trustedDomains?.length) {
+		const domain = email.split("@")[1]?.toLowerCase();
+		const allowed =
+			!!domain && policy.trustedDomains.some((d) => d.toLowerCase() === domain);
+		if (!allowed) return false;
+	}
+
+	if (policy.shouldLinkUser) {
+		const ok = await policy.shouldLinkUser({
+			user: existingUser,
+			email,
+			provider: { providerId, organizationId },
+		});
+		if (!ok) return false;
+	}
+
+	return true;
 }
 
 async function assertSCIMProviderAccess(
@@ -290,6 +347,23 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				if (!hasRequiredRole(member.role, requiredRole)) {
 					throw new APIError("FORBIDDEN", {
 						message: "Insufficient role for this operation",
+					});
+				}
+			}
+
+			// Optional app-level gate. Personal (non-org) tokens otherwise have no
+			// authorization beyond a valid session, so this is the hook to
+			// restrict who can mint them.
+			if (opts.canGenerateToken) {
+				const allowed = await opts.canGenerateToken({
+					user,
+					providerId,
+					organizationId,
+					member,
+				});
+				if (!allowed) {
+					throw new APIError("FORBIDDEN", {
+						message: "You are not allowed to generate a SCIM token",
 					});
 				}
 			}
@@ -542,7 +616,10 @@ export const deleteSCIMProviderConnection = (opts: SCIMOptions) =>
 		},
 	);
 
-export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
+export const createSCIMUser = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
 	createAuthEndpoint(
 		"/scim/v2/Users",
 		{
@@ -643,6 +720,21 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			let account: Account;
 
 			if (existingUser) {
+				// Do not auto-link a pre-existing user by email alone — that would
+				// grant this SCIM token access to an account it never provisioned.
+				// Require an explicit, configured policy to allow it.
+				const allowLink = await canLinkExistingUser(
+					ctx,
+					opts,
+					existingUser,
+					email,
+				);
+				if (!allowLink) {
+					throw new SCIMAPIError("CONFLICT", {
+						detail: "User already exists",
+						scimType: "uniqueness",
+					});
+				}
 				user = existingUser;
 				account = await ctx.context.adapter.transaction<Account>(async () => {
 					const account = await createAccount(user.id);
@@ -1038,7 +1130,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const providerId = ctx.context.scimProvider.providerId;
 			const organizationId = ctx.context.scimProvider.organizationId;
 
-			const { user } = await findUserById(ctx.context.adapter, {
+			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
 				providerId,
 				organizationId,
@@ -1048,6 +1140,84 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				throw new SCIMAPIError("NOT_FOUND", {
 					detail: "User not found",
 				});
+			}
+
+			// Organization-scoped SCIM must not delete the *global* Better Auth
+			// user — that would remove the person's access to every other
+			// organization and identity, well outside this token's boundary.
+			// Deprovision instead: drop their membership in this organization and
+			// the SCIM account link for this provider, leaving the user intact.
+			if (organizationId) {
+				const organizationPlugin = ctx.context.getPlugin("organization");
+				if (!organizationPlugin) {
+					throw new SCIMAPIError("BAD_REQUEST", {
+						detail:
+							"Organization-scoped SCIM deprovisioning requires the organization plugin",
+					});
+				}
+				const orgOptions = organizationPlugin.options;
+				const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
+				const member = await findOrganizationMember(
+					ctx,
+					userId,
+					organizationId,
+				);
+				const organization = member
+					? await orgAdapter.findOrganizationById(organizationId)
+					: null;
+
+				if (member && organization) {
+					await orgOptions?.organizationHooks?.beforeRemoveMember?.({
+						member,
+						user,
+						organization,
+					});
+				}
+
+				await ctx.context.adapter.transaction(async (trx) => {
+					if (member) {
+						await trx.delete({
+							model: "member",
+							where: [{ field: "id", value: member.id }],
+						});
+						if (orgOptions?.teams?.enabled) {
+							const teams = await trx.findMany<{ id: string }>({
+								model: "team",
+								where: [{ field: "organizationId", value: organizationId }],
+							});
+							if (teams.length > 0) {
+								await trx.deleteMany({
+									model: "teamMember",
+									where: [
+										{ field: "userId", value: userId },
+										{
+											field: "teamId",
+											value: teams.map((team) => team.id),
+											operator: "in",
+										},
+									],
+								});
+							}
+						}
+					}
+					if (account) {
+						await trx.delete({
+							model: "account",
+							where: [{ field: "id", value: account.id }],
+						});
+					}
+				});
+
+				if (member && organization) {
+					await orgOptions?.organizationHooks?.afterRemoveMember?.({
+						member,
+						user,
+						organization,
+					});
+				}
+
+				ctx.setStatus(204);
+				return;
 			}
 
 			await ctx.context.internalAdapter.deleteUserSessions(userId);
