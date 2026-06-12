@@ -7,6 +7,7 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
+import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
 import {
 	getAccountCookie,
 	setAccountCookie,
@@ -19,6 +20,7 @@ import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	isStateful,
 	sessionMiddleware,
 } from "./session";
 
@@ -247,7 +249,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			const { token, nonce } = c.body.idToken;
 			const valid = await provider.verifyIdToken(token, nonce);
 			if (!valid) {
-				c.context.logger.error("Invalid id token", {
+				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,
 				});
 				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -456,10 +458,8 @@ async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const isStateful =
-		!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
 	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful,
+		disableCookieCache: isStateful(ctx),
 	});
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");
@@ -472,6 +472,29 @@ async function resolveUserId(
 		});
 	}
 	return resolvedUserId;
+}
+
+function matchesAccountSelection(
+	ctx: GenericEndpointContext,
+	account: Account,
+	{
+		resolvedUserId,
+		providerId,
+		accountId,
+	}: {
+		resolvedUserId: string;
+		providerId?: string;
+		accountId?: string;
+	},
+) {
+	const matchesSessionUser =
+		!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+		account.userId === resolvedUserId;
+	return (
+		matchesSessionUser &&
+		(!providerId || providerId === account.providerId) &&
+		(!accountId || account.accountId === accountId)
+	);
 }
 
 /**
@@ -513,9 +536,11 @@ async function getValidAccessToken(
 		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
-			accountData.userId === resolvedUserId &&
-			providerId === accountData.providerId &&
-			(!accountId || accountData.accountId === accountId)
+			matchesAccountSelection(ctx, accountData, {
+				resolvedUserId,
+				providerId,
+				accountId,
+			})
 		) {
 			account = accountData;
 		} else {
@@ -762,9 +787,11 @@ export const refreshToken = createAuthEndpoint(
 		const accountData = await getAccountCookie(ctx);
 		const usedAccountCookie =
 			!!accountData &&
-			accountData.userId === resolvedUserId &&
-			providerId === accountData.providerId &&
-			(!accountId || accountData.accountId === accountId);
+			matchesAccountSelection(ctx, accountData, {
+				resolvedUserId,
+				providerId,
+				accountId,
+			});
 		if (usedAccountCookie) {
 			account = accountData;
 		} else {
@@ -941,7 +968,13 @@ export const accountInfo = createAuthEndpoint(
 		if (!providedAccountId) {
 			if (ctx.context.options.account?.storeAccountCookie) {
 				const accountData = await getAccountCookie(ctx);
-				if (accountData) {
+				if (
+					accountData &&
+					matchesAccountSelection(ctx, accountData, {
+						resolvedUserId,
+						providerId: providedProviderId,
+					})
+				) {
 					account = accountData;
 				}
 			}
@@ -963,7 +996,12 @@ export const accountInfo = createAuthEndpoint(
 			account = matchingAccounts[0];
 		}
 
-		if (!account || account.userId !== resolvedUserId) {
+		if (
+			!account ||
+			!matchesAccountSelection(ctx, account, {
+				resolvedUserId,
+			})
+		) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
 

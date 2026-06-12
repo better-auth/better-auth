@@ -6,9 +6,9 @@ import type {
 } from "@better-auth/core/db";
 import { toPascalCase } from "@better-auth/core/utils/string";
 import type {
+	OpenAPIParameter as BetterCallOpenAPIParameter,
 	Endpoint,
 	EndpointOptions,
-	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
 import * as z from "zod";
@@ -16,77 +16,96 @@ import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 
 export interface Path {
-	get?:
-		| {
-				tags?: string[];
-				operationId?: string;
-				description?: string;
-				security?: [{ bearerAuth: string[] }];
-				parameters?: OpenAPIParameter[];
-				responses?: {
-					[key in string]: {
-						description?: string;
-						content: {
-							"application/json": {
-								schema: {
-									type?: OpenAPISchemaType;
-									properties?: Record<string, any>;
-									required?: string[];
-									$ref?: string;
-								};
-							};
-						};
-					};
-				};
-		  }
-		| undefined;
-	post?:
-		| {
-				tags?: string[];
-				operationId?: string;
-				description?: string;
-				security?: [{ bearerAuth: string[] }];
-				parameters?: OpenAPIParameter[];
-				requestBody?: {
-					content: {
-						"application/json": {
-							schema: {
-								type?: OpenAPISchemaType;
-								properties?: Record<string, any>;
-								required?: string[];
-								$ref?: string;
-							};
-						};
-					};
-				};
-				responses?: {
-					[key in string]: {
-						description?: string;
-						content: {
-							"application/json": {
-								schema: {
-									type?: OpenAPISchemaType;
-									properties?: Record<string, any>;
-									required?: string[];
-									$ref?: string;
-								};
-							};
-						};
-					};
-				};
-		  }
-		| undefined;
+	get?: OpenAPIOperation | undefined;
+	post?: OpenAPIOperation | undefined;
+	put?: OpenAPIOperation | undefined;
+	patch?: OpenAPIOperation | undefined;
+	delete?: OpenAPIOperation | undefined;
 }
 
+type OpenAPISchemaPrimitiveType = OpenAPISchemaType | "null";
+
+export type OpenAPISchema = {
+	type?: OpenAPISchemaPrimitiveType | OpenAPISchemaPrimitiveType[];
+	properties?: Record<string, OpenAPISchema>;
+	required?: string[];
+	$ref?: string;
+	description?: string;
+	default?: unknown;
+	readOnly?: boolean;
+	format?: string;
+	deprecated?: boolean;
+	enum?: unknown[];
+	items?: OpenAPISchema;
+	minLength?: number;
+	maxLength?: number;
+	minimum?: number;
+	maximum?: number;
+	additionalProperties?: boolean | OpenAPISchema;
+	propertyNames?: OpenAPISchema;
+	allOf?: OpenAPISchema[];
+	anyOf?: OpenAPISchema[];
+	oneOf?: OpenAPISchema[];
+	const?: unknown;
+	example?: unknown;
+};
+
+export type OpenAPIParameter = Omit<BetterCallOpenAPIParameter, "schema"> & {
+	schema?: OpenAPISchema;
+};
+
+type OpenAPIMediaTypeObject = {
+	schema?: OpenAPISchema;
+};
+
+type OpenAPIResponseContent = {
+	"application/json"?: OpenAPIMediaTypeObject;
+	"text/plain"?: OpenAPIMediaTypeObject;
+	"text/html"?: OpenAPIMediaTypeObject;
+	[contentType: string]: OpenAPIMediaTypeObject | undefined;
+};
+
+type OpenAPIResponse = {
+	description?: string;
+	content?: OpenAPIResponseContent;
+};
+
+type OpenAPIRequestBody = {
+	required?: boolean;
+	content: {
+		"application/json": {
+			schema: OpenAPISchema;
+		};
+	};
+};
+
+type OpenAPIOperation = {
+	tags?: string[];
+	operationId?: string;
+	description?: string;
+	security?: [{ bearerAuth: string[] }];
+	parameters?: OpenAPIParameter[];
+	requestBody?: OpenAPIRequestBody;
+	responses?: Record<string, OpenAPIResponse>;
+};
+
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
-const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
-function getTypeFromZodType(zodType: z.ZodType<any>) {
-	// unwrap ZodDefault to get the inner type
-	if (zodType instanceof z.ZodDefault) {
-		return getTypeFromZodType(zodType.unwrap() as any);
+const OPEN_API_SCHEMA_TYPES = new Set<AllowedType>([
+	"string",
+	"number",
+	"boolean",
+	"array",
+	"object",
+]);
+
+function getOpenApiTypeFromZodType(zodType: z.ZodType<unknown>) {
+	if (zodType instanceof z.ZodDefault || zodType instanceof z.ZodPrefault) {
+		return getOpenApiTypeFromZodType(unwrapZodSchema(zodType));
 	}
 	const type = zodType.type;
-	return allowedType.has(type) ? (type as AllowedType) : "string";
+	return OPEN_API_SCHEMA_TYPES.has(type as AllowedType)
+		? (type as AllowedType)
+		: "string";
 }
 
 export type FieldSchema = {
@@ -124,6 +143,77 @@ function getFieldSchema(field: DBFieldAttribute) {
 	return schema;
 }
 
+type ZodDef<T extends object> = {
+	_def: T;
+};
+
+function asZodSchema(schema: unknown): z.ZodType<unknown> {
+	return schema as z.ZodType<unknown>;
+}
+
+function unwrapZodSchema(
+	zodType: z.ZodType<unknown> & { unwrap: () => unknown },
+) {
+	return asZodSchema(zodType.unwrap());
+}
+
+function getZodDef<T extends object>(zodType: z.ZodType<unknown>) {
+	return (zodType as z.ZodType<unknown> & ZodDef<T>)._def;
+}
+
+function getZodDescription(zodType: z.ZodType<unknown>) {
+	return (zodType as z.ZodType<unknown> & { description?: string }).description;
+}
+
+function withDescription(
+	schema: OpenAPISchema,
+	zodType: z.ZodType<unknown>,
+): OpenAPISchema {
+	const description = getZodDescription(zodType);
+	return description ? { ...schema, description } : schema;
+}
+
+function addNullType(schema: OpenAPISchema): OpenAPISchema {
+	if (schema.type) {
+		const type: OpenAPISchemaPrimitiveType[] = Array.isArray(schema.type)
+			? schema.type
+			: [schema.type];
+		const nullableType = Array.from(
+			new Set<OpenAPISchemaPrimitiveType>([...type, "null"]),
+		);
+		return {
+			...schema,
+			type: nullableType,
+		};
+	}
+	return {
+		anyOf: [schema, { type: "null" satisfies OpenAPISchemaPrimitiveType }],
+	};
+}
+
+function getZodStringSchemaConstraints(zodType: z.ZodType<unknown>) {
+	const minLength = (
+		zodType as z.ZodType<unknown> & { minLength?: number | null }
+	).minLength;
+	const maxLength = (
+		zodType as z.ZodType<unknown> & { maxLength?: number | null }
+	).maxLength;
+	return {
+		...(typeof minLength === "number" ? { minLength } : {}),
+		...(typeof maxLength === "number" ? { maxLength } : {}),
+	};
+}
+
+function getZodPipeSchema(zodType: z.ZodType<unknown>) {
+	const def = getZodDef<{
+		in: z.ZodType<unknown>;
+		out: z.ZodType<unknown>;
+	}>(zodType);
+	return def.in instanceof z.ZodTransform && def.out instanceof z.ZodType
+		? def.out
+		: def.in;
+}
+
 function getParameters(options: EndpointOptions) {
 	const parameters: OpenAPIParameter[] = [];
 	if (options.metadata?.openapi?.parameters) {
@@ -133,17 +223,11 @@ function getParameters(options: EndpointOptions) {
 	if (options.query instanceof z.ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
+				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
 				parameters.push({
 					name: key,
 					in: "query",
-					schema: {
-						...processZodType(value as z.ZodType<any>),
-						...("minLength" in value && (value as any).minLength
-							? {
-									minLength: (value as any).minLength as number,
-								}
-							: {}),
-					},
+					schema: parameterSchema,
 				});
 			}
 		});
@@ -151,114 +235,323 @@ function getParameters(options: EndpointOptions) {
 	return parameters;
 }
 
-function getRequestBody(options: EndpointOptions): any {
+function getRequestBodySchemaInfo(zodType: z.ZodType<unknown>) {
+	return {
+		required: !schemaAcceptsUndefined(zodType),
+		schema: zodType,
+	};
+}
+
+function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
+	if (
+		zodType instanceof z.ZodOptional ||
+		zodType instanceof z.ZodDefault ||
+		zodType instanceof z.ZodPrefault ||
+		zodType instanceof z.ZodCatch ||
+		zodType instanceof z.ZodUndefined ||
+		zodType instanceof z.ZodVoid
+	) {
+		return true;
+	}
+	if (zodType instanceof z.ZodNonOptional) {
+		return false;
+	}
+	if (zodType instanceof z.ZodNullable || zodType instanceof z.ZodReadonly) {
+		return schemaAcceptsUndefined(unwrapZodSchema(zodType));
+	}
+	if (zodType instanceof z.ZodPipe) {
+		return schemaAcceptsUndefined(getZodPipeSchema(zodType));
+	}
+	if (zodType instanceof z.ZodUnion) {
+		const def = getZodDef<{ options: z.ZodType<unknown>[] }>(zodType);
+		return def.options.some((option) => schemaAcceptsUndefined(option));
+	}
+	if (zodType instanceof z.ZodIntersection) {
+		const def = getZodDef<{
+			left: z.ZodType<unknown>;
+			right: z.ZodType<unknown>;
+		}>(zodType);
+		return (
+			schemaAcceptsUndefined(def.left) && schemaAcceptsUndefined(def.right)
+		);
+	}
+	return false;
+}
+
+function isUndefinedOnlySchema(zodType: z.ZodType<unknown>) {
+	return zodType instanceof z.ZodUndefined || zodType instanceof z.ZodVoid;
+}
+
+function isMergeableObjectSchema(schema: OpenAPISchema) {
+	const type = schema?.type;
+	return (
+		!!schema &&
+		(type === "object" || (Array.isArray(type) && type.includes("object"))) &&
+		schema.$ref === undefined &&
+		schema.allOf === undefined &&
+		schema.anyOf === undefined
+	);
+}
+
+function schemaAllowsNull(schema: OpenAPISchema) {
+	const type = schema?.type;
+	return Array.isArray(type) && type.includes("null");
+}
+
+function areSchemasEqual(left: OpenAPISchema, right: OpenAPISchema) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function areSchemaMembersCompatible(
+	left: boolean | OpenAPISchema | undefined,
+	right: boolean | OpenAPISchema | undefined,
+) {
+	if (left === undefined || right === undefined) {
+		return true;
+	}
+	if (typeof left === "boolean" || typeof right === "boolean") {
+		return left === right;
+	}
+	return areSchemasEqual(left, right);
+}
+
+function mergeObjectSchemas(
+	left: OpenAPISchema,
+	right: OpenAPISchema,
+	description?: string,
+): OpenAPISchema | undefined {
+	const properties: Record<string, OpenAPISchema> = {
+		...(left.properties || {}),
+	};
+	for (const [key, value] of Object.entries(right.properties || {})) {
+		if (
+			properties[key] !== undefined &&
+			!areSchemasEqual(properties[key], value)
+		) {
+			return undefined;
+		}
+		properties[key] = value;
+	}
+
+	const required = Array.from(
+		new Set([...(left.required || []), ...(right.required || [])]),
+	);
+	const leftAdditionalProperties = left.additionalProperties;
+	const rightAdditionalProperties = right.additionalProperties;
+	if (
+		!areSchemaMembersCompatible(
+			leftAdditionalProperties,
+			rightAdditionalProperties,
+		)
+	) {
+		return undefined;
+	}
+	const leftPropertyNames = left.propertyNames;
+	const rightPropertyNames = right.propertyNames;
+	if (!areSchemaMembersCompatible(leftPropertyNames, rightPropertyNames)) {
+		return undefined;
+	}
+	const additionalProperties =
+		leftAdditionalProperties ?? rightAdditionalProperties;
+	const propertyNames = leftPropertyNames ?? rightPropertyNames;
+
+	const type: OpenAPISchema["type"] =
+		schemaAllowsNull(left) && schemaAllowsNull(right)
+			? ["object", "null"]
+			: "object";
+
+	return {
+		type,
+		...(Object.keys(properties).length > 0 ? { properties } : {}),
+		...(required.length > 0 ? { required } : {}),
+		...(additionalProperties !== undefined ? { additionalProperties } : {}),
+		...(propertyNames !== undefined ? { propertyNames } : {}),
+		...((description ?? left.description ?? right.description)
+			? {
+					description: description ?? left.description ?? right.description,
+				}
+			: {}),
+	};
+}
+
+function getRequestBody(
+	options: EndpointOptions,
+): OpenAPIRequestBody | undefined {
 	if (options.metadata?.openapi?.requestBody) {
 		return options.metadata.openapi.requestBody;
 	}
 	if (!options.body) return undefined;
-	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
-	) {
-		// @ts-expect-error
-		const shape = options.body.shape;
-		if (!shape) return undefined;
-		const properties: Record<string, any> = {};
-		const required: string[] = [];
-		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof z.ZodType) {
-				properties[key] = processZodType(value as z.ZodType<any>);
-				if (!(value instanceof z.ZodOptional)) {
-					required.push(key);
-				}
-			}
-		});
-		return {
-			required:
-				options.body instanceof z.ZodOptional
-					? false
-					: options.body
-						? true
-						: false,
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties,
-						required,
-					},
-				},
+	const requestBodySchemaInfo = getRequestBodySchemaInfo(
+		options.body as z.ZodType<unknown>,
+	);
+	const schema = toOpenApiSchema(requestBodySchemaInfo.schema);
+	return {
+		required: requestBodySchemaInfo.required,
+		content: {
+			"application/json": {
+				schema,
 			},
-		};
-	}
-	return undefined;
+		},
+	};
 }
 
-function processZodType(zodType: z.ZodType<any>): any {
-	// optional unwrapping
+function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	if (zodType instanceof z.ZodOptional) {
-		const innerType = zodType.unwrap() as any;
-		const innerSchema = processZodType(innerType);
-		if (innerSchema.type) {
-			const type = Array.isArray(innerSchema.type)
-				? innerSchema.type
-				: [innerSchema.type];
-			return {
-				...innerSchema,
-				type: Array.from(new Set([...type, "null"])),
-			};
-		}
-		return {
-			anyOf: [innerSchema, { type: "null" }],
-		};
+		return toOpenApiSchema(unwrapZodSchema(zodType));
 	}
-	// default unwrapping
-	if (zodType instanceof z.ZodDefault) {
-		const innerType = zodType.unwrap() as any;
-		const innerSchema = processZodType(innerType);
-		const defaultValueDef = (zodType as any)._def.defaultValue;
-		const defaultValue =
-			typeof defaultValueDef === "function"
-				? defaultValueDef()
-				: defaultValueDef;
-		return {
-			...innerSchema,
-			default: defaultValue,
-		};
+	if (zodType instanceof z.ZodNullable) {
+		return addNullType(toOpenApiSchema(unwrapZodSchema(zodType)));
 	}
-	// object unwrapping
+	if (
+		zodType instanceof z.ZodDefault ||
+		zodType instanceof z.ZodPrefault ||
+		zodType instanceof z.ZodNonOptional
+	) {
+		return toOpenApiSchema(unwrapZodSchema(zodType));
+	}
+	if (zodType instanceof z.ZodAny) {
+		return withDescription({}, zodType);
+	}
 	if (zodType instanceof z.ZodObject) {
-		const shape = (zodType as any).shape;
+		const shape = zodType.shape as Record<string, z.ZodType<unknown>>;
 		if (shape) {
-			const properties: Record<string, any> = {};
+			const properties: Record<string, OpenAPISchema> = {};
 			const required: string[] = [];
 			Object.entries(shape).forEach(([key, value]) => {
 				if (value instanceof z.ZodType) {
-					properties[key] = processZodType(value as z.ZodType<any>);
-					if (!(value instanceof z.ZodOptional)) {
+					properties[key] = toOpenApiSchema(value as z.ZodType<unknown>);
+					if (!schemaAcceptsUndefined(value as z.ZodType<unknown>)) {
 						required.push(key);
 					}
 				}
 			});
-			return {
-				type: "object",
-				properties,
-				...(required.length > 0 ? { required } : {}),
-				description: (zodType as any).description,
-			};
+			return withDescription(
+				{
+					type: "object",
+					properties,
+					...(required.length > 0 ? { required } : {}),
+				},
+				zodType,
+			);
 		}
 	}
+	if (zodType instanceof z.ZodRecord) {
+		const def = getZodDef<{
+			keyType: z.ZodType<unknown>;
+			valueType: z.ZodType<unknown>;
+		}>(zodType);
+		return withDescription(
+			{
+				type: "object",
+				propertyNames: toOpenApiSchema(def.keyType),
+				additionalProperties: toOpenApiSchema(def.valueType),
+			},
+			zodType,
+		);
+	}
+	if (zodType instanceof z.ZodIntersection) {
+		const def = getZodDef<{
+			left: z.ZodType<unknown>;
+			right: z.ZodType<unknown>;
+		}>(zodType);
+		const leftSchema = toOpenApiSchema(def.left);
+		const rightSchema = toOpenApiSchema(def.right);
 
-	// For primitive types, get the correct type from the unwrapped ZodType
+		if (
+			isMergeableObjectSchema(leftSchema) &&
+			isMergeableObjectSchema(rightSchema)
+		) {
+			const mergedSchema = mergeObjectSchemas(
+				leftSchema,
+				rightSchema,
+				getZodDescription(zodType),
+			);
+			if (mergedSchema) {
+				return mergedSchema;
+			}
+		}
+
+		return withDescription({ allOf: [leftSchema, rightSchema] }, zodType);
+	}
+	if (zodType instanceof z.ZodUnion) {
+		const def = getZodDef<{
+			options: z.ZodType<unknown>[];
+			inclusive?: boolean;
+		}>(zodType);
+		const schemas = def.options
+			.filter((option) => !isUndefinedOnlySchema(option))
+			.map((option) => toOpenApiSchema(option));
+		if (schemas.length === 0) {
+			return withDescription({}, zodType);
+		}
+		if (schemas.length === 1) {
+			const schema = schemas[0];
+			if (!schema) {
+				return withDescription({}, zodType);
+			}
+			return withDescription(schema, zodType);
+		}
+		const unionSchema =
+			def.inclusive === false
+				? ({ oneOf: schemas } satisfies OpenAPISchema)
+				: ({ anyOf: schemas } satisfies OpenAPISchema);
+		return withDescription(unionSchema, zodType);
+	}
+	if (zodType instanceof z.ZodArray) {
+		const def = getZodDef<{ element: z.ZodType<unknown> }>(zodType);
+		return withDescription(
+			{
+				type: "array",
+				items: toOpenApiSchema(def.element),
+			},
+			zodType,
+		);
+	}
+	if (zodType instanceof z.ZodLiteral) {
+		const values = Array.from(
+			(zodType as z.ZodType<unknown> & { values: Set<unknown> }).values,
+		);
+		return withDescription({ enum: values }, zodType);
+	}
+	if (zodType instanceof z.ZodEnum) {
+		return withDescription(
+			{
+				type: "string",
+				enum: zodType.options,
+			},
+			zodType,
+		);
+	}
+	if (zodType instanceof z.ZodPipe) {
+		return withDescription(toOpenApiSchema(getZodPipeSchema(zodType)), zodType);
+	}
+	if (zodType instanceof z.ZodCatch || zodType instanceof z.ZodReadonly) {
+		const def = getZodDef<{ innerType: z.ZodType<unknown> }>(zodType);
+		return withDescription(toOpenApiSchema(def.innerType), zodType);
+	}
+	if (zodType instanceof z.ZodNull) {
+		return withDescription({ type: "null" }, zodType);
+	}
+	if (zodType instanceof z.ZodUndefined) {
+		return withDescription({}, zodType);
+	}
+	if (zodType instanceof z.ZodVoid) {
+		return withDescription({}, zodType);
+	}
+
 	const baseSchema = {
-		type: getTypeFromZodType(zodType),
-		description: (zodType as any).description,
+		type: getOpenApiTypeFromZodType(zodType),
+		...(zodType instanceof z.ZodString
+			? getZodStringSchemaConstraints(zodType)
+			: {}),
 	};
 
-	return baseSchema;
+	return withDescription(baseSchema, zodType);
 }
 
-function getResponse(responses?: Record<string, any> | undefined) {
+function getResponse(
+	responses?: Record<string, OpenAPIResponse> | undefined,
+): Record<string, OpenAPIResponse> {
 	return {
 		"400": {
 			content: {
@@ -357,7 +650,7 @@ function getResponse(responses?: Record<string, any> | undefined) {
 				"Internal Server Error. This is a problem with the server that you cannot fix.",
 		},
 		...(responses ? structuredClone(responses) : {}),
-	} as any;
+	};
 }
 
 function toOpenApiPath(path: string) {
@@ -387,15 +680,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
-		const required: string[] = [];
+		const required = new Set<string>(["id"]);
 		const properties: Record<string, FieldSchema> = {
-			id: { type: "string" },
+			id: { type: "string", readOnly: true },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
 			if (!fieldValue) return;
 			properties[fieldKey] = getFieldSchema(fieldValue);
-			if (fieldValue.required && fieldValue.input !== false) {
-				required.push(fieldKey);
+			if (fieldValue.required && fieldValue.returned !== false) {
+				required.add(fieldKey);
 			}
 		});
 
@@ -408,7 +701,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		acc[modelName] = {
 			type: "object",
 			properties,
-			required,
+			required: Array.from(required),
 		};
 		return acc;
 	}, {});

@@ -49,6 +49,7 @@ import type {
 import {
 	domainMatches,
 	normalizePem,
+	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
@@ -1608,9 +1609,9 @@ async function handleOIDCCallback(
 			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
+				? parseProviderEmailVerified(
+						rawUserInfo[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: rawUserInfo[mapping.name || "name"] as string | undefined,
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
@@ -1653,7 +1654,9 @@ async function handleOIDCCallback(
 			id: idToken[mapping.id || "sub"],
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
-				? idToken[mapping.emailVerified || "email_verified"]
+				? parseProviderEmailVerified(
+						idToken[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
