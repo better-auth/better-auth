@@ -168,6 +168,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return "Int[]";
 				}
 			}
+			function getFieldTypeParts(type: string) {
+				const isArray = type.endsWith("[]");
+				const typeWithoutArray = isArray ? type.slice(0, -2) : type;
+				const isOptional = typeWithoutArray.endsWith("?");
+				const fieldType = isOptional
+					? typeWithoutArray.slice(0, -1)
+					: typeWithoutArray;
+				return { fieldType, isArray, isOptional };
+			}
 
 			const prismaModel = builder.findByType("model", {
 				name: modelName,
@@ -207,20 +216,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			for (const field in fields) {
 				const attr = fields[field]!;
 				const fieldName = attr.fieldName || field;
-
-				if (prismaModel) {
-					const isAlreadyExist = builder.findByType("field", {
-						name: fieldName,
-						within: prismaModel.properties,
-					});
-					if (isAlreadyExist) {
-						continue;
-					}
-				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const useNumberId = options.advanced?.database?.generateId === "serial";
-				const fieldBuilder = builder.model(modelName).field(
-					fieldName,
+				const fieldType =
 					field === "id" && useNumberId
 						? getType({
 								isBigint: false,
@@ -236,8 +234,46 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 											? "number"
 											: "string"
 										: attr.type,
-							}),
-				);
+							});
+
+				if (prismaModel) {
+					const isAlreadyExist = builder.findByType("field", {
+						name: fieldName,
+						within: prismaModel.properties,
+					});
+					if (isAlreadyExist) {
+						if (fieldType && typeof isAlreadyExist.fieldType === "string") {
+							const fieldTypeParts = getFieldTypeParts(fieldType);
+							const existingFieldTypeParts = getFieldTypeParts(
+								isAlreadyExist.fieldType,
+							);
+							const isExistingNumericField =
+								existingFieldTypeParts.fieldType === "Int" ||
+								existingFieldTypeParts.fieldType === "BigInt";
+							if (
+								isExistingNumericField &&
+								(fieldTypeParts.fieldType === "Int" ||
+									fieldTypeParts.fieldType === "BigInt")
+							) {
+								isAlreadyExist.fieldType = fieldTypeParts.fieldType;
+								isAlreadyExist.optional =
+									fieldTypeParts.isOptional || undefined;
+								isAlreadyExist.array = fieldTypeParts.isArray || undefined;
+							}
+						}
+						continue;
+					}
+				}
+				if (!fieldType) {
+					throw new Error(
+						`Unsupported Prisma field type for model "${modelName}", field "${fieldName}"${
+							attr.type ? ` (source type: "${attr.type}")` : ""
+						}.`,
+					);
+				}
+				const fieldBuilder = builder
+					.model(modelName)
+					.field(fieldName, fieldType);
 				if (field === "id") {
 					fieldBuilder.attribute("id");
 					if (provider === "mongodb") {

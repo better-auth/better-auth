@@ -756,21 +756,21 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				if (
 					ctx.context.orgOptions.teams &&
 					ctx.context.orgOptions.teams.enabled &&
-					"teamId" in invitation &&
-					invitation.teamId
+					"teamId" in acceptedI &&
+					acceptedI.teamId
 				) {
-					const teamIds = (invitation.teamId as string).split(",");
+					const teamIds = (acceptedI.teamId as string).split(",");
 					const onlyOne = teamIds.length === 1;
 
 					for (const teamId of teamIds) {
-						// Confirm the team still belongs to the invitation's
+						// Confirm the team still belongs to the accepted invitation's
 						// organization before adding the member. This keeps team
 						// membership consistent with the invitation's organization,
 						// including for older invitations and for teams that were
 						// moved or removed between invite and accept.
 						const team = await adapter.findTeamById({
 							teamId,
-							organizationId: invitation.organizationId,
+							organizationId: acceptedI.organizationId,
 						});
 						if (!team) {
 							throw APIError.from(
@@ -789,7 +789,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 									? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
 											teamId,
 											session: session,
-											organizationId: invitation.organizationId,
+											organizationId: acceptedI.organizationId,
 										})
 									: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 
@@ -828,15 +828,15 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				const createdMember = await adapter.createMember({
-					organizationId: invitation.organizationId,
+					organizationId: acceptedI.organizationId,
 					userId: session.user.id,
-					role: invitation.role,
+					role: acceptedI.role,
 					createdAt: new Date(),
 				});
 
 				await adapter.setActiveOrganization(
 					session.session.token,
-					invitation.organizationId,
+					acceptedI.organizationId,
 					ctx,
 				);
 

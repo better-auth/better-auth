@@ -153,6 +153,149 @@ export const schema = {
 		},
 	},
 	/**
+	 * A protected resource the AS issues access tokens for.
+	 *
+	 * Promotes protected resources into a first-class persisted entity with
+	 * per-resource token policy. A null value
+	 * on any policy column means "inherit the plugin-level default at token
+	 * issuance time" — admins can later override without re-seeding.
+	 *
+	 * @see RFC 8707 (Resource Indicators) — `identifier` is the `resource` parameter value
+	 * @see RFC 9068 §2.2 — `customClaims` cannot override reserved JWT claims (enforced server-side)
+	 */
+	oauthResource: {
+		modelName: "oauthResource",
+		fields: {
+			// Business key used in the `aud` claim and as the RFC 8707 `resource` value.
+			identifier: {
+				type: "string",
+				required: true,
+				unique: true,
+			},
+			// Human-friendly label for admin UIs.
+			name: {
+				type: "string",
+				required: true,
+			},
+			// Token policy — null means "inherit plugin default at issuance time".
+			accessTokenTtl: {
+				type: "number",
+				required: false,
+			},
+			refreshTokenTtl: {
+				type: "number",
+				required: false,
+			},
+			// Signing — when set, overrides the JWT plugin's getLatestKey() default.
+			signingAlgorithm: {
+				type: "string",
+				required: false,
+			},
+			signingKeyId: {
+				type: "string",
+				required: false,
+			},
+			// Scope allowlist — when non-null, requested scopes must intersect.
+			allowedScopes: {
+				type: "string[]",
+				required: false,
+			},
+			// Per-resource custom claims. Reserved RFC 9068 claim names are stripped at
+			// issuance with a warning log (never silently dropped).
+			customClaims: {
+				type: "json",
+				required: false,
+			},
+			// Lifecycle: disabled → no new issuance, existing tokens still verify.
+			disabled: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
+			createdAt: {
+				type: "date",
+				required: false,
+			},
+			updatedAt: {
+				type: "date",
+				required: false,
+			},
+			// Forward-migration anchor — lets the runtime branch behavior if claim
+			// emission or validation semantics change without forcing every row to
+			// migrate. This PR ships with policyVersion = 1.
+			policyVersion: {
+				type: "number",
+				required: false,
+				defaultValue: 1,
+			},
+			// Open-ended extension data for fields not yet promoted to columns
+			// (e.g. RFC 9728 non-standard metadata).
+			metadata: {
+				type: "json",
+				required: false,
+			},
+		},
+	},
+	/**
+	 * Join table — which clients are allowed to request which resources.
+	 *
+	 * Authoritative only when `enforcePerClientResources: true` on plugin options.
+	 * When the flag is off, clients implicitly have access to all enabled resources
+	 * (preserves pre-entity behavior).
+	 *
+	 * Composite uniqueness on `(clientId, resourceId)` is load-bearing — the
+	 * `enforcePerClientResources` linkage check assumes one row per pair.
+	 *
+	 * Better Auth's schema layer doesn't expose composite-UNIQUE syntax (no
+	 * way to declare `UNIQUE(clientId, resourceId)` at the column level). To
+	 * enforce it at the database level for free, we set the row's `id` to a
+	 * deterministic `${clientId}::${resourceId}` value at write time and let
+	 * the implicit `UNIQUE` constraint on the primary key catch duplicates
+	 * (see `buildClientResourceLinkId` and the `forceAllowId: true` flag on
+	 * the `adapter.create` call in `oauthResource/endpoints.ts`). The double
+	 * colon separator is chosen because `::` cannot appear in either a
+	 * client_id (URL-safe random string) or a resource identifier (RFC 8707
+	 * absolute URI — `::` would be an IPv6 form rejected by the validator),
+	 * so the encoding is collision-free.
+	 *
+	 * Concurrent inserts of the same pair surface as a UNIQUE-constraint
+	 * error which the endpoint catches and converts to a 200 "alreadyLinked"
+	 * response (idempotency).
+	 */
+	oauthClientResource: {
+		modelName: "oauthClientResource",
+		fields: {
+			clientId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "oauthClient",
+					field: "clientId",
+					onDelete: "cascade",
+				},
+				index: true,
+			},
+			resourceId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "oauthResource",
+					field: "identifier",
+					onDelete: "cascade",
+				},
+				index: true,
+			},
+			metadata: {
+				type: "json",
+				required: false,
+			},
+			createdAt: {
+				type: "date",
+				required: false,
+			},
+		},
+	},
+	/**
 	 * An opaque refresh token created with "offline_access"
 	 *
 	 * Refresh tokens are linked to a session.
@@ -224,7 +367,7 @@ export const schema = {
 		},
 	},
 	/**
-	 * An opaque access token sent when there is no audience
+	 * An opaque access token sent when there is no resource audience claim
 	 * to assigned to the JWT.
 	 *
 	 * Access tokens are linked to a session, better-auth

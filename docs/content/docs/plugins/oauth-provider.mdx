@@ -623,7 +623,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
-Use the `resources` field in `customAccessTokenClaims` to add claims based on the audience.
+Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
 ### Revoke Endpoint
 
@@ -633,7 +633,7 @@ What the endpoint does depends on the token type:
 
 * opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
 * `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
-* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries a different audience is treated as an invalid token and returns a `200` no-op.
+* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries an audience rejected by the OAuth resource model is treated as an invalid token and returns a `200` no-op.
 
 Because a JWT `access_token` cannot be revoked individually, plan for it:
 
@@ -919,7 +919,7 @@ During the OAuth flow, users are likely redirected between pages. For example, a
 
 To process each redirect step in the login flow, we verify the signed query provided in the initial `/oauth2/authorize` redirect. All parameters sent to the authorize endpoint (including any custom ones), are signed and verified.
 
-If your sign-in pages include any custom query parameters, you may append them to the end of the signed query (ie after the `sig` field).
+If your sign-in pages include custom page query parameters, they may coexist in the URL, but they should not be added to the signed `oauth_query`. The client plugin forwards only the parameters declared by the signed redirect.
 
 If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.
 
@@ -1088,18 +1088,24 @@ oauthProvider({
 })
 ```
 
-### Valid Audiences
+### Resources
 
-A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
+A list of protected resources this OAuth server issues access tokens for. Each identifier is the RFC 8707 `resource` parameter value and becomes the JWT `aud` claim when a JWT access token is issued.
 
 ```ts title="auth.ts"
 oauthProvider({
-  validAudiences: [
+  resources: [
     "https://api.example.com",
-    "https://api.example.com/mcp",
+    {
+      identifier: "https://api.example.com/mcp",
+      allowedScopes: ["mcp:read", "mcp:write"],
+      accessTokenTtl: 300,
+    },
   ]
 })
 ```
+
+Use the admin resource endpoints when resource policy needs to change at runtime.
 
 ### Scopes
 
@@ -1626,7 +1632,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
 
     export const GET = async () => {
       const metadata = await serverClient.getProtectedResourceMetadata({
-        resource: "https://api.example.com", // `aud` claim
+        resource: "https://api.example.com", // protected resource identifier
         authorization_servers: ["https://auth.example.com"],
       })
 
@@ -1663,7 +1669,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   <Step>
     ### Handle MCP Errors for your API
 
-    Always verify against a specified `audience`, the default will compare against all `validAudiences` or `baseUrl`.
+    Set `verifyOptions.audience` to your protected resource identifier. If omitted, the resource client falls back to the authorization server base URL as the expected audience.
 
     * Using the client `verifyAccessToken` function
 

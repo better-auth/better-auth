@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { verifyJwsAccessToken } from "better-auth/oauth2";
+import { getJwks } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
+import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -47,25 +49,33 @@ async function validateJwtAccessToken(
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
+	const baseURL = ctx.context.baseURL ?? "";
+	const userInfoAud = `${baseURL}/oauth2/userinfo`;
+	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
 	let jwtPayload: JWTPayload & {
 		sid?: string;
 		azp?: string;
 	};
 
 	try {
-		jwtPayload = await verifyJwsAccessToken(token, {
-			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
-				? jwtPluginOptions.jwks.remoteUrl
-				: async () => {
-						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-						// @ts-expect-error response is a JSONWebKeySet but within the response field
-						return jwksRes?.response as JSONWebKeySet | undefined;
-					},
-			verifyOptions: {
-				audience: opts.validAudiences ?? ctx.context.baseURL,
-				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
+		// here, then validate `aud` manually against the resource model below.
+		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
+			? jwtPluginOptions.jwks.remoteUrl
+			: async (): Promise<JSONWebKeySet | undefined> => {
+					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return jwksRes?.response as JSONWebKeySet | undefined;
+				};
+		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
+			token,
+			createLocalJWKSet(jwks),
+			{
+				issuer: expectedIssuer,
 			},
-		});
+		);
+		jwtPayload = verified.payload;
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.name === "TypeError" || error.name === "JWSInvalid") {
@@ -79,7 +89,7 @@ async function validateJwtAccessToken(
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
-				// audience or issuer mismatch
+				// issuer or other JWT claim validation failure
 				return {
 					active: false,
 				};
@@ -89,11 +99,28 @@ async function validateJwtAccessToken(
 		throw new Error(error as unknown as string);
 	}
 
+	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
+	// the `aud` claim must resolve to a legitimate resource target:
+	//   1. baseURL + /oauth2/userinfo (OIDC implicit),
+	//   2. a known `oauthResource` row (deleted → inactive; disabled rows
+	//      still verify — the "block new issuance, existing tokens continue
+	//      to verify until expiry" lifecycle contract).
+	//
+	// All-must-resolve semantics matter for the deleted-resource contract: a
+	// token issued with `aud: [<resource>, userInfoAud]` and then having
+	// `<resource>` deleted from the AS must hard-reject. "Any valid"
+	// semantics would let the always-valid userinfo audience value mask the
+	// deletion.
+	const rawAud = jwtPayload.aud;
+	if (!(await isAudienceClaimAllowed(ctx, opts, rawAud, [userInfoAud]))) {
+		return { active: false };
+	}
+
 	// An OAuth access token issued by this provider always carries an `azp`
 	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
-	// JWT plugin shares the same issuer, audience, and signing keys, so a plain
-	// session JWT (e.g. from its `/token` endpoint) can otherwise satisfy the
-	// signature/issuer/audience checks above. Such a token was never issued
+	// JWT plugin shares the same issuer, audience convention, and signing keys, so
+	// a plain session JWT (e.g. from its `/token` endpoint) can otherwise satisfy
+	// the signature/issuer/audience checks above. Such a token was never issued
 	// through the OAuth token endpoint and has no client or consent binding, so
 	// it must not be reported as an active access token. Require `azp` and a
 	// matching, enabled client before considering the token active.
@@ -233,11 +260,11 @@ async function validateOpaqueAccessToken(
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
 		: undefined;
-	const audience = resources ? [...resources] : undefined;
-	if (audience?.length && accessToken.scopes?.includes("openid")) {
+	const audienceClaim = resources ? [...resources] : undefined;
+	if (audienceClaim?.length && accessToken.scopes?.includes("openid")) {
 		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
-		if (!audience.includes(userInfoEndpoint)) {
-			audience.push(userInfoEndpoint);
+		if (!audienceClaim.includes(userInfoEndpoint)) {
+			audienceClaim.push(userInfoEndpoint);
 		}
 	}
 
@@ -262,7 +289,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		aud: toAudienceClaim(audience),
+		aud: toAudienceClaim(audienceClaim),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,

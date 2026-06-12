@@ -1,8 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { verifyJwsAccessToken } from "better-auth/oauth2";
+import { getJwks } from "better-auth/oauth2";
 import { APIError } from "better-call";
-import type { JSONWebKeySet } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
+import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -33,9 +35,10 @@ import {
  * delete. Once the token is confirmed to be a valid JWT for this server, the
  * endpoint reports `unsupported_token_type` (RFC 7009 §2.2.1) instead of a
  * silent success, so callers can tell that no server-side revocation happened.
- * An expired or wrong-audience JWT is already inactive and still resolves as a
- * successful no-op. Session-bound tokens (carrying `sid`) are cut off early by
- * the session-liveness check in introspection and userinfo.
+ * An expired JWT or a JWT with an audience rejected by the OAuth resource model
+ * is already inactive and still resolves as a successful no-op. Session-bound
+ * tokens (carrying `sid`) are cut off early by the session-liveness check in
+ * introspection and userinfo.
  */
 async function revokeJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -47,21 +50,40 @@ async function revokeJwtAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 
-	// Verify JWT Payload
+	// Verify signature + issuer first, then validate `aud` against the OAuth
+	// resource model. Do not pass jose's `audience` option here: access-token
+	// audiences are resource identifiers, not a single global authorization-server
+	// audience.
 	try {
-		await verifyJwsAccessToken(token, {
-			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
-				? jwtPluginOptions.jwks.remoteUrl
-				: async () => {
-						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-						// @ts-expect-error response is a JSONWebKeySet but within the response field
-						return jwksRes?.response as JSONWebKeySet | undefined;
-					},
-			verifyOptions: {
-				audience: opts.validAudiences ?? ctx.context.baseURL,
+		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
+			? jwtPluginOptions.jwks.remoteUrl
+			: async (): Promise<JSONWebKeySet | undefined> => {
+					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return jwksRes?.response as JSONWebKeySet | undefined;
+				};
+		const jwks = await getJwks(token, {
+			jwksFetch,
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
+		});
+		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
+			token,
+			createLocalJWKSet(jwks),
+			{
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			},
-		});
+		);
+		const userInfoAudience = `${ctx.context.baseURL}/oauth2/userinfo`;
+		if (
+			!verified.payload.azp ||
+			!(await isAudienceClaimAllowed(ctx, opts, verified.payload.aud, [
+				userInfoAudience,
+			]))
+		) {
+			return null;
+		}
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.name === "TypeError" || error.name === "JWSInvalid") {
@@ -73,7 +95,7 @@ async function revokeJwtAccessToken(
 			} else if (error.name === "JWTExpired") {
 				return null;
 			} else if (error.name === "JWTInvalid") {
-				// audience or issuer mismatch
+				// issuer or other JWT claim validation failure
 				return null;
 			}
 			throw error;

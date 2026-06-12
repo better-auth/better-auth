@@ -1987,4 +1987,87 @@ describe("internal adapter test", async () => {
 			).rejects.toThrow(/requires database-backed verification storage/);
 		});
 	});
+
+	describe("reserveVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns true the first time and the row is findable", async () => {
+			const adapter = await makeAdapter();
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:fresh",
+				value: "jti-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(reserved).toBe(true);
+
+			const found = await adapter.findVerificationValue("reserve:fresh");
+			expect(found).not.toBeNull();
+			expect(found!.value).toBe("jti-1");
+		});
+
+		it("returns false the second time for the same identifier", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		it("yields exactly one winner under concurrent reserve", async () => {
+			const adapter = await makeAdapter();
+
+			const results = await Promise.all([
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			]);
+
+			expect(results.filter((r) => r === true)).toHaveLength(1);
+			expect(results.filter((r) => r === false)).toHaveLength(1);
+		});
+
+		it("reserves independently across different identifiers", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-a",
+				value: "jti-a",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-b",
+				value: "jti-b",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			expect(first).toBe(true);
+			expect(second).toBe(true);
+		});
+	});
 });

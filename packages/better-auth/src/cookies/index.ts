@@ -12,13 +12,20 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import type { JSONWebKeySet } from "jose";
+import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
 import {
-	signJWT,
+	signJWT as signSecretJWT,
 	symmetricDecodeJWT,
 	symmetricEncodeJWT,
-	verifyJWT,
+	verifyJWT as verifySecretJWT,
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
+import {
+	getCookieCacheJwtSigningKey,
+	signCookieCacheJWT,
+	verifyCookieCacheJWTWithJWKS,
+} from "../plugins/jwt/cookie-cache";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
@@ -195,6 +202,7 @@ export async function setCookieCache(
 	const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
+	const jwtSigningKey = getCookieCacheJwtSigningKey(ctx.context.options);
 
 	let data: string;
 
@@ -207,12 +215,14 @@ export async function setCookieCache(
 			options.maxAge || 60 * 5,
 		);
 	} else if (strategy === "jwt") {
-		// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
-		data = await signJWT(
-			sessionData,
-			ctx.context.secret,
-			options.maxAge || 60 * 5,
-		);
+		data =
+			jwtSigningKey === "jwt-plugin"
+				? await signCookieCacheJWT(ctx, sessionData, options.maxAge || 60 * 5)
+				: await signSecretJWT(
+						sessionData,
+						ctx.context.secret,
+						options.maxAge || 60 * 5,
+					);
 	} else {
 		// Use compact strategy (base64url + HMAC, no JWT spec overhead)
 		// Also handles legacy "base64-hmac" for backward compatibility
@@ -256,11 +266,18 @@ export async function setCookieCache(
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
 
-	// Refresh account cookie to keep it in sync
-	if (ctx.context.options.account?.storeAccountCookie) {
+	// Keep the account cookie in sync, unless this response already set a
+	// fresh one that the stale request copy would downgrade or expire.
+	if (
+		ctx.context.options.account?.storeAccountCookie &&
+		!hasPendingSetCookie(ctx, ctx.context.authCookies.accountData.name)
+	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			if (accountData.userId === session.user.id) {
+			if (
+				!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+				accountData.userId === session.user.id
+			) {
 				await setAccountCookie(ctx, accountData);
 			} else {
 				expireCookie(ctx, ctx.context.authCookies.accountData);
@@ -379,6 +396,39 @@ function removeSetCookieEntries(
 }
 
 /**
+ * Whether the response already has a pending `Set-Cookie` for `cookieName`
+ * or a chunked variant.
+ */
+function hasPendingSetCookie(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): boolean {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (
+			existing.some(
+				(entry) => entry.startsWith(exact) || entry.startsWith(chunk),
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
  * Expires a cookie by setting `maxAge: 0` while preserving its attributes
  */
 export function expireCookie(
@@ -428,6 +478,19 @@ export function deleteSessionCookie(
 	if (!skipDontRememberMe) {
 		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
+}
+
+function isEmbeddedSessionExpired(
+	session: { expiresAt?: unknown } | undefined,
+) {
+	if (!session?.expiresAt) {
+		return false;
+	}
+
+	const expiresAt = new Date(
+		session.expiresAt as string | number | Date,
+	).getTime();
+	return Number.isFinite(expiresAt) && expiresAt < Date.now();
 }
 
 export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
@@ -484,6 +547,14 @@ export const getCookieCache = async <
 				isSecure?: boolean;
 				secret?: string;
 				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+				jwt?:
+					| {
+							signingKey?: "secret" | "jwt-plugin";
+							jwks?: JSONWebKeySet;
+							issuer?: string;
+							audience?: string;
+					  }
+					| undefined;
 				version?:
 					| string
 					| ((
@@ -541,16 +612,16 @@ export const getCookieCache = async <
 	}
 
 	if (sessionData) {
-		const secret = config?.secret || env.BETTER_AUTH_SECRET;
-		if (!secret) {
-			throw new BetterAuthError(
-				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
-			);
-		}
-
 		const strategy = config?.strategy || "compact";
+		const jwtSigningKey = config?.jwt?.signingKey ?? "secret";
 
 		if (strategy === "jwe") {
+			const secret = config?.secret || env.BETTER_AUTH_SECRET;
+			if (!secret) {
+				throw new BetterAuthError(
+					"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+				);
+			}
 			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
 				sessionData,
@@ -573,12 +644,36 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
+				if (isEmbeddedSessionExpired(payload.session)) {
+					return null;
+				}
 				return payload;
 			}
 			return null;
 		} else if (strategy === "jwt") {
-			// Use JWT strategy with HMAC signature (HS256), no encryption
-			const payload = await verifyJWT<S>(sessionData, secret);
+			const payload =
+				jwtSigningKey === "jwt-plugin"
+					? await (() => {
+							const jwks = config?.jwt?.jwks;
+							if (!jwks) {
+								throw new BetterAuthError(
+									'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
+								);
+							}
+							return verifyCookieCacheJWTWithJWKS<S>(sessionData, jwks, {
+								issuer: config?.jwt?.issuer,
+								audience: config?.jwt?.audience,
+							});
+						})()
+					: await (() => {
+							const secret = config?.secret || env.BETTER_AUTH_SECRET;
+							if (!secret) {
+								throw new BetterAuthError(
+									"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+								);
+							}
+							return verifySecretJWT<S>(sessionData, secret);
+						})();
 
 			if (payload && payload.session && payload.user) {
 				// Validate version if provided
@@ -595,10 +690,19 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
+				if (isEmbeddedSessionExpired(payload.session)) {
+					return null;
+				}
 				return payload;
 			}
 			return null;
 		} else {
+			const secret = config?.secret || env.BETTER_AUTH_SECRET;
+			if (!secret) {
+				throw new BetterAuthError(
+					"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+				);
+			}
 			// Use compact strategy (or legacy base64-hmac)
 			const sessionDataPayload = safeJSONParse<{
 				session: S;
@@ -619,7 +723,6 @@ export const getCookieCache = async <
 			if (!isValid) {
 				return null;
 			}
-
 			// Validate version if provided
 			if (config?.version && sessionDataPayload.session) {
 				const cookieVersion = sessionDataPayload.session.version || "1";
@@ -636,6 +739,19 @@ export const getCookieCache = async <
 				if (cookieVersion !== expectedVersion) {
 					return null;
 				}
+			}
+
+			// The compact strategy carries no `exp` claim, so the outer cache window
+			// and the embedded session lifetime must be checked explicitly (the
+			// jwt/jwe strategies get the outer window from their `exp` claim).
+			if (
+				typeof sessionDataPayload.expiresAt === "number" &&
+				sessionDataPayload.expiresAt < Date.now()
+			) {
+				return null;
+			}
+			if (isEmbeddedSessionExpired(sessionDataPayload.session?.session)) {
+				return null;
 			}
 
 			return sessionDataPayload.session;

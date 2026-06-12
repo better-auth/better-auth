@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/client";
-import { organizationClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
@@ -12,6 +11,7 @@ import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { resetSeedStateForTests } from "./resources";
 import type { OAuthClient } from "./types/oauth";
 
 describe("oauth register", async () => {
@@ -229,6 +229,86 @@ describe("oauth register", async () => {
 		);
 		expect(response.data?.type).toBe("web");
 		expect(response.data?.public).toBeFalsy();
+	});
+
+	it("dedupes repeated DCR resources to a single client/resource link row", async () => {
+		const identifier = "https://api.example.com/dcr-dedupe";
+		await auth.api.adminCreateOAuthResource({
+			headers,
+			body: { identifier },
+		});
+
+		// A client that lists the same resource twice must not produce two
+		// link rows: the deterministic `${clientId}::${resourceId}` id makes
+		// the second insert a no-op via the PK uniqueness constraint.
+		const response = await serverClient.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				resources: [identifier, identifier],
+			},
+		});
+		const clientId = response.data?.client_id;
+		expect(clientId).toBeDefined();
+
+		const ctx = await auth.$context;
+		const links = await ctx.adapter.findMany({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: clientId! }],
+		});
+		expect(links.length).toBe(1);
+	});
+
+	it("lazy-seeds configured resources before DCR validation", async () => {
+		const identifier = "https://api.example.com/dcr-lazy-seed";
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resources: [identifier],
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		resetSeedStateForTests();
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const response = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				resources: [identifier],
+			},
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data?.resources).toEqual([identifier]);
 	});
 
 	it("should register client with metadata field", async () => {
@@ -678,7 +758,7 @@ describe("oauth register - organization", async () => {
 
 	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
-		plugins: [oauthProviderClient(), organizationClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: baseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -697,16 +777,24 @@ describe("oauth register - organization", async () => {
 		});
 		expect(_org).toBeDefined();
 		org = _org!;
-		await serverClient.organization.setActive({
-			organizationId: org.id,
-			organizationSlug: org.slug,
+		await serverClient.$fetch("/organization/set-active", {
+			method: "POST",
+			body: {
+				organizationId: org.id,
+				organizationSlug: org.slug,
+			},
+			headers,
+			throw: true,
 		});
 		const session = await serverClient.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(org?.id);
+		const sessionData = session.data?.session as
+			| { activeOrganizationId?: string }
+			| undefined;
+		expect(sessionData?.activeOrganizationId).toBe(org?.id);
 	});
 
 	it("should create organizational oauthClient", async () => {
