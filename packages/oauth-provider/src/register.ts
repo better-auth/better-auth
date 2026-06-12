@@ -1,11 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertClientPrivileges } from "./oauthClient/privileges";
-import { buildClientResourceLinkId } from "./resources";
-import type { OAuthOptions, OAuthResource, SchemaClient, Scope } from "./types";
+import { buildClientResourceLinkId, getResource } from "./resources";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
@@ -78,19 +79,18 @@ export async function registerEndpoint(
 	// stays type-stable for existing DCR consumers (the resources are echoed
 	// as an added field, not via a separate Response wrapper).
 	const requestedResources = Array.isArray(body.resources)
-		? body.resources.filter(
-				(resource): resource is string =>
-					typeof resource === "string" && resource.length > 0,
-			)
+		? [
+				...new Set(
+					body.resources.filter(
+						(resource): resource is string =>
+							typeof resource === "string" && resource.length > 0,
+					),
+				),
+			]
 		: [];
 	if (requestedResources.length > 0) {
-		const resourceModel =
-			opts.schema?.oauthResource?.modelName ?? "oauthResource";
 		for (const identifier of requestedResources) {
-			const row = await ctx.context.adapter.findOne<OAuthResource>({
-				model: resourceModel,
-				where: [{ field: "identifier", value: identifier }],
-			});
+			const row = await getResource(ctx, opts, identifier);
 			if (!row) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_target",
@@ -441,31 +441,29 @@ export async function createOAuthClientEndpoint(
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
 	});
-	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
-		model: "oauthClient",
-		data: {
-			...schema,
-			createdAt: new Date(iat * 1000),
-			updatedAt: new Date(iat * 1000),
-		},
-	});
+	const resources = settings.resources ?? [];
+	const client = await runWithTransaction(ctx.context.adapter, async () => {
+		const createdClient = await ctx.context.adapter.create<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			data: {
+				...schema,
+				createdAt: new Date(iat * 1000),
+				updatedAt: new Date(iat * 1000),
+			},
+		});
 
-	// DCR resource linkage (RFC 7591 §2 extension). The caller pre-validated
-	// each identifier; here we just write the join rows so the new client
-	// passes `enforcePerClientResources` checks immediately.
-	if (settings.resources && settings.resources.length > 0) {
-		const linkModel =
-			opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
-		const now = new Date();
-		// Dedupe so a registration that lists the same resource twice doesn't
-		// attempt two inserts of the same deterministic-id row.
-		const uniqueResources = [...new Set(settings.resources)];
-		for (const resourceId of uniqueResources) {
-			// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
-			// constraint enforces composite (clientId, resourceId) uniqueness.
-			// Idempotent under retries: a duplicate insert hits the constraint
-			// and is swallowed rather than creating a second link row.
-			try {
+		// DCR resource linkage (RFC 7591 §2 extension). The caller pre-validated
+		// each identifier; here we write the join rows in the same transaction as
+		// the client so a failed link cannot leave a half-registered client.
+		if (resources.length > 0) {
+			const linkModel =
+				opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+			const now = new Date();
+			for (const resourceId of resources) {
+				// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
+				// constraint enforces composite (clientId, resourceId) uniqueness.
 				await ctx.context.adapter.create({
 					model: linkModel,
 					forceAllowId: true,
@@ -476,14 +474,10 @@ export async function createOAuthClientEndpoint(
 						createdAt: now,
 					} as never,
 				});
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				if (!/unique|duplicate|UNIQUE/i.test(message)) {
-					throw err;
-				}
 			}
 		}
-	}
+		return createdClient;
+	});
 
 	// Format the response according to RFC7591. When resources were linked
 	// during registration, echo them back per RFC 7591 §3 server response
@@ -494,9 +488,9 @@ export async function createOAuthClientEndpoint(
 			? (opts.prefix?.clientSecret ?? "") + clientSecret
 			: undefined,
 	});
-	if (settings.resources && settings.resources.length > 0) {
+	if (resources.length > 0) {
 		(responseBody as OAuthClient & { resources?: string[] }).resources =
-			settings.resources;
+			resources;
 	}
 	return ctx.json(responseBody, {
 		status: 201,

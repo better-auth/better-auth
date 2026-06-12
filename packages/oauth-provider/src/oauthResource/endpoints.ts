@@ -137,25 +137,32 @@ export async function createResourceEndpoint(
 	}
 	await assertIdentifierValid(opts, input.identifier);
 
-	const existing = await ctx.context.adapter.findOne<OAuthResource>({
-		model: resourceModel(opts),
-		where: [{ field: "identifier", value: input.identifier }],
-	});
-	if (existing) {
+	const now = new Date();
+	let created: OAuthResource;
+	try {
+		created = await ctx.context.adapter.create<
+			ReturnType<typeof buildResourceRow>,
+			OAuthResource
+		>({
+			model: resourceModel(opts),
+			data: buildResourceRow(input, now),
+		});
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		if (/unique|duplicate|UNIQUE/i.test(message)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `resource ${input.identifier} already exists`,
+			});
+		}
+		throw err;
+	}
+	if (!created) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
-			error_description: `resource ${input.identifier} already exists`,
+			error_description: `resource ${input.identifier} could not be created`,
 		});
 	}
-
-	const now = new Date();
-	const created = await ctx.context.adapter.create<
-		ReturnType<typeof buildResourceRow>,
-		OAuthResource
-	>({
-		model: resourceModel(opts),
-		data: buildResourceRow(input, now),
-	});
 	invalidateResourceCache(created.identifier);
 	return ctx.json(created, { status: 201 });
 }

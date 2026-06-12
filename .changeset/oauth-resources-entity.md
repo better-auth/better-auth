@@ -1,5 +1,6 @@
 ---
 "@better-auth/oauth-provider": minor
+"@better-auth/mcp": minor
 "better-auth": minor
 ---
 
@@ -14,6 +15,8 @@ Adds `jti` claim emission (RFC 9068 §2.2.4) and server-enforced stripping of re
 **Migration required** for downstream consumers: this PR adds two columns (`alg`, `crv`) to the existing `jwks` table and two new tables (`oauthResource`, `oauthClientResource`). After bumping, run `npx @better-auth/cli generate` and apply the resulting migration before deploying. Without the migration, per-resource `signingAlgorithm` pinning will fail with `signJWT: no key with alg "X" found in JWKS` since the column the resolver needs is absent.
 
 Removes the legacy `validAudiences` option; new integrations must model protected resources through `resources` or the `oauthResource` admin API. DPoP/mTLS proof validation, JWE access tokens, and per-resource opaque-token format are reserved for follow-up PRs; their schema columns are documented as comments in `schema.ts` to keep the seam visible.
+
+`@better-auth/mcp` now requires an explicit `resource` option. The plugin persists that value as an OAuth resource, publishes it in RFC 9728 protected-resource metadata, and binds issued access tokens to it. Existing `mcp({ loginPage, consentPage })` setups should add the protected MCP resource identifier, for example `resource: "https://api.example.com/mcp"`.
 
 Restores RFC 8707 §2 conformance for the `/oauth2/token` endpoint: repeated `resource` form parameters (`resource=https://a&resource=https://b`) are now honored, where the upstream form-body parser had previously collapsed them to last-write-wins and silently narrowed the issued token's `aud` claim. The endpoint re-parses the raw body to recover the full ordered list before delegating to the token pipeline.
 

@@ -55,7 +55,7 @@ const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
  *
  * @internal
  */
-export const MAX_AUD_VALUES = 64;
+const MAX_AUD_VALUES = 64;
 
 /**
  * Builds a deterministic primary-key value for an `oauthClientResource`
@@ -100,7 +100,7 @@ export type IdentifierCheckResult =
  *
  * @internal
  */
-export async function checkIdentifier(
+async function checkIdentifier(
 	opts: Pick<OAuthOptions<Scope[]>, "identifierValidator">,
 	identifier: string,
 ): Promise<IdentifierCheckResult> {
@@ -166,7 +166,7 @@ export async function assertIdentifierValid(
  *
  * @see RFC 9068 §2.2 (Header and Data Structures)
  */
-export const RESERVED_RFC9068_CLAIMS = new Set([
+const RESERVED_RFC9068_CLAIMS = new Set([
 	"iss",
 	"sub",
 	"aud",
@@ -332,9 +332,7 @@ export async function extractRepeatedResourceFromForm(
  *
  * @internal
  */
-export function normalizeResourceParam(
-	resource: unknown,
-): string[] | undefined {
+function normalizeResourceParam(resource: unknown): string[] | undefined {
 	if (resource === undefined || resource === null) return undefined;
 	if (typeof resource === "string") return [resource];
 	if (Array.isArray(resource)) {
@@ -438,6 +436,8 @@ export async function resolveResourcePolicy(
 		};
 	}
 
+	const uniqueRequestedResources = [...new Set(requestedResources)];
+
 	// For each requested resource:
 	//   1. Always attempt `getResource(identifier)` first — DB rows are the
 	//      authoritative source. Admins can create rows via the CRUD API without
@@ -446,7 +446,7 @@ export async function resolveResourcePolicy(
 	//   3. Row exists & disabled → `invalid_target`.
 	//   4. No row → `invalid_target`.
 	const resolved: OAuthResource[] = [];
-	for (const identifier of requestedResources) {
+	for (const identifier of uniqueRequestedResources) {
 		// `/oauth2/userinfo` is an implicit audience for OIDC userinfo lookups
 		// (not a configured resource server). Skip the entity check for it.
 		if (identifier === userInfoResourceIdentifier) continue;
@@ -571,9 +571,10 @@ export async function resolveResourcePolicy(
 	}
 	const safeClaims = stripReservedClaims(mergedClaims);
 
-	const audClaim = includesOpenid
-		? [...requestedResources, userInfoResourceIdentifier]
-		: [...requestedResources];
+	const audienceIdentifiers = includesOpenid
+		? [...uniqueRequestedResources, userInfoResourceIdentifier]
+		: uniqueRequestedResources;
+	const audClaim = [...new Set(audienceIdentifiers)];
 
 	return {
 		audienceClaim: audClaim.length === 1 ? audClaim[0] : audClaim,
@@ -620,13 +621,11 @@ async function assertClientLinkedToResources(
 }
 
 /**
- * Resolution sources for `enforcePerClientResources`. Returned from
- * {@link resolveEnforcePerClientResources} so callers (init log + tests)
- * can verify which default applied.
+ * Resolution sources for `enforcePerClientResources`.
  */
-export type EnforcePerClientResourcesSource = "explicit" | "default";
+type EnforcePerClientResourcesSource = "explicit" | "default";
 
-export interface ResolvedEnforcePerClientResources {
+interface ResolvedEnforcePerClientResources {
 	value: boolean;
 	source: EnforcePerClientResourcesSource;
 }
@@ -640,7 +639,7 @@ export interface ResolvedEnforcePerClientResources {
  *
  * Deterministic and pure — safe to call on every validation pass.
  */
-export function resolveEnforcePerClientResources(
+function resolveEnforcePerClientResources(
 	opts: Pick<OAuthOptions<Scope[]>, "enforcePerClientResources">,
 ): ResolvedEnforcePerClientResources {
 	if (opts.enforcePerClientResources !== undefined) {

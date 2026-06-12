@@ -251,11 +251,11 @@ describe("resourcePrivileges gate", () => {
 
 describe("client/resource linking", () => {
 	const seedClient = async (
-		ctx: Awaited<ReturnType<typeof boot>>["ctx"],
+		instance: Awaited<ReturnType<typeof boot>>,
 		clientId: string,
 	) => {
-		await ctx.adapter.create({
-			model: "oauthClient",
+		await instance.ctx.adapter.create({
+			model: instance.opts.schema?.oauthClient?.modelName ?? "oauthClient",
 			data: {
 				clientId,
 				redirectUris: ["https://example.com/callback"],
@@ -268,7 +268,7 @@ describe("client/resource linking", () => {
 	it("link creates the join row and unlink removes it", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		await seedClient(instance.ctx, "test-client");
+		await seedClient(instance, "test-client");
 		await instance.auth.api.adminCreateOAuthResource({
 			body: { identifier: "https://api.example.com/linked" },
 			headers,
@@ -306,7 +306,7 @@ describe("client/resource linking", () => {
 	it("link is idempotent on repeat calls", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		await seedClient(instance.ctx, "idempotent-client");
+		await seedClient(instance, "idempotent-client");
 		await instance.auth.api.adminCreateOAuthResource({
 			body: { identifier: "https://api.example.com/idempotent" },
 			headers,
@@ -331,7 +331,7 @@ describe("client/resource linking", () => {
 	it("link rejects an unknown resource", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		await seedClient(instance.ctx, "client-x");
+		await seedClient(instance, "client-x");
 		await expect(
 			instance.auth.api.adminLinkClientResource({
 				params: {
@@ -374,7 +374,7 @@ describe("client/resource linking", () => {
 	it("concurrent link attempts for the same pair produce exactly one row", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		await seedClient(instance.ctx, "race-client");
+		await seedClient(instance, "race-client");
 		await instance.auth.api.adminCreateOAuthResource({
 			body: { identifier: "https://api.example.com/race" },
 			headers,
@@ -415,7 +415,7 @@ describe("client/resource linking", () => {
 			schema: { oauthClient: { modelName: "customOauthClient" } },
 		});
 		const headers = await signedInHeaders(instance);
-		await seedClient(instance.ctx, "remapped-client");
+		await seedClient(instance, "remapped-client");
 		await instance.auth.api.adminCreateOAuthResource({
 			body: { identifier: "https://api.example.com/remapped" },
 			headers,

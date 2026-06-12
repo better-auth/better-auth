@@ -31,7 +31,8 @@ The **MCP** plugin lets your app act as an OAuth authorization server for [Model
             jwt(), // [!code highlight]
             mcp({ // [!code highlight]
                 loginPage: "/sign-in", // path to your login page // [!code highlight]
-                consentPage: "/consent" // path to your consent page // [!code highlight]
+                consentPage: "/consent", // path to your consent page // [!code highlight]
+                resource: "https://api.example.com/mcp" // protected resource identifier // [!code highlight]
             }) // [!code highlight]
         ]
     });
@@ -84,7 +85,7 @@ Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://da
 
 The [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) `/.well-known/oauth-protected-resource` document is served automatically at the well-known root (and the resource-path-inserted alias). It tells MCP clients which authorization server protects the resource, which scopes it supports, and which `resource` identifier their access tokens must be bound to.
 
-The `resource` defaults to the server's base URL. Set it explicitly when your resource server has a distinct identifier:
+Set `resource` to the protected resource identifier MCP clients request and access tokens carry as `aud`:
 
 ```ts title="auth.ts"
 mcp({
@@ -171,7 +172,7 @@ export const mcpPluginOptionsType = {
   resource: {
     description: "The protected resource identifier (RFC 8707 / RFC 9728) that access tokens are bound to. Advertised in the protected resource metadata and used as the token audience.",
     type: "string",
-    required: false,
+    required: true,
   },
 }
 
@@ -185,9 +186,9 @@ export const mcpOauthOptionsType = {
     type: "string[]",
     default: '["openid", "profile", "email", "offline_access"]',
   },
-  validAudiences: {
-    description: "Additional valid audiences when the resource server has more than one identifier.",
-    type: "string[]",
+  resources: {
+    description: "Protected resources the authorization server can issue access tokens for.",
+    type: "Array<string | OAuthResourceInput>",
   },
   accessTokenExpiresIn: {
     description: "Lifetime of access tokens in seconds.",

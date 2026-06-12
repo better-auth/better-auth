@@ -9,7 +9,6 @@ import {
 	getResource,
 	invalidateResourceCache,
 	resetSeedStateForTests,
-	resolveEnforcePerClientResources,
 	seedResources,
 	seedResourcesOnce,
 } from "./resources";
@@ -19,35 +18,6 @@ const silenceWarnings = {
 	oauthAuthServerConfig: true,
 	openidConfig: true,
 } as const;
-
-describe("resolveEnforcePerClientResources", () => {
-	it("returns explicit value when set to true", () => {
-		expect(
-			resolveEnforcePerClientResources({ enforcePerClientResources: true }),
-		).toEqual({ value: true, source: "explicit" });
-	});
-
-	it("returns explicit value when set to false", () => {
-		expect(
-			resolveEnforcePerClientResources({ enforcePerClientResources: false }),
-		).toEqual({ value: false, source: "explicit" });
-	});
-
-	it("defaults to true", () => {
-		expect(resolveEnforcePerClientResources({})).toEqual({
-			value: true,
-			source: "default",
-		});
-	});
-
-	it("explicit false beats the default", () => {
-		expect(
-			resolveEnforcePerClientResources({
-				enforcePerClientResources: false,
-			}),
-		).toEqual({ value: false, source: "explicit" });
-	});
-});
 
 describe("collectResourceInputs", () => {
 	let warnSpy: ReturnType<typeof vi.spyOn>;

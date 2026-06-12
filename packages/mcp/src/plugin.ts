@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type {
 	OAuthOptions,
+	OAuthResourceInput,
 	ResourceServerMetadata,
 	Scope,
 } from "@better-auth/oauth-provider";
@@ -30,12 +31,29 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 	/**
 	 * The protected resource identifier (RFC 8707 / RFC 9728) that access tokens
 	 * are bound to. Published as `resource` in the protected resource metadata,
-	 * added to `validAudiences`, and verified as the token audience.
-	 *
-	 * @default the resolved base URL
+	 * added to `resources`, and verified as the token audience.
 	 */
-	resource?: string;
+	resource: string;
 }
+
+const resourceIdentifier = (resource: string | OAuthResourceInput): string =>
+	typeof resource === "string" ? resource : resource.identifier;
+
+const appendProtectedResource = (
+	resources: Array<string | OAuthResourceInput> | undefined,
+	resource: string,
+): Array<string | OAuthResourceInput> => {
+	const configuredResources = resources ?? [];
+	if (
+		configuredResources.some(
+			(configuredResource) =>
+				resourceIdentifier(configuredResource) === resource,
+		)
+	) {
+		return configuredResources;
+	}
+	return [...configuredResources, resource];
+};
 
 /**
  * Build the RFC 9728 Protected Resource Metadata document. The MCP server is the
@@ -47,7 +65,7 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 const buildResourceServerMetadata = (
 	ctx: GenericEndpointContext,
 	providerOptions: OAuthOptions<Scope[]>,
-	resource: string | undefined,
+	resource: string,
 ): ResourceServerMetadata => {
 	const scopes =
 		providerOptions.advertisedMetadata?.scopes_supported ??
@@ -57,7 +75,7 @@ const buildResourceServerMetadata = (
 		(scope) => !AUTHORIZATION_SERVER_ONLY_SCOPES.has(scope),
 	);
 	const metadata: ResourceServerMetadata = {
-		resource: resource ?? ctx.context.baseURL,
+		resource,
 		authorization_servers: [getIssuer(ctx, providerOptions)],
 		bearer_methods_supported: ["header"],
 	};
@@ -84,17 +102,22 @@ const buildResourceServerMetadata = (
  * import { mcp } from "@better-auth/mcp";
  *
  * export const auth = betterAuth({
- *   plugins: [jwt(), mcp({ loginPage: "/login", consentPage: "/consent" })],
+ *   plugins: [
+ *     jwt(),
+ *     mcp({
+ *       loginPage: "/login",
+ *       consentPage: "/consent",
+ *       resource: "https://api.example.com/mcp",
+ *     }),
+ *   ],
  * });
  * ```
  */
 export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
 	const { resource, ...oauthOptions } = options;
-	if (resource !== undefined) {
-		// RFC 8707: reject an invalid or fragment-containing resource before it is
-		// published in the protected resource metadata.
-		ResourceUriSchema.parse(resource);
-	}
+	// RFC 8707: reject an invalid or fragment-containing resource before it is
+	// published in the protected resource metadata.
+	ResourceUriSchema.parse(resource);
 	const provider = oauthProvider({
 		// MCP clients self-register; public clients use PKCE without a secret.
 		allowDynamicClientRegistration: true,
@@ -102,9 +125,7 @@ export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
 		...oauthOptions,
 		// RFC 8707: bind issued tokens to the MCP resource so the resource server
 		// can validate the audience.
-		validAudiences: resource
-			? [...(oauthOptions.validAudiences ?? []), resource]
-			: oauthOptions.validAudiences,
+		resources: appendProtectedResource(oauthOptions.resources, resource),
 	});
 
 	// The MCP server is the OAuth resource server, so it serves the RFC 9728
@@ -127,10 +148,7 @@ export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
 				: pathname;
 			let resourcePath = "";
 			try {
-				resourcePath = new URL(resource ?? ctx.baseURL).pathname.replace(
-					/\/$/,
-					"",
-				);
+				resourcePath = new URL(resource).pathname.replace(/\/$/, "");
 			} catch {
 				resourcePath = "";
 			}

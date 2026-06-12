@@ -5,7 +5,6 @@ import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import {
-	RESERVED_RFC9068_CLAIMS,
 	resetSeedStateForTests,
 	resolveResourcePolicy,
 	seedResourcesOnce,
@@ -17,6 +16,19 @@ const silenceWarnings = {
 	oauthAuthServerConfig: true,
 	openidConfig: true,
 } as const;
+const reservedAccessTokenClaimNames = [
+	"iss",
+	"sub",
+	"aud",
+	"exp",
+	"iat",
+	"jti",
+	"client_id",
+	"scope",
+	"auth_time",
+	"acr",
+	"amr",
+] as const;
 
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
@@ -53,7 +65,7 @@ describe("stripReservedClaims", () => {
 
 	it("strips every RFC 9068 reserved claim", () => {
 		const allReserved = Object.fromEntries(
-			[...RESERVED_RFC9068_CLAIMS].map((k) => [k, "evil"]),
+			reservedAccessTokenClaimNames.map((key) => [key, "evil"]),
 		);
 		expect(stripReservedClaims(allReserved)).toEqual({});
 	});
@@ -123,6 +135,20 @@ describe("resolveResourcePolicy — resource omission", () => {
 		});
 		const expected = [id, `${ctx.baseURL}/oauth2/userinfo`];
 		expect(policy.audienceClaim).toStrictEqual(expected);
+	});
+
+	it("dedupes the implicit /oauth2/userinfo aud when it was explicitly requested", async () => {
+		const id = "https://api.example.com/openid-with-explicit-userinfo";
+		const { ctx, opts } = await bootProvider({
+			resources: [id],
+		});
+		const userInfoResource = `${ctx.baseURL}/oauth2/userinfo`;
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+			resource: [id, userInfoResource],
+			clientId: "client-x",
+			requestedScopes: ["openid", "profile"],
+		});
+		expect(policy.audienceClaim).toStrictEqual([id, userInfoResource]);
 	});
 
 	it("rejects baseURL when it is not configured as a resource", async () => {

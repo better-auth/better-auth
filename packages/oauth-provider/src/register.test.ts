@@ -12,6 +12,7 @@ import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { resetSeedStateForTests } from "./resources";
 import type { OAuthClient } from "./types/oauth";
 
 describe("oauth register", async () => {
@@ -259,6 +260,56 @@ describe("oauth register", async () => {
 			where: [{ field: "clientId", value: clientId! }],
 		});
 		expect(links.length).toBe(1);
+	});
+
+	it("lazy-seeds configured resources before DCR validation", async () => {
+		const identifier = "https://api.example.com/dcr-lazy-seed";
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resources: [identifier],
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		resetSeedStateForTests();
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const response = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				resources: [identifier],
+			},
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data?.resources).toEqual([identifier]);
 	});
 
 	it("should register client with metadata field", async () => {
