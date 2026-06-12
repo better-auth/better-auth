@@ -12,6 +12,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -264,7 +265,10 @@ export async function setCookieCache(
 	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			if (accountData.userId === session.user.id) {
+			if (
+				!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+				accountData.userId === session.user.id
+			) {
 				await setAccountCookie(ctx, accountData);
 			} else {
 				expireCookie(ctx, ctx.context.authCookies.accountData);

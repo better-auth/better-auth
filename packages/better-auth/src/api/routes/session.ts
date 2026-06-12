@@ -13,6 +13,7 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
+import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -529,7 +530,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
  * revoked-but-cached session cannot authorize a sensitive action.
  */
 export const isStateful = (ctx: GenericEndpointContext): boolean =>
-	!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+	hasServerSessionStore(ctx.context.options);
 
 export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,
