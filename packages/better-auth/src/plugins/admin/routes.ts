@@ -1644,6 +1644,14 @@ const setUserPasswordBodySchema = z.object({
 	userId: z.coerce.string().nonempty("userId cannot be empty").meta({
 		description: "The user id",
 	}),
+	revokeSessions: z
+		.boolean()
+		.default(true)
+		.meta({
+			description:
+				"Whether to revoke all user sessions after setting the password. Default is `true`.",
+		})
+		.optional(),
 });
 
 /**
@@ -1709,7 +1717,7 @@ export const setUserPassword = (opts: AdminOptions) =>
 				);
 			}
 
-			const { newPassword, userId } = ctx.body;
+			const { newPassword, userId, revokeSessions } = ctx.body;
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (newPassword.length < minPasswordLength) {
 				ctx.context.logger.error("Password is too short");
@@ -1722,6 +1730,11 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
+
+			if (revokeSessions) {
+				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
+
 			return ctx.json({
 				status: true,
 			});

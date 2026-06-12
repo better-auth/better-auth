@@ -1263,6 +1263,133 @@ describe("Admin plugin", async () => {
 		});
 		expect(res2.data?.user).toBeDefined();
 	});
+
+	it("should revoke user sessions by default when admin sets user password", async () => {
+		const email = "revoke-default@test.com";
+		const password = "password";
+		const newPassword = "updatedPassword";
+		const signUpRes = await client.signUp.email({
+			email,
+			password,
+			name: "Revoke Default User",
+		});
+		const userId = signUpRes.data?.user.id || "";
+
+		await signInWithUser(email, password);
+
+		const sessionsBefore = await client.admin.listUserSessions(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessionsBefore.data?.sessions.length).toBeGreaterThan(0);
+
+		const res = await client.admin.setUserPassword(
+			{
+				userId,
+				newPassword,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.status).toBe(true);
+
+		const sessionsAfter = await client.admin.listUserSessions(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessionsAfter.data?.sessions.length).toBe(0);
+
+		const signInRes = await client.signIn.email({
+			email,
+			password: newPassword,
+		});
+		expect(signInRes.data?.user.id).toBe(userId);
+
+		await client.admin.removeUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+	});
+
+	it("should keep user sessions when revokeSessions is false", async () => {
+		const email = "keep-sessions@test.com";
+		const password = "password";
+		const newPassword = "updatedPassword";
+		const signUpRes = await client.signUp.email({
+			email,
+			password,
+			name: "Keep Sessions User",
+		});
+		const userId = signUpRes.data?.user.id || "";
+		const { headers: userSessionHeaders } = await signInWithUser(
+			email,
+			password,
+		);
+
+		const sessionsBefore = await client.admin.listUserSessions(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessionsBefore.data?.sessions.length).toBeGreaterThan(0);
+
+		const res = await client.admin.setUserPassword(
+			{
+				userId,
+				newPassword,
+				revokeSessions: false,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.status).toBe(true);
+
+		const sessionsAfter = await client.admin.listUserSessions(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessionsAfter.data?.sessions.length).toBe(
+			sessionsBefore.data?.sessions.length,
+		);
+
+		const sessionRes = await client.getSession({
+			fetchOptions: {
+				headers: userSessionHeaders,
+			},
+		});
+		expect(sessionRes.data?.session).toBeDefined();
+
+		await client.admin.removeUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+	});
+
 	it("should not allow admin to set user password with empty userId", async () => {
 		const res = await client.admin.setUserPassword(
 			{
