@@ -407,7 +407,8 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}>({
 					model: "deviceCode",
 					where: [
-						{ field: "deviceCode", value: device_code },
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "clientId", value: client_id },
 						{ field: "status", value: "approved" },
 					],
 				});

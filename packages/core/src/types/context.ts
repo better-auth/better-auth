@@ -245,8 +245,9 @@ export interface InternalAdapter<
 	 * The dual of `consumeVerificationValue`: reserve races to create a marker
 	 * exactly once, where consume races to delete one exactly once. Use it for
 	 * replay tombstones (a SAML assertion id, a JWT `jti`) where the first caller
-	 * wins. The database path is atomic via the primary key; the
-	 * secondary-storage-only path is best-effort under concurrency.
+	 * wins. The database path is atomic via the primary key. Secondary-storage-only
+	 * verification is not supported for reservation and runtime implementations
+	 * should fail closed unless verification is backed by the database.
 	 */
 	reserveVerificationValue(data: {
 		identifier: string;

@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -14,9 +15,41 @@ import type {
 } from "../types";
 import { getMigrations } from "./get-migration";
 
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+	ttlStore?: Map<string, number>,
+): SecondaryStorage {
+	return {
+		set(key, value, ttl) {
+			store.set(key, value);
+			if (ttl !== undefined) ttlStore?.set(key, ttl);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			ttlStore?.delete(key);
+			return value;
+		},
+		increment(key, ttl) {
+			const current = Number(store.get(key) ?? 0);
+			const count = Number.isFinite(current) ? current + 1 : 1;
+			store.set(key, String(count));
+			if (current === 0 && ttl !== undefined) ttlStore?.set(key, ttl);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+			ttlStore?.delete(key);
+		},
+	};
+}
+
 describe("internal adapter test", async () => {
-	const map = new Map();
-	const expirationMap = new Map();
+	const map = new Map<string, string>();
+	const expirationMap = new Map<string, number>();
 	let id = 1;
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
@@ -37,19 +70,7 @@ describe("internal adapter test", async () => {
 		verification: {
 			storeInDatabase: true,
 		},
-		secondaryStorage: {
-			set(key, value, ttl) {
-				map.set(key, value);
-				expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return map.get(key);
-			},
-			delete(key) {
-				map.delete(key);
-				expirationMap.delete(key);
-			},
-		},
+		secondaryStorage: createStringSecondaryStorage(map, expirationMap),
 		advanced: {
 			database: {
 				generateId() {
@@ -579,6 +600,17 @@ describe("internal adapter test", async () => {
 					const item = mockStorage.get(key);
 					return item?.value || null;
 				},
+				getAndDelete(key: string) {
+					const item = mockStorage.get(key);
+					mockStorage.delete(key);
+					return item?.value || null;
+				},
+				increment(key: string, ttl: number) {
+					const item = mockStorage.get(key);
+					const count = Number(item?.value ?? 0) + 1;
+					mockStorage.set(key, { value: String(count), ttl });
+					return count;
+				},
 				delete(key: string) {
 					mockStorage.delete(key);
 				},
@@ -725,8 +757,10 @@ describe("internal adapter test", async () => {
 		expect(typeof session.id).toBe("string");
 		expect(session.id.length).toBeGreaterThan(0);
 
+		const storedSessionsRaw = map.get(`active-sessions-${user.id}`);
+		expect(storedSessionsRaw).toBeDefined();
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${user.id}`),
+			storedSessionsRaw!,
 		);
 		const token = session.token;
 		// Check stored sessions
@@ -737,12 +771,13 @@ describe("internal adapter test", async () => {
 			prev.expiresAt >= curr.expiresAt ? prev : curr,
 		);
 		const actualExp = expirationMap.get(`active-sessions-${user.id}`);
+		expect(actualExp).toBeDefined();
 		const expectedExp = Math.floor(
 			(lastExpiration.expiresAt - Date.now()) / 1000,
 		);
 		// max 1s clock drift between check and set
-		expect(actualExp - expectedExp).toBeLessThanOrEqual(1);
-		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0);
+		expect(actualExp! - expectedExp).toBeLessThanOrEqual(1);
+		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0);
 
 		const storedSession = safeJSONParse<{
 			session: Session;
@@ -754,12 +789,13 @@ describe("internal adapter test", async () => {
 			activeOrganizationId: "1",
 		});
 		const actualTokenExp = expirationMap.get(token);
+		expect(actualTokenExp).toBeDefined();
 		const expectedTokenExp = Math.floor(
 			(expiresAt.getTime() - Date.now()) / 1000,
 		);
 		// max 1s clock drift between check and set
-		expect(actualTokenExp - expectedTokenExp).toBeLessThanOrEqual(1);
-		expect(actualTokenExp - expectedTokenExp).toBeGreaterThanOrEqual(0);
+		expect(actualTokenExp! - expectedTokenExp).toBeLessThanOrEqual(1);
+		expect(actualTokenExp! - expectedTokenExp).toBeGreaterThanOrEqual(0);
 	});
 
 	it("should delete on secondary storage", async () => {
@@ -780,27 +816,32 @@ describe("internal adapter test", async () => {
 			);
 			if (i > 0) {
 				const actualExp = expirationMap.get(`active-sessions-${userId}`);
+				expect(actualExp).toBeDefined();
 				const expectedExp = Math.floor(
 					(expiresAt.getTime() - Date.now()) / 1000,
 				);
-				expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
-				expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+				expect(actualExp! - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
+				expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
 			} else {
 				expect(expirationMap.get(`active-sessions-${userId}`)).toBeUndefined();
 			}
 		}
+		const storedSessionsRaw = map.get(`active-sessions-${userId}`);
+		expect(storedSessionsRaw).toBeDefined();
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${userId}`),
+			storedSessionsRaw!,
 		);
 		expect(storedSessions.length).toBe(4);
-		const token = storedSessions.at(-1)?.token;
+		const token = storedSessions.at(-1)!.token;
 		const tokenStored = map.get(token);
 		expect(tokenStored).toBeDefined();
 
 		// Delete session should clean expiresAt and token
 		await internalAdapter.deleteSession(token!);
+		const afterDeletedRaw = map.get(`active-sessions-${userId}`);
+		expect(afterDeletedRaw).toBeDefined();
 		const afterDeleted: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${userId}`),
+			afterDeletedRaw!,
 		);
 		expect(afterDeleted.length).toBe(3);
 		const removedToken = map.get(token);
@@ -810,11 +851,12 @@ describe("internal adapter test", async () => {
 			prev.expiresAt >= curr.expiresAt ? prev : curr,
 		);
 		const actualExp = expirationMap.get(`active-sessions-${userId}`);
+		expect(actualExp).toBeDefined();
 		const expectedExp = Math.floor(
 			(lastExpiration.expiresAt - Date.now()) / 1000,
 		);
-		expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
-		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+		expect(actualExp! - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
+		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
 	});
 
 	it("should delete a single account", async () => {
@@ -882,17 +924,7 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -933,17 +965,7 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -980,17 +1002,7 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -1026,17 +1038,7 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -1070,17 +1072,7 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -1122,21 +1114,10 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-					if (ttl !== undefined) {
-						testExpirationMap.set(key, ttl);
-					}
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-					testExpirationMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(
+				testMap,
+				testExpirationMap,
+			),
 		} satisfies BetterAuthOptions;
 
 		// Run migrations for the new database
@@ -1230,21 +1211,10 @@ describe("internal adapter test", async () => {
 
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-					if (ttl !== undefined) {
-						testExpirationMap.set(key, ttl);
-					}
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-					testExpirationMap.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(
+				testMap,
+				testExpirationMap,
+			),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -1296,19 +1266,7 @@ describe("internal adapter test", async () => {
 			return {
 				dataMap,
 				ttlMap,
-				storage: {
-					set(key: string, value: string, ttl?: number) {
-						dataMap.set(key, value);
-						if (ttl) ttlMap.set(key, ttl);
-					},
-					get(key: string) {
-						return dataMap.get(key) || null;
-					},
-					delete(key: string) {
-						dataMap.delete(key);
-						ttlMap.delete(key);
-					},
-				},
+				storage: createStringSecondaryStorage(dataMap, ttlMap),
 			};
 		}
 
@@ -1498,7 +1456,7 @@ describe("internal adapter test", async () => {
 		 * where date fields are still ISO 8601 strings, not Date instances.
 		 */
 		function createPreParsedStorage() {
-			const dataMap = new Map<string, any>();
+			const dataMap = new Map<string, unknown>();
 			const ttlMap = new Map<string, number>();
 			return {
 				dataMap,
@@ -1511,6 +1469,19 @@ describe("internal adapter test", async () => {
 					},
 					get(key: string) {
 						return dataMap.get(key) ?? null;
+					},
+					getAndDelete(key: string) {
+						const value = dataMap.get(key) ?? null;
+						dataMap.delete(key);
+						ttlMap.delete(key);
+						return value;
+					},
+					increment(key: string, ttl: number) {
+						const current = Number(dataMap.get(key) ?? 0);
+						const count = Number.isFinite(current) ? current + 1 : 1;
+						dataMap.set(key, count);
+						if (current === 0) ttlMap.set(key, ttl);
+						return count;
 					},
 					delete(key: string) {
 						dataMap.delete(key);
@@ -1812,6 +1783,11 @@ describe("internal adapter test", async () => {
 						return store.get(key) ?? null;
 					},
 					getAndDelete,
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
 					delete(key) {
 						store.delete(key);
 					},
@@ -1840,17 +1816,7 @@ describe("internal adapter test", async () => {
 			const store = new Map<string, string>();
 			const adapter = await makeAdapter({
 				verification: { storeInDatabase: false },
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					get(key) {
-						return store.get(key) ?? null;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(store),
 			});
 
 			// Bypass `createVerificationValue`'s TTL gate by writing directly
@@ -1881,17 +1847,7 @@ describe("internal adapter test", async () => {
 			const store = new Map<string, string>();
 			const adapter = await makeAdapter({
 				verification: { storeInDatabase: false },
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					get(key) {
-						return store.get(key) ?? null;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(store),
 			});
 			await adapter.createVerificationValue({
 				identifier: "consume:secondary-hydrate",
@@ -1912,17 +1868,7 @@ describe("internal adapter test", async () => {
 			const store = new Map<string, string>();
 			const adapter = await makeAdapter({
 				verification: { storeInDatabase: false },
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					get(key) {
-						return store.get(key) ?? null;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(store),
 			});
 
 			store.set(
@@ -1942,77 +1888,103 @@ describe("internal adapter test", async () => {
 			);
 			expect(result).toBeNull();
 		});
+	});
 
-		it("serializes the secondary storage compatibility fallback within one process", async () => {
-			const store = new Map<string, string>();
-			const adapter = await makeAdapter({
-				verification: { storeInDatabase: false },
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					async get(key) {
-						await new Promise((resolve) => setTimeout(resolve, 5));
-						return store.get(key) ?? null;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
+	describe("reserveVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns true the first time and the row is findable", async () => {
+			const adapter = await makeAdapter();
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:fresh",
+				value: "jti-1",
+				expiresAt: new Date(Date.now() + 60_000),
 			});
-			await adapter.createVerificationValue({
-				identifier: "consume:secondary-fallback",
-				value: "fallback-user",
+			expect(reserved).toBe(true);
+
+			const found = await adapter.findVerificationValue("reserve:fresh");
+			expect(found).not.toBeNull();
+			expect(found!.value).toBe("jti-1");
+		});
+
+		it("returns false the second time for the same identifier", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		it("yields exactly one winner under concurrent reserve", async () => {
+			const adapter = await makeAdapter();
+
+			const results = await Promise.all([
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			]);
+
+			expect(results.filter((r) => r === true)).toHaveLength(1);
+			expect(results.filter((r) => r === false)).toHaveLength(1);
+		});
+
+		it("reserves independently across different identifiers", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-a",
+				value: "jti-a",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-b",
+				value: "jti-b",
 				expiresAt: new Date(Date.now() + 60_000),
 			});
 
-			const results = await Promise.all([
-				adapter.consumeVerificationValue("consume:secondary-fallback"),
-				adapter.consumeVerificationValue("consume:secondary-fallback"),
-				adapter.consumeVerificationValue("consume:secondary-fallback"),
-			]);
-
-			expect(results.filter((r) => r !== null)).toHaveLength(1);
-			expect(results.find((r) => r !== null)?.value).toBe("fallback-user");
-			expect(store.has("verification:consume:secondary-fallback")).toBe(false);
+			expect(first).toBe(true);
+			expect(second).toBe(true);
 		});
 
-		it("warns once when secondary storage cannot consume atomically", async () => {
-			const store = new Map<string, string>();
-			const logs: { level: string; message: string }[] = [];
+		it("fails closed when verification reservation is secondary-storage-only", async () => {
 			const adapter = await makeAdapter({
-				logger: {
-					log: (level, message) => {
-						logs.push({ level, message });
-					},
-				},
 				verification: { storeInDatabase: false },
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					get(key) {
-						return store.get(key) ?? null;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(new Map()),
 			});
 
-			for (const id of ["consume:warn-1", "consume:warn-2"]) {
-				await adapter.createVerificationValue({
-					identifier: id,
-					value: "user",
+			await expect(
+				adapter.reserveVerificationValue({
+					identifier: "reserve:secondary-only",
+					value: "jti-secondary",
 					expiresAt: new Date(Date.now() + 60_000),
-				});
-				await adapter.consumeVerificationValue(id);
-			}
-
-			const warnings = logs.filter(
-				(l) => l.level === "warn" && l.message.includes("getAndDelete"),
-			);
-			expect(warnings).toHaveLength(1);
+				}),
+			).rejects.toThrow(/requires database-backed verification storage/);
 		});
 	});
 

@@ -13,7 +13,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -56,9 +56,6 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
-	// Warn at most once when a single-use value is consumed through the
-	// non-atomic secondary-storage fallback (see consumeVerificationValue).
-	let warnedNonAtomicConsume = false;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -1277,15 +1274,9 @@ export const createInternalAdapter = (
 		 * is still deleted (so it cannot be replayed later) but `null` is
 		 * returned. Callers do not need their own `expiresAt` gate.
 		 *
-		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
-		 * only when the configured storage implements `getAndDelete`; otherwise
-		 * it falls back to an in-process lock around `get` then `delete` and
-		 * warns once, since that fallback cannot coordinate across processes.
-		 *
-		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
-		 * in the next breaking release, or require database-backed verification
-		 * storage for security-sensitive consume paths, so the non-atomic
-		 * fallback can be removed entirely.
+		 * The secondary-storage-only path (`storeInDatabase: false`) consumes
+		 * through `getAndDelete`, which is required on `SecondaryStorage` so
+		 * single-use values are not read and deleted as separate operations.
 		 */
 		consumeVerificationValue: async (
 			identifier: string,
@@ -1323,24 +1314,9 @@ export const createInternalAdapter = (
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
 				const consumeCacheKey = async (key: string) => {
-					if (secondaryStorage.getAndDelete) {
-						return hydrateCachedVerification(
-							await secondaryStorage.getAndDelete(key),
-						);
-					}
-					if (!warnedNonAtomicConsume) {
-						warnedNonAtomicConsume = true;
-						logger.warn(
-							"Secondary storage does not implement `getAndDelete`, so single-use verification values cannot be consumed atomically across processes. Implement `getAndDelete` or use database-backed verification storage to guarantee single use.",
-						);
-					}
-					return withVerificationConsumeLock(key, async () => {
-						const raw = await secondaryStorage.get(key);
-						const parsed = hydrateCachedVerification(raw);
-						if (!parsed) return null;
-						await secondaryStorage.delete(key);
-						return parsed;
-					});
+					return hydrateCachedVerification(
+						await secondaryStorage.getAndDelete(key),
+					);
 				};
 
 				for (const stored of identifiersToTry) {
@@ -1432,9 +1408,10 @@ export const createInternalAdapter = (
 		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
-		 * re-reading the row rather than matching adapter-specific errors. The
-		 * secondary-storage-only path has no primary key to enforce uniqueness, so
-		 * it is best-effort under concurrency.
+		 * re-reading the row rather than matching adapter-specific errors.
+		 * Secondary-storage-only verification cannot enforce the deterministic
+		 * primary-key gate, so this operation fails closed unless verification is
+		 * backed by the database.
 		 *
 		 * The atomic guarantee requires the configured adapter to reject a
 		 * duplicate primary key on insert, which every real database enforces. The
@@ -1464,28 +1441,9 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
-				// Best-effort under concurrency: without a database primary key there
-				// is no first-writer-wins gate, so two callers racing a get-then-set
-				// can both observe an empty key and both win (mirrors the non-atomic
-				// secondary fallback in consumeVerificationValue).
-				// FIXME(reserve-secondary-atomic): require an atomic conditional set
-				// (set-if-absent) on SecondaryStorage, or require database-backed
-				// verification storage for reservations, so this path can guarantee
-				// first-writer-wins across processes.
-				const cacheKey = `verification:${storedIdentifier}`;
-				const existing = await secondaryStorage.get(cacheKey);
-				if (existing) return false;
-				await secondaryStorage.set(
-					cacheKey,
-					JSON.stringify({
-						id: reservationId,
-						identifier: storedIdentifier,
-						value: data.value,
-						expiresAt: data.expiresAt,
-					}),
-					getTTLSeconds(data.expiresAt),
+				throw new BetterAuthError(
+					"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
 				);
-				return true;
 			}
 
 			try {

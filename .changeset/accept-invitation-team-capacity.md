@@ -1,5 +1,5 @@
 ---
-"better-auth": patch
+"better-auth": minor
 ---
 
-When a team had a single open slot, accepting an invitation into it was wrongly rejected as over the member limit and left a dangling membership record. Two invitations accepted into a nearly-full team at the same time could also push it past its limit. Both are fixed.
+Team capacity now uses a durable `team.memberCount` counter and an internal unique `teamMember.membershipKey` so `maximumMembersPerTeam` is enforced atomically across invitation acceptance, direct team-member adds, and add-member-with-team calls. Previously the team limit relied on count-then-create checks that could admit multiple concurrent members into one remaining slot.

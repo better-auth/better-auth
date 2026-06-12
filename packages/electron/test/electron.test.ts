@@ -242,9 +242,7 @@ describe("Electron", () => {
 		});
 
 		const codeVerifier = base64Url.encode(randomBytes(32));
-		const codeChallenge = base64Url.encode(
-			await createHash("SHA-256").digest(codeVerifier),
-		);
+		const codeChallenge = await generateCodeChallenge(codeVerifier);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({

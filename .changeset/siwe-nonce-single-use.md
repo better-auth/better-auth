@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-A Sign-In with Ethereum nonce can no longer be used to sign in more than once when submitted from several requests at the same time.
+The Sign-In with Ethereum nonce is now consumed atomically before signature verification, so the same nonce can no longer replay a sign-in under concurrent requests.

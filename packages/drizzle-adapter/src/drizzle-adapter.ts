@@ -41,15 +41,6 @@ export interface DB {
 	[key: string]: any;
 }
 
-/**
- * Derive the number of affected rows from a Drizzle write result.
- *
- * Drizzle's drivers report affected rows under different shapes: postgres-js
- * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
- * the first element of a result-header array), and better-sqlite3 uses
- * `changes`. This normalizes those so `updateMany` and `deleteMany` honor the
- * `Promise<number>` adapter contract instead of leaking the raw driver result.
- */
 function getAffectedRowCount(
 	result: unknown,
 	operation: "updateMany" | "deleteMany",
@@ -66,12 +57,14 @@ function getAffectedRowCount(
 	} else if (hasDriverRowCount(result)) {
 		count = readDriverRowCount(result);
 	}
-	if (typeof count !== "number") {
+	if (typeof count !== "number" || !Number.isFinite(count)) {
 		logger.error(
-			`[Drizzle Adapter] The result of the ${operation} operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
 			{ result, ...context },
 		);
-		return 0;
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
 	}
 	return count;
 }
@@ -1031,7 +1024,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 							);
 						}
-						assignments[columnName] = sql`${column} + ${delta}`;
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
 					}
 					if (set) {
 						for (const [field, value] of Object.entries(set)) {

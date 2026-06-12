@@ -2,4 +2,4 @@
 "@better-auth/passkey": patch
 ---
 
-A passkey registration can no longer be completed with a challenge that was issued for authentication, or the reverse. Registration is also rejected when the target user cannot be resolved.
+Passkey challenges are now bound to the ceremony that created them, so a registration can no longer consume an authentication challenge (or the reverse). Registration is also rejected when the resolved target user id is empty.
