@@ -44,10 +44,26 @@ export {
 	validateSAMLTimestamp,
 } from "./saml/timestamp";
 
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
+import type {
+	OIDCConfig,
+	OrganizationProvisioningOptions,
+	OrganizationProvisioningRole,
+	OrganizationRoleResolverData,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+} from "./types";
 import { PACKAGE_VERSION } from "./version";
 
-export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type {
+	SAMLConfig,
+	OIDCConfig,
+	SSOOptions,
+	SSOProvider,
+	OrganizationProvisioningOptions,
+	OrganizationProvisioningRole,
+	OrganizationRoleResolverData,
+};
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
