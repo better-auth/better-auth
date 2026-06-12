@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Generate App Token
         id: app-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         if: vars.RELEASE_APP_ID != ''
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
@@ -53,14 +53,14 @@ jobs:
           echo "ref=$BASE_REF" >> "$GITHUB_OUTPUT"
 
       # Checkout the PR's base branch — never execute PR or fork code with secrets
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ steps.pr-base.outputs.ref }}
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           package-manager-cache: false
@@ -93,7 +93,7 @@ jobs:
         id: describe
         if: steps.analyze.outputs.skip != 'true'
         continue-on-error: true
-        uses: anthropics/claude-code-action@1b8ee3b94104046d71fde52ec3557651ad8c0d71 # v1.0.29
+        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
@@ -212,7 +212,7 @@ jobs:
     steps:
       - name: Generate App Token
         id: app-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         if: vars.RELEASE_APP_ID != ''
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
@@ -256,7 +256,16 @@ jobs:
           IS_FORK=$(echo "$PR_JSON" | jq -r '.isCrossRepository')
           echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
 
-          if [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
+          # The ref is later interpolated into REST API paths
+          # (git/ref/heads/${HEAD_REF}). URI-reserved characters such as '#' or
+          # '%' can pass the protected-branch string checks below but resolve to
+          # a DIFFERENT ref once placed in a URL ('#' truncates as a fragment,
+          # '%2F' decodes to '/'). Reject anything outside a conservative
+          # branch-name allowlist so the guards operate on the literal ref.
+          if [[ ! "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "blocked_reason=Refusing to commit to branch with unsupported characters (${HEAD_REF}) — only letters, digits, '.', '_', '/', and '-' are allowed." >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "blocked_reason=Cannot commit to protected branch (${HEAD_REF}) — this would trigger release automation." >> "$GITHUB_OUTPUT"
           elif [[ "$IS_FORK" == "true" ]]; then
@@ -313,8 +322,18 @@ jobs:
           # This adds pr-N.md and deletes any superseded changeset files
           # in one commit, preventing duplicate changesets on the branch.
 
-          # Get branch head
-          COMMIT_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq '.object.sha')
+          # Get branch head. Verify the API resolved the EXACT ref we asked for:
+          # if URL semantics caused the path to resolve to a different branch
+          # (e.g. a fragment or decoded slash), `.ref` won't match and we abort
+          # before mutating anything. This is an additional check on top of the
+          # branch-name allowlist enforced in the "Get PR details" step.
+          REF_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}")
+          RESOLVED_REF=$(echo "$REF_JSON" | jq -r '.ref')
+          if [ "$RESOLVED_REF" != "refs/heads/${HEAD_REF}" ]; then
+            echo "::error::Ref mismatch: requested 'refs/heads/${HEAD_REF}' but API resolved '${RESOLVED_REF}'. Aborting."
+            exit 1
+          fi
+          COMMIT_SHA=$(echo "$REF_JSON" | jq -r '.object.sha')
           TREE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${COMMIT_SHA}" --jq '.tree.sha')
 
           # Create blob for the new changeset

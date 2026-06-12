@@ -16,6 +16,7 @@ import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	UserProvisioningSource,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
 import type { SecretConfig } from "./secret";
@@ -91,6 +92,11 @@ export interface InternalAdapter<
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
+		/**
+		 * Provisioning source. The creation seam adds `action: "create-user"` and
+		 * runs the `user.validateUserInfo` gate.
+		 */
+		source: UserProvisioningSource,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
@@ -230,6 +236,24 @@ export interface InternalAdapter<
 	 * pair at single-use credential consumption sites.
 	 */
 	consumeVerificationValue(identifier: string): Promise<Verification | null>;
+
+	/**
+	 * First-writer-wins create keyed by a deterministic primary key derived from
+	 * `identifier`. Returns `true` when this caller created the row and `false`
+	 * when a row for the same identifier already existed.
+	 *
+	 * The dual of `consumeVerificationValue`: reserve races to create a marker
+	 * exactly once, where consume races to delete one exactly once. Use it for
+	 * replay tombstones (a SAML assertion id, a JWT `jti`) where the first caller
+	 * wins. The database path is atomic via the primary key. Secondary-storage-only
+	 * verification is not supported for reservation and runtime implementations
+	 * should fail closed unless verification is backed by the database.
+	 */
+	reserveVerificationValue(data: {
+		identifier: string;
+		value: string;
+		expiresAt: Date;
+	}): Promise<boolean>;
 
 	updateVerificationByIdentifier(
 		identifier: string,

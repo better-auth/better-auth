@@ -67,6 +67,11 @@ describe("oauth token - authorization_code", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -488,6 +493,11 @@ describe("oauth token - refresh_token", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1326,6 +1336,11 @@ describe("oauth token - client_credentials", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 				scope: clientScopes.join(" "),
@@ -1512,6 +1527,11 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1665,6 +1685,11 @@ describe("oauth token - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2045,6 +2070,11 @@ describe("oauth token - client secret validation", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2188,6 +2218,11 @@ describe("id token claim override security", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2849,6 +2884,11 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2947,6 +2987,11 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth2.api.adminCreateOAuthClient({
 			headers: headers2,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -3114,5 +3159,256 @@ describe("verificationValueSchema", () => {
 				"should-pass-through",
 			);
 		}
+	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject empty max_age values in stored authorization queries", () => {
+		for (const maxAge of ["", "   "]) {
+			const result = verificationValueSchema.safeParse({
+				type: "authorization_code",
+				query: {
+					client_id: "test",
+					redirect_uri: "https://example.com",
+					max_age: maxAge,
+				},
+				userId: "u1",
+				sessionId: "s1",
+			});
+
+			expect(result.success).toBe(false);
+		}
+	});
+
+	it("should accept valid prompt values in any order", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "consent login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject prompt=none combined with other prompt values", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "none login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("oauth token - per-client grant_type enforcement", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	// A confidential client registered for the authorization_code grant only.
+	let authCodeOnlyClient: OAuthClient | null = null;
+	beforeAll(async () => {
+		authCodeOnlyClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(authCodeOnlyClient?.client_secret).toBeDefined();
+	});
+
+	// The core fix: a user-delegated (authorization_code) client must not be
+	// able to mint machine-to-machine tokens.
+	it("rejects client_credentials for an authorization_code-only client", async () => {
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${authCodeOnlyClient!.client_id!}:${authCodeOnlyClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.data?.access_token).toBeUndefined();
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+	});
+
+	// Targeted policy: refresh tokens stay tied to the authorization_code flow +
+	// offline_access, so an authorization_code client keeps getting them without
+	// having to also register the refresh_token grant explicitly.
+	it("still issues refresh tokens to an authorization_code client with offline_access", async () => {
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "grant-enforcement",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: reqHeaders });
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+	});
+
+	// Guard against over-blocking: a client explicitly registered for
+	// client_credentials must still be able to use it.
+	it("allows client_credentials for a client registered for it", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${ccClient!.client_id!}:${ccClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.access_token).toBeDefined();
+	});
+
+	// The /authorize endpoint only serves authorization_code; a machine-to-machine
+	// (client_credentials-only) client must be rejected there too.
+	it("rejects /authorize for a client not registered for authorization_code", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: ccClient!.client_id!,
+				clientSecret: ccClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "authorize-grant-enforcement",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(location).toContain("error=unauthorized_client");
 	});
 });

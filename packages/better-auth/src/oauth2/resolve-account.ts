@@ -1,4 +1,7 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	UserProvisioningSource,
+} from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
@@ -15,6 +18,17 @@ export interface OAuthLinkPolicy {
 	 * `c.context.trustedProviders`.
 	 */
 	isTrustedProvider?: boolean | undefined;
+	/**
+	 * Whether `providerId` may be matched against the configured
+	 * `trustedProviders` list to infer trust. Defaults to `true` for built-in
+	 * social/OAuth providers, whose `providerId` namespace is controlled by the
+	 * developer's config. Callers whose `providerId` is user-controlled (the SSO
+	 * plugin, where any authenticated user can register a provider with an
+	 * arbitrary id) must pass `false` so a provider named after a trusted social
+	 * provider can't launder that trust; they supply their own
+	 * `isTrustedProvider` signal instead.
+	 */
+	trustProviderByName?: boolean | undefined;
 	/** Disable sign-up: error out instead of creating a new user. */
 	disableSignUp?: boolean | undefined;
 	/**
@@ -28,6 +42,11 @@ export interface ResolveOAuthUserParams {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	providerId: string;
 	linkPolicy: OAuthLinkPolicy;
+	/**
+	 * Authentication source metadata forwarded to the `validateUserInfo`
+	 * provisioning gate when a new user is created here.
+	 */
+	source: UserProvisioningSource;
 }
 
 /**
@@ -67,7 +86,7 @@ export async function resolveOAuthUser(
 	c: GenericEndpointContext,
 	params: ResolveOAuthUserParams,
 ): Promise<ResolvedOAuthUser | ResolveOAuthUserError> {
-	const { userInfo, providerId, linkPolicy } = params;
+	const { userInfo, providerId, linkPolicy, source } = params;
 
 	let dbUser: Awaited<
 		ReturnType<typeof c.context.internalAdapter.findOAuthUser>
@@ -92,10 +111,13 @@ export async function resolveOAuthUser(
 		}
 		try {
 			const { id: _id, ...restUserInfo } = userInfo;
-			const createdUser = await c.context.internalAdapter.createUser({
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-			});
+			const createdUser = await c.context.internalAdapter.createUser(
+				{
+					...restUserInfo,
+					email: userInfo.email.toLowerCase(),
+				},
+				source,
+			);
 			return {
 				user: createdUser,
 				isRegister: true,
@@ -103,10 +125,12 @@ export async function resolveOAuthUser(
 				error: null,
 			};
 		} catch (e) {
-			logger.error("Unable to create user", e);
+			// Re-throw APIErrors to preserve the machine-readable code; only opaque
+			// failures fall through to the generic error return.
 			if (isAPIError(e)) {
-				return { error: e.message, user: null };
+				throw e;
 			}
+			logger.error("Unable to create user", e);
 			return { error: "unable to create user", user: null };
 		}
 	}
@@ -125,6 +149,7 @@ export async function resolveOAuthUser(
 			providerEmailVerified: userInfo.emailVerified,
 			localEmailVerified: dbUser.user.emailVerified,
 			isTrustedProvider: linkPolicy.isTrustedProvider,
+			trustProviderByName: linkPolicy.trustProviderByName,
 		});
 		if (!gate) {
 			if (isDevelopment()) {
@@ -200,12 +225,19 @@ export function canLinkImplicitly(
 		providerEmailVerified: boolean;
 		localEmailVerified: boolean;
 		isTrustedProvider?: boolean | undefined;
+		/**
+		 * Whether `providerId` may be matched against the configured
+		 * `trustedProviders` list to infer trust. Defaults to `true`; SSO callers
+		 * with user-controlled `providerId` pass `false`.
+		 */
+		trustProviderByName?: boolean | undefined;
 	},
 ): boolean {
 	const accountLinking = c.context.options.account?.accountLinking;
 	const isTrustedProvider =
 		opts.isTrustedProvider ||
-		c.context.trustedProviders.includes(opts.providerId);
+		(opts.trustProviderByName !== false &&
+			c.context.trustedProviders.includes(opts.providerId));
 	// FIXME(next-minor): drop `requireLocalEmailVerified` option and make the
 	// gate unconditional.
 	const requireLocalEmailVerified =

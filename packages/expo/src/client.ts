@@ -347,6 +347,16 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const storage = storageAdapter(opts?.storage);
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
+	const clearSessionCache = async () => {
+		await storage.setItem(cookieName, "{}");
+		store?.atoms.session?.set({
+			...store.atoms.session.get(),
+			data: null,
+			error: null,
+			isPending: false,
+		});
+		await storage.setItem(localCacheName, "{}");
+	};
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
@@ -439,6 +449,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const data = context.data;
 							await storage.setItem(localCacheName, JSON.stringify(data));
 						}
+						if (context.request.url.toString().includes("/sign-out")) {
+							await clearSessionCache();
+						}
 
 						if (
 							context.data?.redirect &&
@@ -521,8 +534,12 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
+						const cookie = url.includes("/link-social")
+							? getCookie(storage.getItem(cookieName) || "{}")
+							: "";
 						options.headers = {
 							...options.headers,
+							...(cookie ? { cookie } : {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
@@ -553,14 +570,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							}
 						}
 						if (url.includes("/sign-out")) {
-							await storage.setItem(cookieName, "{}");
-							store?.atoms.session?.set({
-								...store.atoms.session.get(),
-								data: null,
-								error: null,
-								isPending: false,
-							});
-							await storage.setItem(localCacheName, "{}");
+							await clearSessionCache();
 						}
 					}
 					return {

@@ -73,6 +73,23 @@ await authClient.signIn.social({
 
 The `scopes` parameter is additive: appended to the provider's configured scopes, not a replacement. Whatever the user consents to accumulates into the account's `grantedScopes`. Re-authenticating never narrows previously granted scopes.
 
+You can also pass `additionalData` (a `Record<string, any>`) to round-trip client data through the flow; read it back on the callback with `getOAuthState()` and treat it as untrusted. See [Passing Additional Data Through OAuth Flow](/docs/concepts/oauth#passing-additional-data-through-oauth-flow).
+
+### Sign In with an ID Token
+
+Providers configured with a `discoveryUrl` whose discovery document publishes a `jwks_uri` also accept a client-obtained `id_token` directly, skipping the redirect flow. The token is verified against the provider's JWKS before any claims are trusted:
+
+```ts
+await authClient.signIn.social({
+    provider: "provider-id",
+    idToken: {
+        token: idTokenFromProvider,
+    },
+})
+```
+
+Providers configured with explicit endpoints instead of `discoveryUrl` do not support this path and return `ID_TOKEN_NOT_SUPPORTED`.
+
 ### Link Account
 
 ```ts
@@ -90,6 +107,46 @@ Additional scopes requested when linking accumulate into the account's `grantedS
 The plugin uses the core OAuth callback route at `/callback/:providerId`. This means by default `${baseURL}/api/auth/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
+
+## Validate OAuth User Info
+
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject Generic OAuth users before Better Auth creates a user (`create-user`), links a new account (`link-account`), or signs an existing user back in (`sign-in`). On the `sign-in` action it receives the fresh provider email and profile, so a domain or org check can reject a user whose provider identity later moved out of bounds. Check `source.oauth?.providerId` to scope validation to a specific Generic OAuth provider, and use `source.oauth?.profile` for provider-specific profile fields.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  user: {
+    validateUserInfo: ({ user, source }) => {
+      if (source.oauth?.providerId !== "company-oauth") {
+        return;
+      }
+
+      if (!user.email?.endsWith("@example.com")) {
+        return {
+          error: "email_not_allowed",
+          errorDescription: "Use your example.com email to sign in",
+        };
+      }
+    },
+  },
+  plugins: [
+    genericOAuth({
+      config: [
+        {
+          providerId: "company-oauth",
+          clientId: process.env.COMPANY_OAUTH_CLIENT_ID!,
+          clientSecret: process.env.COMPANY_OAUTH_CLIENT_SECRET!,
+          discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Return nothing to allow the OAuth flow. Return an object with `error` to reject it. Redirect-based OAuth flows send the rejection to the configured error URL, while programmatic flows return a `403` API error.
 
 ## Pre-configured Provider Helpers
 
@@ -240,7 +297,7 @@ interface GenericOAuthConfig {
 
 **providerId**: A unique string to identify the OAuth provider configuration.
 
-**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup.
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 

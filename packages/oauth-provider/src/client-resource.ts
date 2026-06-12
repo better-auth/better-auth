@@ -7,7 +7,7 @@ import type {
 } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { handleMcpErrors } from "./mcp";
+import { raiseResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -134,7 +134,7 @@ export const oauthProviderResourceClient = <
 									: undefined,
 						});
 					} catch (error) {
-						throw handleMcpErrors(error, audience, {
+						raiseResourceServerChallenge(error, audience, {
 							resourceMetadataMappings: opts?.resourceMetadataMappings,
 						});
 					}
@@ -230,6 +230,20 @@ export interface VerifyAccessTokenRemote {
 	 * is also still active.
 	 */
 	force?: boolean;
+	/**
+	 * Accept introspection responses that omit the `aud` claim even when a
+	 * required `audience` is configured in `verifyOptions`.
+	 *
+	 * By default verification fails closed: if you configure an `audience` and
+	 * the introspection response has no `aud` (or a mismatching one), the token
+	 * is rejected. Some authorization servers legitimately omit `aud` from
+	 * introspection responses (it is OPTIONAL per RFC 7662 §2.2); only enable
+	 * this if you trust the issuer to bind the token to this resource through
+	 * another mechanism, as it skips the audience check in that case.
+	 *
+	 * @default false
+	 */
+	allowMissingAudience?: boolean;
 }
 
 type VerifyAccessTokenOutput<T> = T extends undefined

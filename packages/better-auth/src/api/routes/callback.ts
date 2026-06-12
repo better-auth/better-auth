@@ -15,6 +15,7 @@ import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identit
 import { generateState, parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
+import { assertValidUserInfo } from "../../utils/validate-user-info";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -143,7 +144,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!code) {
-			c.context.logger.error("Code not found");
+			c.context.logger.warn("Code not found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CODE);
 		}
 
@@ -152,11 +153,9 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 
 		if (!provider) {
-			c.context.logger.error(
-				"Oauth provider with id",
-				c.params.id,
-				"not found",
-			);
+			c.context.logger.warn("OAuth provider not found", {
+				providerId: c.params.id,
+			});
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.PROVIDER_NOT_FOUND);
 		}
 
@@ -196,23 +195,26 @@ export const callbackOAuth = createAuthEndpoint(
 				}>(userData)
 			: null;
 
-		const userInfo = await provider
-			.getUserInfo({
-				...tokens,
-				/**
-				 * The user object from the provider
-				 * This is only available for some providers like Apple
-				 */
-				user: parsedUserData ?? undefined,
-			})
-			.then((res) => res?.user);
-
-		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
+		const providerResult = await provider.getUserInfo({
+			...tokens,
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user: parsedUserData ?? undefined,
+		});
+		if (
+			!providerResult?.user ||
+			providerResult.user.id === undefined ||
+			providerResult.user.id === null ||
+			providerResult.user.id === ""
+		) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
+		const userInfo = providerResult.user;
 		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
@@ -221,6 +223,30 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
+			// Link-account creates no user row, so the gate runs here rather than
+			// inside createUser.
+			try {
+				await assertValidUserInfo(c, {
+					user: {
+						...userInfo,
+						id: providerAccountId,
+						email: userInfo.email ?? undefined,
+					},
+					source: {
+						action: "link-account",
+						method: "oauth",
+						oauth: {
+							providerId: provider.id,
+							profile: providerResult.data,
+						},
+					},
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					throw redirectOnError(e.body.code, e.body.message);
+				}
+				throw e;
+			}
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
@@ -304,14 +330,15 @@ export const callbackOAuth = createAuthEndpoint(
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				source: {
+					method: "oauth",
+					oauth: { providerId: provider.id, profile: providerResult.data },
+				},
 				grantAuthority: provider.grantAuthority,
 			});
 		} catch (e) {
-			// A before-callback hook (for example the admin plugin's banned-user
-			// guard) can reject sign-in by throwing an APIError. Forward its
-			// machine-readable code and message to the per-flow errorURL instead
-			// of surfacing a raw error response. The code is app-defined, so it is
-			// forwarded verbatim rather than mapped onto OAUTH_CALLBACK_ERROR_CODES.
+			// App-defined rejection codes are forwarded verbatim rather than mapped
+			// onto OAUTH_CALLBACK_ERROR_CODES.
 			if (isAPIError(e) && e.body?.code) {
 				redirectOnError(e.body.code, e.body.message);
 			}

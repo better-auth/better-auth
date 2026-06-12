@@ -301,6 +301,45 @@ await authClient.deleteUser({
 
 ### Callbacks
 
+**validateUserInfo**: A gate that decides which identities Better Auth admits. It fires just before a user is created (`create-user`) or a new provider account is linked (`link-account`), for every authentication method (OAuth, OIDC SSO, SAML SSO, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database, so policy lives in one place instead of per provider.
+
+It also fires when an existing **OAuth or SSO** user signs in again (`sign-in`), and there it receives the *fresh* provider email and profile rather than the stored row. That lets a domain or org policy reject a user whose provider identity moved out of bounds (for example, an email that left the allowed domain). Non-provider returning sign-ins are not re-validated, because their stored row has not changed since `create-user` gated it; use the admin plugin's ban controls or a `databaseHooks.session.create.before` hook to block those.
+
+`source.action` is `"create-user"`, `"link-account"`, or `"sign-in"`, and `source.method` is the authentication method. For OAuth, `source.oauth` carries the provider id and raw provider profile. For OIDC and SAML SSO, `source.sso` carries the SSO provider id and raw provider claims or assertion attributes.
+
+Return nothing to allow provisioning. Return an object with `error` to reject it: browser/redirect flows send the rejection to the configured error URL, while programmatic flows return a `403` API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        validateUserInfo: ({ user, source }) => {
+            if (!user.email?.endsWith("@example.com")) {
+                return {
+                    error: "email_not_allowed",
+                    errorDescription: "Use your example.com email to sign in",
+                };
+            }
+
+            if (
+                source.oauth?.providerId === "company-oauth" &&
+                source.oauth?.profile?.hd !== "example.com"
+            ) {
+                return {
+                    error: "invalid_organization",
+                    errorDescription: "Use your company OAuth account",
+                };
+            }
+        },
+    },
+});
+```
+
+<Callout type="info">
+  `validateUserInfo` is the high-level policy gate. The lower-level `databaseHooks.user.create.before` still runs afterward for data shaping and can also abort a write; reach for it when you need to mutate the record rather than accept or reject the identity.
+</Callout>
+
 **beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
 
 ```ts title="auth.ts"

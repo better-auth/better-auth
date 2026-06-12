@@ -5,6 +5,12 @@ import type {
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: OAuth2UserInfo["id"] | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
 export interface GenericOAuthOptions<ID extends string = string> {
 	/**
 	 * Array of OAuth provider configurations.
@@ -131,7 +137,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?:
-		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| ((tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>)
 		| undefined;
 	/**
 	 * Custom function to map the provider's user profile to your app's user fields.
@@ -139,7 +145,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: OAuth2UserInfo & Record<string, unknown>,
+				profile: GenericOAuthUserInfo,
 		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
@@ -187,6 +193,19 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created or linked, but no session is issued: the callback redirects
+	 * with `?error=email_not_verified`. The gate checks the local user's
+	 * verification state, so a user already verified through another method keeps
+	 * access. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
 	/**
 	 * Accept callbacks from providers that initiate the OAuth flow without
 	 * sending a `state` parameter (e.g. Clever). When enabled, stateless

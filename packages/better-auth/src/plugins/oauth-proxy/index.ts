@@ -101,6 +101,8 @@ type OAuthProxyStatePackage = {
 type PassthroughPayload = {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
+	profile?: Record<string, unknown> | undefined;
 	state: string;
 	callbackURL: string;
 	newUserURL?: string;
@@ -281,6 +283,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							grantAuthority: provider?.grantAuthority,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							source: {
+								method: "oauth",
+								oauth: {
+									providerId: payload.account.providerId,
+									profile: payload.profile,
+								},
+							},
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -442,7 +451,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						if (!code) {
-							ctx.context.logger.error(
+							ctx.context.logger.warn(
 								"OAuth callback missing authorization code",
 							);
 							throw redirectOnError(ctx, errorURL, "no_code");
@@ -454,7 +463,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							(p) => p.id === providerId,
 						);
 						if (!provider) {
-							ctx.context.logger.error("OAuth provider not found", providerId);
+							ctx.context.logger.warn("OAuth provider not found", {
+								providerId,
+							});
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
@@ -505,6 +516,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
+							profile: userInfoResult?.data,
 							account: {
 								providerId: provider.id,
 								accountId: String(userInfo.id),

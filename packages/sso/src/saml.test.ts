@@ -2100,7 +2100,11 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=account_not_linked");
 	});
 
-	it("should allow account linking when provider is in trustedProviders", async () => {
+	// SSO trust must come from verified domain ownership, never from a name
+	// match against the global `trustedProviders` list — otherwise a
+	// user-registered SSO provider named after a trusted provider could inherit
+	// that trust. Registering such a colliding id is now rejected outright.
+	it("should reject registering an SSO provider whose id collides with a trustedProviders entry", async () => {
 		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
 			{
 				account: {
@@ -2115,7 +2119,7 @@ describe("SAML SSO", async () => {
 
 		const { headers } = await signInWithTestUser();
 
-		await authWithTrusted.api.registerSSOProvider({
+		const response = await authWithTrusted.api.registerSSOProvider({
 			body: {
 				providerId: "trusted-saml-provider",
 				issuer: "http://localhost:8081",
@@ -2137,47 +2141,10 @@ describe("SAML SSO", async () => {
 				},
 			},
 			headers,
+			asResponse: true,
 		});
 
-		const ctx = await authWithTrusted.$context;
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: "existing-user-id-2",
-				email: "test@email.com",
-				name: "Existing User",
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-		});
-
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-
-		const response = await authWithTrusted.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/sp/acs/trusted-saml-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-					}),
-				},
-			),
-		);
-
-		expect(response.status).toBe(302);
-		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).not.toContain("error");
-		expect(redirectLocation).toBe("http://localhost:3000");
+		expect(response.status).toBe(422);
 	});
 
 	it("should reject unsolicited SAML response when allowIdpInitiated is false", async () => {
@@ -4723,6 +4690,171 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const acsLocation = acsReplayResponse.headers.get("location") || "";
 		expect(acsLocation).toContain("error=replay_detected");
 	});
+
+	it("should issue only one session when the same SP-initiated assertion is submitted concurrently", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "concurrent-replay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const ctx = await auth.$context;
+		const { AUTHN_REQUEST_KEY_PREFIX } = await import("./constants");
+
+		// The mock IdP echoes a fixed `InResponseTo`, so seed the matching
+		// AuthnRequest record directly. Both concurrent submissions then race to
+		// consume this single stored request; atomic consumption must let exactly
+		// one through and leave the other with no request to match.
+		const inResponseTo = "null";
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: `${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+			value: JSON.stringify({
+				id: inResponseTo,
+				providerId: "concurrent-replay-provider",
+				createdAt: Date.now(),
+				expiresAt: Date.now() + 5 * 60 * 1000,
+			}),
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/concurrent-replay-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+						}),
+					},
+				),
+			);
+
+		const [first, second] = await Promise.all([submit(), submit()]);
+
+		// Both must redirect; a non-redirect failure leaves an empty location
+		// that would otherwise be miscounted as a success below.
+		expect(first.status).toBe(302);
+		expect(second.status).toBe(302);
+
+		const locations = [first, second].map(
+			(res) => res.headers.get("location") || "",
+		);
+		const succeeded = locations.filter((loc) => !loc.includes("error"));
+		const failed = locations.filter((loc) => loc.includes("error"));
+
+		expect(succeeded).toHaveLength(1);
+		expect(failed).toHaveLength(1);
+	});
+
+	it("should issue only one session when the same assertion is submitted concurrently without InResponseTo validation", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "concurrent-assertion-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// The shared mock IdP emits a literal `InResponseTo="null"` value. Disable
+		// that gate here so the assertion-replay tombstone is the only duplicate
+		// guard under test.
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/concurrent-assertion-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: "http://localhost:3000/dashboard",
+						}),
+					},
+				),
+			);
+
+		const [first, second] = await Promise.all([submit(), submit()]);
+
+		expect(first.status).toBe(302);
+		expect(second.status).toBe(302);
+
+		const locations = [first, second].map(
+			(res) => res.headers.get("location") || "",
+		);
+		const succeeded = locations.filter((loc) => loc && !loc.includes("error"));
+		const replayed = locations.filter((loc) =>
+			loc.includes("error=replay_detected"),
+		);
+
+		expect(succeeded).toHaveLength(1);
+		expect(replayed).toHaveLength(1);
+	});
 });
 
 describe("SAML SSO - Single Assertion Validation", () => {
@@ -5794,7 +5926,15 @@ describe("SAML Single Logout (SLO)", () => {
  */
 describe("SAML provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.method === "sso-saml") {
+					validateUserInfoFn(source);
+				}
+			},
+		},
 		plugins: [
 			sso({
 				provisionUser: provisionUserFn,
@@ -5830,6 +5970,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const response1 = await auth.api.signInSSO({
@@ -5864,6 +6005,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -5900,6 +6051,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 

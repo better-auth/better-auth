@@ -16,6 +16,7 @@ import {
 } from "better-auth";
 import {
 	APIError,
+	addOAuthServerContext,
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
@@ -52,7 +53,12 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	domainMatches,
+	parseProviderEmailVerified,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
@@ -415,6 +421,27 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
+			}
+
+			// SSO provider ids share the account-linking provider namespace with
+			// social/OAuth providers. Reject ids that collide with a configured
+			// social provider, a trusted provider, or a reserved built-in id so a
+			// user-registered SSO provider can't be confused with one of them.
+			// Trust for SSO providers is established separately via
+			// verified domain ownership, never by this shared namespace.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				...ctx.context.socialProviders.map((p) => p.id),
+				...ctx.context.trustedProviders,
+			]);
+			if (reservedProviderIds.has(body.providerId)) {
+				ctx.context.logger.warn(
+					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+				);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message:
+						"This providerId is reserved and cannot be used for an SSO provider",
+				});
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -1038,12 +1065,14 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 				const requestedScopes = ctx.body.scopes ||
 					config.scopes || ["openid", "email", "profile", "offline_access"];
-				const state = await generateState(ctx, {
-					additionalData: options?.redirectURI?.trim()
-						? { ssoProviderId: provider.providerId }
-						: false,
-					requestedScopes,
-				});
+				if (options?.redirectURI?.trim()) {
+					// The shared OIDC callback resolves the provider from server-only
+					// state, so it must not be client-spoofable.
+					await addOAuthServerContext({
+						ssoProviderId: provider.providerId,
+					});
+				}
+				const state = await generateState(ctx, { requestedScopes });
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1098,11 +1127,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
+				const { state: relayState } = await generateRelayState(ctx, undefined);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1363,6 +1388,9 @@ async function handleOIDCCallback(
 		[key: string]: any;
 	} | null = null;
 	const mapping = config.mapping || {};
+	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
+	// as `source.sso.profile` so a policy can inspect provider-specific fields.
+	let rawProfile: Record<string, unknown> | undefined;
 
 	if (config.userInfoEndpoint) {
 		const userInfoResponse = await betterFetch<Record<string, unknown>>(
@@ -1371,6 +1399,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				redirect: "error",
 			},
 		);
 		if (userInfoResponse.error) {
@@ -1381,6 +1410,7 @@ async function handleOIDCCallback(
 			);
 		}
 		const rawUserInfo = userInfoResponse.data;
+		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1391,15 +1421,16 @@ async function handleOIDCCallback(
 			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
+				? parseProviderEmailVerified(
+						rawUserInfo[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: rawUserInfo[mapping.name || "name"] as string | undefined,
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
 		};
 	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
+		rawProfile = idToken as Record<string, unknown>;
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
 				`${
@@ -1436,7 +1467,9 @@ async function handleOIDCCallback(
 			id: idToken[mapping.id || "sub"],
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
-				? idToken[mapping.emailVerified || "email_verified"]
+				? parseProviderEmailVerified(
+						idToken[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
@@ -1486,7 +1519,16 @@ async function handleOIDCCallback(
 			callbackURL,
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
+			source: {
+				method: "sso-oidc",
+				sso: { providerId: provider.providerId, profile: rawProfile },
+			},
 			isTrustedProvider,
+			// SSO provider ids are user-controlled and live in the same namespace
+			// as social providers. Never inherit trust from the global
+			// `trustedProviders` list by name — rely solely on the SSO-specific
+			// `isTrustedProvider` (verified domain ownership) computed above.
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
@@ -1638,10 +1680,12 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
+	if (options?.redirectURI?.trim()) {
+		// The shared OIDC callback resolves the provider from server-only state,
+		// so it must not be client-spoofable.
+		await addOAuthServerContext({ ssoProviderId: provider.providerId });
+	}
 	const state = await generateState(ctx, {
-		additionalData: options?.redirectURI?.trim()
-			? { ssoProviderId: provider.providerId }
-			: false,
 		requestedScopes: config.scopes || [
 			"openid",
 			"email",
@@ -1713,7 +1757,9 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = stateData.ssoProviderId as string | undefined;
+			const providerId = stateData.serverContext?.ssoProviderId as
+				| string
+				| undefined;
 			if (!providerId) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(

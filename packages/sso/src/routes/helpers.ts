@@ -53,6 +53,7 @@ export function createSP(
 	baseURL: string,
 	providerId: string,
 	opts?: {
+		clockSkew?: number;
 		relayState?: string;
 		sloOptions?: {
 			wantLogoutRequestSigned?: boolean;
@@ -111,6 +112,10 @@ export function createSP(
 		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
 	});
 }
 

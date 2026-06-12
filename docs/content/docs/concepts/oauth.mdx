@@ -70,6 +70,37 @@ await auth.api.linkSocialAccount({
 });
 ```
 
+### Validate OAuth User Info
+
+Use [`user.validateUserInfo`](/docs/concepts/users-accounts#callbacks) to reject an OAuth identity before Better Auth creates a user, links a new account, or signs a returning user back in. The callback receives the mapped `user` and, in `source.oauth`, the provider id and raw provider profile.
+
+It runs when an OAuth identity is first provisioned (`create-user` from a regular callback, ID-token sign-in, One Tap, or OAuth Proxy), when a new account is linked (`link-account`), and again every time an existing OAuth user signs in (`sign-in`). On the `sign-in` action the `user` carries the *fresh* provider email, so a domain check rejects a user whose provider email later moved to a disallowed domain. It works in stateless setups because it runs at the same points regardless of the database.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  user: {
+    validateUserInfo: ({ user, source }) => {
+      if (source.oauth?.providerId !== "google") return;
+
+      if (!user.email?.endsWith("@example.com")) {
+        return {
+          error: "email_not_allowed",
+          errorDescription: "Use your example.com email to sign in",
+        };
+      }
+    },
+  },
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  },
+});
+```
+
 ### Get Access Token
 
 To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.
@@ -235,51 +266,46 @@ Example using an after hook:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { getOAuthState } from "better-auth/api";
+import { createAuthMiddleware, getOAuthState } from "better-auth/api";
 
 export const auth = betterAuth({
   // Other configurations...
   hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: async (ctx) => {
-          // Additional data is only available during OAuth callback
-          if (ctx.path === "/callback/:id") {
-            const additionalData = await getOAuthState<{
-              referralCode?: string;
-              source?: string;
-            }>();
+    after: createAuthMiddleware(async (ctx) => {
+      // Additional data is only available during OAuth callback
+      if (ctx.path === "/callback/:id") {
+        const additionalData = await getOAuthState<{
+          referralCode?: string;
+          source?: string;
+        }>();
 
-            if (additionalData) {
-              // IMPORTANT: Validate and sanitize the data before using it
-              // This data comes from the client and should not be trusted
+        if (additionalData) {
+          // IMPORTANT: Validate and sanitize the data before using it
+          // This data comes from the client and should not be trusted
 
-              // Example: Validate and process referral code
-              if (additionalData.referralCode) {
-                const isValidFormat = /^[A-Z0-9]{6}$/.test(additionalData.referralCode);
-                if (isValidFormat) {
-                  // Verify the referral code exists in your database
-                  const referral = await db.referrals.findByCode(additionalData.referralCode);
-                  if (referral) {
-                    // Safe to use the verified referral
-                    await db.referrals.incrementUsage(referral.id);
-                  }
-                }
-              }
-
-              // Track analytics (low-risk usage)
-              if (additionalData.source) {
-                await analytics.track("oauth_signin", {
-                  source: additionalData.source,
-                  userId: ctx.context.session?.user.id,
-                });
+          // Example: Validate and process referral code
+          if (additionalData.referralCode) {
+            const isValidFormat = /^[A-Z0-9]{6}$/.test(additionalData.referralCode);
+            if (isValidFormat) {
+              // Verify the referral code exists in your database
+              const referral = await db.referrals.findByCode(additionalData.referralCode);
+              if (referral) {
+                // Safe to use the verified referral
+                await db.referrals.incrementUsage(referral.id);
               }
             }
           }
-        },
-      },
-    ],
+
+          // Track analytics (low-risk usage)
+          if (additionalData.source) {
+            await analytics.track("oauth_signin", {
+              source: additionalData.source,
+              userId: ctx.context.session?.user.id,
+            });
+          }
+        }
+      }
+    }),
   },
 });
 ```
@@ -318,8 +344,40 @@ Example using a database hook:
   * `link` - the link for the OAuth flow (email and user id)
   * `requestSignUp` - whether to request sign up for the OAuth flow
   * `expiresAt` - the expiration time of the OAuth state
-  * `[key: string]`: any additional data you pass in the OAuth flow
+  * `serverContext` - server-set values that survive the redirect (see [Passing Server-Trusted Data](#passing-server-trusted-data))
+  * `[key: string]` - the `additionalData` you passed in. This originates from the client, so treat it as untrusted.
 </Callout>
+
+#### Passing Server-Trusted Data
+
+`additionalData` is client-supplied, so it must be validated before use on the callback. When a plugin (or your own `before` hook) needs to carry server-derived data across the redirect, use `addOAuthServerContext`. It writes to a server-only slot that the client cannot populate, and the values are readable on the callback under `serverContext`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import {
+  addOAuthServerContext,
+  createAuthMiddleware,
+  getOAuthState,
+} from "better-auth/api";
+
+export const auth = betterAuth({
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Social and generic OAuth providers both sign in here.
+      if (ctx.path === "/sign-in/social") {
+        // Derived on the server, so it is safe to trust on the callback.
+        await addOAuthServerContext({ tenantId: ctx.context.tenantId });
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/callback/:id") {
+        const tenantId = (await getOAuthState())?.serverContext?.tenantId;
+        // Safe to use without re-validation: the client could not set this.
+      }
+    }),
+  },
+});
+```
 
 ## Handling Providers Without Email
 
@@ -465,6 +523,34 @@ A custom function to verify the ID token.
 ### overrideUserInfoOnSignIn
 
 A boolean value that determines whether to override the user information in the database when signing in. By default, it is set to `false`, meaning that the user information will not be overridden during sign-in. If you want to update the user information every time they sign in, set this to `true`.
+
+### requireEmailVerification
+
+Require this provider's email to be verified before a session is created. Defaults to `false`.
+
+When the provider reports the email as unverified, Better Auth still creates or links the user and account, but it does not issue a session. The OAuth callback redirects with `?error=email_not_verified`, and ID token sign-in returns a `403` with the `EMAIL_NOT_VERIFIED` error code. A verification email is (re)sent according to your `emailVerification` settings: `sendOnSignUp` covers new users and `sendOnSignIn` covers returning users. Configure `emailVerification.sendVerificationEmail` and keep `sendOnSignUp` enabled so blocked users always receive a link to verify.
+
+The gate checks the local user's verification state rather than the provider's claim on each request. A user already verified through another method (such as email and password) keeps access even if the provider later reports the email as unverified.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      requireEmailVerification: true,
+    },
+  },
+});
+```
+
+This is opt-in per provider and is independent of `emailAndPassword.requireEmailVerification`: enabling email and password verification does not gate social sign-in.
+
+<Callout type="warn">
+  Only enable this for providers that report a trustworthy `email_verified` signal. Several providers always report the email as unverified (or never return one), so enabling it there blocks every sign-in. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+</Callout>
 
 ### mapProfileToUser
 

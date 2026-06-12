@@ -295,4 +295,73 @@ describe("multi-session", async () => {
 		});
 		expect(attackerSessionAfter.data).toBeNull();
 	});
+
+	it("binds set-active and revoke to the signed cookie value, not the body token", async () => {
+		// A validly-signed multi-session cookie must only act on the session it was
+		// signed for. The signature covers the cookie value, not its name, so a
+		// request that presents its own valid cookie under another session's cookie
+		// name (naming that other token in the body) must not revoke the other
+		// session.
+		const callerUser = {
+			email: "ms-bind-caller@test.com",
+			password: "password",
+			name: "Caller",
+		};
+		const otherUser = {
+			email: "ms-bind-other@test.com",
+			password: "password",
+			name: "Other",
+		};
+
+		const callerHeaders = new Headers();
+		let callerToken = "";
+		let callerSignedMultiCookie = "";
+		await client.signUp.email(callerUser, {
+			onSuccess: cookieSetter(callerHeaders),
+			onResponse(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				callerToken =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+				callerSignedMultiCookie =
+					cookies.get(
+						`better-auth.session_token_multi-${callerToken.toLowerCase()}`,
+					)?.value || "";
+			},
+		});
+
+		const otherHeaders = new Headers();
+		let otherToken = "";
+		await client.signUp.email(otherUser, {
+			onSuccess: cookieSetter(otherHeaders),
+			onResponse(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				otherToken =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+			},
+		});
+		expect(callerSignedMultiCookie).not.toBe("");
+		expect(otherToken).not.toBe("");
+
+		// Place the caller's own validly-signed multi-session cookie under the other
+		// session's cookie name and name the other token in the request body.
+		const craftedHeaders = new Headers(callerHeaders);
+		craftedHeaders.set(
+			"cookie",
+			`${callerHeaders.get("cookie")}; better-auth.session_token_multi-${otherToken.toLowerCase()}=${callerSignedMultiCookie}`,
+		);
+
+		await client.multiSession.revoke(
+			{ sessionToken: otherToken },
+			{ headers: craftedHeaders },
+		);
+
+		const otherAfter = await client.getSession({
+			fetchOptions: { headers: otherHeaders },
+		});
+		expect(otherAfter.data?.session.token).toBe(otherToken);
+	});
 });

@@ -1,10 +1,12 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
@@ -38,6 +40,17 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	/**
+	 * Sent so the global origin-check middleware validates the post-login
+	 * redirect target against `trustedOrigins`. Without it the client performs
+	 * an unvalidated `window.location` redirect, which is an open redirect.
+	 */
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect to after a successful sign-in",
+		})
+		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
@@ -83,21 +96,33 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
+					const googleProvider =
+						typeof ctx.context.options.socialProviders?.google === "function"
+							? await ctx.context.options.socialProviders?.google()
+							: ctx.context.options.socialProviders?.google;
+					// Fail closed on a missing audience: without an expected client ID,
+					// jose verifies Google's signature and issuer but not that the token
+					// was minted for this relying party, so a token issued to a different
+					// Google client would be accepted. Resolve and require it before
+					// verification.
+					const audience = options?.clientId || googleProvider?.clientId;
+					if (!audience || (Array.isArray(audience) && audience.length === 0)) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
+						});
+					}
 					let payload: any;
 					try {
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
-						const googleProvider =
-							typeof ctx.context.options.socialProviders?.google === "function"
-								? await ctx.context.options.socialProviders?.google()
-								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience: options?.clientId || googleProvider?.clientId,
+								audience,
 							},
 						);
 						payload = verifiedPayload;
@@ -140,8 +165,23 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						accountId: sub,
 						tokens: { idToken, scopes: ["openid", "profile", "email"] },
 						disableSignUp: options?.disableSignup,
+						source: {
+							method: "oauth",
+							oauth: {
+								providerId: "google",
+								profile: payload as Record<string, unknown>,
+							},
+						},
 					});
 					if (result.error) {
+						if (
+							result.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
+						) {
+							throw APIError.from(
+								"FORBIDDEN",
+								BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+							);
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: result.error,
 						});
