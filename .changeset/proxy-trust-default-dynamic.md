@@ -2,11 +2,11 @@
 "better-auth": minor
 ---
 
-The dynamic `baseURL` path no longer trusts `x-forwarded-host` / `x-forwarded-proto` by default.
+The dynamic `baseURL` config now ignores `x-forwarded-host` and `x-forwarded-proto` unless you set `advanced.trustedProxyHeaders: true`.
 
-Configs using `baseURL: { allowedHosts }` previously honored these proxy headers implicitly, unlike the static-config path, which already gated them behind `advanced.trustedProxyHeaders`. On a deployment that does not strip client-supplied `x-forwarded-*`, that asymmetry let a request spoof its way to any host listed in `allowedHosts`. Both paths now ignore proxy headers unless you opt in.
+Requests using `baseURL: { allowedHosts }` now resolve the auth origin from `Host` by default, so forwarded headers cannot select another allowed host unless trusted proxy headers are enabled.
 
-**Breaking change:** if your proxy exposes the public hostname only through `x-forwarded-host` (rather than rewriting the `Host` header), set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, Netlify) are unaffected.
+**Breaking change:** if your proxy exposes the public hostname only through `x-forwarded-host`, set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, and Netlify) are unaffected.
 
 **Migration:**
 
