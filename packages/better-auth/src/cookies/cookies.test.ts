@@ -25,10 +25,6 @@ import {
 } from "../cookies";
 import { signJWT, symmetricDecodeJWT } from "../crypto";
 import { jwt } from "../plugins";
-import {
-	COOKIE_CACHE_JWT_AUDIENCE,
-	COOKIE_CACHE_JWT_TYPE,
-} from "../plugins/jwt/cookie-cache";
 import { getTestInstance } from "../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../utils/constants";
 import {
@@ -40,6 +36,9 @@ import {
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();

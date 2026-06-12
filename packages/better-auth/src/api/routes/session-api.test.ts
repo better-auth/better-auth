@@ -20,14 +20,13 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { jwt } from "../../plugins";
 import { admin } from "../../plugins/admin";
-import {
-	COOKIE_CACHE_JWT_AUDIENCE,
-	COOKIE_CACHE_JWT_TYPE,
-} from "../../plugins/jwt/cookie-cache";
 import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
 import { freshSessionMiddleware, getSessionFromCtx } from "./session";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =

@@ -10,9 +10,9 @@ import { getJwksAdapter } from "./adapter";
 import { resolveSigningKey } from "./sign";
 import type { JwtOptions } from "./types";
 
-export const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
-export const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
-export const COOKIE_CACHE_JWT_ISSUER = "better-auth:session-cache";
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
+const COOKIE_CACHE_JWT_ISSUER = "better-auth:session-cache";
 
 type CookieCacheJwtSigningKey = "secret" | "jwt-plugin";
 
