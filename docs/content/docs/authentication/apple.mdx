@@ -7,7 +7,7 @@ description: Apple provider setup and usage.
   <Step>
     ### Get your OAuth credentials
 
-    To use Apple sign in, you need a client ID and client secret. You can get them from the [Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list).
+    To use Apple sign in, you need a client ID, Team ID, Key ID, and private key. You can get them from the [Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list), then use them to generate the client secret JWT.
 
     You will need an active **Apple Developer account** to access the developer portal and generate these credentials.
 
@@ -56,17 +56,17 @@ description: Apple provider setup and usage.
     6. **Generate the Client Secret (JWT):**
        Apple requires a JSON Web Token (JWT) to be generated dynamically using the downloaded `.p8` key, the Key ID, and your Team ID. This JWT serves as your `clientSecret`.
 
-       You can use the guide below from [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret) to understand how to generate this client secret. You can also use our built in generator [below](#generate-apple-client-secret-jwt) to generate the client secret JWT required for 'Sign in with Apple'.
+       We recommend generating the client secret JWT in your auth configuration using the [`jose` example below](#configure-the-provider). You can also generate it manually by following [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret), then pass the generated JWT as `clientSecret`.
 
-       **Note:** Apple allows a maximum expiration of 6 months (180 days) for the client secret JWT. You will need to regenerate the client secret before it expires to maintain uninterrupted authentication.
+       **Note:** Apple rejects client secret JWTs that expire more than 15,777,000 seconds (six months) in the future. You will need to regenerate the client secret before it expires to maintain uninterrupted authentication.
   </Step>
 
   <Step>
-    Apple's OAuth implementation requires a JWT (JSON Web Token) as the `clientSecret` instead of a static secret string.
+    Apple's OAuth implementation requires a JWT (JSON Web Token) as the `clientSecret` instead of a shared secret string.
 
     According to [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret), these JWTs:
 
-    * Have a maximum expiration of 6 months
+    * Can't expire more than 15,777,000 seconds (six months) in the future
     * Must be cryptographically signed with your private key
 
     Install `jose` package to generate the client secret JWT.
@@ -103,7 +103,7 @@ description: Apple provider setup and usage.
 
     export const auth = betterAuth({
         socialProviders: {
-            apple: { // [!code highlight]
+            apple: async () => ({ // [!code highlight]
                 clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
                 clientSecret: await generateAppleClientSecret(
                     process.env.APPLE_CLIENT_ID!, // [!code highlight]
@@ -113,7 +113,7 @@ description: Apple provider setup and usage.
                 ), // [!code highlight]
                 // Optional
                 appBundleIdentifier: process.env.APPLE_APP_BUNDLE_IDENTIFIER as string, // [!code highlight]
-            }, // [!code highlight]
+            }), // [!code highlight]
         },
         // Add appleid.apple.com to trustedOrigins for Sign In with Apple flows
         trustedOrigins: ["https://appleid.apple.com"], // [!code highlight]
@@ -181,4 +181,8 @@ await authClient.signIn.social({
 
 ## Generate Apple Client Secret (JWT)
 
-<GenerateAppleJwt />
+If you previously used the in-page generator from this section, use the [`jose` example above](#configure-the-provider) instead. It uses Better Auth's async provider configuration to generate the Apple client secret JWT from your Client ID, Team ID, Key ID, and private key.
+
+The example uses a 180-day expiration, which stays below Apple's six-month limit. Generating the token from configuration avoids copying a static generated token into your auth setup.
+
+Alternatively, you can still generate the client secret JWT manually by following [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret), then pass the generated JWT as `clientSecret`. If you choose this approach, remember to replace it before it expires.

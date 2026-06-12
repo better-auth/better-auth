@@ -21,7 +21,6 @@ import {
 	DividerText,
 	Endpoint,
 	ForkButton,
-	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
@@ -115,7 +114,6 @@ export default async function Page({
 						AddToCursor,
 						Features,
 						Endpoint,
-						GenerateAppleJwt,
 						GenerateSecret,
 						DividerText,
 						Callout: ({

@@ -613,16 +613,6 @@ export function DividerText({ children }: { children: ReactNode }) {
 	);
 }
 
-// ─── GenerateAppleJwt ────────────────────────────────────────────────────────
-
-export function GenerateAppleJwt() {
-	return (
-		<div className="my-4 rounded-lg border bg-card p-4 text-sm text-muted-foreground/80">
-			See the Apple documentation for generating a client secret JWT.
-		</div>
-	);
-}
-
 // ─── Features (placeholder) ─────────────────────────────────────────────────
 
 export function Features({ stars }: { stars?: string | null }) {
