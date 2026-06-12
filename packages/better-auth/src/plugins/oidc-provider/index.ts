@@ -1795,9 +1795,45 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const session = await getSessionFromCtx(ctx);
 
+					// Logout deletes the user's session and OAuth tokens, so on an HTTP
+					// request it must be proven intentional: the request is same-site (or
+					// from a trusted origin), or it carries an id_token_hint for the
+					// session being ended. Otherwise a cross-site GET could log the user
+					// out and revoke their tokens, which the global origin check does not
+					// prevent because it skips GET. A request whose site cannot be
+					// established, or a valid id_token_hint for a different user, does not
+					// authorize ending this session.
+					if (ctx.request && (validatedUserId || session)) {
+						const fetchSite = ctx.request.headers.get("Sec-Fetch-Site");
+						const originHeader =
+							ctx.request.headers.get("origin") ||
+							ctx.request.headers.get("referer");
+						const isSameSiteRequest =
+							fetchSite === "same-origin" ||
+							fetchSite === "same-site" ||
+							fetchSite === "none" ||
+							(!!originHeader &&
+								ctx.context.isTrustedOrigin(originHeader, {
+									allowRelativePaths: false,
+								}));
+						const hintMatchesSession =
+							!!validatedUserId && validatedUserId === session?.user.id;
+						if (!isSameSiteRequest && !hintMatchesSession) {
+							throw new APIError("FORBIDDEN", {
+								error: "invalid_request",
+								error_description:
+									"Logout must be same-site or carry an id_token_hint for the current session",
+							});
+						}
+					}
+
 					if (validatedUserId || session) {
 						const userId = validatedUserId || session?.user.id;
 						if (userId) {
+							// FIXME(next): scope deletion to the session/token family
+							// represented by the validated id_token_hint (sid) instead of
+							// every access token for the user. The successor
+							// @better-auth/oauth-provider logout already deletes by sid.
 							await ctx.context.adapter.deleteMany({
 								model: modelName.oauthAccessToken,
 								where: [{ field: "userId", value: userId }],

@@ -329,23 +329,33 @@ function getRateLimitStorage(
 
 let ipWarningLogged = false;
 
+// Sentinel IP segment for the shared rate-limit bucket used when no trusted
+// client IP can be derived. It is not a valid IP, so it never collides with a
+// real client IP key.
+const NO_TRUSTED_IP_KEY = "no-trusted-ip";
+
 async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const basePath = new URL(ctx.baseURL).pathname;
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
-	if (!ip) {
-		if (!ipWarningLogged) {
-			ctx.logger.warn(
-				"Rate limiting skipped: could not determine client IP address. " +
-					"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
-			);
-			ipWarningLogged = true;
-		}
+	if (!ip && ctx.options.advanced?.ipAddress?.disableIpTracking) {
+		// IP tracking is explicitly disabled; per-IP rate limiting does not apply.
 		return null;
 	}
-	const key = createRateLimitKey(ip, path);
+	if (!ip && !ipWarningLogged) {
+		ctx.logger.warn(
+			"Rate limiting could not determine a client IP and is falling back to a " +
+				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
+				"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
+		);
+		ipWarningLogged = true;
+	}
+	// Fail closed when no client IP can be derived: key on a shared per-path
+	// bucket and still enforce the limit, instead of skipping rate limiting
+	// entirely (which let a client omit the IP header to bypass the limit).
+	const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path);
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 

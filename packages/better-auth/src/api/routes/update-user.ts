@@ -10,6 +10,7 @@ import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
+	isStateful,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
@@ -252,14 +253,14 @@ export const changePassword = createAuthEndpoint(
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
+			ctx.context.logger.warn("Password is too short");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
+			ctx.context.logger.warn("Password is too long");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
@@ -313,7 +314,7 @@ export const changePassword = createAuthEndpoint(
 	},
 );
 
-export const setPassword = createAuthEndpoint(
+export const setPassword = createAuthEndpoint.serverOnly(
 	{
 		method: "POST",
 		body: z.object({
@@ -331,14 +332,14 @@ export const setPassword = createAuthEndpoint(
 		const session = ctx.context.session;
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
+			ctx.context.logger.warn("Password is too short");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
+			ctx.context.logger.warn("Password is too long");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
@@ -619,7 +620,12 @@ export const deleteUserCallback = createAuthEndpoint(
 				code: "NOT_FOUND",
 			});
 		}
-		const session = await getSessionFromCtx(ctx);
+		// Account deletion is sensitive: bypass the cookie cache on stateful
+		// deployments so a revoked-but-cached session cannot complete the deletion
+		// even when paired with a valid delete-account token.
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
 		if (!session) {
 			throw APIError.from(
 				"NOT_FOUND",
@@ -724,7 +730,7 @@ export const changeEmail = createAuthEndpoint(
 		const newEmail = ctx.body.newEmail.toLowerCase();
 
 		if (newEmail === ctx.context.session.user.email) {
-			ctx.context.logger.error("Email is the same");
+			ctx.context.logger.warn("Email is the same");
 			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Email is the same",
 			});

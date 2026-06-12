@@ -546,8 +546,9 @@ describe("should work in development/test environment", () => {
 
 describe("missing client IP warning", () => {
 	const warningMessage =
-		"Rate limiting skipped: could not determine client IP address. " +
-		"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+		"Rate limiting could not determine a client IP and is falling back to a " +
+		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
+		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
@@ -585,6 +586,36 @@ describe("missing client IP warning", () => {
 				`${message}`.includes("trustedProxies"),
 			),
 		).toBe(false);
+	});
+
+	it("should fail closed and still enforce the limit when no client IP is available", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+		});
+
+		// With no derivable client IP, requests share one per-path bucket and
+		// must still be limited rather than skipped (the previous fail-open let a
+		// client omit the IP header to bypass rate limiting entirely).
+		let limited = false;
+		for (let i = 0; i < 6; i++) {
+			const res = await client.getSession();
+			if (res.error?.status === 429) {
+				limited = true;
+				break;
+			}
+		}
+		expect(limited).toBe(true);
 	});
 });
 
