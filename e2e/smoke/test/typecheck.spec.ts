@@ -8,6 +8,7 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
 [
 	{ dir: "tsconfig-declaration", skip: false },
+	{ dir: "tsconfig-composite-client", skip: false },
 	{ dir: "tsconfig-exact-optional-property-types", skip: false },
 	{ dir: "tsconfig-verbatim-module-syntax-node10", skip: false },
 	{ dir: "tsconfig-isolated-module-bundler", skip: false },
