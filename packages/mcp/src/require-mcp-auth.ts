@@ -6,8 +6,8 @@ import type { JWTPayload } from "jose";
 
 interface RequireMcpAuthOptions {
 	/**
-	 * The protected resource identifier the access token must be audience-bound
-	 * to. Defaults to the server's resolved base URL.
+	 * The protected resource identifier the access token must be bound to.
+	 * Defaults to the server's resolved base URL.
 	 */
 	resource?: string;
 	/**
@@ -77,12 +77,13 @@ export const requireMcpAuth = <
 ) => {
 	if (opts?.resource !== undefined) {
 		// RFC 8707 / RFC 9728: reject a non-absolute or fragment-containing
-		// resource up front, so it never reaches the metadata URL or the audience.
+		// resource up front, so it never reaches the metadata URL or audience
+		// verifier.
 		ResourceUriSchema.parse(opts.resource);
 	}
 	return async (req: Request): Promise<Response> => {
-		// The provider stamps tokens with, and binds their audience to, its
-		// resolved base URL (which includes the base path). Read that value from
+		// The provider stamps tokens with its resolved base URL (which includes
+		// the base path) as both issuer and default resource. Read that value from
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.

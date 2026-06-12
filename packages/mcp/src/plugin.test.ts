@@ -26,6 +26,7 @@ describe("mcp plugin", async () => {
 			mcp({
 				loginPage: "/login",
 				consentPage: "/consent",
+				resource: baseURL,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -162,6 +163,7 @@ describe("mcp plugin", async () => {
 					mcp({
 						loginPage: "/login",
 						consentPage: "/consent",
+						resource: resourceBaseURL,
 						scopes: ["openid", "offline_access", "mcp:read"],
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -367,6 +369,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 			mcp({
 				loginPage: "/login",
 				consentPage: "/consent",
+				resource: `${authServerBaseUrl}/api/auth`,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

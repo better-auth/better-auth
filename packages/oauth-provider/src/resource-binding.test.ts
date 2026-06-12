@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/client";
-import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -12,12 +11,12 @@ import type { OAuthClient } from "./types/oauth";
 
 const authServerBaseUrl = "http://localhost:3000";
 const rpBaseUrl = "http://localhost:5000";
-const audienceA = "https://api-a.example.com";
-const audienceB = "https://api-b.example.com";
+const resourceA = "https://api-a.example.com";
+const resourceB = "https://api-b.example.com";
 
-function audienceList(aud: unknown): string[] {
-	if (Array.isArray(aud)) return aud as string[];
-	return aud == null ? [] : [aud as string];
+function toAudienceValues(audienceClaim: unknown): string[] {
+	if (Array.isArray(audienceClaim)) return audienceClaim as string[];
+	return audienceClaim == null ? [] : [audienceClaim as string];
 }
 
 function tokenForm(params: Record<string, string | undefined>) {
@@ -37,11 +36,11 @@ function tokenForm(params: Record<string, string | undefined>) {
 /**
  * The RFC 8707 `resource` indicator is bound to the authorization grant. When a
  * client declares a resource at `/authorize`, the token and refresh endpoints
- * may narrow the audience to a subset but may not widen it to a resource the
- * authorization never covered. Before the fix the audience was read from the
- * token request body and checked only against the global `validAudiences`
- * allowlist, so a client could obtain (or change, across refreshes) a token for
- * any allow-listed resource regardless of the grant.
+ * may narrow the issued token to a subset of those resources but may not widen
+ * it to a resource the authorization never covered. Before the fix the requested
+ * resource was read from the token request body and checked only against the
+ * global `resources` allowlist, so a client could obtain (or change, across
+ * refreshes) a token for any allow-listed resource regardless of the grant.
  *
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-p2fr-6hmx-4528
  */
@@ -53,7 +52,8 @@ describe("oauth-provider resource indicator binding", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [audienceA, audienceB],
+				resources: [resourceA, resourceB],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -64,7 +64,7 @@ describe("oauth-provider resource indicator binding", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -165,64 +165,70 @@ describe("oauth-provider resource indicator binding", async () => {
 	}
 
 	it("rejects a token for a resource the authorization did not cover", async () => {
-		const { code, codeVerifier } = await authorize([audienceA]);
+		const { code, codeVerifier } = await authorize([resourceA]);
 		const tokens = await exchangeCode({
 			code,
 			codeVerifier,
-			resources: [audienceB],
+			resources: [resourceB],
 		});
 		expect(tokens.error?.status).toBeDefined();
 		expect(tokens.data?.access_token).toBeUndefined();
 	});
 
-	it("narrows the access-token audience to the requested subset", async () => {
-		const { code, codeVerifier } = await authorize([audienceA, audienceB]);
+	it("narrows the JWT access-token audience to the requested resource subset", async () => {
+		const { code, codeVerifier } = await authorize([resourceA, resourceB]);
 		const tokens = await exchangeCode({
 			code,
 			codeVerifier,
-			resources: [audienceA],
+			resources: [resourceA],
 		});
 		expect(tokens.error).toBeNull();
-		const aud = audienceList(decodeJwt(tokens.data!.access_token!).aud);
-		expect(aud).toContain(audienceA);
-		expect(aud).not.toContain(audienceB);
+		const audienceValues = toAudienceValues(
+			decodeJwt(tokens.data!.access_token!).aud,
+		);
+		expect(audienceValues).toContain(resourceA);
+		expect(audienceValues).not.toContain(resourceB);
 	});
 
 	it("inherits the authorized resource when the token request omits it", async () => {
-		const { code, codeVerifier } = await authorize([audienceA]);
+		const { code, codeVerifier } = await authorize([resourceA]);
 		const tokens = await exchangeCode({ code, codeVerifier });
 		expect(tokens.error).toBeNull();
-		const aud = audienceList(decodeJwt(tokens.data!.access_token!).aud);
-		expect(aud).toContain(audienceA);
+		const audienceValues = toAudienceValues(
+			decodeJwt(tokens.data!.access_token!).aud,
+		);
+		expect(audienceValues).toContain(resourceA);
 	});
 
 	it("keeps the full authorized set on the refresh token across narrowing", async () => {
-		const { code, codeVerifier } = await authorize([audienceA, audienceB]);
+		const { code, codeVerifier } = await authorize([resourceA, resourceB]);
 		const initial = await exchangeCode({
 			code,
 			codeVerifier,
-			resources: [audienceA],
+			resources: [resourceA],
 		});
 		expect(initial.data?.refresh_token).toBeDefined();
 
 		// Refresh without a resource: the refresh token retained [A, B] (RFC 8707 §2.2).
 		const refreshed = await refresh(initial.data!.refresh_token!);
 		expect(refreshed.error).toBeNull();
-		const aud = audienceList(decodeJwt(refreshed.data!.access_token!).aud);
-		expect(aud).toContain(audienceA);
-		expect(aud).toContain(audienceB);
+		const audienceValues = toAudienceValues(
+			decodeJwt(refreshed.data!.access_token!).aud,
+		);
+		expect(audienceValues).toContain(resourceA);
+		expect(audienceValues).toContain(resourceB);
 	});
 
 	it("rejects a refresh that widens beyond the authorized resources", async () => {
-		const { code, codeVerifier } = await authorize([audienceA]);
+		const { code, codeVerifier } = await authorize([resourceA]);
 		const initial = await exchangeCode({
 			code,
 			codeVerifier,
-			resources: [audienceA],
+			resources: [resourceA],
 		});
 		expect(initial.data?.refresh_token).toBeDefined();
 
-		const refreshed = await refresh(initial.data!.refresh_token!, [audienceB]);
+		const refreshed = await refresh(initial.data!.refresh_token!, [resourceB]);
 		expect(refreshed.error?.status).toBeDefined();
 	});
 });

@@ -6,6 +6,8 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import type { ResolvedResourcePolicy } from "./resources";
+import { resolveResourcePolicy, stripReservedClaims } from "./resources";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -17,7 +19,6 @@ import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
-	checkResource,
 	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
@@ -34,6 +35,8 @@ import {
 	toResourceList,
 	validateClientCredentials,
 } from "./utils";
+
+const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -69,7 +72,7 @@ async function createJwtAccessToken(
 	opts: OAuthOptions<Scope[]>,
 	user: User | undefined,
 	client: SchemaClient<Scope[]>,
-	audience: string | string[],
+	audienceClaim: string | string[],
 	scopes: string[],
 	resources?: string[],
 	referenceId?: string,
@@ -77,11 +80,19 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/**
+		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
+		 * `null` falls back to the JWT plugin's primary key.
+		 */
+		signingAlgorithm?: ResolvedResourcePolicy["signingAlgorithm"];
+		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
+		/** Per-resource custom claims (already reserved-claim-stripped). */
+		resourceCustomClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
-	const customClaims = opts.customAccessTokenClaims
+	const pluginCustomClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes,
@@ -91,21 +102,47 @@ async function createJwtAccessToken(
 			})
 		: {};
 
-	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	// Reserved-claim stripping is server-enforced for BOTH the resource-level
+	// customClaims (already stripped during policy resolution) AND the legacy
+	// plugin-level `customAccessTokenClaims` callback. The AS owns RFC 9068
+	// reserved names regardless of which extension surface tries to set them.
+	const safePluginClaims = stripReservedClaims(pluginCustomClaims);
+	const safeResourceClaims = overrides?.resourceCustomClaims ?? {};
 
-	// Sign token
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	const subject = user?.id ?? client.clientId;
+
+	// Sign token — pass per-resource signing config if set; otherwise fall
+	// back to the JWT plugin's default.
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
+		header: { typ: JWT_ACCESS_TOKEN_TYPE },
+		signingKeyId: overrides?.signingKeyId ?? undefined,
+		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
-			...customClaims,
-			sub: user?.id,
-			aud: toAudienceClaim(audience),
+			...safePluginClaims,
+			...safeResourceClaims,
+			// RFC 9068 §2.2 requires `sub` on every JWT access token. For
+			// client_credentials, no resource owner participates, so the client is
+			// the subject represented to the resource server.
+			sub: subject,
+			aud: toAudienceClaim(audienceClaim),
+			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
+			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
+			// with introspection flows that key on it. The AS owns this value;
+			// `stripReservedClaims` removes any `client_id` from custom claims so
+			// resource/plugin extensions can't override it.
+			client_id: client.clientId,
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
+			// RFC 9068 §2.2.4: `jti` SHOULD be present. Emit a 128-bit random ID
+			// so audit trails and (future) revocation lookups can reference
+			// individual tokens.
+			jti: generateRandomString(32),
 		},
 	});
 }
@@ -486,6 +523,63 @@ interface CreateUserTokensParams {
 	originalResources?: string[];
 }
 
+interface ResourceGrantIssuance {
+	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
+	effectiveScopes: string[];
+	accessTokenExpiresAtSeconds: number;
+	refreshTokenExpiresAtSeconds: number;
+	refreshResources?: string[];
+	signingAlgorithm: ResolvedResourcePolicy["signingAlgorithm"];
+	signingKeyId: ResolvedResourcePolicy["signingKeyId"];
+	resourceCustomClaims: Record<string, unknown>;
+}
+
+async function resolveResourceGrantIssuance(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		clientId: string;
+		requestedScopes: string[];
+		resources?: string[];
+		originalResources?: string[];
+		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		iat: number;
+		scopeExpiresAtSeconds: number;
+	},
+): Promise<ResourceGrantIssuance> {
+	const resourcePolicy = await resolveResourcePolicy(ctx, opts, {
+		resource: params.resources,
+		clientId: params.clientId,
+		requestedScopes: params.requestedScopes,
+	});
+	const resourceExpiresAtSeconds =
+		resourcePolicy.accessTokenTtl !== null
+			? params.iat + resourcePolicy.accessTokenTtl
+			: params.scopeExpiresAtSeconds;
+	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592000;
+	const refreshTokenTtl =
+		resourcePolicy.refreshTokenTtl !== null
+			? Math.min(resourcePolicy.refreshTokenTtl, refreshTokenDefaultTtl)
+			: refreshTokenDefaultTtl;
+
+	return {
+		audienceClaim: resourcePolicy.audienceClaim,
+		effectiveScopes: resourcePolicy.effectiveScopes,
+		accessTokenExpiresAtSeconds: Math.min(
+			params.scopeExpiresAtSeconds,
+			resourceExpiresAtSeconds,
+		),
+		refreshTokenExpiresAtSeconds: params.iat + refreshTokenTtl,
+		refreshResources:
+			params.refreshToken?.resources ??
+			params.originalResources ??
+			params.resources,
+		signingAlgorithm: resourcePolicy.signingAlgorithm,
+		signingKeyId: resourcePolicy.signingKeyId,
+		resourceCustomClaims: resourcePolicy.customClaims,
+	};
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -509,7 +603,7 @@ async function createUserTokens(
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
 	const defaultExp = iat + baseExpiry;
-	const exp = opts.scopeExpirations
+	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
 					opts.scopeExpirations?.[sc]
@@ -521,20 +615,19 @@ async function createUserTokens(
 				}, defaultExp)
 		: defaultExp;
 
-	// Check requested audience if sent as the resource parameter
-	const resourceResult = await checkResource(
-		ctx,
-		opts,
-		params?.resources,
-		scopes,
-	);
-	if (!resourceResult.success) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "requested resource invalid",
-			error: "invalid_target",
-		});
-	}
-	const audience = resourceResult.audience;
+	const grantIssuance = await resolveResourceGrantIssuance(ctx, opts, {
+		clientId: client.clientId,
+		requestedScopes: scopes,
+		resources: params.resources,
+		originalResources: params.originalResources,
+		refreshToken: params.refreshToken,
+		iat,
+		scopeExpiresAtSeconds: scopeExp,
+	});
+	const audienceClaim = grantIssuance.audienceClaim;
+	const effectiveScopes = grantIssuance.effectiveScopes;
+	const exp = grantIssuance.accessTokenExpiresAtSeconds;
+	const refreshTokenExp = grantIssuance.refreshTokenExpiresAtSeconds;
 	// Only mint a refresh token when the client may use refresh tokens.
 	// Otherwise an `offline_access` scope alone would hand a refresh token to a
 	// pure machine-to-machine client that was never authorized for one.
@@ -543,7 +636,7 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
-	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
+	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && scopes.includes("openid");
 
 	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
@@ -551,18 +644,13 @@ async function createUserTokens(
 		? await opts.customTokenResponseFields({
 				grantType,
 				user,
-				scopes,
+				scopes: effectiveScopes,
 				metadata: parseClientMetadata(client.metadata),
 				verificationValue,
 			})
 		: undefined;
 
-	// Refresh token MUST retain the full original set of resources from the previous refresh token per RFC 8707 section 2.2
-	// For the initial auth-code exchange, params.originalResources carries the full authorized set (before any request narrowing).
-	const refreshResources =
-		params?.refreshToken?.resources ??
-		params?.originalResources ??
-		params?.resources;
+	const refreshResources = grantIssuance.refreshResources;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -573,10 +661,10 @@ async function createUserTokens(
 					user,
 					referenceId,
 					client,
-					scopes,
+					effectiveScopes,
 					{
 						iat,
-						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+						exp: refreshTokenExp,
 						sid: sessionId,
 					},
 					existingRefreshToken,
@@ -593,14 +681,17 @@ async function createUserTokens(
 					opts,
 					user,
 					client,
-					audience,
-					scopes,
+					audienceClaim,
+					effectiveScopes,
 					params?.resources,
 					referenceId,
 					{
 						iat,
 						exp,
 						sid: sessionId,
+						signingAlgorithm: grantIssuance.signingAlgorithm,
+						signingKeyId: grantIssuance.signingKeyId,
+						resourceCustomClaims: grantIssuance.resourceCustomClaims,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -608,7 +699,7 @@ async function createUserTokens(
 					opts,
 					user,
 					client,
-					scopes,
+					effectiveScopes,
 					{
 						iat,
 						exp,
@@ -627,10 +718,10 @@ async function createUserTokens(
 						user,
 						referenceId,
 						client,
-						scopes,
+						effectiveScopes,
 						{
 							iat,
-							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+							exp: refreshTokenExp,
 							sid: sessionId,
 						},
 						existingRefreshToken,
@@ -663,7 +754,7 @@ async function createUserTokens(
 			expires_at: exp,
 			token_type: "Bearer" as const,
 			refresh_token: refreshToken?.token,
-			scope: scopes.join(" "),
+			scope: effectiveScopes.join(" "),
 			id_token: idToken,
 		},
 		{

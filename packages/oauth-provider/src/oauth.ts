@@ -34,7 +34,13 @@ import {
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
+import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
+import {
+	extractRepeatedResourceFromForm,
+	logEnforcePerClientResourcesResolution,
+	seedResources,
+} from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
@@ -400,7 +406,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							required: false,
 							schema: { type: "array", items: { type: "string" } },
 							description:
-								"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
+								"Requested protected resource(s) for the access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 						},
 						{
 							name: "prompt",
@@ -466,7 +472,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
-		init: (ctx) => {
+		init: async (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
 			if (
@@ -477,6 +483,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
 			}
+
+			// Seed `oauthResource` rows from plugin config. Idempotent and
+			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
+			// is empty. Tolerates
+			// "table not yet created" errors and defers to lazy-seed.
+			await seedResources(ctx, opts);
+
+			// Record which default applied to `enforcePerClientResources` so
+			// admins can see it in startup logs. Pure resolution lives in
+			// `resolveEnforcePerClientResources` so validation flow stays cheap.
+			logEnforcePerClientResourcesResolution(opts);
 
 			// Well-known warnings are best-effort and only make sense with the
 			// JWT plugin. A dynamic baseURL resolves per-request, so there is
@@ -839,6 +856,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					// RFC 8707 §2 allows the client to repeat the `resource`
+					// parameter. better-call's form-body parser collapses
+					// repeated keys (last-write-wins) so we re-parse the raw
+					// body in the handler to recover the full list. That
+					// requires the underlying request body to be readable a
+					// second time, which only works when better-call clones
+					// the request before its own parse.
+					cloneRequest: true,
 					body: z.object({
 						grant_type: z
 							.string()
@@ -931,7 +956,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														},
 													],
 													description:
-														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
+														"Requested protected resource(s) for the access token",
 												},
 												scope: {
 													type: "string",
@@ -1006,6 +1031,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					// RFC 8707 §2 conformance — recover repeated `resource`
+					// values from the raw body before delegating to the token
+					// pipeline. Only patches `ctx.body.resource` when the raw
+					// form actually carried multiple entries; the
+					// single-value path (and the in-process auth.api.* call
+					// path where there is no Request body to re-read) is left
+					// untouched. See `extractRepeatedResourceFromForm` in
+					// resources.ts for rationale.
+					if (ctx.request) {
+						const repeated = await extractRepeatedResourceFromForm(ctx.request);
+						if (repeated && repeated.length > 1) {
+							ctx.body.resource = repeated;
+						}
+					}
 					return tokenEndpoint(ctx, opts);
 				},
 			),
@@ -1448,6 +1487,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),
+						// RFC 7591 §2 extension: declare the resources this client
+						// will request. Each must reference an existing oauthResource
+						// row; the registration handler links them on success.
+						resources: z.array(z.string().min(1)).optional(),
 						skip_consent: z
 							.never({
 								error:
@@ -1646,6 +1689,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
 			updateOAuthConsent: oauthConsentEndpoints.updateOAuthConsent(opts),
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
+			adminCreateOAuthResource:
+				oauthResourceEndpoints.adminCreateOAuthResource(opts),
+			adminListOAuthResources:
+				oauthResourceEndpoints.adminListOAuthResources(opts),
+			adminGetOAuthResource: oauthResourceEndpoints.adminGetOAuthResource(opts),
+			adminUpdateOAuthResource:
+				oauthResourceEndpoints.adminUpdateOAuthResource(opts),
+			adminDeleteOAuthResource:
+				oauthResourceEndpoints.adminDeleteOAuthResource(opts),
+			adminLinkClientResource:
+				oauthResourceEndpoints.adminLinkClientResource(opts),
+			adminUnlinkClientResource:
+				oauthResourceEndpoints.adminUnlinkClientResource(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
 		rateLimit: [

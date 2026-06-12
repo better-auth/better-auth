@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
+import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
@@ -100,15 +101,96 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * List of valid audiences if there are multiple.
+	 * Protected resources the AS issues access tokens for. Promotes the
+	 * resource model into a first-class persisted entity with per-resource
+	 * token policy.
 	 *
-	 * @default baseURL
-	 * @example [
-	 * 	"https://api.example.com",
-	 * 	"https://api.example.com/mcp",
+	 * - String form: each string becomes an `oauthResource` row using plugin-level
+	 *   defaults.
+	 * - Object form: explicit per-resource policy (TTL, signing alg, scope
+	 *   allowlist, custom claims, sender-constraint requirements).
+	 *
+	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
+	 * {@link OAuthOptions.resourceSeedMode}.
+	 *
+	 * @see RFC 8707 — `identifier` is the `resource` parameter value
+	 * @example
+	 * ```ts
+	 * resources: [
+	 *   { identifier: "https://api.example.com/admin", accessTokenTtl: 300,
+	 *     allowedScopes: ["admin:read", "admin:write"] },
+	 *   "https://api.example.com/public",
 	 * ]
+	 * ```
 	 */
-	validAudiences?: string[];
+	resources?: Array<string | OAuthResourceInput>;
+	/**
+	 * Controls whether boot-time `resources` config overwrites DB-edited rows.
+	 *
+	 * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
+	 *   not already present. Existing rows are untouched — admin edits via CRUD
+	 *   are never reverted on restart.
+	 * - `"merge"`: inserts missing rows; updates only fields present in the
+	 *   config object for existing rows.
+	 * - `"overwrite"`: inserts missing rows; replaces existing rows with the
+	 *   config values. Use only when the config is the source of truth.
+	 *
+	 * Defaults to the safe option to prevent accidental policy reverts in
+	 * production deployments.
+	 *
+	 * @default "insertOnly"
+	 */
+	resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
+	/**
+	 * Opt-in cache membership for resources by `identifier`. Mirrors the
+	 * {@link OAuthOptions.cachedTrustedClients} pattern.
+	 *
+	 * Cached resources are invalidated on every CRUD write. Resources not in
+	 * this set are looked up from the DB on every request — the safe default
+	 * when admins edit rows through external tooling.
+	 */
+	cachedResources?: Set<string>;
+	/**
+	 * When true, `/oauth2/token` and `/oauth2/authorize` require the client to be
+	 * linked to every requested resource via `oauthClientResource`. When false,
+	 * clients implicitly have access to all enabled resources.
+	 *
+	 * Defaults to `true`, enabling per-client validation per RFC 8707 §3. An
+	 * explicit `false` keeps all enabled resources requestable by any client.
+	 *
+	 * The resolved value is logged at plugin init so admins see which default
+	 * applied.
+	 */
+	enforcePerClientResources?: boolean;
+	/**
+	 * Customize how a resource `identifier` is validated when resources are
+	 * created via CRUD or DCR. The default rejects non-URI identifiers per
+	 * RFC 8707 §2 (absolute URI, no fragment). Override only for trusted
+	 * internal use cases.
+	 *
+	 * @default RFC 8707 strict URI validator
+	 */
+	identifierValidator?: (identifier: string) => Awaitable<boolean>;
+	/**
+	 * RBAC on OAuth resources. Mirrors {@link OAuthOptions.clientPrivileges}.
+	 *
+	 * Gates the admin resource CRUD endpoints. Return `false` (or `undefined`)
+	 * to deny the action.
+	 */
+	resourcePrivileges?: (context: {
+		headers: Headers;
+		action:
+			| "create"
+			| "read"
+			| "update"
+			| "delete"
+			| "list"
+			| "link"
+			| "unlink";
+		user?: User & Record<string, unknown>;
+		session?: Session & Record<string, unknown>;
+		resourceId?: string;
+	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Automatically cache trusted clients by client_id.
 	 * Clients are cached at request.
@@ -917,6 +999,87 @@ export interface OAuthAuthorizationQuery {
 	 * Resource parameter as specified by [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)
 	 */
 	resource?: string | string[];
+}
+
+/**
+ * A persisted protected-resource row as stored in `oauthResource`.
+ *
+ * `null` on any policy column means "inherit the plugin-level default at
+ * token issuance time" — admins can later override without re-seeding.
+ */
+export interface OAuthResource {
+	/** Auto-generated primary key */
+	id: string;
+	/**
+	 * Business key used in the `aud` claim and as the RFC 8707 `resource` value.
+	 */
+	identifier: string;
+	/** Human-friendly label for admin UIs */
+	name: string;
+	/** Access token TTL in seconds; null inherits {@link OAuthOptions.accessTokenExpiresIn} */
+	accessTokenTtl?: number | null;
+	/** Refresh token TTL in seconds; null inherits {@link OAuthOptions.refreshTokenExpiresIn} */
+	refreshTokenTtl?: number | null;
+	/** When set, overrides the JWT plugin's getLatestKey() default at signing time. */
+	signingAlgorithm?: JWSAlgorithms | null;
+	signingKeyId?: string | null;
+	/**
+	 * When non-null, requested scopes must intersect this set or the request is
+	 * rejected with `invalid_scope`.
+	 */
+	allowedScopes?: string[] | null;
+	/**
+	 * Per-resource claims merged into the access token JWT payload. Reserved
+	 * RFC 9068 claim names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`,
+	 * `client_id`, `scope`, `auth_time`, `acr`, `amr`) are stripped at issuance
+	 * with a warning log — never silently dropped.
+	 */
+	customClaims?: Record<string, unknown> | null;
+	/**
+	 * Disabled → no new issuance for this resource; existing tokens still verify
+	 * until natural expiry. Compare to delete, which hard-rejects existing tokens.
+	 */
+	disabled: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+	/**
+	 * Forward-migration anchor. Lets the runtime branch behavior when claim
+	 * emission or validation semantics change in a future PR without forcing
+	 * every row to migrate. PR 1 ships with `policyVersion = 1`.
+	 */
+	policyVersion: number;
+	/** Open-ended extension data — not yet promoted to columns. */
+	metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Plugin-config input for {@link OAuthOptions.resources}. A subset of the
+ * persisted {@link OAuthResource} — only `identifier` is required; the rest
+ * fall back to plugin defaults when omitted.
+ */
+export interface OAuthResourceInput {
+	identifier: string;
+	name?: string;
+	accessTokenTtl?: number;
+	refreshTokenTtl?: number;
+	signingAlgorithm?: JWSAlgorithms;
+	signingKeyId?: string;
+	allowedScopes?: string[];
+	customClaims?: Record<string, unknown>;
+	disabled?: boolean;
+	metadata?: Record<string, unknown>;
+}
+
+/**
+ * A row of `oauthClientResource` linking a client to a resource.
+ *
+ * Authoritative only when {@link OAuthOptions.enforcePerClientResources} is true.
+ */
+export interface OAuthClientResource {
+	clientId: string;
+	resourceId: string;
+	metadata?: Record<string, unknown> | null;
+	createdAt: Date;
 }
 
 /**

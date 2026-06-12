@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { buildClientResourceLinkId, getResource } from "./resources";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
@@ -41,7 +43,7 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient;
+	const body = ctx.body as OAuthClient & { resources?: string[] };
 	const session = await getSessionFromCtx(ctx);
 
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
@@ -71,8 +73,42 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §2 extension: clients may declare which resources they need.
+	// Validate up front so the registration fails before we issue a clientId.
+	// Linking happens inside createOAuthClientEndpoint so the response shape
+	// stays type-stable for existing DCR consumers (the resources are echoed
+	// as an added field, not via a separate Response wrapper).
+	const requestedResources = Array.isArray(body.resources)
+		? [
+				...new Set(
+					body.resources.filter(
+						(resource): resource is string =>
+							typeof resource === "string" && resource.length > 0,
+					),
+				),
+			]
+		: [];
+	if (requestedResources.length > 0) {
+		for (const identifier of requestedResources) {
+			const row = await getResource(ctx, opts, identifier);
+			if (!row) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested resource ${identifier} does not exist`,
+				});
+			}
+			if (row.disabled) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested resource ${identifier} is disabled`,
+				});
+			}
+		}
+	}
+
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
+		resources: requestedResources.length > 0 ? requestedResources : undefined,
 	});
 }
 
@@ -330,6 +366,13 @@ export async function createOAuthClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings: {
 		isRegister: boolean;
+		/**
+		 * Pre-validated resource identifiers to link the new client to. Used
+		 * by the DCR registration path (RFC 7591 §2 extension). Validation
+		 * (existence, disabled) is the caller's responsibility — this branch
+		 * only writes the link rows and echoes the field in the response.
+		 */
+		resources?: string[] | undefined;
 	},
 ) {
 	const body = ctx.body as OAuthClient;
@@ -398,30 +441,64 @@ export async function createOAuthClientEndpoint(
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
 	});
-	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
-		model: "oauthClient",
-		data: {
-			...schema,
-			createdAt: new Date(iat * 1000),
-			updatedAt: new Date(iat * 1000),
+	const resources = settings.resources ?? [];
+	const client = await runWithTransaction(ctx.context.adapter, async () => {
+		const createdClient = await ctx.context.adapter.create<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			data: {
+				...schema,
+				createdAt: new Date(iat * 1000),
+				updatedAt: new Date(iat * 1000),
+			},
+		});
+
+		// DCR resource linkage (RFC 7591 §2 extension). The caller pre-validated
+		// each identifier; here we write the join rows in the same transaction as
+		// the client so a failed link cannot leave a half-registered client.
+		if (resources.length > 0) {
+			const linkModel =
+				opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+			const now = new Date();
+			for (const resourceId of resources) {
+				// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
+				// constraint enforces composite (clientId, resourceId) uniqueness.
+				await ctx.context.adapter.create({
+					model: linkModel,
+					forceAllowId: true,
+					data: {
+						id: buildClientResourceLinkId(clientId, resourceId),
+						clientId,
+						resourceId,
+						createdAt: now,
+					} as never,
+				});
+			}
+		}
+		return createdClient;
+	});
+
+	// Format the response according to RFC7591. When resources were linked
+	// during registration, echo them back per RFC 7591 §3 server response
+	// conventions — clients can verify the registration succeeded.
+	const responseBody = schemaToOAuth({
+		...client,
+		clientSecret: clientSecret
+			? (opts.prefix?.clientSecret ?? "") + clientSecret
+			: undefined,
+	});
+	if (resources.length > 0) {
+		(responseBody as OAuthClient & { resources?: string[] }).resources =
+			resources;
+	}
+	return ctx.json(responseBody, {
+		status: 201,
+		headers: {
+			"Cache-Control": "no-store",
+			Pragma: "no-cache",
 		},
 	});
-	// Format the response according to RFC7591
-	return ctx.json(
-		schemaToOAuth({
-			...client,
-			clientSecret: clientSecret
-				? (opts.prefix?.clientSecret ?? "") + clientSecret
-				: undefined,
-		}),
-		{
-			status: 201,
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
 }
 
 /**

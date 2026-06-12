@@ -13,7 +13,7 @@ const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
  * Validates an RFC 8707 resource indicator. The value must be an absolute URI
  * with no fragment (RFC 8707 §2). Unlike a redirect URI it is not restricted to
  * HTTPS, because a resource server identifier may use any absolute URI scheme;
- * the configured `validAudiences` allowlist is the authoritative control over
+ * configured OAuth resources are the authoritative control over
  * which resources a token may target.
  */
 export const ResourceUriSchema = z.string().superRefine((val, ctx) => {

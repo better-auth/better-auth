@@ -11,7 +11,7 @@ import type { JWTPayload } from "jose";
  * @external
  */
 export const mcpHandler = (
-	/** Resource is the same url as the audience */
+	/** Verifier options. `audience` must match the protected resource identifier. */
 	verifyOptions: Parameters<typeof verifyAccessToken>[1],
 	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
 	opts?: {

@@ -1,6 +1,5 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
-import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
@@ -23,7 +22,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl, testUser } =
 		await getTestInstance({
 			baseURL: authServerBaseUrl,
@@ -36,7 +35,8 @@ describe("oauth token - authorization_code", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					validAudiences: [validAudience],
+					resources: [validResource],
+					enforcePerClientResources: false,
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
 						openidConfig: true,
@@ -47,7 +47,7 @@ describe("oauth token - authorization_code", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -83,7 +83,9 @@ describe("oauth token - authorization_code", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -370,7 +372,7 @@ describe("oauth token - authorization_code", async () => {
 		const tokens = await validateAuthCode({
 			code: url.searchParams.get("code")!,
 			codeVerifier,
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(tokens.data?.access_token).toBeDefined();
 		expect(tokens.data?.id_token).toBeDefined();
@@ -385,7 +387,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -446,7 +448,7 @@ describe("oauth token - authorization_code", async () => {
 describe("oauth token - refresh_token", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -462,7 +464,8 @@ describe("oauth token - refresh_token", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -473,7 +476,7 @@ describe("oauth token - refresh_token", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -509,7 +512,9 @@ describe("oauth token - refresh_token", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -728,7 +733,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: scopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -753,7 +758,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -833,7 +838,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: newScopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -858,7 +863,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -1290,7 +1295,7 @@ describe("oauth token - refresh_token", async () => {
 describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const allScopes = ["openid", "profile", "email", "read:posts", "write:posts"];
 	const clientScopes = ["openid", "profile", "email", "read:posts"];
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -1304,7 +1309,8 @@ describe("oauth token - client_credentials", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
 				silenceWarnings: {
@@ -1317,7 +1323,7 @@ describe("oauth token - client_credentials", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -1354,7 +1360,9 @@ describe("oauth token - client_credentials", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -1444,7 +1452,7 @@ describe("oauth token - client_credentials", async () => {
 				clientSecret: oauthClient.client_secret,
 				redirectURI: redirectUri,
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const tokens = await client.$fetch<{
 			access_token?: string;
@@ -1468,11 +1476,11 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
-		expect(accessToken.payload.sub).toBeUndefined(); // unset since not a user!
+		expect(accessToken.payload.sub).toBe(oauthClient.client_id);
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
@@ -1509,7 +1517,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -1541,7 +1549,9 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		expect(response?.redirect_uris).toBeDefined();
 		oauthClient = response;
 
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -1624,7 +1634,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 describe("oauth token - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
@@ -1652,7 +1662,8 @@ describe("oauth token - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -1752,7 +1763,7 @@ describe("oauth token - config", async () => {
 		// Client credentials
 		const tokens = await client.oauth2.token(
 			{
-				resource: validAudience,
+				resource: validResource,
 				grant_type: "client_credentials",
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
@@ -1824,7 +1835,7 @@ describe("oauth token - config", async () => {
 				code: url.searchParams.get("code")!,
 				code_verifier: codeVerifier,
 				grant_type: "authorization_code",
-				resource: validAudience,
+				resource: validResource,
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
 				redirect_uri: redirectUri,
@@ -1844,7 +1855,7 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				resource: validAudience,
+				resource: validResource,
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -2015,7 +2026,7 @@ describe("oauth token - config", async () => {
 describe("oauth token - client secret validation", async () => {
 	const authServerBaseUrl = "http://localhost:3010";
 	const rpBaseUrl = "http://localhost:5010";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
@@ -2039,7 +2050,8 @@ describe("oauth token - client secret validation", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -2201,7 +2213,7 @@ describe("id token claim override security", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2336,7 +2348,7 @@ describe("loopback redirect URI matching", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -2537,7 +2549,7 @@ describe("scope preservation through authorization code flow", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -2602,7 +2614,7 @@ describe("scope preservation through authorization code flow", async () => {
 describe("at_hash in id tokens", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -2614,7 +2626,8 @@ describe("at_hash in id tokens", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -2625,7 +2638,7 @@ describe("at_hash in id tokens", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2746,7 +2759,7 @@ describe("at_hash in id tokens", async () => {
 	it("at_hash should not be present without openid scope", async ({
 		expect,
 	}) => {
-		const tokens = await getTokens(["offline_access"], validAudience);
+		const tokens = await getTokens(["offline_access"], validResource);
 		expect(tokens.id_token).toBeUndefined();
 	});
 
@@ -2779,7 +2792,7 @@ describe("at_hash in id tokens", async () => {
 
 		const { headers: testHeaders } = await signIn();
 		const testClient = createAuthClient({
-			plugins: [oauthProviderClient(), jwtClient()],
+			plugins: [oauthProviderClient()],
 			baseURL: authServerBaseUrl,
 			fetchOptions: { customFetchImpl: fetchImpl, headers: testHeaders },
 		});
@@ -2867,7 +2880,7 @@ describe("customTokenResponseFields", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2979,7 +2992,7 @@ describe("customTokenResponseFields", async () => {
 
 		const { headers: headers2 } = await signIn2();
 		const client2 = createAuthClient({
-			plugins: [oauthProviderClient(), jwtClient()],
+			plugins: [oauthProviderClient()],
 			baseURL: authServerBaseUrl2,
 			fetchOptions: { customFetchImpl: fetch2, headers: headers2 },
 		});
@@ -3261,7 +3274,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 	});
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});

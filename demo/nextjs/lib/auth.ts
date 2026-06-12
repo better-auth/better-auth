@@ -365,7 +365,7 @@ const authOptions = {
 				"offline_access",
 				"read:organization",
 			],
-			validAudiences: [
+			resources: [
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
 					"/api/mcp",
