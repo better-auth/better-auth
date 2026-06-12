@@ -118,6 +118,98 @@ describe("organization invitation recipient ownership gates", async () => {
 		expect(memberEmails).toContain(VICTIM_EMAIL);
 	});
 
+	it("replays an accepted invitation after it expires", async () => {
+		const { client, signInWithUser, invitationId, db } = await setupInvite();
+		const recipientHeaders = await signUpUnverifiedRecipient(
+			client,
+			signInWithUser,
+		);
+
+		const firstAccept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: recipientHeaders },
+		});
+		expect(firstAccept.error).toBeNull();
+
+		await db.update({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const secondAccept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: recipientHeaders },
+		});
+
+		expect(secondAccept.error).toBeNull();
+		expect(secondAccept.data?.invitation.status).toBe("accepted");
+		expect(secondAccept.data?.member.id).toBe(firstAccept.data?.member.id);
+	});
+
+	it("uses configured accepted invitation member lookup attempts", async () => {
+		const { client, signInWithUser, invitationId, auth, db, orgId } =
+			await setupInvite({
+				organizationOptions: {
+					invitationAcceptance: {
+						memberLookupAttempts: 1,
+						memberLookupDelayMs: 0,
+					},
+				},
+			});
+		await client.signUp.email({
+			email: VICTIM_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "recipient",
+		});
+		const {
+			headers: recipientHeaders,
+			res: { user },
+		} = await signInWithUser(VICTIM_EMAIL, ATTACKER_PASSWORD);
+		await db.update({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+			update: { status: "accepted" },
+		});
+
+		const authContext = await auth.$context;
+		const originalFindOne = authContext.adapter.findOne.bind(
+			authContext.adapter,
+		);
+		let memberLookupCount = 0;
+		authContext.adapter.findOne = (async (query) => {
+			const result = await originalFindOne(query);
+			if (query.model === "member") {
+				memberLookupCount++;
+				if (memberLookupCount === 1 && !result) {
+					await authContext.adapter.create({
+						model: "member",
+						data: {
+							organizationId: orgId,
+							userId: user.id,
+							role: "member",
+							createdAt: new Date(),
+						},
+					});
+				}
+			}
+			return result;
+		}) as typeof authContext.adapter.findOne;
+
+		try {
+			const accept = await client.organization.acceptInvitation({
+				invitationId,
+				fetchOptions: { headers: recipientHeaders },
+			});
+
+			expect(accept.data).toBeNull();
+			expect(accept.error?.code).toBe("FAILED_TO_RETRIEVE_INVITATION");
+			expect(memberLookupCount).toBe(1);
+		} finally {
+			authContext.adapter.findOne = originalFindOne;
+		}
+	});
+
 	it("marks an invitation rejected by ID from an unverified matching session by default", async () => {
 		const { client, signInWithUser, invitationId } = await setupInvite();
 		const recipientHeaders = await signUpUnverifiedRecipient(

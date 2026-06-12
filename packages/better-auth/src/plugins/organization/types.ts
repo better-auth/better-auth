@@ -199,6 +199,28 @@ export interface OrganizationOptions {
 		  ) => Awaitable<number>)
 		| undefined;
 	/**
+	 * Configure accepted invitation replay behavior.
+	 *
+	 * When an invitation has already been accepted, repeated or concurrent
+	 * accept calls look up the existing member before returning.
+	 */
+	invitationAcceptance?:
+		| {
+				/**
+				 * The number of times to look up the existing member.
+				 *
+				 * @default 20
+				 */
+				memberLookupAttempts?: number | undefined;
+				/**
+				 * The delay between member lookup attempts in milliseconds.
+				 *
+				 * @default 25
+				 */
+				memberLookupDelayMs?: number | undefined;
+		  }
+		| undefined;
+	/**
 	 * Cancel pending invitations on re-invite.
 	 *
 	 * @default false

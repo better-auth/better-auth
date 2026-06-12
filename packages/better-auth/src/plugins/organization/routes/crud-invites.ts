@@ -128,6 +128,25 @@ const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	});
 };
 
+const DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS = 20;
+const DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_DELAY_MS = 25;
+
+const getPositiveIntegerOption = (
+	value: number | undefined,
+	fallback: number,
+) =>
+	typeof value === "number" && Number.isFinite(value)
+		? Math.max(1, Math.floor(value))
+		: fallback;
+
+const getNonNegativeIntegerOption = (
+	value: number | undefined,
+	fallback: number,
+) =>
+	typeof value === "number" && Number.isFinite(value)
+		? Math.max(0, Math.floor(value))
+		: fallback;
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -658,12 +677,108 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			const invitation = await adapter.findInvitationById(
 				ctx.body.invitationId,
 			);
+			const acceptedInvitationMemberLookupAttempts = getPositiveIntegerOption(
+				ctx.context.orgOptions.invitationAcceptance?.memberLookupAttempts,
+				DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS,
+			);
+			const acceptedInvitationMemberLookupDelayMs = getNonNegativeIntegerOption(
+				ctx.context.orgOptions.invitationAcceptance?.memberLookupDelayMs,
+				DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_DELAY_MS,
+			);
+			type AcceptedInvitation = NonNullable<typeof invitation>;
+			type AcceptedMember = Member &
+				InferAdditionalFieldsFromPluginOptions<"member", O, false>;
+			const findExistingMember = async (organizationId: string) => {
+				return ctx.context.adapter.findOne<AcceptedMember>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+			};
+			const restoreAcceptedInvitationSessionState = async (
+				acceptedInvitation: AcceptedInvitation,
+			) => {
+				if (
+					ctx.context.orgOptions.teams &&
+					ctx.context.orgOptions.teams.enabled &&
+					"teamId" in acceptedInvitation &&
+					acceptedInvitation.teamId
+				) {
+					const teamIds = (acceptedInvitation.teamId as string).split(",");
+					const onlyOne = teamIds.length === 1;
 
-			if (
-				!invitation ||
-				invitation.expiresAt < new Date() ||
-				invitation.status !== "pending"
-			) {
+					if (onlyOne) {
+						const teamId = teamIds[0]!;
+						const teamMember = await adapter.findTeamMember({
+							teamId,
+							userId: session.user.id,
+						});
+						if (teamMember) {
+							const updatedSession = await adapter.setActiveTeam(
+								session.session.token,
+								teamId,
+								ctx,
+							);
+
+							await setSessionCookie(ctx, {
+								session: updatedSession,
+								user: session.user,
+							});
+						}
+					}
+				}
+			};
+			const getAcceptedInvitationResponse = async (
+				acceptedInvitation: AcceptedInvitation,
+			) => {
+				let existingMember: AcceptedMember | null = null;
+				for (
+					let attempt = 0;
+					attempt < acceptedInvitationMemberLookupAttempts;
+					attempt++
+				) {
+					existingMember = await findExistingMember(
+						acceptedInvitation.organizationId,
+					);
+					if (existingMember) {
+						break;
+					}
+					if (attempt < acceptedInvitationMemberLookupAttempts - 1) {
+						await new Promise((resolve) =>
+							setTimeout(resolve, acceptedInvitationMemberLookupDelayMs),
+						);
+					}
+				}
+				if (!existingMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+					);
+				}
+
+				await restoreAcceptedInvitationSessionState(acceptedInvitation);
+
+				await adapter.setActiveOrganization(
+					session.session.token,
+					acceptedInvitation.organizationId,
+					ctx,
+				);
+
+				return ctx.json({
+					invitation: acceptedInvitation,
+					member: existingMember,
+				});
+			};
+
+			if (!invitation) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
@@ -694,6 +809,20 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION,
+				);
+			}
+
+			if (invitation.status === "accepted") {
+				return getAcceptedInvitationResponse(invitation);
+			}
+
+			if (
+				invitation.expiresAt < new Date() ||
+				invitation.status !== "pending"
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
 
@@ -745,7 +874,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				fromStatus: "pending",
 			});
 			if (!acceptedI) {
-				// Another request already accepted this invitation.
+				const latestInvitation = await adapter.findInvitationById(
+					ctx.body.invitationId,
+				);
+				if (latestInvitation && latestInvitation.status === "accepted") {
+					return getAcceptedInvitationResponse(latestInvitation);
+				}
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
@@ -827,12 +961,17 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					}
 				}
 
-				const createdMember = await adapter.createMember({
-					organizationId: acceptedI.organizationId,
-					userId: session.user.id,
-					role: acceptedI.role,
-					createdAt: new Date(),
-				});
+				const existingMember = await findExistingMember(
+					acceptedI.organizationId,
+				);
+				const member =
+					existingMember ??
+					(await adapter.createMember({
+						organizationId: acceptedI.organizationId,
+						userId: session.user.id,
+						role: acceptedI.role,
+						createdAt: new Date(),
+					}));
 
 				await adapter.setActiveOrganization(
 					session.session.token,
@@ -840,7 +979,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					ctx,
 				);
 
-				return createdMember;
+				return member;
 			}).catch(async (error) => {
 				// The membership work failed; release the claim so the invitation is
 				// pending again and the invitee can retry.

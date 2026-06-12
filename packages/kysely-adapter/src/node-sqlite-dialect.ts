@@ -132,6 +132,7 @@ class NodeSqliteConnection implements DatabaseConnection {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
 		const params = parameters as SQLInputValue[];
+		const isInsert = /^(insert|replace)\b/i.test(sql.trim());
 
 		// Row-producing statements (SELECT, RETURNING) expose columns, so they
 		// must read through `all()`. Plain mutations expose none; running them
@@ -148,10 +149,11 @@ class NodeSqliteConnection implements DatabaseConnection {
 		return Promise.resolve({
 			rows: [],
 			numAffectedRows: BigInt(changes),
-			insertId:
-				typeof lastInsertRowid === "bigint"
+			insertId: isInsert
+				? typeof lastInsertRowid === "bigint"
 					? lastInsertRowid
-					: BigInt(lastInsertRowid),
+					: BigInt(lastInsertRowid)
+				: undefined,
 		});
 	}
 
