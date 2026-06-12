@@ -535,28 +535,15 @@ export async function validateClientCredentials(
 	}
 
 	// Enforce registered auth method for assertion/pre-verified methods.
-	const isExtensionAuthMethod = isExtensionTokenEndpointAuthMethod(
-		options,
-		authMethod,
-	);
-	if (preVerifiedClient && authMethod && isExtensionAuthMethod) {
-		if (client.tokenEndpointAuthMethod !== authMethod) {
+	if (preVerifiedClient && authMethod) {
+		const registeredAuthMethod =
+			client.tokenEndpointAuthMethod ?? "client_secret_basic";
+		if (registeredAuthMethod !== authMethod) {
 			throw new APIError("BAD_REQUEST", {
-				error_description: `client registered for ${client.tokenEndpointAuthMethod ?? "client_secret_basic"} cannot use ${authMethod}`,
+				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
 				error: "invalid_client",
 			});
 		}
-	}
-	if (
-		preVerifiedClient &&
-		authMethod &&
-		client.tokenEndpointAuthMethod &&
-		client.tokenEndpointAuthMethod !== authMethod
-	) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: `client registered for ${client.tokenEndpointAuthMethod} cannot use ${authMethod}`,
-			error: "invalid_client",
-		});
 	}
 	if (
 		(client.tokenEndpointAuthMethod === "private_key_jwt" ||

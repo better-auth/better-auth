@@ -95,7 +95,13 @@ function validateOAuthProviderExtension(
 		extension.clientAuthentication ?? {},
 	)) {
 		assertExtensionTokenEndpointAuthMethod(method);
-		for (const assertionType of strategy.assertionTypes ?? [method]) {
+		const assertionTypes = strategy.assertionTypes ?? [method];
+		if (assertionTypes.length === 0) {
+			throw new BetterAuthError(
+				`OAuth Provider extension client_assertion_type list cannot be empty for ${method}`,
+			);
+		}
+		for (const assertionType of assertionTypes) {
 			assertExtensionClientAssertionType(assertionType);
 		}
 	}

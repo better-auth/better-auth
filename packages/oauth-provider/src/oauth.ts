@@ -1418,7 +1418,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							])
 							.optional(),
 						jwks_uri: z.string().optional(),
-						grant_types: z.array(z.string().trim().min(1)).optional(),
+						grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
 						response_types: z.array(z.enum(["code"])).optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),

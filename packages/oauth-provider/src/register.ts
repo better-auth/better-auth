@@ -46,7 +46,14 @@ const DEFAULT_REGISTRATION_GRANT_TYPES = [
 ] as const satisfies GrantType[];
 
 function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
-	return client.grant_types ?? [...DEFAULT_REGISTRATION_GRANT_TYPES];
+	const grantTypes = client.grant_types ?? [
+		...DEFAULT_REGISTRATION_GRANT_TYPES,
+	];
+	if (grantTypes.length > 0) return grantTypes;
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_client_metadata",
+		error_description: "grant_types must contain at least one grant type",
+	});
 }
 
 function resolveRegistrationResponseTypes(

@@ -10,6 +10,7 @@ import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
 import type { ClientDiscovery, SchemaClient, Scope } from "./types";
+import { validateClientCredentials } from "./utils";
 
 describe("oauth-provider extensions", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -242,6 +243,43 @@ describe("oauth-provider extensions", async () => {
 		).toContain("authorization_code");
 	});
 
+	it("rejects empty grant type registration", async () => {
+		const response = await client.$fetch("/oauth2/register", {
+			method: "POST",
+			headers,
+			body: {
+				grant_types: [],
+				redirect_uris: [redirectUri],
+			},
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects assertion auth for legacy clients with omitted auth method", async () => {
+		const legacyClient = {
+			clientId: "legacy-default-client",
+			public: false,
+		} as SchemaClient<Scope[]>;
+		await expect(
+			validateClientCredentials(
+				{} as Parameters<typeof validateClientCredentials>[0],
+				{} as Parameters<typeof validateClientCredentials>[1],
+				legacyClient.clientId,
+				undefined,
+				undefined,
+				legacyClient,
+				undefined,
+				extensionAuthMethod,
+			),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: {
+				error: "invalid_client",
+				error_description: `client registered for client_secret_basic cannot use ${extensionAuthMethod}`,
+			},
+		});
+	});
+
 	it("dispatches extension grants through shared token issuance", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -467,5 +505,47 @@ describe("oauth-provider extensions", async () => {
 		).rejects.toThrow(
 			`client_assertion_type is reserved: ${CLIENT_ASSERTION_TYPE}`,
 		);
+	});
+
+	it("rejects extension auth methods without assertion types", async () => {
+		const invalidExtensionPlugin = {
+			id: "invalid-oauth-empty-assertion-types-extension",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					clientAuthentication: {
+						[extensionAuthMethod]: {
+							assertionTypes: [],
+							authenticate: async () => {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_request",
+									error_description: "unreachable test authentication",
+								});
+							},
+						},
+					},
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					invalidExtensionPlugin,
+				],
+			}),
+		).rejects.toThrow("client_assertion_type list cannot be empty");
 	});
 });

@@ -14,7 +14,7 @@ import {
 } from "./endpoints";
 
 const tokenEndpointAuthMethodSchema = z.string().trim().min(1);
-const grantTypesSchema = z.array(z.string().trim().min(1));
+const grantTypesSchema = z.array(z.string().trim().min(1)).min(1);
 
 export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
