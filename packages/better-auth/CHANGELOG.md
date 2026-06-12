@@ -86,6 +86,23 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.18
+
+### Patch Changes
+
+- [#9315](https://github.com/better-auth/better-auth/pull/9315) [`9ef7240`](https://github.com/better-auth/better-auth/commit/9ef7240fec4a9d8469dd5ed24249949d3400e732) Thanks [@GautamBytes](https://github.com/GautamBytes)! - fix OpenAPI requestBody generation for intersected and default-wrapped body schemas
+
+- [#9583](https://github.com/better-auth/better-auth/pull/9583) [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix plugin-provided client methods and additional session fields not being inferred in composite monorepos.
+
+- Updated dependencies [[`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c)]:
+  - @better-auth/core@1.6.18
+  - @better-auth/drizzle-adapter@1.6.18
+  - @better-auth/kysely-adapter@1.6.18
+  - @better-auth/memory-adapter@1.6.18
+  - @better-auth/mongo-adapter@1.6.18
+  - @better-auth/prisma-adapter@1.6.18
+  - @better-auth/telemetry@1.6.18
+
 ## 1.6.17
 
 ### Patch Changes
