@@ -17,7 +17,7 @@ interface GitHubRelease {
 }
 
 const GITHUB_USERNAME_REGEX =
-	/@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/g;
+	/(?:^|[^\w.+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)(?![A-Za-z0-9-]|[./][A-Za-z])/g;
 
 function getMentionUsernames(line: string) {
 	return Array.from(
@@ -54,17 +54,13 @@ function getContent(content: string) {
 			}
 		}
 		if (line.trim().startsWith("- ")) {
-			const mainContent = line.split(";")[0];
-			const context = line.split(";")[2];
-			const usernames = getMentionUsernames(context ?? line);
+			const [mainContent, , context] = line.split(";");
+			const cleanedContent = (mainContent || line).replace(/&nbsp/g, "");
+			const usernames = context ? getMentionUsernames(context) : [];
 			if (usernames.length === 0) {
-				return (mainContent || line).replace(/&nbsp/g, "");
+				return cleanedContent;
 			}
-			return (
-				(mainContent || line).replace(/&nbsp/g, "") +
-				" \u2013 " +
-				getContributorAvatarLinks(usernames)
-			);
+			return `${cleanedContent} – ${getContributorAvatarLinks(usernames)}`;
 		}
 		return line;
 	});

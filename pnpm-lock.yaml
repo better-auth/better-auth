@@ -775,6 +775,15 @@ importers:
         specifier: ^4.12.25
         version: 4.12.25
 
+  e2e/smoke/test/fixtures/tsconfig-composite-client:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../../packages/better-auth
+      nanostores:
+        specifier: ^1.1.1
+        version: 1.1.1
+
   e2e/smoke/test/fixtures/tsconfig-declaration:
     dependencies:
       '@better-auth/api-key':
