@@ -941,6 +941,7 @@ describe("jwt - HS256 symmetric algorithm", async () => {
 			},
 		});
 
+		expect(result.payload).toBeDefined();
 		expect(result.payload).not.toBeNull();
 		expect(result.payload?.sub).toBe("test-user");
 	});
@@ -993,6 +994,7 @@ describe("jwt - HS256 symmetric algorithm", async () => {
 				token,
 			},
 		});
+		expect(result.payload).toBeDefined();
 		expect(result.payload).not.toBeNull();
 	});
 });
