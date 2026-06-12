@@ -1,5 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "@better-auth/core/env";
+import type { OAuthClient } from "@better-auth/oauth-provider";
+import {
+	oauthProvider,
+	raiseResourceServerChallenge,
+} from "@better-auth/oauth-provider";
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -20,11 +27,7 @@ import { decodeJwt } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-resource";
-import { handleMcpErrors, mcpHandler } from "./mcp";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
+import { mcpHandler } from "./index";
 
 describe("mcp", async () => {
 	const authServerUrl = `http://localhost:3000`;
@@ -35,6 +38,9 @@ describe("mcp", async () => {
 		baseURL: apiServerBaseUrl,
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9992
+	 */
 	it.for([
 		{
 			resource: apiServerBaseUrl,
@@ -43,6 +49,10 @@ describe("mcp", async () => {
 		{
 			resource: `${apiServerBaseUrl}/resource1`,
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
+		},
+		{
+			resource: `${apiServerBaseUrl}/resource1?tenant=a`,
+			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1?tenant=a"`,
 		},
 		{
 			resource: [apiServerBaseUrl, `${apiServerBaseUrl}/resource1`],
@@ -280,7 +290,7 @@ describe("mcp - server-client flows", async () => {
 			} satisfies AuthInfo;
 		} catch (err) {
 			try {
-				handleMcpErrors(err, mcpServerUrl);
+				raiseResourceServerChallenge(err, mcpServerUrl);
 			} catch (error) {
 				res.setHeader("Content-Type", "application/json");
 				if (error instanceof APIError) {

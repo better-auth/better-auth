@@ -1307,6 +1307,40 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/mcp:
+    dependencies:
+      '@better-auth/oauth-provider':
+        specifier: workspace:^
+        version: link:../oauth-provider
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.4.1
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.2.2
+      jose:
+        specifier: ^6.1.3
+        version: 6.1.3
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.27.1
+        version: 1.27.1(zod@4.3.6)
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 1.3.6(zod@4.3.6)
+      listhen:
+        specifier: 1.9.0
+        version: 1.9.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+
   packages/memory-adapter:
     devDependencies:
       '@better-auth/core':
@@ -1361,9 +1395,6 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.27.1
-        version: 1.27.1(zod@4.3.6)
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
