@@ -25,6 +25,35 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+/**
+ * Resolves the configured per-team member cap to a concrete number for a given
+ * team-add. Returns `undefined` only when no cap is configured. Throws when the
+ * cap is a function but no session is available to evaluate it, so a sessionless
+ * server-side add fails closed instead of silently bypassing the limit.
+ */
+export async function resolveMaximumMembersPerTeam(
+	teams: OrganizationOptions["teams"],
+	context: {
+		teamId: string;
+		organizationId: string;
+		session: { user: User; session: Session } | null;
+	},
+): Promise<number | undefined> {
+	const maximumMembersPerTeam = teams?.maximumMembersPerTeam;
+	if (maximumMembersPerTeam === undefined) return undefined;
+	if (typeof maximumMembersPerTeam === "number") return maximumMembersPerTeam;
+	if (!context.session) {
+		throw new BetterAuthError(
+			"`teams.maximumMembersPerTeam` is configured as a function but no session is available to evaluate it. Provide a session-bearing request or configure a numeric limit.",
+		);
+	}
+	return await maximumMembersPerTeam({
+		teamId: context.teamId,
+		session: context.session,
+		organizationId: context.organizationId,
+	});
+}
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
@@ -892,6 +921,57 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 		},
+		/**
+		 * Adds a user to a team only when the team is below its member limit,
+		 * reading the count and creating the membership in one transaction.
+		 * Returns the existing membership unchanged (no capacity charge) when the
+		 * user already belongs to the team.
+		 *
+		 * FIXME(team-cap-race): the count-then-create is not atomic under READ
+		 * COMMITTED, so two concurrent adds can both pass the count check and
+		 * exceed maximumMembersPerTeam. A durable fix needs a unique constraint on
+		 * teamMember(teamId, userId) or serializable isolation. Affects every
+		 * caller (acceptInvitation, addMember, addTeamMember).
+		 */
+		addTeamMemberWithLimit: async (data: {
+			teamId: string;
+			userId: string;
+			maximumMembersPerTeam: number;
+		}): Promise<
+			{ status: "added"; member: TeamMember } | { status: "limitReached" }
+		> => {
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const existing = await adapter.findOne<TeamMember>({
+					model: "teamMember",
+					where: [
+						{ field: "teamId", value: data.teamId },
+						{ field: "userId", value: data.userId },
+					],
+				});
+				if (existing) {
+					return { status: "added", member: existing };
+				}
+				const count = await adapter.count({
+					model: "teamMember",
+					where: [{ field: "teamId", value: data.teamId }],
+				});
+				if (count >= data.maximumMembersPerTeam) {
+					return { status: "limitReached" };
+				}
+				const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>(
+					{
+						model: "teamMember",
+						data: {
+							teamId: data.teamId,
+							userId: data.userId,
+							createdAt: new Date(),
+						},
+					},
+				);
+				return { status: "added", member };
+			});
+		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
@@ -1053,17 +1133,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "pending" | "accepted" | "canceled" | "rejected";
+			/**
+			 * Only transition when the invitation is currently in this status. The
+			 * guarded update is atomic, so a concurrent caller racing the same
+			 * transition gets `null` instead of both proceeding.
+			 */
+			fromStatus?: "pending";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [{ field: "id", value: data.invitationId }];
+			if (data.fromStatus) {
+				where.push({ field: "status", value: data.fromStatus });
+			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "id",
-						value: data.invitationId,
-					},
-				],
+				where,
 				update: {
 					status: data.status,
 				},

@@ -13,6 +13,7 @@ import {
 } from "./_factories";
 import type { StripeMock } from "./_fixtures";
 import {
+	asyncList,
 	test as baseTest,
 	createStripeMock,
 	TEST_LOOKUP_KEYS,
@@ -372,14 +373,10 @@ describe("stripe - organization customer", () => {
 		stripeMock,
 	}) => {
 		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
-		stripeMock.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_org_cancel_123",
-					status: "active",
-					cancel_at_period_end: false,
-				},
-			],
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_org_cancel_123",
+			status: "active",
+			cancel_at_period_end: false,
 		});
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -460,15 +457,11 @@ describe("stripe - organization customer", () => {
 		stripeMock,
 	}) => {
 		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
-		stripeMock.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_org_restore_123",
-					status: "active",
-					cancel_at_period_end: true,
-					cancel_at: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-				},
-			],
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_org_restore_123",
+			status: "active",
+			cancel_at_period_end: true,
+			cancel_at: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
 		});
 		stripeMock.subscriptions.update.mockResolvedValueOnce({
 			id: "sub_org_restore_123",
@@ -2015,15 +2008,15 @@ describe("stripe - organizationHooks integration", () => {
 			});
 
 			// Mock Stripe API to return an active subscription
-			stripeMock.subscriptions.list.mockResolvedValueOnce({
-				data: [
+			stripeMock.subscriptions.list.mockReturnValueOnce(
+				asyncList([
 					{
 						id: "sub_active_123",
 						status: "active",
 						customer: "cus_delete_block_123",
 					},
-				],
-			});
+				]) as any,
+			);
 
 			// Attempt to delete the organization
 			const deleteResult = await client.organization.delete({
@@ -2119,15 +2112,15 @@ describe("stripe - organizationHooks integration", () => {
 			expect(subscription?.status).toBe("canceled");
 
 			// Mock Stripe API to return only canceled subscriptions
-			stripeMock.subscriptions.list.mockResolvedValueOnce({
-				data: [
+			stripeMock.subscriptions.list.mockReturnValueOnce(
+				asyncList([
 					{
 						id: "sub_canceled_123",
 						status: "canceled",
 						customer: "cus_delete_allow_123",
 					},
-				],
-			});
+				]) as any,
+			);
 
 			// Actually delete the organization and verify it succeeds
 			const deleteResult = await client.organization.delete({
@@ -2142,6 +2135,77 @@ describe("stripe - organizationHooks integration", () => {
 				where: [{ field: "id", value: orgId }],
 			});
 			expect(deletedOrg).toBeNull();
+		},
+	);
+
+	testHooks(
+		"should block organization deletion when an active subscription is on a later page",
+		async ({ stripeMock }) => {
+			const hooksStripeOptions = buildHooksStripeOptions(stripeMock);
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(hooksStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+
+			await client.signUp.email({
+				email: "org-paged-test@example.com",
+				password: "password123",
+				name: "Paged Test User",
+			});
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "org-paged-test@example.com", password: "password123" },
+				{ onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Paged Delete Org",
+				slug: "paged-delete-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_paged_123" },
+				where: [{ field: "id", value: orgId }],
+			});
+
+			// The active subscription only shows up past the first page of 100.
+			stripeMock.subscriptions.list.mockReturnValueOnce(
+				asyncList([
+					...Array.from({ length: 100 }, (_, i) => ({
+						id: `sub_canceled_${i}`,
+						status: "canceled",
+					})),
+					{ id: "sub_active_late", status: "active" },
+				]) as any,
+			);
+
+			const deleteResult = await client.organization.delete({
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(deleteResult.error?.code).toBe(
+				"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
+			);
+			const orgAfterDelete = await ctx.adapter.findOne({
+				model: "organization",
+				where: [{ field: "id", value: orgId }],
+			});
+			expect(orgAfterDelete).not.toBeNull();
 		},
 	);
 });

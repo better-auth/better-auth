@@ -4780,6 +4780,85 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(succeeded).toHaveLength(1);
 		expect(failed).toHaveLength(1);
 	});
+
+	it("should issue only one session when the same IdP-initiated assertion is submitted concurrently", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "concurrent-assertion-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// IdP-initiated: no AuthnRequest is stored, so the InResponseTo gate is
+		// not in play. The assertion-replay tombstone is the only thing that can
+		// stop a duplicate submission, which makes this the direct regression for
+		// the non-atomic read-then-create.
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/concurrent-assertion-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: "http://localhost:3000/dashboard",
+						}),
+					},
+				),
+			);
+
+		const [first, second] = await Promise.all([submit(), submit()]);
+
+		expect(first.status).toBe(302);
+		expect(second.status).toBe(302);
+
+		const locations = [first, second].map(
+			(res) => res.headers.get("location") || "",
+		);
+		const succeeded = locations.filter(
+			(loc) => loc.includes("dashboard") && !loc.includes("error"),
+		);
+		const replayed = locations.filter((loc) =>
+			loc.includes("error=replay_detected"),
+		);
+
+		expect(succeeded).toHaveLength(1);
+		expect(replayed).toHaveLength(1);
+	});
 });
 
 describe("SAML SSO - Single Assertion Validation", () => {

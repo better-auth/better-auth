@@ -18,6 +18,14 @@ import {
 } from "../oauth2";
 
 /**
+ * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
+ * personal-account token carries it as the `tid` claim, so it distinguishes the
+ * consumer account class from work/school tenants.
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+ */
+const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+/**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
  */
 export interface MicrosoftEntraIDProfile extends Record<string, any> {
@@ -163,7 +171,14 @@ const MICROSOFT_ENTRA_ID_DEFAULT_SCOPES = [
 
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
-	const authority = options.authority || "https://login.microsoftonline.com";
+	// Trim any trailing slash so endpoint URLs and the issuer comparison below
+	// never produce a double slash (e.g. a configured `https://host/` would make
+	// the expected issuer `https://host//<tid>/v2.0` and reject every token). A
+	// loop avoids a trailing-slash regex, which is a polynomial-ReDoS shape.
+	let authority = options.authority || "https://login.microsoftonline.com";
+	while (authority.endsWith("/")) {
+		authority = authority.slice(0, -1);
+	}
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
 	if (options.clientSecret && options.clientAssertion) {
@@ -235,6 +250,34 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tenant !== "consumers"
 					? `${authority}/${tenant}/v2.0`
 					: undefined,
+			/**
+			 * The multi-tenant endpoints (common/organizations/consumers) skip the
+			 * issuer check above because the issuer varies per tenant, and the
+			 * organizations and consumers JWKS sets overlap. Enforce the tenant
+			 * binding explicitly so a token from a disallowed account class cannot
+			 * pass: the issuer must name the token's own tenant, and the account
+			 * class must match the configured restriction.
+			 * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+			 */
+			verifyClaims: (claims) => {
+				const tid = claims.tid;
+				if (
+					typeof tid !== "string" ||
+					claims.iss !== `${authority}/${tid}/v2.0`
+				) {
+					return false;
+				}
+				if (
+					tenant === "organizations" &&
+					tid === MICROSOFT_CONSUMER_TENANT_ID
+				) {
+					return false;
+				}
+				if (tenant === "consumers" && tid !== MICROSOFT_CONSUMER_TENANT_ID) {
+					return false;
+				}
+				return true;
+			},
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
