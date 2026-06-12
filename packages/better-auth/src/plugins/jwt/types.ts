@@ -176,7 +176,7 @@ export interface JwtOptions {
  *
  * Symmetric algorithm (HS256) uses a shared secret key. When using HS256:
  * - The JWKS endpoint will be disabled (no public key to share)
- * - The secret is derived from the auth secret
+ * - The secret is randomly generated and encrypted using the auth secret for secure storage
  * - Suitable for internal service-to-service communication
  */
 // All new JWK "alg" and/or "crv" MUST have an associated test in jwt.test.ts

@@ -40,8 +40,8 @@ export async function generateExportedKeyPair(
 	if (alg === "HS256") {
 		const secretKey = await generateSecret(alg, { extractable: true });
 		const secretWebKey = await exportJWK(secretKey);
-		// For symmetric keys, both public and private keys are the same (the secret)
-		// The public key is set to an empty object marker to indicate it's symmetric
+		// For symmetric keys, the privateWebKey contains the secret
+		// and the publicWebKey is a marker object to indicate it's symmetric
 		return {
 			publicWebKey: { kty: "oct", symmetric: true } as Record<string, unknown>,
 			privateWebKey: secretWebKey,

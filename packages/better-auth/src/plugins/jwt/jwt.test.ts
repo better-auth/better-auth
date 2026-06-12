@@ -931,8 +931,6 @@ describe("jwt - HS256 symmetric algorithm", async () => {
 					sub: "test-user",
 					exp: Math.floor(Date.now() / 1000) + 600,
 					iat: Math.floor(Date.now() / 1000),
-					iss: "http://localhost:3000/api/auth",
-					aud: "http://localhost:3000/api/auth",
 				},
 			},
 		});
@@ -943,7 +941,7 @@ describe("jwt - HS256 symmetric algorithm", async () => {
 			},
 		});
 
-		expect(result.payload).toBeDefined();
+		expect(result.payload).not.toBeNull();
 		expect(result.payload?.sub).toBe("test-user");
 	});
 
@@ -995,6 +993,6 @@ describe("jwt - HS256 symmetric algorithm", async () => {
 				token,
 			},
 		});
-		expect(result.payload).toBeDefined();
+		expect(result.payload).not.toBeNull();
 	});
 });
