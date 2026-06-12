@@ -4,7 +4,12 @@ import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
-import type { GrantType } from "./oauth";
+import type {
+	AuthServerMetadata,
+	GrantType,
+	OIDCMetadata,
+	TokenEndpointAuthMethod,
+} from "./oauth";
 
 export type {
 	AuthMethod,
@@ -20,7 +25,8 @@ export type {
 export type StoreTokenType =
 	| "access_token"
 	| "refresh_token"
-	| "authorization_code";
+	| "authorization_code"
+	| (string & {});
 
 type InternallySupportedScopes =
 	| "openid"
@@ -79,6 +85,202 @@ export interface ClientDiscovery<
 	 * `client_id_metadata_document_supported`.
 	 */
 	discoveryMetadata?: Record<string, unknown>;
+}
+
+export interface OAuthAuthenticatedClient<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	clientId: string;
+	client: SchemaClient<Scopes>;
+	method?: TokenEndpointAuthMethod;
+}
+
+export interface OAuthClientAuthenticationRequest {
+	/**
+	 * Scopes to validate against the registered client.
+	 */
+	scopes?: string[];
+	/**
+	 * Grant type to enforce for the registered client.
+	 */
+	grantType?: GrantType;
+	/**
+	 * Set to `false` for public extension grants that only require client_id.
+	 *
+	 * @default true
+	 */
+	requireCredentials?: boolean;
+}
+
+export interface OAuthTokenIssueExtras {
+	/**
+	 * Additional JWT access-token claims for this issuance. Reserved access-token
+	 * claims remain owned by the authorization server.
+	 */
+	accessTokenClaims?: Record<string, unknown>;
+	/**
+	 * Additional ID-token claims for this issuance. Protocol-owned claims remain
+	 * owned by the authorization server.
+	 */
+	idTokenClaims?: Record<string, unknown>;
+	/**
+	 * Additional fields for the token response envelope. Standard OAuth token
+	 * response fields remain owned by the authorization server.
+	 */
+	tokenResponse?: Record<string, unknown>;
+}
+
+export interface OAuthTokenIssueParams<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	client: SchemaClient<Scopes>;
+	scopes: string[];
+	grantType: GrantType;
+	user?: User;
+	referenceId?: string;
+	sessionId?: string;
+	nonce?: string;
+	refreshToken?: OAuthRefreshToken<Scopes> & { id: string };
+	authTime?: Date;
+	verificationValue?: VerificationValue;
+	resources?: string[];
+	/** Full original authorized resources for the grant, used to seed refresh tokens. */
+	originalResources?: string[];
+	extra?: OAuthTokenIssueExtras;
+}
+
+export interface OAuthTokenResponse {
+	access_token: string;
+	expires_in: number;
+	expires_at: number;
+	token_type: "Bearer";
+	refresh_token: string | undefined;
+	scope: string;
+	id_token: string | undefined;
+	[key: string]: unknown;
+}
+
+export interface OAuthExtensionGrantTools<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	authenticateClient: (
+		request?: OAuthClientAuthenticationRequest,
+	) => Awaitable<OAuthAuthenticatedClient<Scopes>>;
+	issueTokens: (
+		params: OAuthTokenIssueParams<Scopes>,
+	) => Awaitable<OAuthTokenResponse>;
+	hashTokenIdentifier: (
+		token: string,
+		type: StoreTokenType,
+	) => Awaitable<string>;
+	validateAccessToken: (
+		token: string,
+		clientId?: string,
+	) => Awaitable<JWTPayload>;
+}
+
+export interface OAuthExtensionGrantHandlerInput<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scopes>;
+	grantType: GrantType;
+	tools: OAuthExtensionGrantTools<Scopes>;
+}
+
+export type OAuthExtensionGrantHandler<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = (
+	input: OAuthExtensionGrantHandlerInput<Scopes>,
+) => Awaitable<OAuthTokenResponse>;
+
+export interface OAuthClientAuthenticationInput<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scopes>;
+	assertion: string;
+	assertionType: string;
+	clientId?: string;
+	expectedAudience?: string;
+}
+
+export interface OAuthClientAuthenticationResult<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	clientId: string;
+	client: SchemaClient<Scopes>;
+}
+
+export interface OAuthClientAuthenticationStrategy<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * Assertion type URIs this strategy consumes from `client_assertion_type`.
+	 * Defaults to the strategy key in `OAuthProviderExtension.clientAuthentication`.
+	 */
+	assertionTypes?: string[];
+	authenticate: (
+		input: OAuthClientAuthenticationInput<Scopes>,
+	) => Awaitable<OAuthClientAuthenticationResult<Scopes>>;
+}
+
+export interface OAuthMetadataContributionInput<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scopes>;
+	type: "oauth-authorization-server" | "openid-configuration";
+	metadata: AuthServerMetadata | OIDCMetadata;
+}
+
+export interface OAuthClaimContributionInput<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scopes>;
+	user?: (User & Record<string, unknown>) | null;
+	client: SchemaClient<Scopes>;
+	scopes: string[];
+	grantType?: GrantType;
+	referenceId?: string;
+	resources?: string[];
+	metadata?: Record<string, unknown>;
+}
+
+export interface OAuthUserInfoContributionInput<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scopes>;
+	user: User & Record<string, unknown>;
+	scopes: string[];
+	jwt: JWTPayload;
+	client?: SchemaClient<Scopes>;
+}
+
+export interface OAuthProviderExtension<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	grants?: Record<string, OAuthExtensionGrantHandler<Scopes>>;
+	clientAuthentication?: Record<
+		string,
+		OAuthClientAuthenticationStrategy<Scopes>
+	>;
+	metadata?: (
+		input: OAuthMetadataContributionInput<Scopes>,
+	) => Record<string, unknown>;
+	claims?: {
+		accessToken?: (
+			input: OAuthClaimContributionInput<Scopes>,
+		) => Awaitable<Record<string, unknown>>;
+		idToken?: (
+			input: OAuthClaimContributionInput<Scopes>,
+		) => Awaitable<Record<string, unknown>>;
+		userInfo?: (
+			input: OAuthUserInfoContributionInput<Scopes>,
+		) => Awaitable<Record<string, unknown>>;
+	};
 }
 
 export interface OAuthOptions<
@@ -295,6 +497,15 @@ export interface OAuthOptions<
 	 * time; users can also pass discovery implementations directly.
 	 */
 	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
+	/**
+	 * OAuth/OIDC extension points used by companion plugins to add protocol
+	 * grants, client authentication methods, metadata, and claims without
+	 * modifying oauth-provider core for each RFC.
+	 *
+	 * Extension plugins should prefer `extendOAuthProvider(ctx, extension)` in
+	 * their `init()` hook so users can compose plugins declaratively.
+	 */
+	extensions?: OAuthProviderExtension<Scopes>[];
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
@@ -1187,11 +1398,7 @@ export interface SchemaClient<
 	 * @default false
 	 */
 	backchannelLogoutSessionRequired?: boolean;
-	tokenEndpointAuthMethod?:
-		| "none"
-		| "client_secret_basic"
-		| "client_secret_post"
-		| "private_key_jwt";
+	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
 	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */

@@ -2,8 +2,15 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
+import {
+	applyOAuthProviderMetadataExtensions,
+	getSupportedEndpointAuthMethods,
+	getSupportedGrantTypes,
+	getSupportedTokenEndpointAuthMethods,
+} from "./extensions";
 import type { OAuthOptions, Scope } from "./types";
 import type {
+	AuthMethod,
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
@@ -23,6 +30,8 @@ export function authServerMetadata(
 		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
+		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
+		endpoint_auth_methods_supported?: AuthMethod[];
 		jwt_disabled?: boolean;
 	},
 ) {
@@ -55,30 +64,33 @@ export function authServerMetadata(
 			"client_credentials",
 			"refresh_token",
 		],
-		token_endpoint_auth_methods_supported: [
-			...(overrides?.public_client_supported
-				? (["none"] satisfies TokenEndpointAuthMethod[])
-				: []),
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		token_endpoint_auth_methods_supported:
+			overrides?.token_endpoint_auth_methods_supported ?? [
+				...(overrides?.public_client_supported
+					? (["none"] satisfies TokenEndpointAuthMethod[])
+					: []),
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		token_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		introspection_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		introspection_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		introspection_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		revocation_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		revocation_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		revocation_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
@@ -88,6 +100,39 @@ export function authServerMetadata(
 		backchannel_logout_session_supported: backchannelSupported,
 	};
 	return metadata;
+}
+
+export function oauthAuthorizationServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const jwtPluginOptions = opts.disableJwtPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+	const publicClientSupported =
+		opts.allowUnauthenticatedClientRegistration ||
+		toClientDiscoveryArray(opts.clientDiscovery).length > 0;
+	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
+		public_client_supported: publicClientSupported,
+		grant_types_supported: getSupportedGrantTypes(opts),
+		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
+			opts,
+			{ includeNone: publicClientSupported },
+		),
+		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
+		jwt_disabled: opts.disableJwtPlugin,
+	});
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"oauth-authorization-server",
+		{
+			...mergeDiscoveryMetadata(opts.clientDiscovery),
+			...authMetadata,
+		},
+	) as unknown as AuthServerMetadata;
 }
 
 export function oidcServerMetadata(
@@ -108,7 +153,16 @@ export function oidcServerMetadata(
 		public_client_supported:
 			opts.allowUnauthenticatedClientRegistration ||
 			toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-		grant_types_supported: opts.grantTypes,
+		grant_types_supported: getSupportedGrantTypes(opts),
+		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
+			opts,
+			{
+				includeNone:
+					opts.allowUnauthenticatedClientRegistration ||
+					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+			},
+		),
+		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 	});
 	const metadata: Omit<
@@ -145,10 +199,15 @@ export function oidcServerMetadata(
 			"none",
 		],
 	};
-	return {
-		...metadata,
-		...mergeDiscoveryMetadata(opts.clientDiscovery),
-	};
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"openid-configuration",
+		{
+			...mergeDiscoveryMetadata(opts.clientDiscovery),
+			...metadata,
+		},
+	) as unknown as OIDCMetadata;
 }
 
 // Cache for 15s with a short stale window; metadata rarely changes.

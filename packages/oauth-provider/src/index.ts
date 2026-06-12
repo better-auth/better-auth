@@ -1,7 +1,9 @@
 export { getIssuer } from "./authorize";
+export { extendOAuthProvider } from "./extensions";
 export {
 	authServerMetadata,
 	metadataResponse,
+	oauthAuthorizationServerMetadata,
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
 	oidcServerMetadata,

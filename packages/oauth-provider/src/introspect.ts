@@ -5,6 +5,7 @@ import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
+import { collectExtensionAccessTokenClaims } from "./extensions";
 import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
@@ -269,13 +270,28 @@ async function validateOpaqueAccessToken(
 	}
 
 	// Add Custom Claims
+	const metadata = parseClientMetadata(client?.metadata) as
+		| Record<string, unknown>
+		| undefined;
+	const extensionClaims = client
+		? await collectExtensionAccessTokenClaims(opts, {
+				ctx,
+				opts,
+				user,
+				client,
+				scopes: accessToken.scopes,
+				referenceId: accessToken?.referenceId,
+				resources,
+				metadata,
+			})
+		: {};
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
 				resources,
-				metadata: parseClientMetadata(client?.metadata),
+				metadata,
 			})
 		: {};
 
@@ -286,6 +302,7 @@ async function validateOpaqueAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
+		...extensionClaims,
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -476,6 +493,7 @@ export async function introspectEndpoint(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerifiedClient)) {
@@ -504,6 +522,8 @@ export async function introspectEndpoint(
 		client_secret,
 		undefined,
 		preVerifiedClient,
+		undefined,
+		authMethod,
 	);
 
 	try {

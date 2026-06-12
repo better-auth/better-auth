@@ -6,13 +6,24 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	collectExtensionAccessTokenClaims,
+	collectExtensionIdTokenClaims,
+	getExtensionGrantHandler,
+	getSupportedGrantTypes,
+} from "./extensions";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy, stripReservedClaims } from "./resources";
 import type {
+	OAuthAuthenticatedClient,
+	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthRefreshToken,
+	OAuthTokenIssueParams,
+	OAuthTokenResponse,
 	SchemaClient,
 	Scope,
+	StoreTokenType,
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
@@ -48,7 +59,7 @@ export async function tokenEndpoint(
 ) {
 	const grantType: GrantType = ctx.body.grant_type;
 
-	if (opts.grantTypes && !opts.grantTypes.includes(grantType)) {
+	if (!getSupportedGrantTypes(opts).includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -62,7 +73,81 @@ export async function tokenEndpoint(
 			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
+		default: {
+			const handler = getExtensionGrantHandler(opts, grantType);
+			if (handler) {
+				return handler({
+					ctx,
+					opts,
+					grantType,
+					tools: createExtensionGrantTools(ctx, opts, grantType),
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: `unsupported grant_type ${grantType}`,
+				error: "unsupported_grant_type",
+			});
+		}
 	}
+}
+
+function createExtensionGrantTools(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	grantType: GrantType,
+) {
+	return {
+		authenticateClient: async (
+			request?: OAuthClientAuthenticationRequest,
+		): Promise<OAuthAuthenticatedClient<Scope[]>> => {
+			const credentials = await extractClientCredentials(
+				ctx,
+				opts,
+				`${ctx.context.baseURL}/oauth2/token`,
+			);
+			const { clientId, clientSecret, preVerifiedClient, authMethod } =
+				destructureCredentials(credentials);
+			if (!clientId) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client_id",
+					error: "invalid_grant",
+				});
+			}
+			if (
+				request?.requireCredentials !== false &&
+				!clientSecret &&
+				!preVerifiedClient
+			) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client credentials",
+					error: "invalid_grant",
+				});
+			}
+			const client = await validateClientCredentials(
+				ctx,
+				opts,
+				clientId,
+				clientSecret,
+				request?.scopes,
+				preVerifiedClient,
+				request?.grantType ?? grantType,
+				authMethod,
+			);
+			return {
+				clientId,
+				client,
+				method: authMethod,
+			};
+		},
+		issueTokens: (params: OAuthTokenIssueParams<Scope[]>) =>
+			createUserTokens(ctx, opts, params),
+		hashTokenIdentifier: (token: string, type: StoreTokenType) =>
+			storeToken(opts.storeTokens, token, type),
+		validateAccessToken: async (token: string, clientId?: string) => {
+			const { validateAccessToken } = await import("./introspect");
+			return validateAccessToken(ctx, opts, token, clientId);
+		},
+	};
 }
 
 // User Jwt SHALL follow oAuth 2
@@ -88,6 +173,8 @@ async function createJwtAccessToken(
 		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
 		/** Per-resource custom claims (already reserved-claim-stripped). */
 		resourceCustomClaims?: Record<string, unknown>;
+		/** Extension or grant-level custom claims. */
+		additionalClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -106,6 +193,9 @@ async function createJwtAccessToken(
 	// customClaims (already stripped during policy resolution) AND the legacy
 	// plugin-level `customAccessTokenClaims` callback. The AS owns RFC 9068
 	// reserved names regardless of which extension surface tries to set them.
+	const safeAdditionalClaims = stripReservedClaims(
+		overrides?.additionalClaims ?? {},
+	);
 	const safePluginClaims = stripReservedClaims(pluginCustomClaims);
 	const safeResourceClaims = overrides?.resourceCustomClaims ?? {};
 
@@ -120,6 +210,7 @@ async function createJwtAccessToken(
 		signingKeyId: overrides?.signingKeyId ?? undefined,
 		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
+			...safeAdditionalClaims,
 			...safePluginClaims,
 			...safeResourceClaims,
 			// RFC 9068 §2.2 requires `sub` on every JWT access token. For
@@ -186,6 +277,7 @@ async function createIdToken(
 	sessionId?: string,
 	authTime?: Date,
 	accessToken?: string,
+	extraClaims?: Record<string, unknown>,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -229,6 +321,7 @@ async function createIdToken(
 	);
 	const payload: JWTPayload = {
 		...userClaims,
+		...extraClaims,
 		auth_time: authTimeSec,
 		acr,
 		...customClaims,
@@ -506,22 +599,7 @@ async function createRefreshToken(
 	};
 }
 
-interface CreateUserTokensParams {
-	client: SchemaClient<Scope[]>;
-	scopes: string[];
-	grantType: GrantType;
-	user?: User;
-	referenceId?: string;
-	sessionId?: string;
-	nonce?: string;
-	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	authTime?: Date;
-	verificationValue?: VerificationValue;
-	resources?: string[];
-	/** Full original authorized resources for the grant, used to seed the refresh token
-	 * when the token request narrows the resource (RFC 8707 §2.2). */
-	originalResources?: string[];
-}
+type CreateUserTokensParams = OAuthTokenIssueParams<Scope[]>;
 
 interface ResourceGrantIssuance {
 	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
@@ -584,7 +662,7 @@ async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: CreateUserTokensParams,
-) {
+): Promise<OAuthTokenResponse> {
 	const {
 		client,
 		scopes,
@@ -637,7 +715,45 @@ async function createUserTokens(
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
-	const isIdToken = user && scopes.includes("openid");
+	const isIdToken = user && effectiveScopes.includes("openid");
+	const metadata = parseClientMetadata(client.metadata) as
+		| Record<string, unknown>
+		| undefined;
+	const extensionAccessTokenClaims = await collectExtensionAccessTokenClaims(
+		opts,
+		{
+			ctx,
+			opts,
+			user,
+			client,
+			scopes: effectiveScopes,
+			grantType,
+			referenceId,
+			resources: params.resources,
+			metadata,
+		},
+	);
+	const additionalAccessTokenClaims = {
+		...extensionAccessTokenClaims,
+		...(params.extra?.accessTokenClaims ?? {}),
+	};
+	const additionalIdTokenClaims =
+		isIdToken && user
+			? {
+					...(await collectExtensionIdTokenClaims(opts, {
+						ctx,
+						opts,
+						user,
+						client,
+						scopes: effectiveScopes,
+						grantType,
+						referenceId,
+						resources: params.resources,
+						metadata,
+					})),
+					...(params.extra?.idTokenClaims ?? {}),
+				}
+			: undefined;
 
 	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
 	const customFields = opts.customTokenResponseFields
@@ -645,7 +761,7 @@ async function createUserTokens(
 				grantType,
 				user,
 				scopes: effectiveScopes,
-				metadata: parseClientMetadata(client.metadata),
+				metadata,
 				verificationValue,
 			})
 		: undefined;
@@ -692,6 +808,7 @@ async function createUserTokens(
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						resourceCustomClaims: grantIssuance.resourceCustomClaims,
+						additionalClaims: additionalAccessTokenClaims,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -738,17 +855,19 @@ async function createUserTokens(
 				opts,
 				user,
 				client,
-				scopes,
+				effectiveScopes,
 				nonce,
 				sessionId,
 				authTime,
 				accessToken,
+				additionalIdTokenClaims,
 			)
 		: undefined;
 
 	return ctx.json(
 		{
 			...customFields,
+			...(params.extra?.tokenResponse ?? {}),
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
@@ -866,6 +985,7 @@ async function handleAuthorizationCodeGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -937,6 +1057,7 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 		preVerifiedClient,
 		"authorization_code",
+		authMethod,
 	);
 
 	// Parse scopes from the authorization request
@@ -1078,6 +1199,7 @@ async function handleClientCredentialsGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
 		ctx.body;
@@ -1105,6 +1227,7 @@ async function handleClientCredentialsGrant(
 		undefined,
 		preVerifiedClient,
 		"client_credentials",
+		authMethod,
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -1163,6 +1286,7 @@ async function handleRefreshTokenGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -1271,6 +1395,7 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 		preVerifiedClient,
 		"refresh_token",
+		authMethod,
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

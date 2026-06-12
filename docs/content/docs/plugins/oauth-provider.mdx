@@ -1336,6 +1336,47 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 * **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a public client at request time.
 * **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
 
+### Provider extensions
+
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, and token or UserInfo claims.
+
+```ts title="custom-oauth-extension.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { extendOAuthProvider } from "@better-auth/oauth-provider";
+
+export const customOAuthExtension = () =>
+  ({
+    id: "custom-oauth-extension",
+    init(ctx) {
+      extendOAuthProvider(ctx, {
+        grants: {
+          "urn:example:params:oauth:grant-type:custom": async ({
+            grantType,
+            tools,
+          }) => {
+            const { client } = await tools.authenticateClient({ grantType });
+            return tools.issueTokens({
+              client,
+              grantType,
+              scopes: ["openid"],
+              extra: {
+                tokenResponse: {
+                  issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                },
+              },
+            });
+          },
+        },
+        metadata: () => ({
+          custom_grant_supported: true,
+        }),
+      });
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+Extension metadata is additive: existing authorization-server metadata fields such as `issuer`, `token_endpoint`, `grant_types_supported`, and authentication method lists remain owned by the OAuth Provider. Extension grants and client authentication methods are advertised automatically when registered. Client authentication strategies are keyed by `token_endpoint_auth_method`, consume matching `client_assertion_type` values, and must return the verified registered client.
+
 ### Organizations
 
 OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.

@@ -11,6 +11,10 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import {
+	getExtensionClientAuthenticationStrategy,
+	isExtensionTokenEndpointAuthMethod,
+} from "../extensions";
 import type { oauthProvider } from "../oauth";
 import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
@@ -21,6 +25,7 @@ import type {
 	SchemaClient,
 	Scope,
 	StoreTokenType,
+	TokenEndpointAuthMethod,
 } from "../types";
 
 export {
@@ -513,6 +518,7 @@ export async function validateClientCredentials(
 	scopes?: string[], // checks requested scopes against allowed scopes
 	preVerifiedClient?: SchemaClient<Scope[]>,
 	grantType?: GrantType, // if set, enforces the client is registered for this grant type
+	authMethod?: TokenEndpointAuthMethod,
 ) {
 	const client = preVerifiedClient ?? (await getClient(ctx, options, clientId));
 	if (!client) {
@@ -528,14 +534,40 @@ export async function validateClientCredentials(
 		});
 	}
 
-	// Enforce registered auth method: private_key_jwt clients must use assertion
+	// Enforce registered auth method for assertion/pre-verified methods.
+	const isExtensionAuthMethod = isExtensionTokenEndpointAuthMethod(
+		options,
+		authMethod,
+	);
+	if (preVerifiedClient && authMethod && isExtensionAuthMethod) {
+		if (client.tokenEndpointAuthMethod !== authMethod) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client registered for ${client.tokenEndpointAuthMethod ?? "client_secret_basic"} cannot use ${authMethod}`,
+				error: "invalid_client",
+			});
+		}
+	}
 	if (
-		client.tokenEndpointAuthMethod === "private_key_jwt" &&
+		preVerifiedClient &&
+		authMethod &&
+		client.tokenEndpointAuthMethod &&
+		client.tokenEndpointAuthMethod !== authMethod
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client registered for ${client.tokenEndpointAuthMethod} cannot use ${authMethod}`,
+			error: "invalid_client",
+		});
+	}
+	if (
+		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
+			isExtensionTokenEndpointAuthMethod(
+				options,
+				client.tokenEndpointAuthMethod,
+			)) &&
 		!preVerifiedClient
 	) {
 		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"client registered for private_key_jwt must use client_assertion",
+			error_description: `client registered for ${client.tokenEndpointAuthMethod} must use client_assertion`,
 			error: "invalid_client",
 		});
 	}
@@ -615,16 +647,19 @@ export function parseClientMetadata(
 
 export type ExtractedCredentials =
 	| {
+			kind: "client_secret";
 			method: "client_secret_basic" | "client_secret_post";
 			clientId: string;
 			clientSecret: string;
 	  }
 	| {
-			method: "private_key_jwt";
+			kind: "pre_verified";
+			method: TokenEndpointAuthMethod;
 			clientId: string;
 			client: SchemaClient<Scope[]>;
 	  }
 	| {
+			kind: "public";
 			method: "none";
 			clientId: string;
 	  };
@@ -636,14 +671,12 @@ export function destructureCredentials(
 	return {
 		clientId: credentials?.clientId,
 		clientSecret:
-			credentials?.method === "client_secret_basic" ||
-			credentials?.method === "client_secret_post"
+			credentials?.kind === "client_secret"
 				? credentials.clientSecret
 				: undefined,
 		preVerifiedClient:
-			credentials?.method === "private_key_jwt"
-				? credentials.client
-				: undefined,
+			credentials?.kind === "pre_verified" ? credentials.client : undefined,
+		authMethod: credentials?.method,
 	};
 }
 
@@ -659,7 +692,7 @@ export async function extractClientCredentials(
 	const body = (ctx.body ?? {}) as Record<string, unknown>;
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
-	// 1. Check for private_key_jwt assertion
+	// 1. Check for assertion-based client authentication.
 	if (body.client_assertion_type || body.client_assertion) {
 		if (!body.client_assertion || !body.client_assertion_type) {
 			throw new APIError("BAD_REQUEST", {
@@ -668,12 +701,37 @@ export async function extractClientCredentials(
 				error: "invalid_client",
 			});
 		}
-		if (body.client_secret || authorization?.startsWith("Basic ")) {
+		if (
+			body.client_secret ||
+			(authorization && BASIC_SCHEME_PREFIX.test(authorization))
+		) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client_assertion cannot be combined with client_secret or Basic auth",
 				error: "invalid_client",
 			});
+		}
+		const assertion = body.client_assertion as string;
+		const assertionType = body.client_assertion_type as string;
+		const extensionStrategy = getExtensionClientAuthenticationStrategy(
+			opts,
+			assertionType,
+		);
+		if (extensionStrategy) {
+			const result = await extensionStrategy.strategy.authenticate({
+				ctx,
+				opts,
+				assertion,
+				assertionType,
+				clientId: body.client_id as string | undefined,
+				expectedAudience,
+			});
+			return {
+				kind: "pre_verified",
+				method: extensionStrategy.method,
+				clientId: result.clientId,
+				client: result.client,
+			};
 		}
 		const { verifyClientAssertion: verify } = await import(
 			"./client-assertion"
@@ -681,12 +739,13 @@ export async function extractClientCredentials(
 		const result = await verify(
 			ctx,
 			opts,
-			body.client_assertion as string,
-			body.client_assertion_type as string,
+			assertion,
+			assertionType,
 			body.client_id as string | undefined,
 			expectedAudience,
 		);
 		return {
+			kind: "pre_verified",
 			method: "private_key_jwt",
 			clientId: result.clientId,
 			client: result.client,
@@ -694,10 +753,11 @@ export async function extractClientCredentials(
 	}
 
 	// 2. Check for Basic auth header
-	if (authorization?.startsWith("Basic ")) {
+	if (authorization && BASIC_SCHEME_PREFIX.test(authorization)) {
 		const res = basicToClientCredentials(authorization);
 		if (res) {
 			return {
+				kind: "client_secret",
 				method: "client_secret_basic",
 				clientId: res.client_id,
 				clientSecret: res.client_secret,
@@ -708,6 +768,7 @@ export async function extractClientCredentials(
 	// 3. Check body params
 	if (body.client_id && body.client_secret) {
 		return {
+			kind: "client_secret",
 			method: "client_secret_post",
 			clientId: body.client_id as string,
 			clientSecret: body.client_secret as string,
@@ -716,7 +777,11 @@ export async function extractClientCredentials(
 
 	// 4. client_id only (public client)
 	if (body.client_id) {
-		return { method: "none", clientId: body.client_id as string };
+		return {
+			kind: "public",
+			method: "none",
+			clientId: body.client_id as string,
+		};
 	}
 
 	return null;

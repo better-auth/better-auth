@@ -4,6 +4,11 @@ import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import {
+	getSupportedGrantTypes,
+	getSupportedTokenEndpointAuthMethods,
+	isExtensionTokenEndpointAuthMethod,
+} from "./extensions";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { buildClientResourceLinkId, getResource } from "./resources";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
@@ -32,10 +37,41 @@ function resolveUnauthenticatedAuth(body: OAuthClient): {
 	};
 }
 
+function assertSupportedRegistrationInputs(
+	client: OAuthClient,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const tokenEndpointAuthMethod = client.token_endpoint_auth_method;
+	if (tokenEndpointAuthMethod) {
+		const supportedTokenEndpointAuthMethods = new Set(
+			getSupportedTokenEndpointAuthMethods(opts, { includeNone: true }),
+		);
+		if (!supportedTokenEndpointAuthMethods.has(tokenEndpointAuthMethod)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `unsupported token_endpoint_auth_method ${tokenEndpointAuthMethod}`,
+			});
+		}
+	}
+
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	for (const grantType of client.grant_types ?? []) {
+		if (!supportedGrantTypes.has(grantType)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `unsupported grant_type ${grantType}`,
+			});
+		}
+	}
+}
+
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
+	const body = ctx.body as OAuthClient & { resources?: string[] };
+	assertSupportedRegistrationInputs(body, opts);
+
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
 			error: "access_denied",
@@ -43,7 +79,6 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient & { resources?: string[] };
 	const session = await getSessionFromCtx(ctx);
 
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
@@ -72,6 +107,11 @@ export async function registerEndpoint(
 			" ",
 		);
 	}
+
+	await checkOAuthClient(body, opts, {
+		isRegister: true,
+		ctx,
+	});
 
 	// RFC 7591 §2 extension: clients may declare which resources they need.
 	// Validate up front so the registration fails before we issue a clientId.
@@ -123,6 +163,17 @@ export async function checkOAuthClient(
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = client.token_endpoint_auth_method === "none";
+	const tokenEndpointAuthMethod =
+		client.token_endpoint_auth_method ?? "client_secret_basic";
+	const supportedTokenEndpointAuthMethods = new Set(
+		getSupportedTokenEndpointAuthMethods(opts, { includeNone: true }),
+	);
+	if (!supportedTokenEndpointAuthMethods.has(tokenEndpointAuthMethod)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `unsupported token_endpoint_auth_method ${tokenEndpointAuthMethod}`,
+		});
+	}
 
 	// Check value of type, if sent, matches isPublic
 	if (client.type) {
@@ -157,6 +208,15 @@ export async function checkOAuthClient(
 
 	// Validate correlation between grant_types and response_types
 	const grantTypes = client.grant_types ?? ["authorization_code"];
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	for (const grantType of grantTypes) {
+		if (!supportedGrantTypes.has(grantType)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `unsupported grant_type ${grantType}`,
+			});
+		}
+	}
 	const responseTypes = client.response_types ?? ["code"];
 	if (
 		grantTypes.includes("authorization_code") &&
@@ -291,7 +351,10 @@ export async function checkOAuthClient(
 				});
 			}
 		}
-	} else if (client.jwks || client.jwks_uri) {
+	} else if (
+		!isExtensionTokenEndpointAuthMethod(opts, tokenEndpointAuthMethod) &&
+		(client.jwks || client.jwks_uri)
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
 			error_description:
@@ -397,6 +460,10 @@ export async function createOAuthClientEndpoint(
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = body.token_endpoint_auth_method === "none";
 	const isPrivateKeyJwt = body.token_endpoint_auth_method === "private_key_jwt";
+	const isExtensionAuthMethod = isExtensionTokenEndpointAuthMethod(
+		opts,
+		body.token_endpoint_auth_method,
+	);
 
 	// Check if client parameters are valid combination
 	await checkOAuthClient(ctx.body, opts, {
@@ -408,7 +475,7 @@ export async function createOAuthClientEndpoint(
 	const clientId =
 		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
 	const clientSecret =
-		isPublic || isPrivateKeyJwt
+		isPublic || isPrivateKeyJwt || isExtensionAuthMethod
 			? undefined
 			: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
 	const storedClientSecret = clientSecret
