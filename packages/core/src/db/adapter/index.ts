@@ -608,25 +608,6 @@ export interface CustomAdapter {
 		increment: Record<string, number>;
 		set?: Record<string, unknown> | undefined;
 	}) => Promise<T | null>;
-	/**
-	 * Optional native atomic guarded counter mutation. Applies
-	 * `field = field + delta` for each entry in `increment` (negative deltas
-	 * decrement), with `where` acting as both selector and guard and `set`
-	 * assigning absolute values in the same operation. Returns the updated row,
-	 * or `null` when the guard matched no row.
-	 *
-	 * Implementing this natively (e.g. `UPDATE ... SET n = n + $delta WHERE ...
-	 * RETURNING *`) gives one round trip and the strongest race-safety
-	 * guarantee. When omitted, the adapter factory provides a transaction-based
-	 * fallback over `findMany + updateMany`. TODO(increment-one-required):
-	 * tighten to required in the next minor on `next`.
-	 */
-	incrementOne?: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		increment: Record<string, number>;
-		set?: Record<string, unknown> | undefined;
-	}) => Promise<T | null>;
 	count: ({
 		model,
 		where,

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const execAsync = promisify(exec);
+const DECLARATION_EMIT_TIMEOUT_MS = 30_000;
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/7039
@@ -70,8 +71,10 @@ describe("organizationClient declaration emit with additionalFields", () => {
 		};
 	};
 
-	it("should not produce TS2742 when organizationClient uses additionalFields", async () => {
-		const { dir, cleanup } = createTempProject(`
+	it(
+		"should not produce TS2742 when organizationClient uses additionalFields",
+		async () => {
+			const { dir, cleanup } = createTempProject(`
 import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 
@@ -95,23 +98,33 @@ export const authClient = createAuthClient({
 });
 `);
 
-		try {
-			const tscPath = path.resolve(__dirname, "../../../node_modules/.bin/tsc");
-			const { stderr } = await execAsync(`${tscPath} --project tsconfig.json`, {
-				cwd: dir,
-			});
-			expect(stderr).toBe("");
-		} catch (error: unknown) {
-			const err = error as { stdout: string; stderr: string };
-			const output = (err.stdout || "") + (err.stderr || "");
-			expect(output).not.toContain("TS2742");
-		} finally {
-			cleanup();
-		}
-	});
+			try {
+				const tscPath = path.resolve(
+					__dirname,
+					"../../../node_modules/.bin/tsc",
+				);
+				const { stderr } = await execAsync(
+					`${tscPath} --project tsconfig.json`,
+					{
+						cwd: dir,
+					},
+				);
+				expect(stderr).toBe("");
+			} catch (error: unknown) {
+				const err = error as { stdout: string; stderr: string };
+				const output = (err.stdout || "") + (err.stderr || "");
+				expect(output).not.toContain("TS2742");
+			} finally {
+				cleanup();
+			}
+		},
+		DECLARATION_EMIT_TIMEOUT_MS,
+	);
 
-	it("should not produce TS2742 when organizationClient is used without additionalFields", async () => {
-		const { dir, cleanup } = createTempProject(`
+	it(
+		"should not produce TS2742 when organizationClient is used without additionalFields",
+		async () => {
+			const { dir, cleanup } = createTempProject(`
 import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 
@@ -125,18 +138,26 @@ export const authClient = createAuthClient({
 });
 `);
 
-		try {
-			const tscPath = path.resolve(__dirname, "../../../node_modules/.bin/tsc");
-			const { stderr } = await execAsync(`${tscPath} --project tsconfig.json`, {
-				cwd: dir,
-			});
-			expect(stderr).toBe("");
-		} catch (error: unknown) {
-			const err = error as { stdout: string; stderr: string };
-			const output = (err.stdout || "") + (err.stderr || "");
-			expect(output).not.toContain("TS2742");
-		} finally {
-			cleanup();
-		}
-	});
+			try {
+				const tscPath = path.resolve(
+					__dirname,
+					"../../../node_modules/.bin/tsc",
+				);
+				const { stderr } = await execAsync(
+					`${tscPath} --project tsconfig.json`,
+					{
+						cwd: dir,
+					},
+				);
+				expect(stderr).toBe("");
+			} catch (error: unknown) {
+				const err = error as { stdout: string; stderr: string };
+				const output = (err.stdout || "") + (err.stderr || "");
+				expect(output).not.toContain("TS2742");
+			} finally {
+				cleanup();
+			}
+		},
+		DECLARATION_EMIT_TIMEOUT_MS,
+	);
 });

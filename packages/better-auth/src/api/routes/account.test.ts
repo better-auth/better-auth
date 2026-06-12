@@ -2392,10 +2392,14 @@ describe("account resolution in stateless mode", async () => {
 	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
 		const jar: Jar = new Map();
 		let res = await auth.handler(
-			new Request("http://localhost:3000/api/auth/sign-in/oauth2", {
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ providerId: "idp", callbackURL: "/" }),
+				body: JSON.stringify({
+					provider: "idp",
+					callbackURL: "/",
+					disableRedirect: true,
+				}),
 			}),
 		);
 		collectCookies(res, jar);
@@ -2405,7 +2409,7 @@ describe("account resolution in stateless mode", async () => {
 
 		res = await auth.handler(
 			new Request(
-				`http://localhost:3000/api/auth/oauth2/callback/idp?code=test-code&state=${state}`,
+				`http://localhost:3000/api/auth/callback/idp?code=test-code&state=${state}`,
 				{ headers: requestHeaders(jar), redirect: "manual" },
 			),
 		);
