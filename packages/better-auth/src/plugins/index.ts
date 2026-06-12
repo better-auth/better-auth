@@ -16,7 +16,6 @@ export * from "./magic-link";
 export * from "./multi-session";
 export * from "./oauth-popup";
 export * from "./oauth-proxy";
-export * from "./oidc-provider";
 export * from "./one-tap";
 export * from "./one-time-token";
 export * from "./open-api";

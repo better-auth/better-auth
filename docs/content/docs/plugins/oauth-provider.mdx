@@ -19,7 +19,7 @@ The plugin has a secured configuration by default providing ease to users unfami
 * **Dynamic Client Registration**: Allow clients to register clients dynamically.
   * **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
   * **Confidential Clients**: Supports confidential clients for web clients
-  * **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
+  * **Trusted Clients**: Store first-party clients with optional consent bypass and cache them by `client_id`.
 * **JWT Plugin compatibility**: required by default with an option to disable
   * **JWT Signing**: sign JWT tokens when requesting a `resource`
   * **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
@@ -42,7 +42,7 @@ The plugin has a secured configuration by default providing ease to users unfami
   <Step>
     ### Mount the Plugin
 
-    Add the OIDC plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
+    Add the OAuth Provider plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -939,7 +939,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1302,22 +1302,6 @@ The `require_pkce` field:
 * Temporary compatibility during a phased migration
 
 **Recommendation:** Keep PKCE enabled (default) whenever possible. PKCE provides defense-in-depth even for confidential clients.
-
-#### Migrating from oidc-provider
-
-If you're migrating from the deprecated `oidc-provider` plugin and have confidential clients that don't support PKCE:
-
-1. **For legacy clients, opt-out per-client:**
-   Set `require_pkce: false` when registering clients that cannot be updated to support PKCE.
-
-2. **For new clients, use PKCE:**
-   New client registrations should always use PKCE (the default) for better security.
-
-3. **Phase out non-PKCE clients:**
-   Plan to upgrade or replace clients that don't support PKCE over time.
-
-4. **Monitor usage:**
-   Track which clients have `require_pkce: false` for migration planning.
 
 #### Security Considerations
 
@@ -2221,108 +2205,3 @@ The following are available under the `prefix` configuration setting:
 ## Optimizations
 
 To improve lookup performance, database adapters may map the field `client_id` on the table `oauthClient` to `id`. Note that `id` should support strings formatted like UUIDs and urls.
-
-## Migrations
-
-### From OIDC Provider Plugin
-
-See [OIDC Provider Plugin](/docs/plugins/oidc-provider) for the previous implementation.
-
-#### Configuration
-
-* **`idTokenExpiresIn`** now defaults to `10 hours` (previously `1 hour` through `accessTokenExpiresIn`)
-* **`refreshTokenExpiresIn`** now defaults to `30 days` (previously `7 days`)
-* **`advertisedMetadata`** (previously `metadata`) no longer supports changing metadata fields to prevent accidental misconfiguration.
-* **`clientRegistrationDefaultScopes`** (previously `defaultScope`) is now in array format instead of a space-separated string
-* **`consentPage`** is now required
-* **`getConsentHTML`** is removed in favor of the `consentPage` as raw html is not a response type supported by the authorize endpoint in OAuth
-* **`requirePKCE`** (global option) is removed. PKCE is now required by default per OAuth 2.1. Individual clients can opt-out using `require_pkce: false` during registration if needed for legacy compatibility.
-* **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
-* **`customUserInfoClaims`** (previously `getAdditionalUserInfoClaim`) passes the jwt payload instead of the client of the access token used in the request.
-* **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJwtPlugin: true` (previously `plain`).
-* JWT plugin now is enabled by default. To disable the plugin, set `disableJwtPlugin: true`.
-* Authorization query `code_challenge_method` "S256" must be in caps as described by OAuth 2.1
-
-#### Database
-
-##### Table: `oauthClient`
-
-Previously `oauthApplication`
-
-* If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
-  The following function will convert a `plain` representation into the default hash:
-
-```ts
-import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
-
-const defaultHasher = async (value: string) => {
-	const hash = await createHash("SHA-256").digest(
-		new TextEncoder().encode(value),
-	);
-	const hashed = base64Url.encode(new Uint8Array(hash), {
-		padding: false,
-	});
-	return hashed;
-};
-```
-
-* `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
-  * Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
-  * Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
-  * Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
-  * Clients with `clientSecret: undefined`: set `public: true`
-* `redirectURLs` renamed to `redirectUris`
-* `requirePkce` field added (optional, defaults to `true`). For existing confidential clients that don't support PKCE, set `requirePkce: false`.
-* `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this OAuth plugin may utilize them in the future.
-
-##### Table: `oauthAccessToken`
-
-Option 1 (simple):
-
-You may choose to opt-out of this table conversion with minimal impact. By doing so, users of the existing application will simply need to login again. Simply delete the existing table `oauthAccessToken`.
-
-Option 2 (more complex):
-
-Migrate all tables (you may need to create a clone of `oauthAccessToken` into `oauthRefreshToken` before a migration).
-
-* Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
-
-```ts
-{
-  token: defaultHasher(refreshToken),
-  expiresAt: refreshTokenExpiresAt,
-  clientId: clientId,
-  scopes: scopes,
-  userId: userId,
-  createdAt: createdAt,
-  updatedAt: updatedAt,
-}
-```
-
-* Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
-
-```ts
-{
-  token: defaultHasher(accessToken),
-  expiresAt: accessTokenExpiresAt,
-  clientId: clientId,
-  scopes: scopes,
-  refreshId: oauthRefreshToken.id, // `undefined` if no refreshToken
-  createdAt: createdAt,
-  updatedAt: updatedAt,
-}
-```
-
-### From MCP Plugin
-
-See [MCP Plugin](/docs/plugins/mcp) for prior MCP-specific endpoints.
-
-The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
-
-* `/oauth2/authorize` (previously `/mcp/authorize`)
-* `/oauth2/token` (previously `/mcp/token`)
-* `/oauth2/register` (previously `/mcp/register`)
-* `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
-* `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
-* Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.

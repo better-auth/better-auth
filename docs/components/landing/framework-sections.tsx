@@ -612,7 +612,6 @@ export const plugins = [
 	{ name: "Multi Session", category: "org" },
 	{ name: "API Key", category: "org" },
 	{ name: "SSO", category: "enterprise" },
-	{ name: "OIDC Provider", category: "enterprise" },
 	{ name: "SCIM", category: "enterprise" },
 	{ name: "OAuth Proxy", category: "enterprise" },
 	{ name: "JWT", category: "security" },

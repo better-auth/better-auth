@@ -13,7 +13,6 @@ import {
 	emailOTPClient,
 	magicLinkClient,
 	multiSessionClient,
-	oidcClient,
 	organizationClient,
 	twoFactorClient,
 } from "./plugins";
@@ -857,7 +856,6 @@ describe("type", () => {
 				emailOTPClient(),
 				adminClient(),
 				multiSessionClient(),
-				oidcClient(),
 				deviceAuthorizationClient(),
 				testClientPlugin(),
 				testClientPlugin2(),

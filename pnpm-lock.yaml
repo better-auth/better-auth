@@ -987,9 +987,6 @@ importers:
       happy-dom:
         specifier: '>=20.8.9 <21'
         version: 20.8.9
-      listhen:
-        specifier: ^1.9.0
-        version: 1.9.0
       msw:
         specifier: ^2.12.10
         version: 2.12.10(@types/node@25.6.0)(typescript@5.9.3)
@@ -1636,9 +1633,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../packages/better-auth
-      openid-client:
-        specifier: ^6.8.2
-        version: 6.8.2
       undici:
         specifier: ^7.24.0
         version: 7.24.1
@@ -11503,9 +11497,6 @@ packages:
     engines: {node: ^20.19 || ^22.12 || ^24}
     hasBin: true
 
-  oauth4webapi@3.8.5:
-    resolution: {integrity: sha512-A8jmyUckVhRJj5lspguklcl90Ydqk61H3dcU0oLhH3Yv13KpAliKTt5hknpGGPZSSfOwGyraNEFmofDYH+1kSg==}
-
   ob1@0.83.3:
     resolution: {integrity: sha512-egUxXCDwoWG06NGCS5s5AdcpnumHKJlfd3HH06P3m9TEMwwScfcY35wpQxbm9oHof+dM/lVH9Rfyu1elTVelSA==}
     engines: {node: '>=20.19.4'}
@@ -11582,9 +11573,6 @@ packages:
   open@8.4.2:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
-
-  openid-client@6.8.2:
-    resolution: {integrity: sha512-uOvTCndr4udZsKihJ68H9bUICrriHdUVJ6Az+4Ns6cW55rwM5h0bjVIzDz2SxgOI84LKjFyjOFvERLzdTUROGA==}
 
   ora@3.4.0:
     resolution: {integrity: sha512-eNwHudNbO1folBP3JsZ19v9azXWtQZjICdr3Q0TDPIaeBQ3mXLrh54wM+er0+hSp+dWKf+Z8KM58CYzEyIYxYg==}
@@ -25661,8 +25649,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  oauth4webapi@3.8.5: {}
-
   ob1@0.83.3:
     dependencies:
       flow-enums-runtime: 0.0.6
@@ -25750,11 +25736,6 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
-
-  openid-client@6.8.2:
-    dependencies:
-      jose: 6.1.3
-      oauth4webapi: 3.8.5
 
   ora@3.4.0:
     dependencies:

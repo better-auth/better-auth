@@ -51,7 +51,6 @@ export default defineConfig({
 		"./src/plugins/multi-session/index.ts",
 		"./src/plugins/one-tap/index.ts",
 		"./src/plugins/open-api/index.ts",
-		"./src/plugins/oidc-provider/index.ts",
 		"./src/plugins/oauth-proxy/index.ts",
 		"./src/plugins/organization/index.ts",
 		"./src/plugins/organization/access/index.ts",

@@ -438,7 +438,7 @@ describe("jwt - remote url", async () => {
 				],
 			}),
 		).toThrowError(
-			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when options.jwks.remoteUrl is used for OpenID metadata",
 		);
 	});
 
