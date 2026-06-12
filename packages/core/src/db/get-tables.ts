@@ -15,13 +15,18 @@ export const getAuthTables = (
 						...value.fields,
 					},
 					modelName: value.modelName || key,
+					disableMigration: value.disableMigration,
 				};
 			}
 			return acc;
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, DBFieldAttribute>; modelName: string }
+			{
+				fields: Record<string, DBFieldAttribute>;
+				modelName: string;
+				disableMigration?: boolean;
+			}
 		>,
 	);
 
