@@ -948,6 +948,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							required: true,
 							fieldName: opts.schema?.team?.fields?.name,
 						},
+						memberCount: {
+							type: "number",
+							required: true,
+							defaultValue: 0,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.team?.fields?.memberCount,
+						},
 						organizationId: {
 							type: "string",
 							required: true,
@@ -994,6 +1002,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							},
 							fieldName: opts.schema?.teamMember?.fields?.userId,
 							index: true,
+						},
+						membershipKey: {
+							type: "string",
+							required: false,
+							unique: true,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.teamMember?.fields?.membershipKey,
 						},
 						createdAt: {
 							type: "date",

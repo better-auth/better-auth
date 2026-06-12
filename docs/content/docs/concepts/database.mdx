@@ -133,6 +133,8 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 ```typescript
 interface SecondaryStorage {
   get: (key: string) => Promise<unknown>;
+  getAndDelete: (key: string) => Promise<unknown>;
+  increment: (key: string, ttl: number) => Promise<number>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -195,11 +197,29 @@ import { betterAuth } from "better-auth";
 const redis = createClient();
 await redis.connect();
 
+const incrementScript = `
+local value = redis.call("INCR", KEYS[1])
+if value == 1 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return value
+`;
+
 export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
 		get: async (key) => {
 			return await redis.get(key);
+		},
+		getAndDelete: async (key) => {
+			return await redis.getDel(key);
+		},
+		increment: async (key, ttl) => {
+			const value = await redis.eval(incrementScript, {
+				keys: [key],
+				arguments: [String(ttl)],
+			});
+			return Number(value);
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });

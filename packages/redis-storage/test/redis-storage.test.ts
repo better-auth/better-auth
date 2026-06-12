@@ -119,4 +119,23 @@ describe("redisStorage", () => {
 		expect(script).toContain("== 1");
 		expect(script).toContain('redis.call("EXPIRE"');
 	});
+
+	it.each([
+		0,
+		-1,
+		1.5,
+		Number.NaN,
+		Infinity,
+	])("rejects invalid ttl %s before mutating Redis", async (ttl) => {
+		const evalMock = vi.fn();
+		const storage = redisStorage({
+			client: { eval: evalMock } as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.increment!("rate:invalid", ttl)).rejects.toThrow(
+			"Redis storage increment ttl must be a positive integer",
+		);
+		expect(evalMock).not.toHaveBeenCalled();
+	});
 });

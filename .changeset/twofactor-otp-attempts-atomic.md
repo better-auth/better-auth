@@ -1,5 +1,5 @@
 ---
-"better-auth": patch
+"better-auth": minor
 ---
 
-Submitting the same two-factor OTP from several requests at once can no longer sign in more than once or gain extra tries beyond the attempt limit.
+Two-factor OTP verification now consumes the code atomically and tracks failed attempts without a race, so concurrent submissions can no longer replay a single-use code or slip past the attempt limit.

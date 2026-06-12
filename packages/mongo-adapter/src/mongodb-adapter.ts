@@ -640,11 +640,18 @@ export const mongodbAdapter = (
 				},
 				async incrementOne({ model, where, increment, set }) {
 					const clause = convertWhereClause({ where, model });
-					const update: { $inc: Record<string, number>; $set?: any } = {
-						$inc: increment,
-					};
+					const update: {
+						$inc?: Record<string, number>;
+						$set?: Record<string, unknown>;
+					} = {};
+					if (Object.keys(increment).length > 0) {
+						update.$inc = increment;
+					}
 					if (set && Object.keys(set).length > 0) {
 						update.$set = set;
+					}
+					if (!update.$inc && !update.$set) {
+						return db.collection(model).findOne(clause, { session });
 					}
 					const res = await db
 						.collection(model)

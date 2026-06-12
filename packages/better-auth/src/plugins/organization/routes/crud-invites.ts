@@ -9,7 +9,7 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
-import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
+import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -756,21 +756,21 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				if (
 					ctx.context.orgOptions.teams &&
 					ctx.context.orgOptions.teams.enabled &&
-					"teamId" in acceptedI &&
-					acceptedI.teamId
+					"teamId" in invitation &&
+					invitation.teamId
 				) {
-					const teamIds = (acceptedI.teamId as string).split(",");
+					const teamIds = (invitation.teamId as string).split(",");
 					const onlyOne = teamIds.length === 1;
 
 					for (const teamId of teamIds) {
-						// Confirm the team still belongs to the accepted invitation's
+						// Confirm the team still belongs to the invitation's
 						// organization before adding the member. This keeps team
 						// membership consistent with the invitation's organization,
 						// including for older invitations and for teams that were
 						// moved or removed between invite and accept.
 						const team = await adapter.findTeamById({
 							teamId,
-							organizationId: acceptedI.organizationId,
+							organizationId: invitation.organizationId,
 						});
 						if (!team) {
 							throw APIError.from(
@@ -779,15 +779,20 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 							);
 						}
 
-						const maximumMembersPerTeam = await resolveMaximumMembersPerTeam(
-							ctx.context.orgOptions.teams,
-							{
-								teamId,
-								organizationId: acceptedI.organizationId,
-								session,
-							},
-						);
-						if (maximumMembersPerTeam !== undefined) {
+						if (
+							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+							"undefined"
+						) {
+							const maximumMembersPerTeam =
+								typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+								"function"
+									? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+											teamId,
+											session: session,
+											organizationId: invitation.organizationId,
+										})
+									: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
 							const result = await adapter.addTeamMemberWithLimit({
 								teamId,
 								userId: session.user.id,
@@ -823,15 +828,15 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 
 				const createdMember = await adapter.createMember({
-					organizationId: acceptedI.organizationId,
+					organizationId: invitation.organizationId,
 					userId: session.user.id,
-					role: acceptedI.role,
+					role: invitation.role,
 					createdAt: new Date(),
 				});
 
 				await adapter.setActiveOrganization(
 					session.session.token,
-					acceptedI.organizationId,
+					invitation.organizationId,
 					ctx,
 				);
 
@@ -842,6 +847,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				await adapter.updateInvitation({
 					invitationId: ctx.body.invitationId,
 					status: "pending",
+					fromStatus: "accepted",
 				});
 				throw error;
 			});

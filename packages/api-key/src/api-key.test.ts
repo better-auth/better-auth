@@ -2564,6 +2564,18 @@ describe("api-key", async () => {
 			get(key) {
 				return store.get(key) || null;
 			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				expirationMap.delete(key);
+				return value;
+			},
+			increment(key, ttl) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				if (ttl !== undefined) expirationMap.set(key, ttl);
+				return count;
+			},
 			delete(key) {
 				store.delete(key);
 				expirationMap.delete(key);
@@ -2949,6 +2961,18 @@ describe("api-key", async () => {
 			},
 			get(key) {
 				return store.get(key) || null;
+			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				expirationMap.delete(key);
+				return value;
+			},
+			increment(key, ttl) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				if (ttl !== undefined) expirationMap.set(key, ttl);
+				return count;
 			},
 			delete(key) {
 				store.delete(key);
@@ -4990,6 +5014,16 @@ describe("verify should not write back stale state", async () => {
 			get(key) {
 				return store.get(key) || null;
 			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
 			delete(key) {
 				store.delete(key);
 			},
@@ -5184,6 +5218,16 @@ describe("concurrent verification enforces atomic counters", async () => {
 					await new Promise((resolve) => setTimeout(resolve, 5));
 				}
 				return store.get(key) || null;
+			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
 			},
 			delete(key) {
 				store.delete(key);

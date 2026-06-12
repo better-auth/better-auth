@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-A one-time token can no longer be redeemed for a session more than once when redeemed concurrently.
+One-time tokens are now consumed atomically, so two concurrent redemptions of the same token can no longer both return a session.

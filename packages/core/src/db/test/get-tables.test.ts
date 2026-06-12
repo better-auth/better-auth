@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { getAuthTables } from "../get-tables";
+import type { SecondaryStorage } from "../type";
+
+const secondaryStorageStub: SecondaryStorage = {
+	get: async () => null,
+	getAndDelete: async () => null,
+	increment: async () => 1,
+	set: async () => {},
+	delete: async () => {},
+};
 
 describe("getAuthTables", () => {
 	it("should use correct field name for refreshTokenExpiresAt", () => {
@@ -83,11 +92,7 @@ describe("getAuthTables", () => {
 
 	it("should exclude verification table when secondaryStorage is configured", () => {
 		const tables = getAuthTables({
-			secondaryStorage: {
-				get: async () => null,
-				set: async () => {},
-				delete: async () => {},
-			},
+			secondaryStorage: secondaryStorageStub,
 		});
 
 		expect(tables.verification).toBeUndefined();
@@ -95,11 +100,7 @@ describe("getAuthTables", () => {
 
 	it("should include verification table when storeInDatabase is true", () => {
 		const tables = getAuthTables({
-			secondaryStorage: {
-				get: async () => null,
-				set: async () => {},
-				delete: async () => {},
-			},
+			secondaryStorage: secondaryStorageStub,
 			verification: {
 				storeInDatabase: true,
 			},

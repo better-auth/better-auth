@@ -1,8 +1,4 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import {
-	getCurrentAdapter,
-	runWithTransaction,
-} from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
@@ -10,7 +6,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
-import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
+import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -347,39 +343,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			await runWithTransaction(ctx.context.adapter, async () => {
-				await adapter.deleteTeam(team.id);
-
-				// Drop the removed team from pending invitations so they stay
-				// acceptable; an emptied list degrades to an org-level invitation.
-				const pendingInvitations = await adapter.findPendingInvitations({
-					organizationId,
-				});
-				const trx = await getCurrentAdapter(ctx.context.adapter);
-				for (const invitation of pendingInvitations) {
-					if (!("teamId" in invitation) || !invitation.teamId) {
-						continue;
-					}
-					const teamIds = (invitation.teamId as string).split(",");
-					if (!teamIds.includes(team.id)) {
-						continue;
-					}
-					const remainingTeamIds = teamIds.filter((id) => id !== team.id);
-					await trx.update({
-						model: "invitation",
-						where: [
-							{
-								field: "id",
-								value: invitation.id,
-							},
-						],
-						update: {
-							teamId:
-								remainingTeamIds.length > 0 ? remainingTeamIds.join(",") : null,
-						},
-					});
-				}
-			});
+			await adapter.deleteTeam(team.id);
 
 			// Run afterDeleteTeam hook
 			if (options?.organizationHooks?.afterDeleteTeam) {
@@ -420,7 +384,11 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				}),
 				data: z
 					.object({
-						...teamSchema.shape,
+						...teamSchema.omit({
+							id: true,
+							createdAt: true,
+							updatedAt: true,
+						}).shape,
 						...additionalFieldsSchema.shape,
 					})
 					.partial(),
@@ -1271,17 +1239,20 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
-			const maximumMembersPerTeam = await resolveMaximumMembersPerTeam(
-				ctx.context.orgOptions.teams,
-				{
-					teamId: ctx.body.teamId,
-					organizationId,
-					session,
-				},
-			);
-
 			let teamMember: TeamMember;
-			if (maximumMembersPerTeam !== undefined) {
+			if (
+				typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
+				"undefined"
+			) {
+				const maximumMembersPerTeam =
+					typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+					"function"
+						? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+								teamId: ctx.body.teamId,
+								session,
+								organizationId,
+							})
+						: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 				const result = await adapter.addTeamMemberWithLimit({
 					teamId: ctx.body.teamId,
 					userId: ctx.body.userId,

@@ -362,6 +362,8 @@ describe("base context creation", () => {
 				} as any,
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -437,6 +439,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -861,6 +865,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -880,6 +886,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -1839,6 +1847,8 @@ describe("base context creation", () => {
 		it("should handle secondaryStorage configuration", async () => {
 			const mockStorage = {
 				get: vi.fn(),
+				getAndDelete: vi.fn(),
+				increment: vi.fn(),
 				set: vi.fn(),
 				delete: vi.fn(),
 			};

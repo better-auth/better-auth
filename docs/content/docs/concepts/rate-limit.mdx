@@ -226,16 +226,20 @@ export const auth = betterAuth({
     //...other options
     rateLimit: {
         customStorage: {
-            get: async (key) => {
-                // get rate limit data
-            },
-            set: async (key, value) => {
-                // set rate limit data
+            consume: async (key, rule) => {
+                // atomically record one request for `key`
+                // rule.window is in seconds, rule.max is the request limit
+                return {
+                    allowed: true,
+                    retryAfter: null,
+                };
             },
         },
     },
 })
 ```
+
+`customStorage.consume` must check and increment in one operation. Better Auth no longer accepts separate `get` and `set` methods for rate limiting because that shape can allow concurrent requests to pass the same stale counter.
 
 ## Handling Rate Limit Errors
 

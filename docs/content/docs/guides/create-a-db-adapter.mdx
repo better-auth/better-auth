@@ -251,9 +251,9 @@ deleteMany: async ({ model, where }) => {
 };
 ```
 
-### `consumeOne` method (optional)
+### `consumeOne` method
 
-The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges. Implementing it is optional: when omitted, the adapter factory falls back to wrapping `findMany` + `deleteMany` in a `transaction`, using the deleted-row count as the race gate.
+The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges.
 
 parameters:
 
@@ -270,8 +270,39 @@ consumeOne: async ({ model, where }) => {
 };
 ```
 
-<Callout type="info">
-  Although the factory provides a fallback, implementing `consumeOne` natively is recommended: the fallback is race-safe only under a real `transaction` with an accurate delete count. Stores without multi-document transactions therefore need a native atomic delete-and-return (`DELETE ... RETURNING`, `findOneAndDelete`, or a revision-conditional delete).
+<Callout type="warn">
+  `consumeOne` is required. Better Auth does not provide a `findMany` plus `deleteMany` fallback because that shape cannot guarantee single-use semantics across adapters without a native atomic delete-and-return operation.
+</Callout>
+
+### `incrementOne` method
+
+The `incrementOne` method atomically updates one matching record by applying numeric deltas and optional set values, then returns the updated row. It powers guarded counters such as rate limits, quotas, and one-winner state transitions.
+
+parameters:
+
+* `model`: The model/table name to update.
+* `where`: The `where` clause that must still match for the increment to apply.
+* `increment`: Numeric deltas to apply, such as `{ count: 1 }` or `{ remaining: -1 }`.
+* `set`: Optional fields to set in the same atomic operation.
+
+**Returns** `Promise<T | null>`: the updated record, or `null` if no row matched. Implementations must update at most one matching row.
+
+```ts title="Example"
+incrementOne: async ({ model, where, increment, set }) => {
+  const [row] = await db
+    .update(model)
+    .set({
+      ...set,
+      count: sql`${model.count} + ${increment.count ?? 0}`,
+    })
+    .where(where)
+    .returning();
+  return row ?? null;
+};
+```
+
+<Callout type="warn">
+  `incrementOne` is required. Better Auth uses it as a compare-and-swap primitive: the `where` clause is part of the guard, so concurrent requests cannot all update a stale snapshot.
 </Callout>
 
 ### `findOne` method
@@ -486,7 +517,7 @@ Whether the adapter supports transactions. If `false`, operations run sequential
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"

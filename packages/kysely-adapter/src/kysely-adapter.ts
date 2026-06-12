@@ -890,10 +890,9 @@ export const kyselyAdapter = (
 					// `limit(1)`.
 					const targetIds =
 						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
-					const updateQuery = db
-						.updateTable(model)
-						.set(assignments)
-						.where(`${model}.${idField}`, "in", targetIds);
+					const updateQuery = applyWhere(
+						db.updateTable(model).set(assignments),
+					).where(`${model}.${idField}`, "in", targetIds);
 					if (config?.type === "mssql") {
 						return (
 							(await updateQuery.outputAll("inserted").executeTakeFirst()) ??

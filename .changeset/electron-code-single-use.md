@@ -2,4 +2,4 @@
 "@better-auth/electron": patch
 ---
 
-An Electron authorization code can no longer be exchanged for a session more than once when the exchange is attempted concurrently.
+Electron authorization codes are now consumed atomically, so concurrent token exchanges of the same code can no longer both mint a session.
