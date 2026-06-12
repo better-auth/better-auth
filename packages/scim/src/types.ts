@@ -17,6 +17,82 @@ export type SCIMName = {
 
 export type SCIMEmail = { value?: string; primary?: boolean };
 
+export type SCIMGroupMemberInput = {
+	value?: string;
+	$ref?: string;
+	display?: string;
+	type?: string;
+};
+
+export type SCIMGroupInput = {
+	externalId?: string;
+	displayName: string;
+	members?: SCIMGroupMemberInput[];
+};
+
+export type MapGroupToRolesInput = {
+	group: SCIMGroupInput;
+	provider: {
+		providerId: string;
+		organizationId: string;
+	};
+};
+
+export type SCIMGroupMemberReference = {
+	value: string;
+	$ref: string;
+	display: string;
+	type: "User";
+};
+
+export type SCIMUserGroupReference = {
+	value: string;
+	$ref: string;
+	display: string;
+};
+
+export interface SCIMGroup {
+	id: string;
+	providerId: string;
+	organizationId: string;
+	scimGroupId: string;
+	externalId?: string;
+	externalIdKey?: string;
+	displayName: string;
+	createdAt: Date;
+	updatedAt?: Date;
+}
+
+export interface SCIMGroupMember {
+	id: string;
+	groupId: string;
+	providerId: string;
+	organizationId: string;
+	userId: string;
+	membershipKey: string;
+	createdAt: Date;
+}
+
+export interface SCIMGroupRole {
+	id: string;
+	groupId: string;
+	role: string;
+	roleKey: string;
+	createdAt: Date;
+}
+
+export interface SCIMGroupRoleGrant {
+	id: string;
+	groupId: string;
+	providerId: string;
+	organizationId: string;
+	userId: string;
+	role: string;
+	roleGrantKey: string;
+	isRoleProjected: boolean;
+	createdAt: Date;
+}
+
 export type SCIMOptions = {
 	/**
 	 * Minimum organization role(s) required for SCIM management operations
@@ -30,6 +106,14 @@ export type SCIMOptions = {
 	 * These will take precedence over the database when present.
 	 */
 	defaultSCIM?: Omit<SCIMProvider, "id">[];
+	/**
+	 * Maps an incoming SCIM Group resource to Better Auth organization role(s).
+	 *
+	 * Defaults to using the group's displayName as the role name.
+	 */
+	mapGroupToRoles?: (
+		input: MapGroupToRolesInput,
+	) => string | string[] | Promise<string | string[]>;
 	/**
 	 * Controls whether SCIM provisioning may link to a *pre-existing* Better
 	 * Auth user whose email matches the incoming SCIM resource.
