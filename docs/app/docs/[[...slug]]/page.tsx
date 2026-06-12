@@ -23,6 +23,7 @@ import {
 	ForkButton,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
+import { collectMissingMdxFallbacks } from "@/components/docs/missing-mdx-fallback";
 import { Callout } from "@/components/ui/callout";
 import type { DocsVersion } from "@/lib/docs-versions";
 import {
@@ -60,6 +61,72 @@ export default async function Page({
 	const scope = (href: string | undefined) => scopeDocsHref(href, version);
 	const DefaultAnchor = defaultMdxComponents.a;
 
+	const mdxComponents = {
+		...defaultMdxComponents,
+		Step,
+		Steps,
+		Tab,
+		Tabs,
+		Accordion,
+		Accordions,
+		File,
+		Files,
+		Folder,
+		TypeTable,
+		APIMethod,
+		DatabaseTable,
+		ForkButton,
+		AddToCursor,
+		Features,
+		Endpoint,
+		GenerateSecret,
+		DividerText,
+		Callout: ({
+			children,
+			type,
+			...props
+		}: {
+			children: React.ReactNode;
+			type?: "info" | "warn" | "error" | "success" | "warning";
+			[key: string]: any;
+		}) => (
+			<Callout type={type} {...props}>
+				{children}
+			</Callout>
+		),
+		iframe: (props: React.ComponentProps<"iframe">) => (
+			<iframe
+				title="Embedded content"
+				{...props}
+				className="w-full h-[500px]"
+			/>
+		),
+		a: (props: React.ComponentProps<"a">) => (
+			<DefaultAnchor {...props} href={scope(props.href)} />
+		),
+		Link: ({
+			href,
+			className,
+			...props
+		}: React.ComponentProps<typeof Link>) => (
+			<Link
+				href={typeof href === "string" ? (scope(href) ?? href) : href}
+				className={cn("font-medium underline underline-offset-4", className)}
+				{...props}
+			/>
+		),
+	};
+
+	// Beta content is synced from another branch, so it may reference MDX
+	// components this branch doesn't have. Fall back instead of failing the build.
+	const fallbackComponents =
+		version.slug === "beta"
+			? collectMissingMdxFallbacks(
+					await page.data.getText("processed"),
+					mdxComponents,
+				)
+			: undefined;
+
 	return (
 		<DocsPage
 			toc={toc}
@@ -95,66 +162,7 @@ export default async function Page({
 				</div>
 			</div>
 			<DocsBody>
-				<MDX
-					components={{
-						...defaultMdxComponents,
-						Step,
-						Steps,
-						Tab,
-						Tabs,
-						Accordion,
-						Accordions,
-						File,
-						Files,
-						Folder,
-						TypeTable,
-						APIMethod,
-						DatabaseTable,
-						ForkButton,
-						AddToCursor,
-						Features,
-						Endpoint,
-						GenerateSecret,
-						DividerText,
-						Callout: ({
-							children,
-							type,
-							...props
-						}: {
-							children: React.ReactNode;
-							type?: "info" | "warn" | "error" | "success" | "warning";
-							[key: string]: any;
-						}) => (
-							<Callout type={type} {...props}>
-								{children}
-							</Callout>
-						),
-						iframe: (props: React.ComponentProps<"iframe">) => (
-							<iframe
-								title="Embedded content"
-								{...props}
-								className="w-full h-[500px]"
-							/>
-						),
-						a: (props: React.ComponentProps<"a">) => (
-							<DefaultAnchor {...props} href={scope(props.href)} />
-						),
-						Link: ({
-							href,
-							className,
-							...props
-						}: React.ComponentProps<typeof Link>) => (
-							<Link
-								href={typeof href === "string" ? (scope(href) ?? href) : href}
-								className={cn(
-									"font-medium underline underline-offset-4",
-									className,
-								)}
-								{...props}
-							/>
-						),
-					}}
-				/>
+				<MDX components={{ ...fallbackComponents, ...mdxComponents }} />
 			</DocsBody>
 		</DocsPage>
 	);
