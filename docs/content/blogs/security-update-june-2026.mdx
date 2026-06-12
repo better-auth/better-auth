@@ -5,7 +5,6 @@ date: 2026-06-02
 author:
   name: "Better Auth Maintainers"
   avatar: ""
-image: "/blogs/security-june-2026.png"
 tags: ["security", "advisories", "release"]
 ---
 
@@ -36,8 +35,8 @@ The tables below cover the advisories published in this security cycle, grouped 
 
 ### Organization
 
-| Advisory                                                                                                  | Area                              | Severity | Fixed path                                                     |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------- | -------- | -------------------------------------------------------------- |
+| Advisory                                                                                                  | Area                              | Severity | Fixed path                                                                 |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------- | -------- | -------------------------------------------------------------------------- |
 | [GHSA-fmh4-wcc4-5jm3](https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3) | Organization invitation ownership | High     | `better-auth@1.6.11`, with compatibility follow-up in `better-auth@1.6.14` |
 
 ### Device Authorization
@@ -72,11 +71,11 @@ The tables below cover the advisories published in this security cycle, grouped 
 
 The `oidcProvider` and `mcp` plugins have been deprecated for roughly half a year and will be removed from the library in **1.7**. For the advisories below we strongly recommend migrating to `@better-auth/oauth-provider` rather than relying on continued patches to these plugins.
 
-| Advisory                                                                                                  | Area                                 | Severity | Fixed path                           |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------- | ------------------------------------ |
-| [GHSA-pw9m-5jxm-xr6h](https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h) | OIDC and MCP refresh-token handling  | Critical | `better-auth@1.6.11`                 |
+| Advisory                                                                                                  | Area                                 | Severity | Fixed path                                       |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------- | ------------------------------------------------ |
+| [GHSA-pw9m-5jxm-xr6h](https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h) | OIDC and MCP refresh-token handling  | Critical | `better-auth@1.6.11`                             |
 | [GHSA-86j7-9j95-vpqj](https://github.com/better-auth/better-auth/security/advisories/GHSA-86j7-9j95-vpqj) | OIDC and MCP redirect URI validation | High     | `better-auth@1.6.13`, `better-auth@1.7.0-beta.4` |
-| [GHSA-9h47-pqcx-hjr4](https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4) | OIDC and MCP protocol defaults       | High     | `better-auth@1.6.11`                 |
+| [GHSA-9h47-pqcx-hjr4](https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4) | OIDC and MCP protocol defaults       | High     | `better-auth@1.6.11`                             |
 
 Each advisory has the exact affected ranges, fixed versions, and package names. The tables are a quick index, not a replacement for the advisory body. If your project uses one of the affected plugins, read the linked advisory before deciding that a top-level `better-auth` update is enough.
 
