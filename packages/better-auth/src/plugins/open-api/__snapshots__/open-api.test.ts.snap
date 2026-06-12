@@ -22,6 +22,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "idToken": {
@@ -52,6 +53,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "accountId",
           "providerId",
           "userId",
@@ -72,6 +74,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "ipAddress": {
@@ -92,6 +95,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "expiresAt",
           "token",
           "createdAt",
@@ -116,6 +120,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "boolean",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "image": {
@@ -138,8 +143,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "name",
           "email",
+          "emailVerified",
           "createdAt",
           "updatedAt",
           "role",
@@ -158,6 +165,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "identifier": {
@@ -173,6 +181,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "identifier",
           "value",
           "expiresAt",
@@ -1720,7 +1729,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       },
       "post": {
         "description": "Get the current session",
-        "operationId": "getSession",
+        "operationId": "getSessionPost",
         "parameters": [],
         "requestBody": {
           "content": {
@@ -4095,12 +4104,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Session response when idToken is provided",
+                  "description": "Returns session details when idToken is provided, or an authorize URL otherwise",
                   "properties": {
                     "redirect": {
-                      "enum": [
-                        false,
-                      ],
                       "type": "boolean",
                     },
                     "token": {
@@ -4116,14 +4122,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "required": [
                     "redirect",
-                    "token",
-                    "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success - Returns either session details or redirect URL",
+            "description": "Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
           },
           "400": {
             "content": {

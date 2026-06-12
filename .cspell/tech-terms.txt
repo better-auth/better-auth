@@ -13,6 +13,7 @@ base64urlnopad
 remoteip
 noreferrer
 noopener
+Referer
 pcre
 llms
 svgjs
@@ -58,3 +59,17 @@ GHEOF
 denoland
 zizmor
 zizmorcore
+IMDS
+WHATWG
+CIMD
+Oligo
+febf
+fdff
+fffe
+apng
+jfif
+pcss
+pjpeg
+styl
+vbscript
+unvalidated

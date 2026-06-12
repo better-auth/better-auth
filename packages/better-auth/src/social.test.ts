@@ -8,6 +8,7 @@ import type {
 	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
+import { reddit } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -256,6 +257,66 @@ describe("Social Providers", async (c) => {
 					context.response.headers.get("set-cookie") || "",
 				);
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
+
+	/**
+	 * A built-in social callback that arrives without a `state` parameter must
+	 * redirect to the error page using the `error` query parameter the page
+	 * reads, not a `state` parameter the page ignores.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9215
+	 */
+	it("redirects a built-in callback with no state to error=state_not_found", async () => {
+		await client.$fetch("/callback/google", {
+			query: {
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("error=state_not_found");
+				expect(location).not.toContain("state=state_not_found");
+			},
+		});
+	});
+
+	/**
+	 * When OAuth state validation fails, the redirect must honor the per-flow
+	 * `errorCallbackURL` the caller passed at sign-in, not the default error
+	 * page. The error URL is recoverable from the parsed state even when the
+	 * state-cookie check fails, and it was already origin-validated at sign-in.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 */
+	it("redirects to the per-flow errorCallbackURL when state validation fails", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		// Omit the state cookie so the signed-cookie check fails
+		// (state_security_mismatch) while the verification record still parses.
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).toContain("/oauth-error");
+				expect(location).toContain("error=state_mismatch");
+				expect(location).not.toContain("/api/auth/error");
 			},
 		});
 	});
@@ -991,6 +1052,195 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Google Provider — multiple client IDs", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const webClientId = "123-web.googleusercontent.com";
+	const iosClientId = "456-ios.googleusercontent.com";
+	const androidClientId = "789-android.googleusercontent.com";
+
+	const signIdToken = (audience: string) =>
+		new SignJWT({
+			email: "mobile-user@example.com",
+			email_verified: true,
+			name: "Mobile User",
+			sub: "google-sub-999",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(audience)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", async () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it.each([
+		["web", webClientId],
+		["iOS", iosClientId],
+		["Android", androidClientId],
+	])("accepts an id token issued for the %s client", async (_, audience) => {
+		const idToken = await signIdToken(audience);
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it("rejects an id token whose audience is not configured", async () => {
+		const idToken = await signIdToken("999-unknown.googleusercontent.com");
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("uses the first configured client id when building the authorization URL", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
+		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
+	});
+
+	it("rejects an empty clientId array at sign-in time", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Multi-client ID support — other widened providers", () => {
+	const appleConfig = {
+		clientId: ["apple-web", "apple-ios"],
+		clientSecret: "apple-secret",
+	};
+	const facebookConfig = {
+		clientId: ["fb-web", "fb-mobile"],
+		clientSecret: "fb-secret",
+	};
+	const cognitoConfig = {
+		clientId: ["cog-web", "cog-mobile"],
+		clientSecret: "cog-secret",
+		domain: "test.auth.us-east-1.amazoncognito.com",
+		region: "us-east-1",
+		userPoolId: "us-east-1_testpool",
+	};
+
+	it.each([
+		["apple", appleConfig, "apple-web"],
+		["facebook", facebookConfig, "fb-web"],
+		["cognito", cognitoConfig, "cog-web"],
+	] as const)("%s uses the first entry of the clientId array for the auth URL", async (provider, config, firstId) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain(firstId);
+	});
+
+	it.each([
+		["apple", { ...appleConfig, clientId: [] as string[] }],
+		["facebook", { ...facebookConfig, clientId: [] as string[] }],
+		["cognito", { ...cognitoConfig, clientId: [] as string[] }],
+	] as const)("%s rejects an empty clientId array", async (provider, config) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
 	});
 });
 
@@ -1829,6 +2079,7 @@ describe("Microsoft Provider", async () => {
 		)
 			.setProtectedHeader({ alg: "RS256", kid: msKid })
 			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-789/v2.0")
 			.setAudience("test-ms-client-id-token")
 			.setExpirationTime("1h")
 			.sign(rsaKeyPair.privateKey);
@@ -1939,6 +2190,7 @@ describe("Microsoft Provider", async () => {
 			sub: "ms-tenant-user",
 			email: "tenant@outlook.com",
 			name: "Tenant User",
+			tid: tenantId,
 		};
 
 		const validToken = await new SignJWT(
@@ -2014,6 +2266,27 @@ describe("Microsoft Provider", async () => {
 			idToken: { token: wrongIssuerToken },
 		});
 		expect(invalidRes.error?.status).toBe(401);
+	});
+
+	it("builds an authorization URL without clientSecret (public client)", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "public-ms-client",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain("public-ms-client");
+		expect(res.data?.redirect).toBe(true);
 	});
 });
 
@@ -2174,5 +2447,197 @@ describe("Railway Provider", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
+	});
+});
+
+/**
+ * Regression tests for PayPal ID token verification. Previously
+ * `verifyIdToken` only decoded the JWT and checked that a `sub` claim was
+ * present, performing no signature/issuer/audience checks, so any well-formed
+ * token paired with a valid access token would be accepted.
+ */
+describe("PayPal Provider — id token verification", async () => {
+	const paypalKeyPair = await generateKeyPair("RS256");
+	const paypalJwk = await exportJWK(paypalKeyPair.publicKey);
+	const paypalKid = "test-paypal-kid";
+	paypalJwk.kid = paypalKid;
+	paypalJwk.alg = "RS256";
+	paypalJwk.use = "sig";
+
+	// A key that is not in the provider's published JWKS, used to sign tokens
+	// that must be rejected.
+	const otherKeyPair = await generateKeyPair("RS256");
+
+	const clientId = "paypal-client-id";
+
+	const userInfo = {
+		user_id: "paypal-user-123",
+		name: "PayPal User",
+		email: "paypal-user@example.com",
+		email_verified: true,
+		picture: "https://example.com/avatar.png",
+	};
+
+	const buildToken = (
+		signingKey: CryptoKey,
+		overrides: {
+			audience?: string;
+			issuer?: string;
+			kid?: string;
+		} = {},
+	) =>
+		new SignJWT({ sub: "paypal-user-123" })
+			.setProtectedHeader({ alg: "RS256", kid: overrides.kid ?? paypalKid })
+			.setIssuedAt()
+			.setIssuer(overrides.issuer ?? "https://www.paypal.com")
+			.setAudience(overrides.audience ?? clientId)
+			.setExpirationTime("1h")
+			.sign(signingKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://api.paypal.com/v1/oauth2/certs", async () =>
+				HttpResponse.json({ keys: [paypalJwk] }),
+			),
+			http.get(
+				"https://api-m.paypal.com/v1/identity/oauth2/userinfo",
+				async () => HttpResponse.json(userInfo),
+			),
+		);
+	});
+
+	const getInstance = () =>
+		getTestInstance(
+			{
+				socialProviders: {
+					paypal: {
+						clientId,
+						clientSecret: "paypal-client-secret",
+						environment: "live",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+	it("accepts a properly signed id token", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey);
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "paypal-access-token" },
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("paypal-user@example.com");
+	});
+
+	it("rejects a token signed by a key not in the provider's JWKS", async () => {
+		const idToken = await buildToken(otherKeyPair.privateKey);
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("rejects a token whose audience is a different client", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey, {
+			audience: "some-other-client",
+		});
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("rejects a token with an unexpected issuer", async () => {
+		const idToken = await buildToken(paypalKeyPair.privateKey, {
+			issuer: "https://not-paypal.example.com",
+		});
+		const { client } = await getInstance();
+
+		const res = await client.signIn.social({
+			provider: "paypal",
+			idToken: { token: idToken, accessToken: "other-access-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+});
+
+/**
+ * Regression tests for the Reddit provider profile mapping. Reddit's `identity`
+ * scope does not return an email; previously the provider mapped the shared
+ * `oauth_client_id` (which identifies the OAuth app, not the user) to
+ * `user.email` and `has_verified_email` to `emailVerified`, collapsing every
+ * Reddit user of the same app onto one "verified" email and enabling implicit
+ * account linking/takeover.
+ */
+describe("Reddit Provider — profile email mapping", async () => {
+	const profile = {
+		id: "reddit-user-123",
+		name: "reddit_user",
+		icon_img: "https://example.com/avatar.png?x=1",
+		has_verified_email: true,
+		oauth_client_id: "shared-reddit-oauth-client-id",
+		verified: true,
+	};
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://oauth.reddit.com/api/v1/me", async () =>
+				HttpResponse.json(profile),
+			),
+		);
+	});
+
+	it("never uses oauth_client_id as the email and falls back to a unique per-user email", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		// Without a mapped email the provider derives a unique, per-user
+		// synthetic email from the Reddit user id rather than falling back to
+		// the shared oauth_client_id, so users can never collide on one address.
+		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
+		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		expect(result?.user.emailVerified).toBe(false);
+	});
+
+	it("uses the email supplied by mapProfileToUser and ignores oauth_client_id", async () => {
+		const provider = reddit({
+			clientId: "reddit-client-id",
+			clientSecret: "reddit-client-secret",
+			mapProfileToUser: (p) => ({
+				email: `${p.name}@example.com`,
+			}),
+		});
+
+		const result = await provider.getUserInfo({
+			accessToken: "reddit-access-token",
+		} as any);
+
+		expect(result?.user.email).toBe("reddit_user@example.com");
+		expect(result?.user.email).not.toBe(profile.oauth_client_id);
+		// The synthetic "verified email" flag must not be applied to the mapped
+		// email unless the integrator opts in.
+		expect(result?.user.emailVerified).toBe(false);
 	});
 });

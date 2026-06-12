@@ -2,7 +2,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { applySetCookies, parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1925,30 +1925,8 @@ describe("two factor passwordless", async () => {
 
 	const applySetCookie = (headers: Headers, responseHeaders: Headers) => {
 		const setCookieHeader = responseHeaders.get("set-cookie");
-		if (!setCookieHeader) {
-			return headers;
-		}
-		const existing = headers.get("cookie");
-		const cookieMap = new Map<string, string>();
-		if (existing) {
-			existing.split("; ").forEach((pair) => {
-				const [name, ...rest] = pair.split("=");
-				if (!name) {
-					return;
-				}
-				cookieMap.set(name, rest.join("="));
-			});
-		}
-		const cookies = parseSetCookieHeader(setCookieHeader);
-		cookies.forEach((cookie, name) => {
-			cookieMap.set(name, cookie.value);
-		});
-		headers.set(
-			"cookie",
-			Array.from(cookieMap.entries())
-				.map(([name, value]) => `${name}=${value}`)
-				.join("; "),
-		);
+		if (!setCookieHeader) return headers;
+		applySetCookies(headers, [setCookieHeader]);
 		return headers;
 	};
 
@@ -2349,9 +2327,14 @@ describe("twoFactorMethods in sign-in response", () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/8627
+ * @see https://github.com/better-auth/better-auth/pull/9205
+ *
+ * 2FA enforcement is intentionally scoped to credential sign-in paths
+ * only. These tests lock that scope in so a future refactor does not
+ * accidentally broaden enforcement to non-credential sign-in flows
+ * without a dedicated release.
  */
-describe("2FA enforcement on non-credential sign-in paths", async () => {
+describe("2FA enforcement scope", async () => {
 	let magicLinkURL = "";
 	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
@@ -2370,7 +2353,7 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 		],
 	});
 
-	it("should enforce 2FA on magic-link sign-in", async () => {
+	it("should not challenge 2FA on magic-link sign-in", async () => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
@@ -2385,23 +2368,22 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 
 		const url = new URL(magicLinkURL);
 		const token = url.searchParams.get("token")!;
-		const callbackURL = url.searchParams.get("callbackURL")!;
 
 		const verifyRes = await auth.api.magicLinkVerify({
-			query: { token, callbackURL },
+			query: { token },
 			headers: new Headers(),
 			asResponse: true,
 		});
 
 		const json = await verifyRes.json();
-		expect(json.twoFactorRedirect).toBe(true);
+		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 
-	it("should not enforce 2FA on authenticated non-sign-in endpoints", async () => {
+	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
 		const {
-			auth: a,
+			auth: instance,
 			signInWithTestUser: signIn,
-			testUser: tu,
+			testUser: user,
 		} = await getTestInstance({
 			secret: DEFAULT_SECRET,
 			plugins: [
@@ -2411,20 +2393,20 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 				}),
 			],
 		});
-		let { headers: h } = await signIn();
-		const enableRes = await a.api.enableTwoFactor({
-			body: { password: tu.password },
-			headers: h,
+		let { headers } = await signIn();
+		const enableRes = await instance.api.enableTwoFactor({
+			body: { password: user.password },
+			headers,
 			asResponse: true,
 		});
-		h = convertSetCookieToCookie(enableRes.headers);
+		headers = convertSetCookieToCookie(enableRes.headers);
 
-		const session = await a.api.getSession({ headers: h });
+		const session = await instance.api.getSession({ headers });
 		expect(session?.user.twoFactorEnabled).toBe(true);
 
-		const updateRes = await a.api.updateUser({
+		const updateRes = await instance.api.updateUser({
 			body: { name: "updated-name" },
-			headers: h,
+			headers,
 			asResponse: true,
 		});
 

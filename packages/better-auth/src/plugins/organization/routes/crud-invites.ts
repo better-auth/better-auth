@@ -1,4 +1,6 @@
+import type { GenerateIdFn, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
@@ -7,7 +9,7 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
-import { getOrgAdapter } from "../adapter";
+import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -68,6 +70,83 @@ const baseInvitationSchema = z.object({
 	]),
 });
 
+type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
+	dynamicAccessControl: { enabled: true };
+}
+	? LiteralString
+	: never;
+
+type OrganizationInvitationRole<O extends OrganizationOptions> =
+	| InferOrganizationRolesFromOption<O>
+	| DynamicOrganizationRole<O>;
+
+type ConfiguredGenerateIdOption =
+	| GenerateIdFn
+	| false
+	| "serial"
+	| "uuid"
+	| undefined;
+
+const getAdvancedGenerateId = (
+	advancedOptions: unknown,
+): GenerateIdFn | undefined => {
+	if (typeof advancedOptions !== "object" || advancedOptions === null) {
+		return undefined;
+	}
+	const generateId = (advancedOptions as { generateId?: unknown }).generateId;
+	if (typeof generateId !== "function") {
+		return undefined;
+	}
+	return generateId as GenerateIdFn;
+};
+
+const hasBuiltInOpaqueInvitationIdGeneration = ({
+	advancedGenerateId,
+	databaseGenerateId,
+}: {
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
+}) =>
+	advancedGenerateId === undefined &&
+	(databaseGenerateId === undefined || databaseGenerateId === "uuid");
+
+const shouldRequireVerifiedEmailForInvitationIdAction = ({
+	organizationOptions,
+	advancedGenerateId,
+	databaseGenerateId,
+}: {
+	organizationOptions: OrganizationOptions;
+	advancedGenerateId: GenerateIdFn | undefined;
+	databaseGenerateId: ConfiguredGenerateIdOption;
+}) => {
+	if (organizationOptions.requireEmailVerificationOnInvitation !== undefined) {
+		return organizationOptions.requireEmailVerificationOnInvitation;
+	}
+	return !hasBuiltInOpaqueInvitationIdGeneration({
+		advancedGenerateId,
+		databaseGenerateId,
+	});
+};
+
+const DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS = 20;
+const DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_DELAY_MS = 25;
+
+const getPositiveIntegerOption = (
+	value: number | undefined,
+	fallback: number,
+) =>
+	typeof value === "number" && Number.isFinite(value)
+		? Math.max(1, Math.floor(value))
+		: fallback;
+
+const getNonNegativeIntegerOption = (
+	value: number | undefined,
+	fallback: number,
+) =>
+	typeof value === "number" && Number.isFinite(value)
+		? Math.max(0, Math.floor(value))
+		: fallback;
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -96,8 +175,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The role to assign to the user
 						 */
 						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+							| OrganizationInvitationRole<O>
+							| OrganizationInvitationRole<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -289,7 +368,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 			});
-			if (alreadyInvited.length && !ctx.body.resend) {
+			if (
+				alreadyInvited.length &&
+				!ctx.body.resend &&
+				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
@@ -386,6 +469,39 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
 				);
+			}
+
+			if (
+				ctx.context.orgOptions.teams?.enabled &&
+				"teamId" in ctx.body &&
+				ctx.body.teamId
+			) {
+				const requestedTeamIds =
+					typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId]
+						: (ctx.body.teamId as string[]);
+				if (requestedTeamIds.some((id) => id.includes(","))) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TEAM_ID,
+					);
+				}
+				// Every requested team must belong to the organization the
+				// invitation is for, so the stored team IDs stay consistent with
+				// the invitation's organization. This runs regardless of whether
+				// a team-size limit is configured.
+				for (const teamId of requestedTeamIds) {
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId,
+					});
+					if (!team) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+						);
+					}
+				}
 			}
 
 			if (
@@ -561,8 +677,14 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			const invitation = await adapter.findInvitationById(
 				ctx.body.invitationId,
 			);
-			const acceptedInvitationMemberLookupAttempts = 20;
-			const acceptedInvitationMemberLookupDelayMs = 25;
+			const acceptedInvitationMemberLookupAttempts = getPositiveIntegerOption(
+				ctx.context.orgOptions.invitationAcceptance?.memberLookupAttempts,
+				DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS,
+			);
+			const acceptedInvitationMemberLookupDelayMs = getNonNegativeIntegerOption(
+				ctx.context.orgOptions.invitationAcceptance?.memberLookupDelayMs,
+				DEFAULT_ACCEPTED_INVITATION_MEMBER_LOOKUP_DELAY_MS,
+			);
 			type AcceptedInvitation = NonNullable<typeof invitation>;
 			type AcceptedMember = Member &
 				InferAdditionalFieldsFromPluginOptions<"member", O, false>;
@@ -656,13 +778,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			};
 
-			if (!invitation || invitation.expiresAt < new Date()) {
+			if (!invitation) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
 
+			// TODO(#9124): `session.user.email` becomes nullable in v2 — this
+			// comparison and its mirrors in rejectInvitation, getInvitation, and
+			// listUserInvitations need null handling.
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -671,7 +796,14 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -684,7 +816,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				return getAcceptedInvitationResponse(invitation);
 			}
 
-			if (invitation.status !== "pending") {
+			if (
+				invitation.expiresAt < new Date() ||
+				invitation.status !== "pending"
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
@@ -727,20 +862,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			// Claim the invitation atomically so only one concurrent accept wins the
+			// pending -> accepted transition; the guarded update is a single statement
+			// and atomic on every adapter. The membership work then runs in a
+			// transaction so it is all-or-nothing where the adapter supports it, and if
+			// it fails the claim is released back to pending so the invitee can retry
+			// instead of being stranded as accepted with no membership.
 			const acceptedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
-				expectedStatus: "pending",
 				status: "accepted",
+				fromStatus: "pending",
 			});
 			if (!acceptedI) {
 				const latestInvitation = await adapter.findInvitationById(
 					ctx.body.invitationId,
 				);
-				if (
-					latestInvitation &&
-					latestInvitation.expiresAt >= new Date() &&
-					latestInvitation.status === "accepted"
-				) {
+				if (latestInvitation && latestInvitation.status === "accepted") {
 					return getAcceptedInvitationResponse(latestInvitation);
 				}
 				throw APIError.from(
@@ -748,78 +885,106 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
-			if (
-				ctx.context.orgOptions.teams &&
-				ctx.context.orgOptions.teams.enabled &&
-				"teamId" in acceptedI &&
-				acceptedI.teamId
-			) {
-				const teamIds = (acceptedI.teamId as string).split(",");
-				const onlyOne = teamIds.length === 1;
 
-				for (const teamId of teamIds) {
-					await adapter.findOrCreateTeamMember({
-						teamId,
-						userId: session.user.id,
-					});
+			const member = await runWithTransaction(ctx.context.adapter, async () => {
+				if (
+					ctx.context.orgOptions.teams &&
+					ctx.context.orgOptions.teams.enabled &&
+					"teamId" in acceptedI &&
+					acceptedI.teamId
+				) {
+					const teamIds = (acceptedI.teamId as string).split(",");
+					const onlyOne = teamIds.length === 1;
 
-					if (
-						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-						"undefined"
-					) {
-						const members = await adapter.countTeamMembers({ teamId });
-
-						const maximumMembersPerTeam =
-							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-							"function"
-								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-										teamId,
-										session,
-										organizationId: invitation.organizationId,
-									})
-								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
-
-						if (members >= maximumMembersPerTeam) {
+					for (const teamId of teamIds) {
+						// Confirm the team still belongs to the accepted invitation's
+						// organization before adding the member. This keeps team
+						// membership consistent with the invitation's organization,
+						// including for older invitations and for teams that were
+						// moved or removed between invite and accept.
+						const team = await adapter.findTeamById({
+							teamId,
+							organizationId: acceptedI.organizationId,
+						});
+						if (!team) {
 							throw APIError.from(
-								"FORBIDDEN",
-								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+								"BAD_REQUEST",
+								ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 							);
 						}
+
+						const maximumMembersPerTeam = await resolveMaximumMembersPerTeam(
+							ctx.context.orgOptions.teams,
+							{
+								teamId,
+								organizationId: acceptedI.organizationId,
+								session,
+							},
+						);
+						if (maximumMembersPerTeam !== undefined) {
+							const result = await adapter.addTeamMemberWithLimit({
+								teamId,
+								userId: session.user.id,
+								maximumMembersPerTeam,
+							});
+							if (result.status === "limitReached") {
+								throw APIError.from(
+									"FORBIDDEN",
+									ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+								);
+							}
+						} else {
+							await adapter.findOrCreateTeamMember({
+								teamId: teamId,
+								userId: session.user.id,
+							});
+						}
+					}
+
+					if (onlyOne) {
+						const teamId = teamIds[0]!;
+						const updatedSession = await adapter.setActiveTeam(
+							session.session.token,
+							teamId,
+							ctx,
+						);
+
+						await setSessionCookie(ctx, {
+							session: updatedSession,
+							user: session.user,
+						});
 					}
 				}
 
-				if (onlyOne) {
-					const teamId = teamIds[0]!;
-					const updatedSession = await adapter.setActiveTeam(
-						session.session.token,
-						teamId,
-						ctx,
-					);
-
-					await setSessionCookie(ctx, {
-						session: updatedSession,
-						user: session.user,
-					});
-				}
-			}
-
-			const existingMember = await findExistingMember(
-				invitation.organizationId,
-			);
-			const member = existingMember
-				? existingMember
-				: await adapter.createMember({
-						organizationId: invitation.organizationId,
+				const existingMember = await findExistingMember(
+					acceptedI.organizationId,
+				);
+				const member =
+					existingMember ??
+					(await adapter.createMember({
+						organizationId: acceptedI.organizationId,
 						userId: session.user.id,
-						role: invitation.role,
+						role: acceptedI.role,
 						createdAt: new Date(),
-					});
+					}));
 
-			await adapter.setActiveOrganization(
-				session.session.token,
-				acceptedI.organizationId,
-				ctx,
-			);
+				await adapter.setActiveOrganization(
+					session.session.token,
+					acceptedI.organizationId,
+					ctx,
+				);
+
+				return member;
+			}).catch(async (error) => {
+				// The membership work failed; release the claim so the invitation is
+				// pending again and the invitee can retry.
+				await adapter.updateInvitation({
+					invitationId: ctx.body.invitationId,
+					status: "pending",
+				});
+				throw error;
+			});
+
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,
@@ -896,7 +1061,14 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
-				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
 				!session.user.emailVerified
 			) {
 				throw APIError.from(
@@ -1159,6 +1331,22 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
 				);
 			}
+			if (
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId:
+						ctx.context.options.advanced?.database?.generateId,
+				}) &&
+				!session.user.emailVerified
+			) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
+			}
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -1337,6 +1525,16 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "User email cannot be passed for client side API calls.",
 				});
+			}
+
+			// When the caller has a session, require an ownership signal stronger
+			// than the email string before enumerating invitations targeted at it.
+			// Server-side SDK calls without a session are trusted and skip the gate.
+			if (session && !session.user.emailVerified) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION,
+				);
 			}
 
 			const userEmail = session?.user.email || ctx.query?.email;

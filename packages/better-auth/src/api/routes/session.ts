@@ -13,6 +13,7 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
+import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -278,13 +279,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								await getShouldSkipSessionRefresh();
 
 							if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
-								const cookieMaxAge =
-									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
-								const newExpiresAt = getDate(cookieMaxAge, "sec");
 								const refreshedSession = {
 									session: {
 										...session.session,
-										expiresAt: newExpiresAt,
 									},
 									user: session.user,
 									updatedAt: Date.now(),
@@ -522,6 +519,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		},
 	);
 
+/**
+ * Whether the deployment keeps sessions in a durable server-side store
+ * (a database or secondary storage) rather than only in the signed cookie.
+ *
+ * Sensitive operations use this to decide whether the cookie cache is merely an
+ * optimization that must be bypassed for an authoritative read (`true`), or the
+ * only place the session lives and therefore the authority itself (`false`, for
+ * stateless / DB-less deployments). Pass the result as `disableCookieCache` so a
+ * revoked-but-cached session cannot authorize a sensitive action.
+ */
+export const isStateful = (ctx: GenericEndpointContext): boolean =>
+	hasServerSessionStore(ctx.context.options);
+
 export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,
 	S extends Record<string, any> = Record<string, any>,
@@ -546,17 +556,40 @@ export const getSessionFromCtx = async <
 		method: "GET",
 		asResponse: false,
 		headers: ctx.headers!,
-		returnHeaders: false,
+		returnHeaders: true,
 		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
+			// `disableCookieCache`/`disableRefresh` only ever make validation
+			// stricter, so OR the caller's intent with the request. A caller that
+			// forces strict validation must not be weakened by a request query
+			// param (e.g. `?disableCookieCache=`), which the plain merge would let
+			// override the forced value back to false.
+			disableCookieCache:
+				config?.disableCookieCache || ctx.query?.disableCookieCache,
+			disableRefresh: config?.disableRefresh || ctx.query?.disableRefresh,
 		},
-	}).catch((e) => {
+	}).catch(() => {
 		return null;
 	});
-	ctx.context.session = session;
-	return session as {
+	if (!session) {
+		ctx.context.session = null;
+		return null;
+	}
+	if (session.headers) {
+		session.headers.forEach((value, key) => {
+			if (!ctx.context.responseHeaders) {
+				ctx.context.responseHeaders = new Headers({ [key]: value });
+			} else if (key.toLowerCase() === "set-cookie") {
+				ctx.context.responseHeaders.append(key, value);
+			} else {
+				ctx.context.responseHeaders.set(key, value);
+			}
+		});
+	}
+	ctx.context.session = session.response;
+	return session.response as {
 		session: S & Session;
 		user: U & User;
 	} | null;
@@ -648,7 +681,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		{
 			method: "GET",
 			operationId: "listUserSessions",
-			use: [sessionMiddleware],
+			use: [freshSessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
@@ -813,7 +846,7 @@ export const revokeSessions = createAuthEndpoint(
 	},
 	async (ctx) => {
 		try {
-			await ctx.context.internalAdapter.deleteSessions(
+			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {

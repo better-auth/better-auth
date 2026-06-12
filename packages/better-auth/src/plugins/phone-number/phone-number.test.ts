@@ -106,6 +106,75 @@ describe("phone-number", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4839
+ */
+describe("phone-number callbackOnVerification on updatePhoneNumber", async () => {
+	let otp = "";
+	const callbackOnVerification = vi.fn();
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					callbackOnVerification,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const headers = new Headers();
+	const initialPhoneNumber = "+251911121314";
+	const updatedPhoneNumber = "+0123456789";
+
+	it("fires when verifying a new phone number on an authenticated session", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: initialPhoneNumber });
+		await client.phoneNumber.verify(
+			{ phoneNumber: initialPhoneNumber, code: otp },
+			{ onSuccess: sessionSetter(headers) },
+		);
+		callbackOnVerification.mockClear();
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: updatedPhoneNumber,
+			fetchOptions: { headers },
+		});
+		const res = await client.phoneNumber.verify({
+			phoneNumber: updatedPhoneNumber,
+			updatePhoneNumber: true,
+			code: otp,
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+		expect(callbackOnVerification).toHaveBeenCalledTimes(1);
+		expect(callbackOnVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				phoneNumber: updatedPhoneNumber,
+				user: expect.objectContaining({
+					phoneNumber: updatedPhoneNumber,
+					phoneNumberVerified: true,
+				}),
+			}),
+			expect.any(Object),
+		);
+	});
+});
+
 describe("phone-number send otp error handling", async () => {
 	const sendOTP = vi.fn(async () => {
 		throw new Error("SMS provider error");
@@ -407,6 +476,120 @@ describe("verify phone-number", async () => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Too many attempts");
+	});
+});
+
+describe("verify phone-number race condition protection", async () => {
+	let otp = "";
+
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+					allowedAttempts: 3,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+	const authCtx = await auth.$context;
+
+	it("should allow exactly one success when the same code is verified concurrently", async () => {
+		const phoneNumber = "+251900000001";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+
+		// Force both verifications to read the live OTP row before either
+		// consumes it. Without an atomic consume gate, both would read a valid
+		// code and both would mint a session; the gate must let only one win.
+		const originalFind = authCtx.internalAdapter.findVerificationValue;
+		let entered = 0;
+		let releaseBarrier!: () => void;
+		const barrier = new Promise<void>((resolve) => {
+			releaseBarrier = resolve;
+		});
+		authCtx.internalAdapter.findVerificationValue = (async (
+			identifier: string,
+			...rest: unknown[]
+		) => {
+			const result = await (
+				originalFind as (...args: unknown[]) => Promise<unknown>
+			)(identifier, ...rest);
+			if (identifier === phoneNumber) {
+				entered++;
+				if (entered >= 2) releaseBarrier();
+				await barrier;
+			}
+			return result;
+		}) as typeof authCtx.internalAdapter.findVerificationValue;
+
+		try {
+			const results = await Promise.all([
+				client.phoneNumber.verify({ phoneNumber, code: otp }),
+				client.phoneNumber.verify({ phoneNumber, code: otp }),
+			]);
+
+			const successes = results.filter((r) => r.data?.status === true);
+			const failures = results.filter((r) => r.error);
+			expect(successes).toHaveLength(1);
+			expect(failures).toHaveLength(1);
+			// The loser must be cleanly rejected by the OTP gate, not fail by
+			// accident downstream after both consumed the same code.
+			expect(failures[0]!.error?.status).toBe(400);
+			expect(failures[0]!.error?.message).toBe("Invalid OTP");
+		} finally {
+			authCtx.internalAdapter.findVerificationValue = originalFind;
+		}
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		expect(verificationValue).toBeNull();
+	});
+
+	it("should increment the stored attempt counter by exactly one per wrong code", async () => {
+		const phoneNumber = "+251900000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const correctCode = otp;
+
+		for (let expectedAttempts = 1; expectedAttempts <= 2; expectedAttempts++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: "000000",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored).not.toBeNull();
+			const [storedValue, attempts] = stored!.value.split(":");
+			// The original code survives each wrong attempt so the user can
+			// still redeem it, and the counter advances by exactly one.
+			expect(storedValue).toBe(correctCode);
+			expect(attempts).toBe(String(expectedAttempts));
+		}
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber,
+			code: correctCode,
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+
+		const consumed =
+			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		expect(consumed).toBeNull();
 	});
 });
 
@@ -816,6 +999,91 @@ describe("updateUser phone number update prevention", async () => {
 		});
 		expect(sessionAfterUpdate.data?.user.phoneNumberVerified).toBe(true);
 		expect(sessionAfterUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
+	});
+});
+
+describe("updateUser phone number disassociation", async () => {
+	let otp = "";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const originalHeaders = new Headers();
+	const reclaimerHeaders = new Headers();
+	const sharedPhoneNumber = "+251911121314";
+
+	it("should null phone number and reset verified flag atomically", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: sharedPhoneNumber });
+		const verifyRes = await client.phoneNumber.verify(
+			{ phoneNumber: sharedPhoneNumber, code: otp },
+			{ onSuccess: sessionSetter(originalHeaders) },
+		);
+		expect(verifyRes.error).toBe(null);
+
+		const updateRes = await client.updateUser({
+			phoneNumber: null,
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(updateRes.error).toBe(null);
+
+		const session = await client.getSession({
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(session.data?.user.phoneNumber).toBe(null);
+		expect(session.data?.user.phoneNumberVerified).toBe(false);
+	});
+
+	it("should let another user claim the released number via verify", async () => {
+		await client.signUp.email(
+			{
+				email: "reclaimer@test.com",
+				password: "password123",
+				name: "reclaimer",
+			},
+			{ onSuccess: sessionSetter(reclaimerHeaders) },
+		);
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: sharedPhoneNumber,
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: sharedPhoneNumber,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		expect(verifyRes.error).toBe(null);
+
+		const reclaimerSession = await client.getSession({
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		expect(reclaimerSession.data?.user.phoneNumber).toBe(sharedPhoneNumber);
+		expect(reclaimerSession.data?.user.phoneNumberVerified).toBe(true);
+
+		const originalSession = await client.getSession({
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(originalSession.data?.user.phoneNumber).toBe(null);
 	});
 });
 

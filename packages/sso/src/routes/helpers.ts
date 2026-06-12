@@ -1,7 +1,7 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import * as saml from "samlify";
+import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
+import { normalizePem, safeJsonParse } from "../utils";
 
 export async function findSAMLProvider(
 	providerId: string,
@@ -43,6 +43,7 @@ export function createSP(
 	baseURL: string,
 	providerId: string,
 	opts?: {
+		clockSkew?: number;
 		relayState?: string;
 		sloOptions?: {
 			wantLogoutRequestSigned?: boolean;
@@ -83,15 +84,19 @@ export function createSP(
 		wantLogoutResponseSigned:
 			opts?.sloOptions?.wantLogoutResponseSigned ?? false,
 		metadata: spData?.metadata,
-		privateKey: spData?.privateKey || config.privateKey,
+		privateKey: normalizePem(spData?.privateKey || config.privateKey),
 		privateKeyPass: spData?.privateKeyPass,
 		isAssertionEncrypted: spData?.isAssertionEncrypted || false,
-		encPrivateKey: spData?.encPrivateKey,
+		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		nameIDFormat: config.identifierFormat
 			? [config.identifierFormat]
 			: undefined,
 		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
 	});
 }
 
@@ -100,10 +105,10 @@ export function createIdP(config: SAMLConfig) {
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
 			metadata: idpData.metadata,
-			privateKey: idpData.privateKey,
+			privateKey: normalizePem(idpData.privateKey),
 			privateKeyPass: idpData.privateKeyPass,
 			isAssertionEncrypted: idpData.isAssertionEncrypted,
-			encPrivateKey: idpData.encPrivateKey,
+			encPrivateKey: normalizePem(idpData.encPrivateKey),
 			encPrivateKeyPass: idpData.encPrivateKeyPass,
 		});
 	}
@@ -119,7 +124,7 @@ export function createIdP(config: SAMLConfig) {
 		signingCert: idpData?.cert || config.cert,
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
 		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: idpData?.encPrivateKey,
+		encPrivateKey: normalizePem(idpData?.encPrivateKey),
 		encPrivateKeyPass: idpData?.encPrivateKeyPass,
 	});
 }

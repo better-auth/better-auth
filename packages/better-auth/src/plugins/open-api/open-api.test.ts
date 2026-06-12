@@ -26,15 +26,28 @@ describe("open-api", async () => {
 		expect(schema).toMatchSnapshot("openAPISchema");
 	});
 
-	it("should have an id field in the User schema", async () => {
+	it("should mark model id fields as required and read-only", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
 			string,
 			Record<string, any>
 		>;
 		expect(schemas["User"]!.properties.id).toEqual({
+			readOnly: true,
 			type: "string",
 		});
+		expect(schemas["User"]!.required).toContain("id");
+		expect(schemas["User"]!.properties.emailVerified).toEqual({
+			default: false,
+			readOnly: true,
+			type: "boolean",
+		});
+		expect(schemas["User"]!.required).toContain("emailVerified");
+		expect(schemas["Session"]!.properties.id).toEqual({
+			readOnly: true,
+			type: "string",
+		});
+		expect(schemas["Session"]!.required).toContain("id");
 	});
 
 	it("should include additionalFields in the User schema", async () => {
@@ -139,6 +152,45 @@ describe("open-api", async () => {
 		expect(getSessionSchema.nullable).toBe(undefined);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9669
+	 */
+	it("should emit unique operationIds across multi-method endpoints", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const seen = new Set<string>();
+
+		for (const pathItem of Object.values(paths)) {
+			for (const method of ["get", "post", "put", "patch", "delete"]) {
+				const id = pathItem[method]?.operationId;
+				if (!id) continue;
+				expect(seen.has(id)).toBe(false);
+				seen.add(id);
+			}
+		}
+
+		expect(paths["/get-session"].get.operationId).toBe("getSession");
+		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9669
+	 */
+	it("should serialize the generated schema without circular response refs", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		expect(paths["/get-session"].get.responses["200"]).not.toBe(
+			paths["/get-session"].post.responses["200"],
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/open-api/generate-schema"),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.text()).not.toContain("[Circular ref");
+	});
+
 	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
@@ -195,6 +247,29 @@ describe("open-api", async () => {
 		expect(() =>
 			checkNoNullable(requestBodySchema, "signInSocialRequestBody"),
 		).not.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9260
+	 */
+	it("should not require token/user in /sign-in/social response and allow redirect to be true or false", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const responseSchema =
+			paths["/sign-in/social"].post.responses["200"].content["application/json"]
+				.schema;
+
+		expect(responseSchema.required).toEqual(["redirect"]);
+		expect(responseSchema.required).not.toContain("token");
+		expect(responseSchema.required).not.toContain("user");
+
+		expect(responseSchema.properties.redirect.enum).toBeUndefined();
+		expect(responseSchema.properties.redirect.type).toBe("boolean");
+
+		expect(responseSchema.properties.token).toBeDefined();
+		expect(responseSchema.properties.user).toBeDefined();
+		expect(responseSchema.properties.url).toBeDefined();
 	});
 
 	it("should correctly unwrap ZodDefault and infer inner type", async () => {

@@ -3,6 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";
@@ -936,6 +937,265 @@ describe("debug mode stack trace", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9105
+ */
+describe("dynamic baseURL resolution", () => {
+	const endpoints = {
+		readBaseURL: createAuthEndpoint(
+			"/read-base-url",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				return { baseURL: c.context.baseURL };
+			},
+		),
+	};
+
+	it("should resolve dynamic baseURL from headers for direct auth.api calls", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should leave baseURL untouched for static string config", async () => {
+		const authContext = init({
+			baseURL: "https://static.example.com",
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "other.example.com" }),
+		});
+		expect(res.baseURL).toBe("https://static.example.com/api/auth");
+	});
+
+	it("should reject Node IncomingMessage-shaped objects when duck typing", async () => {
+		// A Node http.IncomingMessage has url/method/headers but also socket,
+		// and its headers are a plain object (not Web Headers). Accepting it
+		// as a Fetch Request would crash inside getHostFromSource.
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const fakeIncomingMessage = {
+			url: "/read-base-url",
+			method: "GET",
+			headers: { host: "example.com" },
+			socket: {},
+		};
+		const res = await authEndpoints.readBaseURL({
+			request: fakeIncomingMessage as unknown as Request,
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should not mutate the shared authContext across calls", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const [resA, resB] = await Promise.all([
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "tenant-a.example.com" }),
+			}),
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "tenant-b.example.com" }),
+			}),
+		]);
+		expect(resA.baseURL).toBe("https://tenant-a.example.com/api/auth");
+		expect(resB.baseURL).toBe("https://tenant-b.example.com/api/auth");
+
+		const sharedCtx = await authContext;
+		expect(sharedCtx.baseURL).toBe("");
+	});
+
+	it("should ignore x-forwarded-host when trustedProxyHeaders is explicitly disabled", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "evil.com"],
+				protocol: "https",
+			},
+			advanced: { trustedProxyHeaders: false },
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "evil.com",
+			}),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should honor x-forwarded-host when trustedProxyHeaders is enabled", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "proxy.example.com"],
+				protocol: "https",
+			},
+			advanced: { trustedProxyHeaders: true },
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+			}),
+		});
+		expect(res.baseURL).toBe("https://proxy.example.com/api/auth");
+	});
+
+	it("should throw APIError when the host is not in allowedHosts", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await expect(
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "not-allowed.com" }),
+			}),
+		).rejects.toSatisfy(isAPIError);
+	});
+
+	it("should throw APIError when called with no source and no fallback", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await expect(authEndpoints.readBaseURL()).rejects.toSatisfy(isAPIError);
+	});
+
+	it("should use fallback when source is missing", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+				fallback: "https://default.example.com",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL();
+		expect(res.baseURL).toBe("https://default.example.com/api/auth");
+	});
+
+	it("should expose a Request-like to a user-defined trustedOrigins callback", async () => {
+		let seenHost: string | null | undefined;
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+			trustedOrigins: async (req) => {
+				seenHost = req?.headers.get("host");
+				return [];
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(seenHost).toBe("example.com");
+	});
+
+	it("should return a Response for cross-realm Request inputs", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		// Simulate a cross-realm Request: passes the `[object Request]`
+		// toString check but fails `instanceof Request`.
+		const realRequest = new Request(
+			"https://example.com/api/auth/read-base-url",
+		);
+		const crossRealm = Object.create(Object.prototype);
+		crossRealm.url = realRequest.url;
+		crossRealm.method = realRequest.method;
+		crossRealm.headers = realRequest.headers;
+		Object.defineProperty(crossRealm, Symbol.toStringTag, { value: "Request" });
+
+		const res = await authEndpoints.readBaseURL({ request: crossRealm });
+		expect(res).toBeInstanceOf(Response);
+	});
+
+	it("should infer http for loopback hosts on the headers-only path", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["localhost:3000"],
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "localhost:3000" }),
+		});
+		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
+	});
+
+	it("should rehydrate trustedProviders per call when configured as a function", async () => {
+		const hosts: string[] = [];
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
+				protocol: "https",
+			},
+			account: {
+				accountLinking: {
+					trustedProviders: async (req) => {
+						const host = req?.headers.get("host");
+						if (host) hosts.push(host);
+						return ["google"];
+					},
+				},
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "tenant-a.example.com" }),
+		});
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "tenant-b.example.com" }),
+		});
+		expect(hosts).toEqual(["tenant-a.example.com", "tenant-b.example.com"]);
+	});
+});
+
 describe("custom response code", () => {
 	const endpoints = {
 		responseWithStatus: createAuthEndpoint(
@@ -967,5 +1227,230 @@ describe("custom response code", () => {
 		});
 		expect(response.status).toBe(201);
 		expect(response.response).toEqual({ success: true });
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8576
+ */
+describe("response headers on APIError", async () => {
+	const endpoints = {
+		setCookieThenThrow: createAuthEndpoint(
+			"/set-cookie-then-throw",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				c.setCookie("session_data", "", { maxAge: 0 });
+				throw c.error("UNAUTHORIZED", { message: "cleared" });
+			},
+		),
+		setCookieThenThrowWithExplicitHeaders: createAuthEndpoint(
+			"/set-cookie-then-throw-with-explicit-headers",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				throw new APIError(
+					"FOUND",
+					{ message: "redirect" },
+					{ location: "/login" },
+				);
+			},
+		),
+		setCookieThenRedirect: createAuthEndpoint(
+			"/set-cookie-then-redirect",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				c.setCookie("session_data", "", { maxAge: 0 });
+				throw c.redirect("/dashboard");
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("preserves Set-Cookie headers accumulated via c.setCookie when the endpoint throws APIError", async () => {
+		const response = await authEndpoints.setCookieThenThrow({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(401);
+
+		const setCookie = response.headers.get("set-cookie") ?? "";
+		expect(setCookie).toMatch(/(^|,\s*)session=;/);
+		expect(setCookie).toMatch(/(^|,\s*)session_data=;/);
+		expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
+	});
+
+	it("merges ctx.responseHeaders with explicit APIError headers so both survive", async () => {
+		const response = await authEndpoints.setCookieThenThrowWithExplicitHeaders({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/login");
+		expect(response.headers.get("set-cookie") ?? "").toMatch(
+			/(^|,\s*)session=;/,
+		);
+	});
+
+	it("attaches merged headers to the thrown APIError on the non-response path", async () => {
+		let caught: APIError | undefined;
+		try {
+			await authEndpoints.setCookieThenThrowWithExplicitHeaders();
+		} catch (e) {
+			caught = e as APIError;
+		}
+		expect(caught).toBeInstanceOf(APIError);
+		const merged = (
+			caught as { [kAPIErrorHeaderSymbol]?: Headers } | undefined
+		)?.[kAPIErrorHeaderSymbol];
+		expect(merged).toBeInstanceOf(Headers);
+		expect(merged?.get("location")).toBe("/login");
+		expect(merged?.get("set-cookie") ?? "").toMatch(/(^|,\s*)session=;/);
+	});
+
+	it("does not duplicate Set-Cookie when c.redirect reuses ctx.responseHeaders as e.headers", async () => {
+		const response = await authEndpoints.setCookieThenRedirect({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/dashboard");
+
+		const setCookies = response.headers.getSetCookie();
+		expect(setCookies).toHaveLength(2);
+		expect(setCookies.some((c) => c.startsWith("session="))).toBe(true);
+		expect(setCookies.some((c) => c.startsWith("session_data="))).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9887
+ *
+ * Configured hooks run once per dispatch boundary (the HTTP router or an
+ * `auth.api.*` call), not once per endpoint invocation. Internal
+ * endpoint-to-endpoint calls, such as `sessionMiddleware` resolving the
+ * session through the `getSession` endpoint, must not re-run them.
+ */
+describe("hook dispatch boundary", async () => {
+	it("does not re-run configured hooks for internal getSession calls", async () => {
+		const beforePaths: string[] = [];
+		const afterPaths: string[] = [];
+		const { auth, signInWithTestUser } = await getTestInstance({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					beforePaths.push(ctx.path);
+				}),
+				after: createAuthMiddleware(async (ctx) => {
+					afterPaths.push(ctx.path);
+				}),
+			},
+		});
+		const { headers } = await signInWithTestUser();
+
+		// `/list-sessions` resolves the session via `sessionMiddleware`, which
+		// calls the `getSession` endpoint internally.
+		beforePaths.length = 0;
+		afterPaths.length = 0;
+		await auth.api.listSessions({ headers });
+
+		expect(beforePaths).toContain("/list-sessions");
+		expect(afterPaths).toContain("/list-sessions");
+		expect(beforePaths).not.toContain("/get-session");
+		expect(afterPaths).not.toContain("/get-session");
+
+		// Sanity: hooks do run when `getSession` is the dispatched endpoint, so
+		// the assertions above reflect the boundary, not a disabled hook.
+		beforePaths.length = 0;
+		await auth.api.getSession({ headers });
+		expect(beforePaths).toContain("/get-session");
+	});
+});
+
+describe("before hook response headers", async () => {
+	const endpoints = {
+		guarded: createAuthEndpoint("/guarded", { method: "GET" }, async () => ({
+			handler: true,
+		})),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				c.setHeader("x-before", "yes");
+				c.setCookie("from_before", "1");
+				return { shortCircuited: true };
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("serializes the response headers a short-circuiting before hook set", async () => {
+		const response = await api.guarded({ asResponse: true });
+		expect(await response.json()).toMatchObject({ shortCircuited: true });
+		expect(response.headers.get("x-before")).toBe("yes");
+		expect(response.headers.get("set-cookie")).toContain("from_before=1");
+	});
+});
+
+describe("after hook error headers", async () => {
+	const endpoints = {
+		ok: createAuthEndpoint("/ok", { method: "GET" }, async () => ({
+			ok: true,
+		})),
+	};
+	const authContext = init({
+		hooks: {
+			after: createAuthMiddleware(async (c) => {
+				c.setCookie("from_after", "1");
+				throw c.error(
+					"BAD_REQUEST",
+					{ message: "after rejected" },
+					new Headers({ location: "/login" }),
+				);
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("merges accumulated cookies with explicit APIError headers from an after hook", async () => {
+		const response = await api.ok({ asResponse: true });
+		expect(response.status).toBe(400);
+		expect(response.headers.get("location")).toBe("/login");
+		expect(response.headers.get("set-cookie")).toContain("from_after=1");
+	});
+});
+
+describe("before hook request headers", async () => {
+	const endpoints = {
+		echoHeaders: createAuthEndpoint(
+			"/echo-headers",
+			{ method: "GET" },
+			async (c) => Object.fromEntries(c.headers?.entries() ?? []),
+		),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				if (c.path === "/echo-headers") {
+					return { context: { headers: new Headers({ injected: "yes" }) } };
+				}
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("merges hook-provided request headers when the call has none", async () => {
+		// No request headers, so the dispatch context starts with `headers`
+		// undefined; the merge must not throw.
+		const res = await api.echoHeaders();
+		expect(res).toMatchObject({ injected: "yes" });
 	});
 });

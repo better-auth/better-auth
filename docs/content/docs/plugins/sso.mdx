@@ -7,6 +7,10 @@ description: Integrate Single Sign-On (SSO) with your application.
 
 Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC), OAuth2 providers, and SAML 2.0.
 
+<Callout>
+  Need self-service SSO where your customers can configure their own SSO connections? [Contact us for enterprise](/enterprise).
+</Callout>
+
 ## Installation
 
 <Steps>
@@ -174,7 +178,13 @@ This allows most endpoint-related fields in `oidcConfig` to be **optional** — 
   ```ts
   type registerSSOProvider = {
       /**
-       * Unique identifier for the provider
+       * Unique identifier for the provider.
+       *
+       * Must not collide with a configured social provider, an
+       * `accountLinking.trustedProviders` entry, or a reserved built-in id
+       * (e.g. `credential`). Registration is rejected (422) otherwise, since
+       * SSO provider ids share the account-linking provider namespace and a
+       * collision could otherwise inherit trust meant for that provider.
        */
       providerId: string = "okta"
       /**
@@ -754,6 +764,10 @@ const auth = betterAuth({
 #### Linking SSO Providers to Organizations
 
 When registering an SSO provider, you can link it to a specific organization:
+
+<Callout type="info">
+  When the `organization` plugin is enabled and `organizationId` is supplied, the caller must be an organization `owner` or `admin`. Regular members receive a `403 FORBIDDEN`. SSO deployments without the `organization` plugin keep the prior behavior (membership lookup only).
+</Callout>
 
 ```ts title="register-org-provider.ts"
 import { auth } from "@/lib/auth"
@@ -1479,7 +1493,7 @@ export const ssoProviderTableFields = [
 	},
 ];
 
-<DatabaseTable fields={ssoProviderTableFields} />
+<DatabaseTable name="ssoProvider" fields={ssoProviderTableFields} />
 
 ### If you have enabled domain verification:
 
@@ -1494,7 +1508,7 @@ export const ssoProviderDomainVerificationFields = [
 	},
 ];
 
-<DatabaseTable fields={ssoProviderDomainVerificationFields} />
+<DatabaseTable name="ssoProvider" fields={ssoProviderDomainVerificationFields} />
 
 ### IdP-Initiated SAML SSO
 

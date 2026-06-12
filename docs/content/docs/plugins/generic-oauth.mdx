@@ -260,6 +260,7 @@ interface GenericOAuthConfig {
   prompt?: string;
   pkce?: boolean;
   accessType?: string;
+  accessTokenExpiresIn?: number;
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
 }
 ```
@@ -297,6 +298,8 @@ interface GenericOAuthConfig {
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**accessTokenExpiresIn**: (Optional) Fallback access-token lifetime in seconds, used only when the provider's token response omits `expires_in`. Without a known expiry, `getAccessToken` cannot tell the token has expired and never refreshes it. Set this to the token's lifetime so the expiry is tracked and the token is refreshed when needed. Leave unset if the provider returns `expires_in`.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
 
