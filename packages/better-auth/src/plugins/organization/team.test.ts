@@ -1653,7 +1653,10 @@ describe("accept-invitation validates team capacity before adding the member", a
 		expect(orgMembers.some((m) => m.userId === userId)).toBe(false);
 	});
 
-	it("accepts only once when the same invitation is accepted concurrently", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9154
+	 */
+	it("replays the accepted member when the same invitation is accepted concurrently", async () => {
 		const team = await auth.api.createTeam({
 			headers: owner.headers,
 			body: { name: "Concurrent Team", organizationId: org.id },
@@ -1674,10 +1677,13 @@ describe("accept-invitation validates team capacity before adding the member", a
 			}),
 		]);
 
-		// One request wins the claim; the other observes the invitation is no
-		// longer pending and is rejected, never running the side effects twice.
-		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-		expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+		const acceptedResults = results.flatMap((result) =>
+			result.status === "fulfilled" ? [result.value] : [],
+		);
+		expect(acceptedResults).toHaveLength(2);
+		expect(
+			new Set(acceptedResults.map((result) => result.member.id)).size,
+		).toBe(1);
 
 		const orgMembers = await ctx.adapter.findMany<{ userId: string }>({
 			model: "member",

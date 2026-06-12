@@ -16,6 +16,7 @@ import type {
 	InferOrganization,
 	InferTeam,
 	InvitationInput,
+	InvitationStatus,
 	Member,
 	MemberInput,
 	OrganizationInput,
@@ -940,8 +941,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
 		> => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
+			const addTeamMember = async (
+				adapter: Awaited<ReturnType<typeof getCurrentAdapter>>,
+			) => {
 				const existing = await adapter.findOne<TeamMember>({
 					model: "teamMember",
 					where: [
@@ -950,14 +952,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				});
 				if (existing) {
-					return { status: "added", member: existing };
+					return { status: "added" as const, member: existing };
 				}
 				const count = await adapter.count({
 					model: "teamMember",
 					where: [{ field: "teamId", value: data.teamId }],
 				});
 				if (count >= data.maximumMembersPerTeam) {
-					return { status: "limitReached" };
+					return { status: "limitReached" as const };
 				}
 				const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>(
 					{
@@ -969,7 +971,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					},
 				);
-				return { status: "added", member };
+				return { status: "added" as const, member };
+			};
+
+			const currentAdapter = await getCurrentAdapter(baseAdapter);
+			if (currentAdapter !== baseAdapter) {
+				return await addTeamMember(currentAdapter);
+			}
+			return await runWithTransaction(baseAdapter, async () => {
+				return await addTeamMember(await getCurrentAdapter(baseAdapter));
 			});
 		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
@@ -1133,13 +1143,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "pending" | "accepted" | "canceled" | "rejected";
+			status: InvitationStatus;
 			/**
 			 * Only transition when the invitation is currently in this status. The
 			 * guarded update is atomic, so a concurrent caller racing the same
 			 * transition gets `null` instead of both proceeding.
 			 */
-			fromStatus?: "pending";
+			fromStatus?: InvitationStatus;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const where = [{ field: "id", value: data.invitationId }];

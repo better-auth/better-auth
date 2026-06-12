@@ -143,15 +143,19 @@ class BunSqliteConnection implements DatabaseConnection {
 			});
 		}
 
+		const firstSqlToken = sql.trimStart().split(/\s+/, 1)[0]?.toLowerCase();
+		const shouldReturnInsertId =
+			firstSqlToken === "insert" || firstSqlToken === "replace";
 		const { changes, lastInsertRowid } = stmt.run(...params);
+		const insertId =
+			typeof lastInsertRowid === "bigint"
+				? lastInsertRowid
+				: BigInt(lastInsertRowid);
 
 		return Promise.resolve({
 			rows: [],
 			numAffectedRows: BigInt(changes),
-			insertId:
-				typeof lastInsertRowid === "bigint"
-					? lastInsertRowid
-					: BigInt(lastInsertRowid),
+			...(shouldReturnInsertId ? { insertId } : {}),
 		});
 	}
 

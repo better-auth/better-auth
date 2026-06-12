@@ -83,6 +83,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	let dialect: Dialect | undefined = undefined;
+	let transaction: boolean | undefined = undefined;
 
 	const databaseType = getKyselyDatabaseType(db);
 
@@ -94,17 +95,20 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new SqliteDialect({
 			database: db,
 		});
+		transaction = true;
 	}
 
 	if ("getConnection" in db) {
 		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
+		transaction = true;
 	}
 
 	if ("connect" in db) {
 		dialect = new PostgresDialect({
 			pool: db,
 		});
+		transaction = true;
 	}
 
 	if ("fileControl" in db) {
@@ -112,6 +116,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
+		transaction = true;
 	}
 
 	if ("createSession" in db) {
@@ -141,6 +146,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			dialect = new NodeSqliteDialect({
 				database: db,
 			});
+			transaction = true;
 		}
 	}
 
@@ -150,11 +156,12 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new D1SqliteDialect({
 			database: db,
 		});
+		transaction = false;
 	}
 
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
-		transaction: undefined,
+		transaction,
 	};
 };
