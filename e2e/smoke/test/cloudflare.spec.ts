@@ -6,47 +6,69 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+const repoDir = fileURLToPath(new URL("../../..", import.meta.url));
+
+const assertContentDoesNotInclude = (
+	fileName: string,
+	content: string,
+	unexpectedContents: Iterable<string>,
+) => {
+	for (const unexpectedContent of unexpectedContents) {
+		assert(
+			!content.includes(unexpectedContent),
+			`${fileName} should not contain "${unexpectedContent}"`,
+		);
+	}
+};
 
 describe("(cloudflare) simple server", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9983
+	 */
 	it("check repo", async (t) => {
-		const cp = spawn("npm", ["run", "check"], {
+		const cp = spawn("pnpm", ["run", "check"], {
 			cwd: join(fixturesDir, "cloudflare"),
 			stdio: "pipe",
 		});
+		let stdout = "";
+		let stderr = "";
 
 		t.after(() => {
-			cp.kill("SIGINT");
+			if (cp.exitCode === null) {
+				cp.kill("SIGINT");
+			}
 		});
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
+		const exitMarker = "exiting now.";
 
 		cp.stdout.on("data", (data) => {
-			console.log(data.toString());
-			for (const str of unexpectedWarnings) {
-				assert(
-					!data.toString().includes(str),
-					`Output should not contain "${str}"`,
-				);
-			}
+			const text = data.toString();
+			stdout += text;
+			console.log(text);
+			assertContentDoesNotInclude("stdout", stdout, unexpectedWarnings);
 		});
 
 		cp.stderr.on("data", (data) => {
-			console.error(data.toString());
-			for (const str of unexpectedWarnings) {
-				assert(
-					!data.toString().includes(str),
-					`Error output should not contain "${str}"`,
-				);
-			}
+			const text = data.toString();
+			stderr += text;
+			console.error(text);
+			assertContentDoesNotInclude("stderr", stderr, unexpectedWarnings);
 		});
 
-		await new Promise<void>((resolve) => {
-			cp.stdout.on("data", (data) => {
-				if (data.toString().includes("exiting now.")) {
-					resolve();
-				}
-			});
+		const exitCode = await new Promise<number | null>((resolve, reject) => {
+			cp.on("error", reject);
+			cp.on("close", resolve);
 		});
+		assert.equal(
+			exitCode,
+			0,
+			`Cloudflare fixture check failed.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
+		);
+		assert(
+			stdout.includes(exitMarker),
+			`Cloudflare fixture check exited before Wrangler completed.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
+		);
 
 		const indexJs = await fs.readFile(
 			join(fixturesDir, "cloudflare", "dist", "index.js"),
@@ -58,11 +80,25 @@ describe("(cloudflare) simple server", () => {
 			"node:fs",
 			"node:module",
 		]);
-		for (const content of unexpectedContents) {
-			assert(
-				!indexJs.includes(content),
-				`index.js should not contain "${content}"`,
-			);
-		}
+		assertContentDoesNotInclude("index.js", indexJs, unexpectedContents);
+
+		const rolldownRuntime = await fs.readFile(
+			join(
+				repoDir,
+				"packages",
+				"better-auth",
+				"dist",
+				"_virtual",
+				"_rolldown",
+				"runtime.mjs",
+			),
+			"utf-8",
+		);
+
+		assertContentDoesNotInclude(
+			"better-auth rolldown runtime",
+			rolldownRuntime,
+			["createRequire", "node:module", "__require"],
+		);
 	});
 });
