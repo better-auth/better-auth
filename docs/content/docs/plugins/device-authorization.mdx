@@ -116,9 +116,9 @@ To initiate device authorization, call `device.code` with the client ID:
        */
       scope?: string;
       /**
-       * The user_id to which the device code should be pre-bound. 
-       * This can be used to prevent another authenticated user from
-       * claiming a device code before the intended user verifies it. (optional)
+       * The user ID to which the device code should be pre-bound.
+       * When set, only that user can approve or deny the code.
+       * Pass this from trusted server-side code only. (optional)
        */
       user_id?: string;
   }
@@ -133,7 +133,6 @@ import { authClient } from "@/lib/auth-client"
 const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
-  user_id: "your-user-id"
 });
 
 if (data) {
@@ -142,6 +141,26 @@ if (data) {
   console.log(`Complete verification URL: ${data.verification_uri_complete}`);
 }
 ```
+
+### Pre-binding to a User
+
+If your server already knows which user a device belongs to, pass `user_id` when requesting the device code. The code is then bound to that user from the start. It skips the claiming step, and only the bound user can approve or deny it. Any other signed-in user receives an `access_denied` error.
+
+This is useful when the user code is displayed where others can see it, because no one else can claim the code before the intended user verifies it.
+
+```ts title="server.ts"
+const data = await auth.api.deviceCode({
+  body: {
+    client_id: "your-client-id",
+    scope: "openid profile email",
+    user_id: user.id,
+  },
+});
+```
+
+<Callout type="warn">
+  Pass `user_id` from trusted server-side code. The parameter only restricts who can approve the code, so an untrusted device cannot use it to access another user's account. The protection is only meaningful when your server controls how codes are issued.
+</Callout>
 
 ### Polling for Token
 
@@ -563,6 +582,7 @@ authenticateCLI().catch((err) => {
 4. **HTTPS Only**: Always use HTTPS in production for device authorization
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
 6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
+7. **Pre-binding**: Device codes issued with `user_id` skip the claiming step and can only be approved or denied by that user. Pass `user_id` from trusted server-side code only
 
 ## Options
 
