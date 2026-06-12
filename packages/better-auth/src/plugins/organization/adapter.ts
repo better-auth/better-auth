@@ -1155,6 +1155,20 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const where = [{ field: "id", value: data.invitationId }];
 			if (data.fromStatus) {
 				where.push({ field: "status", value: data.fromStatus });
+				const updated = await adapter.updateMany({
+					model: "invitation",
+					where,
+					update: {
+						status: data.status,
+					},
+				});
+				if (!updated) {
+					return null;
+				}
+				return await adapter.findOne<InferInvitation<O, false>>({
+					model: "invitation",
+					where: [{ field: "id", value: data.invitationId }],
+				});
 			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",

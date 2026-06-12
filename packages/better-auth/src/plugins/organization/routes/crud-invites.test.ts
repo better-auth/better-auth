@@ -375,40 +375,52 @@ describe("organization invitation recipient ownership gates", async () => {
 describe("organization invitation acceptance idempotency", async () => {
 	const INVITEE_EMAIL = "invitee-idempotent@example.com";
 	const CONCURRENT_INVITEE_EMAIL = "invitee-concurrent@example.com";
+	const NON_TRANSACTIONAL_INVITEE_EMAIL =
+		"invitee-non-transactional@example.com";
 	const PASSWORD = "test-password-123";
+
+	type InvitationAcceptanceSetupOptions = {
+		email: string;
+		inviteeName: string;
+		organizationName: string;
+		organizationSlug: string;
+	};
 
 	const wait = (ms: number) =>
 		new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9154
-	 */
-	it("replays an accepted invitation after expiration without creating another member", async () => {
-		const { client, signInWithTestUser, signInWithUser, cookieSetter, db } =
-			await getTestInstance(
-				{
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => ({
-									data: { ...user, emailVerified: true },
-								}),
-							},
+	async function setupInvitationAcceptance({
+		email,
+		inviteeName,
+		organizationName,
+		organizationSlug,
+	}: InvitationAcceptanceSetupOptions) {
+		const helpers = await getTestInstance(
+			{
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
 						},
 					},
-					plugins: [
-						organization({
-							async sendInvitationEmail() {},
-						}),
-					],
 				},
-				{ clientOptions: { plugins: [organizationClient()] } },
-			);
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+			helpers;
 
 		const { headers: ownerHeaders } = await signInWithTestUser();
 		const createdOrganization = await client.organization.create({
-			name: "Replay Org",
-			slug: "replay-org",
+			name: organizationName,
+			slug: organizationSlug,
 			fetchOptions: {
 				headers: ownerHeaders,
 				onSuccess: cookieSetter(ownerHeaders),
@@ -416,21 +428,48 @@ describe("organization invitation acceptance idempotency", async () => {
 		});
 		const invitation = await client.organization.inviteMember({
 			organizationId: createdOrganization.data!.id,
-			email: INVITEE_EMAIL,
+			email,
 			role: "member",
 			fetchOptions: { headers: ownerHeaders },
 		});
-		const invitationId = String(invitation.data!.id);
 
 		await client.signUp.email({
-			email: INVITEE_EMAIL,
+			email,
 			password: PASSWORD,
-			name: "Invitee",
+			name: inviteeName,
 		});
 		const { headers: inviteeHeaders, res: invitee } = await signInWithUser(
-			INVITEE_EMAIL,
+			email,
 			PASSWORD,
 		);
+
+		return {
+			...helpers,
+			createdOrganization,
+			invitationId: String(invitation.data!.id),
+			invitee,
+			inviteeHeaders,
+			ownerHeaders,
+		};
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9154
+	 */
+	it("replays an accepted invitation after expiration without creating another member", async () => {
+		const {
+			client,
+			db,
+			createdOrganization,
+			invitationId,
+			invitee,
+			inviteeHeaders,
+		} = await setupInvitationAcceptance({
+			email: INVITEE_EMAIL,
+			inviteeName: "Invitee",
+			organizationName: "Replay Org",
+			organizationSlug: "replay-org",
+		});
 
 		const firstAccept = await client.organization.acceptInvitation({
 			invitationId,
@@ -468,62 +507,21 @@ describe("organization invitation acceptance idempotency", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9154
 	 */
 	it("replays concurrent accepts while creating the member once", async () => {
-		let inviteeUserId = "";
 		let delayedInviteeMemberCreates = 0;
 		const {
 			auth,
 			client,
-			signInWithTestUser,
-			signInWithUser,
-			cookieSetter,
 			db,
-		} = await getTestInstance(
-			{
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => ({
-								data: { ...user, emailVerified: true },
-							}),
-						},
-					},
-				},
-				plugins: [
-					organization({
-						async sendInvitationEmail() {},
-					}),
-				],
-			},
-			{ clientOptions: { plugins: [organizationClient()] } },
-		);
-
-		const { headers: ownerHeaders } = await signInWithTestUser();
-		const createdOrganization = await client.organization.create({
-			name: "Concurrent Replay Org",
-			slug: "concurrent-replay-org",
-			fetchOptions: {
-				headers: ownerHeaders,
-				onSuccess: cookieSetter(ownerHeaders),
-			},
-		});
-		const invitation = await client.organization.inviteMember({
-			organizationId: createdOrganization.data!.id,
+			createdOrganization,
+			invitationId,
+			invitee,
+			inviteeHeaders,
+		} = await setupInvitationAcceptance({
 			email: CONCURRENT_INVITEE_EMAIL,
-			role: "member",
-			fetchOptions: { headers: ownerHeaders },
+			inviteeName: "Concurrent Invitee",
+			organizationName: "Concurrent Replay Org",
+			organizationSlug: "concurrent-replay-org",
 		});
-		const invitationId = String(invitation.data!.id);
-
-		await client.signUp.email({
-			email: CONCURRENT_INVITEE_EMAIL,
-			password: PASSWORD,
-			name: "Concurrent Invitee",
-		});
-		const { headers: inviteeHeaders, res: invitee } = await signInWithUser(
-			CONCURRENT_INVITEE_EMAIL,
-			PASSWORD,
-		);
-		inviteeUserId = invitee.user.id;
 
 		const ctx = await auth.$context;
 		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
@@ -538,7 +536,7 @@ describe("organization invitation acceptance idempotency", async () => {
 						.mockImplementation(async (createArgs) => {
 							if (
 								createArgs.model === "member" &&
-								createArgs.data.userId === inviteeUserId
+								createArgs.data.userId === invitee.user.id
 							) {
 								delayedInviteeMemberCreates++;
 								await wait(50);
@@ -576,6 +574,82 @@ describe("organization invitation acceptance idempotency", async () => {
 			).toBe(1);
 			expect(delayedInviteeMemberCreates).toBe(1);
 		} finally {
+			transactionSpy.mockRestore();
+		}
+
+		const members = await db.findMany<{ id: string }>({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: createdOrganization.data!.id },
+				{ field: "userId", value: invitee.user.id },
+			],
+		});
+		expect(members).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9154
+	 */
+	it("replays a non-transactional accepted invitation while the member is materializing", async () => {
+		let delayedInviteeMemberCreates = 0;
+		const {
+			auth,
+			client,
+			db,
+			createdOrganization,
+			invitationId,
+			invitee,
+			inviteeHeaders,
+		} = await setupInvitationAcceptance({
+			email: NON_TRANSACTIONAL_INVITEE_EMAIL,
+			inviteeName: "Non Transactional Invitee",
+			organizationName: "Non Transactional Replay Org",
+			organizationSlug: "non-transactional-replay-org",
+		});
+
+		const ctx = await auth.$context;
+		const transactionSpy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (callback) => {
+				return await callback(ctx.adapter);
+			});
+		const originalCreate = ctx.adapter.create.bind(ctx.adapter);
+		const createSpy = vi
+			.spyOn(ctx.adapter, "create")
+			.mockImplementation(async (createArgs) => {
+				if (
+					createArgs.model === "member" &&
+					createArgs.data.userId === invitee.user.id
+				) {
+					delayedInviteeMemberCreates++;
+					await wait(75);
+				}
+				return await originalCreate(createArgs);
+			});
+
+		try {
+			const acceptResponses = await Promise.all([
+				client.organization.acceptInvitation({
+					invitationId,
+					fetchOptions: { headers: inviteeHeaders },
+				}),
+				client.organization.acceptInvitation({
+					invitationId,
+					fetchOptions: { headers: inviteeHeaders },
+				}),
+			]);
+
+			for (const acceptResponse of acceptResponses) {
+				expect(acceptResponse.error).toBeNull();
+				expect(acceptResponse.data?.invitation.status).toBe("accepted");
+			}
+			expect(
+				new Set(acceptResponses.map((response) => response.data?.member.id))
+					.size,
+			).toBe(1);
+			expect(delayedInviteeMemberCreates).toBe(1);
+		} finally {
+			createSpy.mockRestore();
 			transactionSpy.mockRestore();
 		}
 

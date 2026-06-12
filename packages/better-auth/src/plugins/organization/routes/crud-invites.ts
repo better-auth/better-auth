@@ -617,6 +617,13 @@ const acceptInvitationBodySchema = z.object({
 		description: "The ID of the invitation to accept",
 	}),
 });
+const ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS = 20;
+const ACCEPTED_INVITATION_MEMBER_LOOKUP_INTERVAL_MS = 25;
+
+const waitForAcceptedInvitationMemberLookup = () =>
+	new Promise<void>((resolve) =>
+		setTimeout(resolve, ACCEPTED_INVITATION_MEMBER_LOOKUP_INTERVAL_MS),
+	);
 
 export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
@@ -680,7 +687,22 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			};
 
-			const restoreAcceptedInvitationTeamSession = async (
+			const findMaterializedAcceptedInvitationMember = async (
+				acceptedInvitation: AcceptedInvitation,
+			) => {
+				let member = await findAcceptedInvitationMember(acceptedInvitation);
+				for (
+					let attempt = 1;
+					!member && attempt < ACCEPTED_INVITATION_MEMBER_LOOKUP_ATTEMPTS;
+					attempt++
+				) {
+					await waitForAcceptedInvitationMemberLookup();
+					member = await findAcceptedInvitationMember(acceptedInvitation);
+				}
+				return member;
+			};
+
+			const findAcceptedInvitationSingleTeamId = async (
 				acceptedInvitation: AcceptedInvitation,
 			) => {
 				if (
@@ -688,12 +710,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					!("teamId" in acceptedInvitation) ||
 					!acceptedInvitation.teamId
 				) {
-					return;
+					return null;
 				}
 
 				const teamIds = (acceptedInvitation.teamId as string).split(",");
 				if (teamIds.length !== 1) {
-					return;
+					return null;
 				}
 
 				const teamId = teamIds[0]!;
@@ -702,15 +724,25 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					userId: session.user.id,
 				});
 				if (!teamMember) {
-					return;
+					return null;
 				}
 
-				const updatedSession = await adapter.setActiveTeam(
+				return teamId;
+			};
+
+			const restoreAcceptedInvitationSession = async (
+				acceptedInvitation: AcceptedInvitation,
+			) => {
+				const teamId =
+					await findAcceptedInvitationSingleTeamId(acceptedInvitation);
+				if (teamId) {
+					await adapter.setActiveTeam(session.session.token, teamId, ctx);
+				}
+				const updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
-					teamId,
+					acceptedInvitation.organizationId,
 					ctx,
 				);
-
 				await setSessionCookie(ctx, {
 					session: updatedSession,
 					user: session.user,
@@ -720,7 +752,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			const completeAcceptedInvitationReplay = async (
 				acceptedInvitation: AcceptedInvitation,
 			) => {
-				const member = await findAcceptedInvitationMember(acceptedInvitation);
+				const member =
+					await findMaterializedAcceptedInvitationMember(acceptedInvitation);
 				if (!member) {
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -728,12 +761,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 
-				await restoreAcceptedInvitationTeamSession(acceptedInvitation);
-				await adapter.setActiveOrganization(
-					session.session.token,
-					acceptedInvitation.organizationId,
-					ctx,
-				);
+				await restoreAcceptedInvitationSession(acceptedInvitation);
 
 				return ctx.json({
 					invitation: acceptedInvitation,
@@ -848,7 +876,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						acceptedI.teamId
 					) {
 						const teamIds = (acceptedI.teamId as string).split(",");
-						const onlyOne = teamIds.length === 1;
 
 						for (const teamId of teamIds) {
 							// Confirm the team still belongs to the accepted invitation's
@@ -894,20 +921,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 								});
 							}
 						}
-
-						if (onlyOne) {
-							const teamId = teamIds[0]!;
-							const updatedSession = await adapter.setActiveTeam(
-								session.session.token,
-								teamId,
-								ctx,
-							);
-
-							await setSessionCookie(ctx, {
-								session: updatedSession,
-								user: session.user,
-							});
-						}
 					}
 
 					const createdMember = await adapter.createMember({
@@ -916,12 +929,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						role: acceptedI.role,
 						createdAt: new Date(),
 					});
-
-					await adapter.setActiveOrganization(
-						session.session.token,
-						acceptedI.organizationId,
-						ctx,
-					);
 
 					return {
 						status: "accepted" as const,
@@ -956,6 +963,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			const { invitation: acceptedI, member } = acceptance;
+
+			await restoreAcceptedInvitationSession(acceptedI);
 
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
