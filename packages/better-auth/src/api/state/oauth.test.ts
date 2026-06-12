@@ -41,22 +41,41 @@ describe("getOAuthState generic parameter", () => {
 		});
 	});
 
-	it("types the no-argument return as the base OAuthState shape (or null)", () => {
+	it("types the no-argument return with the explicit OAuthState property types", () => {
 		// Type-only check; the cast keeps vitest from actually invoking the
-		// function outside of `runWithRequestState`.
+		// function outside of `runWithRequestState`. The explicit `OAuthState`
+		// default (vs. `Record<string, never>`, which would collapse the known
+		// properties to `never` through the intersection with `OAuthState`)
+		// keeps each property at its documented type.
 		type Returned = Awaited<ReturnType<typeof getOAuthState>>;
-		expectTypeOf<NonNullable<Returned>>().toHaveProperty("callbackURL");
-		expectTypeOf<NonNullable<Returned>>().toHaveProperty("codeVerifier");
-		expectTypeOf<NonNullable<Returned>>().toHaveProperty("expiresAt");
+		expectTypeOf<NonNullable<Returned>>()
+			.toHaveProperty("callbackURL")
+			.toEqualTypeOf<string>();
+		expectTypeOf<NonNullable<Returned>>()
+			.toHaveProperty("codeVerifier")
+			.toEqualTypeOf<string>();
+		expectTypeOf<NonNullable<Returned>>()
+			.toHaveProperty("expiresAt")
+			.toEqualTypeOf<number>();
 	});
 
 	it("widens the resolved type with the supplied generic parameter", () => {
-		// The supplied `{ tenantId: string }` field must show up as a typed
-		// property on the resolved value, not fall back to the loose
-		// `[key: string]: any` index signature.
+		// The supplied `{ tenantId: string }` shows up as a property on the
+		// resolved value. The explicit `OAuthState` defaults in `OAuthState`
+		// such as `callbackURL: string` survive the intersection (no `never`
+		// collapse). For the widened key itself we can only assert presence:
+		// `OAuthState` carries a `[key: string]: any` index signature so
+		// `(OAuthState & { tenantId: string })["tenantId"]` resolves to `any`,
+		// not `string`. The runtime data store still needs that index
+		// signature (callers spread arbitrary `additionalData` into the state
+		// in `oauth2/state.ts`), so this is an honest test of what the type
+		// system can guarantee here.
 		type Returned = Awaited<
 			ReturnType<typeof getOAuthState<{ tenantId: string }>>
 		>;
+		expectTypeOf<NonNullable<Returned>>()
+			.toHaveProperty("callbackURL")
+			.toEqualTypeOf<string>();
 		expectTypeOf<NonNullable<Returned>>().toHaveProperty("tenantId");
 	});
 
@@ -66,6 +85,8 @@ describe("getOAuthState generic parameter", () => {
 		type Returned = Awaited<
 			ReturnType<typeof getOAuthState<{ callbackURL: string }>>
 		>;
-		expectTypeOf<NonNullable<Returned>>().toHaveProperty("callbackURL");
+		expectTypeOf<NonNullable<Returned>>()
+			.toHaveProperty("callbackURL")
+			.toEqualTypeOf<string>();
 	});
 });

@@ -34,7 +34,7 @@ const oauthRequestState = defineRequestState<OAuthState | null>(() => null);
  * }
  */
 function getOAuthState<
-	T extends Record<string, unknown> = Record<string, never>,
+	T extends Record<string, unknown> = OAuthState,
 >(): Promise<(OAuthState & T) | null> {
 	return oauthRequestState.get() as Promise<(OAuthState & T) | null>;
 }
