@@ -5,6 +5,39 @@ import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
 import { openAPI } from ".";
+import type { OpenAPISchema, Path } from "./generator";
+
+type PostRequestBody = NonNullable<NonNullable<Path["post"]>["requestBody"]>;
+
+function getPostRequestBody(
+	paths: Record<string, Path>,
+	path: string,
+): PostRequestBody {
+	const requestBody = paths[path]?.post?.requestBody;
+	if (!requestBody) {
+		throw new Error(`Expected ${path} to define a POST request body`);
+	}
+	return requestBody;
+}
+
+function getSchemaProperty(schema: OpenAPISchema, propertyName: string) {
+	const property = schema.properties?.[propertyName];
+	if (!property) {
+		throw new Error(`Expected schema to define ${propertyName}`);
+	}
+	return property;
+}
+
+function getComposedSchemaItem(
+	schemas: OpenAPISchema[] | undefined,
+	index: number,
+) {
+	const schema = schemas?.[index];
+	if (!schema) {
+		throw new Error(`Expected composed schema item at index ${index}`);
+	}
+	return schema;
+}
 
 const nullableIntersectionPlugin = {
 	id: "nullable-intersection-test",
@@ -99,6 +132,86 @@ const defaultBodyPlugin = {
 	},
 } satisfies BetterAuthPlugin;
 
+const unionIntersectionPlugin = {
+	id: "union-intersection-test",
+	endpoints: {
+		chooseRole: createAuthEndpoint(
+			"/test/choose-role",
+			{
+				method: "POST",
+				body: z
+					.object({
+						organizationId: z.string().optional(),
+					})
+					.and(
+						z.union([
+							z.object({
+								roleName: z.string(),
+							}),
+							z.object({
+								roleId: z.string(),
+							}),
+						]),
+					),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+let defaultFactoryCallCount = 0;
+
+const defaultFactoryBodyPlugin = {
+	id: "default-factory-body-test",
+	endpoints: {
+		defaultFactoryBody: createAuthEndpoint(
+			"/test/default-factory-body",
+			{
+				method: "POST",
+				body: z
+					.object({
+						nonce: z.string(),
+					})
+					.default(() => {
+						defaultFactoryCallCount++;
+						return {
+							nonce: `generated-${defaultFactoryCallCount}`,
+						};
+					}),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+let wrapperDefaultFactoryCallCount = 0;
+
+const wrapperSemanticsPlugin = {
+	id: "wrapper-semantics-test",
+	endpoints: {
+		wrapperSemantics: createAuthEndpoint(
+			"/test/wrapper-semantics",
+			{
+				method: "POST",
+				body: z.object({
+					optionalNullable: z.string().optional().nullable(),
+					nullableDefault: z
+						.string()
+						.default(() => {
+							wrapperDefaultFactoryCallCount++;
+							return "generated-default";
+						})
+						.nullable(),
+					prefaulted: z.string().prefault("prefaulted-value"),
+					nonOptional: z.string().optional().nonoptional(),
+					unionOptional: z.union([z.string(), z.undefined()]),
+				}),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
 describe("open-api", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [openAPI()],
@@ -129,6 +242,15 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithDefaultBody } = await getTestInstance({
 		plugins: [openAPI(), defaultBodyPlugin],
+	});
+	const { auth: authWithUnionIntersection } = await getTestInstance({
+		plugins: [openAPI(), unionIntersectionPlugin],
+	});
+	const { auth: authWithDefaultFactoryBody } = await getTestInstance({
+		plugins: [openAPI(), defaultFactoryBodyPlugin],
+	});
+	const { auth: authWithWrapperSemantics } = await getTestInstance({
+		plugins: [openAPI(), wrapperSemanticsPlugin],
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -195,8 +317,7 @@ describe("open-api", async () => {
 		expect(schema_properties.idToken).toBeDefined();
 
 		const idTokenType = schema_properties.idToken.type;
-		expect(idTokenType).toContain("object");
-		expect(idTokenType).toContain("null");
+		expect(idTokenType).toBe("object");
 
 		expect(schema_properties.idToken.properties).toBeDefined();
 		expect(schema_properties.idToken.properties.token).toBeDefined();
@@ -205,21 +326,19 @@ describe("open-api", async () => {
 
 		const accessTokenType =
 			schema_properties.idToken.properties.accessToken.type;
-		expect(accessTokenType).toContain("string");
-		expect(accessTokenType).toContain("null");
+		expect(accessTokenType).toBe("string");
 
 		expect(schema_properties.idToken.properties.refreshToken).toBeDefined();
 		const refreshTokenType =
 			schema_properties.idToken.properties.refreshToken.type;
-		expect(refreshTokenType).toContain("string");
-		expect(refreshTokenType).toContain("null");
+		expect(refreshTokenType).toBe("string");
 
 		expect(schema_properties.idToken.required).toContain("token");
 		expect(schema_properties.idToken.required).not.toContain("accessToken");
 		expect(schema_properties.idToken.required).not.toContain("refreshToken");
 	});
 
-	it("should use OpenAPI 3.1 nullable format for optional primitive types", async () => {
+	it("should keep optional primitive types non-nullable", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
 
@@ -233,13 +352,9 @@ describe("open-api", async () => {
 		const refreshTokenType =
 			schema_properties.idToken.properties.refreshToken.type;
 
-		expect(Array.isArray(accessTokenType)).toBe(true);
-		expect(accessTokenType).toContain("string");
-		expect(accessTokenType).toContain("null");
+		expect(accessTokenType).toBe("string");
 
-		expect(Array.isArray(refreshTokenType)).toBe(true);
-		expect(refreshTokenType).toContain("string");
-		expect(refreshTokenType).toContain("null");
+		expect(refreshTokenType).toBe("string");
 
 		expect(schema_properties.idToken.properties.accessToken.nullable).toBe(
 			undefined,
@@ -302,7 +417,7 @@ describe("open-api", async () => {
 		expect(await response.text()).not.toContain("[Circular ref");
 	});
 
-	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {
+	it("should keep optional object types non-nullable", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
 
@@ -318,11 +433,9 @@ describe("open-api", async () => {
 		expect(isIdTokenOptional).toBe(true);
 
 		const idTokenSchema = schema_properties.idToken;
-		const _hasAnyOf = idTokenSchema.anyOf !== undefined;
-		const hasTypeArrayWithNull =
-			Array.isArray(idTokenSchema.type) && idTokenSchema.type.includes("null");
 
-		expect(hasTypeArrayWithNull).toBe(true);
+		expect(idTokenSchema.type).toBe("object");
+		expect(idTokenSchema.anyOf).toBeUndefined();
 
 		expect(idTokenSchema.nullable).toBe(undefined);
 	});
@@ -395,12 +508,11 @@ describe("open-api", async () => {
 			return [type];
 		};
 
-		// Helper to check if field has correct type and default value
+		// Helper to check if field has correct type without evaluating defaults.
 		const validateDefaultField = (
 			properties: any,
 			fieldName: string,
 			expectedType: string,
-			expectedDefault?: any,
 		) => {
 			expect(properties[fieldName]).toBeDefined();
 			const fieldSchema = properties[fieldName];
@@ -409,11 +521,7 @@ describe("open-api", async () => {
 			const baseTypes = getBaseType(fieldSchema.type);
 			expect(baseTypes).toContain(expectedType);
 			expect(baseTypes).not.toContain("string");
-
-			// Check default value is included if expected
-			if (expectedDefault !== undefined) {
-				expect(fieldSchema.default).toBe(expectedDefault);
-			}
+			expect(fieldSchema.default).toBeUndefined();
 		};
 
 		// Test sign-in endpoint: z.boolean().default(true).optional()
@@ -424,7 +532,7 @@ describe("open-api", async () => {
 
 		const signInProps =
 			signInPath.post.requestBody.content["application/json"].schema.properties;
-		validateDefaultField(signInProps, "rememberMe", "boolean", true);
+		validateDefaultField(signInProps, "rememberMe", "boolean");
 
 		// Test sign-up endpoint: z.boolean().optional() - no default
 		const signUpPath = paths["/sign-up/email"];
@@ -474,14 +582,8 @@ describe("open-api", async () => {
 		expect(signInEmailOTPSchema.required).toEqual(["email", "otp"]);
 		expect(signInEmailOTPSchema.properties.email.type).toBe("string");
 		expect(signInEmailOTPSchema.properties.otp.type).toBe("string");
-		expect(signInEmailOTPSchema.properties.name.type).toEqual([
-			"string",
-			"null",
-		]);
-		expect(signInEmailOTPSchema.properties.image.type).toEqual([
-			"string",
-			"null",
-		]);
+		expect(signInEmailOTPSchema.properties.name.type).toBe("string");
+		expect(signInEmailOTPSchema.properties.image.type).toBe("string");
 		expect(signInEmailOTPSchema.additionalProperties).toEqual({});
 	});
 
@@ -525,6 +627,96 @@ describe("open-api", async () => {
 		const requestBodySchema = requestBody.content["application/json"].schema;
 		expect(requestBodySchema.type).toBe("object");
 		expect(requestBodySchema.properties.rememberMe.type).toBe("boolean");
-		expect(requestBodySchema.default).toEqual({ rememberMe: true });
+		expect(requestBodySchema.default).toBeUndefined();
+	});
+
+	it("should represent object intersections with union branches", async () => {
+		const schema = await authWithUnionIntersection.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/choose-role");
+		expect(requestBody.required).toBe(true);
+
+		const requestBodySchema = requestBody.content["application/json"].schema;
+		expect(requestBodySchema.allOf).toHaveLength(2);
+		expect(getComposedSchemaItem(requestBodySchema.allOf, 0)).toEqual({
+			type: "object",
+			properties: {
+				organizationId: {
+					type: "string",
+				},
+			},
+		});
+		expect(getComposedSchemaItem(requestBodySchema.allOf, 1)).toEqual({
+			anyOf: [
+				{
+					type: "object",
+					properties: {
+						roleName: {
+							type: "string",
+						},
+					},
+					required: ["roleName"],
+				},
+				{
+					type: "object",
+					properties: {
+						roleId: {
+							type: "string",
+						},
+					},
+					required: ["roleId"],
+				},
+			],
+		});
+	});
+
+	it("should not evaluate request body default factories", async () => {
+		defaultFactoryCallCount = 0;
+		const schema = await authWithDefaultFactoryBody.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/default-factory-body");
+		expect(requestBody.required).toBe(false);
+		expect(defaultFactoryCallCount).toBe(0);
+
+		const requestBodySchema = requestBody.content["application/json"].schema;
+		expect(requestBodySchema.default).toBeUndefined();
+		expect(getSchemaProperty(requestBodySchema, "nonce").type).toBe("string");
+	});
+
+	it("should compute required fields through Zod wrapper schemas", async () => {
+		wrapperDefaultFactoryCallCount = 0;
+		const schema = await authWithWrapperSemantics.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/wrapper-semantics");
+		expect(requestBody.required).toBe(true);
+
+		const requestBodySchema = requestBody.content["application/json"].schema;
+		expect(requestBodySchema.required).toEqual(["nonOptional"]);
+		expect(wrapperDefaultFactoryCallCount).toBe(0);
+
+		expect(
+			getSchemaProperty(requestBodySchema, "optionalNullable").type,
+		).toEqual(["string", "null"]);
+		expect(
+			getSchemaProperty(requestBodySchema, "nullableDefault").type,
+		).toEqual(["string", "null"]);
+		expect(
+			getSchemaProperty(requestBodySchema, "nullableDefault").default,
+		).toBeUndefined();
+		expect(getSchemaProperty(requestBodySchema, "prefaulted").type).toBe(
+			"string",
+		);
+		expect(
+			getSchemaProperty(requestBodySchema, "prefaulted").default,
+		).toBeUndefined();
+		expect(getSchemaProperty(requestBodySchema, "nonOptional").type).toBe(
+			"string",
+		);
+		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
+			"string",
+		);
 	});
 });
