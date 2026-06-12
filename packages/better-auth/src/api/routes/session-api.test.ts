@@ -1003,6 +1003,62 @@ describe("cookie cache with JWE strategy", async () => {
 	});
 });
 
+describe("expired cookie cache fallback", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10021
+	 */
+	it.each([
+		"jwe",
+		"jwt",
+	] as const)("should fall back to the database when an expired %s cache cookie is sent", async (strategy) => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy,
+					maxAge: 1,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const findSession = vi.spyOn(ctx.internalAdapter, "findSession");
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		expect(
+			parseCookies(headers.get("cookie") || "").get("better-auth.session_data"),
+		).toBeDefined();
+		findSession.mockClear();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 20);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+		expect(findSession).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("cookie cache refreshCache", async () => {
 	const { auth, client, testUser, cookieSetter } = await getTestInstance({
 		session: {

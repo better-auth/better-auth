@@ -5,6 +5,7 @@ import {
 	calculateJwkThumbprint,
 	decodeProtectedHeader,
 	EncryptJWT,
+	errors,
 	jwtDecrypt,
 	jwtVerify,
 	SignJWT,
@@ -28,11 +29,15 @@ export async function signJWT(
 export async function verifyJWT<T = any>(
 	token: string,
 	secret: string,
+	options?: { ignoreExpiration?: boolean },
 ): Promise<T | null> {
 	try {
 		const verified = await jwtVerify(token, new TextEncoder().encode(secret));
 		return verified.payload as T;
-	} catch {
+	} catch (error) {
+		if (options?.ignoreExpiration && error instanceof errors.JWTExpired) {
+			return error.payload as T;
+		}
 		return null;
 	}
 }
@@ -115,10 +120,21 @@ const jwtDecryptOpts = {
 	contentEncryptionAlgorithms: [enc, "A256GCM"],
 };
 
+function getExpiredJWTPayload<T>(
+	error: unknown,
+	options?: { ignoreExpiration?: boolean },
+): T | null {
+	if (options?.ignoreExpiration && error instanceof errors.JWTExpired) {
+		return error.payload as T;
+	}
+	return null;
+}
+
 export async function symmetricDecodeJWT<T = any>(
 	token: string,
 	secret: string | SecretConfig,
 	salt: string,
+	options?: { ignoreExpiration?: boolean },
 ): Promise<T | null> {
 	if (!token) return null;
 	// Parse the JWT header to check if kid is present
@@ -158,7 +174,11 @@ export async function symmetricDecodeJWT<T = any>(
 			jwtDecryptOpts,
 		);
 		return payload as T;
-	} catch {
+	} catch (error) {
+		const expiredPayload = getExpiredJWTPayload<T>(error, options);
+		if (expiredPayload) {
+			return expiredPayload;
+		}
 		// Only try fallback if token has no kid
 		if (hasKid) {
 			return null;
@@ -176,7 +196,11 @@ export async function symmetricDecodeJWT<T = any>(
 					jwtDecryptOpts,
 				);
 				return payload as T;
-			} catch {
+			} catch (error) {
+				const expiredPayload = getExpiredJWTPayload<T>(error, options);
+				if (expiredPayload) {
+					return expiredPayload;
+				}
 				continue;
 			}
 		}
