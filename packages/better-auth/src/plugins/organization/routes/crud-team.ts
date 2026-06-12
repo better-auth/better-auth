@@ -10,6 +10,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import type { TeamMember } from "../schema";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -383,7 +384,11 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				}),
 				data: z
 					.object({
-						...teamSchema.shape,
+						...teamSchema.omit({
+							id: true,
+							createdAt: true,
+							updatedAt: true,
+						}).shape,
 						...additionalFieldsSchema.shape,
 					})
 					.partial(),
@@ -1234,10 +1239,38 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
-			const teamMember = await adapter.findOrCreateTeamMember({
-				teamId: ctx.body.teamId,
-				userId: ctx.body.userId,
-			});
+			let teamMember: TeamMember;
+			if (
+				typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
+				"undefined"
+			) {
+				const maximumMembersPerTeam =
+					typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+					"function"
+						? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+								teamId: ctx.body.teamId,
+								session,
+								organizationId,
+							})
+						: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+				const result = await adapter.addTeamMemberWithLimit({
+					teamId: ctx.body.teamId,
+					userId: ctx.body.userId,
+					maximumMembersPerTeam,
+				});
+				if (result.status === "limitReached") {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+					);
+				}
+				teamMember = result.member;
+			} else {
+				teamMember = await adapter.findOrCreateTeamMember({
+					teamId: ctx.body.teamId,
+					userId: ctx.body.userId,
+				});
+			}
 
 			// Run afterAddTeamMember hook
 			if (options?.organizationHooks?.afterAddTeamMember) {

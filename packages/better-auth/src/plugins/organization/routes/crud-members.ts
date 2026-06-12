@@ -196,10 +196,54 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const createdMember = await adapter.createMember(memberData);
 
 			if (teamId) {
-				await adapter.findOrCreateTeamMember({
-					userId: user.id,
-					teamId,
-				});
+				try {
+					if (
+						typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
+						"undefined"
+					) {
+						const configuredMaximumMembersPerTeam =
+							ctx.context.orgOptions.teams.maximumMembersPerTeam;
+						let maximumMembersPerTeam: number;
+						if (typeof configuredMaximumMembersPerTeam === "function") {
+							if (!session) {
+								throw APIError.fromStatus("UNAUTHORIZED");
+							}
+							maximumMembersPerTeam = await configuredMaximumMembersPerTeam({
+								teamId,
+								session: {
+									user: session.user,
+									session: session.session,
+								},
+								organizationId: orgId,
+							});
+						} else {
+							maximumMembersPerTeam = configuredMaximumMembersPerTeam;
+						}
+						const result = await adapter.addTeamMemberWithLimit({
+							userId: user.id,
+							teamId,
+							maximumMembersPerTeam,
+						});
+						if (result.status === "limitReached") {
+							throw APIError.from(
+								"FORBIDDEN",
+								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+							);
+						}
+					} else {
+						await adapter.findOrCreateTeamMember({
+							userId: user.id,
+							teamId,
+						});
+					}
+				} catch (error) {
+					await adapter.deleteMember({
+						memberId: createdMember.id,
+						organizationId: orgId,
+						userId: user.id,
+					});
+					throw error;
+				}
 			}
 
 			// Run afterAddMember hook

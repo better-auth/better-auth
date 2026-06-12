@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink } from "better-auth/plugins";
@@ -8,6 +9,58 @@ interface VerificationEmail {
 	email: string;
 	token: string;
 	url: string;
+}
+
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, value);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
+function createParsedSecondaryStorage(
+	store: Map<string, unknown>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, safeJSONParse<unknown>(value));
+		},
+		get(key) {
+			return store.get(key) ?? null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, count);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
 }
 
 /**
@@ -23,17 +76,7 @@ describe("magic link with secondary storage (string return)", async () => {
 
 	const { testUser, sessionSetter, client } = await getTestInstance(
 		{
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(store),
 			rateLimit: {
 				enabled: false,
 			},
@@ -120,17 +163,7 @@ describe("magic link with secondary storage (string return)", async () => {
 			client: c,
 		} = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						attemptStore.set(key, value);
-					},
-					get(key) {
-						return attemptStore.get(key) || null;
-					},
-					delete(key) {
-						attemptStore.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(attemptStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
@@ -177,17 +210,7 @@ describe("magic link with secondary storage (string return)", async () => {
 
 		const { testUser: tu, client: c } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						expiredStore.set(key, value);
-					},
-					get(key) {
-						return expiredStore.get(key) || null;
-					},
-					delete(key) {
-						expiredStore.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(expiredStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
@@ -232,7 +255,7 @@ describe("magic link with secondary storage (string return)", async () => {
  * @see https://github.com/better-auth/better-auth/issues/8228
  */
 describe("magic link with secondary storage (pre-parsed object return)", async () => {
-	const store = new Map<string, any>();
+	const store = new Map<string, unknown>();
 	let verificationEmail: VerificationEmail = {
 		email: "",
 		token: "",
@@ -241,17 +264,7 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 
 	const { testUser, sessionSetter, client } = await getTestInstance(
 		{
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, safeJSONParse(value));
-				},
-				get(key) {
-					return store.get(key) ?? null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createParsedSecondaryStorage(store),
 			rateLimit: {
 				enabled: false,
 			},
@@ -294,7 +307,7 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-x88r-fmh4
 	 */
 	it("consumes the token atomically with pre-parsed storage, INVALID_TOKEN on retries", async () => {
-		const attemptStore = new Map<string, any>();
+		const attemptStore = new Map<string, unknown>();
 		let attemptEmail: VerificationEmail = { email: "", token: "", url: "" };
 
 		const {
@@ -303,17 +316,7 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 			client: c,
 		} = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						attemptStore.set(key, safeJSONParse(value));
-					},
-					get(key) {
-						return attemptStore.get(key) ?? null;
-					},
-					delete(key) {
-						attemptStore.delete(key);
-					},
-				},
+				secondaryStorage: createParsedSecondaryStorage(attemptStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
