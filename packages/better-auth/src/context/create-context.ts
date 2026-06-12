@@ -8,7 +8,7 @@ import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { OAuthProvider } from "@better-auth/core/oauth2";
+import type { UpstreamProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
@@ -35,6 +35,7 @@ import {
 	parseSecretsEnv,
 	validateSecretsArray,
 } from "./secret-utils";
+import { hasServerSessionStore } from "./store-capabilities";
 
 /**
  * Estimates the entropy of a string in bits.
@@ -94,8 +95,13 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	options: Options,
 	getDatabaseType: (database: Options["database"]) => string,
 ): Promise<AuthContext<Options>> {
-	//set default options for stateless mode
-	if (!options.database) {
+	// secondaryStorage is a durable server-side session store, so treat it like
+	// a database for session cache defaults.
+	const isStateful = hasServerSessionStore(options);
+
+	// Cookie-cached sessions stand in for a durable store; only default them on
+	// when there is no durable store at all.
+	if (!isStateful) {
 		options = defu(options, {
 			session: {
 				cookieCache: {
@@ -105,8 +111,15 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 					maxAge: options.session?.expiresIn || 60 * 60 * 24 * 7, // match session expiresIn, default 7 days
 				},
 			},
+		}) as Options;
+	}
+
+	// secondaryStorage holds sessions and verification, not account records, so
+	// without a primary database the account (and its OAuth tokens) only has a
+	// durable home in a cookie. Keep it enabled whenever there is no database.
+	if (!options.database) {
+		options = defu(options, {
 			account: {
-				storeStateStrategy: "cookie" as const,
 				storeAccountCookie: true,
 			},
 		}) as Options;
@@ -136,7 +149,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 
 	if (!baseURL && !isDynamicConfig) {
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL is not set. Set the baseURL option or BETTER_AUTH_URL env, or use a dynamic baseURL with allowedHosts for multi-host setups. Without it the origin is derived from the incoming request, and callbacks and redirects may not work correctly.`,
 		);
 	}
 
@@ -212,9 +225,9 @@ Most of the features of Better Auth will not work correctly.`,
 					);
 				}
 				const provider = socialProviders[key](config as never);
-				(provider as OAuthProvider).disableImplicitSignUp =
+				(provider as UpstreamProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
-				return provider as OAuthProvider;
+				return provider as UpstreamProvider;
 			}),
 		)
 	).filter((x) => x !== null);
@@ -263,7 +276,7 @@ Most of the features of Better Auth will not work correctly.`,
 		oauthConfig: {
 			storeStateStrategy:
 				options.account?.storeStateStrategy ||
-				(options.database ? "database" : "cookie"),
+				(isStateful ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
@@ -296,7 +309,6 @@ Most of the features of Better Auth will not work correctly.`,
 				// `refreshCache` is intended for fully stateless / DB-less setups.
 				// If a server-side store is configured, prefer fetching/refreshing from that source
 				// and disable stateless refresh behavior to avoid confusing/unsafe configurations.
-				const isStateful = !!options.database || !!options.secondaryStorage;
 				if (isStateful && refreshCache) {
 					logger.warn(
 						"[better-auth] `session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured. `refreshCache` is meant for stateless (DB-less) setups. Disabling `refreshCache` — remove it from your config to silence this warning.",

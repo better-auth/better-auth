@@ -3,7 +3,7 @@ import { logger } from "@better-auth/core/env";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
-import { decodeRefreshToken } from "./token";
+import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -28,7 +28,14 @@ import {
 
 /**
  * Revokes a JWT access token against the configured JWKs.
- * (does nothing if successful since a JWT is not stored on the server)
+ *
+ * A JWT access token is self-contained and never stored, so there is nothing to
+ * delete. Once the token is confirmed to be a valid JWT for this server, the
+ * endpoint reports `unsupported_token_type` (RFC 7009 §2.2.1) instead of a
+ * silent success, so callers can tell that no server-side revocation happened.
+ * An expired or wrong-audience JWT is already inactive and still resolves as a
+ * successful no-op. Session-bound tokens (carrying `sid`) are cut off early by
+ * the session-liveness check in introspection and userinfo.
  */
 async function revokeJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -50,6 +57,9 @@ async function revokeJwtAccessToken(
 						// @ts-expect-error response is a JSONWebKeySet but within the response field
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
 			verifyOptions: {
 				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -73,6 +83,15 @@ async function revokeJwtAccessToken(
 		}
 		throw new Error(error as unknown as string);
 	}
+
+	// Verified: a valid JWT access token for this server. It is self-contained
+	// and not stored, so it cannot be revoked. Report that rather than implying
+	// success (RFC 7009 §2.2.1).
+	throw new APIError("BAD_REQUEST", {
+		error_description:
+			"JWT access tokens are self-contained and cannot be revoked server-side",
+		error: "unsupported_token_type",
+	});
 }
 
 /**
@@ -160,19 +179,7 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await ctx.context.adapter.deleteMany({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "clientId",
-					value: clientId,
-				},
-				{
-					field: "userId",
-					value: refreshToken.userId,
-				},
-			],
-		});
+		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
@@ -183,26 +190,37 @@ async function revokeRefreshToken(
 	}
 
 	const iat = Math.floor(Date.now() / 1000);
-	await Promise.allSettled([
-		// Removes all access tokens associated with the refresh token
-		ctx.context.adapter.deleteMany({
-			model: "oauthAccessToken",
-			where: [{ field: "refreshId", value: refreshToken.id }],
-		}),
-		// Update the refresh token
-		ctx.context.adapter.update({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "id",
-					value: refreshToken.id,
-				},
-			],
-			update: {
-				revoked: new Date(iat * 1000),
+	// Atomic compare-and-swap. If a concurrent rotation already revoked
+	// (and re-minted) this row, fail closed and tear down the whole family
+	// so the rotation's offspring cannot be used either.
+	const won = await ctx.context.adapter.update<{ id: string }>({
+		model: "oauthRefreshToken",
+		where: [
+			{
+				field: "id",
+				value: refreshToken.id,
 			},
-		}),
-	]);
+			{
+				field: "revoked",
+				operator: "eq",
+				value: null,
+			},
+		],
+		update: {
+			revoked: new Date(iat * 1000),
+		},
+	});
+	if (!won) {
+		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		throw new APIError("BAD_REQUEST", {
+			error_description: "refresh token revoked",
+			error: "invalid_request",
+		});
+	}
+	await ctx.context.adapter.deleteMany({
+		model: "oauthAccessToken",
+		where: [{ field: "refreshId", value: refreshToken.id }],
+	});
 }
 
 /**
@@ -219,7 +237,12 @@ async function revokeAccessToken(
 		return await revokeJwtAccessToken(ctx, opts, token);
 	} catch (err) {
 		if (err instanceof APIError) {
-			// continue
+			// A confirmed JWT access token cannot be revoked: surface that rather
+			// than falling through to the opaque-token lookup.
+			if (err.body?.error === "unsupported_token_type") {
+				throw err;
+			}
+			// otherwise not a JWT, continue to opaque
 		} else if (err instanceof Error) {
 			throw err;
 		} else {
@@ -306,7 +329,10 @@ export async function revokeEndpoint(
 				return await revokeAccessToken(ctx, opts, client.clientId, token);
 			} catch (error) {
 				if (error instanceof APIError) {
-					if (token_type_hint === "access_token") {
+					if (
+						token_type_hint === "access_token" ||
+						error.body?.error === "unsupported_token_type"
+					) {
 						throw error;
 					} // else continue
 				} else if (error instanceof Error) {
@@ -345,6 +371,11 @@ export async function revokeEndpoint(
 		});
 	} catch (error) {
 		if (error instanceof APIError) {
+			// RFC 7009 §2.2.1: an explicit protocol error (unsupported_token_type)
+			// must surface; an unknown or already-invalid token still succeeds.
+			if (error.body?.error === "unsupported_token_type") {
+				throw error;
+			}
 			if (error.name === "BAD_REQUEST") {
 				return null;
 			}

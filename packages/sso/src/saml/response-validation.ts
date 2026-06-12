@@ -54,18 +54,18 @@ export async function validateInResponseTo(
 	const allowIdpInitiated = ctx.options.allowIdpInitiated ?? false;
 
 	if (inResponseTo) {
-		let storedRequest: AuthnRequestRecord | null = null;
-
-		const verification = await c.context.internalAdapter.findVerificationValue(
+		// Consume the stored AuthnRequest atomically so two concurrent ACS
+		// submissions can't both match one outstanding request. The consume
+		// returns null for missing or expired rows, so no separate expiry gate is
+		// needed and no delete is required on either success or rejection.
+		const consumed = await c.context.internalAdapter.consumeVerificationValue(
 			`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 		);
 
-		if (verification) {
+		let storedRequest: AuthnRequestRecord | null = null;
+		if (consumed) {
 			try {
-				storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
-				if (storedRequest && storedRequest.expiresAt < Date.now()) {
-					storedRequest = null;
-				}
+				storedRequest = JSON.parse(consumed.value) as AuthnRequestRecord;
 			} catch {
 				storedRequest = null;
 			}
@@ -94,9 +94,6 @@ export async function validateInResponseTo(
 					actualProvider: ctx.providerId,
 				},
 			);
-			await c.context.internalAdapter.deleteVerificationByIdentifier(
-				`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-			);
 			throw c.redirect(
 				errorRedirectUrl(
 					ctx.redirectUrl,
@@ -105,11 +102,6 @@ export async function validateInResponseTo(
 				),
 			);
 		}
-
-		// Single-use: delete the stored request after successful validation
-		await c.context.internalAdapter.deleteVerificationByIdentifier(
-			`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-		);
 	} else if (!allowIdpInitiated) {
 		c.context.logger.error(
 			"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",

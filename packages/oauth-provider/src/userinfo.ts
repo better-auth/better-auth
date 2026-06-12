@@ -50,6 +50,16 @@ export async function userInfoEndpoint(
 	}
 	const jwt = await validateAccessToken(ctx, opts, token);
 
+	// A token that is expired, revoked, or bound to an ended session resolves to
+	// `{ active: false }`. RFC 6750 §3.1 wants `invalid_token` (401) for that,
+	// not the `invalid_scope` (400) the scope check below would otherwise raise.
+	if (!jwt.active) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "the access token is invalid or has been revoked",
+			error: "invalid_token",
+		});
+	}
+
 	const scopes = (jwt.scope as string | undefined)?.split(" ");
 	if (!scopes?.includes("openid")) {
 		throw new APIError("BAD_REQUEST", {

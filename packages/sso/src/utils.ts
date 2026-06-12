@@ -45,6 +45,18 @@ export const domainMatches = (searchDomain: string, domainList: string) => {
 };
 
 /**
+ * Strictly parse a provider-supplied email-verification claim.
+ *
+ * OIDC userInfo, OIDC id-token, and SAML attribute values are frequently
+ * strings, so a loose `Boolean(value)` or truthy fallback treats the string
+ * `"false"` as verified. Only a boolean `true` or the exact string `"true"`
+ * count as verified; every other value, including `"false"`, `"0"`, `""`,
+ * numbers, arrays, and objects, is unverified.
+ */
+export const parseProviderEmailVerified = (value: unknown): boolean =>
+	value === true || value === "true";
+
+/**
  * Validates email domain against allowed domain(s).
  * Supports comma-separated domains for multi-domain SSO.
  */
@@ -72,6 +84,23 @@ export function parseCertificate(certPem: string) {
 		publicKeyAlgorithm:
 			cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
 	};
+}
+
+/**
+ * samlify >= 2.11 parses private keys with Node's native crypto (OpenSSL 3),
+ * which rejects PEM blocks carrying leading indentation that the previous
+ * node-forge implementation tolerated. Trim each line so keys pasted with
+ * surrounding whitespace (e.g. indented YAML/JSON config) still load.
+ */
+export function normalizePem(key: string): string;
+export function normalizePem(key: string | undefined): string | undefined;
+export function normalizePem(key: string | undefined): string | undefined {
+	if (!key) return key;
+	return `${key
+		.split("\n")
+		.map((line) => line.trim())
+		.join("\n")
+		.trim()}\n`;
 }
 
 export function getHostnameFromDomain(domain: string): string | null {

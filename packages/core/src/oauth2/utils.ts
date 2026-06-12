@@ -1,5 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { OAuth2Tokens } from "./oauth-provider";
+import { parseScopeField } from "./scopes";
 
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	const getDate = (seconds: number) => {
@@ -17,15 +18,30 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		refreshTokenExpiresAt: data.refresh_token_expires_in
 			? getDate(data.refresh_token_expires_in)
 			: undefined,
-		scopes: data?.scope
-			? typeof data.scope === "string"
-				? data.scope.split(" ")
-				: data.scope
-			: [],
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 		// Preserve the raw token response for provider-specific fields
 		raw: data,
 	};
+}
+
+/**
+ * Fill in `accessTokenExpiresAt` from the provider's configured
+ * `accessTokenExpiresIn` when the token response omitted `expires_in`. Without a
+ * known expiry, `getAccessToken` cannot tell the token is expired and never
+ * refreshes it. No-op when the provider already supplied an expiry or no
+ * fallback is configured.
+ */
+export function applyDefaultAccessTokenExpiry(
+	tokens: OAuth2Tokens,
+	accessTokenExpiresIn: number | undefined,
+): OAuth2Tokens {
+	if (!tokens.accessTokenExpiresAt && accessTokenExpiresIn) {
+		tokens.accessTokenExpiresAt = new Date(
+			Date.now() + accessTokenExpiresIn * 1000,
+		);
+	}
+	return tokens;
 }
 
 /**

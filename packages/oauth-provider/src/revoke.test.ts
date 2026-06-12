@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -61,7 +61,7 @@ describe("oauth revoke", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -83,7 +83,7 @@ describe("oauth revoke", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -91,7 +91,7 @@ describe("oauth revoke", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -170,7 +170,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(401);
 	});
 
-	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
+	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		const revocation = await client.oauth2.revoke(
 			{
@@ -186,8 +186,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
@@ -268,7 +270,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(400);
 	});
 
-	it("should pass verification without token_type_hint and sent jwt access_token", async () => {
+	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		const revocation = await client.oauth2.revoke(
 			{
@@ -283,8 +285,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification without token_type_hint and sent opaque access_token", async () => {
@@ -386,6 +390,11 @@ describe("oauth revoke - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -402,7 +411,7 @@ describe("oauth revoke - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,

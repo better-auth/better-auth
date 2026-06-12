@@ -9,6 +9,7 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -28,7 +29,14 @@ export interface MagicLinkOptions {
 	expiresIn?: number | undefined;
 	/**
 	 * Allowed attempts for verifying the magic link token.
-	 * Note: Passing Infinity will allow unlimited attempts.
+	 *
+	 * @deprecated Multi-attempt verification is no longer supported. Each
+	 * magic link token is consumed atomically on the first verification call,
+	 * so a given token mints at most one session regardless of this value
+	 * (see GHSA-hc7v-rggr-4hvx). The option is kept for source compatibility
+	 * and may be removed in a future major; any value other than `1` is
+	 * ignored and emits a `console.warn` at plugin construction.
+	 *
 	 * @default 1
 	 */
 	allowedAttempts?: number;
@@ -153,6 +161,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 		...options,
 	} satisfies MagicLinkOptions;
 
+	if (options.allowedAttempts !== undefined && options.allowedAttempts !== 1) {
+		console.warn(
+			"[better-auth/magic-link] `allowedAttempts` is ignored: tokens are consumed atomically on the first verification call (GHSA-hc7v-rggr-4hvx). Any value other than `1` has no effect; remove the option to silence this warning.",
+		);
+	}
+
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
 			return await defaultKeyHasher(token);
@@ -225,7 +239,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name, attempt: 0 }),
+						value: JSON.stringify({ email, name: ctx.body.name }),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
@@ -344,8 +358,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					);
 
-					function redirectWithError(error: string): never {
+					function redirectWithError(
+						error: string,
+						description?: string | undefined,
+					): never {
 						errorCallbackURL.searchParams.set("error", error);
+						if (description) {
+							errorCallbackURL.searchParams.set(
+								"error_description",
+								description,
+							);
+						}
 						throw ctx.redirect(errorCallbackURL.toString());
 					}
 
@@ -357,43 +380,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 					).toString();
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
-						await ctx.context.internalAdapter.findVerificationValue(
+						await ctx.context.internalAdapter.consumeVerificationValue(
 							storedToken,
 						);
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					if (tokenValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							storedToken,
-						);
-						redirectWithError("EXPIRED_TOKEN");
-					}
-					const {
-						email,
-						name,
-						attempt = 0,
-					} = JSON.parse(tokenValue.value) as {
+					const { email, name } = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string | undefined;
-						attempt?: number | undefined;
 					};
-					if (attempt >= opts.allowedAttempts) {
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							storedToken,
-						);
-						redirectWithError("ATTEMPTS_EXCEEDED");
-					}
-					await ctx.context.internalAdapter.updateVerificationByIdentifier(
-						storedToken,
-						{
-							value: JSON.stringify({
-								email,
-								name,
-								attempt: attempt + 1,
-							}),
-						},
-					);
 
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
@@ -402,11 +398,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser({
-								email: email,
-								emailVerified: true,
-								name: name || "",
-							});
+							let newUser: Awaited<
+								ReturnType<typeof ctx.context.internalAdapter.createUser>
+							> | null;
+							try {
+								newUser = await ctx.context.internalAdapter.createUser(
+									{
+										email: email,
+										emailVerified: true,
+										name: name || "",
+									},
+									{ method: "magic-link" },
+								);
+							} catch (e) {
+								// Browser flow: forward a gate rejection's code to the error
+								// URL instead of surfacing a raw API error.
+								if (isAPIError(e) && e.body?.code) {
+									redirectWithError(e.body.code, e.body.message);
+								}
+								throw e;
+							}
 							isNewUser = true;
 							user = newUser;
 							if (!user) {

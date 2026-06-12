@@ -1,10 +1,10 @@
-import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
-import { BetterAuthError } from "../../error";
 import {
 	ATTR_DB_COLLECTION_NAME,
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
-} from "../../instrumentation";
+} from "@better-auth/core/instrumentation";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
+import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
@@ -131,6 +131,16 @@ export const createAdapterFactory =
 						} else if (
 							method === "deleteMany" &&
 							!config.debugLogs.deleteMany
+						) {
+							return;
+						} else if (
+							method === "consumeOne" &&
+							!config.debugLogs.consumeOne
+						) {
+							return;
+						} else if (
+							method === "incrementOne" &&
+							!config.debugLogs.incrementOne
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
@@ -485,6 +495,8 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
+				| "consumeOne"
+				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -1051,6 +1063,14 @@ export const createAdapterFactory =
 							update: data,
 						}),
 				);
+				if (
+					typeof updatedCount !== "number" ||
+					!Number.isFinite(updatedCount)
+				) {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" updateMany must return a finite number affected row count.`,
+					);
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -1311,6 +1331,149 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				return res;
+			},
+			consumeOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+			}: {
+				model: string;
+				where: Where[];
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "consumeOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`,
+					{ model, where },
+				);
+
+				if (typeof adapterInstance.consumeOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
+					);
+				}
+				const res = await withSpan(
+					`db consumeOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "consumeOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.consumeOne<T>({ model, where }),
+				);
+
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
+			incrementOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+			}: {
+				model: string;
+				where: Where[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "incrementOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`,
+					{ model, where, increment: unsafeIncrement, set: unsafeSet },
+				);
+
+				if (typeof adapterInstance.incrementOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement incrementOne for atomic guarded counter updates.`,
+					);
+				}
+				const mappedKeys = config.mapKeysTransformInput ?? {};
+				const increment: Record<string, number> = {};
+				for (const [field, delta] of Object.entries(unsafeIncrement)) {
+					increment[
+						mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+					] = delta;
+				}
+				let set: Record<string, unknown> | undefined;
+				if (unsafeSet && !config.disableTransformInput) {
+					set = await transformInput(unsafeSet, unsafeModel, "update");
+				} else {
+					set = unsafeSet;
+				}
+				const res = await withSpan(
+					`db incrementOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "incrementOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.incrementOne<T>({
+							model,
+							where,
+							increment,
+							set,
+						}),
+				);
+
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
 			},
 			count: async ({
 				model: unsafeModel,

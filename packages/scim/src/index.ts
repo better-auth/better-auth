@@ -33,7 +33,6 @@ export const scim = (options?: SCIMOptions) => {
 		storeSCIMToken: "plain",
 		...options,
 	} satisfies SCIMOptions;
-	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
@@ -46,7 +45,7 @@ export const scim = (options?: SCIMOptions) => {
 			getSCIMProviderConnection: getSCIMProviderConnection(opts),
 			deleteSCIMProviderConnection: deleteSCIMProviderConnection(opts),
 			getSCIMUser: getSCIMUser(authMiddleware),
-			createSCIMUser: createSCIMUser(authMiddleware),
+			createSCIMUser: createSCIMUser(authMiddleware, opts),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
 			deleteSCIMUser: deleteSCIMUser(authMiddleware),
 			updateSCIMUser: updateSCIMUser(authMiddleware),
@@ -74,14 +73,10 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
-					...(providerOwnershipEnabled
-						? {
-								userId: {
-									type: "string",
-									required: false,
-								},
-							}
-						: {}),
+					userId: {
+						type: "string",
+						required: false,
+					},
 				},
 			},
 		},
