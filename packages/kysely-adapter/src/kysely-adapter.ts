@@ -805,9 +805,14 @@ export const kyselyAdapter = (
 							: db.transaction().execute(claimFromTransaction);
 					}
 
-					const targetIds = applyWhere(
+					const selectIds = applyWhere(
 						db.selectFrom(model).select(`${model}.${idField}`),
-					).limit(1);
+					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
 					const query = db
 						.deleteFrom(model)
 						.where(`${model}.${idField}`, "in", targetIds);

@@ -173,7 +173,7 @@ const createVerificationOTPBodySchema = z.object({
 });
 
 export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
-	createAuthEndpoint(
+	createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: createVerificationOTPBodySchema,
@@ -234,7 +234,7 @@ const getVerificationOTPBodySchema = z.object({
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-get-verification-otp)
  */
 export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
-	createAuthEndpoint(
+	createAuthEndpoint.serverOnly(
 		{
 			method: "GET",
 			query: getVerificationOTPBodySchema,

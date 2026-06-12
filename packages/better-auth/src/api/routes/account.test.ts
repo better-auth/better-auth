@@ -8,13 +8,16 @@ import {
 	afterEach,
 	assert,
 	beforeAll,
+	beforeEach,
 	describe,
 	expect,
 	it,
 	vi,
 } from "vitest";
+import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT } from "../../crypto";
+import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -2289,5 +2292,220 @@ describe("token routes cookie cache revocation", async () => {
 			},
 		);
 		expect(bypass.error?.status).toBe(401);
+	});
+});
+
+describe("account resolution in stateless mode", async () => {
+	const IDP = "https://idp.stateless.test";
+	const STATELESS_SECRET = "stateless-test-secret-stateless-test-secret";
+
+	const idpHandlers = [
+		http.get(`${IDP}/.well-known/openid-configuration`, () =>
+			HttpResponse.json({
+				issuer: IDP,
+				authorization_endpoint: `${IDP}/authorize`,
+				token_endpoint: `${IDP}/token`,
+				userinfo_endpoint: `${IDP}/userinfo`,
+				jwks_uri: `${IDP}/jwks`,
+			}),
+		),
+		http.post(`${IDP}/token`, async ({ request }) => {
+			const params = new URLSearchParams(await request.text());
+			if (params.get("grant_type") === "refresh_token") {
+				return HttpResponse.json({
+					token_type: "Bearer",
+					access_token: "idp-refreshed-access-token",
+					refresh_token: "idp-rotated-refresh-token",
+					expires_in: 3600,
+					scope: "openid profile email",
+				});
+			}
+			return HttpResponse.json({
+				token_type: "Bearer",
+				access_token: "idp-access-token",
+				refresh_token: "idp-refresh-token",
+				expires_in: 3600,
+				scope: "openid profile email",
+			});
+		}),
+	];
+
+	beforeEach(() => server.use(...idpHandlers));
+
+	const makeStatelessAuth = () =>
+		betterAuth({
+			secret: STATELESS_SECRET,
+			baseURL: "http://localhost:3000",
+			trustedOrigins: ["http://localhost:3000"],
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 60,
+					refreshCache: { updateAge: 60 * 60 },
+				},
+			},
+			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "idp",
+							clientId: "client-id",
+							clientSecret: "client-secret",
+							scopes: ["openid", "profile", "email"],
+							discoveryUrl: `${IDP}/.well-known/openid-configuration`,
+							getUserInfo: async (tokens) => ({
+								id: "shared-idp-user",
+								email: "user@stateless.test",
+								name: "Stateless User",
+								emailVerified: true,
+								accessTokenSeen: tokens.accessToken,
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+	type Jar = Map<string, string>;
+
+	const collectCookies = (res: Response, jar: Jar) => {
+		for (const cookie of res.headers.getSetCookie()) {
+			const [pair = ""] = cookie.split(";");
+			const idx = pair.indexOf("=");
+			if (idx > 0) {
+				jar.set(pair.slice(0, idx), pair.slice(idx + 1));
+			}
+		}
+	};
+
+	const cookieHeader = (jar: Jar) =>
+		[...jar].map(([name, value]) => `${name}=${value}`).join("; ");
+
+	const requestHeaders = (jar: Jar) =>
+		new Headers({
+			cookie: cookieHeader(jar),
+			host: "localhost:3000",
+		});
+
+	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
+		const jar: Jar = new Map();
+		let res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					provider: "idp",
+					callbackURL: "/",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		collectCookies(res, jar);
+		const { url } = (await res.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+		assert(state, "expected an OAuth state to be issued");
+
+		res = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/callback/idp?code=test-code&state=${state}`,
+				{ headers: requestHeaders(jar), redirect: "manual" },
+			),
+		);
+		collectCookies(res, jar);
+
+		const session = (await auth.api.getSession({
+			headers: requestHeaders(jar),
+		})) as { user: { id: string } } | null;
+		assert(session?.user.id, "expected OAuth sign-in to create a session");
+		return { jar, userId: session.user.id };
+	};
+
+	const signInOnTwoInstances = async () => {
+		const authA = makeStatelessAuth();
+		const a = await signIn(authA);
+		const b = await signIn(makeStatelessAuth());
+		expect(a.userId).not.toBe(b.userId);
+
+		const accountCookieName = (await authA.$context).authCookies.accountData
+			.name;
+		const mixed: Jar = new Map(a.jar);
+		for (const key of [...mixed.keys()]) {
+			if (key.startsWith(accountCookieName)) mixed.delete(key);
+		}
+		for (const [key, value] of b.jar) {
+			if (key.startsWith(accountCookieName)) mixed.set(key, value);
+		}
+
+		return {
+			accountCookieName,
+			mixed,
+			sessionUserId: a.userId,
+		};
+	};
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves getAccessToken with a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const result = await makeStatelessAuth().api.getAccessToken({
+			body: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		expect(result.accessToken).toBe("idp-access-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("resolves accountInfo with a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const info = await makeStatelessAuth().api.accountInfo({
+			query: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		assert(info, "expected accountInfo to resolve from the account cookie");
+		expect(info.user.id).toBe("shared-idp-user");
+		expect(info.data.accessTokenSeen).toBe("idp-access-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("refreshes a valid account cookie whose userId differs from the session user", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances();
+
+		const result = await makeStatelessAuth().api.refreshToken({
+			body: { providerId: "idp", userId: sessionUserId },
+			headers: requestHeaders(mixed),
+		});
+
+		expect(result.accessToken).toBe("idp-refreshed-access-token");
+		expect(result.refreshToken).toBe("idp-rotated-refresh-token");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9978
+	 */
+	it("preserves a valid mismatched account cookie during stateless session refresh", async () => {
+		const { accountCookieName, mixed } = await signInOnTwoInstances();
+
+		const res = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: requestHeaders(mixed),
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const cookies = parseSetCookieHeader(res.headers.get("set-cookie") || "");
+		const accountCookie = cookies.get(accountCookieName);
+		expect(accountCookie?.value).toBeTruthy();
+		expect(accountCookie?.maxAge).not.toBe(0);
 	});
 });

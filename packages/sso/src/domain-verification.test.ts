@@ -176,7 +176,6 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({
 				message: "Provider not found",
-				code: "PROVIDER_NOT_FOUND",
 			});
 		});
 
@@ -223,9 +222,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -258,9 +255,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -278,6 +273,43 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers: newHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(201);
+			expect(await response.json()).toMatchObject({
+				domainVerificationToken: expect.any(String),
+			});
+		});
+
+		it("allows a non-creator org admin to request verification for an org-owned provider", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider, createOrganization } =
+				createTestAuth();
+			const ownerHeaders = await getAuthHeaders(testUser);
+			const org = await createOrganization("org-with-admin", ownerHeaders);
+
+			// The org owner registers the provider; a different org admin who did
+			// not create it must still be able to verify its domain.
+			const provider = await registerSSOProvider(ownerHeaders, org?.id);
+
+			const adminHeaders = await getAuthHeaders({
+				name: "Org Admin",
+				email: "org-admin@test.com",
+				password: "password",
+			});
+			const adminSession = await auth.api.getSession({ headers: adminHeaders });
+			await auth.api.addMember({
+				body: {
+					userId: adminSession!.user.id,
+					role: "admin",
+					organizationId: org!.id,
+				},
+				headers: ownerHeaders,
+			});
+
+			const response = await auth.api.requestDomainVerification({
+				body: { providerId: provider.providerId },
+				headers: adminHeaders,
 				asResponse: true,
 			});
 
@@ -352,7 +384,6 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({
 				message: "Provider not found",
-				code: "PROVIDER_NOT_FOUND",
 			});
 		});
 
@@ -425,9 +456,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -458,9 +487,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 

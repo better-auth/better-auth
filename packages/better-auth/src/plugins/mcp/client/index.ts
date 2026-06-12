@@ -162,6 +162,15 @@ export function createMcpAuthClient(
 			if (!data || !data.userId) {
 				return null;
 			}
+			// Defense in depth: the auth server gates expiry, but never authorize a
+			// session whose access token has already expired, in case an older or
+			// misconfigured server returns one.
+			if (
+				data.accessTokenExpiresAt &&
+				new Date(data.accessTokenExpiresAt).getTime() < Date.now()
+			) {
+				return null;
+			}
 
 			return data as McpSession;
 		} catch {

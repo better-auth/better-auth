@@ -217,7 +217,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
+					ctx.context.logger.warn("Password is too short");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
@@ -226,7 +226,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
+					ctx.context.logger.warn("Password is too long");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_LONG,

@@ -5,6 +5,12 @@ import type {
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: OAuth2UserInfo["id"] | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
 export interface GenericOAuthOptions<ID extends string = string> {
 	/**
 	 * Array of OAuth provider configurations.
@@ -131,7 +137,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?:
-		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| ((tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>)
 		| undefined;
 	/**
 	 * Custom function to map the provider's user profile to your app's user fields.
@@ -139,7 +145,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: OAuth2UserInfo & Record<string, unknown>,
+				profile: GenericOAuthUserInfo,
 		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**

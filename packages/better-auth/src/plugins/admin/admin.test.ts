@@ -1333,6 +1333,64 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/3553
+	 */
+	it("should create a credential account when setting password for a user without one", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "No Credential User",
+				email: "no-credential@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user?.id || "";
+		expect(userId).not.toBe("");
+
+		const preSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(preSignIn.error).toBeDefined();
+
+		const setRes = await client.admin.setUserPassword(
+			{
+				userId,
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(setRes.data?.status).toBe(true);
+
+		const postSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(postSignIn.error).toBeNull();
+		expect(postSignIn.data?.user.id).toBe(userId);
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+	});
+
+	it("should return USER_NOT_FOUND when setting password for a non-existent user", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "non-existent-user-id",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{
