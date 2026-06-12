@@ -20,6 +20,7 @@ const html = (
 	description: string | null = null,
 ) => {
 	const custom = options.onAPIError?.customizeDefaultErrorPage;
+	const urlSafeCode = code.replace(/'/g, "");
 	return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -306,7 +307,7 @@ ${
             ${
 							!description
 								? "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find " +
-									`<a href='https://better-auth.com/docs/reference/errors/${encodeURIComponent(code)}' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>more information about the error</a>.`
+									`<a href='https://better-auth.com/docs/reference/errors/${encodeURIComponent(urlSafeCode)}' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>more information about the error</a>.`
 								: description
 						}
           </p>
@@ -342,7 +343,7 @@ ${
             </div>
           </a>
           <a
-            href="https://better-auth.com/docs/reference/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}"
+            href="https://better-auth.com/docs/reference/errors/${encodeURIComponent(urlSafeCode)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}"
             target="_blank"
             rel="noopener noreferrer"
             style="
