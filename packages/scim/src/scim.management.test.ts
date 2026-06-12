@@ -27,6 +27,10 @@ const createTestInstance = (
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};
@@ -246,6 +250,10 @@ describe("SCIM provider management", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 			};
@@ -481,6 +489,9 @@ describe("SCIM provider management", () => {
 			const [secret, ...rest] = Buffer.from(response.scimToken, "base64url")
 				.toString()
 				.split(":");
+			if (!secret) {
+				throw new Error("Expected generated SCIM token to include a secret");
+			}
 			// Tamper the secret while preserving its length, so verification cannot
 			// short-circuit on a length mismatch and must reject the value itself
 			// through the constant-time comparison.

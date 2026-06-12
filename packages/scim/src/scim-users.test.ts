@@ -23,6 +23,10 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};
@@ -331,7 +335,7 @@ describe("SCIM", () => {
 
 			const users = await auth.api.listSCIMUsers({
 				query: {
-					filter: 'userName eq "user-A"',
+					filter: 'UserName Eq "USER-A"',
 				},
 				headers: {
 					authorization: `Bearer ${scimToken}`,
@@ -679,6 +683,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 			};
@@ -839,6 +847,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 				invitation: [],
