@@ -14,7 +14,9 @@ export type AuthQueryState<T> = {
 	isPending: boolean;
 	isRefetching: boolean;
 	refetch: (
-		queryParams?: { query?: SessionQueryParams } | undefined,
+		queryParams?:
+			| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+			| undefined,
 	) => Promise<void>;
 };
 
@@ -60,7 +62,9 @@ export const useAuthQuery = <T>(
 	withEquality(value, isAuthQueryStateEqual);
 
 	const fn = async (
-		queryParams?: { query?: SessionQueryParams } | undefined,
+		queryParams?:
+			| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+			| undefined,
 	) => {
 		return new Promise<void>((resolve) => {
 			const opts =
@@ -74,6 +78,7 @@ export const useAuthQuery = <T>(
 
 			$fetch<T>(path, {
 				...opts,
+				...queryParams?.fetchOptions,
 				query: {
 					...opts?.query,
 					...queryParams?.query,

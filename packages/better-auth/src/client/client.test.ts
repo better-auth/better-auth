@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { isProxy } from "node:util/types";
+import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
@@ -442,7 +443,9 @@ describe("type", () => {
 			isPending: boolean;
 			error: BetterFetchError | null;
 			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
+				queryParams?:
+					| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+					| undefined,
 			) => void;
 		}>();
 	});
@@ -479,7 +482,9 @@ describe("type", () => {
 			isRefetching: boolean;
 			error: BetterFetchError | null;
 			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
+				queryParams?:
+					| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+					| undefined,
 			) => Promise<void>;
 		}>();
 	});
@@ -517,7 +522,9 @@ describe("type", () => {
 			isRefetching: boolean;
 			error: BetterFetchError | null;
 			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
+				queryParams?:
+					| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+					| undefined,
 			) => Promise<void>;
 		}>();
 	});
@@ -556,7 +563,9 @@ describe("type", () => {
 					isRefetching: boolean;
 					error: BetterFetchError | null;
 					refetch: (
-						queryParams?: { query?: SessionQueryParams } | undefined,
+						queryParams?:
+							| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+							| undefined,
 					) => Promise<void>;
 				}>
 			>
@@ -596,7 +605,9 @@ describe("type", () => {
 			isRefetching: boolean;
 			error: BetterFetchError | null;
 			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
+				queryParams?:
+					| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+					| undefined,
 			) => Promise<void>;
 		}>();
 	});

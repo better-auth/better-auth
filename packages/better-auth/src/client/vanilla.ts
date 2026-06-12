@@ -1,6 +1,7 @@
 import type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
+	ClientFetchOption,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
@@ -87,7 +88,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				isPending: boolean;
 				isRefetching: boolean;
 				refetch: (
-					queryParams?: { query?: SessionQueryParams } | undefined,
+					queryParams?:
+						| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+						| undefined,
 				) => Promise<void>;
 			}>;
 			$fetch: typeof $fetch;
