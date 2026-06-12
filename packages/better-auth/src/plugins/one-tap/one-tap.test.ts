@@ -1,3 +1,4 @@
+import { jwtVerify } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oneTap } from "./index";
@@ -22,6 +23,10 @@ vi.mock("jose", async (importOriginal) => {
 			protectedHeader: { alg: "RS256" },
 		})),
 	};
+});
+
+afterEach(() => {
+	vi.mocked(jwtVerify).mockClear();
 });
 
 describe("one-tap implicit linking gate", async () => {
@@ -518,6 +523,7 @@ describe("one-tap audience enforcement", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.message).toContain("Google client ID is required");
+		expect(jwtVerify).not.toHaveBeenCalled();
 	});
 
 	it("accepts the oneTap-level clientId as the audience without a Google provider", async () => {
@@ -538,6 +544,13 @@ describe("one-tap audience enforcement", async () => {
 		// missing client ID (verification proceeds via the mocked jose).
 		expect(res.error?.message ?? "").not.toContain(
 			"Google client ID is required",
+		);
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Function),
+			expect.objectContaining({
+				audience: "explicit-one-tap-client",
+			}),
 		);
 	});
 });
