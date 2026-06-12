@@ -26,6 +26,14 @@
 
   Connections created before this release carry no owner. Access now fails closed, so those connections are no longer reachable through the management endpoints, including token regeneration. Reclaim them at the database level: delete `scimProvider` rows that have neither `organizationId` nor `userId`, or set `userId` to the intended owner, then regenerate tokens as needed. Organization-scoped connections are not affected.
 
+## 1.6.18
+
+### Patch Changes
+
+- Updated dependencies [[`9ef7240`](https://github.com/better-auth/better-auth/commit/9ef7240fec4a9d8469dd5ed24249949d3400e732), [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c)]:
+  - better-auth@1.6.18
+  - @better-auth/core@1.6.18
+
 ## 1.6.17
 
 ### Patch Changes

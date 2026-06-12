@@ -51,6 +51,16 @@
 
   Migration: run the schema migration (`npx @better-auth/cli migrate`, or `generate` if you manage the schema yourself) to add the new resource columns.
 
+## 1.6.18
+
+### Patch Changes
+
+- [#9941](https://github.com/better-auth/better-auth/pull/9941) [`729fd84`](https://github.com/better-auth/better-auth/commit/729fd84034d547f37bb8c1c5b8958280c5bdb487) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix OAuth provider signed query verification so CDN or proxy query parameter reordering does not break signature validation. Existing signed redirects created before this patch is deployed may fail until their short expiration window elapses.
+
+- Updated dependencies [[`9ef7240`](https://github.com/better-auth/better-auth/commit/9ef7240fec4a9d8469dd5ed24249949d3400e732), [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c)]:
+  - better-auth@1.6.18
+  - @better-auth/core@1.6.18
+
 ## 1.6.17
 
 ### Patch Changes
