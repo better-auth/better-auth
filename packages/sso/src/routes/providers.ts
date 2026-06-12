@@ -1,3 +1,5 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -18,9 +20,13 @@ import {
 } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
+import {
+	getUpdateSSOProviderBodySchema,
+	parseSSOProviderAdditionalFields,
+} from "./schemas";
 
 interface SSOProviderRecord {
+	[key: string]: unknown;
 	id: string;
 	providerId: string;
 	issuer: string;
@@ -33,6 +39,36 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+export function filterSSOProviderAdditionalFields<
+	T extends Record<string, unknown>,
+>(provider: T, options?: SSOOptions) {
+	return filterOutputFields(provider, getSSOProviderAdditionalFields(options));
+}
+
+function getReturnedSSOProviderAdditionalFields(
+	provider: Record<string, unknown>,
+	options?: SSOOptions,
+) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const result: Record<string, unknown> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.returned === false) {
+			continue;
+		}
+		if (key in provider) {
+			result[key] = provider[key];
+		}
+	}
+	return result;
+}
 
 export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
 	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
@@ -110,6 +146,7 @@ async function batchCheckOrgAdmin(
 
 function sanitizeProvider(
 	provider: {
+		[key: string]: unknown;
 		providerId: string;
 		issuer: string;
 		domain: string;
@@ -119,6 +156,7 @@ function sanitizeProvider(
 		samlConfig?: string | SAMLConfig | null;
 	},
 	baseURL: string,
+	options?: SSOOptions,
 ) {
 	let oidcConfig: OIDCConfig | null = null;
 	let samlConfig: SAMLConfig | null = null;
@@ -136,8 +174,13 @@ function sanitizeProvider(
 	}
 
 	const type = samlConfig ? "saml" : "oidc";
+	const returnedAdditionalFields = getReturnedSSOProviderAdditionalFields(
+		provider,
+		options,
+	);
 
 	return {
+		...returnedAdditionalFields,
 		providerId: provider.providerId,
 		type,
 		issuer: provider.issuer,
@@ -173,7 +216,7 @@ function sanitizeProvider(
 	};
 }
 
-export const listSSOProviders = () => {
+export const listSSOProviders = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/providers",
 		{
@@ -246,7 +289,7 @@ export const listSSOProviders = () => {
 			}
 
 			const providers = accessibleProviders.map((p) =>
-				sanitizeProvider(p, ctx.context.baseURL),
+				sanitizeProvider(p, ctx.context.baseURL, options),
 			);
 
 			return ctx.json({ providers });
@@ -299,7 +342,7 @@ export async function checkProviderAccess(
 	return provider;
 }
 
-export const getSSOProvider = () => {
+export const getSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/get-provider",
 		{
@@ -331,7 +374,7 @@ export const getSSOProvider = () => {
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
-			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL, options));
 		},
 	);
 };
@@ -410,14 +453,14 @@ function mergeOIDCConfig(
 }
 
 export const updateSSOProvider = (options: SSOOptions) => {
+	const updateBodySchema = getUpdateSSOProviderBodySchema(options);
+
 	return createAuthEndpoint(
 		"/sso/update-provider",
 		{
 			method: "POST",
 			use: [sessionMiddleware],
-			body: updateSSOProviderBodySchema.extend({
-				providerId: z.string(),
-			}),
+			body: updateBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "updateSSOProvider",
@@ -443,7 +486,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			const { providerId, ...body } = ctx.body;
 
 			const { issuer, domain, samlConfig, oidcConfig } = body;
-			if (!issuer && !domain && !samlConfig && !oidcConfig) {
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"update",
+			);
+			if (
+				!issuer &&
+				!domain &&
+				!samlConfig &&
+				!oidcConfig &&
+				Object.keys(additionalFields).length === 0
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "No fields provided for update",
 				});
@@ -451,7 +505,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 			const existingProvider = await checkProviderAccess(ctx, providerId);
 
-			const updateData: Partial<SSOProviderRecord> = {};
+			const updateData: Partial<SSOProviderRecord> = {
+				...additionalFields,
+			};
 
 			if (body.issuer !== undefined) {
 				updateData.issuer = body.issuer;
@@ -581,7 +637,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
+			return ctx.json(
+				sanitizeProvider(fullProvider, ctx.context.baseURL, options),
+			);
 		},
 	);
 };

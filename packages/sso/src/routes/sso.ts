@@ -46,12 +46,14 @@ import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	InferSSOProvider,
 	Member,
 	OIDCConfig,
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderAdditionalFieldsInput,
 } from "../types";
 import {
 	domainMatches,
@@ -66,9 +68,15 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
-import { hasOrgAdminRole } from "./providers";
+import {
+	filterSSOProviderAdditionalFields,
+	hasOrgAdminRole,
+} from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
-import { registerSSOProviderBodySchema } from "./schemas";
+import {
+	getRegisterSSOProviderBodySchema,
+	parseSSOProviderAdditionalFields,
+} from "./schemas";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -161,13 +169,20 @@ export const spMetadata = (options?: SSOOptions) => {
 };
 
 export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
+	const registerBodySchema = getRegisterSSOProviderBodySchema(options);
+	type Body = z.infer<typeof registerBodySchema> &
+		SSOProviderAdditionalFieldsInput<O>;
+
 	return createAuthEndpoint(
 		"/sso/register",
 		{
 			method: "POST",
-			body: registerSSOProviderBodySchema,
+			body: registerBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					operationId: "registerSSOProvider",
 					summary: "Register an OIDC provider",
@@ -381,6 +396,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			const body = ctx.body;
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"create",
+			);
 
 			if (body.samlConfig?.idpMetadata?.metadata) {
 				const maxMetadataSize =
@@ -596,6 +616,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
+					...additionalFields,
 					oidcConfig: (() => {
 						const config = buildOIDCConfig();
 						if (config) {
@@ -671,7 +692,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				redirectURI: string;
 				oidcConfig: OIDCConfig | null;
 				samlConfig: SAMLConfig | null;
-			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+			} & Omit<InferSSOProvider<O>, "oidcConfig" | "samlConfig">;
 
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
 				? SSOProviderResponse & {
@@ -681,7 +702,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				: SSOProviderResponse;
 
 			const result = {
-				...provider,
+				...filterSSOProviderAdditionalFields(
+					provider as unknown as Record<string, unknown>,
+					options,
+				),
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
 				),
