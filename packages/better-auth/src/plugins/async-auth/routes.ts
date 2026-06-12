@@ -1,0 +1,648 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
+import { jwtVerify } from "jose";
+import * as z from "zod";
+import { getSessionFromCtx } from "../../api/routes/session";
+import { generateRandomString } from "../../crypto";
+import type { TimeString } from "../../utils/time";
+import { ms } from "../../utils/time";
+import { verifyJWT } from "../jwt";
+import type { OIDCOptions } from "../oidc-provider/types";
+import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
+import { ASYNC_AUTH_ERROR_CODES } from "./error-codes";
+import { isSecureEndpoint, pushTokensToClient } from "./push-delivery";
+import {
+	deleteAsyncAuthRequest,
+	findAsyncAuthRequest,
+	storeAsyncAuthRequest,
+	updateAsyncAuthRequest,
+} from "./storage";
+import type {
+	AsyncAuthDeliveryMode,
+	AsyncAuthInternalOptions,
+	AsyncAuthRequestData,
+} from "./types";
+
+/**
+ * POST /oauth/bc-authorize
+ * Backchannel Authentication Request - Agent initiates auth request
+ */
+
+const bcAuthorizeBodySchema = z
+	.object({
+		client_id: z.string().optional(),
+		client_secret: z.string().optional(),
+		scope: z.string().default("openid"),
+		login_hint: z.string().optional(),
+		id_token_hint: z.string().optional(),
+		binding_message: z.string().optional(),
+		client_notification_token: z.string().optional(),
+	})
+	// CIBA spec §7.1 requires exactly one of login_hint, login_hint_token,
+	// or id_token_hint. login_hint_token is not implemented (uncommon in
+	// practice); only login_hint and id_token_hint are supported.
+	.refine((data) => !!data.login_hint !== !!data.id_token_hint, {
+		message:
+			"Exactly one of login_hint or id_token_hint must be provided (CIBA spec §7.1)",
+		path: ["login_hint"],
+	});
+
+export const bcAuthorize = (opts: AsyncAuthInternalOptions) =>
+	createAuthEndpoint(
+		"/oauth/bc-authorize",
+		{
+			method: "POST",
+			body: bcAuthorizeBodySchema,
+			metadata: {
+				openapi: {
+					description:
+						"Initiate an async auth (CIBA) backchannel authentication request",
+					responses: {
+						200: {
+							description: "Authentication request initiated",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											auth_req_id: {
+												type: "string",
+												description:
+													"Unique identifier for the authentication request",
+											},
+											expires_in: {
+												type: "number",
+												description: "Lifetime of the auth_req_id in seconds",
+											},
+											interval: {
+												type: "number",
+												description:
+													"Minimum polling interval in seconds (poll mode only)",
+											},
+										},
+										required: ["auth_req_id", "expires_in"],
+									},
+								},
+							},
+						},
+						400: {
+							description: "Invalid request",
+						},
+						401: {
+							description: "Invalid client credentials",
+						},
+					},
+				},
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
+			},
+		},
+		async (ctx) => {
+			const pluginContext = getOidcPluginContext(ctx);
+			const { client, credentials } = await validateClientCredentials(
+				ctx,
+				ctx.body as Record<string, unknown>,
+				pluginContext,
+				opts.agents,
+				opts.ensuredAgents,
+			);
+
+			// Validate scope includes openid
+			const requestedScopes = ctx.body.scope.split(" ");
+			if (!requestedScopes.includes("openid")) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_scope",
+					error_description: "scope must include 'openid'",
+				});
+			}
+
+			// Determine delivery mode from client metadata
+			let clientMetadata: Record<string, unknown> = {};
+			if (typeof client.metadata === "string") {
+				try {
+					clientMetadata = JSON.parse(client.metadata);
+				} catch {
+					// Malformed metadata — treat as empty
+				}
+			} else if (client.metadata) {
+				clientMetadata = client.metadata;
+			}
+
+			let deliveryMode: AsyncAuthDeliveryMode = opts.deliveryMode;
+			let clientNotificationEndpoint: string | undefined;
+
+			if (clientMetadata.backchannel_token_delivery_mode === "push") {
+				deliveryMode = "push";
+			}
+			if (typeof clientMetadata.client_notification_endpoint === "string") {
+				clientNotificationEndpoint =
+					clientMetadata.client_notification_endpoint;
+			}
+
+			// Validate push mode requirements
+			if (deliveryMode === "push") {
+				if (!clientNotificationEndpoint) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description:
+							ASYNC_AUTH_ERROR_CODES.MISSING_NOTIFICATION_ENDPOINT.message,
+					});
+				}
+				// CIBA spec §10.3: notification endpoint MUST use TLS.
+				if (!isSecureEndpoint(clientNotificationEndpoint)) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description:
+							"client_notification_endpoint must use HTTPS per CIBA spec §10.3",
+					});
+				}
+				if (!ctx.body.client_notification_token) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description:
+							ASYNC_AUTH_ERROR_CODES.MISSING_NOTIFICATION_TOKEN.message,
+					});
+				}
+			}
+
+			// Resolve user from login_hint or id_token_hint
+			let user = null;
+
+			if (ctx.body.id_token_hint) {
+				const oidcOpts = pluginContext.oidcOpts as OIDCOptions;
+				let validatedUserId: string | null = null;
+
+				try {
+					if (oidcOpts.useJWTPlugin) {
+						const jwtPlugin = ctx.context.getPlugin("jwt");
+						if (!jwtPlugin?.options) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error: "server_error",
+								error_description:
+									"useJWTPlugin is enabled but the JWT plugin is not available",
+							});
+						}
+						// verifyJWT checks signature + expiry but validates aud
+						// against the JWT plugin's own audience (baseURL), not clientId.
+						// We check aud explicitly after signature verification.
+						const verified = await verifyJWT(
+							ctx.body.id_token_hint,
+							jwtPlugin.options,
+						);
+						if (!verified?.sub) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint does not contain a valid subject",
+							});
+						}
+						const aud =
+							typeof verified.aud === "string"
+								? verified.aud
+								: verified.aud?.[0];
+						if (aud !== credentials.clientId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint audience does not match client_id",
+							});
+						}
+						validatedUserId = verified.sub;
+					} else {
+						// HS256 path — jose validates audience + issuer natively
+						const { payload } = await jwtVerify(
+							ctx.body.id_token_hint,
+							new TextEncoder().encode(ctx.context.secret),
+							{
+								audience: credentials.clientId,
+								issuer: ctx.context.baseURL,
+							},
+						);
+						if (!payload.sub) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint does not contain a valid subject",
+							});
+						}
+						validatedUserId = payload.sub as string;
+					}
+				} catch (e) {
+					if (e instanceof APIError) throw e;
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description: "id_token_hint is invalid or expired",
+					});
+				}
+
+				user = await ctx.context.internalAdapter.findUserById(validatedUserId);
+			} else {
+				const loginHint = ctx.body.login_hint!;
+
+				if (opts.resolveUser) {
+					user = await opts.resolveUser(loginHint, ctx);
+				} else {
+					const result =
+						await ctx.context.internalAdapter.findUserByEmail(loginHint);
+					if (result) {
+						user = "user" in result ? result.user : result;
+					}
+
+					let userId: string | null = null;
+
+					if (!user) {
+						try {
+							const phoneUser = await ctx.context.adapter.findOne<{
+								id: string;
+							}>({
+								model: "user",
+								where: [{ field: "phoneNumber", value: loginHint }],
+							});
+							if (phoneUser) {
+								userId = phoneUser.id;
+							}
+						} catch {
+							// Phone number field doesn't exist, skip
+						}
+					}
+
+					if (!user && !userId) {
+						try {
+							const usernameUser = await ctx.context.adapter.findOne<{
+								id: string;
+							}>({
+								model: "user",
+								where: [{ field: "username", value: loginHint }],
+							});
+							if (usernameUser) {
+								userId = usernameUser.id;
+							}
+						} catch {
+							// Username field doesn't exist, skip
+						}
+					}
+
+					if (!user && userId) {
+						user = await ctx.context.internalAdapter.findUserById(userId);
+					}
+				}
+			}
+
+			if (!user) {
+				throw new APIError("BAD_REQUEST", {
+					error: "unknown_user_id",
+					error_description: ASYNC_AUTH_ERROR_CODES.UNKNOWN_USER_ID.message,
+				});
+			}
+
+			// Generate auth_req_id
+			const authReqId = generateRandomString(32, "a-z", "A-Z", "0-9");
+
+			// Calculate expiration
+			const requestLifetimeMs = ms(opts.requestLifetime as TimeString);
+			const pollingIntervalMs = ms(opts.pollingInterval as TimeString);
+			const expiresAt = Date.now() + requestLifetimeMs;
+
+			// Store async auth request
+			const asyncAuthRequest: AsyncAuthRequestData = {
+				authReqId,
+				clientId: credentials.clientId,
+				userId: user.id,
+				scope: ctx.body.scope,
+				bindingMessage: ctx.body.binding_message,
+				status: "pending",
+				expiresAt,
+				pollingInterval: pollingIntervalMs,
+				createdAt: Date.now(),
+				deliveryMode,
+				clientNotificationToken: ctx.body.client_notification_token,
+				clientNotificationEndpoint,
+			};
+
+			await storeAsyncAuthRequest(ctx, asyncAuthRequest);
+
+			// Build approval URL
+			const approvalUrl = new URL(opts.approvalUri, ctx.context.baseURL);
+			approvalUrl.searchParams.set("auth_req_id", authReqId);
+
+			// Send notification to user
+			await ctx.context.runInBackgroundOrAwait(
+				opts.sendNotification(
+					{
+						user,
+						authReqId,
+						approvalUrl: approvalUrl.toString(),
+						bindingMessage: ctx.body.binding_message,
+						clientId: credentials.clientId,
+						scope: ctx.body.scope,
+						expiresAt: new Date(expiresAt),
+					},
+					ctx.request,
+				),
+			);
+
+			// Return response
+			// Per CIBA spec: interval is only returned for poll mode
+			return ctx.json(
+				{
+					auth_req_id: authReqId,
+					expires_in: Math.floor(requestLifetimeMs / 1000),
+					interval:
+						deliveryMode === "poll"
+							? Math.floor(pollingIntervalMs / 1000)
+							: undefined,
+				},
+				{
+					headers: {
+						"Cache-Control": "no-store",
+					},
+				},
+			);
+		},
+	);
+
+/**
+ * GET /async-auth/verify
+ * Get async auth request details for the approval UI.
+ *
+ * Security note: This endpoint is intentionally unauthenticated. The
+ * auth_req_id acts as an unguessable bearer token (32 cryptographically
+ * random alphanumeric characters ≈ 190 bits of entropy). This is consistent
+ * with the CIBA spec — the auth_req_id is a secret shared between the AS and
+ * the client, and this endpoint only exposes non-sensitive metadata
+ * (client_id, scope, binding_message, status). No tokens or user PII
+ * beyond what the client already knows are returned.
+ */
+
+const verifyQuerySchema = z.object({
+	auth_req_id: z.string(),
+});
+
+export const asyncAuthVerify = createAuthEndpoint(
+	"/async-auth/verify",
+	{
+		method: "GET",
+		query: verifyQuerySchema,
+		metadata: {
+			openapi: {
+				description: "Get async auth request details for the approval UI",
+				responses: {
+					200: {
+						description: "Request details",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										auth_req_id: { type: "string" },
+										client_id: { type: "string" },
+										scope: { type: "string" },
+										binding_message: { type: "string" },
+										status: { type: "string" },
+										expires_at: { type: "string" },
+									},
+								},
+							},
+						},
+					},
+					400: {
+						description: "Invalid or expired request",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { auth_req_id } = ctx.query;
+
+		const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+		if (!asyncAuthRequest) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+			});
+		}
+
+		// Check if expired
+		if (asyncAuthRequest.expiresAt < Date.now()) {
+			await deleteAsyncAuthRequest(ctx, auth_req_id);
+			throw new APIError("BAD_REQUEST", {
+				error: "expired_token",
+				error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
+			});
+		}
+
+		return ctx.json({
+			auth_req_id: asyncAuthRequest.authReqId,
+			client_id: asyncAuthRequest.clientId,
+			scope: asyncAuthRequest.scope,
+			binding_message: asyncAuthRequest.bindingMessage,
+			status: asyncAuthRequest.status,
+			expires_at: new Date(asyncAuthRequest.expiresAt).toISOString(),
+		});
+	},
+);
+
+/**
+ * POST /async-auth/authorize
+ * User approves the request (requires session)
+ * For push mode: triggers token delivery to client's notification endpoint
+ */
+
+const authorizeBodySchema = z.object({
+	auth_req_id: z.string(),
+});
+
+export const asyncAuthAuthorize = (opts: AsyncAuthInternalOptions) =>
+	createAuthEndpoint(
+		"/async-auth/authorize",
+		{
+			method: "POST",
+			body: authorizeBodySchema,
+			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Approve an async auth request (requires user session)",
+					responses: {
+						200: {
+							description: "Request approved",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: { type: "boolean" },
+										},
+									},
+								},
+							},
+						},
+						401: {
+							description: "User not authenticated",
+						},
+						400: {
+							description: "Invalid request or user mismatch",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			// Require authenticated session
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "unauthorized",
+					error_description:
+						ASYNC_AUTH_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+				});
+			}
+
+			const { auth_req_id } = ctx.body;
+
+			const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+			if (!asyncAuthRequest) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+				});
+			}
+
+			// Check if expired
+			if (asyncAuthRequest.expiresAt < Date.now()) {
+				await deleteAsyncAuthRequest(ctx, auth_req_id);
+				throw new APIError("BAD_REQUEST", {
+					error: "expired_token",
+					error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
+				});
+			}
+
+			// Check if already processed
+			if (asyncAuthRequest.status !== "pending") {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description:
+						ASYNC_AUTH_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
+				});
+			}
+
+			// Verify the authenticated user matches the requested user
+			if (session.user.id !== asyncAuthRequest.userId) {
+				throw new APIError("BAD_REQUEST", {
+					error: "access_denied",
+					error_description: ASYNC_AUTH_ERROR_CODES.USER_MISMATCH.message,
+				});
+			}
+
+			// Update status to approved
+			await updateAsyncAuthRequest(ctx, auth_req_id, { status: "approved" });
+
+			// For push mode: generate and deliver tokens to client
+			const deliveryMode = asyncAuthRequest.deliveryMode ?? "poll";
+			if (deliveryMode === "push") {
+				await ctx.context.runInBackgroundOrAwait(
+					pushTokensToClient(ctx, asyncAuthRequest),
+				);
+			}
+
+			return ctx.json({ success: true });
+		},
+	);
+
+/**
+ * POST /async-auth/reject
+ * User rejects the request (requires session)
+ */
+
+const rejectBodySchema = z.object({
+	auth_req_id: z.string(),
+});
+
+export const asyncAuthReject = createAuthEndpoint(
+	"/async-auth/reject",
+	{
+		method: "POST",
+		body: rejectBodySchema,
+		requireHeaders: true,
+		metadata: {
+			openapi: {
+				description: "Reject an async auth request (requires user session)",
+				responses: {
+					200: {
+						description: "Request rejected",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: { type: "boolean" },
+									},
+								},
+							},
+						},
+					},
+					401: {
+						description: "User not authenticated",
+					},
+					400: {
+						description: "Invalid request or user mismatch",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		// Require authenticated session
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "unauthorized",
+				error_description:
+					ASYNC_AUTH_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+			});
+		}
+
+		const { auth_req_id } = ctx.body;
+
+		const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+		if (!asyncAuthRequest) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+			});
+		}
+
+		// Check if expired
+		if (asyncAuthRequest.expiresAt < Date.now()) {
+			await deleteAsyncAuthRequest(ctx, auth_req_id);
+			throw new APIError("BAD_REQUEST", {
+				error: "expired_token",
+				error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
+			});
+		}
+
+		// Check if already processed
+		if (asyncAuthRequest.status !== "pending") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					ASYNC_AUTH_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
+			});
+		}
+
+		// Verify the authenticated user matches the requested user
+		if (session.user.id !== asyncAuthRequest.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: ASYNC_AUTH_ERROR_CODES.USER_MISMATCH.message,
+			});
+		}
+
+		// Update status to rejected
+		await updateAsyncAuthRequest(ctx, auth_req_id, { status: "rejected" });
+
+		return ctx.json({ success: true });
+	},
+);
