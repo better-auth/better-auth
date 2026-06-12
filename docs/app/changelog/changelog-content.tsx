@@ -81,7 +81,7 @@ function MarkdownContent({ content }: { content: string }) {
 			components={{
 				h2: ({ children, ...props }) => (
 					<h2
-						className="text-2xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200 mt-6 mb-3"
+						className="text-2xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200 mt-6 mb-3 [&_code]:text-xl"
 						{...props}
 					>
 						{children}
@@ -89,7 +89,7 @@ function MarkdownContent({ content }: { content: string }) {
 				),
 				h3: ({ children, ...props }) => (
 					<h3
-						className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 mt-5 mb-2 tracking-tight"
+						className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 mt-5 mb-2 tracking-tight [&_code]:text-lg"
 						{...props}
 					>
 						{children}
@@ -123,7 +123,7 @@ function MarkdownContent({ content }: { content: string }) {
 						target="_blank"
 						rel="noopener noreferrer"
 						className={cn(
-							"font-medium text-neutral-600 dark:text-neutral-300 underline decoration-dashed underline-offset-4 hover:text-neutral-900 dark:hover:text-white transition-colors",
+							"font-medium text-neutral-600 dark:text-neutral-300 underline decoration-dashed underline-offset-4 hover:text-neutral-900 dark:hover:text-white transition-colors has-[img]:inline-flex has-[img]:align-middle has-[img]:no-underline",
 							className,
 						)}
 						{...props}
@@ -147,7 +147,7 @@ function MarkdownContent({ content }: { content: string }) {
 				hr: () => null,
 				img: (props) => (
 					<img
-						className="inline-block w-5 h-5 rounded-full border opacity-80 mx-0.5 align-text-bottom"
+						className="inline-block size-6 rounded-full border border-foreground/10 bg-background opacity-90 mx-0.5 align-middle shadow-sm"
 						{...props}
 						style={{ maxWidth: "100%" }}
 						alt={props.alt || ""}

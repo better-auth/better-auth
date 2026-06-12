@@ -630,6 +630,38 @@ export const mongodbAdapter = (
 						.deleteMany(clause, { session });
 					return res.deletedCount;
 				},
+				async consumeOne({ model, where }) {
+					const clause = convertWhereClause({ where, model });
+					const doc = await db.collection(model).findOneAndDelete(clause, {
+						session,
+						includeResultMetadata: true,
+					});
+					return ((doc as any)?.value as any) ?? null;
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const clause = convertWhereClause({ where, model });
+					const update: {
+						$inc?: Record<string, number>;
+						$set?: Record<string, unknown>;
+					} = {};
+					if (Object.keys(increment).length > 0) {
+						update.$inc = increment;
+					}
+					if (set && Object.keys(set).length > 0) {
+						update.$set = set;
+					}
+					if (!update.$inc && !update.$set) {
+						return db.collection(model).findOne(clause, { session });
+					}
+					const res = await db
+						.collection(model)
+						.findOneAndUpdate(clause, update, {
+							session,
+							returnDocument: "after",
+							includeResultMetadata: true,
+						});
+					return ((res as any)?.value as any) ?? null;
+				},
 			};
 		};
 
@@ -664,7 +696,10 @@ export const mongodbAdapter = (
 								session.startTransaction();
 
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 

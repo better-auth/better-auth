@@ -2,6 +2,7 @@ import type {
 	BetterAuthClientOptions,
 	ClientFetchOption,
 } from "@better-auth/core";
+import type { SocialProviderList } from "@better-auth/core/social-providers";
 import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
@@ -15,6 +16,31 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
+
+/**
+ * Extract generic OAuth provider IDs from the client options.
+ * Supports both `$InferAuth` (server type bridge) and client plugins
+ * with `$InferServerPlugin`.
+ */
+type InferGenericOAuthProviderIds<O extends BetterAuthClientOptions> =
+	| (O extends { $InferAuth: { options: { plugins: Array<infer P> } } }
+			? P extends {
+					id: "generic-oauth";
+					options: { config: Array<{ providerId: infer ID }> };
+				}
+				? ID & string
+				: never
+			: never)
+	| (O extends { plugins: Array<infer P> }
+			? P extends {
+					$InferServerPlugin: {
+						id: "generic-oauth";
+						options: { config: Array<{ providerId: infer ID }> };
+					};
+				}
+				? ID & string
+				: never
+			: never);
 
 type KeepNullishFromOriginal<Original, Replaced> =
 	| Replaced
@@ -109,6 +135,15 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+export type InferSessionUpdateCtx<
+	ClientOpts extends BetterAuthClientOptions,
+	FetchOptions extends ClientFetchOption,
+> = {
+	fetchOptions?: FetchOptions | undefined;
+} & Partial<
+	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "session", "input">>
+>;
+
 type InferCtxQuery<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
@@ -176,7 +211,18 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 													Prettify<
 														T["path"] extends `/sign-up/email`
 															? InferSignUpEmailCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: T["path"] extends `/sign-in/social`
+																? Omit<
+																		InferCtx<C, FetchOptions>,
+																		"provider"
+																	> & {
+																		provider:
+																			| SocialProviderList[number]
+																			| InferGenericOAuthProviderIds<COpts>
+																			| (string & {});
+																		fetchOptions?: FetchOptions | undefined;
+																	}
+																: InferCtx<C, FetchOptions>
 													>,
 													FetchOptions?,
 												]
@@ -184,7 +230,9 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 													Prettify<
 														T["path"] extends `/update-user`
 															? InferUserUpdateCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: T["path"] extends `/update-session`
+																? InferSessionUpdateCtx<COpts, FetchOptions>
+																: InferCtx<C, FetchOptions>
 													>?,
 													FetchOptions?,
 												]

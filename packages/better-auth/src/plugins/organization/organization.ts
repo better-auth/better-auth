@@ -64,7 +64,6 @@ import type {
 	InferOrganization,
 	InferTeam,
 	OrganizationSchema,
-	Team,
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
@@ -89,7 +88,9 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 		Organization: InferOrganization<Options>;
 		Invitation: InferInvitation<Options>;
 		Member: InferMember<Options>;
-		Team: Options["teams"] extends { enabled: true } ? Team : never;
+		Team: Options["teams"] extends { enabled: true }
+			? InferTeam<Options>
+			: never;
 		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: Options["teams"] extends { enabled: true }
 			? {
@@ -166,13 +167,11 @@ const createHasPermissionBodySchema = z
 		organizationId: z.string().optional(),
 	})
 	.and(
-		z.union([
+		z.xor([
 			z.object({
 				permission: z.record(z.string(), z.array(z.string())),
-				permissions: z.undefined(),
 			}),
 			z.object({
-				permission: z.undefined(),
 				permissions: z.record(z.string(), z.array(z.string())),
 			}),
 		]),
@@ -305,7 +304,7 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : never;
+		Team: O["teams"] extends { enabled: true } ? InferTeam<O> : never;
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
@@ -357,7 +356,7 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : never;
+		Team: O["teams"] extends { enabled: true } ? InferTeam<O> : never;
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
@@ -391,7 +390,7 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : never;
+		Team: O["teams"] extends { enabled: true } ? InferTeam<O> : never;
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
@@ -423,7 +422,7 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : never;
+		Team: O["teams"] extends { enabled: true } ? InferTeam<O> : never;
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
@@ -670,9 +669,12 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 */
 		checkOrganizationSlug: checkOrganizationSlug(opts),
 		/**
-		 * ### Endpoint
+		 * Add a member to an organization directly, bypassing the invitation flow.
 		 *
-		 * POST `/organization/add-member`
+		 * **Server-only:** callable as `auth.api.addMember` from trusted server
+		 * code. It is not registered as an HTTP route and has no client method, so
+		 * it runs no session or permission check of its own; the caller is
+		 * responsible for authorizing the request.
 		 *
 		 * ### API Methods
 		 *
@@ -946,6 +948,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							required: true,
 							fieldName: opts.schema?.team?.fields?.name,
 						},
+						memberCount: {
+							type: "number",
+							required: true,
+							defaultValue: 0,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.team?.fields?.memberCount,
+						},
 						organizationId: {
 							type: "string",
 							required: true,
@@ -992,6 +1002,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							},
 							fieldName: opts.schema?.teamMember?.fields?.userId,
 							index: true,
+						},
+						membershipKey: {
+							type: "string",
+							required: false,
+							unique: true,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.teamMember?.fields?.membershipKey,
 						},
 						createdAt: {
 							type: "date",
@@ -1222,6 +1240,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						input: false,
 						fieldName: opts.schema?.session?.fields?.activeOrganizationId,
 					},
 					...(teamSupport
@@ -1229,6 +1248,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 								activeTeamId: {
 									type: "string",
 									required: false,
+									input: false,
 									fieldName: opts.schema?.session?.fields?.activeTeamId,
 								},
 							}
@@ -1240,16 +1260,19 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							activeTeamId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						}
 					: {
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						},
 			},
@@ -1258,7 +1281,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
-			Team: teamSupport ? ({} as Team) : ({} as never),
+			Team: teamSupport ? ({} as InferTeam<O>) : ({} as never),
 			TeamMember: teamSupport ? ({} as TeamMember) : ({} as never),
 			ActiveOrganization: {} as O["teams"] extends { enabled: true }
 				? {

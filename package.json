@@ -2,7 +2,7 @@
   "name": "@better-auth/root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.30.2",
+  "packageManager": "pnpm@11.1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git"
@@ -16,7 +16,7 @@
     "format:md": "pnpm --filter docs format:md",
     "format:check": "pnpm --filter docs format:check",
     "lint": "biome check . --error-on-warnings",
-    "lint:dependencies": "knip; c1=$?; knip --production; c2=$?; [ $c1 -eq 0 ] && [ $c2 -eq 0 ]",
+    "lint:dependencies": "knip && knip --production",
     "lint:fix": "biome check . --fix --unsafe",
     "lint:spell": "cspell . --color",
     "lint:types": "turbo lint:types --filter=./packages/*",
@@ -50,7 +50,7 @@
     "lefthook": "^2.1.4",
     "nyc": "^17.1.0",
     "publint": "^0.3.17",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.14",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }

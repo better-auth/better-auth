@@ -5,25 +5,15 @@ import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import type { OAuthClient } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
+import { assertClientPrivileges } from "./privileges";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "read");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "read",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const client = await getClient(ctx, opts, ctx.query.client_id);
 	if (!client) {
@@ -88,19 +78,8 @@ export async function getClientsEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "list");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "list",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const referenceId = await opts.clientReference?.(session);
 	if (referenceId) {
@@ -145,19 +124,8 @@ export async function deleteClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "delete");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "delete",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);
@@ -206,19 +174,8 @@ export async function updateClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "update");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "update",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);
@@ -260,7 +217,36 @@ export async function updateClientEndpoint(
 			...updates,
 		},
 		opts,
+		{
+			ctx,
+		},
 	);
+
+	// Clear obsolete auth material when switching auth methods
+	const schemaUpdates: Record<string, unknown> = {
+		...oauthToSchema(updates),
+	};
+	if (updates.token_endpoint_auth_method) {
+		if (updates.token_endpoint_auth_method === "private_key_jwt") {
+			schemaUpdates.clientSecret = null;
+		} else {
+			schemaUpdates.jwks = null;
+			schemaUpdates.jwksUri = null;
+			// Generate a new secret when switching away from private_key_jwt
+			// to prevent clients from being stuck without credentials
+			if (!schemaUpdates.clientSecret) {
+				const rawSecret =
+					opts.generateClientSecret?.() ||
+					generateRandomString(32, "a-z", "A-Z");
+				schemaUpdates.clientSecret = await storeClientSecret(
+					ctx,
+					opts,
+					rawSecret,
+				);
+			}
+		}
+	}
+
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
 			model: "oauthClient",
@@ -271,7 +257,7 @@ export async function updateClientEndpoint(
 				},
 			],
 			update: {
-				...oauthToSchema(updates),
+				...schemaUpdates,
 				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
 			},
 		},
@@ -293,19 +279,8 @@ export async function rotateClientSecretEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "rotate");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "rotate",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);
@@ -335,7 +310,8 @@ export async function rotateClientSecretEndpoint(
 
 	if (client.public || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "public clients cannot be updated",
+			error_description:
+				"secret rotation is only available for clients using client_secret authentication",
 			error: "invalid_client",
 		});
 	}

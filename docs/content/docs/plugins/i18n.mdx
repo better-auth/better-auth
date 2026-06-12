@@ -10,41 +10,154 @@ Better Auth already provides English error messages by default, so you only need
 ## Installation
 
 <Steps>
-<Step>
-### Install the plugin
+  <Step>
+    ### Install the plugin
 
-```package-install
-@better-auth/i18n
-```
-</Step>
-<Step>
-### Add the plugin to your **auth** config
+    ```package-install
+    @better-auth/i18n
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { i18n } from "@better-auth/i18n"
+
+    export const auth = betterAuth({
+        plugins: [
+            i18n({
+                translations: {
+                    fr: {
+                        USER_NOT_FOUND: "Utilisateur non trouvé",
+                        INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+                        INVALID_PASSWORD: "Mot de passe invalide",
+                    },
+                    de: {
+                        USER_NOT_FOUND: "Benutzer nicht gefunden",
+                        INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+                        INVALID_PASSWORD: "Ungültiges Passwort",
+                    },
+                },
+            }),
+        ],
+    })
+    ```
+  </Step>
+</Steps>
+
+## Built-in Translations
+
+The package ships with ready-to-use translations for 22 languages, so you don't need to write translations from scratch. Import `locales` from `@better-auth/i18n` to use them.
+
+| Code | Language             |
+| ---- | -------------------- |
+| `ar` | Arabic               |
+| `bn` | Bengali              |
+| `de` | German               |
+| `en` | English              |
+| `es` | Spanish              |
+| `fa` | Persian (Farsi)      |
+| `fr` | French               |
+| `hi` | Hindi                |
+| `id` | Indonesian           |
+| `it` | Italian              |
+| `ja` | Japanese             |
+| `ko` | Korean               |
+| `nl` | Dutch                |
+| `pl` | Polish               |
+| `pt` | Portuguese           |
+| `ru` | Russian              |
+| `sv` | Swedish              |
+| `th` | Thai                 |
+| `tr` | Turkish              |
+| `uk` | Ukrainian            |
+| `vi` | Vietnamese           |
+| `zh` | Chinese (Simplified) |
+
+### Use all built-in locales
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n } from "@better-auth/i18n"
+import { i18n, locales } from "@better-auth/i18n"
+
+export const auth = betterAuth({
+    plugins: [
+        i18n({ translations: locales }),
+    ],
+})
+```
+
+### Use a subset of locales
+
+To keep your bundle lean, you can import only the locales you need:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { i18n, locales } from "@better-auth/i18n"
 
 export const auth = betterAuth({
     plugins: [
         i18n({
             translations: {
+                en: locales.en,
+                fr: locales.fr,
+            },
+        }),
+    ],
+})
+```
+
+### Override specific messages
+
+You can spread a built-in locale and override only the messages you want to customize:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { i18n, locales } from "@better-auth/i18n"
+
+export const auth = betterAuth({
+    plugins: [
+        i18n({
+            translations: {
+                ...locales,
                 fr: {
-                    USER_NOT_FOUND: "Utilisateur non trouvé",
-                    INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
-                    INVALID_PASSWORD: "Mot de passe invalide",
-                },
-                de: {
-                    USER_NOT_FOUND: "Benutzer nicht gefunden",
-                    INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
-                    INVALID_PASSWORD: "Ungültiges Passwort",
+                    ...locales.fr,
+                    USER_NOT_FOUND: "Membre introuvable",
                 },
             },
         }),
     ],
 })
 ```
-</Step>
-</Steps>
+
+### Add a custom locale
+
+You can mix built-in locales with your own custom ones:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { i18n, locales } from "@better-auth/i18n"
+import type { TranslationDictionary } from "@better-auth/i18n"
+
+const myLocale: TranslationDictionary = {
+    USER_NOT_FOUND: "...",
+    INVALID_EMAIL_OR_PASSWORD: "...",
+    // ... other error codes
+}
+
+export const auth = betterAuth({
+    plugins: [
+        i18n({
+            translations: {
+                ...locales,
+                xx: myLocale,
+            },
+        }),
+    ],
+})
+```
 
 ## Usage
 
@@ -75,10 +188,10 @@ i18n({
 
 Available detection strategies:
 
-- **`header`** - Uses the `Accept-Language` HTTP header (default)
-- **`cookie`** - Reads locale from a cookie
-- **`session`** - Reads locale from the authenticated user's stored preference
-- **`callback`** - Uses a custom function to determine locale
+* **`header`** - Uses the `Accept-Language` HTTP header (default)
+* **`cookie`** - Reads locale from a cookie
+* **`session`** - Reads locale from the authenticated user's stored preference
+* **`callback`** - Uses a custom function to determine locale
 
 ### Header-Based Detection
 
@@ -148,14 +261,14 @@ The plugin translates error messages based on error codes. You can find all avai
 
 Common error codes include:
 
-| Code | Default Message |
-|------|-----------------|
-| `USER_NOT_FOUND` | User not found |
-| `INVALID_EMAIL_OR_PASSWORD` | Invalid email or password |
-| `INVALID_PASSWORD` | Invalid password |
+| Code                           | Default Message              |
+| ------------------------------ | ---------------------------- |
+| `USER_NOT_FOUND`               | User not found               |
+| `INVALID_EMAIL_OR_PASSWORD`    | Invalid email or password    |
+| `INVALID_PASSWORD`             | Invalid password             |
 | `CREDENTIAL_ACCOUNT_NOT_FOUND` | Credential account not found |
-| `EMAIL_NOT_VERIFIED` | Email not verified |
-| `SESSION_EXPIRED` | Session expired |
+| `EMAIL_NOT_VERIFIED`           | Email not verified           |
+| `SESSION_EXPIRED`              | Session expired              |
 
 ## Options
 
@@ -213,12 +326,12 @@ The field name on the user object that stores their locale preference when using
 A custom function to detect the locale when using the `"callback"` detection strategy. Receives the full endpoint context. Returns the locale code or `null`.
 
 <Callout type="info">
-`ctx.request` could be undefined for non-HTTP calls.
+  `ctx.request` could be undefined for non-HTTP calls.
 </Callout>
 
 ## Fallback Behavior
 
-- If a translation is not found for a specific error code in the detected locale, the built-in English message is kept.
-- If the detected locale is not in the translations dictionary, the built-in English message is used.
-- If no locale can be detected from any strategy, the built-in English message is used.
-- Non-error responses are never modified by this plugin.
+* If a translation is not found for a specific error code in the detected locale, the built-in English message is kept.
+* If the detected locale is not in the translations dictionary, the built-in English message is used.
+* If no locale can be detected from any strategy, the built-in English message is used.
+* Non-error responses are never modified by this plugin.

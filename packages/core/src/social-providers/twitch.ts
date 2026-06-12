@@ -1,9 +1,10 @@
 import { decodeJwt } from "jose";
 import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -37,23 +38,26 @@ export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	clientId: string;
 	claims?: string[] | undefined;
 }
+const TWITCH_DEFAULT_SCOPES = ["user:read:email", "openid"];
+
 export const twitch = (options: TwitchOptions) => {
 	const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
 	return {
 		id: "twitch",
 		name: "Twitch",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["user:read:email", "openid"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+		callbackPath: "/callback/twitch",
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				TWITCH_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "twitch",
 				redirectURI,
 				options,
 				authorizationEndpoint: "https://id.twitch.tv/oauth2/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				claims: options.claims || [
 					"email",
@@ -61,6 +65,7 @@ export const twitch = (options: TwitchOptions) => {
 					"preferred_username",
 					"picture",
 				],
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -108,5 +113,5 @@ export const twitch = (options: TwitchOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<TwitchProfile>;
+	} satisfies UpstreamProvider<TwitchProfile>;
 };

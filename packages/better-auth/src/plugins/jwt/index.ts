@@ -16,7 +16,7 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
-export { signJWT } from "./sign";
+export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
@@ -248,7 +248,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					});
 				},
 			),
-			signJWT: createAuthEndpoint(
+			signJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {
@@ -272,7 +272,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					return c.json({ token: jwt });
 				},
 			),
-			verifyJWT: createAuthEndpoint(
+			verifyJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {

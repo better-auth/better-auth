@@ -1,39 +1,39 @@
-import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type {
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	TokenEndpointAuth,
+} from "@better-auth/core/oauth2";
 
-export interface GenericOAuthOptions {
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: OAuth2UserInfo["id"] | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
+export interface GenericOAuthOptions<ID extends string = string> {
 	/**
 	 * Array of OAuth provider configurations.
 	 */
-	config: GenericOAuthConfig[];
+	config: GenericOAuthConfig<ID>[];
 }
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-export interface GenericOAuthConfig {
+export interface GenericOAuthConfig<ID extends string = string> {
 	/** Unique identifier for the OAuth provider */
-	providerId: string;
+	providerId: ID;
+	/**
+	 * Human-readable display name for this provider.
+	 * Defaults to `providerId` if not set.
+	 */
+	name?: string | undefined;
 	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string | undefined;
-	/**
-	 * The expected issuer identifier for validation.
-	 * If not provided but discoveryUrl is set, it will be fetched from the discovery document.
-	 * When set, the callback validates that the `iss` parameter matches this value.
-	 * @see https://datatracker.ietf.org/doc/html/rfc9207
-	 */
-	issuer?: string | undefined;
-	/**
-	 * When true, requires the `iss` parameter in callbacks if an issuer is configured.
-	 * This provides stricter security but may break with older OAuth servers
-	 * that don't support issuer identification.
-	 * @default false
-	 */
-	requireIssuerValidation?: boolean | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -53,6 +53,14 @@ export interface GenericOAuthConfig {
 	clientId: string;
 	/** OAuth client secret */
 	clientSecret?: string | undefined;
+	/**
+	 * Token endpoint client authentication method.
+	 *
+	 * Use `private_key_jwt` for IdPs that authenticate clients with RFC 7523
+	 * client assertions instead of a client secret. Secret-based methods require
+	 * clientSecret.
+	 */
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
@@ -89,8 +97,10 @@ export interface GenericOAuthConfig {
 		  )
 		| undefined;
 	/**
-	 * Whether to use PKCE (Proof Key for Code Exchange)
-	 * @default false
+	 * Whether to use PKCE (Proof Key for Code Exchange).
+	 * Required by OAuth 2.1 for all authorization code flows.
+	 * Disable only for providers that explicitly reject PKCE.
+	 * @default true
 	 */
 	pkce?: boolean | undefined;
 	/**
@@ -98,6 +108,13 @@ export interface GenericOAuthConfig {
 	 * Use "offline" to request a refresh token.
 	 */
 	accessType?: string | undefined;
+	/**
+	 * Fallback access-token lifetime, in seconds, used only when the provider's
+	 * token response omits `expires_in`. Set this so `getAccessToken` can track
+	 * expiry and refresh the token; leave unset if the provider returns
+	 * `expires_in`.
+	 */
+	accessTokenExpiresIn?: number | undefined;
 	/**
 	 * Custom function to exchange authorization code for tokens.
 	 * If provided, this function will be used instead of the default token exchange logic.
@@ -120,36 +137,29 @@ export interface GenericOAuthConfig {
 	 * @returns A promise that resolves to a User object or null
 	 */
 	getUserInfo?:
-		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| ((tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>)
 		| undefined;
 	/**
-	 * Custom function to map the user profile to a User object.
+	 * Custom function to map the provider's user profile to your app's user fields.
+	 * The profile contains standard OAuth2 fields plus any provider-specific extras.
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: Record<string, any>,
-		  ) => Partial<Partial<User>> | Promise<Partial<User>>)
+				profile: GenericOAuthUserInfo,
+		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	authorizationUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
-	 * Warning: Search-params added here overwrite any default params.
+	 * Parameters already set by Better Auth are preserved. Configure token
+	 * endpoint client authentication with clientId, clientSecret, and
+	 * tokenEndpointAuth.
 	 */
-	tokenUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	tokenUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -161,6 +171,7 @@ export interface GenericOAuthConfig {
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Authentication method for token requests.
+	 * "basic" requires clientSecret.
 	 * @default "post"
 	 */
 	authentication?: ("basic" | "post") | undefined;
@@ -182,4 +193,26 @@ export interface GenericOAuthConfig {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created or linked, but no session is issued: the callback redirects
+	 * with `?error=email_not_verified`. The gate checks the local user's
+	 * verification state, so a user already verified through another method keeps
+	 * access. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
+	/**
+	 * Accept callbacks from providers that initiate the OAuth flow without
+	 * sending a `state` parameter (e.g. Clever). When enabled, stateless
+	 * callbacks restart the OAuth flow server-side with a fresh `state` and
+	 * PKCE verifier. See the generic-oauth docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }

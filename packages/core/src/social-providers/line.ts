@@ -1,9 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -32,6 +33,8 @@ export interface LineOptions
 	clientId: string;
 }
 
+const LINE_DEFAULT_SCOPES = ["openid", "profile", "email"];
+
 /**
  * LINE Login v2.1
  * - Authorization endpoint: https://access.line.me/oauth2/v2.1/authorize
@@ -50,27 +53,30 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		async createAuthorizationURL({
+		callbackPath: "/callback/line",
+		createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["openid", "profile", "email"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				LINE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "line",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				loginHint,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -94,34 +100,30 @@ export const line = (options: LineOptions) => {
 						tokenEndpoint,
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			const body = new URLSearchParams();
-			body.set("id_token", token);
-			body.set("client_id", options.clientId);
-			if (nonce) body.set("nonce", nonce);
-			const { data, error } = await betterFetch<LineIdTokenPayload>(
-				verifyIdTokenEndpoint,
-				{
-					method: "POST",
-					headers: {
-						"content-type": "application/x-www-form-urlencoded",
+		idToken: {
+			verify: async (token, nonce) => {
+				const body = new URLSearchParams();
+				body.set("id_token", token);
+				body.set("client_id", options.clientId);
+				if (nonce) body.set("nonce", nonce);
+				const { data, error } = await betterFetch<LineIdTokenPayload>(
+					verifyIdTokenEndpoint,
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/x-www-form-urlencoded",
+						},
+						body,
 					},
-					body,
-				},
-			);
-			if (error || !data) {
-				return false;
-			}
-			// aud must match clientId; nonce (if provided) must also match nonce
-			if (data.aud !== options.clientId) return false;
-			if (data.nonce && data.nonce !== nonce) return false;
-			return true;
+				);
+				if (error || !data) {
+					return false;
+				}
+				// aud must match clientId; nonce (if provided) must also match nonce
+				if (data.aud !== options.clientId) return false;
+				if (data.nonce && data.nonce !== nonce) return false;
+				return true;
+			},
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -165,5 +167,5 @@ export const line = (options: LineOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
+	} satisfies UpstreamProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
 };

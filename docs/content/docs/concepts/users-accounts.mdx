@@ -23,6 +23,7 @@ await authClient.updateUser({
     name: "John Doe",
 })
 ```
+
 ### Change Email
 
 To allow users to change their email, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:
@@ -49,13 +50,12 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  Avoid awaiting the email sending to prevent 
+  Avoid awaiting the email sending to prevent
   timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 </Callout>
 
 By default, when a user requests to change their email, a verification email is sent to the **new** email address.
 The email is only updated after the user verifies the new email.
-
 
 #### Confirming with Current Email
 
@@ -101,7 +101,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-    If `updateEmailWithoutVerification` is false (default), the email will not be updated until the new email is verified, even if the current email is unverified.
+  If `updateEmailWithoutVerification` is false (default), the email will not be updated until the new email is verified, even if the current email is unverified.
 </Callout>
 
 #### Client Usage
@@ -116,28 +116,28 @@ await authClient.changeEmail({
     callbackURL: "/dashboard", // to redirect after verification
 });
 ```
- 
+
 ### Change Password
+
 A user's password isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use one of the following approaches:
 
-
 <APIMethod path="/change-password" method="POST" requireSession>
-```ts
-type changePassword = {
-    /**
-     * The new password to set 
-     */
-    newPassword: string = "newpassword1234"
-    /**
-     * The current user password 
-     */
-    currentPassword: string = "oldpassword1234"
-    /**
-     * When set to true, all other active sessions for this user will be invalidated
-     */
-    revokeOtherSessions?: boolean = true
-}
-```
+  ```ts
+  type changePassword = {
+      /**
+       * The new password to set 
+       */
+      newPassword: string = "newpassword1234"
+      /**
+       * The current user password 
+       */
+      currentPassword: string = "oldpassword1234"
+      /**
+       * When set to true, all other active sessions for this user will be invalidated
+       */
+      revokeOtherSessions?: boolean = true
+  }
+  ```
 </APIMethod>
 
 ### Set Password
@@ -154,6 +154,7 @@ await auth.api.setPassword({
     headers: await headers() // headers containing the user's session token
 });
 ```
+
 ### Verify Password
 
 The `verifyPassword` function allows you to verify a user's current password. This is useful for confirming user identity before performing sensitive operations like updating security settings. This function can only be called from the server.
@@ -168,8 +169,9 @@ await auth.api.verifyPassword({
     headers: await headers() // headers containing the user's session token
 });
 ```
+
 <Callout type="info">
-For OAuth users who don't have passwords, consider using email verification or fresh session checks for sensitive operations instead.
+  For OAuth users who don't have passwords, consider using email verification or fresh session checks for sensitive operations instead.
 </Callout>
 
 ## Delete User
@@ -193,7 +195,7 @@ Once enabled, you can call `authClient.deleteUser` to permanently delete user da
 
 ### Adding Verification Before Deletion
 
-For added security, you’ll likely want to confirm the user’s intent before deleting their account. A common approach is to send a verification email. Better Auth provides a `sendDeleteAccountVerification` utility for this purpose. 
+For added security, you’ll likely want to confirm the user’s intent before deleting their account. A common approach is to send a verification email. Better Auth provides a `sendDeleteAccountVerification` utility for this purpose.
 This is especially needed if you have OAuth setup and want them to be able to delete their account without forcing them to login again for a fresh session.
 
 Here’s how you can set it up:
@@ -223,7 +225,7 @@ export const auth = betterAuth({
 
 **How callback verification works:**
 
-- **Callback URL**: The URL provided in `sendDeleteAccountVerification` is a pre-generated link that deletes the user data when accessed.
+* **Callback URL**: The URL provided in `sendDeleteAccountVerification` is a pre-generated link that deletes the user data when accessed.
 
 ```ts
 import { authClient } from "@/lib/auth-client"
@@ -233,8 +235,8 @@ await authClient.deleteUser({
 });
 ```
 
-- **Authentication Check**: The user must be signed in to the account they’re attempting to delete.
-If they aren’t signed in, the deletion process will fail. 
+* **Authentication Check**: The user must be signed in to the account they’re attempting to delete.
+  If they aren’t signed in, the deletion process will fail.
 
 If you have sent a custom URL, you can use the `deleteUser` method with the token to delete the user.
 
@@ -267,7 +269,7 @@ await authClient.deleteUser({
 The user must have a `fresh` session token, meaning the user must have signed in recently. This is checked if the password is not provided.
 
 <Callout type="warn">
-By default `session.freshAge` is set to `60 * 60 * 24` (1 day). You can change this value by passing the `session` object to the `auth` configuration. If it is set to `0`, the freshness check is disabled. It is recommended not to disable this check if you are not using email verification for deleting the account.
+  By default `session.freshAge` is set to `60 * 60 * 24` (1 day). You can change this value by passing the `session` object to the `auth` configuration. If it is set to `0`, the freshness check is disabled. It is recommended not to disable this check if you are not using email verification for deleting the account.
 </Callout>
 
 ```ts
@@ -287,7 +289,7 @@ await authClient.deleteUser();
 ```
 
 4. If you have a custom delete account page and sent that url via the `sendDeleteAccountVerification` callback.
-Then you need to call the `deleteUser` method with the token to complete the deletion.
+   Then you need to call the `deleteUser` method with the token to complete the deletion.
 
 ```ts
 import { authClient } from "@/lib/auth-client"
@@ -298,6 +300,45 @@ await authClient.deleteUser({
 ```
 
 ### Callbacks
+
+**validateUserInfo**: A gate that decides which identities Better Auth admits. It fires just before a user is created (`create-user`) or a new provider account is linked (`link-account`), for every authentication method (OAuth, OIDC SSO, SAML SSO, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database, so policy lives in one place instead of per provider.
+
+It also fires when an existing **OAuth or SSO** user signs in again (`sign-in`), and there it receives the *fresh* provider email and profile rather than the stored row. That lets a domain or org policy reject a user whose provider identity moved out of bounds (for example, an email that left the allowed domain). Non-provider returning sign-ins are not re-validated, because their stored row has not changed since `create-user` gated it; use the admin plugin's ban controls or a `databaseHooks.session.create.before` hook to block those.
+
+`source.action` is `"create-user"`, `"link-account"`, or `"sign-in"`, and `source.method` is the authentication method. For OAuth, `source.oauth` carries the provider id and raw provider profile. For OIDC and SAML SSO, `source.sso` carries the SSO provider id and raw provider claims or assertion attributes.
+
+Return nothing to allow provisioning. Return an object with `error` to reject it: browser/redirect flows send the rejection to the configured error URL, while programmatic flows return a `403` API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        validateUserInfo: ({ user, source }) => {
+            if (!user.email?.endsWith("@example.com")) {
+                return {
+                    error: "email_not_allowed",
+                    errorDescription: "Use your example.com email to sign in",
+                };
+            }
+
+            if (
+                source.oauth?.providerId === "company-oauth" &&
+                source.oauth?.profile?.hd !== "example.com"
+            ) {
+                return {
+                    error: "invalid_organization",
+                    errorDescription: "Use your company OAuth account",
+                };
+            }
+        },
+    },
+});
+```
+
+<Callout type="info">
+  `validateUserInfo` is the high-level policy gate. The lower-level `databaseHooks.user.create.before` still runs afterward for data shaping and can also abort a write; reach for it when you need to mutate the record rather than accept or reject the identity.
+</Callout>
 
 **beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
 
@@ -315,6 +356,7 @@ export const auth = betterAuth({
     },
 });
 ```
+
 you can also throw `APIError` to interrupt the deletion process.
 
 ```ts title="auth.ts"
@@ -362,7 +404,6 @@ When a user signs in using a provider, an account is created for the user. The a
 
 The account table stores the authentication data of the user [Click here to view the schema](/docs/concepts/database#account)
 
-
 ### List User Accounts
 
 To list user accounts you can use `client.user.listAccounts` method. Which will return all accounts associated with a user.
@@ -371,6 +412,22 @@ To list user accounts you can use `client.user.listAccounts` method. Which will 
 import { authClient } from "@/lib/auth-client"
 
 const accounts = await authClient.listAccounts();
+```
+
+#### Granted Scopes
+
+Each account exposes a `grantedScopes` field: a `string[]` of the OAuth scopes the user has **accumulated** for that provider over time. It is not the latest token's `scope` claim. Every API that surfaces scopes returns this same array shape, including `listAccounts`, `getAccessToken`, and `refreshToken`.
+
+To check whether an account holds a particular scope, use the `includesGrantedScope` helper instead of inspecting the array yourself:
+
+```ts
+import { includesGrantedScope } from "better-auth/oauth2";
+
+const google = accounts.find((account) => account.providerId === "google");
+const canReadDrive = includesGrantedScope(
+    google?.grantedScopes,
+    "https://www.googleapis.com/auth/drive.readonly",
+);
 ```
 
 ### Token Encryption
@@ -445,7 +502,7 @@ export const auth = betterAuth({
 
 Users already signed in can manually link their account to additional social providers or credential-based accounts.
 
-- **Linking Social Accounts:** Use the `linkSocial` method on the client to link a social provider to the user's account.
+* **Linking Social Accounts:** Use the `linkSocial` method on the client to link a social provider to the user's account.
 
   ```ts
   import { authClient } from "@/lib/auth-client"
@@ -456,7 +513,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  You can also request specific scopes when linking a social account, which can be different from the scopes used during the initial authentication:
+  You can also request specific scopes when linking a social account. The `scopes` you pass are **added** to the provider's default scopes; they don't replace them. This is how you perform incremental authorization: each `linkSocial` call asks for more access, and the newly granted scopes **accumulate** into the account's stored `grantedScopes` rather than overwriting it.
 
   ```ts
   import { authClient } from "@/lib/auth-client"
@@ -464,9 +521,13 @@ Users already signed in can manually link their account to additional social pro
   await authClient.linkSocial({
       provider: "google",
       callbackURL: "/callback",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Request additional scopes
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Added on top of the provider defaults
   });
   ```
+
+  <Callout type="info">
+    `signIn.social({ scopes })` works the same way: the scopes are additive to the provider defaults. Token refresh never changes the stored grant, and for most providers a narrower sign-in never shrinks it either. Google with the default `includeGrantedScopes: true` is the exception: it resyncs `grantedScopes` to Google's authoritative combined grant on each sign-in, so a scope revoked at Google drops on the next sign-in (see [OAuth scopes](/docs/concepts/oauth#how-granted-scopes-accumulate)).
+  </Callout>
 
   You can also link accounts using ID tokens directly, without redirecting to the provider's OAuth flow:
 
@@ -485,13 +546,15 @@ Users already signed in can manually link their account to additional social pro
   ```
 
   This is useful when you already have valid tokens from the provider, for example:
-  - After signing in with a native SDK
-  - When using a mobile app that handles authentication
-  - When implementing custom OAuth flows
+
+  * After signing in with a native SDK
+  * When using a mobile app that handles authentication
+  * When implementing custom OAuth flows
 
   The ID token must be valid and the provider must support ID token verification.
 
-  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings. 
+  If you want your users to be able to link a social account with a different email address than the user, or if you want to use a provider that does not return email addresses, you will need to enable this in the account linking settings.
+
   ```ts title="auth.ts"
   import { betterAuth } from "better-auth";
 
@@ -504,11 +567,11 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  If you want the newly linked accounts to update the user information, you need to enable this in the account linking settings. 
+  By default, linking an account leaves the existing user profile untouched. Enable `updateUserInfoOnLink` to copy the provider's profile onto the user each time an account is linked. The synced fields are the same ones persisted on sign-up (`name`, `image`, and any fields your `mapProfileToUser` adds). The user's `email` and `emailVerified` are never changed on a link, so linking a provider can't rebind the account's identity.
 
   ```ts title="auth.ts"
   import { betterAuth } from "better-auth";
-  
+
   export const auth = betterAuth({
       account: {
           accountLinking: {
@@ -518,7 +581,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-- **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server. 
+* **Linking Credential-Based Accounts:** To link a credential-based account (e.g., email and password), users can initiate a "forgot password" flow, or you can call the `setPassword` method on the server.
 
   ```ts title="set-password.ts"
   import { auth } from "@/lib/auth"
@@ -532,7 +595,7 @@ Users already signed in can manually link their account to additional social pro
   ```
 
 <Callout>
-`setPassword` can't be called from the client for security reasons.
+  `setPassword` can't be called from the client for security reasons.
 </Callout>
 
 ### Account Unlinking

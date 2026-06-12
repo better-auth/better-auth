@@ -1,3 +1,4 @@
+import { cimd } from "@better-auth/cimd";
 import { electron } from "@better-auth/electron";
 import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -196,7 +197,6 @@ const authOptions = {
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
-				allowReTrialsForDifferentPlans: true,
 				plans: () => {
 					const PRO_PRICE_ID = {
 						default:
@@ -365,7 +365,7 @@ const authOptions = {
 				"offline_access",
 				"read:organization",
 			],
-			validAudiences: [
+			resources: [
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
 					"/api/mcp",
@@ -436,12 +436,13 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		cimd(),
 		electron(),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
-		"exp://",
+		"better-auth://",
 		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],

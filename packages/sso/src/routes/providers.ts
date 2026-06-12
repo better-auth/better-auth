@@ -1,3 +1,5 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -6,12 +8,25 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { validateConfigAlgorithms } from "../saml";
+import {
+	DiscoveryError,
+	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
+} from "../oidc";
+import {
+	resolveSigningCerts,
+	validateCertSources,
+	validateConfigAlgorithms,
+} from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
+import {
+	getUpdateSSOProviderBodySchema,
+	parseSSOProviderAdditionalFields,
+} from "./schemas";
 
 interface SSOProviderRecord {
+	[key: string]: unknown;
 	id: string;
 	providerId: string;
 	issuer: string;
@@ -24,6 +39,57 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+export function filterSSOProviderAdditionalFields<
+	T extends Record<string, unknown>,
+>(provider: T, options?: SSOOptions) {
+	return filterOutputFields(provider, getSSOProviderAdditionalFields(options));
+}
+
+function getReturnedSSOProviderAdditionalFields(
+	provider: Record<string, unknown>,
+	options?: SSOOptions,
+) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const result: Record<string, unknown> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.returned === false) {
+			continue;
+		}
+		if (key in provider) {
+			result[key] = provider[key];
+		}
+	}
+	return result;
+}
+
+export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
+	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+}
+
+type ParsedCert = ReturnType<typeof parseCertificate>;
+type SanitizedCert = ParsedCert | { error: string };
+
+function parseCertOrError(cert: string): SanitizedCert {
+	try {
+		return parseCertificate(cert);
+	} catch {
+		return { error: "Failed to parse certificate" };
+	}
+}
+
+function sanitizeSigningCerts(config: SAMLConfig): SanitizedCert[] | undefined {
+	const certs = resolveSigningCerts(config);
+	if (certs === undefined) return undefined;
+	return certs.map(parseCertOrError);
+}
 
 async function isOrgAdmin(
 	ctx: {
@@ -46,9 +112,7 @@ async function isOrgAdmin(
 			{ field: "organizationId", value: organizationId },
 		],
 	});
-	if (!member) return false;
-	const roles = member.role.split(",");
-	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
+	return member ? hasOrgAdminRole(member) : false;
 }
 
 async function batchCheckOrgAdmin(
@@ -72,8 +136,7 @@ async function batchCheckOrgAdmin(
 
 	const adminOrgIds = new Set<string>();
 	for (const member of members) {
-		const roles = member.role.split(",");
-		if (roles.some((r: string) => ADMIN_ROLES.includes(r.trim()))) {
+		if (hasOrgAdminRole(member)) {
 			adminOrgIds.add(member.organizationId);
 		}
 	}
@@ -83,6 +146,7 @@ async function batchCheckOrgAdmin(
 
 function sanitizeProvider(
 	provider: {
+		[key: string]: unknown;
 		providerId: string;
 		issuer: string;
 		domain: string;
@@ -92,6 +156,7 @@ function sanitizeProvider(
 		samlConfig?: string | SAMLConfig | null;
 	},
 	baseURL: string,
+	options?: SSOOptions,
 ) {
 	let oidcConfig: OIDCConfig | null = null;
 	let samlConfig: SAMLConfig | null = null;
@@ -109,8 +174,13 @@ function sanitizeProvider(
 	}
 
 	const type = samlConfig ? "saml" : "oidc";
+	const returnedAdditionalFields = getReturnedSSOProviderAdditionalFields(
+		provider,
+		options,
+	);
 
 	return {
+		...returnedAdditionalFields,
 		providerId: provider.providerId,
 		type,
 		issuer: provider.issuer,
@@ -133,27 +203,20 @@ function sanitizeProvider(
 		samlConfig: samlConfig
 			? {
 					entryPoint: samlConfig.entryPoint,
-					callbackUrl: samlConfig.callbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
-					certificate: (() => {
-						try {
-							return parseCertificate(samlConfig.cert);
-						} catch {
-							return { error: "Failed to parse certificate" };
-						}
-					})(),
+					certificate: sanitizeSigningCerts(samlConfig),
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
 	};
 }
 
-export const listSSOProviders = () => {
+export const listSSOProviders = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/providers",
 		{
@@ -166,7 +229,8 @@ export const listSSOProviders = () => {
 					description: "Returns a list of SSO providers the user has access to",
 					responses: {
 						"200": {
-							description: "List of SSO providers",
+							description:
+								"List of SSO providers. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 					},
 				},
@@ -225,7 +289,7 @@ export const listSSOProviders = () => {
 			}
 
 			const providers = accessibleProviders.map((p) =>
-				sanitizeProvider(p, ctx.context.baseURL),
+				sanitizeProvider(p, ctx.context.baseURL, options),
 			);
 
 			return ctx.json({ providers });
@@ -237,7 +301,7 @@ const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
 });
 
-async function checkProviderAccess(
+export async function checkProviderAccess(
 	ctx: {
 		context: AuthContext & {
 			session: { user: { id: string } };
@@ -278,7 +342,7 @@ async function checkProviderAccess(
 	return provider;
 }
 
-export const getSSOProvider = () => {
+export const getSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/get-provider",
 		{
@@ -292,7 +356,8 @@ export const getSSOProvider = () => {
 					description: "Returns sanitized details for a specific SSO provider",
 					responses: {
 						"200": {
-							description: "SSO provider details",
+							description:
+								"SSO provider details. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -309,7 +374,7 @@ export const getSSOProvider = () => {
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
-			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL, options));
 		},
 	);
 };
@@ -343,7 +408,6 @@ function mergeSAMLConfig(
 		issuer,
 		entryPoint: updates.entryPoint ?? current.entryPoint,
 		cert: updates.cert ?? current.cert,
-		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
 		spMetadata: updates.spMetadata ?? current.spMetadata,
 		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
 		mapping: updates.mapping ?? current.mapping,
@@ -382,18 +446,21 @@ function mergeOIDCConfig(
 		tokenEndpointAuthentication:
 			updates.tokenEndpointAuthentication ??
 			current.tokenEndpointAuthentication,
+		privateKeyId: updates.privateKeyId ?? current.privateKeyId,
+		privateKeyAlgorithm:
+			updates.privateKeyAlgorithm ?? current.privateKeyAlgorithm,
 	};
 }
 
 export const updateSSOProvider = (options: SSOOptions) => {
+	const updateBodySchema = getUpdateSSOProviderBodySchema(options);
+
 	return createAuthEndpoint(
 		"/sso/update-provider",
 		{
 			method: "POST",
 			use: [sessionMiddleware],
-			body: updateSSOProviderBodySchema.extend({
-				providerId: z.string(),
-			}),
+			body: updateBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "updateSSOProvider",
@@ -402,7 +469,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
-							description: "SSO provider updated successfully",
+							description:
+								"SSO provider updated successfully. The `certificate` field is an array of parsed certificates for SAML providers, or absent when certs live inside `idpMetadata.metadata`.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -418,7 +486,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			const { providerId, ...body } = ctx.body;
 
 			const { issuer, domain, samlConfig, oidcConfig } = body;
-			if (!issuer && !domain && !samlConfig && !oidcConfig) {
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"update",
+			);
+			if (
+				!issuer &&
+				!domain &&
+				!samlConfig &&
+				!oidcConfig &&
+				Object.keys(additionalFields).length === 0
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "No fields provided for update",
 				});
@@ -426,7 +505,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 			const existingProvider = await checkProviderAccess(ctx, providerId);
 
-			const updateData: Partial<SSOProviderRecord> = {};
+			const updateData: Partial<SSOProviderRecord> = {
+				...additionalFields,
+			};
 
 			if (body.issuer !== undefined) {
 				updateData.issuer = body.issuer;
@@ -479,10 +560,23 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
+				validateCertSources(updatedSamlConfig);
+
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}
 
 			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+
 				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
 					existingProvider.oidcConfig,
 					"OIDC",
@@ -495,6 +589,31 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						currentOidcConfig.issuer ||
 						existingProvider.issuer,
 				);
+
+				// Validate: clientSecret is required for non-private_key_jwt auth
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication !== "private_key_jwt" &&
+					!updatedOidcConfig.clientSecret
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+					});
+				}
+				// Validate: private_key_jwt requires a key source at runtime
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication === "private_key_jwt" &&
+					!options?.resolvePrivateKey &&
+					!options?.defaultSSO?.some(
+						(p: Record<string, unknown>) =>
+							p.providerId === providerId && "privateKey" in p && p.privateKey,
+					)
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+					});
+				}
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 			}
@@ -518,7 +637,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
+			return ctx.json(
+				sanitizeProvider(fullProvider, ctx.context.baseURL, options),
+			);
 		},
 	);
 };

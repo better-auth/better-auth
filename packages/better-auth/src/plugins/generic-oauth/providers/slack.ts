@@ -42,7 +42,7 @@ interface SlackProfile {
  * });
  * ```
  */
-export function slack(options: SlackOptions): GenericOAuthConfig {
+export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	const getUserInfo = async (
@@ -77,6 +77,7 @@ export function slack(options: SlackOptions): GenericOAuthConfig {
 		userInfoUrl: "https://slack.com/api/openid.connect.userInfo",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

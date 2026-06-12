@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink } from "better-auth/plugins";
@@ -8,6 +9,58 @@ interface VerificationEmail {
 	email: string;
 	token: string;
 	url: string;
+}
+
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, value);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
+function createParsedSecondaryStorage(
+	store: Map<string, unknown>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, safeJSONParse<unknown>(value));
+		},
+		get(key) {
+			return store.get(key) ?? null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, count);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
 }
 
 /**
@@ -23,17 +76,7 @@ describe("magic link with secondary storage (string return)", async () => {
 
 	const { testUser, sessionSetter, client } = await getTestInstance(
 		{
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(store),
 			rateLimit: {
 				enabled: false,
 			},
@@ -107,7 +150,10 @@ describe("magic link with secondary storage (string return)", async () => {
 		});
 	});
 
-	it("should track attempts and reject when exceeded", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-x88r-fmh4
+	 */
+	it("consumes the token atomically on first verify, INVALID_TOKEN on retries", async () => {
 		const attemptStore = new Map<string, string>();
 		let attemptEmail: VerificationEmail = { email: "", token: "", url: "" };
 
@@ -117,21 +163,10 @@ describe("magic link with secondary storage (string return)", async () => {
 			client: c,
 		} = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						attemptStore.set(key, value);
-					},
-					get(key) {
-						return attemptStore.get(key) || null;
-					},
-					delete(key) {
-						attemptStore.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(attemptStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
-						allowedAttempts: 3,
 						async sendMagicLink(data) {
 							attemptEmail = data;
 						},
@@ -148,27 +183,25 @@ describe("magic link with secondary storage (string return)", async () => {
 		await c.signIn.magicLink({ email: tu.email });
 		const token = new URL(attemptEmail.url).searchParams.get("token")!;
 
-		// 3 attempts should succeed
-		for (let i = 0; i < 3; i++) {
-			const headers = new Headers();
-			const response = await c.magicLink.verify({
-				query: { token },
-				fetchOptions: { onSuccess: ss(headers) },
-			});
-			expect(response.data?.token).toBeDefined();
-		}
+		const firstHeaders = new Headers();
+		const firstResponse = await c.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: ss(firstHeaders) },
+		});
+		expect(firstResponse.data?.token).toBeDefined();
 
-		// 4th attempt should be rejected
-		await c.magicLink.verify(
-			{ query: { token } },
-			{
-				onError(context) {
-					expect(context.response.status).toBe(302);
-					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
+		for (let i = 0; i < 3; i++) {
+			await c.magicLink.verify(
+				{ query: { token } },
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+						const location = context.response.headers.get("location");
+						expect(location).toContain("?error=INVALID_TOKEN");
+					},
 				},
-			},
-		);
+			);
+		}
 	});
 
 	it("should delete expired verification on verify", async () => {
@@ -177,17 +210,7 @@ describe("magic link with secondary storage (string return)", async () => {
 
 		const { testUser: tu, client: c } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						expiredStore.set(key, value);
-					},
-					get(key) {
-						return expiredStore.get(key) || null;
-					},
-					delete(key) {
-						expiredStore.delete(key);
-					},
-				},
+				secondaryStorage: createStringSecondaryStorage(expiredStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
@@ -217,7 +240,7 @@ describe("magic link with secondary storage (string return)", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=EXPIRED_TOKEN");
+					expect(location).toContain("?error=INVALID_TOKEN");
 				},
 			},
 		);
@@ -232,7 +255,7 @@ describe("magic link with secondary storage (string return)", async () => {
  * @see https://github.com/better-auth/better-auth/issues/8228
  */
 describe("magic link with secondary storage (pre-parsed object return)", async () => {
-	const store = new Map<string, any>();
+	const store = new Map<string, unknown>();
 	let verificationEmail: VerificationEmail = {
 		email: "",
 		token: "",
@@ -241,17 +264,7 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 
 	const { testUser, sessionSetter, client } = await getTestInstance(
 		{
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, safeJSONParse(value));
-				},
-				get(key) {
-					return store.get(key) ?? null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createParsedSecondaryStorage(store),
 			rateLimit: {
 				enabled: false,
 			},
@@ -290,8 +303,11 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 		expect(betterAuthCookie).toBeDefined();
 	});
 
-	it("should track attempts with pre-parsed storage", async () => {
-		const attemptStore = new Map<string, any>();
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-x88r-fmh4
+	 */
+	it("consumes the token atomically with pre-parsed storage, INVALID_TOKEN on retries", async () => {
+		const attemptStore = new Map<string, unknown>();
 		let attemptEmail: VerificationEmail = { email: "", token: "", url: "" };
 
 		const {
@@ -300,21 +316,10 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 			client: c,
 		} = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						attemptStore.set(key, safeJSONParse(value));
-					},
-					get(key) {
-						return attemptStore.get(key) ?? null;
-					},
-					delete(key) {
-						attemptStore.delete(key);
-					},
-				},
+				secondaryStorage: createParsedSecondaryStorage(attemptStore),
 				rateLimit: { enabled: false },
 				plugins: [
 					magicLink({
-						allowedAttempts: 2,
 						async sendMagicLink(data) {
 							attemptEmail = data;
 						},
@@ -331,26 +336,24 @@ describe("magic link with secondary storage (pre-parsed object return)", async (
 		await c.signIn.magicLink({ email: tu.email });
 		const token = new URL(attemptEmail.url).searchParams.get("token")!;
 
-		// 2 attempts should succeed
-		for (let i = 0; i < 2; i++) {
-			const headers = new Headers();
-			const response = await c.magicLink.verify({
-				query: { token },
-				fetchOptions: { onSuccess: ss(headers) },
-			});
-			expect(response.data?.token).toBeDefined();
-		}
+		const firstHeaders = new Headers();
+		const firstResponse = await c.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: ss(firstHeaders) },
+		});
+		expect(firstResponse.data?.token).toBeDefined();
 
-		// 3rd attempt should be rejected
-		await c.magicLink.verify(
-			{ query: { token } },
-			{
-				onError(context) {
-					expect(context.response.status).toBe(302);
-					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
+		for (let i = 0; i < 2; i++) {
+			await c.magicLink.verify(
+				{ query: { token } },
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+						const location = context.response.headers.get("location");
+						expect(location).toContain("?error=INVALID_TOKEN");
+					},
 				},
-			},
-		);
+			);
+		}
 	});
 });

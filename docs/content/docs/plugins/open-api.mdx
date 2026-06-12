@@ -5,17 +5,16 @@ description: Open API reference for Better Auth.
 
 This is a plugin that provides an Open API reference for Better Auth. It shows all endpoints added by plugins and the core. It also provides a way to test the endpoints. It uses [Scalar](https://scalar.com/) to display the Open API reference.
 
-
 <Callout>
-This plugin is still in the early stages of development. We are working on adding more features to it and filling in the gaps.
+  This plugin is still in the early stages of development. We are working on adding more features to it and filling in the gaps.
 </Callout>
-
 
 ## Installation
 
 <Steps>
-    <Step>
+  <Step>
     ### Add the plugin to your **auth** config
+
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { openAPI } from "better-auth/plugins" // [!code highlight]
@@ -26,19 +25,18 @@ This plugin is still in the early stages of development. We are working on addin
         ]
     })
     ```
-    </Step>
-    <Step>
+  </Step>
+
+  <Step>
     ### Navigate to `/api/auth/reference` to view the Open API reference
-    
+
     Each plugin endpoints are grouped by the plugin name. The core endpoints are grouped under the `Default` group. And Model schemas are grouped under the `Models` group.
 
     ![Open API reference](/open-api-reference.png)
-    </Step>
-</Steps>    
+  </Step>
+</Steps>
 
-
-
-## Usage 
+## Usage
 
 The Open API reference is generated using the [OpenAPI 3.0](https://swagger.io/specification/) specification. You can use the reference to generate client libraries, documentation, and more.
 

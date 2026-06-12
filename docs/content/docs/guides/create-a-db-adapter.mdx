@@ -14,98 +14,96 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
 ## Quick Start
 
 <Steps>
-<Step>
-### Get things ready
+  <Step>
+    ### Get things ready
 
-1. Import `createAdapterFactory`.
-2. Create `CustomAdapterConfig` interface that represents your adapter config options.
-3. Create the adapter!
+    1. Import `createAdapterFactory`.
+    2. Create `CustomAdapterConfig` interface that represents your adapter config options.
+    3. Create the adapter!
 
-```ts
-import { createAdapterFactory, type DBAdapterDebugLogOption } from "better-auth/adapters";
+    ```ts
+    import { createAdapterFactory, type DBAdapterDebugLogOption } from "better-auth/adapters";
 
-// Your custom adapter config options
-interface CustomAdapterConfig {
-  /**
-   * Helps you debug issues with the adapter.
-   */
-  debugLogs?: DBAdapterDebugLogOption;
-  /**
-   * If the table names in the schema are plural.
-   */
-  usePlural?: boolean;
-}
+    // Your custom adapter config options
+    interface CustomAdapterConfig {
+      /**
+       * Helps you debug issues with the adapter.
+       */
+      debugLogs?: DBAdapterDebugLogOption;
+      /**
+       * If the table names in the schema are plural.
+       */
+      usePlural?: boolean;
+    }
 
-export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
+    export const myAdapter = (config: CustomAdapterConfig = {}) =>
+      createAdapterFactory({
+        // ...
+      });
+    ```
+  </Step>
+
+  <Step>
+    ### Configure the adapter
+
+    The `config` object is mostly used to provide information about the adapter to Better-Auth.
+    We try to minimize the amount of code you need to write in your adapter functions, and these `config` options are used to help us do that.
+
+    ```ts
     // ...
-  });
-```
-
-</Step>
-
-<Step>
-### Configure the adapter
-
-The `config` object is mostly used to provide information about the adapter to Better-Auth.
-We try to minimize the amount of code you need to write in your adapter functions, and these `config` options are used to help us do that.
-
-```ts
-// ...
-export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
-    config: {
-      adapterId: "custom-adapter", // A unique identifier for the adapter.
-      adapterName: "Custom Adapter", // The name of the adapter.
-      usePlural: config.usePlural ?? false, // Whether the table names in the schema are plural.
-      debugLogs: config.debugLogs ?? false, // Whether to enable debug logs.
-      supportsJSON: false, // Whether the database supports JSON. (Default: false)
-      supportsDates: true, // Whether the database supports dates. (Default: true)
-      supportsBooleans: true, // Whether the database supports booleans. (Default: true)
-      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
-    },
-    // ...
-  });
-```
-</Step>
-
-<Step>
-### Create the adapter
-
-The `adapter` function is where you write the code that interacts with your database.
-
-```ts
-// ...
-export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
-    config: {
-      // ...
-    },
-    adapter: ({}) => {
-      return {
-        create: async ({ data, model, select }) => {
-          // ...
-        },
-        update: async ({ data, model, select }) => {
-          // ...
-        },
-        updateMany: async ({ data, model, select }) => {
-          // ...
-        },
-        delete: async ({ data, model, select }) => {
-          // ...
+    export const myAdapter = (config: CustomAdapterConfig = {}) =>
+      createAdapterFactory({
+        config: {
+          adapterId: "custom-adapter", // A unique identifier for the adapter.
+          adapterName: "Custom Adapter", // The name of the adapter.
+          usePlural: config.usePlural ?? false, // Whether the table names in the schema are plural.
+          debugLogs: config.debugLogs ?? false, // Whether to enable debug logs.
+          supportsJSON: false, // Whether the database supports JSON. (Default: false)
+          supportsDates: true, // Whether the database supports dates. (Default: true)
+          supportsBooleans: true, // Whether the database supports booleans. (Default: true)
+          supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
         },
         // ...
-      };
-    },
-  });
-```
+      });
+    ```
+  </Step>
 
-<Callout>
-Learn more about the `adapter` here [here](/docs/concepts/database#adapters).
-</Callout>
-</Step>
+  <Step>
+    ### Create the adapter
 
+    The `adapter` function is where you write the code that interacts with your database.
+
+    ```ts
+    // ...
+    export const myAdapter = (config: CustomAdapterConfig = {}) =>
+      createAdapterFactory({
+        config: {
+          // ...
+        },
+        adapter: ({}) => {
+          return {
+            create: async ({ data, model, select }) => {
+              // ...
+            },
+            update: async ({ model, where, update }) => {
+              // ...
+            },
+            updateMany: async ({ model, where, update }) => {
+              // ...
+            },
+            delete: async ({ model, where }) => {
+              // ...
+            },
+            // ...
+          };
+        },
+      });
+    ```
+
+    <Callout>
+      Learn more about [database adapters](/docs/concepts/database#adapters).
+    </Callout>
+  </Step>
 </Steps>
 
 ## Adapter
@@ -116,25 +114,25 @@ If you haven't already, check out the `options` object in the [config section](#
 
 Before we get into the adapter function, let's go over the parameters that are available to you.
 
-- `options`: The Better Auth options.
-- `schema`: The schema from the user's Better Auth instance.
-- `debugLog`: The debug log function.
-- `getFieldName`: Function to get the transformed field name for the database.
-- `getModelName`: Function to get the transformed model name for the database.
-- `getDefaultModelName`: Function to get the default model name from the schema.
-- `getDefaultFieldName`: Function to get the default field name from the schema.
-- `getFieldAttributes`: Function to get field attributes for a specific model and field.
-- `transformInput`: Function to transform input data before saving to the database.
-- `transformOutput`: Function to transform output data after retrieving from the database.
-- `transformWhereClause`: Function to transform where clauses for database queries.
+* `options`: The Better Auth options.
+* `schema`: The schema from the user's Better Auth instance.
+* `debugLog`: The debug log function.
+* `getModelName`: Function to get the transformed model name for the database.
+* `getFieldName`: Function to get the transformed field name for the database.
+* `getDefaultModelName`: Function to get the default model name from the schema.
+* `getDefaultFieldName`: Function to get the default field name from the schema.
+* `getFieldAttributes`: Function to get field attributes for a specific model and field.
+* `transformInput`: Function to transform input data before saving to the database.
+* `transformOutput`: Function to transform output data after retrieving from the database.
+* `transformWhereClause`: Function to transform where clauses for database queries.
 
 ```ts title="Example"
 adapter: ({
   options,
   schema,
   debugLog,
-  getFieldName,
   getModelName,
+  getFieldName,
   getDefaultModelName,
   getDefaultFieldName,
   getFieldAttributes,
@@ -150,29 +148,27 @@ adapter: ({
 
 ### Adapter Methods
 
-- All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
-  - This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
-- We will automatically fill in any missing fields you return based on the user's `schema` configuration.
-- Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
+* All `model` values are already transformed into the correct model name for the database based on the end-user's schema configuration.
+  * This also means that if you need access to the `schema` version of a given model, you can't use this exact `model` value, you'll need to use the `getDefaultModelName` function provided in the options to convert the `model` to the `schema` version.
+* We will automatically fill in any missing fields you return based on the user's `schema` configuration.
+* Any method that includes a `select` parameter, is only for the purpose of getting data from your database more efficiently. You do not need to worry about only returning what the `select` parameter states, as we will handle that for you.
 
 ### `create` method
 
 The `create` method is used to create a new record in the database.
 
 <Callout>
-It's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
-We handle `forceAllowId` internally, so you don't need to worry about it.
+  It's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
+  We handle `forceAllowId` internally, so you don't need to worry about it.
 </Callout>
 
 parameters:
 
-- `model`: The model/table name that new data will be inserted into.
-- `data`: The data to insert into the database.
-- `select`: An array of fields to return from the database.
+* `model`: The model/table name that new data will be inserted into.
+* `data`: The data to insert into the database.
+* `select`: An array of fields to return from the database.
 
-<Callout>
-  Make sure to return the data that is inserted into the database.
-</Callout>
+**Returns** `Promise<T>`: the record that was inserted into the database.
 
 ```ts title="Example"
 create: async ({ model, data, select }) => {
@@ -187,14 +183,11 @@ The `update` method is used to update a record in the database.
 
 parameters:
 
-- `model`: The model/table name that the record will be updated in.
-- `where`: The `where` clause to update the record by.
-- `update`: The data to update the record with.
+* `model`: The model/table name that the record will be updated in.
+* `where`: The `where` clause to update the record by.
+* `update`: The data to update the record with.
 
-<Callout>
-  Make sure to return the data in the row which is updated. This includes any
-  fields that were not updated.
-</Callout>
+**Returns** `Promise<T | null>`: the updated row, or `null` if no row matched. With multiple `where` clauses, some adapters cannot return it.
 
 ```ts title="Example"
 update: async ({ model, where, update }) => {
@@ -209,11 +202,11 @@ The `updateMany` method is used to update multiple records in the database.
 
 parameters:
 
-- `model`: The model/table name that the records will be updated in.
-- `where`: The `where` clause to update the records by.
-- `update`: The data to update the records with.
+* `model`: The model/table name that the records will be updated in.
+* `where`: The `where` clause to update the records by.
+* `update`: The data to update the records with.
 
-<Callout>Make sure to return the number of records that were updated.</Callout>
+**Returns** `Promise<number>`: the number of records that were updated.
 
 ```ts title="Example"
 updateMany: async ({ model, where, update }) => {
@@ -228,8 +221,10 @@ The `delete` method is used to delete a record from the database.
 
 parameters:
 
-- `model`: The model/table name that the record will be deleted from.
-- `where`: The `where` clause to delete the record by.
+* `model`: The model/table name that the record will be deleted from.
+* `where`: The `where` clause to delete the record by.
+
+**Returns** `Promise<void>`: nothing.
 
 ```ts title="Example"
 delete: async ({ model, where }) => {
@@ -244,10 +239,10 @@ The `deleteMany` method is used to delete multiple records from the database.
 
 parameters:
 
-- `model`: The model/table name that the records will be deleted from.
-- `where`: The `where` clause to delete the records by.
+* `model`: The model/table name that the records will be deleted from.
+* `where`: The `where` clause to delete the records by.
 
-<Callout>Make sure to return the number of records that were deleted.</Callout>
+**Returns** `Promise<number>`: the number of records that were deleted.
 
 ```ts title="Example"
 deleteMany: async ({ model, where }) => {
@@ -256,18 +251,72 @@ deleteMany: async ({ model, where }) => {
 };
 ```
 
+### `consumeOne` method
+
+The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges.
+
+parameters:
+
+* `model`: The model/table name to consume a record from.
+* `where`: The `where` clause to match the single record by.
+
+**Returns** `Promise<T | null>`: the consumed record, or `null` if no row matched (including when another request consumed it first). Implementations must delete at most one matching row.
+
+```ts title="Example"
+consumeOne: async ({ model, where }) => {
+  // Single DELETE ... RETURNING is atomic, so only one caller gets the row.
+  const [row] = await db.delete(model).where(where).returning();
+  return row ?? null;
+};
+```
+
+<Callout type="warn">
+  `consumeOne` is required. Better Auth does not provide a `findMany` plus `deleteMany` fallback because that shape cannot guarantee single-use semantics across adapters without a native atomic delete-and-return operation.
+</Callout>
+
+### `incrementOne` method
+
+The `incrementOne` method atomically updates one matching record by applying numeric deltas and optional set values, then returns the updated row. It powers guarded counters such as rate limits, quotas, and one-winner state transitions.
+
+parameters:
+
+* `model`: The model/table name to update.
+* `where`: The `where` clause that must still match for the increment to apply.
+* `increment`: Numeric deltas to apply, such as `{ count: 1 }` or `{ remaining: -1 }`.
+* `set`: Optional fields to set in the same atomic operation.
+
+**Returns** `Promise<T | null>`: the updated record, or `null` if no row matched. Implementations must update at most one matching row.
+
+```ts title="Example"
+incrementOne: async ({ model, where, increment, set }) => {
+  const [row] = await db
+    .update(model)
+    .set({
+      ...set,
+      count: sql`${model.count} + ${increment.count ?? 0}`,
+    })
+    .where(where)
+    .returning();
+  return row ?? null;
+};
+```
+
+<Callout type="warn">
+  `incrementOne` is required. Better Auth uses it as a compare-and-swap primitive: the `where` clause is part of the guard, so concurrent requests cannot all update a stale snapshot.
+</Callout>
+
 ### `findOne` method
 
 The `findOne` method is used to find a single record in the database.
 
 parameters:
 
-- `model`: The model/table name that the record will be found in.
-- `where`: The `where` clause to find the record by.
-- `select`: The `select` clause to return.
-- `join`: Optional join configuration to fetch related records in a single query.
+* `model`: The model/table name that the record will be found in.
+* `where`: The `where` clause to find the record by.
+* `select`: The `select` clause to return.
+* `join`: Optional join configuration to fetch related records in a single query.
 
-<Callout>Make sure to return the data that is found in the database.</Callout>
+**Returns** `Promise<T | null>`: the matching record, or `null` if none was found.
 
 ```ts title="Example"
 findOne: async ({ model, where, select, join }) => {
@@ -282,19 +331,18 @@ The `findMany` method is used to find multiple records in the database.
 
 parameters:
 
-- `model`: The model/table name that the records will be found in.
-- `where`: The `where` clause to find the records by.
-- `limit`: The limit of records to return.
-- `sortBy`: The `sortBy` clause to sort the records by.
-- `offset`: The offset of records to return.
-- `join`: Optional join configuration to fetch related records in a single query.
+* `model`: The model/table name that the records will be found in.
+* `where`: The `where` clause to find the records by.
+* `limit`: The limit of records to return.
+* `select`: The `select` clause to return.
+* `sortBy`: The `sortBy` clause to sort the records by.
+* `offset`: The offset of records to return.
+* `join`: Optional join configuration to fetch related records in a single query.
 
-<Callout>
-  Make sure to return the array of data that is found in the database.
-</Callout>
+**Returns** `Promise<T[]>`: an array of the matching records.
 
 ```ts title="Example"
-findMany: async ({ model, where, limit, sortBy, offset, join }) => {
+findMany: async ({ model, where, limit, select, sortBy, offset, join }) => {
   // Example of finding multiple records in the database.
   return await db
     .select()
@@ -312,10 +360,10 @@ The `count` method is used to count the number of records in the database.
 
 parameters:
 
-- `model`: The model/table name that the records will be counted in.
-- `where`: The `where` clause to count the records by.
+* `model`: The model/table name that the records will be counted in.
+* `where`: The `where` clause to count the records by.
 
-<Callout>Make sure to return the number of records that were counted.</Callout>
+**Returns** `Promise<number>`: the number of records that were counted.
 
 ```ts title="Example"
 count: async ({ model, where }) => {
@@ -348,8 +396,8 @@ The `createSchema` method allows the [Better Auth CLI](/docs/concepts/cli) to [g
 
 parameters:
 
-- `tables`: The tables from the user's Better-Auth instance schema; which is expected to be generated into the schema file.
-- `file`: The file the user may have passed in to the `generate` command as the expected schema file output path.
+* `tables`: The tables from the user's Better-Auth instance schema; which is expected to be generated into the schema file.
+* `file`: The file the user may have passed in to the `generate` command as the expected schema file output path.
 
 ```ts title="Example"
 createSchema: async ({ file, tables }) => {
@@ -425,6 +473,10 @@ The name of the adapter.
 
 Whether the database supports numeric IDs. If this is set to `false` and the user's config has enabled `useNumberId`, then we will throw an error.
 
+### `supportsUUIDs`
+
+Whether the database can natively generate UUIDs. Defaults to `false`. Set this to `true` if your database generates UUIDs itself.
+
 ### `supportsJSON`
 
 Whether the database supports JSON. If the database doesn't support JSON, we will use a `string` to save the JSON data.And when we retrieve the data, we will safely parse the `string` back into a JSON object.
@@ -436,6 +488,10 @@ Whether the database supports dates. If the database doesn't support dates, we w
 ### `supportsBooleans`
 
 Whether the database supports booleans. If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value. When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
+
+### `supportsArrays`
+
+Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
 
 ### `usePlural`
 
@@ -461,7 +517,7 @@ Whether the adapter supports transactions. If `false`, operations run sequential
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"
@@ -530,15 +586,16 @@ If you need to transform the input data before it is saved to the database, you 
   the transformations will be applied before your `customTransformInput`
   function is called.
 </Callout>
+
 The `customTransformInput` function receives the following arguments:
 
-- `data`: The data to transform.
-- `field`: The field that is being transformed.
-- `fieldAttributes`: The field attributes of the field that is being transformed.
-- `action`: The action which was called from the adapter (`create` or `update`).
-- `model`: The model that is being transformed.
-- `schema`: The schema that is being transformed.
-- `options`: Better Auth options.
+* `data`: The data to transform.
+* `field`: The field that is being transformed.
+* `fieldAttributes`: The field attributes of the field that is being transformed.
+* `action`: The action which was called from the adapter (`create` or `update`).
+* `model`: The model that is being transformed.
+* `schema`: The schema that is being transformed.
+* `options`: Better Auth options.
 
 The `customTransformInput` function runs at every key in the data object of a given action.
 
@@ -602,15 +659,3 @@ Whether to disable join transformation. This should only be used if you know wha
 <Callout type="warn">
   Disabling join transformation can break join functionality.
 </Callout>
-
-### `supportsJoin`
-
-Whether the adapter supports native joins. If set to `false` (the default), Better-Auth will handle joins by making multiple queries and combining the results. If set to `true`, the adapter is expected to handle joins natively (e.g., SQL JOIN operations).
-
-```ts title="Example"
-// For adapters that support native SQL joins
-const adapter = myAdapter({
-  supportsJoin: true,
-});
-```
- 

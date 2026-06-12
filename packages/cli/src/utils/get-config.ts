@@ -8,10 +8,11 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
-import { getTsconfig, parseTsconfig } from "get-tsconfig";
+import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
-import { addCloudflareModules } from "./add-cloudflare-modules";
-import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import { addCloudflareVirtualModules } from "./cloudflare-virtual-modules";
+import { addSvelteKitVirtualModules } from "./sveltekit-virtual-modules";
+import { getViteAssetStub } from "./vite-virtual-modules";
 
 let possiblePaths = [
 	"auth.ts",
@@ -43,40 +44,9 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function mergeAliases(
-	target: Record<string, string>,
-	source: Record<string, string>,
-): void {
-	for (const [alias, aliasPath] of Object.entries(source)) {
-		if (!(alias in target)) {
-			target[alias] = aliasPath;
-		}
-	}
-}
+type PathsMatcher = (specifier: string) => string[];
 
-function extractAliases(tsconfig: TsConfigResult): Record<string, string> {
-	const { paths = {}, baseUrl } = tsconfig.config.compilerOptions ?? {};
-	const result: Record<string, string> = {};
-	const configDir = path.dirname(tsconfig.path);
-	const resolvedBaseUrl = baseUrl
-		? path.resolve(configDir, baseUrl)
-		: configDir;
-
-	for (const [alias, aliasPaths = []] of Object.entries(paths)) {
-		for (const aliasedPath of aliasPaths) {
-			const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
-			const finalAliasedPath =
-				aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0, -1) : aliasedPath;
-
-			result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
-		}
-	}
-	return result;
-}
-
-/**
- * Reads raw tsconfig JSON to get `references` (which get-tsconfig strips out).
- */
+/** Reads `references` from raw tsconfig JSON (stripped out by `parseTsconfig`). */
 function readRawTsconfigReferences(
 	tsconfigPath: string,
 ): Array<{ path: string }> | undefined {
@@ -94,14 +64,12 @@ function readRawTsconfigReferences(
 	}
 }
 
-/**
- * Collect path aliases from tsconfig references recursively.
- */
-function collectReferencesAliases(
+/** Recursively collects tsconfigs reachable via `references`. */
+function collectReferencedTsconfigs(
 	tsconfigPath: string,
 	visited = new Set<string>(),
-): Record<string, string> {
-	const result: Record<string, string> = {};
+): TsConfigResult[] {
+	const result: TsConfigResult[] = [];
 	const refs = readRawTsconfigReferences(tsconfigPath);
 	if (!refs) return result;
 
@@ -117,43 +85,189 @@ function collectReferencesAliases(
 
 		try {
 			const refConfig = parseTsconfig(refTsconfigPath);
-			mergeAliases(
-				result,
-				extractAliases({ path: refTsconfigPath, config: refConfig }),
-			);
+			result.push({ path: refTsconfigPath, config: refConfig });
 		} catch {
 			continue;
 		}
 
-		mergeAliases(result, collectReferencesAliases(refTsconfigPath, visited));
+		result.push(...collectReferencedTsconfigs(refTsconfigPath, visited));
 	}
 	return result;
 }
 
-function getPathAliases(cwd: string): Record<string, string> | null {
+/**
+ * Ordered `paths` matchers from the project tsconfig and any referenced
+ * tsconfigs, following TypeScript canonical resolution semantics.
+ * @see https://github.com/microsoft/TypeScript/blob/main/src/compiler/moduleNameResolver.ts
+ */
+function collectPathsMatchers(cwd: string): PathsMatcher[] {
 	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
 		? "tsconfig.json"
 		: "jsconfig.json";
 	const tsconfig = getTsconfig(cwd, configName);
-	if (!tsconfig) {
-		return null;
-	}
+	if (!tsconfig) return [];
+
+	const matchers: PathsMatcher[] = [];
 	try {
-		const result = extractAliases(tsconfig);
-		mergeAliases(result, collectReferencesAliases(tsconfig.path));
-		addSvelteKitEnvModules(result);
-		addCloudflareModules(result);
-		return result;
+		const mainMatcher = createPathsMatcher(tsconfig);
+		if (mainMatcher) matchers.push(mainMatcher);
+		for (const refTsconfig of collectReferencedTsconfigs(tsconfig.path)) {
+			const refMatcher = createPathsMatcher(refTsconfig);
+			if (refMatcher) matchers.push(refMatcher);
+		}
 	} catch (error) {
 		console.error(error);
 		throw new BetterAuthError("Error parsing tsconfig.json");
 	}
+	return matchers;
+}
+
+/**
+ * Source file extensions jiti can load. Shared between the jiti `extensions`
+ * option and `resolveCandidateFile` so both stay in sync.
+ */
+const SOURCE_EXTENSIONS = [
+	".ts",
+	".tsx",
+	".mts",
+	".cts",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+] as const;
+
+const SOURCE_EXTENSIONS_SET: ReadonlySet<string> = new Set(SOURCE_EXTENSIONS);
+
+/** Probes a candidate as-is, with known extensions, and as a directory index. */
+function resolveCandidateFile(candidate: string): string | undefined {
+	try {
+		if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+			return candidate;
+		}
+	} catch {}
+	// A candidate that already has a known extension is either the exact
+	// target or does not exist; extension and index probing would be noise.
+	if (SOURCE_EXTENSIONS_SET.has(path.extname(candidate))) {
+		return undefined;
+	}
+	for (const ext of SOURCE_EXTENSIONS) {
+		const withExt = candidate + ext;
+		if (fs.existsSync(withExt)) return withExt;
+	}
+	for (const ext of SOURCE_EXTENSIONS) {
+		const asIndex = path.join(candidate, `index${ext}`);
+		if (fs.existsSync(asIndex)) return asIndex;
+	}
+	return undefined;
+}
+
+function resolveWithMatchers(
+	specifier: string,
+	matchers: PathsMatcher[],
+): string | undefined {
+	for (const matcher of matchers) {
+		for (const candidate of matcher(specifier)) {
+			const resolved = resolveCandidateFile(candidate);
+			if (resolved) return resolved;
+		}
+	}
+	return undefined;
+}
+
+interface StringLiteralNode {
+	type: "StringLiteral";
+	value: string;
+}
+interface BabelNodePath<Node> {
+	node: Node;
+}
+interface BabelTypes {
+	isIdentifier(node: unknown): node is { name: string };
+	isImport(node: unknown): boolean;
+	isStringLiteral(node: unknown): node is StringLiteralNode;
+}
+
+/**
+ * Callees whose first string argument is a module specifier. `jitiImport` is
+ * a jiti-side preprocessor artifact observed in the AST; revisit on jiti
+ * major version bumps (the regression suite catches a rename but not the why).
+ */
+const LOADER_IDENTIFIERS = new Set(["require", "import", "jitiImport"]);
+
+/**
+ * Rewrites aliased specifiers at AST level. Required because jiti's `alias`
+ * option only supports prefix matching and cannot express mid-path wildcards.
+ *
+ * Matchers always take precedence over native resolution, mirroring
+ * TypeScript's own `paths` → `node_modules` order.
+ */
+function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
+	return ({ types: t }: { types: BabelTypes }) => {
+		const rewrite = (source: StringLiteralNode | null | undefined): void => {
+			if (!source) return;
+			// Vite asset/query imports have no file on disk; stub them first so a
+			// resolved alias prefix never sends them down the filesystem path.
+			const stub = getViteAssetStub(source.value);
+			if (stub) {
+				source.value = stub;
+				return;
+			}
+			const resolved = resolveWithMatchers(source.value, matchers);
+			if (resolved) source.value = resolved;
+		};
+		return {
+			visitor: {
+				ImportDeclaration(p: BabelNodePath<{ source: StringLiteralNode }>) {
+					rewrite(p.node.source);
+				},
+				ExportNamedDeclaration(
+					p: BabelNodePath<{ source: StringLiteralNode | null }>,
+				) {
+					rewrite(p.node.source);
+				},
+				ExportAllDeclaration(p: BabelNodePath<{ source: StringLiteralNode }>) {
+					rewrite(p.node.source);
+				},
+				ImportExpression(p: BabelNodePath<{ source: unknown }>) {
+					// Only string literal sources can be statically rewritten.
+					if (t.isStringLiteral(p.node.source)) rewrite(p.node.source);
+				},
+				CallExpression(
+					p: BabelNodePath<{
+						callee: unknown;
+						arguments: unknown[];
+					}>,
+				) {
+					const { callee, arguments: args } = p.node;
+					const first = args[0];
+					if (!t.isStringLiteral(first)) return;
+					const isKnownLoader =
+						(t.isIdentifier(callee) && LOADER_IDENTIFIERS.has(callee.name)) ||
+						t.isImport(callee);
+					if (!isKnownLoader) return;
+					rewrite(first);
+				},
+			},
+		};
+	};
+}
+
+/** Virtual module aliases; real tsconfig paths go through the babel plugin. */
+function getVirtualModuleAliases(): Record<string, string> {
+	const result: Record<string, string> = {};
+	addSvelteKitVirtualModules(result);
+	addCloudflareVirtualModules(result);
+	return result;
 }
 /**
  * .tsx files are not supported by Jiti.
  */
 const jitiOptions = (cwd: string): JitiOptions => {
-	const alias = getPathAliases(cwd) || {};
+	const matchers = collectPathsMatchers(cwd);
+	// The plugin always runs: even with no tsconfig paths, it stubs Vite asset
+	// and query imports (`?raw`, `.css`, `.svg`, ...) that jiti cannot load.
+	const plugins = [createRewriteImportPathsPlugin(matchers)];
 	return {
 		transformOptions: {
 			babel: {
@@ -167,24 +281,35 @@ const jitiOptions = (cwd: string): JitiOptions => {
 					],
 					[babelPresetReact, { runtime: "automatic" }],
 				],
+				plugins,
 			},
 		},
-		extensions: [".ts", ".tsx", ".js", ".jsx"],
-		alias,
+		extensions: [...SOURCE_EXTENSIONS],
+		alias: getVirtualModuleAliases(),
 	};
 };
 
-const isDefaultExport = (
-	object: Record<string, unknown>,
-): object is BetterAuthOptions => {
-	return (
-		typeof object === "object" &&
-		object !== null &&
-		!Array.isArray(object) &&
-		Object.keys(object).length > 0 &&
-		"options" in object
-	);
+/**
+ * Picks the auth instance from the loaded module, supporting `export const auth`,
+ * `export default auth`, and `export default { auth }`. Falls back to the raw
+ * module as a defensive default.
+ */
+const resolveAuthModule = (mod: unknown): unknown => {
+	const m = mod as { auth?: unknown; default?: { auth?: unknown } };
+	return m?.auth ?? m?.default?.auth ?? m?.default ?? mod;
 };
+
+const isServerOnlyError = (e: unknown): boolean =>
+	typeof e === "object" &&
+	e !== null &&
+	"message" in e &&
+	typeof (e as { message: unknown }).message === "string" &&
+	(e as { message: string }).message.includes(
+		"This module cannot be imported from a Client Component module",
+	);
+
+const SERVER_ONLY_HINT = `Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`;
+
 export async function getConfig({
 	cwd,
 	configPath,
@@ -194,133 +319,60 @@ export async function getConfig({
 	configPath?: string;
 	shouldThrowOnError?: boolean;
 }) {
-	try {
-		let configFile: BetterAuthOptions | null = null;
-		if (configPath) {
-			let resolvedPath: string = path.join(cwd, configPath);
-			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
-			const { config } = await loadConfig<
-				| {
-						auth: {
-							options: BetterAuthOptions;
-						};
-				  }
-				| {
-						options: BetterAuthOptions;
-				  }
-			>({
-				configFile: resolvedPath,
-				dotenv: {
-					fileName: [".env", ".env.local"],
-				},
-				jitiOptions: jitiOptions(cwd),
-				cwd,
-			});
-			if (!("auth" in config) && !isDefaultExport(config)) {
-				if (shouldThrowOnError) {
-					throw new Error(
-						`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
-					);
-				}
-				console.error(
-					`[#better-auth]: Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
-				);
-				process.exit(1);
-			}
-			configFile = "auth" in config ? config.auth?.options : config.options;
-		}
-
-		if (!configFile) {
-			for (const possiblePath of possiblePaths) {
-				try {
-					const { config } = await loadConfig<{
-						auth: {
-							options: BetterAuthOptions;
-						};
-						default?: {
-							options: BetterAuthOptions;
-						};
-					}>({
-						configFile: possiblePath,
-						dotenv: {
-							fileName: [".env", ".env.local"],
-						},
-						jitiOptions: jitiOptions(cwd),
-						cwd,
-					});
-					const hasConfig = Object.keys(config).length > 0;
-					if (hasConfig) {
-						configFile =
-							config.auth?.options || config.default?.options || null;
-						if (!configFile) {
-							if (shouldThrowOnError) {
-								throw new Error(
-									"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
-								);
-							}
-							console.error("[#better-auth]: Couldn't read your auth config.");
-							console.log("");
-							console.log(
-								"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
-							);
-							process.exit(1);
-						}
-						break;
-					}
-				} catch (e) {
-					if (
-						typeof e === "object" &&
-						e &&
-						"message" in e &&
-						typeof e.message === "string" &&
-						e.message.includes(
-							"This module cannot be imported from a Client Component module",
-						)
-					) {
-						if (shouldThrowOnError) {
-							throw new Error(
-								`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-							);
-						}
-						console.error(
-							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-						);
-						process.exit(1);
-					}
-					if (shouldThrowOnError) {
-						throw e;
-					}
-					console.error("[#better-auth]: Couldn't read your auth config.", e);
-					process.exit(1);
-				}
-			}
-		}
-		return configFile;
-	} catch (e) {
-		if (
-			typeof e === "object" &&
-			e &&
-			"message" in e &&
-			typeof e.message === "string" &&
-			e.message.includes(
-				"This module cannot be imported from a Client Component module",
-			)
-		) {
-			if (shouldThrowOnError) {
-				throw new Error(
-					`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-				);
-			}
-			console.error(
-				`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-			);
-			process.exit(1);
-		}
-		if (shouldThrowOnError) {
-			throw e;
-		}
-
-		console.error("Couldn't read your auth config.", e);
+	const fail = (message: string, error?: unknown): never => {
+		if (shouldThrowOnError)
+			throw error instanceof Error ? error : new Error(message);
+		const log = `[#better-auth]: ${message}`;
+		if (error) console.error(log, error);
+		else console.error(log);
 		process.exit(1);
+	};
+
+	const load = (configFile: string) =>
+		loadConfig<{ options?: BetterAuthOptions }>({
+			configFile,
+			dotenv: { fileName: [".env", ".env.local"] },
+			jitiOptions: jitiOptions(cwd),
+			resolveModule: resolveAuthModule,
+			cwd,
+		});
+
+	try {
+		if (configPath) {
+			// If the configPath is a file, use it as is, as it means the path wasn't relative.
+			const resolvedPath = existsSync(configPath)
+				? configPath
+				: path.join(cwd, configPath);
+			const { config } = await load(resolvedPath);
+			const options = config?.options;
+			if (!options) {
+				return fail(
+					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+				);
+			}
+			return options;
+		}
+
+		for (const possiblePath of possiblePaths) {
+			let config: { options?: BetterAuthOptions };
+			try {
+				({ config } = await load(possiblePath));
+			} catch (e) {
+				if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
+				return fail("Couldn't read your auth config.", e);
+			}
+			// c12 returns `{}` when no file was found at this path; keep searching.
+			if (Object.keys(config).length === 0) continue;
+			if (!config.options) {
+				return fail(
+					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+				);
+			}
+			return config.options;
+		}
+		return null;
+	} catch (e) {
+		if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
+		return fail("Couldn't read your auth config.", e);
 	}
 }

@@ -4,65 +4,68 @@ description: Google provider setup and usage.
 ---
 
 <Steps>
-    <Step> 
-        ### Get your Google credentials
-        To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
+  <Step>
+    ### Get your Google credentials
 
-        In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
 
-        <Callout type="info">
-        **Creating Your Google OAuth Credentials**
+    In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
-        If you haven't created OAuth credentials yet, follow these step-by-step instructions:
+    <Callout type="info">
+      **Creating Your Google OAuth Credentials**
 
-        1. Open **Google Cloud Console** → **APIs & Services** → **Credentials**
-        2. Click **Create Credentials** → **OAuth client ID**
-        3. Choose **Web application**
-        4. Add your redirect URIs:
-           - `http://localhost:3000/api/auth/callback/google` (for local development)
-           - `https://your-domain.com/api/auth/callback/google` (for production)
-        5. Copy the **Client ID** and **Client Secret** into your environment variables
+      If you haven't created OAuth credentials yet, follow these step-by-step instructions:
 
-        These steps avoid common issues such as `redirect_uri_mismatch`.
-        </Callout>
-    </Step>
+      1. Open **Google Cloud Console** → **APIs & Services** → **Credentials**
+      2. Click **Create Credentials** → **OAuth client ID**
+      3. Choose **Web application**
+      4. Add your redirect URIs:
+         * `http://localhost:3000/api/auth/callback/google` (for local development)
+         * `https://your-domain.com/api/auth/callback/google` (for production)
+      5. Copy the **Client ID** and **Client Secret** into your environment variables
+
+      These steps avoid common issues such as `redirect_uri_mismatch`.
+    </Callout>
+  </Step>
 
   <Step>
-        ### Configure the provider
-        To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
+    ### Configure the provider
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
+    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
 
-        export const auth = betterAuth({
-            baseURL: process.env.BETTER_AUTH_URL, // [!code highlight]
-            socialProviders: {
-                google: { // [!code highlight]
-                    clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
-                    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, // [!code highlight]
-                }, // [!code highlight]
-            },
-        })
-        ```
-        <Callout type="warn">
-        **Important: Set Your Base URL**
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
 
-        You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors. Better Auth uses this to construct the OAuth callback URL sent to Google.
+    export const auth = betterAuth({
+        baseURL: process.env.BETTER_AUTH_URL, // [!code highlight]
+        socialProviders: {
+            google: { // [!code highlight]
+                clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
 
-        **Option 1: Environment Variable (Recommended)**
+    <Callout type="warn">
+      **Important: Set Your Base URL**
 
-        Add to your `.env` file:
-        ```dotenv
-        BETTER_AUTH_URL=https://your-domain.com
-        ```
+      You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors. Better Auth uses this to construct the OAuth callback URL sent to Google.
 
-        **Option 2: Explicit Configuration**
+      **Option 1: Environment Variable (Recommended)**
 
-        Pass `baseURL` directly in the auth config as shown above.
-        Without this, the callback URL may default to `localhost`, causing Google OAuth to fail in production.
-        </Callout>
-    </Step>
+      Add to your `.env` file:
 
+      ```dotenv
+      BETTER_AUTH_URL=https://your-domain.com
+      ```
+
+      **Option 2: Explicit Configuration**
+
+      Pass `baseURL` directly in the auth config as shown above.
+      Without this, the callback URL may default to `localhost`, causing Google OAuth to fail in production.
+    </Callout>
+  </Step>
 </Steps>
 
 ## Usage
@@ -71,7 +74,7 @@ description: Google provider setup and usage.
 
 To sign in with Google, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 
-- `provider`: The provider to use. It should be set to `google`.
+* `provider`: The provider to use. It should be set to `google`.
 
 ```ts title="auth-client.ts"  /
 import { createAuthClient } from "better-auth/client";
@@ -110,6 +113,38 @@ const data = await authClient.signIn.social({
   Plugin](/docs/plugins/one-tap) guide.
 </Callout>
 
+### Cross-Platform Sign In (Web, iOS, Android)
+
+Google issues a separate Client ID per platform in the same Google Cloud project. Pass an array to `clientId` to accept ID tokens from any of them. See [clientId](/docs/concepts/oauth#clientid) for the shared provider-option semantics.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: [ // [!code highlight]
+            process.env.GOOGLE_WEB_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_IOS_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_ANDROID_CLIENT_ID as string, // [!code highlight]
+        ], // [!code highlight]
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```
+
+Your mobile app signs in with the native Google SDK and forwards the ID token:
+
+```ts title="Mobile app"
+const { idToken, accessToken } = await GoogleSignin.signIn();
+
+await authClient.signIn.social({
+    provider: "google",
+    idToken: { token: idToken, accessToken },
+});
+```
+
+<Callout type="info">
+  The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `clientSecret` and `redirectURI`, so those cannot vary per platform within one provider block.
+</Callout>
+
 ### Always ask to select an account
 
 If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.
@@ -144,13 +179,59 @@ return (
 );
 ```
 
-This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
+This triggers a new OAuth flow that requests the additional scopes. The `scopes` you pass to `signIn.social` and `linkSocial` are **additive** to the provider's default scopes, not a replacement for them. Linking is incremental: the new scopes accumulate into the account's stored `grantedScopes` alongside any previously granted scopes.
+
+Whether a later flow can shrink that set depends on `includeGrantedScopes`. Token refresh never changes `grantedScopes` for any provider. With the default `includeGrantedScopes: true`, each sign-in resyncs `grantedScopes` to Google's combined grant, so a scope the user revoked in their Google account drops on the next sign-in (see [Incremental authorization](#incremental-authorization-includegrantedscopes) below). With `includeGrantedScopes: false`, the stored grant only grows and a narrower flow never removes a scope, so once an account holds Google Drive access it keeps it.
+
+```ts
+const drive = "https://www.googleapis.com/auth/drive.file";
+const { idToken } = await authClient.linkSocial({
+    provider: "google",
+    scopes: [drive],
+});
+// account.grantedScopes is now ["email", "openid", "profile", drive]
+```
+
+<Callout type="info">
+  The account's accumulated grant is stored as `grantedScopes`, a `string[]`, not the scopes echoed by the most recent token. The `list-accounts`, `get-access-token`, and `refresh-token` endpoints all return this `grantedScopes` array. With the default `includeGrantedScopes: true`, each Google sign-in resyncs the array to Google's authoritative combined grant; with `includeGrantedScopes: false` it is the union of every scope the user has granted this account over time.
+</Callout>
+
+To check whether an account already holds a scope before triggering another flow, use the `includesGrantedScope` helper:
+
+```ts title="auth.ts"
+import { includesGrantedScope } from "better-auth/oauth2";
+
+const accounts = await auth.api.listUserAccounts({ headers });
+const google = accounts.find((account) => account.providerId === "google");
+
+if (!includesGrantedScope(google?.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
+    // prompt the user to grant Drive access via linkSocial
+}
+```
 
 <Callout>
   Ensure you're using Better Auth version 1.2.7 or later to avoid "Social
   account already linked" errors when requesting additional scopes from the same
   provider.
 </Callout>
+
+### Incremental authorization (`includeGrantedScopes`)
+
+By default, Better Auth enables Google's [incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) by sending `include_granted_scopes=true`. Google then issues a token covering the project's full accumulated grant for the user, so a flow that only requests Drive access still returns a token that also carries the user's previously granted scopes.
+
+Because Google's token response is the authoritative combined grant under this setting, each sign-in **resyncs** the account's stored `grantedScopes` to it: the array is replaced, not merged. This keeps Better Auth in step with revocations. If the user removes your app's Drive access from their [Google account permissions](https://myaccount.google.com/permissions), the Drive scope is missing from the next token response, so it drops from `grantedScopes` on the next sign-in. The stored grant can therefore shrink in this configuration. Token refresh never changes `grantedScopes`, per [RFC 6749 §6](https://datatracker.ietf.org/doc/html/rfc6749#section-6); only a sign-in resync does.
+
+Set `includeGrantedScopes` to `false` to disable this and have each flow authorize only the scopes it requests. The grant then becomes **union-only**: `grantedScopes` accumulates across flows and never shrinks, so a narrower sign-in or refresh never removes a scope, and a revocation at Google is not reflected in the stored array. This matches the behavior of generic OAuth and most social providers, which never send `include_granted_scopes`.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        includeGrantedScopes: false, // [!code highlight]
+    },
+}
+```
 
 ### Always get refresh token
 
@@ -175,3 +256,19 @@ socialProviders: {
   already authorized your app, you must have them revoke your app's access in
   their Google account settings, then re-authorize.
 </Callout>
+
+### Restricting to a Google Workspace domain
+
+To limit sign-in to accounts in a specific Google Workspace domain, forward the
+`hd` parameter on the call. This mirrors Google's `hd` authorization-URL
+parameter and is resolved per request:
+
+```ts
+await authClient.signIn.social({
+  provider: "google",
+  additionalParams: { hd: "example.com" },
+});
+```
+
+You can also set `hd` at the provider config level if the restriction is static
+for your application.

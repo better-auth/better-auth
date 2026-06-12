@@ -5,10 +5,9 @@ import type {
 	ClientStore,
 } from "@better-auth/core";
 import type {
-	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
 	InferDBFieldsOutput,
 } from "@better-auth/core/db";
-import type { RawError } from "@better-auth/core/utils/error-codes";
 import type { InferFieldsInputClient } from "../db/field";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
@@ -20,16 +19,23 @@ export type {
 	BetterAuthClientPlugin,
 };
 
+type ClientPluginError<K extends string = string> = {
+	readonly code: K;
+	message: string;
+};
+
 type InferPluginEndpoints<Plugins> =
 	Plugins extends Array<infer Pl>
 		? UnionToIntersection<
 				Pl extends {
-					$InferServerPlugin: infer Plug;
+					$InferServerPlugin?: infer Plug;
 				}
 					? Plug extends {
-							endpoints: infer Endpoints;
+							endpoints?: infer Endpoints;
 						}
-						? Endpoints
+						? Endpoints extends Record<string, unknown>
+							? Endpoints
+							: {}
 						: {}
 					: {}
 			>
@@ -46,8 +52,10 @@ export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 export type InferActions<O extends BetterAuthClientOptions> =
 	(O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
-				Plugin extends BetterAuthClientPlugin
-					? Plugin["getActions"] extends (...args: any) => infer Actions
+				Plugin extends {
+					getActions?: infer GetActions;
+				}
+					? GetActions extends (...args: any) => infer Actions
 						? Actions
 						: {}
 					: {}
@@ -60,9 +68,11 @@ export type InferActions<O extends BetterAuthClientOptions> =
 			}
 				? Plugins extends Array<infer Plugin>
 					? Plugin extends {
-							endpoints: infer Endpoints;
+							endpoints?: infer Endpoints;
 						}
-						? Endpoints
+						? Endpoints extends Record<string, unknown>
+							? Endpoints
+							: {}
 						: {}
 					: {}
 				: {},
@@ -72,11 +82,13 @@ export type InferActions<O extends BetterAuthClientOptions> =
 export type InferErrorCodes<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
-				Plugin extends BetterAuthClientPlugin
-					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
+				Plugin extends {
+					$InferServerPlugin?: infer ServerPlugin;
+				}
+					? ServerPlugin extends { $ERROR_CODES?: infer E }
 						? {
-								[K in keyof E & string]: E[K] extends RawError
-									? RawError<K>
+								[K in keyof E & string]: E[K] extends ClientPluginError
+									? ClientPluginError<K>
 									: never;
 							}
 						: {}
@@ -105,12 +117,16 @@ export type InferAdditionalFromClient<
 	Format extends "input" | "output" = "output",
 > =
 	Options["plugins"] extends Array<infer Plugin>
-		? Plugin extends BetterAuthClientPlugin
-			? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
-				? Schema extends BetterAuthPluginDBSchema
-					? Format extends "input"
-						? InferFieldsInputClient<Schema[Key]["fields"]>
-						: InferDBFieldsOutput<Schema[Key]["fields"]>
+		? Plugin extends {
+				$InferServerPlugin?: infer ServerPlugin;
+			}
+			? ServerPlugin extends { schema?: infer Schema }
+				? Schema extends Record<Key, { fields: infer Fields }>
+					? Fields extends Record<string, DBFieldAttribute>
+						? Format extends "input"
+							? InferFieldsInputClient<Fields>
+							: InferDBFieldsOutput<Fields>
+						: {}
 					: {}
 				: {}
 			: {}

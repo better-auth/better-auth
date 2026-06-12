@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { verifyJwsAccessToken } from "better-auth/oauth2";
+import { getJwks } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
+import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -13,12 +15,14 @@ import type {
 	Scope,
 } from "./types";
 import {
-	basicToClientCredentials,
+	destructureCredentials,
+	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
+	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
 
@@ -45,25 +49,33 @@ async function validateJwtAccessToken(
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
+	const baseURL = ctx.context.baseURL ?? "";
+	const userInfoAud = `${baseURL}/oauth2/userinfo`;
+	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
 	let jwtPayload: JWTPayload & {
 		sid?: string;
 		azp?: string;
 	};
 
 	try {
-		jwtPayload = await verifyJwsAccessToken(token, {
-			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
-				? jwtPluginOptions.jwks.remoteUrl
-				: async () => {
-						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-						// @ts-expect-error response is a JSONWebKeySet but within the response field
-						return jwksRes?.response as JSONWebKeySet | undefined;
-					},
-			verifyOptions: {
-				audience: opts.validAudiences ?? ctx.context.baseURL,
-				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
+		// here, then validate `aud` manually against the resource model below.
+		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
+			? jwtPluginOptions.jwks.remoteUrl
+			: async (): Promise<JSONWebKeySet | undefined> => {
+					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return jwksRes?.response as JSONWebKeySet | undefined;
+				};
+		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
+			token,
+			createLocalJWKSet(jwks),
+			{
+				issuer: expectedIssuer,
 			},
-		});
+		);
+		jwtPayload = verified.payload;
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.name === "TypeError" || error.name === "JWSInvalid") {
@@ -77,7 +89,7 @@ async function validateJwtAccessToken(
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
-				// audience or issuer mismatch
+				// issuer or other JWT claim validation failure
 				return {
 					active: false,
 				};
@@ -87,43 +99,66 @@ async function validateJwtAccessToken(
 		throw new Error(error as unknown as string);
 	}
 
-	let client: SchemaClient<Scope[]> | null | undefined;
-	if (jwtPayload.azp) {
-		client = await getClient(ctx, opts, jwtPayload.azp);
-		if (!client || client?.disabled) {
-			return {
-				active: false,
-			};
-		}
-		if (clientId && jwtPayload.azp !== clientId) {
-			return {
-				active: false,
-			};
-		}
+	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
+	// the `aud` claim must resolve to a legitimate resource target:
+	//   1. baseURL + /oauth2/userinfo (OIDC implicit),
+	//   2. a known `oauthResource` row (deleted → inactive; disabled rows
+	//      still verify — the "block new issuance, existing tokens continue
+	//      to verify until expiry" lifecycle contract).
+	//
+	// All-must-resolve semantics matter for the deleted-resource contract: a
+	// token issued with `aud: [<resource>, userInfoAud]` and then having
+	// `<resource>` deleted from the AS must hard-reject. "Any valid"
+	// semantics would let the always-valid userinfo audience value mask the
+	// deletion.
+	const rawAud = jwtPayload.aud;
+	if (!(await isAudienceClaimAllowed(ctx, opts, rawAud, [userInfoAud]))) {
+		return { active: false };
 	}
 
-	// Validate JWT against its session if it exists
+	// An OAuth access token issued by this provider always carries an `azp`
+	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
+	// JWT plugin shares the same issuer, audience convention, and signing keys, so
+	// a plain session JWT (e.g. from its `/token` endpoint) can otherwise satisfy
+	// the signature/issuer/audience checks above. Such a token was never issued
+	// through the OAuth token endpoint and has no client or consent binding, so
+	// it must not be reported as an active access token. Require `azp` and a
+	// matching, enabled client before considering the token active.
+	if (!jwtPayload.azp) {
+		return {
+			active: false,
+		};
+	}
+	const client = await getClient(ctx, opts, jwtPayload.azp);
+	if (!client || client?.disabled) {
+		return {
+			active: false,
+		};
+	}
+	if (clientId && jwtPayload.azp !== clientId) {
+		return {
+			active: false,
+		};
+	}
+
+	// A JWT access token carrying `sid` is bound to that OP session; once the
+	// session has ended (sign-out, admin revoke, back-channel logout...) the
+	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
+	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
+			where: [{ field: "id", value: sessionId }],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			jwtPayload.sid = undefined;
+			return { active: false };
 		}
 	}
 
 	// Return the JWT payload in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	if (jwtPayload.azp) {
-		jwtPayload.client_id = jwtPayload.azp;
-	}
+	jwtPayload.client_id = jwtPayload.azp;
 	jwtPayload.active = true;
 	return jwtPayload;
 }
@@ -177,6 +212,11 @@ async function validateOpaqueAccessToken(
 			active: false,
 		};
 	}
+	if (accessToken.revoked) {
+		return {
+			active: false,
+		};
+	}
 
 	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
@@ -193,7 +233,11 @@ async function validateOpaqueAccessToken(
 		}
 	}
 
-	let sessionId = accessToken.sessionId ?? undefined;
+	// An opaque access token bound to a session (every authorization-code token;
+	// client-credentials tokens have no sessionId) dies with that session. This
+	// mirrors the JWT path so revocation is a function of session state and does
+	// not depend solely on the `revoked` flag written by the session-delete hook.
+	const sessionId = accessToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -205,13 +249,23 @@ async function validateOpaqueAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
+			return { active: false };
 		}
 	}
 
 	let user: User | null | undefined;
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
+	}
+	const resources = Array.isArray(accessToken.resources)
+		? accessToken.resources
+		: undefined;
+	const audienceClaim = resources ? [...resources] : undefined;
+	if (audienceClaim?.length && accessToken.scopes?.includes("openid")) {
+		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+		if (!audienceClaim.includes(userInfoEndpoint)) {
+			audienceClaim.push(userInfoEndpoint);
+		}
 	}
 
 	// Add Custom Claims
@@ -220,6 +274,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
+				resources,
 				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
@@ -234,6 +289,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		aud: toAudienceClaim(audienceClaim),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
@@ -288,14 +344,14 @@ async function validateRefreshToken(
 		};
 	}
 
-	let sessionId: string | undefined = refreshToken.sessionId ?? undefined;
+	let sessionId = refreshToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
 			where: [
 				{
 					field: "id",
-					value: refreshToken.sessionId,
+					value: sessionId,
 				},
 			],
 		});
@@ -397,26 +453,32 @@ export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		token,
-		token_type_hint,
-	}: {
-		client_id?: string;
-		client_secret?: string;
+	let { token, token_type_hint } = ctx.body as {
 		token: string;
-		token_type_hint?: "access_token" | "refresh_token";
-	} = ctx.body;
+		token_type_hint?: string;
+	};
 
-	// Convert basic authorization
-	const authorization = ctx.request?.headers.get("authorization") || null;
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
+	// RFC 7662 §2.1: unknown hints are ignored and detection falls back to
+	// trying both supported token types.
+	if (
+		token_type_hint !== "access_token" &&
+		token_type_hint !== "refresh_token"
+	) {
+		token_type_hint = undefined;
 	}
-	if (!client_id || !client_secret) {
+
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/introspect`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
+
+	if (!client_id || (!client_secret && !preVerifiedClient)) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -440,6 +502,8 @@ export async function introspectEndpoint(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	try {

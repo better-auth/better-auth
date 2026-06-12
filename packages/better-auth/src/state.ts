@@ -14,6 +14,11 @@ const stateDataSchema = z.looseObject({
 	errorURL: z.string().optional(),
 	newUserURL: z.string().optional(),
 	expiresAt: z.number(),
+	/**
+	 * CSRF nonce returned to the OAuth provider. When using cookie state storage,
+	 * this must match the callback `state` query parameter.
+	 */
+	oauthState: z.string().optional(),
 	link: z
 		.object({
 			email: z.string(),
@@ -21,12 +26,26 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	/**
+	 * The effective set of scopes requested in the authorization URL, captured
+	 * from `createAuthorizationURL`. Persisted so the callback can fall back to
+	 * the request when the provider omits `scope` from its token response
+	 * (RFC 6749 §5.1).
+	 */
+	requestedScopes: z.array(z.string()).optional(),
+	/**
+	 * Server-controlled values that ride the state across the provider redirect.
+	 * Populated only by `generateState` from `addOAuthServerContext`, never from
+	 * the request body, so it is safe to trust on the callback.
+	 */
+	serverContext: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
 export type StateErrorCode =
 	| "state_generation_error"
+	| "state_not_found"
 	| "state_invalid"
 	| "state_mismatch"
 	| "state_security_mismatch";
@@ -34,26 +53,36 @@ export type StateErrorCode =
 export class StateError extends BetterAuthError {
 	code: string;
 	details?: Record<string, any>;
+	/**
+	 * The per-flow `errorCallbackURL` recovered from the parsed state, when the
+	 * failure happened after the state was successfully parsed (for example a
+	 * nonce or state-cookie mismatch). It was origin-validated at sign-in, so
+	 * the callback can safely redirect there instead of the default error page.
+	 * Absent when the state could not be parsed at all.
+	 */
+	errorURL?: string;
 
 	constructor(
 		message: string,
 		options: ErrorOptions & {
 			code: StateErrorCode;
 			details?: Record<string, any>;
+			errorURL?: string;
 		},
 	) {
 		super(message, options);
 		this.code = options.code;
 		this.details = options.details;
+		this.errorURL = options.errorURL;
 	}
 }
 
 export async function generateGenericState(
 	c: GenericEndpointContext,
 	stateData: StateData,
-	settings?: { cookieName: string },
+	settings?: { cookieName?: string; oauthState?: string },
 ) {
-	const state = generateRandomString(32);
+	const state = settings?.oauthState ?? generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	// Cookie strategy:
@@ -61,9 +90,10 @@ export async function generateGenericState(
 	// State data is encrypted into the cookie
 	// no verification record created
 	if (storeStateStrategy === "cookie") {
+		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
 			key: c.context.secretConfig,
-			data: JSON.stringify(stateData),
+			data: JSON.stringify(payload),
 		});
 
 		const stateCookie = c.context.createAuthCookie(
@@ -103,7 +133,10 @@ export async function generateGenericState(
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
+		value: JSON.stringify({
+			...stateData,
+			oauthState: state,
+		} satisfies StateData),
 		identifier: state,
 		expiresAt,
 	});
@@ -128,9 +161,15 @@ export async function generateGenericState(
 
 export async function parseGenericState(
 	c: GenericEndpointContext,
-	state: string,
-	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
+	state: string | undefined,
+	settings?: { cookieName?: string; skipStateCookieCheck?: boolean },
 ) {
+	if (!state) {
+		throw new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+	}
+
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 
@@ -166,6 +205,17 @@ export async function parseGenericState(
 			);
 		}
 
+		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+					errorURL: parsedData.errorURL,
+				},
+			);
+		}
+
 		// Clear the cookie after successful parsing
 		expireCookie(c, stateCookie);
 	} else {
@@ -179,6 +229,20 @@ export async function parseGenericState(
 		}
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
+
+		if (
+			parsedData.oauthState !== undefined &&
+			parsedData.oauthState !== state
+		) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+					errorURL: parsedData.errorURL,
+				},
+			);
+		}
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",
@@ -208,6 +272,7 @@ export async function parseGenericState(
 			throw new StateError("State mismatch: State not persisted correctly", {
 				code: "state_security_mismatch",
 				details: { state },
+				errorURL: parsedData.errorURL,
 			});
 		}
 
@@ -224,6 +289,7 @@ export async function parseGenericState(
 			details: {
 				expiresAt: parsedData.expiresAt,
 			},
+			errorURL: parsedData.errorURL,
 		});
 	}
 

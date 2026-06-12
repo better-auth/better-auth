@@ -311,6 +311,23 @@ export interface SecondaryStorage {
 	 * @returns - Value of the key
 	 */
 	get: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically get a value and delete it from storage.
+	 */
+	getAndDelete: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically increment the counter at `key` by one, returning the
+	 * post-increment value.
+	 *
+	 * When the key is absent, it is created with a value of `1` and the given
+	 * `ttl` (in SECONDS). The TTL is applied only on creation; later increments
+	 * never extend it, so the counter expires a fixed window after it was first
+	 * created.
+	 *
+	 * Required so secondary-storage-backed rate limiting can enforce the limit
+	 * in one distributed-safe operation.
+	 */
+	increment: (key: string, ttl: number) => Awaitable<number>;
 	set: (
 		/**
 		 * Key to store

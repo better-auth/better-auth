@@ -1,7 +1,17 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import * as saml from "samlify";
+import { resolveSigningCerts } from "../saml";
+import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
+import { normalizePem, safeJsonParse } from "../utils";
+
+/**
+ * Same as `normalizePem`, but applied across the resolved list of IdP signing
+ * certificates so multi-cert rotation configs survive the line-trim step.
+ */
+function normalizePemList(certs: string[] | undefined): string[] | undefined {
+	if (!certs) return certs;
+	return certs.map((pem) => normalizePem(pem) ?? pem);
+}
 
 export async function findSAMLProvider(
 	providerId: string,
@@ -42,37 +52,70 @@ export function createSP(
 	config: SAMLConfig,
 	baseURL: string,
 	providerId: string,
-	sloOptions?: {
-		wantLogoutRequestSigned?: boolean;
-		wantLogoutResponseSigned?: boolean;
+	opts?: {
+		clockSkew?: number;
+		relayState?: string;
+		sloOptions?: {
+			wantLogoutRequestSigned?: boolean;
+			wantLogoutResponseSigned?: boolean;
+		};
 	},
 ) {
+	const spData = config.spMetadata;
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
+	const acsUrl = `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+
+	// When no SP metadata XML is provided, generate it so samlify can read
+	// authnRequestsSigned and other flags that only work via metadata.
+	let metadata = spData?.metadata;
+	if (!metadata) {
+		metadata =
+			saml
+				.SPMetadata({
+					entityID: spData?.entityID || config.issuer,
+					assertionConsumerService: [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: acsUrl,
+						},
+					],
+					singleLogoutService: opts?.sloOptions
+						? [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+									Location: sloLocation,
+								},
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+									Location: sloLocation,
+								},
+							]
+						: undefined,
+					wantMessageSigned: config.wantAssertionsSigned || false,
+					authnRequestsSigned: config.authnRequestsSigned || false,
+					nameIDFormat: config.identifierFormat
+						? [config.identifierFormat]
+						: undefined,
+				})
+				.getMetadata() || "";
+	}
+
 	return saml.ServiceProvider({
-		entityID: config.spMetadata?.entityID || config.issuer,
-		assertionConsumerService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location:
-					config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`,
-			},
-		],
-		singleLogoutService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location: sloLocation,
-			},
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-				Location: sloLocation,
-			},
-		],
-		wantMessageSigned: config.wantAssertionsSigned || false,
-		wantLogoutRequestSigned: sloOptions?.wantLogoutRequestSigned ?? false,
-		wantLogoutResponseSigned: sloOptions?.wantLogoutResponseSigned ?? false,
-		metadata: config.spMetadata?.metadata,
-		privateKey: config.spMetadata?.privateKey || config.privateKey,
-		privateKeyPass: config.spMetadata?.privateKeyPass,
+		metadata,
+		allowCreate: true,
+		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
+		wantLogoutResponseSigned:
+			opts?.sloOptions?.wantLogoutResponseSigned ?? false,
+		privateKey: normalizePem(spData?.privateKey || config.privateKey),
+		privateKeyPass: spData?.privateKeyPass,
+		isAssertionEncrypted: spData?.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(spData?.encPrivateKey),
+		encPrivateKeyPass: spData?.encPrivateKeyPass,
+		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
 	});
 }
 
@@ -81,9 +124,10 @@ export function createIdP(config: SAMLConfig) {
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
 			metadata: idpData.metadata,
-			privateKey: idpData.privateKey,
+			privateKey: normalizePem(idpData.privateKey),
 			privateKeyPass: idpData.privateKeyPass,
-			encPrivateKey: idpData.encPrivateKey,
+			isAssertionEncrypted: idpData.isAssertionEncrypted,
+			encPrivateKey: normalizePem(idpData.encPrivateKey),
 			encPrivateKeyPass: idpData.encPrivateKeyPass,
 		});
 	}
@@ -96,7 +140,11 @@ export function createIdP(config: SAMLConfig) {
 			},
 		],
 		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: idpData?.cert || config.cert,
+		signingCert: normalizePemList(resolveSigningCerts(config)),
+		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
+		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(idpData?.encPrivateKey),
+		encPrivateKeyPass: idpData?.encPrivateKeyPass,
 	});
 }
 

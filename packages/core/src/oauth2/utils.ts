@@ -1,5 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { OAuth2Tokens } from "./oauth-provider";
+import { parseScopeField } from "./scopes";
 
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	const getDate = (seconds: number) => {
@@ -17,15 +18,43 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		refreshTokenExpiresAt: data.refresh_token_expires_in
 			? getDate(data.refresh_token_expires_in)
 			: undefined,
-		scopes: data?.scope
-			? typeof data.scope === "string"
-				? data.scope.split(" ")
-				: data.scope
-			: [],
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 		// Preserve the raw token response for provider-specific fields
 		raw: data,
 	};
+}
+
+/**
+ * Fill in `accessTokenExpiresAt` from the provider's configured
+ * `accessTokenExpiresIn` when the token response omitted `expires_in`. Without a
+ * known expiry, `getAccessToken` cannot tell the token is expired and never
+ * refreshes it. No-op when the provider already supplied an expiry or no
+ * fallback is configured.
+ */
+export function applyDefaultAccessTokenExpiry(
+	tokens: OAuth2Tokens,
+	accessTokenExpiresIn: number | undefined,
+): OAuth2Tokens {
+	if (!tokens.accessTokenExpiresAt && accessTokenExpiresIn) {
+		tokens.accessTokenExpiresAt = new Date(
+			Date.now() + accessTokenExpiresIn * 1000,
+		);
+	}
+	return tokens;
+}
+
+/**
+ * Return the provider's primary Client ID: the single string, or the entry at
+ * array index 0 for the cross-platform form used by ID token audience
+ * verification. Index 0 is the designated primary and pairs with
+ * `clientSecret` for the authorization code flow; later array entries are
+ * only used as additional accepted audiences. Returns `undefined` when the
+ * primary value is missing or an empty string.
+ */
+export function getPrimaryClientId(clientId: unknown): string | undefined {
+	const value = Array.isArray(clientId) ? clientId[0] : clientId;
+	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 export async function generateCodeChallenge(codeVerifier: string) {

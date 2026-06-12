@@ -8,6 +8,10 @@
  * @see https://openid.net/specs/openid-connect-discovery-1_0.html
  */
 
+import {
+	classifyHost,
+	isPublicRoutableHost,
+} from "@better-auth/core/utils/host";
 import { betterFetch } from "@better-fetch/fetch";
 import type { OIDCConfig } from "../types";
 import type {
@@ -124,6 +128,171 @@ export function validateDiscoveryUrl(
 }
 
 /**
+ * Validate that a user-supplied OIDC endpoint URL is safe to fetch.
+ *
+ * Layered checks (in order):
+ *   1. URL parsing + http(s) scheme            → discovery_invalid_url
+ *   2. Public-routable host (RFC 6890)         → allowed
+ *   3. Operator-allowlisted via trustedOrigins → allowed (opt-in for internal IdPs)
+ *   4. Otherwise                               → discovery_private_host
+ *
+ * Step 2 rejects loopback, RFC 1918, link-local, ULA, shared-address,
+ * cloud-metadata FQDNs (e.g. `169.254.169.254`, `metadata.google.internal`),
+ * multicast, and reserved ranges. See `isPublicRoutableHost` in
+ * `@better-auth/core/utils/host`.
+ *
+ * Step 3 is the documented escape hatch for customers whose IdP runs on a
+ * private network or behind a corporate VPN: they add the IdP origin to their
+ * `trustedOrigins` configuration.
+ *
+ * @param name - The endpoint field name, used in error messages
+ * @param endpoint - The URL to validate
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError(discovery_invalid_url)  — malformed URL or non-http(s) scheme
+ * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
+ */
+function validateSkipDiscoveryEndpoint(
+	name: string,
+	endpoint: string,
+	isTrustedOrigin: (url: string) => boolean,
+): void {
+	const parsed = parseURL(name, endpoint);
+	if (isPublicRoutableHost(parsed.hostname)) return;
+	if (isTrustedOrigin(parsed.toString())) return;
+	throw new DiscoveryError(
+		"discovery_private_host",
+		`The ${name} URL (${parsed.toString()}) is not publicly routable: ${parsed.hostname}. If this is an internal IdP, add its origin to trustedOrigins.`,
+		{ endpoint: name, url: endpoint, hostname: parsed.hostname },
+	);
+}
+
+/**
+ * Validate every present OIDC endpoint URL in a registration or update body.
+ *
+ * Each provided URL is checked with {@link validateSkipDiscoveryEndpoint}.
+ * Omitted (undefined / null / empty) fields are skipped.
+ *
+ * @param config - OIDC endpoint URLs from the request body
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError on the first invalid endpoint
+ */
+export function validateSkipDiscoveryEndpoints(
+	config: {
+		authorizationEndpoint?: string | null;
+		tokenEndpoint?: string | null;
+		userInfoEndpoint?: string | null;
+		jwksEndpoint?: string | null;
+		discoveryEndpoint?: string | null;
+	},
+	isTrustedOrigin: (url: string) => boolean,
+): void {
+	const fields: Array<[string, string | null | undefined]> = [
+		["authorizationEndpoint", config.authorizationEndpoint],
+		["tokenEndpoint", config.tokenEndpoint],
+		["userInfoEndpoint", config.userInfoEndpoint],
+		["jwksEndpoint", config.jwksEndpoint],
+		["discoveryEndpoint", config.discoveryEndpoint],
+	];
+	for (const [name, url] of fields) {
+		if (url) validateSkipDiscoveryEndpoint(name, url, isTrustedOrigin);
+	}
+}
+
+/**
+ * Re-validate an endpoint by resolving its hostname and rejecting any resolved
+ * address that is not publicly routable.
+ *
+ * {@link validateSkipDiscoveryEndpoint} only classifies the literal hostname, so
+ * a host like `idp.example` whose DNS record points at `127.0.0.1`,
+ * `169.254.169.254`, or an RFC 1918 address passes that check unchanged. This
+ * function closes that gap by performing the same RFC 6890 classification on the
+ * addresses the host actually resolves to, right before the server-side fetch.
+ *
+ * Best-effort by design:
+ *   - Operator-allowlisted origins (trustedOrigins) are skipped — this is the
+ *     documented escape hatch for internal IdPs.
+ *   - IP-literal hosts are already fully covered by the synchronous check.
+ *   - On runtimes without `node:dns` (e.g. Cloudflare Workers / edge), DNS
+ *     resolution is unavailable; we fall back to the synchronous host check and
+ *     the platform's own egress controls.
+ *
+ * Note: this resolves once and validates the result; it does not pin the address
+ * for the subsequent connection, so a change in the resolved address between
+ * this lookup and the fetch remains theoretically possible. It nonetheless
+ * rejects the common case of a DNS record that statically points at an internal
+ * address.
+ *
+ * @throws DiscoveryError(discovery_private_host) if any resolved address is not public
+ */
+export async function assertEndpointResolvesPublic(
+	name: string,
+	endpoint: string,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<void> {
+	const parsed = parseURL(name, endpoint);
+
+	// Operator opt-in for internal IdPs (mirrors validateSkipDiscoveryEndpoint).
+	if (isTrustedOrigin(parsed.toString())) return;
+
+	const host = parsed.hostname;
+	// IP literals are already classified synchronously; only FQDNs need resolving.
+	if (classifyHost(host).literal !== "fqdn") return;
+
+	let dns: typeof import("node:dns/promises");
+	try {
+		dns = await import("node:dns/promises");
+	} catch {
+		// Runtime without node:dns — rely on the synchronous host check.
+		return;
+	}
+
+	let resolved: Array<{ address: string }>;
+	try {
+		resolved = await dns.lookup(host, { all: true });
+	} catch {
+		// Resolution failure: let the actual fetch surface the network error.
+		return;
+	}
+
+	for (const { address } of resolved) {
+		if (!isPublicRoutableHost(address)) {
+			throw new DiscoveryError(
+				"discovery_private_host",
+				`The ${name} host "${host}" resolves to a non-publicly-routable address (${address}). If this is an internal IdP, add its origin to trustedOrigins.`,
+				{ endpoint: name, url: endpoint, hostname: host, resolved: address },
+			);
+		}
+	}
+}
+
+/**
+ * Re-validate, at fetch time, every OIDC endpoint that is fetched server-side
+ * (token, userinfo, jwks). Runs the synchronous host classification plus the
+ * best-effort DNS resolution check. `authorizationEndpoint` is intentionally
+ * excluded — it is a browser redirect target, not a server-side fetch, so these
+ * checks don't apply to it.
+ */
+export async function assertOIDCEndpointsResolvePublic(
+	config: {
+		tokenEndpoint?: string | null;
+		userInfoEndpoint?: string | null;
+		jwksEndpoint?: string | null;
+	},
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<void> {
+	const fields: Array<[string, string | null | undefined]> = [
+		["tokenEndpoint", config.tokenEndpoint],
+		["userInfoEndpoint", config.userInfoEndpoint],
+		["jwksEndpoint", config.jwksEndpoint],
+	];
+	for (const [name, url] of fields) {
+		if (!url) continue;
+		validateSkipDiscoveryEndpoint(name, url, isTrustedOrigin);
+		await assertEndpointResolvesPublic(name, url, isTrustedOrigin);
+	}
+}
+
+/**
  * Fetch the OIDC discovery document from the IdP.
  *
  * @param url - The discovery endpoint URL
@@ -139,6 +308,11 @@ export async function fetchDiscoveryDocument(
 		const response = await betterFetch<OIDCDiscoveryDocument>(url, {
 			method: "GET",
 			timeout,
+			// Never auto-follow redirects on this server-side fetch. A redirect
+			// Location is not re-validated against the private-host checks, so a
+			// redirect could send the fetch to an internal/loopback/metadata
+			// address. Reject redirects outright.
+			redirect: "error",
 		});
 
 		if (response.error) {
@@ -447,8 +621,11 @@ function parseURL(name: string, endpoint: string, base?: string) {
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
-	existing?: "client_secret_basic" | "client_secret_post",
-): "client_secret_basic" | "client_secret_post" {
+	existing?: "client_secret_basic" | "client_secret_post" | "private_key_jwt",
+): "client_secret_basic" | "client_secret_post" | "private_key_jwt" {
+	if (existing === "private_key_jwt") {
+		return existing;
+	}
 	if (existing) {
 		return existing;
 	}
@@ -465,6 +642,13 @@ export function selectTokenEndpointAuthMethod(
 
 	if (supported.includes("client_secret_post")) {
 		return "client_secret_post";
+	}
+
+	// If only private_key_jwt is advertised, select it so the config
+	// accurately reflects what the IdP requires. The caller must still
+	// provide key material (resolvePrivateKey or defaultSSO inline key).
+	if (supported.includes("private_key_jwt")) {
+		return "private_key_jwt";
 	}
 
 	return "client_secret_basic";
@@ -506,20 +690,22 @@ export async function ensureRuntimeDiscovery(
 	issuer: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): Promise<OIDCConfig> {
-	if (!needsRuntimeDiscovery(config)) {
-		return config;
+	let resolved = config;
+	if (needsRuntimeDiscovery(config)) {
+		const hydrated = await discoverOIDCConfig({
+			issuer,
+			existingConfig: config,
+			isTrustedOrigin,
+		});
+		resolved = {
+			...config,
+			authorizationEndpoint: hydrated.authorizationEndpoint,
+			tokenEndpoint: hydrated.tokenEndpoint,
+			tokenEndpointAuthentication: hydrated.tokenEndpointAuthentication,
+			userInfoEndpoint: hydrated.userInfoEndpoint,
+			jwksEndpoint: hydrated.jwksEndpoint,
+		};
 	}
-	const hydrated = await discoverOIDCConfig({
-		issuer,
-		existingConfig: config,
-		isTrustedOrigin,
-	});
-	return {
-		...config,
-		authorizationEndpoint: hydrated.authorizationEndpoint,
-		tokenEndpoint: hydrated.tokenEndpoint,
-		tokenEndpointAuthentication: hydrated.tokenEndpointAuthentication,
-		userInfoEndpoint: hydrated.userInfoEndpoint,
-		jwksEndpoint: hydrated.jwksEndpoint,
-	};
+	await assertOIDCEndpointsResolvePublic(resolved, isTrustedOrigin);
+	return resolved;
 }

@@ -21,7 +21,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
+          "grantedScopes": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "idToken": {
@@ -40,9 +47,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
-          "scope": {
-            "type": "string",
-          },
           "updatedAt": {
             "format": "date-time",
             "type": "string",
@@ -52,6 +56,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "accountId",
           "providerId",
           "userId",
@@ -72,6 +77,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "ipAddress": {
@@ -92,6 +98,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "expiresAt",
           "token",
           "createdAt",
@@ -116,6 +123,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "boolean",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "image": {
@@ -138,8 +146,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "name",
           "email",
+          "emailVerified",
           "createdAt",
           "updatedAt",
           "role",
@@ -158,6 +168,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "id": {
+            "readOnly": true,
             "type": "string",
           },
           "identifier": {
@@ -173,6 +184,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
+          "id",
           "identifier",
           "value",
           "expiresAt",
@@ -482,11 +494,34 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "properties": {
+                  "code": {
+                    "type": "string",
+                  },
+                  "device_id": {
+                    "type": "string",
+                  },
+                  "error": {
+                    "type": "string",
+                  },
+                  "error_description": {
+                    "type": "string",
+                  },
+                  "iss": {
+                    "type": "string",
+                  },
+                  "state": {
+                    "type": "string",
+                  },
+                  "user": {
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
             },
           },
+          "required": false,
         },
         "responses": {
           "400": {
@@ -608,10 +643,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "callbackURL": {
                     "description": "The URL to redirect to after email verification",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "newEmail": {
                     "description": "The new email address to set must be a valid email address",
@@ -787,10 +819,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "revokeOtherSessions": {
                     "description": "Must be a boolean value",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                 },
                 "required": [
@@ -1159,10 +1188,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "name": "callbackURL",
             "schema": {
               "description": "The URL to redirect to after deletion",
-              "type": [
-                "string",
-                "null",
-              ],
+              "type": "string",
             },
           },
         ],
@@ -1437,10 +1463,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "accountId": {
                     "description": "The account ID associated with the refresh token",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
                     "description": "The provider ID for the OAuth provider",
@@ -1448,10 +1471,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "userId": {
                     "description": "The user ID associated with the account",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -1591,7 +1611,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1604,7 +1623,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
@@ -1718,7 +1740,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       },
       "post": {
         "description": "Get the current session",
-        "operationId": "getSession",
+        "operationId": "getSessionPost",
         "parameters": [],
         "requestBody": {
           "content": {
@@ -1735,7 +1757,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1748,7 +1769,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
@@ -1872,94 +1896,120 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
                   },
                   "callbackURL": {
                     "description": "The URL to redirect to after the user has signed in",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "disableRedirect": {
                     "description": "Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "errorCallbackURL": {
                     "description": "The URL to redirect to if there is an error during the link process",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "idToken": {
-                    "description": undefined,
                     "properties": {
                       "accessToken": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "nonce": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "refreshToken": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "scopes": {
-                        "description": undefined,
-                        "type": [
-                          "array",
-                          "null",
-                        ],
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
                       },
                       "token": {
-                        "description": undefined,
                         "type": "string",
                       },
                     },
                     "required": [
                       "token",
                     ],
-                    "type": [
-                      "object",
-                      "null",
-                    ],
+                    "type": "object",
                   },
-                  "provider": {
-                    "description": undefined,
+                  "loginHint": {
+                    "description": "The login hint to use for the authorization code request",
                     "type": "string",
                   },
-                  "requestSignUp": {
-                    "description": undefined,
-                    "type": [
-                      "boolean",
-                      "null",
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "apple",
+                          "atlassian",
+                          "cognito",
+                          "discord",
+                          "facebook",
+                          "figma",
+                          "github",
+                          "microsoft",
+                          "google",
+                          "huggingface",
+                          "slack",
+                          "spotify",
+                          "twitch",
+                          "twitter",
+                          "dropbox",
+                          "kick",
+                          "linear",
+                          "linkedin",
+                          "gitlab",
+                          "tiktok",
+                          "reddit",
+                          "roblox",
+                          "salesforce",
+                          "vk",
+                          "zoom",
+                          "notion",
+                          "kakao",
+                          "naver",
+                          "line",
+                          "paybin",
+                          "paypal",
+                          "polar",
+                          "railway",
+                          "vercel",
+                          "wechat",
+                        ],
+                        "type": "string",
+                      },
+                      {
+                        "type": "string",
+                      },
                     ],
+                  },
+                  "requestSignUp": {
+                    "type": "boolean",
                   },
                   "scopes": {
                     "description": "Additional scopes to request from the provider",
-                    "type": [
-                      "array",
-                      "null",
-                    ],
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
                   },
                 },
                 "required": [
@@ -2124,17 +2174,17 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "format": "date-time",
                         "type": "string",
                       },
+                      "grantedScopes": {
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
+                      },
                       "id": {
                         "type": "string",
                       },
                       "providerId": {
                         "type": "string",
-                      },
-                      "scopes": {
-                        "items": {
-                          "type": "string",
-                        },
-                        "type": "array",
                       },
                       "updatedAt": {
                         "format": "date-time",
@@ -2151,7 +2201,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "updatedAt",
                       "accountId",
                       "userId",
-                      "scopes",
+                      "grantedScopes",
                     ],
                     "type": "object",
                   },
@@ -2538,10 +2588,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "accountId": {
                     "description": "The account ID associated with the refresh token",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
                     "description": "The provider ID for the OAuth provider",
@@ -2549,10 +2596,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "userId": {
                     "description": "The user ID associated with the account",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -2576,6 +2620,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "accessTokenExpiresAt": {
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "grantedScopes": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
                     },
                     "idToken": {
                       "type": "string",
@@ -2705,10 +2755,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "redirectTo": {
                     "description": "The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter \`?error=INVALID_TOKEN\`. If the token is valid, it'll be redirected with a query parameter \`?token=VALID_TOKEN",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -2862,10 +2909,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "token": {
                     "description": "The token to reset the password",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -3747,10 +3791,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "callbackURL": {
                     "description": "Callback URL to use as a redirect for email verification",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "email": {
                     "description": "Email of the user",
@@ -3761,12 +3802,8 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "type": "string",
                   },
                   "rememberMe": {
-                    "default": true,
                     "description": "If this is false, the session will not be remembered. Default is \`true\`.",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                 },
                 "required": [
@@ -3934,63 +3971,58 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
                   },
                   "callbackURL": {
                     "description": "Callback URL to redirect to after the user has signed in",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "disableRedirect": {
                     "description": "Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "errorCallbackURL": {
                     "description": "Callback URL to redirect to if an error happens",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "idToken": {
-                    "description": undefined,
                     "properties": {
                       "accessToken": {
                         "description": "Access token from the provider",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "expiresAt": {
                         "description": "Expiry date of the token",
-                        "type": [
-                          "number",
-                          "null",
-                        ],
+                        "type": "number",
                       },
                       "nonce": {
                         "description": "Nonce used to generate the token",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "refreshToken": {
                         "description": "Refresh token from the provider",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
+                      },
+                      "scopes": {
+                        "description": "The scopes granted alongside the id token",
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
                       },
                       "token": {
                         "description": "ID token from the provider",
@@ -4000,81 +4032,92 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "description": "The user object from the provider. Only available for some providers like Apple.",
                         "properties": {
                           "email": {
-                            "description": undefined,
-                            "type": [
-                              "string",
-                              "null",
-                            ],
+                            "type": "string",
                           },
                           "name": {
-                            "description": undefined,
                             "properties": {
                               "firstName": {
-                                "description": undefined,
-                                "type": [
-                                  "string",
-                                  "null",
-                                ],
+                                "type": "string",
                               },
                               "lastName": {
-                                "description": undefined,
-                                "type": [
-                                  "string",
-                                  "null",
-                                ],
+                                "type": "string",
                               },
                             },
-                            "type": [
-                              "object",
-                              "null",
-                            ],
+                            "type": "object",
                           },
                         },
-                        "type": [
-                          "object",
-                          "null",
-                        ],
+                        "type": "object",
                       },
                     },
                     "required": [
                       "token",
                     ],
-                    "type": [
-                      "object",
-                      "null",
-                    ],
+                    "type": "object",
                   },
                   "loginHint": {
                     "description": "The login hint to use for the authorization code request",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "newUserCallbackURL": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "provider": {
-                    "description": undefined,
-                    "type": "string",
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "apple",
+                          "atlassian",
+                          "cognito",
+                          "discord",
+                          "facebook",
+                          "figma",
+                          "github",
+                          "microsoft",
+                          "google",
+                          "huggingface",
+                          "slack",
+                          "spotify",
+                          "twitch",
+                          "twitter",
+                          "dropbox",
+                          "kick",
+                          "linear",
+                          "linkedin",
+                          "gitlab",
+                          "tiktok",
+                          "reddit",
+                          "roblox",
+                          "salesforce",
+                          "vk",
+                          "zoom",
+                          "notion",
+                          "kakao",
+                          "naver",
+                          "line",
+                          "paybin",
+                          "paypal",
+                          "polar",
+                          "railway",
+                          "vercel",
+                          "wechat",
+                        ],
+                        "type": "string",
+                      },
+                      {
+                        "type": "string",
+                      },
+                    ],
                   },
                   "requestSignUp": {
                     "description": "Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "scopes": {
                     "description": "Array of scopes to request from the provider. This will override the default scopes passed.",
-                    "type": [
-                      "array",
-                      "null",
-                    ],
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
                   },
                 },
                 "required": [
@@ -4091,12 +4134,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Session response when idToken is provided",
+                  "description": "Returns session details when idToken is provided, or an authorize URL otherwise",
                   "properties": {
                     "redirect": {
-                      "enum": [
-                        false,
-                      ],
                       "type": "boolean",
                     },
                     "token": {
@@ -4112,14 +4152,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "required": [
                     "redirect",
-                    "token",
-                    "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success - Returns either session details or redirect URL",
+            "description": "Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
           },
           "400": {
             "content": {
@@ -4611,14 +4649,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "schema": {
                 "properties": {
                   "accountId": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
-                    "description": undefined,
                     "type": "string",
                   },
                 },
@@ -4763,11 +4796,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "additionalProperties": {},
+                "propertyNames": {
+                  "description": "Field name must be a string",
+                  "type": "string",
+                },
                 "type": "object",
               },
             },
           },
+          "required": true,
         },
         "responses": {
           "200": {
