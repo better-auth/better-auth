@@ -569,6 +569,110 @@ describe("device authorization flow", async () => {
 			});
 		});
 	});
+
+	describe("concurrent token redemption", () => {
+		// Invariant: an approved device code is single-use. Two polls racing to
+		// redeem the same approved code must yield exactly one token; the loser
+		// is rejected and the row must not survive for a third redemption.
+		it("should redeem an approved device code at most once under concurrent polling", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			const poll = () =>
+				auth.api
+					.deviceToken({
+						body: {
+							grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+							device_code,
+							client_id: "test-client",
+						},
+					})
+					.then(
+						(value) => ({ ok: true as const, value }),
+						(error) => ({ ok: false as const, error }),
+					);
+
+			const results = await Promise.all([poll(), poll()]);
+
+			const successes = results.filter(
+				(result) => result.ok && "access_token" in result.value,
+			);
+			expect(successes).toHaveLength(1);
+
+			const rowAfter = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(rowAfter).toBeNull();
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "invalid_grant" },
+			});
+		});
+
+		it("should burn an expired approved device code instead of issuing a token", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			await db.update({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+				update: { expiresAt: new Date(Date.now() - 1000) },
+			});
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "expired_token" },
+			});
+
+			const rowAfter = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(rowAfter).toBeNull();
+		});
+	});
 });
 
 describe("device authorization ownership gate", () => {

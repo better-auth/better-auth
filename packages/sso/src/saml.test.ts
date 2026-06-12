@@ -4780,6 +4780,81 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(succeeded).toHaveLength(1);
 		expect(failed).toHaveLength(1);
 	});
+
+	it("should issue only one session when the same assertion is submitted concurrently without InResponseTo validation", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "concurrent-assertion-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// The shared mock IdP emits a literal `InResponseTo="null"` value. Disable
+		// that gate here so the assertion-replay tombstone is the only duplicate
+		// guard under test.
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/concurrent-assertion-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: "http://localhost:3000/dashboard",
+						}),
+					},
+				),
+			);
+
+		const [first, second] = await Promise.all([submit(), submit()]);
+
+		expect(first.status).toBe(302);
+		expect(second.status).toBe(302);
+
+		const locations = [first, second].map(
+			(res) => res.headers.get("location") || "",
+		);
+		const succeeded = locations.filter((loc) => loc && !loc.includes("error"));
+		const replayed = locations.filter((loc) =>
+			loc.includes("error=replay_detected"),
+		);
+
+		expect(succeeded).toHaveLength(1);
+		expect(replayed).toHaveLength(1);
+	});
 });
 
 describe("SAML SSO - Single Assertion Validation", () => {
