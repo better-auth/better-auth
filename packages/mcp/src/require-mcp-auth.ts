@@ -102,7 +102,7 @@ export const requireMcpAuth = <
 			resourceUrl.pathname === "/"
 				? ""
 				: resourceUrl.pathname.replace(/\/$/, "");
-		const resourceMetadata = `${resourceUrl.origin}/.well-known/oauth-protected-resource${resourcePath}`;
+		const resourceMetadata = `${resourceUrl.origin}/.well-known/oauth-protected-resource${resourcePath}${resourceUrl.search}`;
 
 		const authorization = req.headers?.get("authorization") ?? undefined;
 		const accessToken = authorization?.startsWith("Bearer ")

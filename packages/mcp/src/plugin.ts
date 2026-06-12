@@ -5,7 +5,6 @@ import type {
 	Scope,
 } from "@better-auth/oauth-provider";
 import {
-	DEFAULT_OAUTH_SCOPES,
 	getIssuer,
 	metadataResponse,
 	oauthProvider,
@@ -14,6 +13,14 @@ import {
 
 const PROTECTED_RESOURCE_METADATA_PATH =
 	"/.well-known/oauth-protected-resource";
+const AUTHORIZATION_SERVER_ONLY_SCOPES = new Set([
+	"openid",
+	"profile",
+	"email",
+	"phone",
+	"address",
+	"offline_access",
+]);
 
 /**
  * Options for the {@link mcp} plugin: the full OAuth provider configuration plus
@@ -33,8 +40,9 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 /**
  * Build the RFC 9728 Protected Resource Metadata document. The MCP server is the
  * resource server, and its authorization server is this same provider, so
- * `authorization_servers` reuses the provider issuer and `scopes_supported`
- * mirrors what the authorization-server metadata advertises.
+ * `authorization_servers` reuses the provider issuer. Resource metadata only
+ * advertises scopes that apply to the protected resource itself; OIDC identity
+ * scopes and refresh-token scopes stay authorization-server metadata.
  */
 const buildResourceServerMetadata = (
 	ctx: GenericEndpointContext,
@@ -44,13 +52,19 @@ const buildResourceServerMetadata = (
 	const scopes =
 		providerOptions.advertisedMetadata?.scopes_supported ??
 		providerOptions.scopes ??
-		DEFAULT_OAUTH_SCOPES;
-	return {
+		[];
+	const resourceScopes = scopes.filter(
+		(scope) => !AUTHORIZATION_SERVER_ONLY_SCOPES.has(scope),
+	);
+	const metadata: ResourceServerMetadata = {
 		resource: resource ?? ctx.context.baseURL,
 		authorization_servers: [getIssuer(ctx, providerOptions)],
-		scopes_supported: [...scopes],
 		bearer_methods_supported: ["header"],
 	};
+	if (resourceScopes.length) {
+		metadata.scopes_supported = [...resourceScopes];
+	}
+	return metadata;
 };
 
 /**

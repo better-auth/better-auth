@@ -94,4 +94,20 @@ describe("requireMcpAuth", () => {
 			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="openid profile"`,
 		);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9992
+	 */
+	it("preserves a resource query in the metadata URL", async () => {
+		const response = await requireMcpAuth(
+			authWith("https://app.example.com", "https://app.example.com/api/auth"),
+			async () => new Response("unreachable"),
+			{ resource: "https://mcp.example.com/mcp?tenant=a" },
+		)(new Request("https://mcp.example.com/mcp"));
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			`Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp?tenant=a"`,
+		);
+	});
 });

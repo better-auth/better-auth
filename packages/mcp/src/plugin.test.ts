@@ -125,6 +125,9 @@ describe("mcp plugin", async () => {
 	});
 
 	describe("protected resource metadata", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/9992
+		 */
 		it("returns RFC 9728 protected resource metadata", async () => {
 			const response = await customFetchImpl(
 				`${authServerBaseUrl}/.well-known/oauth-protected-resource`,
@@ -134,7 +137,7 @@ describe("mcp plugin", async () => {
 			const metadata = (await response.json()) as {
 				resource: string;
 				authorization_servers: string[];
-				scopes_supported: string[];
+				scopes_supported?: string[];
 				bearer_methods_supported: string[];
 			};
 
@@ -143,7 +146,49 @@ describe("mcp plugin", async () => {
 				authorization_servers: [baseURL],
 				bearer_methods_supported: ["header"],
 			});
-			expect(metadata.scopes_supported).toContain("offline_access");
+			expect(metadata.scopes_supported).toBeUndefined();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/9992
+		 */
+		it("advertises resource scopes without authorization-server-only scopes", async () => {
+			const resourceServerBaseUrl = "http://localhost:3010";
+			const resourceBaseURL = `${resourceServerBaseUrl}/api/auth`;
+			const { customFetchImpl: resourceFetch } = await getTestInstance({
+				baseURL: resourceServerBaseUrl,
+				plugins: [
+					jwt(),
+					mcp({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid", "offline_access", "mcp:read"],
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			});
+
+			const response = await resourceFetch(
+				`${resourceServerBaseUrl}/.well-known/oauth-protected-resource`,
+				{ method: "GET" },
+			);
+			expect(response.status).toBe(200);
+			const metadata = (await response.json()) as {
+				resource: string;
+				authorization_servers: string[];
+				scopes_supported?: string[];
+				bearer_methods_supported: string[];
+			};
+
+			expect(metadata).toMatchObject({
+				resource: resourceBaseURL,
+				authorization_servers: [resourceBaseURL],
+				scopes_supported: ["mcp:read"],
+				bearer_methods_supported: ["header"],
+			});
 		});
 
 		it("answers HEAD with metadata headers and an empty body", async () => {

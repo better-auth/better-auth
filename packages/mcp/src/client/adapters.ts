@@ -25,6 +25,29 @@ interface HonoApp {
 	get: (path: string, handler: (c: HonoContext) => Promise<Response>) => void;
 }
 
+const PROTECTED_RESOURCE_METADATA_PATH =
+	"/.well-known/oauth-protected-resource";
+
+function getProtectedResourceMetadataPath(resource: string): string {
+	const resourceUrl = new URL(resource);
+	if (resourceUrl.origin === "null") {
+		return PROTECTED_RESOURCE_METADATA_PATH;
+	}
+	const resourcePath =
+		resourceUrl.pathname === "/" ? "" : resourceUrl.pathname.replace(/\/$/, "");
+	return `${PROTECTED_RESOURCE_METADATA_PATH}${resourcePath}`;
+}
+
+function getProtectedResourceMetadataURL(resource: string): string {
+	const resourceUrl = new URL(resource);
+	if (resourceUrl.origin === "null") {
+		throw new Error(
+			"MCP resource_metadata requires an origin-based resource URL",
+		);
+	}
+	return `${resourceUrl.origin}${getProtectedResourceMetadataPath(resource)}${resourceUrl.search}`;
+}
+
 export function mcpAuthHono(options: McpResourceClientOptions): {
 	client: McpResourceClient;
 	middleware: HonoMiddleware;
@@ -32,7 +55,9 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 } {
 	const client = createMcpResourceClient(options);
 
-	const resourceBase = options.resource ?? client.authURL;
+	const resourceMetadata = getProtectedResourceMetadataURL(
+		options.resource ?? client.authURL,
+	);
 
 	const middleware: HonoMiddleware = async (c, next) => {
 		const authHeader = c.req.header("Authorization");
@@ -42,7 +67,7 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 		if (!token) {
 			c.header(
 				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
+				`Bearer resource_metadata="${resourceMetadata}"`,
 			);
 			return c.json(
 				{
@@ -61,7 +86,7 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 		if (!session) {
 			c.header(
 				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
+				`Bearer resource_metadata="${resourceMetadata}"`,
 			);
 			return c.json(
 				{
@@ -80,6 +105,10 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 	const discoveryRoutes = (app: HonoApp, serverURL: string) => {
 		const discoveryFn = client.discoveryHandler();
 		const protectedResourceFn = client.protectedResourceHandler(serverURL);
+		const protectedResourcePaths = new Set([
+			PROTECTED_RESOURCE_METADATA_PATH,
+			getProtectedResourceMetadataPath(options.resource ?? client.authURL),
+		]);
 
 		app.get(
 			"/.well-known/oauth-authorization-server",
@@ -92,13 +121,15 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 			},
 		);
 
-		app.get("/.well-known/oauth-protected-resource", async (c: HonoContext) => {
-			const response = await protectedResourceFn(c.req.raw);
-			const data: unknown = await response.json().catch(() => ({
-				error: "Invalid response from auth server",
-			}));
-			return c.json(data, response.status as 200 | 502);
-		});
+		for (const path of protectedResourcePaths) {
+			app.get(path, async (c: HonoContext) => {
+				const response = await protectedResourceFn(c.req.raw);
+				const data: unknown = await response.json().catch(() => ({
+					error: "Invalid response from auth server",
+				}));
+				return c.json(data, response.status as 200 | 502);
+			});
+		}
 	};
 
 	return { client, middleware, discoveryRoutes };

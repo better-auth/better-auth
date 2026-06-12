@@ -45,6 +45,9 @@ interface NodeLikeResponse {
 	end?: (body: string) => void;
 }
 
+const PROTECTED_RESOURCE_METADATA_PATH =
+	"/.well-known/oauth-protected-resource";
+
 export interface McpResourceClient {
 	verifyToken: (token: string) => Promise<McpSession | null>;
 	handler: (
@@ -84,10 +87,22 @@ function buildCorsHeaders(
 	};
 }
 
+function getProtectedResourceMetadataURL(resource: string): string {
+	const resourceUrl = new URL(resource);
+	if (resourceUrl.origin === "null") {
+		throw new Error(
+			"MCP resource_metadata requires an origin-based resource URL",
+		);
+	}
+	const resourcePath =
+		resourceUrl.pathname === "/" ? "" : resourceUrl.pathname.replace(/\/$/, "");
+	return `${resourceUrl.origin}${PROTECTED_RESOURCE_METADATA_PATH}${resourcePath}${resourceUrl.search}`;
+}
+
 function makeWWWAuthenticate(authURL: string, resource?: string): string {
-	const resourceMetadataURL = resource
-		? `${resource}/.well-known/oauth-protected-resource`
-		: `${authURL}/.well-known/oauth-protected-resource`;
+	const resourceMetadataURL = getProtectedResourceMetadataURL(
+		resource ?? authURL,
+	);
 	return `Bearer resource_metadata="${resourceMetadataURL}"`;
 }
 
@@ -241,7 +256,6 @@ export function createMcpResourceClient(
 				resource,
 				authorization_servers: [authURL],
 				bearer_methods_supported: ["header"],
-				scopes_supported: ["openid", "profile", "email", "offline_access"],
 			};
 
 			return async (_req: Request) => {

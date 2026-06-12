@@ -38,6 +38,9 @@ describe("mcp", async () => {
 		baseURL: apiServerBaseUrl,
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9992
+	 */
 	it.for([
 		{
 			resource: apiServerBaseUrl,
@@ -46,6 +49,10 @@ describe("mcp", async () => {
 		{
 			resource: `${apiServerBaseUrl}/resource1`,
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
+		},
+		{
+			resource: `${apiServerBaseUrl}/resource1?tenant=a`,
+			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1?tenant=a"`,
 		},
 		{
 			resource: [apiServerBaseUrl, `${apiServerBaseUrl}/resource1`],

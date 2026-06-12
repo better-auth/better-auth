@@ -33,7 +33,7 @@ export function raiseResourceServerChallenge(
 					const audiencePath = url.pathname.endsWith("/")
 						? url.pathname.slice(0, -1)
 						: url.pathname;
-					return `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${audiencePath}"`;
+					return `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${audiencePath}${url.search}"`;
 				}
 				const resourceMetadata = opts?.resourceMetadataMappings?.[value];
 				if (!resourceMetadata) {
