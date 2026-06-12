@@ -139,6 +139,29 @@ const SAML_SKIP_ORIGIN_CHECK_PATHS = [
 	"/sso/saml2/sp/slo", // SAML SLO endpoint (prefix matches /sp/slo/:providerId)
 ];
 
+const SSO_PROVIDER_BUILT_IN_FIELD_KEYS = new Set([
+	"id",
+	"issuer",
+	"oidcConfig",
+	"samlConfig",
+	"userId",
+	"providerId",
+	"organizationId",
+	"domain",
+	"domainVerified",
+]);
+
+function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
+	const additionalFields = options?.schema?.ssoProvider?.additionalFields ?? {};
+	for (const key in additionalFields) {
+		if (SSO_PROVIDER_BUILT_IN_FIELD_KEYS.has(key)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" conflicts with a built-in field`,
+			);
+		}
+	}
+}
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -171,6 +194,7 @@ export function sso<O extends SSOOptions>(
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
+	assertNoAdditionalFieldCollisions(options);
 	const optionsWithStore = options as O;
 
 	let endpoints = {

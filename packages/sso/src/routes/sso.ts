@@ -24,11 +24,6 @@ import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import * as z from "zod";
-import {
-	filterSSOProviderAdditionalFields,
-	getSSOProviderAdditionalFieldsSchema,
-	parseSSOProviderAdditionalFields,
-} from "../additional-fields";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
@@ -59,7 +54,12 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { filterSSOProviderAdditionalFields } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	getSSOProviderAdditionalFieldsSchema,
+	parseSSOProviderAdditionalFields,
+} from "./schemas";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option

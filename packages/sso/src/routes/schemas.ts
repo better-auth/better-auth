@@ -1,4 +1,56 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { APIError } from "better-auth/api";
+import { parseInputData, toZodSchema } from "better-auth/db";
 import * as z from "zod";
+import type { SSOOptions } from "../types";
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+export function getSSOProviderAdditionalFieldsSchema(options?: SSOOptions) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const schema = toZodSchema({
+		fields: additionalFields,
+		isClientSide: true,
+	});
+	const blockedInputFields: Record<string, z.ZodOptional<z.ZodAny>> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.input === false) {
+			blockedInputFields[key] = z.any().optional();
+		}
+	}
+	return schema.extend(blockedInputFields);
+}
+
+function assertNoBlockedAdditionalFieldInput(
+	fields: Record<string, DBFieldAttribute>,
+	data: Record<string, unknown>,
+) {
+	for (const key in fields) {
+		if (fields[key]?.input === false && key in data) {
+			throw new APIError("BAD_REQUEST", {
+				message: `${key} is not allowed to be set`,
+			});
+		}
+	}
+}
+
+export function parseSSOProviderAdditionalFields(
+	options: SSOOptions | undefined,
+	data: Record<string, unknown>,
+	action: "create" | "update",
+) {
+	const fields = getSSOProviderAdditionalFields(options);
+	assertNoBlockedAdditionalFieldInput(fields, data);
+	return parseInputData(data, {
+		fields,
+		action,
+	});
+}
 
 const oidcMappingSchema = z
 	.object({

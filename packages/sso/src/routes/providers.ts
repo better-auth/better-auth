@@ -1,3 +1,5 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -5,16 +7,15 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import * as z from "zod";
-import {
-	getReturnedSSOProviderAdditionalFields,
-	getSSOProviderAdditionalFieldsSchema,
-	parseSSOProviderAdditionalFields,
-} from "../additional-fields";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
+import {
+	getSSOProviderAdditionalFieldsSchema,
+	parseSSOProviderAdditionalFields,
+	updateSSOProviderBodySchema,
+} from "./schemas";
 
 interface SSOProviderRecord {
 	[key: string]: unknown;
@@ -30,6 +31,36 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+export function filterSSOProviderAdditionalFields<
+	T extends Record<string, unknown>,
+>(provider: T, options?: SSOOptions) {
+	return filterOutputFields(provider, getSSOProviderAdditionalFields(options));
+}
+
+function getReturnedSSOProviderAdditionalFields(
+	provider: Record<string, unknown>,
+	options?: SSOOptions,
+) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const result: Record<string, unknown> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.returned === false) {
+			continue;
+		}
+		if (key in provider) {
+			result[key] = provider[key];
+		}
+	}
+	return result;
+}
 
 async function isOrgAdmin(
 	ctx: {

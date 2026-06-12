@@ -1189,7 +1189,6 @@ describe("SSO provider read endpoints", () => {
 				{
 					displayName: "Okta",
 					internalCode: "secret",
-					source: "client",
 				},
 			)) as any;
 
@@ -1216,6 +1215,46 @@ describe("SSO provider read endpoints", () => {
 			expect(fetched.internalCode).toBeUndefined();
 		});
 
+		it("should reject additional field keys that collide with built-in provider fields", () => {
+			expect(() =>
+				createTestAuth(false, false, {
+					schema: {
+						ssoProvider: {
+							additionalFields: {
+								providerId: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			).toThrow(
+				'ssoProvider additional field "providerId" conflicts with a built-in field',
+			);
+		});
+
+		it("should reject input false additional fields on register", async () => {
+			const { getAuthHeaders, registerSAMLProvider, data } = createTestAuth(
+				false,
+				false,
+				ssoOptions,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await expect(
+				registerSAMLProvider(headers, "okta", undefined, {
+					displayName: "Okta",
+					source: "client",
+				}),
+			).rejects.toThrow("source is not allowed to be set");
+			expect(data.ssoProvider).toHaveLength(0);
+		});
+
 		it("should update additional fields", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
 				false,
@@ -1240,6 +1279,32 @@ describe("SSO provider read endpoints", () => {
 			})) as any;
 
 			expect(updated.displayName).toBe("Okta Workforce");
+		});
+
+		it("should reject input false additional fields on update", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				false,
+				ssoOptions,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "okta", undefined, {
+				displayName: "Okta",
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "okta",
+						source: "client",
+					} as any,
+					headers,
+				}),
+			).rejects.toThrow("source is not allowed to be set");
 		});
 
 		it("should infer sso provider additional fields", () => {
