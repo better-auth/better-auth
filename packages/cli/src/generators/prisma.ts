@@ -242,7 +242,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						within: prismaModel.properties,
 					});
 					if (isAlreadyExist) {
-						if (fieldType) {
+						if (fieldType && typeof isAlreadyExist.fieldType === "string") {
 							const fieldTypeParts = getFieldTypeParts(fieldType);
 							const existingFieldTypeParts = getFieldTypeParts(
 								isAlreadyExist.fieldType,
