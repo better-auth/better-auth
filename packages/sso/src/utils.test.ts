@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { validateEmailDomain } from "./utils";
+import {
+	getHostnameFromDomain,
+	parseProviderEmailVerified,
+	validateEmailDomain,
+} from "./utils";
+
+describe("parseProviderEmailVerified", () => {
+	it('treats only boolean true and the string "true" as verified', () => {
+		expect(parseProviderEmailVerified(true)).toBe(true);
+		expect(parseProviderEmailVerified("true")).toBe(true);
+	});
+
+	it('treats the string "false" as unverified (the coercion bug)', () => {
+		expect(parseProviderEmailVerified("false")).toBe(false);
+	});
+
+	it("treats every other value as unverified", () => {
+		for (const value of [
+			false,
+			"False",
+			"TRUE",
+			"0",
+			"1",
+			0,
+			1,
+			"",
+			" ",
+			undefined,
+			null,
+			{},
+			[],
+			["true"],
+		]) {
+			expect(parseProviderEmailVerified(value)).toBe(false);
+		}
+	});
+});
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/7324
@@ -102,5 +138,36 @@ describe("validateEmailDomain", () => {
 		it("should return false for domain list with only whitespace/commas", () => {
 			expect(validateEmailDomain("user@company.com", ", ,")).toBe(false);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8361
+ */
+describe("getHostnameFromDomain", () => {
+	it("should extract hostname from a bare domain", () => {
+		expect(getHostnameFromDomain("github.com")).toBe("github.com");
+	});
+
+	it("should extract hostname from a full URL", () => {
+		expect(getHostnameFromDomain("https://github.com")).toBe("github.com");
+	});
+
+	it("should extract hostname from a URL with port", () => {
+		expect(getHostnameFromDomain("https://github.com:8081")).toBe("github.com");
+	});
+
+	it("should extract hostname from a subdomain", () => {
+		expect(getHostnameFromDomain("auth.github.com")).toBe("auth.github.com");
+	});
+
+	it("should extract hostname from a URL with path", () => {
+		expect(getHostnameFromDomain("https://github.com/path/to/resource")).toBe(
+			"github.com",
+		);
+	});
+
+	it("should return null for an empty string", () => {
+		expect(getHostnameFromDomain("")).toBeNull();
 	});
 });

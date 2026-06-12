@@ -3,6 +3,8 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 } from "@better-auth/core";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
+import { PACKAGE_VERSION } from "../../version";
 
 declare global {
 	interface Window {
@@ -192,6 +194,7 @@ const noRetryReasons = {
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
 		id: "one-tap",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "fedcm-signout-handle",
@@ -247,21 +250,31 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 
 						async function callback(idToken: string) {
-							await $fetch("/one-tap/callback", {
+							const res = await $fetch("/one-tap/callback", {
 								method: "POST",
-								body: { idToken },
+								body: { idToken, callbackURL: opts?.callbackURL },
 								...opts?.fetchOptions,
 								...fetchOptions,
 							});
 
+							// The server validates callbackURL against trustedOrigins; do
+							// not navigate if it rejected the request.
+							if (res?.error) {
+								return;
+							}
+
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-								window.location.href = opts?.callbackURL ?? "/";
+								const target = opts?.callbackURL ?? "/";
+								if (isSafeUrlScheme(target)) {
+									window.location.href = target;
+								}
 							}
 						}
 
 						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 						const contextValue = context ?? options.context ?? "signin";
 
+						const useFedCM = options.promptOptions?.fedCM !== false;
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
 							callback: async (response: { credential: string }) => {
@@ -277,6 +290,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
+							use_fedcm_for_prompt: useFedCM,
 							...options.additionalOptions,
 						});
 
@@ -291,15 +305,24 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					async function callback(idToken: string) {
-						await $fetch("/one-tap/callback", {
+						const res = await $fetch("/one-tap/callback", {
 							method: "POST",
-							body: { idToken },
+							body: { idToken, callbackURL: opts?.callbackURL },
 							...opts?.fetchOptions,
 							...fetchOptions,
 						});
 
+						// The server validates callbackURL against trustedOrigins; do
+						// not navigate if it rejected the request.
+						if (res?.error) {
+							return;
+						}
+
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-							window.location.href = opts?.callbackURL ?? "/";
+							const target = opts?.callbackURL ?? "/";
+							if (isSafeUrlScheme(target)) {
+								window.location.href = target;
+							}
 						}
 					}
 
@@ -314,6 +337,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							const baseDelay = options.promptOptions?.baseDelay ?? 1000;
 							const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
 
+							const useFedCM = options.promptOptions?.fedCM !== false;
 							window.google?.accounts.id.initialize({
 								client_id: options.clientId,
 								callback: async (response: { credential: string }) => {
@@ -335,7 +359,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
-
+								use_fedcm_for_prompt: useFedCM,
 								...options.additionalOptions,
 							});
 
@@ -345,10 +369,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								window.google?.accounts.id.prompt((notification: any) => {
 									if (isResolved) return;
 
-									if (
-										notification.isDismissedMoment &&
-										notification.isDismissedMoment()
-									) {
+									if (notification.isDismissedMoment?.()) {
 										const reason = notification.getDismissedReason?.();
 										if (noRetryReasons.dismissed.includes(reason)) {
 											opts?.onPromptNotification?.(notification);
@@ -362,10 +383,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
-									} else if (
-										notification.isSkippedMoment &&
-										notification.isSkippedMoment()
-									) {
+									} else if (notification.isSkippedMoment?.()) {
+										// Under FedCM, getSkippedReason() is not available.
+										// Treat missing reason the same as a no-retry reason.
 										const reason = notification.getSkippedReason?.();
 										if (!reason || noRetryReasons.skipped.includes(reason)) {
 											opts?.onPromptNotification?.(notification);
@@ -379,10 +399,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
-									} else if (
-										notification.isNotDisplayed &&
-										notification.isNotDisplayed()
-									) {
+									} else if (notification.isNotDisplayed?.()) {
+										// Under FedCM, isNotDisplayed() is deprecated.
+										// Still handle it for non-FedCM fallback.
 										opts?.onPromptNotification?.(notification);
 										resolve();
 									}

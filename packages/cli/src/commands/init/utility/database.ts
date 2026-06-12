@@ -25,7 +25,7 @@ export const getDatabaseCode = <A extends DatabaseAdapter | null>(
  * - "sqlite-bun" -> "kysely"
  * - "mongodb" -> "mongodb"
  */
-export const getORMFromAdapter = (adapter: DatabaseAdapter): string => {
+const getORMFromAdapter = (adapter: DatabaseAdapter): string => {
 	if (adapter.includes("-")) {
 		const parts = adapter.split("-");
 		// Handle kysely adapters like "sqlite-better-sqlite3" or "sqlite-bun"

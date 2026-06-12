@@ -196,7 +196,6 @@ const authOptions = {
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
-				allowReTrialsForDifferentPlans: true,
 				plans: () => {
 					const PRO_PRICE_ID = {
 						default:
@@ -441,7 +440,7 @@ const authOptions = {
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
-		"exp://",
+		"better-auth://",
 		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],

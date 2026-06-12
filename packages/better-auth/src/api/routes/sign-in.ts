@@ -7,6 +7,7 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -113,6 +114,25 @@ const socialSignInBodySchema = z.object({
 					description: "Expiry date of the token",
 				})
 				.optional(),
+			/**
+			 * The user object from the provider.
+			 * This is only available for some providers like Apple.
+			 */
+			user: z
+				.object({
+					name: z
+						.object({
+							firstName: z.string().optional(),
+							lastName: z.string().optional(),
+						})
+						.optional(),
+					email: z.string().optional(),
+				})
+				.meta({
+					description:
+						"The user object from the provider. Only available for some providers like Apple.",
+				})
+				.optional(),
 		}),
 	),
 	scopes: z
@@ -162,7 +182,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			body: socialSignInBodySchema,
 			metadata: {
 				$Infer: {
-					body: socialSignInBodySchema,
+					body: {} as z.infer<typeof socialSignInBodySchema>,
 					returned: {} as {
 						redirect: boolean;
 						token?: string | undefined;
@@ -176,13 +196,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					responses: {
 						"200": {
 							description:
-								"Success - Returns either session details or redirect URL",
+								"Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
 							content: {
 								"application/json": {
 									schema: {
-										// todo: we need support for multiple schema
 										type: "object",
-										description: "Session response when idToken is provided",
+										description:
+											"Returns session details when idToken is provided, or an authorize URL otherwise",
 										properties: {
 											token: {
 												type: "string",
@@ -196,10 +216,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 											},
 											redirect: {
 												type: "boolean",
-												enum: [false],
 											},
 										},
-										required: ["redirect", "token", "user"],
+										required: ["redirect"],
 									},
 								},
 							},
@@ -248,7 +267,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				const { token, nonce } = c.body.idToken;
 				const valid = await provider.verifyIdToken(token, nonce);
 				if (!valid) {
-					c.context.logger.error("Invalid id token", {
+					c.context.logger.warn("Invalid id token", {
 						provider: c.body.provider,
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -257,6 +276,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
+					user: c.body.idToken.user,
 				});
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
@@ -268,9 +288,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				if (!userInfo.user.email) {
-					c.context.logger.error("User email not found", {
-						provider: c.body.provider,
-					});
+					c.context.logger.error(
+						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
+						{ provider: c.body.provider },
+					);
 					throw APIError.from(
 						"UNAUTHORIZED",
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
@@ -344,6 +365,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "signInEmail",
 			use: [formCsrfMiddleware],
+			cloneRequest: true,
 			body: z.object({
 				/**
 				 * Email of the user
@@ -470,7 +492,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				// Hash password to prevent timing attacks from revealing valid email addresses
 				// By hashing passwords for invalid emails, we ensure consistent response times
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("User not found", { email });
+				ctx.context.logger.warn("User not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -482,7 +504,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			);
 			if (!credentialAccount) {
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Credential account not found", { email });
+				ctx.context.logger.warn("Credential account not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -491,7 +513,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			const currentPassword = credentialAccount?.password;
 			if (!currentPassword) {
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Password not found", { email });
+				ctx.context.logger.warn("Password not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -502,7 +524,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				password,
 			});
 			if (!validPassword) {
-				ctx.context.logger.error("Invalid password");
+				ctx.context.logger.warn("Invalid password");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -535,7 +557,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request,
+							ctx.request?.clone(),
 						),
 					);
 				}

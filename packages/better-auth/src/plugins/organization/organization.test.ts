@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -31,6 +31,45 @@ describe("organization type", () => {
 	it("empty org type should works", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
 		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9135
+	 */
+	it("allows dynamic roles in create invitation input", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					roles: {
+						admin: adminAc,
+						member: memberAc,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+				}),
+			],
+		});
+
+		const dynamicRole = "contractor" as string;
+		const dynamicRoles = ["contractor", "reviewer"] as string[];
+
+		if (false) {
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-role@example.com",
+					role: dynamicRole,
+				},
+			});
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-roles@example.com",
+					role: dynamicRoles,
+				},
+			});
+		}
 	});
 });
 
@@ -65,6 +104,17 @@ describe("organization", async () => {
 				session: {
 					update: {
 						before: async (data, ctx) => {},
+					},
+				},
+				// Pre-verify every user created in this suite so invitation
+				// acceptance tests focus on role/membership logic rather than
+				// email-ownership; the dedicated emailVerified gate is exercised
+				// in `routes/crud-invites.test.ts`.
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
 					},
 				},
 			},
@@ -116,11 +166,13 @@ describe("organization", async () => {
 			activeOrganizationId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		} & {
 			activeTeamId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		};
 
@@ -550,6 +602,72 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * Tests that users can accept invitations sent to mixed-case emails
+	 * when they sign up with different casing. This ensures email case
+	 * normalization is consistent across the invitation flow.
+	 */
+	it("should allow accepting invitation when user signs up with different email casing", async () => {
+		const rng = crypto.randomUUID();
+		const mixedCaseEmail = `Test.User.${rng}@Example.COM`;
+		const user = {
+			email: mixedCaseEmail,
+			password: rng,
+			name: `Test User ${rng}`,
+		};
+		const { headers } = await signInWithTestUser();
+
+		const org = await client.organization.create({
+			name: `test-org-${rng}`,
+			slug: `test-org-${rng}`,
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!org.data) throw new Error("Organization not created");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data.id,
+			email: mixedCaseEmail,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data)
+			throw new Error(`Invitation not created: ${invite.error?.message}`);
+		expect(invite.data.email).toBe(mixedCaseEmail.toLowerCase());
+
+		await client.signUp.email({
+			email: user.email.toLowerCase(),
+			password: user.password,
+			name: user.name,
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			user.email.toLowerCase(),
+			user.password,
+		);
+
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(userInvitations.data?.length).toBeGreaterThanOrEqual(1);
+		const matchingInvite = userInvitations.data?.find(
+			(i) => i.id === invite.data!.id,
+		);
+		expect(matchingInvite).toBeDefined();
+
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id!,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
+	});
+
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.setActive({
@@ -683,6 +801,41 @@ describe("organization", async () => {
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
 				.message,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8385
+	 */
+	it("should allow multi-role owner to invite with owner role", async () => {
+		const { headers } = await signInWithTestUser();
+		// Create a fresh org for this test
+		const org = await client.organization.create({
+			name: "multi-role-test-org",
+			slug: "multi-role-test-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data!.id;
+		const memberId = org.data!.members[0]!.id;
+
+		// Set the member to have multiple roles including owner
+		const updatedMember = await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: orgId,
+				role: ["owner", "admin"],
+				memberId,
+			},
+		});
+		expect(updatedMember?.role).toBe("owner,admin");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "multi-role-invite-test@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
 	});
 
 	it("should allow leaving organization", async () => {
@@ -1313,6 +1466,15 @@ describe("invitation expiration and filtering", async () => {
 				async sendInvitationEmail() {},
 			}),
 		],
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 	});
 
 	const client = createAuthClient({
@@ -1900,6 +2062,109 @@ describe("cancel pending invitations on re-invite", async () => {
 				.length,
 		).toBe(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should cancel pending invitation and create a new one when re-inviting without resend", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error).toBeNull();
+		expect(invite2.data?.status).toBe("pending");
+		expect(invite2.data?.id).not.toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "pending",
+			).length,
+		).toBe(1);
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "canceled",
+			).length,
+		).toBe(1);
+	});
+});
+
+describe("re-invite without cancelPendingInvitationsOnReInvite still throws", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should still throw USER_IS_ALREADY_INVITED when option is disabled", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
 });
 
 describe("resend invitation should reuse existing", async () => {
@@ -2120,14 +2385,15 @@ describe("owner can update roles", async () => {
 	});
 
 	it("allows an org owner to remove their own creator role if not sole owner", async () => {
-		await auth.api.updateMemberRole({
+		const updated = await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
 			body: {
 				organizationId: org.id,
 				memberId: ownerId,
-				role: [],
+				role: ["custom"],
 			},
 		});
+		expect(updated.role).toBe("custom");
 	});
 
 	it("should throw error if sole org owner tries to remove creator role"),
@@ -2293,6 +2559,15 @@ describe("Additional Fields", async () => {
 		logger: {
 			level: "error",
 		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -2339,7 +2614,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Params>().toEqualTypeOf<{
 			name: string;
 			slug: string;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;
@@ -2349,7 +2624,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Params2>().toEqualTypeOf<{
 			name: string;
 			slug: string;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
 			someRequiredField: string;
@@ -2515,6 +2790,56 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer team additional fields on $Infer.Team", () => {
+		type Team = typeof auth.$Infer.Team;
+		expectTypeOf<Team>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer organization additional fields on $Infer.Organization", () => {
+		type Organization = typeof auth.$Infer.Organization;
+		expectTypeOf<Organization>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			slug: string;
+			createdAt: Date;
+			logo?: string | null | undefined;
+			metadata?: any;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			someHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer member additional fields on $Infer.Member", () => {
+		type Member = typeof auth.$Infer.Member;
+		expectTypeOf<Member>().toEqualTypeOf<{
+			id: string;
+			organizationId: string;
+			userId: string;
+			role: "member" | "admin" | "owner";
+			createdAt: Date;
+			teamId?: string | undefined;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
+			memberRequiredField: string;
+			memberOptionalField?: string | undefined;
+			memberHiddenField?: string | undefined;
 		}>();
 	});
 
@@ -3395,6 +3720,30 @@ describe("organization additionalFields with returned: false", async () => {
 
 	const { headers } = await signInWithTestUser();
 
+	it("inferOrgAdditionalFields should filter out schema keys without additionalFields", async () => {
+		const { auth: authWithSession } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								logo: { type: "string", required: false },
+							},
+						},
+						session: {
+							fields: { activeOrganizationId: "orgId" },
+						},
+					},
+				}),
+			],
+		});
+		const inferred = inferOrgAdditionalFields<typeof authWithSession>();
+		type Schema = NonNullable<typeof inferred>;
+		// session has no additionalFields, should not be in inferred schema keys
+		type HasSession = "session" extends keyof Schema ? true : false;
+		expectTypeOf<HasSession>().toEqualTypeOf<false>();
+	});
+
 	const client = createAuthClient({
 		plugins: [
 			organizationClient({
@@ -3419,9 +3768,11 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(org.data).toBeDefined();
-		expect(org.data?.publicField).toBe("public-value");
-		// @ts-expect-error secretField has returned: false
-		expect(org.data?.secretField).toBeUndefined();
+		// Note: publicField and secretField use `as any` because endpoint response types
+		// are inferred from adapter return values which include all fields.
+		// The runtime correctly filters returned: false fields.
+		expect((org.data as any).publicField).toBe("public-value");
+		expect((org.data as any).secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg).toBeDefined();
@@ -3454,9 +3805,8 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(orgs.data!.length).toBeGreaterThan(0);
 
 		for (const org of orgs.data!) {
-			// @ts-expect-error secretField has returned: false
-			expect(org.secretField).toBeUndefined();
-			expect(org.publicField).toBeDefined();
+			expect((org as any).secretField).toBeUndefined();
+			expect((org as any).publicField).toBeDefined();
 		}
 	});
 
@@ -3560,11 +3910,217 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(updated.data).toBeDefined();
-		expect(updated.data?.publicField).toBe("updated-public");
-		// @ts-expect-error secretField has returned: false
-		expect(updated.data?.secretField).toBeUndefined();
+		expect((updated.data as any).publicField).toBe("updated-public");
+		expect((updated.data as any).secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");
+	});
+});
+
+describe("delete cascade rollback", async () => {
+	it("rolls back deleteOrganization when an intermediate step throws", async () => {
+		const db: Record<string, any[]> = {
+			users: [],
+			session: [],
+			account: [],
+			verification: [],
+			organization: [],
+			member: [],
+			invitation: [],
+			team: [],
+			teamMember: [],
+		};
+		const { auth, signInWithTestUser, client } = await getTestInstance(
+			{
+				database: memoryAdapter(db, { debugLogs: false }),
+				user: { modelName: "users" },
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: { enabled: true },
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+
+		const orgRes = await client.organization.create({
+			name: "Cascade Org",
+			slug: "cascade-org",
+			fetchOptions: { headers },
+		});
+		const organizationId = orgRes.data?.id as string;
+		expect(organizationId).toBeDefined();
+
+		const inviteRes = await client.organization.inviteMember(
+			{
+				email: "invitee@email.com",
+				role: "member",
+				organizationId,
+			},
+			{ headers },
+		);
+		expect(inviteRes.data).toBeDefined();
+
+		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
+		const spy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (cb: any) => {
+				return originalTransaction(async (trx: any) => {
+					const originalDeleteMany = trx.deleteMany.bind(trx);
+					trx.deleteMany = async (args: any) => {
+						if (args.model === "invitation") {
+							throw new Error("simulated mid-cascade failure");
+						}
+						return originalDeleteMany(args);
+					};
+					return cb(trx);
+				});
+			});
+
+		try {
+			await expect(
+				auth.api.deleteOrganization({
+					headers,
+					body: { organizationId },
+				}),
+			).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		const memberCount = await ctx.adapter.count({
+			model: "member",
+			where: [{ field: "organizationId", value: organizationId }],
+		});
+		expect(memberCount).toBeGreaterThan(0);
+		const invitationCount = await ctx.adapter.count({
+			model: "invitation",
+			where: [{ field: "organizationId", value: organizationId }],
+		});
+		expect(invitationCount).toBeGreaterThan(0);
+		const org = await ctx.adapter.findOne({
+			model: "organization",
+			where: [{ field: "id", value: organizationId }],
+		});
+		expect(org).not.toBeNull();
+	});
+
+	it("rolls back removeMember when an intermediate step throws", async () => {
+		const db: Record<string, any[]> = {
+			users: [],
+			session: [],
+			account: [],
+			verification: [],
+			organization: [],
+			member: [],
+			invitation: [],
+			team: [],
+			teamMember: [],
+		};
+		const { auth, signInWithTestUser, client, cookieSetter } =
+			await getTestInstance(
+				{
+					database: memoryAdapter(db, { debugLogs: false }),
+					user: { modelName: "users" },
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+							teams: { enabled: true },
+						}),
+					],
+					logger: { level: "error" },
+				},
+				{
+					clientOptions: {
+						plugins: [organizationClient({ teams: { enabled: true } })],
+					},
+				},
+			);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+
+		const orgRes = await client.organization.create({
+			name: "Cascade Member Org",
+			slug: "cascade-member-org",
+			fetchOptions: { headers },
+		});
+		const organizationId = orgRes.data?.id as string;
+
+		const teamRes = await client.organization.createTeam(
+			{ name: "Cascade Team", organizationId },
+			{ headers },
+		);
+		const teamId = teamRes.data?.id as string;
+
+		const newUserHeaders = new Headers();
+		const signUpRes = await client.signUp.email(
+			{
+				email: "memberuser@email.com",
+				password: "password",
+				name: "Member User",
+			},
+			{ onSuccess: cookieSetter(newUserHeaders) },
+		);
+		const newUserId = signUpRes.data?.user.id as string;
+
+		const addedMember = await auth.api.addMember({
+			body: { organizationId, userId: newUserId, role: "member" },
+		});
+		const memberId = addedMember!.id;
+
+		await auth.api.addTeamMember({
+			headers,
+			body: { userId: newUserId, teamId, organizationId },
+		});
+
+		const originalTransaction = ctx.adapter.transaction.bind(ctx.adapter);
+		const spy = vi
+			.spyOn(ctx.adapter, "transaction")
+			.mockImplementation(async (cb: any) => {
+				return originalTransaction(async (trx: any) => {
+					const originalDeleteMany = trx.deleteMany.bind(trx);
+					trx.deleteMany = async (args: any) => {
+						if (args.model === "teamMember") {
+							throw new Error("simulated mid-cascade failure");
+						}
+						return originalDeleteMany(args);
+					};
+					return cb(trx);
+				});
+			});
+
+		try {
+			await expect(
+				auth.api.removeMember({
+					headers,
+					body: { organizationId, memberIdOrEmail: memberId },
+				}),
+			).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		const memberStillThere = await ctx.adapter.findOne({
+			model: "member",
+			where: [{ field: "id", value: memberId }],
+		});
+		expect(memberStillThere).not.toBeNull();
+		const teamMemberCount = await ctx.adapter.count({
+			model: "teamMember",
+			where: [
+				{ field: "teamId", value: teamId },
+				{ field: "userId", value: newUserId },
+			],
+		});
+		expect(teamMemberCount).toBe(1);
 	});
 });

@@ -9,7 +9,6 @@ import { createLogger } from "@better-auth/core/env";
 import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
 import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
-	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
@@ -279,7 +278,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
-		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
@@ -424,6 +422,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
+	// Indexes are collected separately and appended last to ensure all
+	// referenced columns/tables exist before any CREATE INDEX executes.
+	const deferredIndexes: CreateIndexBuilder[] = [];
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
@@ -431,10 +433,14 @@ export async function getMigrations(config: BetterAuthOptions) {
 				const builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
-					const index = db.schema
-						.alterTable(table.table)
-						.addIndex(`${table.table}_${fieldName}_idx`);
-					migrations.push(index);
+					const indexName = `${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`;
+					const indexBuilder = db.schema
+						.createIndex(indexName)
+						.on(table.table)
+						.columns([fieldName]);
+					deferredIndexes.push(
+						field.unique ? indexBuilder.unique() : indexBuilder,
+					);
 				}
 
 				const built = builder.addColumn(fieldName, type, (col) => {
@@ -469,8 +475,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 		}
 	}
-
-	const toBeIndexed: CreateIndexBuilder[] = [];
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
@@ -540,19 +544,15 @@ export async function getMigrations(config: BetterAuthOptions) {
 						)
 						.on(table.table)
 						.columns([fieldName]);
-					toBeIndexed.push(field.unique ? builder.unique() : builder);
+					deferredIndexes.push(field.unique ? builder.unique() : builder);
 				}
 			}
 			migrations.push(dbT);
 		}
 	}
 
-	// instead of adding the index straight to `migrations`,
-	// we do this at the end so that indexes are created after the table is created
-	if (toBeIndexed.length) {
-		for (const index of toBeIndexed) {
-			migrations.push(index);
-		}
+	for (const index of deferredIndexes) {
+		migrations.push(index);
 	}
 
 	async function runMigrations() {

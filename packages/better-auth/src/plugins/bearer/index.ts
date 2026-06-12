@@ -3,6 +3,8 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
+import { setRequestCookie } from "../../cookies/cookie-utils";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -40,6 +42,7 @@ function tryDecode(str: string): string {
 export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{
@@ -67,21 +70,18 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							return;
 						}
 
-						let signedToken: string;
 						let decodedToken: string;
 
 						if (token.includes(".")) {
-							const isEncoded = token.includes("%");
-							signedToken = isEncoded ? token : encodeURIComponent(token);
-							decodedToken = isEncoded ? tryDecode(token) : token;
+							decodedToken = token.includes("%") ? tryDecode(token) : token;
 						} else {
 							if (options?.requireSignature) {
 								return;
 							}
-							signedToken = (
+							const signed = (
 								await serializeSignedCookie("", token, c.context.secret)
 							).replace("=", "");
-							decodedToken = tryDecode(signedToken);
+							decodedToken = tryDecode(signed);
 						}
 						try {
 							const isValid = await createHMAC(
@@ -103,14 +103,10 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						// Use headers.set() with "; " separator per RFC 6265.
-						// headers.append("cookie") joins with ", " in some runtimes
-						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
-						const existingCookie = headers.get("cookie");
-						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
-						headers.set(
-							"cookie",
-							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
+						setRequestCookie(
+							headers,
+							c.context.authCookies.sessionToken.name,
+							decodedToken,
 						);
 						return {
 							context: {

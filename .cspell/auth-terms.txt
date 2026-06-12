@@ -1,9 +1,12 @@
 totp
+otps
 pkce
 unban
 siwe
 scim
 aaguid
+aaguids
+Nord
 unionid
 appleid
 ciam
@@ -30,3 +33,5 @@ Agentic
 Timestampz
 Vercel
 rgba
+idtoken
+HIBP

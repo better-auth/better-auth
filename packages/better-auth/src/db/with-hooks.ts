@@ -6,15 +6,26 @@ import {
 } from "@better-auth/core/context";
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import {
+	ATTR_CONTEXT,
+	ATTR_DB_COLLECTION_NAME,
+	ATTR_HOOK_TYPE,
+	withSpan,
+} from "@better-auth/core/instrumentation";
+
+export type DatabaseHooksEntry = {
+	source: string;
+	hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
+};
 
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: BetterAuthOptions;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		hooks: DatabaseHooksEntry[];
 	},
 ) {
-	const hooks = ctx.hooks;
+	const hooksEntries = ctx.hooks;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModelNames,
@@ -27,11 +38,20 @@ export function getWithHooks(
 	) {
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.create?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.create?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(actualData as any, context);
+				const result = await withSpan(
+					`db create.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "create.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(actualData as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -57,12 +77,21 @@ export function getWithHooks(
 			created = await customCreateFn.fn(created ?? actualData);
 		}
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.create?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.create?.after;
 			if (toRun) {
 				await queueAfterTransactionHook(async () => {
-					// @ts-expect-error context type mismatch
-					await toRun(created as any, context);
+					await withSpan(
+						`db create.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "create.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(created as any, context),
+					);
 				});
 			}
 		}
@@ -84,11 +113,20 @@ export function getWithHooks(
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(data as any, context);
+				const result = await withSpan(
+					`db update.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "update.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(data as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -115,12 +153,21 @@ export function getWithHooks(
 					})
 				: customUpdated;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.after;
 			if (toRun) {
 				await queueAfterTransactionHook(async () => {
-					// @ts-expect-error context type mismatch
-					await toRun(updated as any, context);
+					await withSpan(
+						`db update.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "update.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(updated as any, context),
+					);
 				});
 			}
 		}
@@ -141,11 +188,20 @@ export function getWithHooks(
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(data as any, context);
+				const result = await withSpan(
+					`db updateMany.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "updateMany.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(data as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -172,12 +228,21 @@ export function getWithHooks(
 					})
 				: customUpdated;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.after;
 			if (toRun) {
 				await queueAfterTransactionHook(async () => {
-					// @ts-expect-error context type mismatch
-					await toRun(updated as any, context);
+					await withSpan(
+						`db updateMany.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "updateMany.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(updated as any, context),
+					);
 				});
 			}
 		}
@@ -210,11 +275,20 @@ export function getWithHooks(
 		}
 
 		if (entityToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.before;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.before;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(entityToDelete as any, context);
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(entityToDelete as any, context),
+					);
 					if (result === false) {
 						return null;
 					}
@@ -237,12 +311,21 @@ export function getWithHooks(
 				: customDeleted;
 
 		if (entityToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.after;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.after;
 				if (toRun) {
 					await queueAfterTransactionHook(async () => {
-						// @ts-expect-error context type mismatch
-						await toRun(entityToDelete as any, context);
+						await withSpan(
+							`db delete.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "delete.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(entityToDelete as any, context),
+						);
 					});
 				}
 			}
@@ -274,11 +357,20 @@ export function getWithHooks(
 		}
 
 		for (const entity of entitiesToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.before;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.before;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(entity as any, context);
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(entity as any, context),
+					);
 					if (result === false) {
 						return null;
 					}
@@ -299,13 +391,22 @@ export function getWithHooks(
 				: customDeleted;
 
 		for (const entity of entitiesToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.after;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.after;
 				if (toRun) {
 					// Queue after hooks to run post-transaction
 					await queueAfterTransactionHook(async () => {
-						// @ts-expect-error context type mismatch
-						await toRun(entity as any, context);
+						await withSpan(
+							`db delete.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "delete.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(entity as any, context),
+						);
 					});
 				}
 			}
@@ -314,11 +415,98 @@ export function getWithHooks(
 		return deleted;
 	}
 
+	/**
+	 * Wraps an atomic consume operation in the plugin `delete.before` and
+	 * `delete.after` hook lifecycle. The caller supplies a `consumeFn` that
+	 * performs the actual single-row delete-and-return (typically the
+	 * adapter's `consumeOne`). The first concurrent caller wins, subsequent
+	 * racers resolve to `null` without firing `delete.after` hooks.
+	 *
+	 * `preSnapshot` lets the caller hand in a row it already fetched so
+	 * `delete.before` hooks don't trigger a second read. Without it, the
+	 * helper falls back to a best-effort `findMany` against `hookWhere`.
+	 * The snapshot only feeds `delete.before`; the `consumeFn` return value
+	 * is the race gate.
+	 *
+	 * Returning `false` from a `delete.before` hook aborts the consume and
+	 * the helper resolves to `null` (no `consumeFn` call, no after hooks).
+	 */
+	async function consumeOneWithHooks<T extends Record<string, any>>(
+		model: BaseModelNames,
+		hookWhere: Where[],
+		consumeFn: () => Promise<T | null>,
+		preSnapshot?: T | null,
+	): Promise<T | null> {
+		const context = await getCurrentAuthContext().catch(() => null);
+		const beforeHooks = hooksEntries.flatMap(({ source, hooks }) => {
+			const fn = hooks[model]?.delete?.before;
+			return fn ? [{ source, fn }] : [];
+		});
+
+		let snapshot: T | null = preSnapshot ?? null;
+		if (beforeHooks.length) {
+			if (!snapshot) {
+				try {
+					const rows = await (await getCurrentAdapter(adapter)).findMany<T>({
+						model,
+						where: hookWhere,
+						limit: 1,
+					});
+					snapshot = rows[0] || null;
+				} catch {}
+			}
+
+			if (snapshot) {
+				for (const { source, fn } of beforeHooks) {
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							fn(snapshot as any, context),
+					);
+					if (result === false) {
+						return null;
+					}
+				}
+			}
+		}
+
+		const consumed = await consumeFn();
+		if (!consumed) return null;
+
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.delete?.after;
+			if (toRun) {
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db delete.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(consumed as any, context),
+					);
+				});
+			}
+		}
+
+		return consumed;
+	}
+
 	return {
 		createWithHooks,
 		updateWithHooks,
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		consumeOneWithHooks,
 	};
 }

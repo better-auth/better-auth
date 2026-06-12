@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, userAc } from "./access";
@@ -8,7 +9,7 @@ import { hasPermission } from "./has-permission";
 
 export * from "./error-codes";
 
-interface AdminClientOptions {
+export interface AdminClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {
@@ -42,6 +43,7 @@ export const adminClient = <O extends AdminClientOptions>(
 
 	return {
 		id: "admin-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<
 			typeof admin<{
 				ac: O["ac"] extends AccessControl
@@ -80,8 +82,17 @@ export const adminClient = <O extends AdminClientOptions>(
 		}),
 		pathMethods: {
 			"/admin/list-users": "GET",
+			"/admin/impersonate-user": "POST",
 			"/admin/stop-impersonating": "POST",
 		},
+		atomListeners: [
+			{
+				matcher: (path) =>
+					path === "/admin/impersonate-user" ||
+					path === "/admin/stop-impersonating",
+				signal: "$sessionSignal",
+			},
+		],
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

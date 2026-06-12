@@ -12,8 +12,9 @@ A unique identifier for this configuration. Required when using multiple configu
 `references` <span className="opacity-70">`"user" | "organization"`</span>
 
 What the API key references. This determines ownership over the API key. Default is `"user"`.
-- `"user"`: API keys are owned by users (requires `userId` on creation)
-- `"organization"`: API keys are owned by organizations (requires `organizationId` on creation)
+
+* `"user"`: API keys are owned by users (requires `userId` on creation)
+* `"organization"`: API keys are owned by organizations (requires `organizationId` on creation)
 
 `apiKeyHeaders` <span className="opacity-70">`string | string[];`</span>
 
@@ -48,7 +49,6 @@ Customize the starting characters configuration.
     The length of the starting characters to store in the database.
     This includes the prefix length.
     Default is `6`.
-
   </Accordion>
 </Accordions>
 
@@ -113,7 +113,6 @@ Customize the key expiration.
 
     The maximum expiresIn value allowed to be set from the client. in days.
     Default is `365`.
-
   </Accordion>
 </Accordions>
 
@@ -136,7 +135,6 @@ Customize the rate-limiting.
 
     Maximum amount of requests allowed within a window.
     Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
-
   </Accordion>
 </Accordions>
 
@@ -152,8 +150,8 @@ An API Key can represent a valid session, so we can mock a session for the user 
 
 Storage backend for API keys. Default is `"database"`.
 
-- `"database"`: Store API keys in the database adapter (default)
-- `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+* `"database"`: Store API keys in the database adapter (default)
+* `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
 
 `fallbackToDatabase` <span className="opacity-70">`boolean`</span>
 
@@ -162,16 +160,17 @@ Default is `false`.
 
 <Callout>
   When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
-  - `api-key:${hashedKey}` - Primary lookup by hashed key
-  - `api-key:by-id:${id}` - Lookup by ID
-  - `api-key:by-ref:${referenceId}` - Reference's API key list (user or organization)
-  
+
+  * `api-key:${hashedKey}` - Primary lookup by hashed key
+  * `api-key:by-id:${id}` - Lookup by ID
+  * `api-key:by-ref:${referenceId}` - Reference's API key list (user or organization)
+
   If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
 </Callout>
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   secondaryStorage: {
@@ -202,7 +201,7 @@ Useful when you want to use a different storage backend specifically for API key
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -247,6 +246,7 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
     });
     ```
   </Tab>
+
   <Tab value="Cloudflare Workers">
     ```ts
     import { AsyncLocalStorage } from "node:async_hooks";
@@ -282,7 +282,6 @@ Read more about permissions [below](#permissions).
     `defaultPermissions` <span className="opacity-70">`Statements | ((referenceId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>)`</span>
 
     The default permissions for the API key. The `referenceId` is either the user ID or organization ID depending on the `references` setting.
-
   </Accordion>
 </Accordions>
 
@@ -291,11 +290,11 @@ Read more about permissions [below](#permissions).
 Disable hashing of the API key.
 
 <Callout type="warn">
-Security Warning: It's strongly recommended to not disable hashing.
-Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+  Security Warning: It's strongly recommended to not disable hashing.
+  Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
 </Callout>
 
----
+***
 
 ## Permissions
 
@@ -307,7 +306,7 @@ You can configure default permissions that will be applied to all newly created 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -327,7 +326,7 @@ You can also provide a function that returns permissions dynamically:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -431,139 +430,144 @@ When verifying an API key, all required permissions must be present in the API k
 
 Table: `apikey`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "The ID of the API key.",
-      isUnique: true,
-      isPrimaryKey: true,
-    },
-    {
-      name: "configId",
-      type: "string",
-      description: "The configuration ID this key belongs to. Default is 'default'.",
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "The name of the API key.",
-      isOptional: true,
-    },
-    {
-      name: "start",
-      type: "string",
-      description:
-        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
-      isOptional: true,
-    },
-    {
-      name: "prefix",
-      type: "string",
-      description: "The API Key prefix. Stored as plain text.",
-      isOptional: true,
-    },
-    {
-      name: "key",
-      type: "string",
-      description: "The hashed API key itself.",
-    },
-    {
-      name: "referenceId",
-      type: "string",
-      description: "The ID of the owner (user ID or organization ID based on the config's `references` setting).",
-      isIndexed: true,
-    },
-    {
-      name: "refillInterval",
-      type: "number",
-      description: "The interval to refill the key in milliseconds.",
-      isOptional: true,
-    },
-    {
-      name: "refillAmount",
-      type: "number",
-      description: "The amount to refill the remaining count of the key.",
-      isOptional: true,
-    },
-    {
-      name: "lastRefillAt",
-      type: "Date",
-      description: "The date and time when the key was last refilled.",
-      isOptional: true,
-    },
-    {
-      name: "enabled",
-      type: "boolean",
-      description: "Whether the API key is enabled.",
-    },
-    {
-      name: "rateLimitEnabled",
-      type: "boolean",
-      description: "Whether the API key has rate limiting enabled.",
-    },
-    {
-      name: "rateLimitTimeWindow",
-      type: "number",
-      description: "The time window in milliseconds for the rate limit.",
-      isOptional: true,
-    },
-    {
-      name: "rateLimitMax",
-      type: "number",
-      description:
-        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
-      isOptional: true,
-    },
-    {
-      name: "requestCount",
-      type: "number",
-      description:
-        "The number of requests made within the rate limit time window.",
-    },
-    {
-      name: "remaining",
-      type: "number",
-      description: "The number of requests remaining.",
-      isOptional: true,
-    },
-    {
-      name: "lastRequest",
-      type: "Date",
-      description: "The date and time of the last request made to the key.",
-      isOptional: true,
-    },
-    {
-      name: "expiresAt",
-      type: "Date",
-      description: "The date and time when the key will expire.",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "The date and time the API key was created.",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "The date and time the API key was updated.",
-    },
-    {
-      name: "permissions",
-      type: "string",
-      description: "The permissions of the key.",
-      isOptional: true,
-    },
-    {
-      name: "metadata",
-      type: "Object",
-      isOptional: true,
-      description: "Any additional metadata you want to store with the key.",
-    },
-  ]}
-/>
+export const apiKeyTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "The ID of the API key.",
+		isUnique: true,
+		isPrimaryKey: true,
+	},
+	{
+		name: "configId",
+		type: "string",
+		description:
+			"The configuration ID this key belongs to. Default is 'default'.",
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the API key.",
+		isOptional: true,
+	},
+	{
+		name: "start",
+		type: "string",
+		description:
+			"The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+		isOptional: true,
+	},
+	{
+		name: "prefix",
+		type: "string",
+		description: "The API Key prefix. Stored as plain text.",
+		isOptional: true,
+	},
+	{
+		name: "key",
+		type: "string",
+		description: "The hashed API key itself.",
+	},
+	{
+		name: "referenceId",
+		type: "string",
+		description:
+			"The ID of the owner (user ID or organization ID based on the config's `references` setting).",
+		isIndexed: true,
+	},
+	{
+		name: "refillInterval",
+		type: "number",
+		description: "The interval to refill the key in milliseconds.",
+		isOptional: true,
+	},
+	{
+		name: "refillAmount",
+		type: "number",
+		description: "The amount to refill the remaining count of the key.",
+		isOptional: true,
+	},
+	{
+		name: "lastRefillAt",
+		type: "Date",
+		description: "The date and time when the key was last refilled.",
+		isOptional: true,
+	},
+	{
+		name: "enabled",
+		type: "boolean",
+		description: "Whether the API key is enabled.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitEnabled",
+		type: "boolean",
+		description: "Whether the API key has rate limiting enabled.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitTimeWindow",
+		type: "number",
+		description: "The time window in milliseconds for the rate limit.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitMax",
+		type: "number",
+		description:
+			"The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+		isOptional: true,
+	},
+	{
+		name: "requestCount",
+		type: "number",
+		description:
+			"The number of requests made within the rate limit time window.",
+		isOptional: true,
+	},
+	{
+		name: "remaining",
+		type: "number",
+		description: "The number of requests remaining.",
+		isOptional: true,
+	},
+	{
+		name: "lastRequest",
+		type: "Date",
+		description: "The date and time of the last request made to the key.",
+		isOptional: true,
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The date and time when the key will expire.",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "The date and time the API key was created.",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "The date and time the API key was updated.",
+	},
+	{
+		name: "permissions",
+		type: "string",
+		description: "The permissions of the key.",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		isOptional: true,
+		description: "Any additional metadata you want to store with the key.",
+	},
+];
+
+<DatabaseTable name="apikey" fields={apiKeyTableFields} />
 
 ### Migration from Previous Versions
 

@@ -2,6 +2,8 @@ import type { InferOptionSchema, User } from "../../types";
 import type { OAuthApplication, schema } from "./schema";
 
 export interface OIDCOptions {
+	/** @internal */
+	__skipDeprecationWarning?: boolean | undefined;
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *

@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -1016,6 +1017,50 @@ describe("api-key", async () => {
 		expect(response?.valid).toBe(true);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9504
+	 */
+	it("should return 429 when API key rate limit is exceeded via before hook", async () => {
+		const { client: rlClient, signInWithTestUser: rlSignIn } =
+			await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+							rateLimit: {
+								enabled: true,
+								timeWindow: 60000,
+								maxRequests: 2,
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+		const { headers: userHeaders } = await rlSignIn();
+		const { data: rlKey } = await rlClient.apiKey.create(
+			{},
+			{ headers: userHeaders },
+		);
+		if (!rlKey) throw new Error("apiKey.create returned null");
+
+		const headers = new Headers();
+		headers.set("x-api-key", rlKey.key);
+
+		for (let i = 0; i < 2; i++) {
+			const res = await rlClient.getSession({ fetchOptions: { headers } });
+			expect(res.error).toBeNull();
+		}
+
+		const res = await rlClient.getSession({ fetchOptions: { headers } });
+		expect(res.error?.status).toBe(429);
+	});
+
 	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
 		const { data: apiKey } = await client.apiKey.create(
@@ -1939,6 +1984,69 @@ describe("api-key", async () => {
 			expect(session?.session).toBeDefined();
 		});
 
+		it("should run customAPIKeyValidator once on the session path", async () => {
+			const validator = vi.fn(() => true);
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+							customAPIKeyValidator: validator,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { user } = await signInWithTestUser();
+			const apiKey2 = await auth.api.createApiKey({
+				body: { userId: user.id },
+			});
+
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			validator.mockClear();
+
+			await auth.api.getSession({ headers });
+
+			expect(validator).toHaveBeenCalledTimes(1);
+		});
+
+		it("should not grant a session for a key from a different config", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey([
+							{ configId: "primary", enableSessionForAPIKeys: true },
+							{ configId: "secondary", enableSessionForAPIKeys: true },
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { user } = await signInWithTestUser();
+
+			// Issued under "secondary" but presented via the shared default header,
+			// which matches the first config ("primary").
+			const secondaryKey = await auth.api.createApiKey({
+				body: { configId: "secondary", userId: user.id },
+			});
+
+			const headers = new Headers();
+			headers.set("x-api-key", secondaryKey.key);
+
+			await expect(auth.api.getSession({ headers })).rejects.toThrowError();
+		});
+
 		it("should not get session from an API key if enableSessionForAPIKeys is false", async () => {
 			const { client, auth, signInWithTestUser } = await getTestInstance(
 				{
@@ -2448,21 +2556,23 @@ describe("api-key", async () => {
 		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value, ttl) {
+				store.set(key, value as string);
+				if (ttl) expirationMap.set(key, ttl);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+				expirationMap.delete(key);
+			},
+		};
+
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						store.set(key, value);
-						if (ttl) expirationMap.set(key, ttl);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					delete(key) {
-						store.delete(key);
-						expirationMap.delete(key);
-					},
-				},
+				secondaryStorage,
 				plugins: [
 					apiKey({
 						storage: "secondary-storage",
@@ -2546,6 +2656,36 @@ describe("api-key", async () => {
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
 			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
 			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
+		});
+
+		it("should fetch keys from secondary storage in parallel, not sequentially", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await client.apiKey.create({}, { headers });
+			}
+
+			let concurrentGets = 0;
+			let maxConcurrentGets = 0;
+			const originalGet = secondaryStorage.get;
+			vi.spyOn(secondaryStorage, "get").mockImplementation(async (key) => {
+				if (!key.startsWith("api-key:by-id:")) return originalGet(key);
+				concurrentGets++;
+				maxConcurrentGets = Math.max(maxConcurrentGets, concurrentGets);
+				await new Promise((r) => setTimeout(r, 20));
+				const result = await originalGet(key);
+				concurrentGets--;
+				return result;
+			});
+
+			const { data: keys } = await client.apiKey.list({
+				fetchOptions: { headers },
+			});
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBe(keyCount);
+			expect(maxConcurrentGets).toBe(keyCount);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2802,21 +2942,23 @@ describe("api-key", async () => {
 		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
+		const fallbackStorage: SecondaryStorage = {
+			set(key, value, ttl) {
+				store.set(key, value as string);
+				if (ttl) expirationMap.set(key, ttl);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+				expirationMap.delete(key);
+			},
+		};
+
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						store.set(key, value);
-						if (ttl) expirationMap.set(key, ttl);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					delete(key) {
-						store.delete(key);
-						expirationMap.delete(key);
-					},
-				},
+				secondaryStorage: fallbackStorage,
 				plugins: [
 					apiKey({
 						storage: "secondary-storage",
@@ -2835,6 +2977,10 @@ describe("api-key", async () => {
 		beforeEach(() => {
 			store.clear();
 			expirationMap.clear();
+		});
+
+		afterEach(() => {
+			vi.restoreAllMocks();
 		});
 
 		it("should read from secondary storage first", async () => {
@@ -3033,6 +3179,172 @@ describe("api-key", async () => {
 			expect(store.has(`api-key:${hashedKey2}`)).toBe(true);
 			// Verify user's key list is populated
 			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
+		});
+
+		it("should populate storage in parallel when listing falls back to database", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const context = await auth.$context;
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: "apikey",
+					data: {
+						configId: "default",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: `Parallel Key ${i}`,
+						prefix: "test",
+						start: "test_",
+						key: `hashed_parallel_${i}`,
+						enabled: true,
+						expiresAt: null,
+						referenceId: user.id,
+						lastRefillAt: null,
+						lastRequest: null,
+						metadata: null,
+						rateLimitMax: null,
+						rateLimitTimeWindow: null,
+						remaining: null,
+						refillAmount: null,
+						refillInterval: null,
+						rateLimitEnabled: false,
+						requestCount: 0,
+						permissions: null,
+					},
+				});
+			}
+
+			let concurrentSets = 0;
+			let maxConcurrentSets = 0;
+			const originalSet = fallbackStorage.set;
+			vi.spyOn(fallbackStorage, "set").mockImplementation(
+				async (key, value) => {
+					if (!key.startsWith("api-key:by-id:")) {
+						originalSet(key, value);
+						return;
+					}
+					concurrentSets++;
+					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
+					await new Promise((r) => setTimeout(r, 20));
+					originalSet(key, value);
+					concurrentSets--;
+				},
+			);
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
+		});
+
+		it("should not touch the ref list per key while populating", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const context = await auth.$context;
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: "apikey",
+					data: {
+						configId: "default",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: `Ref List Key ${i}`,
+						prefix: "test",
+						start: "test_",
+						key: `hashed_ref_list_${i}`,
+						enabled: true,
+						expiresAt: null,
+						referenceId: user.id,
+						lastRefillAt: null,
+						lastRequest: null,
+						metadata: null,
+						rateLimitMax: null,
+						rateLimitTimeWindow: null,
+						remaining: null,
+						refillAmount: null,
+						refillInterval: null,
+						rateLimitEnabled: false,
+						requestCount: 0,
+						permissions: null,
+					},
+				});
+			}
+
+			const refKey = `api-key:by-ref:${user.id}`;
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+			expect(
+				getSpy.mock.calls.filter(([k]) => k === refKey).length,
+			).toBeLessThanOrEqual(1);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should invalidate (not mutate) the ref list on create", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const refKey = `api-key:by-ref:${user.id}`;
+			await client.apiKey.list({}, { headers });
+
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
+
+			await client.apiKey.create({}, { headers });
+
+			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should invalidate (not mutate) the ref list on delete", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: created } = await client.apiKey.create({}, { headers });
+			await client.apiKey.list({}, { headers });
+
+			const refKey = `api-key:by-ref:${user.id}`;
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
+
+			await client.apiKey.delete({ keyId: created!.id }, { headers });
+
+			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should not lose ids when two creates race on the ref list", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Widen the RMW window so both writers would observe the same
+			// empty ref list before either wrote back. The fix avoids get entirely.
+			const originalGet = fallbackStorage.get.bind(fallbackStorage);
+			vi.spyOn(fallbackStorage, "get").mockImplementation(
+				async (key: string) => {
+					const value = await originalGet(key);
+					if (key.startsWith("api-key:by-ref:")) {
+						await new Promise((r) => setTimeout(r, 30));
+					}
+					return value;
+				},
+			);
+
+			const [a, b] = await Promise.all([
+				client.apiKey.create({ name: "race-a" }, { headers }),
+				client.apiKey.create({ name: "race-b" }, { headers }),
+			]);
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+			const ids = keys!.apiKeys!.map((k) => k.id);
+			expect(ids).toContain(a.data!.id);
+			expect(ids).toContain(b.data!.id);
 		});
 
 		it("should write to secondary storage only", async () => {
@@ -3790,12 +4102,197 @@ describe("api-key", async () => {
 			});
 
 			const result = await auth.api.verifyApiKey({
-				body: { key: publicKey.key },
+				body: {
+					configId: "public-api",
+					key: publicKey.key,
+				},
 			});
 
 			expect(result.valid).toBe(true);
 			expect(result.key?.configId).toBe("public-api");
 			expect(result.key?.rateLimitMax).toBe(100);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9779
+		 */
+		describe("verify scoping by configId", () => {
+			it("should verify a non-default key when configId is omitted", async () => {
+				const { user } = await signInWithTestUser();
+
+				const publicKey = await auth.api.createApiKey({
+					body: {
+						configId: "public-api",
+						userId: user.id,
+					},
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: { key: publicKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("public-api");
+			});
+
+			it("should still verify a default key when configId is omitted", async () => {
+				const { user } = await signInWithTestUser();
+
+				const defaultKey = await auth.api.createApiKey({
+					body: { userId: user.id },
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: { key: defaultKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("default");
+			});
+
+			// Preserves the #9393 check: scoping to the wrong config is rejected.
+			it("should reject a key when scoped to a different configId", async () => {
+				const { user } = await signInWithTestUser();
+
+				const publicKey = await auth.api.createApiKey({
+					body: {
+						configId: "public-api",
+						userId: user.id,
+					},
+				});
+
+				const result = await auth.api.verifyApiKey({
+					body: {
+						configId: "internal-api",
+						key: publicKey.key,
+					},
+				});
+
+				expect(result.valid).toBe(false);
+				expect(result.error?.code).toBe("INVALID_API_KEY");
+			});
+
+			// Default config disables rate limiting; the key's config enforces it,
+			// so the second unscoped verify must be rate limited.
+			it("should apply the key's own config when configId is omitted", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "limited",
+										defaultPrefix: "lim_",
+										rateLimit: {
+											enabled: true,
+											maxRequests: 1,
+											timeWindow: 60000,
+										},
+									},
+									{
+										configId: "default",
+										defaultPrefix: "def_",
+										rateLimit: { enabled: false },
+									},
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const limitedKey = await scopedAuth.api.createApiKey({
+					body: { configId: "limited", userId: user.id },
+				});
+
+				const first = await scopedAuth.api.verifyApiKey({
+					body: { key: limitedKey.key },
+				});
+				expect(first.valid).toBe(true);
+
+				const second = await scopedAuth.api.verifyApiKey({
+					body: { key: limitedKey.key },
+				});
+				expect(second.valid).toBe(false);
+				expect(second.error?.code).toBe("RATE_LIMITED");
+			});
+
+			it("should run the key's own customAPIKeyValidator when configId is omitted", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "guarded",
+										defaultPrefix: "grd_",
+										customAPIKeyValidator: () => false,
+									},
+									{ configId: "default", defaultPrefix: "def_" },
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const guardedKey = await scopedAuth.api.createApiKey({
+					body: { configId: "guarded", userId: user.id },
+				});
+
+				const result = await scopedAuth.api.verifyApiKey({
+					body: { key: guardedKey.key },
+				});
+
+				expect(result.valid).toBe(false);
+				expect(result.error?.code).toBe("KEY_NOT_FOUND");
+			});
+
+			it("should not apply the default config validator to a non-default key", async () => {
+				const { auth: scopedAuth, signInWithTestUser: scopedSignIn } =
+					await getTestInstance(
+						{
+							plugins: [
+								apiKey([
+									{
+										configId: "default",
+										defaultPrefix: "def_",
+										customAPIKeyValidator: () => false,
+									},
+									{ configId: "open", defaultPrefix: "opn_" },
+								]),
+							],
+						},
+						{
+							clientOptions: {
+								plugins: [apiKeyClient()],
+							},
+						},
+					);
+
+				const { user } = await scopedSignIn();
+
+				const openKey = await scopedAuth.api.createApiKey({
+					body: { configId: "open", userId: user.id },
+				});
+
+				const result = await scopedAuth.api.verifyApiKey({
+					body: { key: openKey.key },
+				});
+
+				expect(result.valid).toBe(true);
+				expect(result.key?.configId).toBe("open");
+			});
 		});
 
 		it("should get key and resolve correct config", async () => {
@@ -4434,5 +4931,399 @@ describe("api-key", async () => {
 			expect(updatedKey.configId).toBe("org-keys");
 			expect(updatedKey.referenceId).toBe(org.id);
 		});
+	});
+});
+
+describe("verify should not write back stale state", async () => {
+	let onValidate: (() => Promise<void>) | null = null;
+	const customAPIKeyValidator = async () => {
+		const fn = onValidate;
+		onValidate = null;
+		if (fn) await fn();
+		return true;
+	};
+
+	describe("database storage", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey({ customAPIKeyValidator })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("should not re-enable a key disabled during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.updateApiKey({
+					body: { keyId: created.id, enabled: false },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			// the verification read the key before the disable, so it passes,
+			// but its write-back must not revert the disable
+			expect(result.valid).toBe(true);
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.enabled).toBe(false);
+		});
+	});
+
+	describe("secondary storage", async () => {
+		const store = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					apiKey({ storage: "secondary-storage", customAPIKeyValidator }),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		beforeEach(() => {
+			store.clear();
+		});
+
+		it("should not re-enable a key disabled during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.updateApiKey({
+					body: { keyId: created.id, enabled: false },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(result.valid).toBe(true);
+
+			const stored = store.get(`api-key:by-id:${created.id}`);
+			expect(stored).toBeDefined();
+			expect(JSON.parse(stored!).enabled).toBe(false);
+		});
+
+		it("should not recreate a key deleted during verification", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+
+			onValidate = async () => {
+				await auth.api.deleteApiKey({
+					body: { keyId: created.id },
+					headers,
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(result.valid).toBe(false);
+
+			const apiKeyEntries = [...store.keys()].filter((k) =>
+				k.startsWith("api-key:"),
+			);
+			expect(apiKeyEntries).toEqual([]);
+		});
+	});
+});
+
+describe("concurrent verification enforces atomic counters", async () => {
+	describe("database storage", async () => {
+		// A gate that releases all waiters only once `size` of them have arrived,
+		// forcing every concurrent verification to read the same pre-update row
+		// before any write runs. Without this, the synchronous SQLite driver lets
+		// each verification finish before the next begins and no race is observed.
+		function createArrivalGate(size: number) {
+			let arrived = 0;
+			let release!: () => void;
+			const ready = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return async () => {
+				arrived++;
+				if (arrived >= size) release();
+				await ready;
+			};
+		}
+
+		const concurrency = 8;
+		let gate: (() => Promise<void>) | null = null;
+		const customAPIKeyValidator = async () => {
+			if (gate) await gate();
+			return true;
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey({ customAPIKeyValidator })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		afterEach(() => {
+			gate = null;
+		});
+
+		it("does not let concurrent verifications drop remaining below zero", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: { remaining: 1, userId: user.id },
+			});
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			const accepted = results.filter((r) => r.valid);
+			expect(accepted.length).toBe(1);
+			for (const r of results) {
+				if (!r.valid) {
+					expect(r.error?.code).toBe("USAGE_EXCEEDED");
+				}
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.remaining).toBe(0);
+		});
+
+		it("does not let concurrent verifications exceed the per-key rate limit", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+
+			// Prime the window with one accepted request so the concurrent burst
+			// races the in-window increment path, not the first-request branch.
+			// With max 2 and one already used, exactly one of the burst may pass.
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			const accepted = results.filter((r) => r.valid);
+			expect(accepted.length).toBe(1);
+			for (const r of results) {
+				if (!r.valid) {
+					expect(r.error?.code).toBe("RATE_LIMITED");
+				}
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.requestCount).toBe(2);
+		});
+	});
+
+	describe("secondary storage reference list", async () => {
+		const store = new Map<string, string>();
+		// A read of the gated key yields for a tick before returning. Two
+		// concurrent writers without a lock therefore both read the same pre-write
+		// reference list and the lost update is exercised deterministically; a
+		// correctly serialized writer reads the gated key one at a time and keeps
+		// both entries.
+		let gatedKey: string | null = null;
+
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value as string);
+			},
+			async get(key) {
+				if (key === gatedKey) {
+					await new Promise((resolve) => setTimeout(resolve, 5));
+				}
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [apiKey({ storage: "secondary-storage" })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		beforeEach(() => {
+			store.clear();
+			gatedKey = null;
+		});
+
+		it("does not hide an active key when two creates run concurrently", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			gatedKey = `api-key:by-ref:${user.id}`;
+
+			const [keyA, keyB] = await Promise.all([
+				auth.api.createApiKey({ body: {}, headers }),
+				auth.api.createApiKey({ body: {}, headers }),
+			]);
+
+			gatedKey = null;
+
+			const listed = await auth.api.listApiKeys({ headers });
+			const listedIds = listed.apiKeys.map((k) => k.id);
+			expect(listedIds).toContain(keyA.id);
+			expect(listedIds).toContain(keyB.id);
+
+			for (const created of [keyA, keyB]) {
+				const verified = await auth.api.verifyApiKey({
+					body: { key: created.key },
+				});
+				expect(verified.valid).toBe(true);
+			}
+		});
+	});
+});
+
+describe("listApiKeys with integer user.id (postgres + serial)", async () => {
+	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [apiKey()],
+			advanced: {
+				database: { generateId: "serial" },
+			},
+		},
+		{
+			testWith: "postgres",
+			testUser: { email: testUserEmail },
+			clientOptions: { plugins: [apiKeyClient()] },
+		},
+	);
+	const { headers } = await signInWithTestUser();
+
+	it("returns the key that createApiKey just wrote", async () => {
+		const created = await auth.api.createApiKey({ body: {}, headers });
+		expect(created.id).toBeDefined();
+
+		const result = await auth.api.listApiKeys({ headers });
+
+		expect(result.total).toBeGreaterThan(0);
+		expect(result.apiKeys.find((k) => k.id === created.id)).toBeDefined();
+	});
+});
+
+describe("api key creation uses a fresh session", async () => {
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			session: {
+				cookieCache: { enabled: true, maxAge: 60 * 5 },
+			},
+			plugins: [apiKey()],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+
+	// Capture every cookie the response sets, including `session_data` (the
+	// signed cookie-cache snapshot), not just `session_token`.
+	function captureCookies(headers: Headers) {
+		return (context: { response: Response }) => {
+			const setCookies = context.response.headers.getSetCookie?.() ?? [];
+			for (const setCookie of setCookies) {
+				const pair = setCookie.split(";")[0]!;
+				const eq = pair.indexOf("=");
+				if (eq === -1) continue;
+				const name = pair.slice(0, eq).trim();
+				const value = pair.slice(eq + 1).trim();
+				if (!value) continue;
+				const current = headers.get("cookie");
+				headers.set(
+					"cookie",
+					current ? `${current}; ${name}=${value}` : `${name}=${value}`,
+				);
+			}
+		};
+	}
+
+	it("rejects creation when the session was revoked but the cookie cache is still valid", async () => {
+		const headers = new Headers();
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: captureCookies(headers) },
+		});
+		const userId = signIn.data?.user.id;
+		expect(userId).toBeDefined();
+		// The cookie cache must actually be present, otherwise this test would
+		// pass for the wrong reason.
+		expect(headers.get("cookie")).toContain("better-auth.session_data");
+
+		// With a live session, creation succeeds.
+		const first = await client.apiKey.create({}, { headers });
+		expect(first.data?.key).toBeDefined();
+
+		// Simulate an admin ban / session revocation: the database sessions are
+		// deleted while the client still holds the valid signed cookie cache.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUserSessions(userId!);
+
+		// Creation must re-check the authoritative store and reject, rather than
+		// minting a fresh key from the stale cookie-cache session.
+		const second = await client.apiKey.create({}, { headers });
+		expect(second.data).toBeNull();
+		expect(second.error?.status).toBe(401);
 	});
 });

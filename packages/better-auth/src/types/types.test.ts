@@ -1,8 +1,14 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { organization, twoFactor } from "../plugins";
+import { betterAuth } from "../auth/minimal";
+import type { InferCtx } from "../client/path-to-object";
+import { tanstackStartCookies } from "../integrations/tanstack-start";
+import { admin, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { Auth } from "./auth";
+import type { HasRequiredKeys } from "./helper";
 
 type TestTypeOptions = {
 	test: boolean;
@@ -151,6 +157,49 @@ describe("general types", async () => {
 		expectTypeOf<typeof auth.api>().not.toHaveProperty("testNonAction");
 	});
 
+	/**
+	 * `Auth<O>["api"].getSession` must remain callable from a generic context.
+	 * Changing this contract is a breaking change for downstream consumers.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/8466
+	 * @see https://github.com/next-safe-action/next-safe-action/pull/439
+	 */
+	it("should keep getSession on auth.api when O is a generic parameter", () => {
+		async function probe<O extends BetterAuthOptions>(auth: Auth<O>) {
+			await auth.api.getSession({ headers: new Headers() });
+		}
+		void probe;
+	});
+
+	/**
+	 * A plugin overriding a base endpoint must expose the plugin's type,
+	 * not an intersection that leaks base metadata like `options.body`.
+	 */
+	it("plugin override of base endpoint key should drive auth.api type", async () => {
+		const overridePlugin = {
+			id: "override-base" as const,
+			endpoints: {
+				signInEmail: createAuthEndpoint(
+					"/sign-in/email",
+					{
+						method: "POST",
+					},
+					async (ctx) => {
+						return ctx.json({ overriddenMarker: true as const });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth } = await getTestInstance({ plugins: [overridePlugin] });
+		type ApiSignInEmail = (typeof auth.api)["signInEmail"];
+		type Ret = Awaited<ReturnType<ApiSignInEmail>>;
+		expectTypeOf<Ret>().toEqualTypeOf<{ overriddenMarker: true }>();
+		type Body = ApiSignInEmail extends { options: { body: infer B } }
+			? B
+			: "no-body";
+		expectTypeOf<Body>().toEqualTypeOf<"no-body">();
+	});
+
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [twoFactor(), organization()],
@@ -221,5 +270,120 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8823
+ */
+describe("plugin types through factory and indirection patterns", () => {
+	it("preserves endpoint types through factory ReturnType", () => {
+		const createAuth = () =>
+			betterAuth({
+				plugins: [admin()],
+			});
+		type Auth = ReturnType<typeof createAuth>;
+
+		const auth = createAuth();
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.listUsers).toBeFunction();
+		expectTypeOf<Auth["api"]["createUser"]>().toBeFunction();
+		expectTypeOf<Auth["api"]["listUsers"]>().toBeFunction();
+	});
+
+	it("preserves endpoint types when options are stored in a variable", () => {
+		const opts = { plugins: [admin()] };
+		const auth = betterAuth(opts);
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.listUsers).toBeFunction();
+	});
+
+	it("preserves endpoint types with mixed-shape plugins", () => {
+		const auth = betterAuth({
+			plugins: [admin(), organization(), tanstackStartCookies()],
+		});
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.createOrganization).toBeFunction();
+	});
+
+	it("preserves $ERROR_CODES through factory ReturnType", () => {
+		const createAuth = () => betterAuth({ plugins: [admin()] });
+		type Codes = ReturnType<typeof createAuth>["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
+		expectTypeOf<Codes>().toHaveProperty("USER_ALREADY_EXISTS");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6876
+ */
+describe("public type exports", () => {
+	it("should export JoinOption from better-auth/types", () => {
+		expectTypeOf<JoinOption>().not.toBeAny();
+	});
+
+	it("should export JoinConfig from better-auth/types", () => {
+		expectTypeOf<JoinConfig>().not.toBeAny();
+	});
+
+	it("should export GoogleProfile from better-auth/types", () => {
+		expectTypeOf<GoogleProfile>().not.toBeAny();
+	});
+});
+
+describe("HasRequiredKeys", () => {
+	it("should return false for any", () => {
+		expectTypeOf<HasRequiredKeys<any>>().toEqualTypeOf<false>();
+	});
+
+	it("should return true for objects with required keys", () => {
+		expectTypeOf<HasRequiredKeys<{ name: string }>>().toEqualTypeOf<true>();
+	});
+
+	it("should return false for objects with only optional keys", () => {
+		expectTypeOf<HasRequiredKeys<{ name?: string }>>().toEqualTypeOf<false>();
+	});
+});
+
+describe("any-poisoning guards", () => {
+	/**
+	 * InferCtx: when body is `any`, query typing should be preserved
+	 * via InferCtxQuery delegation instead of collapsing to `any`.
+	 */
+	it("InferCtx should preserve query when body is any", () => {
+		type Result = InferCtx<
+			{ body: any; query: { page: number }; method: "GET" },
+			{}
+		>;
+		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
+	});
+
+	/**
+	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
+	 * should not collapse auth.$Infer to `any`.
+	 */
+	it("auth.$Infer should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Infer = typeof auth.$Infer;
+		expectTypeOf<Infer>().not.toBeAny();
+		expectTypeOf<Infer>().toHaveProperty("Session");
+	});
+
+	/**
+	 * InferPluginErrorCodes: same guard as InferPluginTypes,
+	 * auth.$ERROR_CODES should not collapse to `any`.
+	 */
+	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Codes = (typeof auth)["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
 });

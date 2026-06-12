@@ -120,7 +120,9 @@ export const getClientConfig = (
 					path === "/verify-email" ||
 					path === "/revoke-sessions" ||
 					path === "/revoke-session" ||
-					path === "/change-email";
+					path === "/revoke-other-sessions" ||
+					path === "/change-email" ||
+					path === "/change-password";
 
 				return matchesCommonPaths;
 			},

@@ -158,7 +158,7 @@ describe("sign-up with custom fields", async () => {
 					email: "input-false@test.com",
 					password: "password",
 					name: "Input False Test",
-					// @ts-expect-error role has input: false
+					//@ts-expect-error
 					role: "admin",
 				},
 			}),
@@ -265,13 +265,14 @@ describe("sign-up user enumeration protection", async () => {
 		);
 	});
 
-	it("should call onExistingUserSignUp when autoSignIn is false", async () => {
+	it("should call onExistingUserSignUp when autoSignIn is false and requireEmailVerification is true", async () => {
 		const onExistingUserSignUp = vi.fn();
 		const { auth } = await getTestInstance(
 			{
 				emailAndPassword: {
 					enabled: true,
 					autoSignIn: false,
+					requireEmailVerification: true,
 					onExistingUserSignUp,
 				},
 			},
@@ -289,6 +290,34 @@ describe("sign-up user enumeration protection", async () => {
 		await auth.api.signUpEmail({ body });
 		await auth.api.signUpEmail({ body });
 
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("should call onExistingUserSignUp when autoSignIn is false without requireEmailVerification", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-autosignin-no-verify@test.com",
+			password: "password123",
+			name: "Callback AutoSignIn No Verify",
+		};
+
+		await auth.api.signUpEmail({ body });
+		const response = await auth.api.signUpEmail({ body });
+		expect(response.token).toBeNull();
+		expect(response.user).toBeDefined();
 		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
 	});
 
@@ -344,7 +373,7 @@ describe("sign-up user enumeration protection", async () => {
 		expect(onExistingUserSignUp).not.toHaveBeenCalled();
 	});
 
-	it("should return success for existing email when autoSignIn is disabled", async () => {
+	it("should return synthetic user for existing email when autoSignIn is disabled without requireEmailVerification", async () => {
 		const { auth } = await getTestInstance(
 			{
 				emailAndPassword: {
@@ -364,11 +393,35 @@ describe("sign-up user enumeration protection", async () => {
 		};
 
 		await auth.api.signUpEmail({ body });
+		const response = await auth.api.signUpEmail({ body });
+		expect(response.token).toBeNull();
+		expect(response.user).toBeDefined();
+		expect(response.user.email).toBe("existing-auto-signin@test.com");
+	});
 
-		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+	it("should return token: null for new sign-up when autoSignIn is disabled", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
 
-		expect(duplicatedSignUp.token).toBeNull();
-		expect(duplicatedSignUp.user.email).toBe(body.email);
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "new-auto-signin@test.com",
+				password: "password123",
+				name: "New User",
+			},
+		});
+
+		expect(res.token).toBeNull();
+		expect(res.user.email).toBe("new-auto-signin@test.com");
 	});
 });
 
@@ -702,6 +755,68 @@ describe("sign-up enumeration protection — indistinguishable response", async 
 			disableTestUser: true,
 		},
 	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9346
+	 */
+	it("should have identical image key presence for real and synthetic user when image is omitted", async () => {
+		const body = {
+			email: "image-enum-test@test.com",
+			password: "password123",
+			name: "Image Enum Test",
+		};
+
+		const first = await auth.api.signUpEmail({ body });
+		const second = await auth.api.signUpEmail({ body });
+
+		expect("image" in first.user).toBe("image" in second.user);
+		expect(first.user.image).toBe(second.user.image);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9346
+	 */
+	it("should have identical image key presence in raw JSON response when image is omitted", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			name: "A",
+			email: "image-raw-test@example.com",
+			password: "correct horse battery staple",
+		};
+
+		const firstResponse = await auth.handler(
+			new Request("http://localhost/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		const first = await firstResponse.json();
+
+		const secondResponse = await auth.handler(
+			new Request("http://localhost/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		const second = await secondResponse.json();
+
+		expect("image" in first.user).toBe("image" in second.user);
+		expect(first.user.image).toBe(second.user.image);
+	});
 
 	it("should return same keys in same order for real and synthetic user", async () => {
 		const first = await auth.api.signUpEmail({

@@ -145,7 +145,8 @@
       "!**/playwright-report",
       "!**/.output",
       "!**/.tmp",
-      "!**/tmp-docs-fetch"
+      "!**/tmp-docs-fetch",
+      "!**/.claude/worktrees/**"
     ]
   }
 }

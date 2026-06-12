@@ -35,3 +35,23 @@ export {
 	initGetFieldAttributes,
 	initGetIdField,
 };
+
+/**
+ * @deprecated Use `createAdapterFactory` instead.
+ */
+export const createAdapter = createAdapterFactory;
+
+/**
+ * @deprecated Use `AdapterFactoryOptions` instead.
+ */
+export type CreateAdapterOptions = AdapterFactoryOptions;
+
+/**
+ * @deprecated Use `AdapterFactoryConfig` instead.
+ */
+export type AdapterConfig = AdapterFactoryConfig;
+
+/**
+ * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead.
+ */
+export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;

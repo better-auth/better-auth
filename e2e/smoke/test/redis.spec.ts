@@ -101,7 +101,7 @@ test("Redis secondary storage integration", async (t) => {
 			t.assert.ok(sessionDataString);
 			const sessionData = JSON.parse(sessionDataString);
 			t.assert.ok(sessionData.user.id);
-			t.assert.ok(sessionData.session.id === undefined);
+			t.assert.ok(sessionData.session.id);
 		},
 	);
 
@@ -229,7 +229,7 @@ test("Redis secondary storage integration", async (t) => {
 
 			const sessionData = JSON.parse(sessionDataString);
 			t.assert.ok(sessionData.user.id);
-			t.assert.ok(sessionData.session.id === undefined);
+			t.assert.ok(sessionData.session.id);
 			t.assert.equal(sessionData.user.email, "google-user@example.com");
 		},
 	);

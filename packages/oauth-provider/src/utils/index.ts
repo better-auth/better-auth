@@ -12,6 +12,7 @@ import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
+	GrantType,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -55,12 +56,102 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
 };
 
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	const queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	const verifySig = await makeSignature(queryParams.toString(), secret);
+	return (
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -289,13 +380,15 @@ export function basicToClientCredentials(authorization: string) {
 	if (authorization.startsWith("Basic ")) {
 		const encoded = authorization.replace("Basic ", "");
 		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
+		const separatorIndex = decoded.indexOf(":");
+		if (separatorIndex === -1) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			});
 		}
-		const [id, secret] = decoded.split(":", 2);
+		const id = decoded.slice(0, separatorIndex);
+		const secret = decoded.slice(separatorIndex + 1);
 		if (!id || !secret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "invalid authorization header format",
@@ -310,6 +403,33 @@ export function basicToClientCredentials(authorization: string) {
 }
 
 /**
+ * Whether a client is allowed to use a given grant type.
+ *
+ * A client's registered `grantTypes` defaults to the documented default
+ * `["authorization_code"]` when unset (see client registration). Refresh tokens
+ * are only ever issued through the authorization_code flow, so a client allowed
+ * to use `authorization_code` is implicitly allowed to use `refresh_token`.
+ *
+ * @internal
+ */
+export function clientAllowsGrant(
+	client: Pick<SchemaClient<Scope[]>, "grantTypes">,
+	grantType: GrantType,
+) {
+	const allowedGrants =
+		client.grantTypes && client.grantTypes.length > 0
+			? client.grantTypes
+			: (["authorization_code"] as GrantType[]);
+	if (
+		grantType === "refresh_token" &&
+		allowedGrants.includes("authorization_code")
+	) {
+		return true;
+	}
+	return allowedGrants.includes(grantType);
+}
+
+/**
  * Validates client credentials failing on mismatches
  * and incorrectly provided information
  *
@@ -321,6 +441,7 @@ export async function validateClientCredentials(
 	clientId: string,
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes
+	grantType?: GrantType, // if set, enforces the client is registered for this grant type
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
@@ -381,6 +502,14 @@ export async function validateClientCredentials(
 		}
 	}
 
+	// Enforce the client is registered for the requested grant type
+	if (grantType && !clientAllowsGrant(client, grantType)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client is not authorized to use grant type ${grantType}`,
+			error: "unauthorized_client",
+		});
+	}
+
 	return client;
 }
 
@@ -425,7 +554,7 @@ export function parsePrompt(prompt: string) {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -441,7 +570,7 @@ export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export async function computePairwiseSub(
+async function computePairwiseSub(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	secret: string,
@@ -468,21 +597,42 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
  */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+export const signedQueryIssuedAtParam = "ba_iat";
+export const postLoginClearedParam = "ba_pl";
+
+export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
+	if (!raw) return null;
+	const issuedAt = Number(raw);
+	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+	return new Date(issuedAt);
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return nextQuery;
 }
 
 enum PKCERequirementErrors {

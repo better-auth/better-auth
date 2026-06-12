@@ -1,4 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { parseCookies } from "../../cookies/cookie-utils";
+import { PACKAGE_VERSION } from "../../version";
 
 /**
  * Configuration for the client-side last login method plugin
@@ -15,12 +17,7 @@ function getCookieValue(name: string): string | null {
 	if (typeof document === "undefined") {
 		return null;
 	}
-
-	const cookie = document.cookie
-		.split("; ")
-		.find((row) => row.startsWith(`${name}=`));
-
-	return cookie ? cookie.split("=")[1]! : null;
+	return parseCookies(document.cookie).get(name) ?? null;
 }
 
 /**
@@ -33,6 +30,7 @@ export const lastLoginMethodClient = (
 
 	return {
 		id: "last-login-method-client",
+		version: PACKAGE_VERSION,
 		getActions() {
 			return {
 				/**

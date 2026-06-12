@@ -18,6 +18,7 @@ import {
 	updateSCIMUser,
 } from "./routes";
 import type { SCIMOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -30,21 +31,26 @@ declare module "@better-auth/core" {
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
-		providerOwnership: { enabled: false },
 		...options,
 	} satisfies SCIMOptions;
+	// TODO(scim-provider-ownership-default-on): flip default to `true` on next.
+	// Kept default-off on main so existing SQL deployments don't need a schema
+	// migration mid-upgrade. The dedicated next-minor PR adds the
+	// `scimProvider.userId` column and flips the default in one step.
+	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
 	return {
 		id: "scim",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
-			listSCIMProviderConnections: listSCIMProviderConnections(),
-			getSCIMProviderConnection: getSCIMProviderConnection(),
-			deleteSCIMProviderConnection: deleteSCIMProviderConnection(),
+			listSCIMProviderConnections: listSCIMProviderConnections(opts),
+			getSCIMProviderConnection: getSCIMProviderConnection(opts),
+			deleteSCIMProviderConnection: deleteSCIMProviderConnection(opts),
 			getSCIMUser: getSCIMUser(authMiddleware),
-			createSCIMUser: createSCIMUser(authMiddleware),
+			createSCIMUser: createSCIMUser(authMiddleware, opts),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
 			deleteSCIMUser: deleteSCIMUser(authMiddleware),
 			updateSCIMUser: updateSCIMUser(authMiddleware),
@@ -72,7 +78,7 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
-					...(opts.providerOwnership?.enabled
+					...(providerOwnershipEnabled
 						? {
 								userId: {
 									type: "string",

@@ -231,8 +231,8 @@ export const siwx = (options: SIWXPluginOptions) => {
 						}
 
 						// Clean up used nonce to prevent replay attacks
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							identifier,
 						);
 
 						const accountId = formatAccountId(

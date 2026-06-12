@@ -87,9 +87,20 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
+/** Stored AuthnRequest record for InResponseTo validation */
+export interface AuthnRequestRecord {
+	id: string;
+	providerId: string;
+	createdAt: number;
+	expiresAt: number;
+}
+
 /** Session data stored during SAML login for Single Logout */
 export interface SAMLSessionRecord {
+	/** Session row id, used to key the by-id lookup index. */
 	sessionId: string;
+	/** Session token, used to revoke the session during Single Logout. */
+	sessionToken: string;
 	providerId: string;
 	nameID: string;
 	sessionIndex?: string;
@@ -147,6 +158,16 @@ export interface SSOOptions {
 				provider: SSOProvider<SSOOptions>;
 		  }) => Awaitable<void>)
 		| undefined;
+	/**
+	 * If true, the `provisionUser` callback will be called on every login,
+	 * not just when a new user is registered. This is useful when you need
+	 * to sync upstream identity provider profile changes on each sign-in.
+	 *
+	 * The `provisionUser` callback should be idempotent when this is enabled.
+	 *
+	 * @default false
+	 */
+	provisionUserOnEveryLogin?: boolean;
 	/**
 	 * Organization provisioning options
 	 */
@@ -305,7 +326,7 @@ export interface SSOOptions {
 		 *
 		 * This works correctly in serverless environments without any additional configuration.
 		 *
-		 * @default false
+		 * @default true
 		 */
 		enableInResponseToValidation?: boolean;
 		/**
