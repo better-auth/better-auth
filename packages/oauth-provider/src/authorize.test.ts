@@ -12,10 +12,11 @@ import {
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
-	signedQueryParameterNameParam,
 } from "./signed-query";
 import type { OAuthClient } from "./types/oauth";
 import { verifyOAuthQueryParams } from "./utils";
+
+const signedQueryParameterNameParam = "ba_param";
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {

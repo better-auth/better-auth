@@ -1,6 +1,6 @@
 export const signedQueryIssuedAtParam = "ba_iat";
 export const postLoginClearedParam = "ba_pl";
-export const signedQueryParameterNameParam = "ba_param";
+const signedQueryParameterNameParam = "ba_param";
 
 export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
 	const canonicalParams = new URLSearchParams();

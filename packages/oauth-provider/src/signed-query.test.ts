@@ -3,8 +3,9 @@ import {
 	buildSignedOAuthQuery,
 	canonicalizeOAuthQueryParams,
 	setSignedOAuthQueryParameterNames,
-	signedQueryParameterNameParam,
 } from "./signed-query";
+
+const signedQueryParameterNameParam = "ba_param";
 
 describe("signed OAuth query", () => {
 	it("builds oauth_query from declared signed params", () => {
@@ -23,6 +24,9 @@ describe("signed OAuth query", () => {
 		reorderedParams.append("utm_email", "user@example.com");
 
 		const oauthQuery = buildSignedOAuthQuery(`?${reorderedParams.toString()}`);
+		if (!oauthQuery) {
+			throw new Error("Expected signed OAuth query");
+		}
 		const oauthParams = new URLSearchParams(oauthQuery);
 
 		expect(oauthParams.get("custom_authorization_context")).toBe("tenant-a");

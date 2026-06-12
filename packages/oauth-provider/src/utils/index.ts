@@ -22,7 +22,6 @@ import type {
 } from "../types";
 
 export {
-	canonicalizeOAuthQueryParams,
 	getSignedQueryIssuedAt,
 	postLoginClearedParam,
 	signedQueryIssuedAtParam,
