@@ -171,7 +171,16 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
+			/**
+			 * Enforce a constant-time floor so an attacker cannot distinguish
+			 * "email not found / already verified" (fast local JWT sign) from
+			 * "email found and unverified" (slow external email-send) by
+			 * comparing response times.
+			 */
+			const MINIMUM_MS = 500;
+			const start = Date.now();
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let error: unknown;
 			if (!user || user.user.emailVerified) {
 				await createEmailVerificationToken(
 					ctx.context.secret,
@@ -179,12 +188,18 @@ export const sendVerificationEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				// We're returning true to avoid leaking information about the user
-				return ctx.json({
-					status: true,
-				});
+			} else {
+				try {
+					await sendVerificationEmailFn(ctx, user.user);
+				} catch (e) {
+					error = e;
+				}
 			}
-			await sendVerificationEmailFn(ctx, user.user);
+			const remaining = MINIMUM_MS - (Date.now() - start);
+			if (remaining > 0) {
+				await new Promise((resolve) => setTimeout(resolve, remaining));
+			}
+			if (error) throw error;
 			return ctx.json({
 				status: true,
 			});

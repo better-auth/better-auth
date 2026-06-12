@@ -508,6 +508,77 @@ describe("Email Verification", async () => {
 	});
 });
 
+describe("Email Verification - Timing-safe unauthenticated path", () => {
+	it("should enforce a constant-time floor for both existing and non-existing emails", async () => {
+		const mockSendEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user }) {
+					mockSendEmail(user.email);
+				},
+			},
+		});
+
+		const startExisting = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: testUser.email },
+		});
+		const elapsedExisting = Date.now() - startExisting;
+
+		const startMissing = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: "nonexistent@example.com" },
+		});
+		const elapsedMissing = Date.now() - startMissing;
+
+		expect(elapsedExisting).toBeGreaterThanOrEqual(450);
+		expect(elapsedMissing).toBeGreaterThanOrEqual(450);
+
+		expect(mockSendEmail).toHaveBeenCalledWith(testUser.email);
+		expect(mockSendEmail).not.toHaveBeenCalledWith("nonexistent@example.com");
+	});
+
+	it("should still surface errors from sendVerificationEmail after the minimum delay", async () => {
+		let calls = 0;
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {
+					calls += 1;
+					if (calls >= 2) {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests.",
+						});
+					}
+				},
+			},
+		});
+
+		const start = Date.now();
+		try {
+			await auth.api.sendVerificationEmail({
+				body: { email: testUser.email },
+			});
+			expect.fail("Expected to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+			}
+		}
+		const elapsed = Date.now() - start;
+		expect(elapsed).toBeGreaterThanOrEqual(450);
+	});
+});
+
 describe("Email Verification Secondary Storage", async () => {
 	const store = new Map<string, string>();
 	let token: string;
