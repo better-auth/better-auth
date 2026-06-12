@@ -120,6 +120,13 @@ function getFieldSchema(field: DBFieldAttribute) {
 	return schema;
 }
 
+/**
+ * Extracts OpenAPI parameters from endpoint options.
+ *
+ * If explicit `openapi.parameters` are provided in metadata, automatic query
+ * parameter inference from the Zod schema is skipped. This allows full control
+ * over parameter definitions when needed.
+ */
 function getParameters(options: EndpointOptions) {
 	const parameters: OpenAPIParameter[] = [];
 	if (options.metadata?.openapi?.parameters) {
@@ -376,7 +383,7 @@ function getResponse(responses?: Record<string, any> | undefined) {
 			description:
 				"Internal Server Error. This is a problem with the server that you cannot fix.",
 		},
-		...responses,
+		...(responses ? structuredClone(responses) : {}),
 	} as any;
 }
 
@@ -401,7 +408,9 @@ function getOperationId(
 		usedOperationIds.add(operationId);
 		return operationId;
 	}
-	const methodSuffix = method.charAt(0) + method.slice(1).toLowerCase();
+	const normalizedMethod = method.toUpperCase();
+	const methodSuffix =
+		normalizedMethod.charAt(0) + normalizedMethod.slice(1).toLowerCase();
 	let candidate = `${operationId}${methodSuffix}`;
 	let duplicateIndex = 2;
 	while (usedOperationIds.has(candidate)) {
@@ -415,6 +424,10 @@ function getOperationId(
 function cloneOpenAPIValue<T>(value: T): T {
 	if (Array.isArray(value)) {
 		return value.map((item) => cloneOpenAPIValue(item)) as T;
+	}
+
+	if (value instanceof Date) {
+		return new Date(value) as T;
 	}
 
 	if (value && typeof value === "object") {

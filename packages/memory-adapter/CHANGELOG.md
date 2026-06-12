@@ -1,5 +1,57 @@
 # @better-auth/memory-adapter
 
+## 1.6.16
+
+### Patch Changes
+
+- Updated dependencies [[`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15)]:
+  - @better-auth/core@1.6.16
+
+## 1.6.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.15
+
+## 1.6.14
+
+### Patch Changes
+
+- Updated dependencies [[`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.6.14
+
+## 1.6.13
+
+### Patch Changes
+
+- Updated dependencies [[`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066)]:
+  - @better-auth/core@1.6.13
+
+## 1.6.12
+
+### Patch Changes
+
+- Updated dependencies [[`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3), [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f), [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff), [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3), [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799)]:
+  - @better-auth/core@1.6.12
+
+## 1.6.11
+
+### Patch Changes
+
+- [#9568](https://github.com/better-auth/better-auth/pull/9568) [`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.consumeVerificationValue(identifier)`: atomically consume a verification row keyed by identifier. The first concurrent caller receives the row; later racers receive `null`. Backed by a new `DBAdapter.consumeOne` primitive implemented natively per adapter (memory, mongo, drizzle, kysely, prisma), with a `transaction(findMany + delete)` factory fallback. `SecondaryStorage.getAndDelete` is added as an optional companion; Redis ships it via an atomic Lua get-and-delete operation for compatibility with Redis versions before 6.2.
+
+- [`c6918ec`](https://github.com/better-auth/better-auth/commit/c6918ecc9e3a75892169415d7f6c95b591b6a52d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the OAuth refresh-token grant rotation: two concurrent requests presenting the same refresh token both passed the `revoked` check before either revocation write completed, so each minted a fresh refresh token (forked family). `createRefreshToken` now performs an atomic compare-and-swap on the parent row (`UPDATE ... WHERE id = ? AND revoked IS NULL`) before issuing the new token, and `revokeRefreshToken` uses the same CAS. The loser of a concurrent rotation receives `invalid_grant`; the parent row's `revoked` flag is set, so any subsequent replay trips the existing family-invalidation guard. The `oauthRefreshToken.token` column gains a `unique` constraint for parity with `oauthAccessToken.token`.
+
+  `@better-auth/memory-adapter` now treats `undefined` and `null` as equivalent under an `eq null` `where` clause, mirroring SQL `IS NULL` and Mongo's missing-or-null semantics. The adapter factory's `transformInput` skips writing optional fields whose value is `undefined`, so a CAS predicate like `WHERE revoked IS NULL` against a freshly created row (where the field is absent) used to fail-closed on every call. Without this change the refresh-token rotation above is broken for any deployment using the in-memory adapter.
+
+  **Migration note:** the better-auth migration generator only emits `UNIQUE` for newly-created columns. Existing installs will not get the new `oauthRefreshToken.token` unique constraint via `migrate`/`generate`; add it manually if your operational tooling relies on it (e.g. `CREATE UNIQUE INDEX oauth_refresh_token_token_uniq ON "oauthRefreshToken" (token);`). The CAS fix above does not depend on the database-level constraint to be correct; the constraint is defense-in-depth so collisions from buggy custom `generateRefreshToken` callbacks fail loudly.
+
+  Strict family invalidation on contested rotations (per RFC 9700 §4.14) is deferred to a follow-up minor; closing it cleanly requires opt-in transactional rotation in the adapter contract so the family-delete cannot interleave with the winner's in-flight access-token insert.
+
+- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
+  - @better-auth/core@1.6.11
+
 ## 1.6.10
 
 ### Patch Changes

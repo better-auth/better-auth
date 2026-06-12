@@ -2,6 +2,7 @@ import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
@@ -9,6 +10,7 @@ import {
 import { betterFetch } from "@better-fetch/fetch";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
+import type { GenericOAuthUserInfo } from "./routes";
 import {
 	getUserInfo,
 	oAuth2Callback,
@@ -16,6 +18,12 @@ import {
 	signInWithOAuth2,
 } from "./routes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+
+function isNonEmptyOAuthId(
+	id: string | number | null | undefined,
+): id is string | number {
+	return id !== undefined && id !== null && id !== "";
+}
 
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
@@ -131,7 +139,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}) {
 						// Use custom getToken if provided
 						if (c.getToken) {
-							return c.getToken(data);
+							return applyDefaultAccessTokenExpiry(
+								await c.getToken(data),
+								c.accessTokenExpiresIn,
+							);
 						}
 
 						// Standard token exchange flow
@@ -155,7 +166,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return validateAuthorizationCode({
+						const tokens = await validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
@@ -168,6 +179,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async refreshAccessToken(
 						refreshToken: string,
@@ -190,7 +205,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						return refreshAccessToken({
+						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
 								clientId: c.clientId,
@@ -199,25 +214,41 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
 						});
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {
-						const userInfo = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl);
+						const userInfo = (
+							c.getUserInfo
+								? await c.getUserInfo(tokens)
+								: await getUserInfo(tokens, finalUserInfoUrl)
+						) as GenericOAuthUserInfo | null;
 						if (!userInfo) {
 							return null;
 						}
 
 						const userMap = await c.mapProfileToUser?.(userInfo);
+						const rawId = isNonEmptyOAuthId(userMap?.id)
+							? userMap.id
+							: isNonEmptyOAuthId(userInfo.id)
+								? userInfo.id
+								: isNonEmptyOAuthId(userInfo.sub)
+									? userInfo.sub
+									: undefined;
+						if (rawId === undefined) {
+							return null;
+						}
 
 						return {
 							user: {
-								id: userInfo?.id,
 								email: userInfo?.email,
 								emailVerified: userInfo?.emailVerified,
 								image: userInfo?.image,
 								name: userInfo?.name,
 								...userMap,
+								id: String(rawId),
 							},
 							data: userInfo,
 						};

@@ -139,6 +139,46 @@ describe("info command", () => {
 		expect(output.betterAuth.config.baseURL).toBe("https://example.com");
 	});
 
+	it("should redact versioned secrets", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				secrets: [
+					{ version: 1, value: "old-rotation-secret-123" },
+					{ version: 2, value: "new-rotation-secret-456" },
+				],
+				emailAndPassword: {
+					enabled: true,
+				}
+			})`,
+		);
+
+		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
+			cwd: tmpDir,
+		});
+
+		const output = JSON.parse(stdout);
+
+		expect(output.betterAuth.config).toBeDefined();
+		expect(output.betterAuth.config.secrets).toBe("[REDACTED]");
+		const configStr = JSON.stringify(output.betterAuth.config);
+		expect(configStr).not.toContain("old-rotation-secret-123");
+		expect(configStr).not.toContain("new-rotation-secret-456");
+	});
+
 	it("should detect installed frameworks", async () => {
 		// Create package.json with various frameworks
 		await fs.writeFile(
@@ -346,4 +386,4 @@ describe("info command", () => {
 		expect(output.frameworks).toBeNull();
 		expect(output.databases).toBeNull();
 	});
-}, 20000);
+});

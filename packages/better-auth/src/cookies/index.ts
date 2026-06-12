@@ -24,7 +24,11 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import {
+	parseCookies,
+	SECURE_COOKIE_PREFIX,
+	splitSetCookieHeader,
+} from "./cookie-utils";
 import {
 	createAccountStore,
 	createSessionStore,
@@ -252,11 +256,25 @@ export async function setCookieCache(
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
 
-	// Refresh account cookie to keep it in sync
-	if (ctx.context.options.account?.storeAccountCookie) {
+	// Keep the account cookie in sync, unless this response already set a
+	// fresh one that the stale request copy would downgrade or expire.
+	if (
+		ctx.context.options.account?.storeAccountCookie &&
+		!hasPendingSetCookie(ctx, ctx.context.authCookies.accountData.name)
+	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			await setAccountCookie(ctx, accountData);
+			if (accountData.userId === session.user.id) {
+				await setAccountCookie(ctx, accountData);
+			} else {
+				expireCookie(ctx, ctx.context.authCookies.accountData);
+				const accountStore = createAccountStore(
+					ctx.context.authCookies.accountData.name,
+					ctx.context.authCookies.accountData.attributes,
+					ctx,
+				);
+				accountStore.setCookies(accountStore.clean());
+			}
 		}
 	}
 }
@@ -305,6 +323,98 @@ export async function setSessionCookie(
 	ctx.context.setNewSession(session);
 }
 
+type CookieScrubView = GenericEndpointContext & {
+	responseHeaders?: Headers;
+	context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
+};
+
+/**
+ * Remove any prior `Set-Cookie` entries on the current response whose cookie
+ * name matches `cookieName` or any chunked variant (`${cookieName}.0`, etc.).
+ *
+ * Prevents a valid cookie value from leaking on the wire when the same cookie
+ * is set and then expired within a single request (e.g. `/sign-in/email`
+ * writes credential session cookies and the 2FA after-hook expires them).
+ * Browsers honor the expiring entry, but anything reading the raw response
+ * headers — proxy/LB logs, server-side SDK consumers, observability tools —
+ * sees the earlier valid value and could replay it (bypassing the 2FA gate
+ * when the cookie cache is enabled).
+ *
+ * Scrubs both the local middleware scope's `responseHeaders` and the outer
+ * endpoint scope's `ctx.context.responseHeaders`, because plugin after-hooks
+ * run in a fresh local scope while accumulated response headers live on the
+ * outer one. `scoped.context` is required by {@link GenericEndpointContext}
+ * but unit-test mocks pass a minimal object via `as any`, so we use optional
+ * chaining defensively. The `Set` collapses the case where both scopes
+ * reference the same `Headers`.
+ */
+function removeSetCookieEntries(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+) {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		// `Headers.getSetCookie()` is standard on Node ≥18.14, Bun, Deno, and
+		// Cloudflare Workers, but older Node and some polyfilled Headers shims
+		// expose Set-Cookie as a collapsed string. Parse that fallback before
+		// rewriting the header so stale session cookies don't survive there.
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (!existing.length) continue;
+		const survivors = existing.filter(
+			(entry) => !entry.startsWith(exact) && !entry.startsWith(chunk),
+		);
+		if (survivors.length === existing.length) continue;
+		headers.delete("set-cookie");
+		for (const entry of survivors) {
+			headers.append("set-cookie", entry);
+		}
+	}
+}
+
+/**
+ * Whether the response already has a pending `Set-Cookie` for `cookieName`
+ * or a chunked variant.
+ */
+function hasPendingSetCookie(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): boolean {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (
+			existing.some(
+				(entry) => entry.startsWith(exact) || entry.startsWith(chunk),
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /**
  * Expires a cookie by setting `maxAge: 0` while preserving its attributes
  */
@@ -312,6 +422,7 @@ export function expireCookie(
 	ctx: GenericEndpointContext,
 	cookie: BetterAuthCookie,
 ) {
+	removeSetCookieEntries(ctx, cookie.name);
 	ctx.setCookie(cookie.name, "", {
 		...cookie.attributes,
 		maxAge: 0,
@@ -356,17 +467,6 @@ export function deleteSessionCookie(
 	}
 }
 
-export function parseCookies(cookieHeader: string) {
-	const cookies = cookieHeader.split("; ");
-	const cookieMap = new Map<string, string>();
-
-	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split(/=(.*)/s);
-		cookieMap.set(name!, value!);
-	});
-	return cookieMap;
-}
-
 export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
 
 export const getSessionCookie = (
@@ -390,9 +490,10 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
 	const parsedCookie = parseCookies(cookies);
+	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
 	const getCookie = (name: string) =>
-		parsedCookie.get(name) ||
-		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
+		parsedCookie.get(name);
 
 	const sessionToken =
 		getCookie(`${cookiePrefix}.${cookieName}`) ||
@@ -486,6 +587,15 @@ export const getCookieCache = async <
 
 		const strategy = config?.strategy || "compact";
 
+		// A valid signature/encryption only proves integrity, not freshness. Mirror
+		// the in-route session reader and reject a snapshot whose embedded session
+		// has already expired, so a caller using this helper as an auth gate cannot
+		// treat a stale-but-signed cookie as a live session.
+		const isEmbeddedSessionExpired = (payload: S): boolean => {
+			const expiresAt = payload.session?.expiresAt;
+			return !!expiresAt && new Date(expiresAt).getTime() < Date.now();
+		};
+
 		if (strategy === "jwe") {
 			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
@@ -509,6 +619,9 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
+				}
 				return payload;
 			}
 			return null;
@@ -530,6 +643,9 @@ export const getCookieCache = async <
 					if (cookieVersion !== expectedVersion) {
 						return null;
 					}
+				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
 				}
 				return payload;
 			}
@@ -572,6 +688,19 @@ export const getCookieCache = async <
 				if (cookieVersion !== expectedVersion) {
 					return null;
 				}
+			}
+
+			// The compact strategy carries no `exp` claim, so the outer cache window
+			// and the embedded session lifetime must be checked explicitly (the
+			// jwt/jwe strategies get the outer window from their `exp` claim).
+			if (
+				typeof sessionDataPayload.expiresAt === "number" &&
+				sessionDataPayload.expiresAt < Date.now()
+			) {
+				return null;
+			}
+			if (isEmbeddedSessionExpired(sessionDataPayload.session)) {
+				return null;
 			}
 
 			return sessionDataPayload.session;

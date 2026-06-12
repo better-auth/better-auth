@@ -644,7 +644,11 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new account linked to an existing user", async () => {
-			const { auth, authClient, getSCIMToken } = createTestInstance();
+			// Linking a pre-existing user by email is opt-in via
+			// `linkExistingUsers`; enable the legacy behavior for this test.
+			const { auth, authClient, getSCIMToken } = createTestInstance({
+				linkExistingUsers: true,
+			});
 			const scimToken = await getSCIMToken();
 
 			await authClient.signUp.email({
@@ -695,6 +699,83 @@ describe("SCIM", () => {
 				]),
 				userName: "existing@email.com",
 			});
+		});
+
+		it("should NOT link a pre-existing user by email when linkExistingUsers is disabled (default)", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "existing-user@email.com",
+				password: "the password",
+				name: "existing-user",
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "existing-user",
+						emails: [{ value: "existing-user@email.com" }],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+
+			// Must not silently link to the existing account.
+			await expect(createUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User already exists",
+					body: expect.objectContaining({
+						scimType: "uniqueness",
+						status: "409",
+					}),
+				}),
+			);
+		});
+
+		it("should only link a pre-existing user whose email domain is trusted", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance({
+				linkExistingUsers: { trustedDomains: ["trusted.com"] },
+			});
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "user@other.com",
+				password: "the password",
+				name: "other",
+			});
+			await authClient.signUp.email({
+				email: "user@trusted.com",
+				password: "the password",
+				name: "trusted",
+			});
+
+			// Domain not in trustedDomains: rejected.
+			await expect(
+				auth.api.createSCIMUser({
+					body: {
+						userName: "other",
+						emails: [{ value: "user@other.com" }],
+					},
+					headers: { authorization: `Bearer ${scimToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ message: "User already exists" }),
+			);
+
+			// Trusted domain: linked.
+			const linked = await auth.api.createSCIMUser({
+				body: {
+					userName: "trusted",
+					emails: [{ value: "user@trusted.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(linked.id).toBeTruthy();
+			expect(linked.emails).toEqual([
+				{ primary: true, value: "user@trusted.com" },
+			]);
 		});
 
 		it("should create a new user with external id", async () => {

@@ -1,4 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
@@ -342,7 +346,39 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			await adapter.deleteTeam(team.id);
+			await runWithTransaction(ctx.context.adapter, async () => {
+				await adapter.deleteTeam(team.id);
+
+				// Drop the removed team from pending invitations so they stay
+				// acceptable; an emptied list degrades to an org-level invitation.
+				const pendingInvitations = await adapter.findPendingInvitations({
+					organizationId,
+				});
+				const trx = await getCurrentAdapter(ctx.context.adapter);
+				for (const invitation of pendingInvitations) {
+					if (!("teamId" in invitation) || !invitation.teamId) {
+						continue;
+					}
+					const teamIds = (invitation.teamId as string).split(",");
+					if (!teamIds.includes(team.id)) {
+						continue;
+					}
+					const remainingTeamIds = teamIds.filter((id) => id !== team.id);
+					await trx.update({
+						model: "invitation",
+						where: [
+							{
+								field: "id",
+								value: invitation.id,
+							},
+						],
+						update: {
+							teamId:
+								remainingTeamIds.length > 0 ? remainingTeamIds.join(",") : null,
+						},
+					});
+				}
+			});
 
 			// Run afterDeleteTeam hook
 			if (options?.organizationHooks?.afterDeleteTeam) {
@@ -822,7 +858,26 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 			});
 
-			return ctx.json(teams);
+			// Only return teams that belong to an organization the caller is
+			// actually a member of. A teamMember row on its own is not enough —
+			// a stray row could otherwise surface another organization's team
+			// metadata.
+			const orgIds = [...new Set(teams.map((team) => team.organizationId))];
+			const memberships = await Promise.all(
+				orgIds.map((organizationId) =>
+					adapter.checkMembership({
+						userId: session.user.id,
+						organizationId,
+					}),
+				),
+			);
+			const memberOrgIds = new Set(
+				orgIds.filter((_, index) => memberships[index]),
+			);
+
+			return ctx.json(
+				teams.filter((team) => memberOrgIds.has(team.organizationId)),
+			);
 		},
 	);
 
@@ -896,6 +951,28 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+				);
+			}
+			// Resolve the team to its organization and confirm the caller is a
+			// member of that organization. A teamMember row alone is not
+			// sufficient: a stray row pointing at another organization's team
+			// would otherwise return that team's member list. Organization
+			// membership is the requirement here.
+			const team = await adapter.findTeamById({ teamId });
+			if (!team) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				);
+			}
+			const isOrgMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: team.organizationId,
+			});
+			if (!isOrgMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				);
 			}
 			const member = await adapter.findTeamMember({
