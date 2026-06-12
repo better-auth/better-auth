@@ -1,5 +1,5 @@
 ---
-"better-auth": minor
+"better-auth": patch
 ---
 
 fix organization invitation acceptance creating duplicate members on retries and make accepted-invitation replay lookup configurable
