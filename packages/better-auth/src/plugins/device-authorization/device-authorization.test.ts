@@ -1001,6 +1001,41 @@ describe("device authorization ownership gate", () => {
 		expect(deny).toMatchObject({ success: true });
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
+	 */
+	it("treats an empty user_id as omitted and leaves the code unbound", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: "",
+			},
+		});
+
+		// The unbound code is claimable by any signed-in user via verify
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
 	it("does not overwrite a device code claimed after verify reads it", async () => {
 		let adapter: DBAdapter<BetterAuthOptions> | null = null;
 		let concurrentOwnerId: string | undefined;
