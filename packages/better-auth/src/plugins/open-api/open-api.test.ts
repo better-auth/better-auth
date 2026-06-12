@@ -260,6 +260,7 @@ const wrapperSemanticsPlugin = {
 					prefaulted: z.string().prefault("prefaulted-value"),
 					nonOptional: z.string().optional().nonoptional(),
 					unionOptional: z.union([z.string(), z.undefined()]),
+					unknownPayload: z.unknown(),
 				}),
 			},
 			async () => ({ success: true }),
@@ -840,5 +841,7 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+		expect(getSchemaProperty(requestBodySchema, "unknownPayload")).toEqual({});
+		expect(requestBodySchema.required).not.toContain("unknownPayload");
 	});
 });
