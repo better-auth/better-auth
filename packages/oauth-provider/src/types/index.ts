@@ -4,7 +4,7 @@ import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
-import type { GrantType } from "./oauth";
+import type { GrantType, OAuthClient } from "./oauth";
 
 export type {
 	AuthMethod,
@@ -79,6 +79,19 @@ export interface ClientDiscovery<
 	 * `client_id_metadata_document_supported`.
 	 */
 	discoveryMetadata?: Record<string, unknown>;
+}
+
+export type OAuthClientRegistrationMetadata = Omit<OAuthClient, "client_id"> &
+	Partial<Pick<OAuthClient, "client_id">>;
+
+export interface InitialClientRegistrationAccessTokenAuthorization {
+	/**
+	 * Ownership reference to attach to the created OAuth client.
+	 *
+	 * Use this to associate machine-provisioned clients with an organization,
+	 * team, tenant, or other application-level owner.
+	 */
+	referenceId?: string;
 }
 
 export interface OAuthOptions<
@@ -280,6 +293,25 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * Validates an RFC 7591 initial access token for protected dynamic client
+	 * registration.
+	 *
+	 * The token is read from the `Authorization: Bearer <token>` header on
+	 * `POST /oauth2/register`. Return `true` to authorize registration, or
+	 * return an object with `referenceId` to attach ownership metadata to the
+	 * created OAuth client. Return `false` or `undefined` to reject the token.
+	 *
+	 * Token issuance, storage, expiration, and revocation are deployment-specific
+	 * in RFC 7591 and should be handled by your application.
+	 */
+	validateInitialClientRegistrationAccessToken?: (context: {
+		initialClientRegistrationAccessToken: string;
+		headers: Headers;
+		clientMetadata: OAuthClientRegistrationMetadata;
+	}) => Awaitable<
+		boolean | InitialClientRegistrationAccessTokenAuthorization | undefined
+	>;
 	/**
 	 * Discovery implementations consulted by `getClient()` when resolving
 	 * a `client_id`. Each entry decides whether it handles the `client_id`

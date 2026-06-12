@@ -1508,7 +1508,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
-								"200": {
+								"201": {
 									description: "OAuth2 application registered successfully",
 									content: {
 										"application/json": {

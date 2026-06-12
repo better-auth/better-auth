@@ -1225,6 +1225,28 @@ oauthProvider({
   For MCP, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
 </Callout>
 
+Protected dynamic client registration allows machine callers to register public or confidential clients without a Better Auth user session. Issue an RFC 7591 initial access token out of band, then validate the token from the `Authorization: Bearer <token>` header.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  validateInitialClientRegistrationAccessToken: async ({
+    initialClientRegistrationAccessToken,
+    clientMetadata,
+  }) => {
+    if (initialClientRegistrationAccessToken !== process.env.CLIENT_REGISTRATION_TOKEN) {
+      return false
+    }
+
+    return {
+      referenceId: "infra-provisioner",
+    }
+  },
+})
+```
+
+The `referenceId` value attaches application ownership metadata to the created OAuth client. Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
+
 #### Dynamic Client Registration Expiration
 
 You can set an expiration time for how long a dynamically registered confidential client should last for. By default, dynamically registered confidential clients do not expire.

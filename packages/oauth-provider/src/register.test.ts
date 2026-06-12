@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import { resetSeedStateForTests } from "./resources";
+import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
 describe("oauth register", async () => {
@@ -601,6 +602,174 @@ describe("oauth register - unauthenticated", async () => {
 			redirect_uris: [redirectUri],
 		});
 		expect(response.error?.status).toBe(400);
+	});
+});
+
+describe("oauth register - protected dynamic registration", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validInitialAccessToken = "valid-initial-registration-token";
+	const validateInitialClientRegistrationAccessToken = vi.fn<
+		NonNullable<OAuthOptions["validateInitialClientRegistrationAccessToken"]>
+	>(({ initialClientRegistrationAccessToken, clientMetadata }) => {
+		if (
+			initialClientRegistrationAccessToken === validInitialAccessToken &&
+			clientMetadata.client_name === "Machine Client"
+		) {
+			return { referenceId: "infra-provisioner" };
+		}
+
+		return false;
+	});
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				validateInitialClientRegistrationAccessToken,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	it("should create confidential clients with a valid initial access token", async () => {
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${validInitialAccessToken}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+					grant_types: ["client_credentials"],
+				}),
+			},
+		);
+		expect(response.status).toBe(201);
+
+		const body = (await response.json()) as OAuthClient;
+		expect(body.client_id).toBeDefined();
+		expect(body.client_secret).toBeDefined();
+		expect(body.grant_types).toEqual(["client_credentials"]);
+		expect(body.reference_id).toBe("infra-provisioner");
+		expect(body.user_id).toBeUndefined();
+		expect(body.token_endpoint_auth_method).toBe("client_secret_basic");
+		expect(validateInitialClientRegistrationAccessToken).toHaveBeenCalledWith(
+			expect.objectContaining({
+				initialClientRegistrationAccessToken: validInitialAccessToken,
+				clientMetadata: expect.objectContaining({
+					client_name: "Machine Client",
+				}),
+			}),
+		);
+	});
+
+	it("should reject invalid initial access tokens", async () => {
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: "Bearer invalid-initial-registration-token",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+				}),
+			},
+		);
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Bearer error="invalid_token"',
+		);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+		expect(response.headers.get("Pragma")).toBe("no-cache");
+
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_token");
+	});
+
+	it("should reject malformed initial access token headers", async () => {
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: "Bearer",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+				}),
+			},
+		);
+		expect(response.status).toBe(400);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Bearer error="invalid_request"',
+		);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+		expect(response.headers.get("Pragma")).toBe("no-cache");
+
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_request");
+	});
+
+	it("should reject initial access tokens when validation is not configured", async () => {
+		const noValidatorAuthServerBaseUrl = "http://localhost:3001";
+		const { customFetchImpl: customFetchWithoutValidator } =
+			await getTestInstance({
+				baseURL: noValidatorAuthServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			});
+
+		const response = await customFetchWithoutValidator(
+			`${noValidatorAuthServerBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${validInitialAccessToken}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+				}),
+			},
+		);
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Bearer error="invalid_token"',
+		);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+		expect(response.headers.get("Pragma")).toBe("no-cache");
+
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_token");
 	});
 });
 
