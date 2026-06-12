@@ -17,11 +17,6 @@ import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
-import {
-	extractRepeatedResourceFromForm,
-	logEnforcePerClientAudiencesResolution,
-	seedAudiences,
-} from "./audiences";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
@@ -35,13 +30,17 @@ import {
 	authServerMetadata,
 	metadataResponse,
 	oidcServerMetadata,
-	protectedResourceMetadata,
 } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
-import * as oauthAudienceEndpoints from "./oauthAudience";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
+import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
+import {
+	extractRepeatedResourceFromForm,
+	logEnforcePerClientResourcesResolution,
+	seedResources,
+} from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
@@ -407,7 +406,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							required: false,
 							schema: { type: "array", items: { type: "string" } },
 							description:
-								"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
+								"Requested protected resource(s) for the access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 						},
 						{
 							name: "prompt",
@@ -485,16 +484,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Seed `oauthAudience` rows from plugin config. Idempotent and
-			// race-safe (UNIQUE constraint on identifier). No-op when neither
-			// `audiences` nor the deprecated `validAudiences` is set. Tolerates
+			// Seed `oauthResource` rows from plugin config. Idempotent and
+			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
+			// is empty. Tolerates
 			// "table not yet created" errors and defers to lazy-seed.
-			await seedAudiences(ctx, opts);
+			await seedResources(ctx, opts);
 
-			// Record which default applied to `enforcePerClientAudiences` so
+			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
-			// `resolveEnforcePerClientAudiences` so validation flow stays cheap.
-			logEnforcePerClientAudiencesResolution(opts);
+			// `resolveEnforcePerClientResources` so validation flow stays cheap.
+			logEnforcePerClientResourcesResolution(opts);
 
 			// Well-known warnings are best-effort and only make sense with the
 			// JWT plugin. A dynamic baseURL resolves per-request, so there is
@@ -731,43 +730,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				},
 			),
 			/**
-			 * RFC 9728 protected-resource metadata endpoint. Opt-in via
-			 * `publishProtectedResourceMetadata: true` — when off, returns 404
-			 * so audience identifiers can't be probed on unauthorized deployments.
-			 *
-			 * Identifier is passed as a single URL-encoded path segment
-			 * (e.g. `/.well-known/oauth-protected-resource/https%3A%2F%2Fapi.example.com`).
-			 *
-			 * Aligns with the current MCP authorization spec direction.
-			 */
-			getProtectedResourceMetadata: createAuthEndpoint(
-				"/.well-known/oauth-protected-resource/:identifier",
-				{
-					method: "GET",
-					metadata: {
-						SERVER_ONLY: true,
-					},
-				},
-				async (ctx) => {
-					const rawIdentifier = (
-						ctx as unknown as { params: { identifier: string } }
-					).params.identifier;
-					// `decodeURIComponent` throws `URIError` on malformed escape
-					// sequences. Fall back to the raw value so a bad identifier
-					// surfaces as a clean NOT_FOUND from the row lookup in
-					// `protectedResourceMetadata` rather than an unhandled 500 —
-					// mirroring the `decodePathParam` helper used by the admin
-					// audience endpoints.
-					let identifier: string;
-					try {
-						identifier = decodeURIComponent(rawIdentifier);
-					} catch {
-						identifier = rawIdentifier;
-					}
-					return protectedResourceMetadata(ctx, opts, identifier);
-				},
-			),
-			/**
 			 * A server-only endpoint that helps provide the
 			 * OpenId configuration at the well-known endpoint.
 			 *
@@ -994,7 +956,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														},
 													],
 													description:
-														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
+														"Requested protected resource(s) for the access token",
 												},
 												scope: {
 													type: "string",
@@ -1076,7 +1038,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					// single-value path (and the in-process auth.api.* call
 					// path where there is no Request body to re-read) is left
 					// untouched. See `extractRepeatedResourceFromForm` in
-					// audiences.ts for rationale.
+					// resources.ts for rationale.
 					if (ctx.request) {
 						const repeated = await extractRepeatedResourceFromForm(ctx.request);
 						if (repeated && repeated.length > 1) {
@@ -1525,10 +1487,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),
-						// RFC 7591 §2 extension: declare the audiences this client
-						// will request. Each must reference an existing oauthAudience
+						// RFC 7591 §2 extension: declare the resources this client
+						// will request. Each must reference an existing oauthResource
 						// row; the registration handler links them on success.
-						audiences: z.array(z.string().min(1)).optional(),
+						resources: z.array(z.string().min(1)).optional(),
 						skip_consent: z
 							.never({
 								error:
@@ -1727,15 +1689,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
 			updateOAuthConsent: oauthConsentEndpoints.updateOAuthConsent(opts),
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
-			adminCreateAudience: oauthAudienceEndpoints.adminCreateAudience(opts),
-			adminListAudiences: oauthAudienceEndpoints.adminListAudiences(opts),
-			adminGetAudience: oauthAudienceEndpoints.adminGetAudience(opts),
-			adminUpdateAudience: oauthAudienceEndpoints.adminUpdateAudience(opts),
-			adminDeleteAudience: oauthAudienceEndpoints.adminDeleteAudience(opts),
-			adminLinkClientAudience:
-				oauthAudienceEndpoints.adminLinkClientAudience(opts),
-			adminUnlinkClientAudience:
-				oauthAudienceEndpoints.adminUnlinkClientAudience(opts),
+			adminCreateOAuthResource:
+				oauthResourceEndpoints.adminCreateOAuthResource(opts),
+			adminListOAuthResources:
+				oauthResourceEndpoints.adminListOAuthResources(opts),
+			adminGetOAuthResource: oauthResourceEndpoints.adminGetOAuthResource(opts),
+			adminUpdateOAuthResource:
+				oauthResourceEndpoints.adminUpdateOAuthResource(opts),
+			adminDeleteOAuthResource:
+				oauthResourceEndpoints.adminDeleteOAuthResource(opts),
+			adminLinkClientResource:
+				oauthResourceEndpoints.adminLinkClientResource(opts),
+			adminUnlinkClientResource:
+				oauthResourceEndpoints.adminUnlinkClientResource(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
 		rateLimit: [

@@ -3,9 +3,9 @@ import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { buildClientAudienceLinkId } from "./audiences";
 import { assertClientPrivileges } from "./oauthClient/privileges";
-import type { OAuthAudience, OAuthOptions, SchemaClient, Scope } from "./types";
+import { buildClientResourceLinkId } from "./resources";
+import type { OAuthOptions, OAuthResource, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
@@ -42,7 +42,7 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient & { audiences?: string[] };
+	const body = ctx.body as OAuthClient & { resources?: string[] };
 	const session = await getSessionFromCtx(ctx);
 
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
@@ -72,34 +72,35 @@ export async function registerEndpoint(
 		);
 	}
 
-	// RFC 7591 §2 extension: clients may declare which audiences they need.
+	// RFC 7591 §2 extension: clients may declare which resources they need.
 	// Validate up front so the registration fails before we issue a clientId.
 	// Linking happens inside createOAuthClientEndpoint so the response shape
-	// stays type-stable for existing DCR consumers (the audiences are echoed
+	// stays type-stable for existing DCR consumers (the resources are echoed
 	// as an added field, not via a separate Response wrapper).
-	const requestedAudiences = Array.isArray(body.audiences)
-		? body.audiences.filter(
-				(a): a is string => typeof a === "string" && a.length > 0,
+	const requestedResources = Array.isArray(body.resources)
+		? body.resources.filter(
+				(resource): resource is string =>
+					typeof resource === "string" && resource.length > 0,
 			)
 		: [];
-	if (requestedAudiences.length > 0) {
-		const audienceModel =
-			opts.schema?.oauthAudience?.modelName ?? "oauthAudience";
-		for (const identifier of requestedAudiences) {
-			const row = await ctx.context.adapter.findOne<OAuthAudience>({
-				model: audienceModel,
+	if (requestedResources.length > 0) {
+		const resourceModel =
+			opts.schema?.oauthResource?.modelName ?? "oauthResource";
+		for (const identifier of requestedResources) {
+			const row = await ctx.context.adapter.findOne<OAuthResource>({
+				model: resourceModel,
 				where: [{ field: "identifier", value: identifier }],
 			});
 			if (!row) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_target",
-					error_description: `requested audience ${identifier} does not exist`,
+					error_description: `requested resource ${identifier} does not exist`,
 				});
 			}
 			if (row.disabled) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_target",
-					error_description: `requested audience ${identifier} is disabled`,
+					error_description: `requested resource ${identifier} is disabled`,
 				});
 			}
 		}
@@ -107,7 +108,7 @@ export async function registerEndpoint(
 
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
-		audiences: requestedAudiences.length > 0 ? requestedAudiences : undefined,
+		resources: requestedResources.length > 0 ? requestedResources : undefined,
 	});
 }
 
@@ -366,12 +367,12 @@ export async function createOAuthClientEndpoint(
 	settings: {
 		isRegister: boolean;
 		/**
-		 * Pre-validated audience identifiers to link the new client to. Used
+		 * Pre-validated resource identifiers to link the new client to. Used
 		 * by the DCR registration path (RFC 7591 §2 extension). Validation
 		 * (existence, disabled) is the caller's responsibility — this branch
 		 * only writes the link rows and echoes the field in the response.
 		 */
-		audiences?: string[] | undefined;
+		resources?: string[] | undefined;
 	},
 ) {
 	const body = ctx.body as OAuthClient;
@@ -449,19 +450,19 @@ export async function createOAuthClientEndpoint(
 		},
 	});
 
-	// DCR audience linkage (RFC 7591 §2 extension). The caller pre-validated
+	// DCR resource linkage (RFC 7591 §2 extension). The caller pre-validated
 	// each identifier; here we just write the join rows so the new client
-	// passes `enforcePerClientAudiences` checks immediately.
-	if (settings.audiences && settings.audiences.length > 0) {
+	// passes `enforcePerClientResources` checks immediately.
+	if (settings.resources && settings.resources.length > 0) {
 		const linkModel =
-			opts.schema?.oauthClientAudience?.modelName ?? "oauthClientAudience";
+			opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
 		const now = new Date();
-		// Dedupe so a registration that lists the same audience twice doesn't
+		// Dedupe so a registration that lists the same resource twice doesn't
 		// attempt two inserts of the same deterministic-id row.
-		const uniqueAudiences = [...new Set(settings.audiences)];
-		for (const audienceId of uniqueAudiences) {
+		const uniqueResources = [...new Set(settings.resources)];
+		for (const resourceId of uniqueResources) {
 			// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
-			// constraint enforces composite (clientId, audienceId) uniqueness.
+			// constraint enforces composite (clientId, resourceId) uniqueness.
 			// Idempotent under retries: a duplicate insert hits the constraint
 			// and is swallowed rather than creating a second link row.
 			try {
@@ -469,9 +470,9 @@ export async function createOAuthClientEndpoint(
 					model: linkModel,
 					forceAllowId: true,
 					data: {
-						id: buildClientAudienceLinkId(clientId, audienceId),
+						id: buildClientResourceLinkId(clientId, resourceId),
 						clientId,
-						audienceId,
+						resourceId,
 						createdAt: now,
 					} as never,
 				});
@@ -484,7 +485,7 @@ export async function createOAuthClientEndpoint(
 		}
 	}
 
-	// Format the response according to RFC7591. When audiences were linked
+	// Format the response according to RFC7591. When resources were linked
 	// during registration, echo them back per RFC 7591 §3 server response
 	// conventions — clients can verify the registration succeeded.
 	const responseBody = schemaToOAuth({
@@ -493,9 +494,9 @@ export async function createOAuthClientEndpoint(
 			? (opts.prefix?.clientSecret ?? "") + clientSecret
 			: undefined,
 	});
-	if (settings.audiences && settings.audiences.length > 0) {
-		(responseBody as OAuthClient & { audiences?: string[] }).audiences =
-			settings.audiences;
+	if (settings.resources && settings.resources.length > 0) {
+		(responseBody as OAuthClient & { resources?: string[] }).resources =
+			settings.resources;
 	}
 	return ctx.json(responseBody, {
 		status: 201,

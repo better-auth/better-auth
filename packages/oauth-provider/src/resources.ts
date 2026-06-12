@@ -3,10 +3,10 @@ import { logger } from "@better-auth/core/env";
 import { APIError } from "better-auth/api";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type {
-	OAuthAudience,
-	OAuthAudienceInput,
-	OAuthClientAudience,
+	OAuthClientResource,
 	OAuthOptions,
+	OAuthResource,
+	OAuthResourceInput,
 	Scope,
 } from "./types";
 
@@ -44,9 +44,9 @@ const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
 /**
  * Upper bound on how many entries are accepted in a JWT's `aud` claim during
  * introspection / revocation validation. Without a cap, a hostile or replayed
- * token can supply hundreds of fake audience identifiers and amplify load on
- * the audience table (one DB lookup per unique unrecognized entry). Real-world
- * deployments use single-digit audience lists; 64 is a generous ceiling that
+ * token can supply hundreds of fake resource identifiers and amplify load on
+ * the resource table (one DB lookup per unique unrecognized entry). Real-world
+ * deployments use single-digit resource lists; 64 is a generous ceiling that
  * stays well clear of any legitimate use and bounds the per-request DB fan-out.
  *
  * RFC 7519 §4.1.3 does not specify a maximum, so this is a defensive limit,
@@ -58,25 +58,25 @@ const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
 export const MAX_AUD_VALUES = 64;
 
 /**
- * Builds a deterministic primary-key value for an `oauthClientAudience`
+ * Builds a deterministic primary-key value for an `oauthClientResource`
  * row. Used so the implicit PK uniqueness constraint enforces the composite
- * `(clientId, audienceId)` uniqueness that Better Auth's schema layer
- * cannot declare directly — making client↔audience links idempotent across
+ * `(clientId, resourceId)` uniqueness that Better Auth's schema layer
+ * cannot declare directly — making client-resource links idempotent across
  * the admin link endpoint and Dynamic Client Registration.
  *
  * The `::` separator is collision-free: client_id is a URL-safe random
- * string (no `::`) and audience identifier is an RFC 8707 absolute URI
+ * string (no `::`) and resource identifier is an RFC 8707 absolute URI
  * (a bare `::` would be a malformed IPv6 host the validator rejects).
  *
- * @see comment block in `schema.ts` on `oauthClientAudience` for the full
+ * @see comment block in `schema.ts` on `oauthClientResource` for the full
  * rationale.
  * @internal
  */
-export function buildClientAudienceLinkId(
+export function buildClientResourceLinkId(
 	clientId: string,
-	audienceId: string,
+	resourceId: string,
 ): string {
-	return `${clientId}::${audienceId}`;
+	return `${clientId}::${resourceId}`;
 }
 
 /**
@@ -92,7 +92,7 @@ export type IdentifierCheckResult =
 	| { ok: false; reason: string };
 
 /**
- * Validates an audience `identifier` per RFC 8707 §2 (absolute URI, no
+ * Validates a resource `identifier` per RFC 8707 §2 (absolute URI, no
  * fragment), honoring {@link OAuthOptions.identifierValidator} when provided.
  *
  * Returns a structured result so callers can decide whether to throw
@@ -110,7 +110,7 @@ export async function checkIdentifier(
 		if (!ok) {
 			return {
 				ok: false,
-				reason: `audience identifier ${identifier} failed validation`,
+				reason: `resource identifier ${identifier} failed validation`,
 			};
 		}
 		return { ok: true };
@@ -122,13 +122,13 @@ export async function checkIdentifier(
 	} catch {
 		return {
 			ok: false,
-			reason: `audience identifier ${identifier} must be an absolute URI (RFC 8707 §2)`,
+			reason: `resource identifier ${identifier} must be an absolute URI (RFC 8707 §2)`,
 		};
 	}
 	if (url.hash) {
 		return {
 			ok: false,
-			reason: `audience identifier ${identifier} must not contain a URI fragment (RFC 8707 §2)`,
+			reason: `resource identifier ${identifier} must not contain a URI fragment (RFC 8707 §2)`,
 		};
 	}
 	return { ok: true };
@@ -155,9 +155,9 @@ export async function assertIdentifierValid(
 
 /**
  * Claim names reserved by RFC 9068 §2.2 for OAuth 2.0 JWT-formatted access
- * tokens. Customizations (`customClaims` on an audience row, or the existing
+ * tokens. Customizations (`customClaims` on a resource row, or the existing
  * `customAccessTokenClaims` plugin option) cannot override these — the AS is
- * the only source of truth for issuer identity, subject, audience, lifetime,
+ * the only source of truth for issuer identity, subject, audience claim, lifetime,
  * and the token's stable ID.
  *
  * Reserved values found in untrusted input are stripped at issuance and
@@ -212,35 +212,35 @@ export function stripReservedClaims(
 }
 
 /**
- * Resolved audience policy for a single `/oauth2/token` (or `/oauth2/authorize`)
- * request. Computed by {@link resolveAudiencePolicy} and consumed by the
+ * Resolved resource policy for a single `/oauth2/token` (or `/oauth2/authorize`)
+ * request. Computed by {@link resolveResourcePolicy} and consumed by the
  * token-issuance pipeline.
  */
-export interface ResolvedAudiencePolicy {
+export interface ResolvedResourcePolicy {
 	/**
 	 * The `aud` claim value:
 	 * - `undefined` when the request omitted `resource` (legacy behavior)
-	 * - a single string when exactly one audience was requested
+	 * - a single string when exactly one resource was requested
 	 * - an array when multiple were requested
 	 *
 	 * Includes the implicit `/oauth2/userinfo` audience when `openid` is in
 	 * scope — the OIDC userinfo endpoint expects to find itself in `aud`.
 	 */
-	audience: string | string[] | undefined;
+	audienceClaim: string | string[] | undefined;
 	/**
-	 * Effective access-token TTL in seconds. `null` means "no audience-specific
+	 * Effective access-token TTL in seconds. `null` means "no resource-specific
 	 * override — caller should use the plugin default."
 	 *
-	 * When multiple audiences are requested, this is the **minimum** TTL
+	 * When multiple resources are requested, this is the **minimum** TTL
 	 * across all of them (OAuth 2.1 §1.5 bounded-blast-radius rule).
 	 */
 	accessTokenTtl: number | null;
 	/**
-	 * Effective refresh-token TTL in seconds. `null` means "no audience-specific
+	 * Effective refresh-token TTL in seconds. `null` means "no resource-specific
 	 * override — caller should use {@link OAuthOptions.refreshTokenExpiresIn}
 	 * (or its built-in default)."
 	 *
-	 * When multiple audiences are requested, this is the **minimum** TTL
+	 * When multiple resources are requested, this is the **minimum** TTL
 	 * across all of them (same bounded-blast-radius rule as access tokens).
 	 */
 	refreshTokenTtl: number | null;
@@ -248,30 +248,30 @@ export interface ResolvedAudiencePolicy {
 	 * Effective signing algorithm and key id for the issued token.
 	 *
 	 * The JWS Protected Header (RFC 7515 §4.1) carries exactly one `alg` and
-	 * at most one `kid`, so a single signed token can satisfy a multi-audience
-	 * request only when every audience's pins are mutually compatible:
+	 * at most one `kid`, so a single signed token can satisfy a multi-resource
+	 * request only when every resource's pins are mutually compatible:
 	 * the set of unique non-null `signingAlgorithm` values across requested
-	 * audiences must be ≤ 1, and the same for `signingKeyId`. When the
+	 * resources must be ≤ 1, and the same for `signingKeyId`. When the
 	 * compatibility check passes, the single unique pin (if any) is honored;
-	 * `null` means "no audience pinned this, fall back to the JWT plugin
+	 * `null` means "no resource pinned this, fall back to the JWT plugin
 	 * default." Conflicts raise `invalid_request`.
 	 */
 	signingAlgorithm: JWSAlgorithms | null;
 	signingKeyId: string | null;
 	/**
-	 * Merged custom claims across requested audiences. Reserved RFC 9068
+	 * Merged custom claims across requested resources. Reserved RFC 9068
 	 * claim names are stripped — callers don't need to re-strip.
 	 */
 	customClaims: Record<string, unknown>;
 	/**
 	 * The intersection of the caller's `requestedScopes` with each requested
-	 * audience's `allowedScopes`. When no requested audience defines an
+	 * resource's `allowedScopes`. When no requested resource defines an
 	 * allowlist, equals `requestedScopes` unchanged.
 	 *
-	 * - An audience with `allowedScopes: null` is treated as "no restriction"
-	 *   for that audience (other audiences' allowlists still apply).
-	 * - An audience whose allowlist excludes every requested scope causes
-	 *   {@link resolveAudiencePolicy} to throw `invalid_scope`.
+	 * - A resource with `allowedScopes: null` is treated as "no restriction"
+	 *   for that resource (other resources' allowlists still apply).
+	 * - A resource whose allowlist excludes every requested scope causes
+	 *   {@link resolveResourcePolicy} to throw `invalid_scope`.
 	 * - Otherwise this is the filtered scope set the token endpoint should
 	 *   mint with (RFC 6749 §3.3 narrow-but-don't-widen).
 	 */
@@ -279,11 +279,11 @@ export interface ResolvedAudiencePolicy {
 }
 
 /**
- * The OIDC userinfo endpoint's audience identifier. Always accepted as an
- * implicit audience when `openid` is in scope — not looked up against
- * `oauthAudience` rows.
+ * The OIDC userinfo endpoint's resource identifier. Always accepted as an
+ * implicit `aud` value when `openid` is in scope — not looked up against
+ * `oauthResource` rows.
  */
-const userInfoAudience = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
+const userInfoResource = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
 
 /**
  * Re-parses a request's raw `application/x-www-form-urlencoded` body to
@@ -293,7 +293,7 @@ const userInfoAudience = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
  * collapses repeated form keys with last-write-wins. A client sending
  * `resource=https://a&resource=https://b` would otherwise arrive in the
  * handler as `{ resource: "https://b" }`, silently narrowing the issued
- * token's `aud` to a single audience.
+ * token's `aud` to a single resource.
  *
  * Returns the full ordered list when the body is form-encoded and contains
  * any `resource` entries; `undefined` otherwise. Caller MUST enable
@@ -347,33 +347,67 @@ export function normalizeResourceParam(
 }
 
 /**
- * Resolves the audience policy for a request.
+ * Validates a JWT `aud` claim against the OAuth resource model.
  *
- * Validation steps (RFC 8707 §3 + per-audience policy):
- *
- * 1. Resolve `resource` parameter to a list of identifiers.
- * 2. For each identifier, look up the {@link OAuthAudience} row.
- *    - Missing → `invalid_target`.
- *    - `disabled` → `invalid_target` (no new issuance).
- * 3. If {@link OAuthOptions.enforcePerClientAudiences} resolves to true,
- *    confirm the client is linked to every requested audience via
- *    `oauthClientAudience`. Unlinked → `invalid_target`.
- * 4. Intersect `requestedScopes` with each audience's `allowedScopes`.
- *    Empty intersection → `invalid_scope`.
- * 5. Pick the minimum `accessTokenTtl` across requested audiences.
- * 6. Pick signing config — only honored for single-audience requests
- *    (a JWT can only have one signature).
- * 7. Merge per-audience `customClaims`, strip reserved claim names.
- *
- * Backward compat path: when neither `audiences` nor `validAudiences` is
- * configured AND no `resource` param is present, returns an empty policy
- * (no aud claim, no overrides). The legacy fallback for `resource`-with-no-
- * config is the implicit `baseURL` audience — preserved here for parity
- * with pre-entity deployments.
+ * Every non-implicit audience value must resolve to an `oauthResource` row.
+ * Disabled rows still pass because disabling blocks new issuance; deleting the
+ * row is the operation that invalidates already-issued tokens.
  *
  * @internal
  */
-export async function resolveAudiencePolicy(
+export async function isAudienceClaimAllowed(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	audienceClaim: string | string[] | undefined,
+	implicitAudiences: Iterable<string> = [],
+): Promise<boolean> {
+	if (audienceClaim === undefined) return true;
+	const audienceValues = Array.isArray(audienceClaim)
+		? audienceClaim
+		: [audienceClaim];
+	if (audienceValues.length > MAX_AUD_VALUES) return false;
+
+	const implicitAudienceSet = new Set(implicitAudiences);
+	const resourcesToLookup = new Set<string>();
+	for (const audienceValue of audienceValues) {
+		if (implicitAudienceSet.has(audienceValue)) continue;
+		resourcesToLookup.add(audienceValue);
+	}
+	if (resourcesToLookup.size === 0) return true;
+
+	const rows = await Promise.all(
+		Array.from(resourcesToLookup, (resource) =>
+			getResource(ctx, opts, resource),
+		),
+	);
+	return rows.every(Boolean);
+}
+
+/**
+ * Resolves the resource policy for a request.
+ *
+ * Validation steps (RFC 8707 §3 + per-resource policy):
+ *
+ * 1. Resolve `resource` parameter to a list of identifiers.
+ * 2. For each identifier, look up the {@link OAuthResource} row.
+ *    - Missing → `invalid_target`.
+ *    - `disabled` → `invalid_target` (no new issuance).
+ * 3. If {@link OAuthOptions.enforcePerClientResources} resolves to true,
+ *    confirm the client is linked to every requested resource via
+ *    `oauthClientResource`. Unlinked → `invalid_target`.
+ * 4. Intersect `requestedScopes` with each resource's `allowedScopes`.
+ *    Empty intersection → `invalid_scope`.
+ * 5. Pick the minimum `accessTokenTtl` across requested resources.
+ * 6. Pick signing config — only honored for single-resource requests
+ *    (a JWT can only have one signature).
+ * 7. Merge per-resource `customClaims`, strip reserved claim names.
+ *
+ * When no `resource` param is present, returns an empty policy: no `aud`
+ * claim and no resource-specific overrides.
+ *
+ * @internal
+ */
+export async function resolveResourcePolicy(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: {
@@ -381,20 +415,20 @@ export async function resolveAudiencePolicy(
 		clientId: string;
 		requestedScopes: string[];
 	},
-): Promise<ResolvedAudiencePolicy> {
-	const requestedAudiences = normalizeResourceParam(params.resource);
+): Promise<ResolvedResourcePolicy> {
+	const requestedResources = normalizeResourceParam(params.resource);
 	const includesOpenid = params.requestedScopes.includes("openid");
 	const baseURL = ctx.context.baseURL ?? "";
-	const userInfoAud = userInfoAudience(baseURL);
+	const userInfoResourceIdentifier = userInfoResource(baseURL);
 
-	if (!requestedAudiences) {
-		// No resource param — no audience-specific decisions to make. Matches
+	if (!requestedResources) {
+		// No resource param — no resource-specific decisions to make. Matches
 		// pre-entity behavior: an access token requested without `resource`
 		// has no `aud` claim, regardless of `openid` scope membership. The
 		// implicit userinfo audience is only added when at least one real
 		// RFC 8707 resource is requested (see audClaim construction below).
 		return {
-			audience: undefined,
+			audienceClaim: undefined,
 			accessTokenTtl: null,
 			refreshTokenTtl: null,
 			signingAlgorithm: null,
@@ -404,25 +438,19 @@ export async function resolveAudiencePolicy(
 		};
 	}
 
-	// Entity-driven flow with legacy fallback per requested identifier.
-	//
 	// For each requested resource:
-	//   1. Always attempt `getAudience(identifier)` first — DB rows are the
-	//      authoritative source, regardless of whether `opts.audiences` or
-	//      the deprecated `opts.validAudiences` is set. Admins can create
-	//      rows via the CRUD API without any config.
-	//   2. Row exists & enabled → apply per-audience policy.
+	//   1. Always attempt `getResource(identifier)` first — DB rows are the
+	//      authoritative source. Admins can create rows via the CRUD API without
+	//      any config.
+	//   2. Row exists & enabled → apply per-resource policy.
 	//   3. Row exists & disabled → `invalid_target`.
-	//   4. No row → fall back to legacy implicit allowlist
-	//      (`baseURL`, userInfoAud, `validAudiences`). None match →
-	//      `invalid_target`.
-	const legacyValidAudiences = new Set(opts.validAudiences ?? []);
-	const resolved: OAuthAudience[] = [];
-	for (const identifier of requestedAudiences) {
+	//   4. No row → `invalid_target`.
+	const resolved: OAuthResource[] = [];
+	for (const identifier of requestedResources) {
 		// `/oauth2/userinfo` is an implicit audience for OIDC userinfo lookups
 		// (not a configured resource server). Skip the entity check for it.
-		if (identifier === userInfoAud) continue;
-		const row = await getAudience(ctx, opts, identifier);
+		if (identifier === userInfoResourceIdentifier) continue;
+		const row = await getResource(ctx, opts, identifier);
 		if (row) {
 			if (row.disabled) {
 				throw new APIError("BAD_REQUEST", {
@@ -433,42 +461,32 @@ export async function resolveAudiencePolicy(
 			resolved.push(row);
 			continue;
 		}
-		// No DB row — legacy fallback: accept baseURL, the userinfo audience,
-		// or any string in the deprecated `validAudiences` list. Otherwise
-		// reject as an unknown resource.
-		if (
-			identifier === baseURL ||
-			identifier === userInfoAud ||
-			legacyValidAudiences.has(identifier)
-		) {
-			continue;
-		}
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_target",
-			error_description: `requested resource ${identifier} is not a configured audience`,
+			error_description: `requested resource ${identifier} is not configured`,
 		});
 	}
 
-	// Per-client audience linkage check.
-	const { value: enforcePerClient } = resolveEnforcePerClientAudiences(opts);
+	// Per-client resource linkage check.
+	const { value: enforcePerClient } = resolveEnforcePerClientResources(opts);
 	if (enforcePerClient && resolved.length > 0) {
-		await assertClientLinkedToAudiences(ctx, opts, params.clientId, resolved);
+		await assertClientLinkedToResources(ctx, opts, params.clientId, resolved);
 	}
 
 	// Scope allowlist enforcement — intersect (not all-or-nothing).
 	//
 	// RFC 6749 §3.3: an authorization server MAY narrow the granted scope set
-	// but MUST NOT widen it. Per-audience allowlists are a narrowing filter,
+	// but MUST NOT widen it. Per-resource allowlists are a narrowing filter,
 	// not a gate.
 	//
 	// Algorithm:
-	//   - For each requested audience with a non-null allowlist, retain only
-	//     the requested scopes that are members of that audience's allowlist.
-	//   - An audience whose allowlist excludes every requested scope still
-	//     fails closed with `invalid_scope` for THAT audience (the caller
+	//   - For each requested resource with a non-null allowlist, retain only
+	//     the requested scopes that are members of that resource's allowlist.
+	//   - A resource whose allowlist excludes every requested scope still
+	//     fails closed with `invalid_scope` for that resource (the caller
 	//     would otherwise mint a token with no scopes for a resource that
 	//     refuses all of them).
-	//   - Audiences with a null allowlist contribute no narrowing (treated as
+	//   - Resources with a null allowlist contribute no narrowing (treated as
 	//     "any requested scope is acceptable here").
 	let effectiveScopes: string[] = [...params.requestedScopes];
 	for (const row of resolved) {
@@ -480,13 +498,13 @@ export async function resolveAudiencePolicy(
 		if (intersection.length === 0) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_scope",
-				error_description: `none of the requested scopes are allowed for audience ${row.identifier}`,
+				error_description: `none of the requested scopes are allowed for resource ${row.identifier}`,
 			});
 		}
 		effectiveScopes = intersection;
 	}
 
-	// TTL: minimum across audiences that declare one. null means "no override".
+	// TTL: minimum across resources that declare one. null means "no override".
 	let accessTokenTtl: number | null = null;
 	let refreshTokenTtl: number | null = null;
 	for (const row of resolved) {
@@ -507,15 +525,15 @@ export async function resolveAudiencePolicy(
 	// Signing config: compatibility check.
 	//
 	// RFC 7515 §4.1 — a JWS Protected Header carries one `alg` and at most
-	// one `kid`. So a single token can satisfy a multi-audience request iff
-	// the union of per-audience pins collapses to ≤ 1 algorithm AND ≤ 1
+	// one `kid`. So a single token can satisfy a multi-resource request iff
+	// the union of per-resource pins collapses to ≤ 1 algorithm AND ≤ 1
 	// key id. All-pins-agree is fine (operators commonly pin the same alg
-	// fleet-wide); mixed-but-compatible pins (e.g. only one audience pins
+	// fleet-wide); mixed-but-compatible pins (e.g. only one resource pins
 	// `alg`, only another pins a matching `kid`) are also fine — the JWT
 	// plugin's `resolveSigningKey()` will reject downstream if the chosen
 	// kid's key doesn't actually carry the chosen alg.
 	//
-	// Single-audience requests fall out of this naturally (a one-element
+	// Single-resource requests fall out of this naturally (a one-element
 	// resolved list produces at most one pin in each set).
 	const uniqueSigningAlgs = new Set<JWSAlgorithms>();
 	const uniqueSigningKids = new Set<string>();
@@ -527,14 +545,14 @@ export async function resolveAudiencePolicy(
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
 			error_description:
-				"multi-audience request has conflicting signingAlgorithm pins; a single JWS signature cannot satisfy multiple algorithms",
+				"multi-resource request has conflicting signingAlgorithm pins; a single JWS signature cannot satisfy multiple algorithms",
 		});
 	}
 	if (uniqueSigningKids.size > 1) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
 			error_description:
-				"multi-audience request has conflicting signingKeyId pins; a single JWS signature cannot satisfy multiple key ids",
+				"multi-resource request has conflicting signingKeyId pins; a single JWS signature cannot satisfy multiple key ids",
 		});
 	}
 	const signingAlgorithm: JWSAlgorithms | null =
@@ -542,7 +560,7 @@ export async function resolveAudiencePolicy(
 	const signingKeyId: string | null =
 		uniqueSigningKids.values().next().value ?? null;
 
-	// Per-audience custom claims: merge in declared order (later audiences
+	// Per-resource custom claims: merge in declared order (later resources
 	// win on key collisions). Reserved-claim stripping is applied after the
 	// merge so the AS-owned claims are protected regardless of source.
 	const mergedClaims: Record<string, unknown> = {};
@@ -554,11 +572,11 @@ export async function resolveAudiencePolicy(
 	const safeClaims = stripReservedClaims(mergedClaims);
 
 	const audClaim = includesOpenid
-		? [...requestedAudiences, userInfoAud]
-		: [...requestedAudiences];
+		? [...requestedResources, userInfoResourceIdentifier]
+		: [...requestedResources];
 
 	return {
-		audience: audClaim.length === 1 ? audClaim[0] : audClaim,
+		audienceClaim: audClaim.length === 1 ? audClaim[0] : audClaim,
 		accessTokenTtl,
 		refreshTokenTtl,
 		signingAlgorithm,
@@ -569,116 +587,100 @@ export async function resolveAudiencePolicy(
 }
 
 /**
- * Throws `invalid_target` if the client isn't linked to every audience via
- * the `oauthClientAudience` join table. Issues one `findMany` per call.
+ * Throws `invalid_target` if the client isn't linked to every resource via
+ * the `oauthClientResource` join table. Issues one `findMany` per call.
  *
  * @internal
  */
-async function assertClientLinkedToAudiences(
+async function assertClientLinkedToResources(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	clientId: string,
-	audiences: OAuthAudience[],
+	resources: OAuthResource[],
 ): Promise<void> {
-	if (audiences.length === 0) return;
+	if (resources.length === 0) return;
 	const modelName =
-		opts.schema?.oauthClientAudience?.modelName ?? "oauthClientAudience";
-	const links = await ctx.context.adapter.findMany<OAuthClientAudience>({
+		opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+	const links = await ctx.context.adapter.findMany<OAuthClientResource>({
 		model: modelName,
 		where: [{ field: "clientId", value: clientId }],
 	});
-	const linkedSet = new Set(links?.map((l) => l.audienceId) ?? []);
-	const unlinked = audiences.filter((a) => !linkedSet.has(a.identifier));
+	const linkedSet = new Set(links?.map((l) => l.resourceId) ?? []);
+	const unlinked = resources.filter(
+		(resource) => !linkedSet.has(resource.identifier),
+	);
 	if (unlinked.length > 0) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_target",
-			error_description: `client ${clientId} is not linked to audience(s) ${unlinked
-				.map((a) => a.identifier)
+			error_description: `client ${clientId} is not linked to resource(s) ${unlinked
+				.map((resource) => resource.identifier)
 				.join(", ")}`,
 		});
 	}
 }
 
 /**
- * Resolution sources for `enforcePerClientAudiences`. Returned from
- * {@link resolveEnforcePerClientAudiences} so callers (init log + tests)
+ * Resolution sources for `enforcePerClientResources`. Returned from
+ * {@link resolveEnforcePerClientResources} so callers (init log + tests)
  * can verify which default applied.
  */
-export type EnforcePerClientAudiencesSource =
-	| "explicit"
-	| "smart-default-legacy"
-	| "smart-default-new";
+export type EnforcePerClientResourcesSource = "explicit" | "default";
 
-export interface ResolvedEnforcePerClientAudiences {
+export interface ResolvedEnforcePerClientResources {
 	value: boolean;
-	source: EnforcePerClientAudiencesSource;
+	source: EnforcePerClientResourcesSource;
 }
 
 /**
- * Resolves the effective {@link OAuthOptions.enforcePerClientAudiences} value.
+ * Resolves the effective {@link OAuthOptions.enforcePerClientResources} value.
  *
  * - Explicit `true | false` always wins (`source: "explicit"`).
- * - Otherwise, if `validAudiences` is set (and `audiences` is not), resolve
- *   to `false` (`source: "smart-default-legacy"`). Preserves the pre-entity
- *   "any client can request any audience" behavior on upgrade.
- * - Otherwise resolve to `true` (`source: "smart-default-new"`). RFC 8707 §3
- *   per-client validation — the secure default for new deployments.
+ * - Otherwise resolve to `true` (`source: "default"`). RFC 8707 §3 per-client
+ *   validation is the secure default.
  *
  * Deterministic and pure — safe to call on every validation pass.
  */
-export function resolveEnforcePerClientAudiences(
-	opts: Pick<
-		OAuthOptions<Scope[]>,
-		"enforcePerClientAudiences" | "validAudiences" | "audiences"
-	>,
-): ResolvedEnforcePerClientAudiences {
-	if (opts.enforcePerClientAudiences !== undefined) {
-		return { value: opts.enforcePerClientAudiences, source: "explicit" };
+export function resolveEnforcePerClientResources(
+	opts: Pick<OAuthOptions<Scope[]>, "enforcePerClientResources">,
+): ResolvedEnforcePerClientResources {
+	if (opts.enforcePerClientResources !== undefined) {
+		return { value: opts.enforcePerClientResources, source: "explicit" };
 	}
-	const hasLegacy = Array.isArray(opts.validAudiences)
-		? opts.validAudiences.length > 0
-		: false;
-	const hasNew = Array.isArray(opts.audiences)
-		? opts.audiences.length > 0
-		: false;
-	if (hasLegacy && !hasNew) {
-		return { value: false, source: "smart-default-legacy" };
-	}
-	return { value: true, source: "smart-default-new" };
+	return { value: true, source: "default" };
 }
 
 /**
- * In-process cache of {@link OAuthAudience} rows, keyed by `identifier`.
+ * In-process cache of {@link OAuthResource} rows, keyed by `identifier`.
  *
- * Opt-in via {@link OAuthOptions.cachedAudiences} (same membership-Set pattern
- * as `cachedTrustedClients`). Audiences outside the set are looked up from the
+ * Opt-in via {@link OAuthOptions.cachedResources} (same membership-Set pattern
+ * as `cachedTrustedClients`). Resources outside the set are looked up from the
  * DB on every request — the safe default for deployments that edit rows
  * through external tooling.
  *
  * Module-scoped so admin CRUD handlers can invalidate from anywhere via
- * {@link invalidateAudienceCache}.
+ * {@link invalidateResourceCache}.
  */
-const audienceCache = new Map<string, OAuthAudience>();
+const resourceCache = new Map<string, OAuthResource>();
 
 /**
- * Removes an entry from the audience cache. Called by admin CRUD handlers
+ * Removes an entry from the resource cache. Called by admin CRUD handlers
  * after every write. Pass no argument to clear the entire cache.
  *
  * @internal
  */
-export function invalidateAudienceCache(identifier?: string): void {
+export function invalidateResourceCache(identifier?: string): void {
 	if (identifier === undefined) {
-		audienceCache.clear();
+		resourceCache.clear();
 		return;
 	}
-	audienceCache.delete(identifier);
+	resourceCache.delete(identifier);
 }
 
 /**
- * Looks up an {@link OAuthAudience} by `identifier`, consulting the in-process
- * cache when the identifier is in {@link OAuthOptions.cachedAudiences}.
+ * Looks up an {@link OAuthResource} by `identifier`, consulting the in-process
+ * cache when the identifier is in {@link OAuthOptions.cachedResources}.
  *
- * Triggers the lazy seed via {@link seedAudiencesOnce} on first call — this
+ * Triggers the lazy seed via {@link seedResourcesOnce} on first call — this
  * is the safety net for deployments where migrations run after plugin init
  * (so seeding at init couldn't see the table yet). The seed is idempotent
  * and coalesced, so the cost is paid only once per process.
@@ -687,60 +689,50 @@ export function invalidateAudienceCache(identifier?: string): void {
  *
  * @internal
  */
-export async function getAudience(
+export async function getResource(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
-): Promise<OAuthAudience | null> {
+): Promise<OAuthResource | null> {
 	// Lazy-seed safety net for the migration-ordering case.
-	await seedAudiencesOnce(ctx.context, opts);
+	await seedResourcesOnce(ctx.context, opts);
 
-	if (opts.cachedAudiences?.has(identifier)) {
-		const cached = audienceCache.get(identifier);
+	if (opts.cachedResources?.has(identifier)) {
+		const cached = resourceCache.get(identifier);
 		if (cached) return Object.assign({}, cached);
 	}
 
-	const dbAudience = await ctx.context.adapter.findOne<OAuthAudience>({
-		model: opts.schema?.oauthAudience?.modelName ?? "oauthAudience",
+	const dbResource = await ctx.context.adapter.findOne<OAuthResource>({
+		model: opts.schema?.oauthResource?.modelName ?? "oauthResource",
 		where: [{ field: "identifier", value: identifier }],
 	});
 
-	if (dbAudience && opts.cachedAudiences?.has(identifier)) {
-		audienceCache.set(identifier, Object.assign({}, dbAudience));
+	if (dbResource && opts.cachedResources?.has(identifier)) {
+		resourceCache.set(identifier, Object.assign({}, dbResource));
 	}
-	return dbAudience;
+	return dbResource;
 }
 
 /**
  * Default `name` value when an input doesn't provide one. Mirrors what most
  * admin UIs would show.
  */
-function defaultName(input: OAuthAudienceInput): string {
+function defaultName(input: OAuthResourceInput): string {
 	return input.name ?? input.identifier;
 }
 
 /**
- * Coerces seed-config inputs (both deprecated `validAudiences` strings and new
- * `audiences` entries — string or object form) into a single normalized list
- * of {@link OAuthAudienceInput}. Logs a deprecation warning when
- * `validAudiences` is encountered.
+ * Coerces seed-config `resources` entries — string or object form — into a
+ * normalized list of {@link OAuthResourceInput}.
  *
  * @internal
  */
-export function collectAudienceInputs(
-	opts: Pick<OAuthOptions<Scope[]>, "validAudiences" | "audiences">,
-): OAuthAudienceInput[] {
-	const inputs: OAuthAudienceInput[] = [];
-	if (opts.validAudiences?.length) {
-		logger.warn(
-			"oauth-provider: `validAudiences` is deprecated; migrate to `audiences`.",
-		);
-		for (const id of opts.validAudiences) {
-			inputs.push({ identifier: id });
-		}
-	}
-	if (opts.audiences?.length) {
-		for (const entry of opts.audiences) {
+export function collectResourceInputs(
+	opts: Pick<OAuthOptions<Scope[]>, "resources">,
+): OAuthResourceInput[] {
+	const inputs: OAuthResourceInput[] = [];
+	if (opts.resources?.length) {
+		for (const entry of opts.resources) {
 			inputs.push(typeof entry === "string" ? { identifier: entry } : entry);
 		}
 	}
@@ -752,7 +744,7 @@ export function collectAudienceInputs(
  * columns default to `null` (= inherit plugin default at issuance time)
  * when the input doesn't specify a value.
  */
-function buildSeedRow(input: OAuthAudienceInput, now: Date) {
+function buildSeedRow(input: OAuthResourceInput, now: Date) {
 	return {
 		identifier: input.identifier,
 		name: defaultName(input),
@@ -779,7 +771,7 @@ function buildSeedRow(input: OAuthAudienceInput, now: Date) {
  *   other fields are preserved.
  */
 function buildSeedUpdate(
-	input: OAuthAudienceInput,
+	input: OAuthResourceInput,
 	mode: "merge" | "overwrite",
 	now: Date,
 ): Record<string, unknown> {
@@ -812,7 +804,7 @@ function buildSeedUpdate(
 /**
  * Pattern matched against adapter errors to detect the "table not yet
  * created" case — i.e. migrations haven't been run. When matched, the
- * caller treats the seed as deferred (will retry on first audience access).
+ * caller treats the seed as deferred (will retry on first resource access).
  *
  * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
  * and MySQL ("Table X does not exist" / contracted form).
@@ -821,16 +813,27 @@ function buildSeedUpdate(
 const MISSING_TABLE_PATTERN =
 	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
 
+interface SeedState {
+	completed: boolean;
+	promise: Promise<void> | null;
+}
+
 /**
- * Module-level flags for the lazy-seed path. Once a process has successfully
- * seeded (or definitively determined there's nothing to seed), it skips the
- * lazy check on subsequent audience lookups.
- *
- * In-flight seeds are coalesced via `seedingPromise` so concurrent requests
- * during initial warm-up don't all stampede the adapter.
+ * Per-adapter state for the lazy-seed path. A module-level boolean would let
+ * one Better Auth instance suppress seeding for every later instance in the same
+ * process. Endpoint `AuthContext` objects are not guaranteed to be stable across
+ * requests, so keying by the adapter keeps one seed state per backing store.
  */
-let seedCompleted = false;
-let seedingPromise: Promise<void> | null = null;
+let seedStates = new WeakMap<object, SeedState>();
+
+function getSeedState(ctx: AuthContext): SeedState {
+	const key = ctx.adapter as object;
+	const existing = seedStates.get(key);
+	if (existing) return existing;
+	const created: SeedState = { completed: false, promise: null };
+	seedStates.set(key, created);
+	return created;
+}
 
 /**
  * Resets the lazy-seed state. Used by tests to force re-seeding between
@@ -839,14 +842,13 @@ let seedingPromise: Promise<void> | null = null;
  * @internal
  */
 export function resetSeedStateForTests(): void {
-	seedCompleted = false;
-	seedingPromise = null;
+	seedStates = new WeakMap<object, SeedState>();
 }
 
 /**
- * Seeds `oauthAudience` rows from plugin config.
+ * Seeds `oauthResource` rows from plugin config.
  *
- * Behavior is controlled by {@link OAuthOptions.audienceSeedMode}:
+ * Behavior is controlled by {@link OAuthOptions.resourceSeedMode}:
  *
  * - `"insertOnly"` (default, safe): inserts rows whose `identifier` is not
  *   already present. Existing rows are untouched — admin edits via CRUD
@@ -865,46 +867,46 @@ export function resetSeedStateForTests(): void {
  * Migration ordering: at plugin `init` time, tables may not exist yet
  * (Better Auth's test harness, and many deployment setups, run migrations
  * after auth construction). Seeding tolerates "no such table" errors and
- * defers — the lazy {@link seedAudiencesOnce} path picks up the work on
- * the first audience access.
+ * defers — the lazy {@link seedResourcesOnce} path picks up the work on
+ * the first resource access.
  *
  * Idempotent: safe to call multiple times.
  *
  * @internal
  */
-export async function seedAudiences(
+export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
-	const inputs = collectAudienceInputs(opts);
+	const inputs = collectResourceInputs(opts);
 	if (inputs.length === 0) return;
 
-	const mode = opts.audienceSeedMode ?? "insertOnly";
-	const modelName = opts.schema?.oauthAudience?.modelName ?? "oauthAudience";
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
 
 	for (const rawInput of inputs) {
 		// Apply the same RFC 8707 §2 identifier validation as the admin CRUD
-		// path. A typo in `audiences` config should not silently produce a row
+		// path. A typo in `resources` config should not silently produce a row
 		// the AS will later refuse to issue against — but it shouldn't brick
 		// plugin init either. Warn and skip the offending entry.
 		const check = await checkIdentifier(opts, rawInput.identifier);
 		if (!check.ok) {
 			logger.warn(
-				`oauth-provider: skipping audience seed for ${rawInput.identifier} — ${check.reason}`,
+				`oauth-provider: skipping resource seed for ${rawInput.identifier} — ${check.reason}`,
 			);
 			continue;
 		}
 		// Parity with the admin-CRUD zod gate (`z.enum(JWS_ALGORITHMS)`):
 		// reject bad `signingAlgorithm` values from config at seed time so
 		// they never reach signJWT. Strip-and-warn rather than throw so a
-		// single typo doesn't brick init for every other audience entry.
+		// single typo doesn't brick init for every other resource entry.
 		let input = rawInput;
 		if (
 			input.signingAlgorithm != null &&
 			!JWS_ALGORITHM_SET.has(input.signingAlgorithm)
 		) {
 			logger.warn(
-				`oauth-provider: dropping unsupported signingAlgorithm "${input.signingAlgorithm}" for audience ${input.identifier} — must be one of ${JWS_ALGORITHMS.join(", ")}. Continuing without an algorithm override.`,
+				`oauth-provider: dropping unsupported signingAlgorithm "${input.signingAlgorithm}" for resource ${input.identifier} — must be one of ${JWS_ALGORITHMS.join(", ")}. Continuing without an algorithm override.`,
 			);
 			// Strip the bad algorithm so downstream policy treats it as "inherit
 			// plugin default." Cast away `null` in the type since the input
@@ -912,9 +914,9 @@ export async function seedAudiences(
 			const { signingAlgorithm: _, ...rest } = input;
 			input = rest as typeof input;
 		}
-		let existing: OAuthAudience | null;
+		let existing: OAuthResource | null;
 		try {
-			existing = await ctx.adapter.findOne<OAuthAudience>({
+			existing = await ctx.adapter.findOne<OAuthResource>({
 				model: modelName,
 				where: [{ field: "identifier", value: input.identifier }],
 			});
@@ -922,7 +924,7 @@ export async function seedAudiences(
 			const message = err instanceof Error ? err.message : String(err);
 			if (MISSING_TABLE_PATTERN.test(message)) {
 				logger.debug(
-					"oauth-provider: oauthAudience table not yet created; deferring audience seed to first access.",
+					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
 				);
 				return;
 			}
@@ -943,13 +945,13 @@ export async function seedAudiences(
 				// the conflict as a no-op so init doesn't fail.
 				if (/unique|duplicate|UNIQUE/i.test(message)) {
 					logger.debug(
-						`oauth-provider: audience ${input.identifier} already inserted by a concurrent process — skipping.`,
+						`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
 					);
 					continue;
 				}
 				if (MISSING_TABLE_PATTERN.test(message)) {
 					logger.debug(
-						"oauth-provider: oauthAudience table not yet created; deferring audience seed to first access.",
+						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
 					);
 					return;
 				}
@@ -969,54 +971,52 @@ export async function seedAudiences(
 }
 
 /**
- * Idempotent, coalesced wrapper around {@link seedAudiences} for the
- * lazy-seed path. Safe to call from every audience lookup — the first call
+ * Idempotent, coalesced wrapper around {@link seedResources} for the
+ * lazy-seed path. Safe to call from every resource lookup — the first call
  * runs the seed, concurrent calls await the same promise, and subsequent
  * calls become no-ops.
  *
  * The endpoint context shape (`{ context: AuthContext }`) is what
- * `getAudience` receives, so this is a convenience overload that unwraps
+ * `getResource` receives, so this is a convenience overload that unwraps
  * for callers.
  *
  * @internal
  */
-export async function seedAudiencesOnce(
+export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
 	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
 	// rule happy — these are flag variables, not Promise checks.
-	if (seedCompleted === true) return;
-	if (seedingPromise !== null) return seedingPromise;
-	seedingPromise = seedAudiences(ctx, opts)
+	const state = getSeedState(ctx);
+	if (state.completed === true) return;
+	if (state.promise !== null) return state.promise;
+	state.promise = seedResources(ctx, opts)
 		.then(() => {
-			seedCompleted = true;
+			state.completed = true;
 		})
 		.catch((err) => {
 			// Reset so a later call can retry — transient errors shouldn't
 			// permanently disable seeding for the process.
-			seedingPromise = null;
+			state.promise = null;
 			throw err;
 		});
-	return seedingPromise;
+	return state.promise;
 }
 
 /**
- * Logs the resolved value of {@link OAuthOptions.enforcePerClientAudiences}
+ * Logs the resolved value of {@link OAuthOptions.enforcePerClientResources}
  * so deployment admins see which default applied at init. Separated from
- * {@link resolveEnforcePerClientAudiences} so the latter stays pure and
+ * {@link resolveEnforcePerClientResources} so the latter stays pure and
  * cheap to call from validation flow.
  *
  * @internal
  */
-export function logEnforcePerClientAudiencesResolution(
-	opts: Pick<
-		OAuthOptions<Scope[]>,
-		"enforcePerClientAudiences" | "validAudiences" | "audiences"
-	>,
+export function logEnforcePerClientResourcesResolution(
+	opts: Pick<OAuthOptions<Scope[]>, "enforcePerClientResources">,
 ): void {
-	const resolved = resolveEnforcePerClientAudiences(opts);
+	const resolved = resolveEnforcePerClientResources(opts);
 	logger.info(
-		`oauth-provider: enforcePerClientAudiences resolved to ${resolved.value} (${resolved.source})`,
+		`oauth-provider: enforcePerClientResources resolved to ${resolved.value} (${resolved.source})`,
 	);
 }

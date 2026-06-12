@@ -6,8 +6,8 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
-import type { ResolvedAudiencePolicy } from "./audiences";
-import { resolveAudiencePolicy, stripReservedClaims } from "./audiences";
+import type { ResolvedResourcePolicy } from "./resources";
+import { resolveResourcePolicy, stripReservedClaims } from "./resources";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -35,6 +35,8 @@ import {
 	toResourceList,
 	validateClientCredentials,
 } from "./utils";
+
+const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -70,7 +72,7 @@ async function createJwtAccessToken(
 	opts: OAuthOptions<Scope[]>,
 	user: User | undefined,
 	client: SchemaClient<Scope[]>,
-	audience: string | string[],
+	audienceClaim: string | string[],
 	scopes: string[],
 	resources?: string[],
 	referenceId?: string,
@@ -79,13 +81,13 @@ async function createJwtAccessToken(
 		exp?: number;
 		sid?: string;
 		/**
-		 * Per-audience signing config resolved by {@link resolveAudiencePolicy}.
+		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
 		 * `null` falls back to the JWT plugin's primary key.
 		 */
-		signingAlgorithm?: ResolvedAudiencePolicy["signingAlgorithm"];
-		signingKeyId?: ResolvedAudiencePolicy["signingKeyId"];
-		/** Per-audience custom claims (already reserved-claim-stripped). */
-		audienceCustomClaims?: Record<string, unknown>;
+		signingAlgorithm?: ResolvedResourcePolicy["signingAlgorithm"];
+		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
+		/** Per-resource custom claims (already reserved-claim-stripped). */
+		resourceCustomClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -100,31 +102,36 @@ async function createJwtAccessToken(
 			})
 		: {};
 
-	// Reserved-claim stripping is server-enforced for BOTH the audience-level
+	// Reserved-claim stripping is server-enforced for BOTH the resource-level
 	// customClaims (already stripped during policy resolution) AND the legacy
 	// plugin-level `customAccessTokenClaims` callback. The AS owns RFC 9068
 	// reserved names regardless of which extension surface tries to set them.
 	const safePluginClaims = stripReservedClaims(pluginCustomClaims);
-	const safeAudienceClaims = overrides?.audienceCustomClaims ?? {};
+	const safeResourceClaims = overrides?.resourceCustomClaims ?? {};
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	const subject = user?.id ?? client.clientId;
 
-	// Sign token — pass per-audience signing config if set; otherwise fall
+	// Sign token — pass per-resource signing config if set; otherwise fall
 	// back to the JWT plugin's default.
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
+		header: { typ: JWT_ACCESS_TOKEN_TYPE },
 		signingKeyId: overrides?.signingKeyId ?? undefined,
 		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
 			...safePluginClaims,
-			...safeAudienceClaims,
-			sub: user?.id,
-			aud: toAudienceClaim(audience),
+			...safeResourceClaims,
+			// RFC 9068 §2.2 requires `sub` on every JWT access token. For
+			// client_credentials, no resource owner participates, so the client is
+			// the subject represented to the resource server.
+			sub: subject,
+			aud: toAudienceClaim(audienceClaim),
 			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
 			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
 			// with introspection flows that key on it. The AS owns this value;
 			// `stripReservedClaims` removes any `client_id` from custom claims so
-			// audience/plugin extensions can't override it.
+			// resource/plugin extensions can't override it.
 			client_id: client.clientId,
 			azp: client.clientId,
 			scope: scopes.join(" "),
@@ -516,6 +523,63 @@ interface CreateUserTokensParams {
 	originalResources?: string[];
 }
 
+interface ResourceGrantIssuance {
+	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
+	effectiveScopes: string[];
+	accessTokenExpiresAtSeconds: number;
+	refreshTokenExpiresAtSeconds: number;
+	refreshResources?: string[];
+	signingAlgorithm: ResolvedResourcePolicy["signingAlgorithm"];
+	signingKeyId: ResolvedResourcePolicy["signingKeyId"];
+	resourceCustomClaims: Record<string, unknown>;
+}
+
+async function resolveResourceGrantIssuance(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		clientId: string;
+		requestedScopes: string[];
+		resources?: string[];
+		originalResources?: string[];
+		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		iat: number;
+		scopeExpiresAtSeconds: number;
+	},
+): Promise<ResourceGrantIssuance> {
+	const resourcePolicy = await resolveResourcePolicy(ctx, opts, {
+		resource: params.resources,
+		clientId: params.clientId,
+		requestedScopes: params.requestedScopes,
+	});
+	const resourceExpiresAtSeconds =
+		resourcePolicy.accessTokenTtl !== null
+			? params.iat + resourcePolicy.accessTokenTtl
+			: params.scopeExpiresAtSeconds;
+	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592000;
+	const refreshTokenTtl =
+		resourcePolicy.refreshTokenTtl !== null
+			? Math.min(resourcePolicy.refreshTokenTtl, refreshTokenDefaultTtl)
+			: refreshTokenDefaultTtl;
+
+	return {
+		audienceClaim: resourcePolicy.audienceClaim,
+		effectiveScopes: resourcePolicy.effectiveScopes,
+		accessTokenExpiresAtSeconds: Math.min(
+			params.scopeExpiresAtSeconds,
+			resourceExpiresAtSeconds,
+		),
+		refreshTokenExpiresAtSeconds: params.iat + refreshTokenTtl,
+		refreshResources:
+			params.refreshToken?.resources ??
+			params.originalResources ??
+			params.resources,
+		signingAlgorithm: resourcePolicy.signingAlgorithm,
+		signingKeyId: resourcePolicy.signingKeyId,
+		resourceCustomClaims: resourcePolicy.customClaims,
+	};
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -551,41 +615,19 @@ async function createUserTokens(
 				}, defaultExp)
 		: defaultExp;
 
-	// Resolve per-audience policy from the request's resource set. Replaces the
-	// legacy static-`validAudiences` check: looks up `oauthAudience` rows and
-	// derives the `aud` claim, per-audience TTLs, the scope-allowlist
-	// intersection, the signing pin, and merged custom claims. Missing or
-	// disabled audiences (or, when `enforcePerClientAudiences`, unlinked ones)
-	// throw `invalid_target`; an empty scope intersection throws `invalid_scope`.
-	const audiencePolicy: ResolvedAudiencePolicy = await resolveAudiencePolicy(
-		ctx,
-		opts,
-		{
-			resource: params?.resources,
-			clientId: client.clientId,
-			requestedScopes: scopes,
-		},
-	);
-	const audience = audiencePolicy.audience;
-	// Scopes narrowed to the audience allowlist intersection (RFC 6749 §3.3
-	// narrow-but-don't-widen). Equals `scopes` when no allowlist applies.
-	const effectiveScopes = audiencePolicy.effectiveScopes;
-	// Effective access-token expiry: min(per-scope, per-audience). OAuth 2.1 §1.5
-	// most-restrictive-wins for bounded blast radius.
-	const audienceExp =
-		audiencePolicy.accessTokenTtl !== null
-			? iat + audiencePolicy.accessTokenTtl
-			: scopeExp;
-	const exp = Math.min(scopeExp, audienceExp);
-	// Effective refresh-token expiry — same most-restrictive rule, floored
-	// against the plugin default so a permissive audience can't extend the
-	// AS-wide refresh lifetime.
-	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592000;
-	const refreshTokenTtl =
-		audiencePolicy.refreshTokenTtl !== null
-			? Math.min(audiencePolicy.refreshTokenTtl, refreshTokenDefaultTtl)
-			: refreshTokenDefaultTtl;
-	const refreshTokenExp = iat + refreshTokenTtl;
+	const grantIssuance = await resolveResourceGrantIssuance(ctx, opts, {
+		clientId: client.clientId,
+		requestedScopes: scopes,
+		resources: params.resources,
+		originalResources: params.originalResources,
+		refreshToken: params.refreshToken,
+		iat,
+		scopeExpiresAtSeconds: scopeExp,
+	});
+	const audienceClaim = grantIssuance.audienceClaim;
+	const effectiveScopes = grantIssuance.effectiveScopes;
+	const exp = grantIssuance.accessTokenExpiresAtSeconds;
+	const refreshTokenExp = grantIssuance.refreshTokenExpiresAtSeconds;
 	// Only mint a refresh token when the client may use refresh tokens.
 	// Otherwise an `offline_access` scope alone would hand a refresh token to a
 	// pure machine-to-machine client that was never authorized for one.
@@ -594,7 +636,7 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
-	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
+	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && scopes.includes("openid");
 
 	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
@@ -608,12 +650,7 @@ async function createUserTokens(
 			})
 		: undefined;
 
-	// Refresh token MUST retain the full original set of resources from the previous refresh token per RFC 8707 section 2.2
-	// For the initial auth-code exchange, params.originalResources carries the full authorized set (before any request narrowing).
-	const refreshResources =
-		params?.refreshToken?.resources ??
-		params?.originalResources ??
-		params?.resources;
+	const refreshResources = grantIssuance.refreshResources;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -644,7 +681,7 @@ async function createUserTokens(
 					opts,
 					user,
 					client,
-					audience,
+					audienceClaim,
 					effectiveScopes,
 					params?.resources,
 					referenceId,
@@ -652,9 +689,9 @@ async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
-						signingAlgorithm: audiencePolicy.signingAlgorithm,
-						signingKeyId: audiencePolicy.signingKeyId,
-						audienceCustomClaims: audiencePolicy.customClaims,
+						signingAlgorithm: grantIssuance.signingAlgorithm,
+						signingKeyId: grantIssuance.signingKeyId,
+						resourceCustomClaims: grantIssuance.resourceCustomClaims,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -717,7 +754,7 @@ async function createUserTokens(
 			expires_at: exp,
 			token_type: "Bearer" as const,
 			refresh_token: refreshToken?.token,
-			scope: scopes.join(" "),
+			scope: effectiveScopes.join(" "),
 			id_token: idToken,
 		},
 		{

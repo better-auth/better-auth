@@ -14,8 +14,8 @@ describe("oauth provider schema", () => {
 			["oauthAccessToken", "refreshId"],
 			["oauthConsent", "clientId"],
 			["oauthConsent", "userId"],
-			["oauthClientAudience", "clientId"],
-			["oauthClientAudience", "audienceId"],
+			["oauthClientResource", "clientId"],
+			["oauthClientResource", "resourceId"],
 		] as const;
 
 		const oauthProviderSchema = schema as Record<
@@ -31,7 +31,7 @@ describe("oauth provider schema", () => {
 		}
 	});
 
-	it("declares the oauthAudience entity with the expected policy seams", () => {
+	it("declares the oauthResource entity with the expected policy seams", () => {
 		type FieldShape = {
 			type?: string;
 			unique?: boolean;
@@ -42,14 +42,14 @@ describe("oauth provider schema", () => {
 			string,
 			{ fields: Record<string, FieldShape | undefined> }
 		>;
-		const audience = oauthSchema.oauthAudience;
-		if (!audience) {
-			throw new Error("oauthAudience table missing from schema");
+		const resource = oauthSchema.oauthResource;
+		if (!resource) {
+			throw new Error("oauthResource table missing from schema");
 		}
 		const requireField = (name: string): FieldShape => {
-			const field = audience.fields[name];
+			const field = resource.fields[name];
 			if (!field) {
-				throw new Error(`oauthAudience.${name} missing from schema`);
+				throw new Error(`oauthResource.${name} missing from schema`);
 			}
 			return field;
 		};
@@ -75,7 +75,7 @@ describe("oauth provider schema", () => {
 		// Lifecycle + extensibility seams
 		expect(requireField("disabled").defaultValue).toBe(false);
 		expect(requireField("policyVersion").defaultValue).toBe(1);
-		expect(audience.fields.metadata).toBeDefined();
+		expect(resource.fields.metadata).toBeDefined();
 	});
 
 	it("defers DPoP/mTLS/JWE/opaque-token columns to follow-up PRs", () => {
@@ -87,18 +87,18 @@ describe("oauth provider schema", () => {
 			string,
 			{ fields: Record<string, unknown> }
 		>;
-		const audienceFields = oauthSchema.oauthAudience?.fields ?? {};
+		const resourceFields = oauthSchema.oauthResource?.fields ?? {};
 		const refreshFields = oauthSchema.oauthRefreshToken?.fields ?? {};
 
-		const deferredOnAudience = [
+		const deferredOnResource = [
 			"tokenFormat",
 			"encryptionAlgorithm",
 			"encryptionKeyId",
 			"requireDpop",
 			"requireMtls",
 		];
-		for (const fieldName of deferredOnAudience) {
-			expect(audienceFields[fieldName]).toBeUndefined();
+		for (const fieldName of deferredOnResource) {
+			expect(resourceFields[fieldName]).toBeUndefined();
 		}
 		expect(refreshFields.senderConstraintType).toBeUndefined();
 		expect(refreshFields.senderConstraintKey).toBeUndefined();

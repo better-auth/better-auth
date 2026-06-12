@@ -5,7 +5,7 @@ import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
-import { getAudience, MAX_AUD_VALUES } from "./audiences";
+import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -58,11 +58,8 @@ async function validateJwtAccessToken(
 	};
 
 	try {
-		// Do NOT pass `audience` to jose's verifier — JWTs minted with
-		// `aud: <oauthAudience.identifier>` would fail audience verify under
-		// the legacy `audience: opts.validAudiences ?? baseURL` setting.
-		// Verify signature + issuer here, then validate `aud` manually against
-		// the live audience entities (and legacy fallback) below.
+		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
+		// here, then validate `aud` manually against the resource model below.
 		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 			? jwtPluginOptions.jwks.remoteUrl
 			: async (): Promise<JSONWebKeySet | undefined> => {
@@ -103,49 +100,20 @@ async function validateJwtAccessToken(
 	}
 
 	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
-	// the `aud` claim must resolve to a legitimate audience target:
-	//   1. baseURL (implicit AS-as-audience),
-	//   2. baseURL + /oauth2/userinfo (OIDC implicit),
-	//   3. a known `oauthAudience` row (deleted → inactive; disabled rows
+	// the `aud` claim must resolve to a legitimate resource target:
+	//   1. baseURL + /oauth2/userinfo (OIDC implicit),
+	//   2. a known `oauthResource` row (deleted → inactive; disabled rows
 	//      still verify — the "block new issuance, existing tokens continue
-	//      to verify until expiry" lifecycle contract),
-	//   4. a string present in the deprecated `opts.validAudiences` allowlist
-	//      (legacy deployments without entity rows).
+	//      to verify until expiry" lifecycle contract).
 	//
-	// All-must-resolve semantics matter for the deleted-audience contract: a
+	// All-must-resolve semantics matter for the deleted-resource contract: a
 	// token issued with `aud: [<resource>, userInfoAud]` and then having
 	// `<resource>` deleted from the AS must hard-reject. "Any valid"
-	// semantics would let the always-valid userinfo audience mask the
+	// semantics would let the always-valid userinfo audience claim mask the
 	// deletion.
 	const rawAud = jwtPayload.aud;
-	if (rawAud !== undefined) {
-		const audValues = Array.isArray(rawAud) ? rawAud : [rawAud];
-		// Defensive cap on `aud` cardinality before any DB work. See
-		// `MAX_AUD_VALUES` in audiences.ts for rationale.
-		if (audValues.length > MAX_AUD_VALUES) {
-			return { active: false };
-		}
-		const legacyValidAudiences = new Set(opts.validAudiences ?? []);
-		// Partition the audience list before issuing any DB queries:
-		// short-circuit values (baseURL, userinfo, legacy allowlist) are free;
-		// the remainder is deduplicated so a malicious token can't repeat the
-		// same identifier to amplify lookups.
-		const toLookup = new Set<string>();
-		for (const audValue of audValues) {
-			if (audValue === baseURL || audValue === userInfoAud) continue;
-			if (legacyValidAudiences.has(audValue)) continue;
-			toLookup.add(audValue);
-		}
-		if (toLookup.size > 0) {
-			// All-must-resolve semantics — fan out in parallel and require every
-			// unique unmatched identifier to map to an entity row.
-			const rows = await Promise.all(
-				Array.from(toLookup, (audValue) => getAudience(ctx, opts, audValue)),
-			);
-			if (rows.some((row) => !row)) {
-				return { active: false };
-			}
-		}
+	if (!(await isAudienceClaimAllowed(ctx, opts, rawAud, [userInfoAud]))) {
+		return { active: false };
 	}
 
 	// An OAuth access token issued by this provider always carries an `azp`

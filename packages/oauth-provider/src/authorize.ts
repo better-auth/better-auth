@@ -5,9 +5,9 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
-import { resolveAudiencePolicy } from "./audiences";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
+import { resolveResourcePolicy } from "./resources";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -480,13 +480,13 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	// Validate `resource` (RFC 8707 §2) against the configured audience
+	// Validate `resource` (RFC 8707 §2) against the configured resource
 	// entities — fail-fast at /authorize so clients see misconfigured
 	// resources before consent UI. Re-validated at /oauth2/token because
 	// clients typically re-supply the parameter there.
 	if (query.resource !== undefined) {
 		try {
-			await resolveAudiencePolicy(ctx, opts, {
+			await resolveResourcePolicy(ctx, opts, {
 				resource: query.resource,
 				clientId: client.clientId,
 				requestedScopes,
@@ -564,7 +564,7 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	// `resource` was already validated above via resolveAudiencePolicy (entity
+	// `resource` was already validated above via resolveResourcePolicy (entity
 	// + legacy fallback aware). Just normalize it for downstream consent/binding.
 	const requestedResources = toResourceList(query.resource) ?? [];
 

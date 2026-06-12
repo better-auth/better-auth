@@ -1,15 +1,15 @@
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { JWS_ALGORITHMS } from "../audiences";
+import { JWS_ALGORITHMS } from "../resources";
 import type { OAuthOptions, Scope } from "../types";
 import {
-	createAudienceEndpoint,
-	deleteAudienceEndpoint,
-	getAudienceByIdentifierEndpoint,
-	linkClientAudienceEndpoint,
-	listAudiencesEndpoint,
-	unlinkClientAudienceEndpoint,
-	updateAudienceEndpoint,
+	createResourceEndpoint,
+	deleteResourceEndpoint,
+	getResourceByIdentifierEndpoint,
+	linkClientResourceEndpoint,
+	listResourcesEndpoint,
+	unlinkClientResourceEndpoint,
+	updateResourceEndpoint,
 } from "./endpoints";
 
 /**
@@ -17,7 +17,7 @@ import {
  * `identifier` on create (validated in the handler). Update accepts a
  * subset; the handler only writes fields that are explicitly present.
  */
-const audienceBodySchema = z.object({
+const resourceBodySchema = z.object({
 	identifier: z.string().min(1).optional(),
 	name: z.string().optional(),
 	accessTokenTtl: z.number().int().positive().nullable().optional(),
@@ -30,94 +30,94 @@ const audienceBodySchema = z.object({
 	metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-export const adminCreateAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminCreateOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences",
+		"/admin/oauth2/resources",
 		{
 			method: "POST",
-			body: audienceBodySchema.required({ identifier: true }),
+			body: resourceBodySchema.required({ identifier: true }),
 			metadata: { SERVER_ONLY: true },
 		},
-		async (ctx) => createAudienceEndpoint(ctx, opts),
+		async (ctx) => createResourceEndpoint(ctx, opts),
 	);
 
-export const adminListAudiences = (opts: OAuthOptions<Scope[]>) =>
+export const adminListOAuthResources = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences",
+		"/admin/oauth2/resources",
 		{
 			method: "GET",
 			metadata: { SERVER_ONLY: true },
 		},
-		async (ctx) => listAudiencesEndpoint(ctx, opts),
+		async (ctx) => listResourcesEndpoint(ctx, opts),
 	);
 
-export const adminGetAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminGetOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences/:identifier",
+		"/admin/oauth2/resources/:identifier",
 		{
 			method: "GET",
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>
-			getAudienceByIdentifierEndpoint(
-				ctx as Parameters<typeof getAudienceByIdentifierEndpoint>[0],
+			getResourceByIdentifierEndpoint(
+				ctx as Parameters<typeof getResourceByIdentifierEndpoint>[0],
 				opts,
 			),
 	);
 
-export const adminUpdateAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminUpdateOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences/:identifier",
+		"/admin/oauth2/resources/:identifier",
 		{
 			method: "PATCH",
-			body: audienceBodySchema,
+			body: resourceBodySchema,
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>
-			updateAudienceEndpoint(
-				ctx as Parameters<typeof updateAudienceEndpoint>[0],
+			updateResourceEndpoint(
+				ctx as Parameters<typeof updateResourceEndpoint>[0],
 				opts,
 			),
 	);
 
-export const adminDeleteAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminDeleteOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences/:identifier",
+		"/admin/oauth2/resources/:identifier",
 		{
 			method: "DELETE",
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>
-			deleteAudienceEndpoint(
-				ctx as Parameters<typeof deleteAudienceEndpoint>[0],
+			deleteResourceEndpoint(
+				ctx as Parameters<typeof deleteResourceEndpoint>[0],
 				opts,
 			),
 	);
 
-export const adminLinkClientAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminLinkClientResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences/:identifier/clients/:client_id",
+		"/admin/oauth2/resources/:identifier/clients/:client_id",
 		{
 			method: "POST",
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>
-			linkClientAudienceEndpoint(
-				ctx as Parameters<typeof linkClientAudienceEndpoint>[0],
+			linkClientResourceEndpoint(
+				ctx as Parameters<typeof linkClientResourceEndpoint>[0],
 				opts,
 			),
 	);
 
-export const adminUnlinkClientAudience = (opts: OAuthOptions<Scope[]>) =>
+export const adminUnlinkClientResource = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/admin/oauth2/audiences/:identifier/clients/:client_id",
+		"/admin/oauth2/resources/:identifier/clients/:client_id",
 		{
 			method: "DELETE",
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>
-			unlinkClientAudienceEndpoint(
-				ctx as Parameters<typeof unlinkClientAudienceEndpoint>[0],
+			unlinkClientResourceEndpoint(
+				ctx as Parameters<typeof unlinkClientResourceEndpoint>[0],
 				opts,
 			),
 	);

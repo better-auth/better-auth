@@ -623,7 +623,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
-Use the `resources` field in `customAccessTokenClaims` to add claims based on the audience.
+Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
 ### Revoke Endpoint
 
@@ -1088,18 +1088,24 @@ oauthProvider({
 })
 ```
 
-### Valid Audiences
+### Resources
 
-A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
+A list of protected resources this OAuth server issues access tokens for. Each identifier is the RFC 8707 `resource` parameter value and becomes the JWT `aud` claim when a JWT access token is issued.
 
 ```ts title="auth.ts"
 oauthProvider({
-  validAudiences: [
+  resources: [
     "https://api.example.com",
-    "https://api.example.com/mcp",
+    {
+      identifier: "https://api.example.com/mcp",
+      allowedScopes: ["mcp:read", "mcp:write"],
+      accessTokenTtl: 300,
+    },
   ]
 })
 ```
+
+Use the admin resource endpoints when resource policy needs to change at runtime.
 
 ### Scopes
 
@@ -1663,7 +1669,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   <Step>
     ### Handle MCP Errors for your API
 
-    Always verify against a specified `audience`, the default will compare against all `validAudiences` or `baseUrl`.
+    Always verify against a specified `audience` matching your protected resource. If omitted, the resource client falls back to the authorization server base URL.
 
     * Using the client `verifyAccessToken` function
 

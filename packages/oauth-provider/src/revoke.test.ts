@@ -29,7 +29,8 @@ describe("oauth revoke", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -357,7 +358,8 @@ describe("oauth revoke - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validAudience],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,

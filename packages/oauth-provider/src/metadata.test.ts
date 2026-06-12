@@ -497,7 +497,8 @@ describe("oauth resource metadata", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,

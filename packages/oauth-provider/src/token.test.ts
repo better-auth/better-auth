@@ -36,7 +36,8 @@ describe("oauth token - authorization_code", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					validAudiences: [validAudience],
+					resources: [validAudience],
+					enforcePerClientResources: false,
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
 						openidConfig: true,
@@ -462,7 +463,8 @@ describe("oauth token - refresh_token", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -1304,7 +1306,8 @@ describe("oauth token - client_credentials", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
 				silenceWarnings: {
@@ -1472,7 +1475,7 @@ describe("oauth token - client_credentials", async () => {
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
-		expect(accessToken.payload.sub).toBeUndefined(); // unset since not a user!
+		expect(accessToken.payload.sub).toBe(oauthClient.client_id);
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
@@ -1652,7 +1655,8 @@ describe("oauth token - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validAudience],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -2039,7 +2043,8 @@ describe("oauth token - client secret validation", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validAudience],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -2614,7 +2619,8 @@ describe("at_hash in id tokens", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

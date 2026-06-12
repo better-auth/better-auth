@@ -101,45 +101,31 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * List of valid audiences if there are multiple.
+	 * Protected resources the AS issues access tokens for. Promotes the
+	 * resource model into a first-class persisted entity with per-resource
+	 * token policy.
 	 *
-	 * @deprecated Use {@link OAuthOptions.audiences} instead.
-	 *
-	 * @default baseURL
-	 * @example [
-	 * 	"https://api.example.com",
-	 * 	"https://api.example.com/mcp",
-	 * ]
-	 */
-	validAudiences?: string[];
-	/**
-	 * Audiences (resource servers) the AS issues tokens for. Promotes the
-	 * previously-static {@link OAuthOptions.validAudiences} into a first-class
-	 * persisted entity with per-audience token policy.
-	 *
-	 * - String form: equivalent to the deprecated `validAudiences` (each string
-	 *   becomes an `oauthAudience` row using plugin-level defaults).
-	 * - Object form: explicit per-audience policy (TTL, signing alg, scope
+	 * - String form: each string becomes an `oauthResource` row using plugin-level
+	 *   defaults.
+	 * - Object form: explicit per-resource policy (TTL, signing alg, scope
 	 *   allowlist, custom claims, sender-constraint requirements).
 	 *
 	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
-	 * {@link OAuthOptions.audienceSeedMode}.
+	 * {@link OAuthOptions.resourceSeedMode}.
 	 *
 	 * @see RFC 8707 — `identifier` is the `resource` parameter value
-	 * @see RFC 9728 — projected to the published metadata endpoint when opt-in
-	 *
 	 * @example
 	 * ```ts
-	 * audiences: [
+	 * resources: [
 	 *   { identifier: "https://api.example.com/admin", accessTokenTtl: 300,
 	 *     allowedScopes: ["admin:read", "admin:write"] },
 	 *   "https://api.example.com/public",
 	 * ]
 	 * ```
 	 */
-	audiences?: Array<string | OAuthAudienceInput>;
+	resources?: Array<string | OAuthResourceInput>;
 	/**
-	 * Controls whether boot-time `audiences` config overwrites DB-edited rows.
+	 * Controls whether boot-time `resources` config overwrites DB-edited rows.
 	 *
 	 * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
 	 *   not already present. Existing rows are untouched — admin edits via CRUD
@@ -154,47 +140,30 @@ export interface OAuthOptions<
 	 *
 	 * @default "insertOnly"
 	 */
-	audienceSeedMode?: "insertOnly" | "merge" | "overwrite";
+	resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
 	/**
-	 * Opt-in cache membership for audiences by `identifier`. Mirrors the
+	 * Opt-in cache membership for resources by `identifier`. Mirrors the
 	 * {@link OAuthOptions.cachedTrustedClients} pattern.
 	 *
-	 * Cached audiences are invalidated on every CRUD write. Audiences not in
+	 * Cached resources are invalidated on every CRUD write. Resources not in
 	 * this set are looked up from the DB on every request — the safe default
 	 * when admins edit rows through external tooling.
 	 */
-	cachedAudiences?: Set<string>;
+	cachedResources?: Set<string>;
 	/**
 	 * When true, `/oauth2/token` and `/oauth2/authorize` require the client to be
-	 * linked to every requested audience via `oauthClientAudience`. When false,
-	 * clients implicitly have access to all enabled audiences (preserves
-	 * pre-entity behavior).
+	 * linked to every requested resource via `oauthClientResource`. When false,
+	 * clients implicitly have access to all enabled resources.
 	 *
-	 * **Smart default when undefined**:
-	 * - {@link OAuthOptions.validAudiences} is set (legacy path) → resolves to
-	 *   `false`. Existing deployments don't suddenly start rejecting unlinked
-	 *   clients on upgrade.
-	 * - Otherwise (new path: {@link OAuthOptions.audiences} is set, or no
-	 *   audience config at all) → resolves to `true`. Per-client validation per
-	 *   RFC 8707 §3 — the secure default for new deployments.
-	 * - An explicit `true | false` always wins over the smart default.
+	 * Defaults to `true`, enabling per-client validation per RFC 8707 §3. An
+	 * explicit `false` keeps all enabled resources requestable by any client.
 	 *
 	 * The resolved value is logged at plugin init so admins see which default
 	 * applied.
 	 */
-	enforcePerClientAudiences?: boolean;
+	enforcePerClientResources?: boolean;
 	/**
-	 * When true, publishes per-audience metadata at
-	 * `/.well-known/oauth-protected-resource/{identifier}` (RFC 9728). Aligns
-	 * with the MCP authorization spec direction. Opt-in to avoid exposing
-	 * audience identifiers on deployments that have not opted into publishing.
-	 *
-	 * @default false
-	 * @see RFC 9728
-	 */
-	publishProtectedResourceMetadata?: boolean;
-	/**
-	 * Customize how an audience `identifier` is validated when audiences are
+	 * Customize how a resource `identifier` is validated when resources are
 	 * created via CRUD or DCR. The default rejects non-URI identifiers per
 	 * RFC 8707 §2 (absolute URI, no fragment). Override only for trusted
 	 * internal use cases.
@@ -203,12 +172,12 @@ export interface OAuthOptions<
 	 */
 	identifierValidator?: (identifier: string) => Awaitable<boolean>;
 	/**
-	 * RBAC on OAuth Audiences. Mirrors {@link OAuthOptions.clientPrivileges}.
+	 * RBAC on OAuth resources. Mirrors {@link OAuthOptions.clientPrivileges}.
 	 *
-	 * Gates the admin audience CRUD endpoints. Return `false` (or `undefined`)
+	 * Gates the admin resource CRUD endpoints. Return `false` (or `undefined`)
 	 * to deny the action.
 	 */
-	audiencePrivileges?: (context: {
+	resourcePrivileges?: (context: {
 		headers: Headers;
 		action:
 			| "create"
@@ -220,7 +189,7 @@ export interface OAuthOptions<
 			| "unlink";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
-		audienceId?: string;
+		resourceId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Automatically cache trusted clients by client_id.
@@ -1033,12 +1002,12 @@ export interface OAuthAuthorizationQuery {
 }
 
 /**
- * A persisted resource server (audience) row as stored in `oauthAudience`.
+ * A persisted protected-resource row as stored in `oauthResource`.
  *
  * `null` on any policy column means "inherit the plugin-level default at
  * token issuance time" — admins can later override without re-seeding.
  */
-export interface OAuthAudience {
+export interface OAuthResource {
 	/** Auto-generated primary key */
 	id: string;
 	/**
@@ -1060,14 +1029,14 @@ export interface OAuthAudience {
 	 */
 	allowedScopes?: string[] | null;
 	/**
-	 * Per-audience claims merged into the access token JWT payload. Reserved
+	 * Per-resource claims merged into the access token JWT payload. Reserved
 	 * RFC 9068 claim names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`,
 	 * `client_id`, `scope`, `auth_time`, `acr`, `amr`) are stripped at issuance
 	 * with a warning log — never silently dropped.
 	 */
 	customClaims?: Record<string, unknown> | null;
 	/**
-	 * Disabled → no new issuance for this audience; existing tokens still verify
+	 * Disabled → no new issuance for this resource; existing tokens still verify
 	 * until natural expiry. Compare to delete, which hard-rejects existing tokens.
 	 */
 	disabled: boolean;
@@ -1084,11 +1053,11 @@ export interface OAuthAudience {
 }
 
 /**
- * Plugin-config input for {@link OAuthOptions.audiences}. A subset of the
- * persisted {@link OAuthAudience} — only `identifier` is required; the rest
+ * Plugin-config input for {@link OAuthOptions.resources}. A subset of the
+ * persisted {@link OAuthResource} — only `identifier` is required; the rest
  * fall back to plugin defaults when omitted.
  */
-export interface OAuthAudienceInput {
+export interface OAuthResourceInput {
 	identifier: string;
 	name?: string;
 	accessTokenTtl?: number;
@@ -1102,13 +1071,13 @@ export interface OAuthAudienceInput {
 }
 
 /**
- * A row of `oauthClientAudience` linking a client to an audience.
+ * A row of `oauthClientResource` linking a client to a resource.
  *
- * Authoritative only when {@link OAuthOptions.enforcePerClientAudiences} is true.
+ * Authoritative only when {@link OAuthOptions.enforcePerClientResources} is true.
  */
-export interface OAuthClientAudience {
+export interface OAuthClientResource {
 	clientId: string;
-	audienceId: string;
+	resourceId: string;
 	metadata?: Record<string, unknown> | null;
 	createdAt: Date;
 }

@@ -767,7 +767,8 @@ describe("oauth authorize - consented resources", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience, secondValidAudience],
+				resources: [validAudience, secondValidAudience],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

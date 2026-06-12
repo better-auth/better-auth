@@ -231,23 +231,23 @@ describe("oauth register", async () => {
 		expect(response.data?.public).toBeFalsy();
 	});
 
-	it("dedupes repeated DCR audiences to a single client/audience link row", async () => {
+	it("dedupes repeated DCR resources to a single client/resource link row", async () => {
 		const identifier = "https://api.example.com/dcr-dedupe";
-		await auth.api.adminCreateAudience({
+		await auth.api.adminCreateOAuthResource({
 			headers,
 			body: { identifier },
 		});
 
-		// A client that lists the same audience twice must not produce two
-		// link rows: the deterministic `${clientId}::${audienceId}` id makes
+		// A client that lists the same resource twice must not produce two
+		// link rows: the deterministic `${clientId}::${resourceId}` id makes
 		// the second insert a no-op via the PK uniqueness constraint.
 		const response = await serverClient.$fetch<
-			OAuthClient & { audiences?: string[] }
+			OAuthClient & { resources?: string[] }
 		>("/oauth2/register", {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
-				audiences: [identifier, identifier],
+				resources: [identifier, identifier],
 			},
 		});
 		const clientId = response.data?.client_id;
@@ -255,7 +255,7 @@ describe("oauth register", async () => {
 
 		const ctx = await auth.$context;
 		const links = await ctx.adapter.findMany({
-			model: "oauthClientAudience",
+			model: "oauthClientResource",
 			where: [{ field: "clientId", value: clientId! }],
 		});
 		expect(links.length).toBe(1);

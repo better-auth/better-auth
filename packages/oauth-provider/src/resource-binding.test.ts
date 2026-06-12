@@ -39,7 +39,7 @@ function tokenForm(params: Record<string, string | undefined>) {
  * client declares a resource at `/authorize`, the token and refresh endpoints
  * may narrow the audience to a subset but may not widen it to a resource the
  * authorization never covered. Before the fix the audience was read from the
- * token request body and checked only against the global `validAudiences`
+ * token request body and checked only against the global `resources`
  * allowlist, so a client could obtain (or change, across refreshes) a token for
  * any allow-listed resource regardless of the grant.
  *
@@ -53,7 +53,8 @@ describe("oauth-provider resource indicator binding", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [audienceA, audienceB],
+				resources: [audienceA, audienceB],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

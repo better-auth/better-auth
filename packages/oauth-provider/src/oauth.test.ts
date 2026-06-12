@@ -3220,7 +3220,8 @@ describe("oauth - config", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					disableJwtPlugin: disableJwtPlugin,
-					validAudiences: resource ? [validAudience] : undefined,
+					resources: resource ? [validAudience] : undefined,
+					enforcePerClientResources: false,
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
 						openidConfig: true,

@@ -6,8 +6,8 @@ import { APIError } from "better-call";
  *
  * Given an error thrown while verifying a bearer token, this rethrows an
  * unauthorized error as a `401` carrying the RFC 9728 `resource_metadata`
- * pointer for each audience, and rethrows any other error unchanged. Non-URL
- * audiences (for example a `urn:` or a client id) resolve their metadata URL
+ * pointer for each resource, and rethrows any other error unchanged. Non-URL
+ * resources (for example a `urn:` or a client id) resolve their metadata URL
  * through `resourceMetadataMappings`.
  *
  * @internal
@@ -30,10 +30,10 @@ export function raiseResourceServerChallenge(
 				// mapping.
 				const url = URL.canParse?.(value) ? new URL(value) : null;
 				if (url && url.origin !== "null") {
-					const audiencePath = url.pathname.endsWith("/")
+					const resourcePath = url.pathname.endsWith("/")
 						? url.pathname.slice(0, -1)
 						: url.pathname;
-					return `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${audiencePath}${url.search}"`;
+					return `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${resourcePath}${url.search}"`;
 				}
 				const resourceMetadata = opts?.resourceMetadataMappings?.[value];
 				if (!resourceMetadata) {

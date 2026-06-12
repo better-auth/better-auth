@@ -153,19 +153,18 @@ export const schema = {
 		},
 	},
 	/**
-	 * A resource server (audience) the AS issues tokens for.
+	 * A protected resource the AS issues access tokens for.
 	 *
-	 * Promotes the previously-static `validAudiences: string[]` config into a
-	 * first-class persisted entity with per-audience token policy. A null value
+	 * Promotes protected resources into a first-class persisted entity with
+	 * per-resource token policy. A null value
 	 * on any policy column means "inherit the plugin-level default at token
 	 * issuance time" — admins can later override without re-seeding.
 	 *
 	 * @see RFC 8707 (Resource Indicators) — `identifier` is the `resource` parameter value
 	 * @see RFC 9068 §2.2 — `customClaims` cannot override reserved JWT claims (enforced server-side)
-	 * @see RFC 9728 — projected to the published metadata endpoint when opt-in
 	 */
-	oauthAudience: {
-		modelName: "oauthAudience",
+	oauthResource: {
+		modelName: "oauthResource",
 		fields: {
 			// Business key used in the `aud` claim and as the RFC 8707 `resource` value.
 			identifier: {
@@ -201,7 +200,7 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
-			// Per-audience custom claims. Reserved RFC 9068 claim names are stripped at
+			// Per-resource custom claims. Reserved RFC 9068 claim names are stripped at
 			// issuance with a warning log (never silently dropped).
 			customClaims: {
 				type: "json",
@@ -238,24 +237,24 @@ export const schema = {
 		},
 	},
 	/**
-	 * Join table — which clients are allowed to request which audiences.
+	 * Join table — which clients are allowed to request which resources.
 	 *
-	 * Authoritative only when `enforcePerClientAudiences: true` on plugin options.
-	 * When the flag is off, clients implicitly have access to all enabled audiences
+	 * Authoritative only when `enforcePerClientResources: true` on plugin options.
+	 * When the flag is off, clients implicitly have access to all enabled resources
 	 * (preserves pre-entity behavior).
 	 *
-	 * Composite uniqueness on `(clientId, audienceId)` is load-bearing — the
-	 * `enforcePerClientAudiences` linkage check assumes one row per pair.
+	 * Composite uniqueness on `(clientId, resourceId)` is load-bearing — the
+	 * `enforcePerClientResources` linkage check assumes one row per pair.
 	 *
 	 * Better Auth's schema layer doesn't expose composite-UNIQUE syntax (no
-	 * way to declare `UNIQUE(clientId, audienceId)` at the column level). To
+	 * way to declare `UNIQUE(clientId, resourceId)` at the column level). To
 	 * enforce it at the database level for free, we set the row's `id` to a
-	 * deterministic `${clientId}::${audienceId}` value at write time and let
+	 * deterministic `${clientId}::${resourceId}` value at write time and let
 	 * the implicit `UNIQUE` constraint on the primary key catch duplicates
-	 * (see `buildClientAudienceLinkId` and the `forceAllowId: true` flag on
-	 * the `adapter.create` call in `oauthAudience/endpoints.ts`). The double
+	 * (see `buildClientResourceLinkId` and the `forceAllowId: true` flag on
+	 * the `adapter.create` call in `oauthResource/endpoints.ts`). The double
 	 * colon separator is chosen because `::` cannot appear in either a
-	 * client_id (URL-safe random string) or an audience identifier (RFC 8707
+	 * client_id (URL-safe random string) or a resource identifier (RFC 8707
 	 * absolute URI — `::` would be an IPv6 form rejected by the validator),
 	 * so the encoding is collision-free.
 	 *
@@ -263,8 +262,8 @@ export const schema = {
 	 * error which the endpoint catches and converts to a 200 "alreadyLinked"
 	 * response (idempotency).
 	 */
-	oauthClientAudience: {
-		modelName: "oauthClientAudience",
+	oauthClientResource: {
+		modelName: "oauthClientResource",
 		fields: {
 			clientId: {
 				type: "string",
@@ -276,11 +275,11 @@ export const schema = {
 				},
 				index: true,
 			},
-			audienceId: {
+			resourceId: {
 				type: "string",
 				required: true,
 				references: {
-					model: "oauthAudience",
+					model: "oauthResource",
 					field: "identifier",
 					onDelete: "cascade",
 				},
@@ -368,7 +367,7 @@ export const schema = {
 		},
 	},
 	/**
-	 * An opaque access token sent when there is no audience
+	 * An opaque access token sent when there is no resource audience claim
 	 * to assigned to the JWT.
 	 *
 	 * Access tokens are linked to a session, better-auth

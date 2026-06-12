@@ -31,7 +31,8 @@ describe("pairwise subject identifiers", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
-				validAudiences: [validAudience],
+				resources: [validAudience],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,

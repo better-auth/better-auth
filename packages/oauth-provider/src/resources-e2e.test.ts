@@ -1,7 +1,7 @@
 /**
- * Regression coverage for the OAuth audiences entity. Each `describe`
+ * Regression coverage for the OAuth resources entity. Each `describe`
  * targets one downstream consumer of the policy resolved by
- * `resolveAudiencePolicy`, asserting end-to-end behavior (token mint → DB
+ * `resolveResourcePolicy`, asserting end-to-end behavior (token mint → DB
  * row → introspection / refresh / verifier) rather than just helper
  * return values.
  */
@@ -11,20 +11,20 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, decodeProtectedHeader } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	invalidateAudienceCache,
-	resetSeedStateForTests,
-	resolveAudiencePolicy,
-	seedAudiencesOnce,
-} from "./audiences";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import {
+	invalidateResourceCache,
+	resetSeedStateForTests,
+	resolveResourcePolicy,
+	seedResourcesOnce,
+} from "./resources";
 import type {
-	OAuthAudience,
 	OAuthOptions,
 	OAuthRefreshToken,
+	OAuthResource,
 	Scope,
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -36,7 +36,7 @@ const silenceWarnings = {
 
 /**
  * Boots an in-memory better-auth instance with the oauth-provider plugin and
- * (when not disabled by callers) the jwt plugin. Pre-seeds audience rows so
+ * (when not disabled by callers) the jwt plugin. Pre-seeds resource rows so
  * tests don't have to deal with the lazy seeding semantics directly.
  */
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
@@ -44,10 +44,10 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 		loginPage: "/login",
 		consentPage: "/consent",
 		silenceWarnings,
-		// Audience-linkage enforcement has its own coverage; disable here so
-		// unit-level resolveAudiencePolicy tests don't have to seed
-		// `oauthClientAudience` rows just to validate policy fields.
-		enforcePerClientAudiences: false,
+		// Resource-linkage enforcement has its own coverage; disable here so
+		// unit-level resolveResourcePolicy tests don't have to seed
+		// `oauthClientResource` rows just to validate policy fields.
+		enforcePerClientResources: false,
 		...options,
 	} as OAuthOptions<Scope[]>;
 	const instance = await getTestInstance({
@@ -55,7 +55,7 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	});
 	resetSeedStateForTests();
 	const ctx = await instance.auth.$context;
-	await seedAudiencesOnce(ctx as unknown as AuthContext, opts);
+	await seedResourcesOnce(ctx as unknown as AuthContext, opts);
 	return { ...instance, ctx, opts };
 };
 
@@ -76,11 +76,11 @@ const fakeEndpointCtx = (
 const bootCodeFlowHarness = async (
 	options: Partial<OAuthOptions<Scope[]>> = {},
 ) => {
-	// Module-level audience cache + seed-completion flag persist across tests
+	// Module-level resource cache + seed-completion flag persist across tests
 	// in this file. Reset both before each harness boot so a stale cached row
 	// from an earlier test doesn't leak into a fresh instance.
 	resetSeedStateForTests();
-	invalidateAudienceCache();
+	invalidateResourceCache();
 
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -92,10 +92,10 @@ const bootCodeFlowHarness = async (
 		loginPage: "/login",
 		consentPage: "/consent",
 		silenceWarnings,
-		// Disable the per-client audience-linkage check for the harness.
+		// Disable the per-client resource-linkage check for the harness.
 		// Bug-fix coverage targets the policy / introspection / refresh paths;
-		// per-client linkage has its own coverage in audiences.test.ts.
-		enforcePerClientAudiences: false,
+		// per-client linkage has its own coverage in resources.test.ts.
+		enforcePerClientResources: false,
 		...options,
 	} as OAuthOptions<Scope[]>;
 
@@ -103,10 +103,10 @@ const bootCodeFlowHarness = async (
 		baseURL: authServerBaseUrl,
 		plugins: [jwt({ jwt: { issuer: authServerBaseUrl } }), oauthProvider(opts)],
 	});
-	// Force the seed to run now (lazy-seed normally defers until first audience
+	// Force the seed to run now (lazy-seed normally defers until first resource
 	// access, which is after migrations have run).
 	const seedCtx = await auth.$context;
-	await seedAudiencesOnce(seedCtx as unknown as AuthContext, opts);
+	await seedResourcesOnce(seedCtx as unknown as AuthContext, opts);
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -249,20 +249,19 @@ const bootCodeFlowHarness = async (
 // ────────────────────────────────────────────────────────────────────────────
 // Introspection of entity-issued JWTs
 // ────────────────────────────────────────────────────────────────────────────
-describe("introspection accepts entity-issued JWTs and rejects deleted-audience tokens", () => {
-	it("introspects a JWT whose `aud` is an oauthAudience identifier as active", async () => {
-		// Pre-fix, validateJwtAccessToken passed `audience: opts.validAudiences ??
-		// baseURL` to jose, so a JWT minted with `aud: <entity identifier>`
-		// would fail jose's audience check and report active=false. The fix
-		// removes that argument and validates `aud` manually against live
-		// audience rows.
-		const validAudience = "https://api.example.com/bug-1";
+describe("introspection accepts entity-issued JWTs and rejects deleted-resource tokens", () => {
+	it("introspects a JWT whose `aud` is an oauthResource identifier as active", async () => {
+		// Pre-fix, validateJwtAccessToken delegated JWT `aud` validation to a
+		// global jose audience check, so a JWT minted with
+		// `aud: <entity identifier>` could report active=false. The fix
+		// validates `aud` manually against live resource rows.
+		const validResource = "https://api.example.com/bug-1";
 		const harness = await bootCodeFlowHarness({
-			audiences: [validAudience],
+			resources: [validResource],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: validAudience,
-			tokenResource: validAudience,
+			authorizeResource: validResource,
+			tokenResource: validResource,
 		});
 		expect(result.tokens?.data?.access_token).toBeDefined();
 
@@ -287,21 +286,21 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-audience 
 		// `aud` survived round-trip and references the entity identifier.
 		const decoded = decodeJwt(result.tokens!.data!.access_token!);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(validAudience);
+		expect(audClaim).toContain(validResource);
 	});
 
-	it("hard-rejects a JWT whose audience row was deleted (introspection inactive)", async () => {
-		// Contract: deleting an audience row implicitly revokes outstanding
+	it("hard-rejects a JWT whose resource row was deleted (introspection inactive)", async () => {
+		// Contract: deleting an resource row implicitly revokes outstanding
 		// tokens. Introspection returns active=false (RFC 7662 §2.2 — stable
 		// failure mode), enabling RS-side immediate enforcement without per-
 		// token revocation calls.
-		const validAudience = "https://api.example.com/bug-1-delete";
+		const validResource = "https://api.example.com/bug-1-delete";
 		const harness = await bootCodeFlowHarness({
-			audiences: [validAudience],
+			resources: [validResource],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: validAudience,
-			tokenResource: validAudience,
+			authorizeResource: validResource,
+			tokenResource: validResource,
 		});
 		const accessToken = result.tokens!.data!.access_token!;
 
@@ -322,11 +321,11 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-audience 
 		);
 		expect(beforeDelete.data?.active).toBe(true);
 
-		// Delete the audience row directly to simulate admin DELETE.
+		// Delete the resource row directly to simulate admin DELETE.
 		const ctx = await harness.auth.$context;
 		await ctx.adapter.delete({
-			model: "oauthAudience",
-			where: [{ field: "identifier", value: validAudience }],
+			model: "oauthResource",
+			where: [{ field: "identifier", value: validResource }],
 		});
 
 		const afterDelete = await harness.client.oauth2.introspect(
@@ -346,26 +345,26 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-audience 
 		expect(afterDelete.data?.active).toBe(false);
 	});
 
-	it("continues to verify a JWT whose audience row was disabled (block new issuance only)", async () => {
+	it("continues to verify a JWT whose resource row was disabled (block new issuance only)", async () => {
 		// Lifecycle contract (schema.ts comment on `disabled`): disabling an
-		// audience blocks NEW issuance but existing tokens continue to verify
+		// resource blocks NEW issuance but existing tokens continue to verify
 		// until their natural expiry. Only deletion hard-rejects existing
 		// tokens. This test pins the contract so the row-existence vs.
 		// disabled-flag distinction doesn't drift in introspect.ts.
-		const validAudience = "https://api.example.com/bug-1-disabled";
+		const validResource = "https://api.example.com/bug-1-disabled";
 		const harness = await bootCodeFlowHarness({
-			audiences: [validAudience],
+			resources: [validResource],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: validAudience,
-			tokenResource: validAudience,
+			authorizeResource: validResource,
+			tokenResource: validResource,
 		});
 		const accessToken = result.tokens!.data!.access_token!;
 
 		const ctx = await harness.auth.$context;
 		await ctx.adapter.update({
-			model: "oauthAudience",
-			where: [{ field: "identifier", value: validAudience }],
+			model: "oauthResource",
+			where: [{ field: "identifier", value: validResource }],
 			update: { disabled: true },
 		});
 
@@ -386,18 +385,18 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-audience 
 		expect(introspection.data?.active).toBe(true);
 	});
 
-	it("blocks NEW issuance against a disabled audience (resolveAudiencePolicy rejects)", async () => {
+	it("blocks NEW issuance against a disabled resource (resolveResourcePolicy rejects)", async () => {
 		// Complement to the previous test: disabling stops NEW mint but does
 		// not retroactively invalidate. Confirm /oauth2/token rejects when the
-		// audience is already disabled at request time.
+		// resource is already disabled at request time.
 		const aud = "https://api.example.com/bug-1-disabled-mint";
 		const harness = await bootCodeFlowHarness({
-			audiences: [aud],
+			resources: [aud],
 		});
 
 		const ctx = await harness.auth.$context;
 		await ctx.adapter.update({
-			model: "oauthAudience",
+			model: "oauthResource",
 			where: [{ field: "identifier", value: aud }],
 			update: { disabled: true },
 		});
@@ -423,7 +422,7 @@ describe("code grant binds authorize-time `resource`", () => {
 		// verificationValue.query.resource and plumbs it through.
 		const audA = "https://api.example.com/bug-2-omit";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA],
+			resources: [audA],
 		});
 
 		const result = await harness.runCodeFlow({
@@ -440,12 +439,12 @@ describe("code grant binds authorize-time `resource`", () => {
 
 	it("rejects with invalid_target when /token widens the resource set", async () => {
 		// RFC 8707 §2.2 — the redemption resource MUST be a subset of the
-		// authorize-time resource set. Widening to a different audience is
-		// invalid_target even if that audience is otherwise configured.
+		// authorize-time resource set. Widening to a different resource is
+		// invalid_target even if that resource is otherwise configured.
 		const audA = "https://api.example.com/bug-2-widen-a";
 		const audB = "https://api.example.com/bug-2-widen-b";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA, audB],
+			resources: [audA, audB],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: audA,
@@ -461,7 +460,7 @@ describe("code grant binds authorize-time `resource`", () => {
 	it("accepts /token resource when it equals the authorize-time resource", async () => {
 		const audA = "https://api.example.com/bug-2-match";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA],
+			resources: [audA],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: audA,
@@ -475,13 +474,13 @@ describe("code grant binds authorize-time `resource`", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// Refresh-token preservation of original audience
+// Refresh-token preservation of original resource
 // ────────────────────────────────────────────────────────────────────────────
-describe("refresh tokens preserve original audience", () => {
+describe("refresh tokens preserve original resource", () => {
 	it("persists `resource` on the oauthRefreshToken row at issuance", async () => {
 		const audA = "https://api.example.com/bug-3-persist";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA],
+			resources: [audA],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: audA,
@@ -495,20 +494,20 @@ describe("refresh tokens preserve original audience", () => {
 			where: [{ field: "clientId", value: harness.oauthClient.client_id! }],
 		});
 		expect(rows.length).toBeGreaterThan(0);
-		// At least one row carries the audience we issued against.
+		// At least one row carries the resource we issued against.
 		const persisted = rows.find((r) => (r.resources ?? []).includes(audA));
 		expect(persisted).toBeDefined();
 		expect(persisted?.resources).toContain(audA);
 	});
 
-	it("re-applies the original audience on refresh when /token omits resource", async () => {
+	it("re-applies the original resource on refresh when /token omits resource", async () => {
 		// Pre-fix, handleRefreshTokenGrant used only ctx.body.resource, so a
-		// refresh without `resource` would lose the original audience binding
-		// (and per-audience TTL/signing/claims). Post-fix the persisted
+		// refresh without `resource` would lose the original resource binding
+		// (and per-resource TTL/signing/claims). Post-fix the persisted
 		// resource is the source of truth.
 		const audA = "https://api.example.com/bug-3-rebind";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA],
+			resources: [audA],
 		});
 		const initial = await harness.runCodeFlow({
 			authorizeResource: audA,
@@ -543,7 +542,7 @@ describe("refresh tokens preserve original audience", () => {
 		const audA = "https://api.example.com/bug-3-widen-a";
 		const audB = "https://api.example.com/bug-3-widen-b";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA, audB],
+			resources: [audA, audB],
 		});
 		const initial = await harness.runCodeFlow({
 			authorizeResource: audA,
@@ -573,16 +572,16 @@ describe("refresh tokens preserve original audience", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// DB-only audiences without config
+// DB-only resources without config
 // ────────────────────────────────────────────────────────────────────────────
-describe("DB-only audiences resolve without `audiences` / `validAudiences` config", () => {
-	it("looks up a DB row even when neither audiences nor validAudiences is set", async () => {
-		// Boot with no audience config so the legacy gate would have blocked
-		// the DB lookup. Then create a row directly and assert resolution.
+describe("DB-only resources resolve without `resources` config", () => {
+	it("looks up a DB row even when resources config is absent", async () => {
+		// Boot with no resource config. Then create a row directly and assert
+		// resolution still uses the database as the authority.
 		const { ctx, opts } = await bootProvider({});
 		const identifier = "https://api.example.com/bug-4-db-only";
-		await ctx.adapter.create<OAuthAudience>({
-			model: "oauthAudience",
+		await ctx.adapter.create<OAuthResource>({
+			model: "oauthResource",
 			data: {
 				identifier,
 				name: identifier,
@@ -597,21 +596,21 @@ describe("DB-only audiences resolve without `audiences` / `validAudiences` confi
 				metadata: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
-			} as unknown as OAuthAudience,
+			} as unknown as OAuthResource,
 		});
-		const policy = await resolveAudiencePolicy(fakeEndpointCtx(ctx), opts, {
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 			resource: identifier,
 			clientId: "client-x",
 			requestedScopes: ["read"],
 		});
-		expect(policy.audience).toBe(identifier);
+		expect(policy.audienceClaim).toBe(identifier);
 		expect(policy.accessTokenTtl).toBe(120);
 	});
 
 	it("rejects an unknown identifier with invalid_target when no config and no DB row", async () => {
 		const { ctx, opts } = await bootProvider({});
 		await expect(
-			resolveAudiencePolicy(fakeEndpointCtx(ctx), opts, {
+			resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 				resource: "https://api.example.com/bug-4-nope",
 				clientId: "client-x",
 				requestedScopes: [],
@@ -624,8 +623,8 @@ describe("DB-only audiences resolve without `audiences` / `validAudiences` confi
 	it("rejects a disabled DB row with invalid_target even without legacy config", async () => {
 		const { ctx, opts } = await bootProvider({});
 		const identifier = "https://api.example.com/bug-4-disabled";
-		await ctx.adapter.create<OAuthAudience>({
-			model: "oauthAudience",
+		await ctx.adapter.create<OAuthResource>({
+			model: "oauthResource",
 			data: {
 				identifier,
 				name: identifier,
@@ -640,10 +639,10 @@ describe("DB-only audiences resolve without `audiences` / `validAudiences` confi
 				metadata: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
-			} as unknown as OAuthAudience,
+			} as unknown as OAuthResource,
 		});
 		await expect(
-			resolveAudiencePolicy(fakeEndpointCtx(ctx), opts, {
+			resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 				resource: identifier,
 				clientId: "client-x",
 				requestedScopes: [],
@@ -657,15 +656,15 @@ describe("DB-only audiences resolve without `audiences` / `validAudiences` confi
 // ────────────────────────────────────────────────────────────────────────────
 // refreshTokenTtl application at issuance
 // ────────────────────────────────────────────────────────────────────────────
-describe("refreshTokenTtl from oauthAudience is applied at issuance", () => {
-	it("uses the audience refreshTokenTtl when shorter than plugin default", async () => {
+describe("refreshTokenTtl from oauthResource is applied at issuance", () => {
+	it("uses the resource refreshTokenTtl when shorter than plugin default", async () => {
 		const identifier = "https://api.example.com/bug-7-short";
-		const audienceRefreshTtl = 60; // 1 minute
+		const resourceRefreshTtl = 60; // 1 minute
 		const harness = await bootCodeFlowHarness({
-			audiences: [
+			resources: [
 				{
 					identifier,
-					refreshTokenTtl: audienceRefreshTtl,
+					refreshTokenTtl: resourceRefreshTtl,
 				},
 			],
 			refreshTokenExpiresIn: 86400, // 1 day — should be ignored
@@ -688,16 +687,16 @@ describe("refreshTokenTtl from oauthAudience is applied at issuance", () => {
 			(new Date(row!.expiresAt).getTime() -
 				new Date(row!.createdAt).getTime()) /
 			1000;
-		// Within 5s tolerance of the audience TTL.
-		expect(Math.abs(ttlSeconds - audienceRefreshTtl)).toBeLessThan(5);
+		// Within 5s tolerance of the resource TTL.
+		expect(Math.abs(ttlSeconds - resourceRefreshTtl)).toBeLessThan(5);
 	});
 
-	it("policy.refreshTokenTtl reflects audience override (unit-level)", async () => {
+	it("policy.refreshTokenTtl reflects resource override (unit-level)", async () => {
 		const id = "https://api.example.com/bug-7-policy";
 		const { ctx, opts } = await bootProvider({
-			audiences: [{ identifier: id, refreshTokenTtl: 300 }],
+			resources: [{ identifier: id, refreshTokenTtl: 300 }],
 		});
-		const policy = await resolveAudiencePolicy(fakeEndpointCtx(ctx), opts, {
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 			resource: id,
 			clientId: "client-x",
 			requestedScopes: [],
@@ -705,16 +704,16 @@ describe("refreshTokenTtl from oauthAudience is applied at issuance", () => {
 		expect(policy.refreshTokenTtl).toBe(300);
 	});
 
-	it("policy.refreshTokenTtl picks the minimum across multi-audience requests", async () => {
+	it("policy.refreshTokenTtl picks the minimum across multi-resource requests", async () => {
 		const a = "https://api.example.com/bug-7-multi-a";
 		const b = "https://api.example.com/bug-7-multi-b";
 		const { ctx, opts } = await bootProvider({
-			audiences: [
+			resources: [
 				{ identifier: a, refreshTokenTtl: 600 },
 				{ identifier: b, refreshTokenTtl: 120 },
 			],
 		});
-		const policy = await resolveAudiencePolicy(fakeEndpointCtx(ctx), opts, {
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 			resource: [a, b],
 			clientId: "client-x",
 			requestedScopes: [],
@@ -722,19 +721,19 @@ describe("refreshTokenTtl from oauthAudience is applied at issuance", () => {
 		expect(policy.refreshTokenTtl).toBe(120);
 	});
 
-	it("caps audience refreshTokenTtl against the plugin default (lowest wins)", async () => {
+	it("caps resource refreshTokenTtl against the plugin default (lowest wins)", async () => {
 		// OAuth 2.1 §1.5 / RFC 8693 §3.2 lifetime-narrowing semantics: a
-		// permissive per-audience TTL must not extend the AS-wide default.
-		// Pre-fix `audiencePolicy.refreshTokenTtl ?? default` would let the
-		// audience override an even-shorter plugin default.
+		// permissive per-resource TTL must not extend the AS-wide default.
+		// Pre-fix `resourcePolicy.refreshTokenTtl ?? default` would let the
+		// resource override an even-shorter plugin default.
 		const identifier = "https://api.example.com/bug-7-cap";
 		const pluginDefault = 60; // 1 minute — should win
-		const audienceRefreshTtl = 3600; // 1 hour — should be capped
+		const resourceRefreshTtl = 3600; // 1 hour — should be capped
 		const harness = await bootCodeFlowHarness({
-			audiences: [
+			resources: [
 				{
 					identifier,
-					refreshTokenTtl: audienceRefreshTtl,
+					refreshTokenTtl: resourceRefreshTtl,
 				},
 			],
 			refreshTokenExpiresIn: pluginDefault,
@@ -757,26 +756,26 @@ describe("refreshTokenTtl from oauthAudience is applied at issuance", () => {
 			(new Date(row!.expiresAt).getTime() -
 				new Date(row!.createdAt).getTime()) /
 			1000;
-		// Within 5s tolerance of the plugin-default TTL, NOT the audience TTL.
+		// Within 5s tolerance of the plugin-default TTL, NOT the resource TTL.
 		expect(Math.abs(ttlSeconds - pluginDefault)).toBeLessThan(5);
-		expect(ttlSeconds).toBeLessThan(audienceRefreshTtl);
+		expect(ttlSeconds).toBeLessThan(resourceRefreshTtl);
 	});
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // RFC 8707 §2: repeated `resource` form parameters
 // ────────────────────────────────────────────────────────────────────────────
-describe("repeated `resource` form parameter mints multi-audience tokens", () => {
+describe("repeated `resource` form parameter mints multi-resource tokens", () => {
 	it("token aud carries every requested resource (auth code grant)", async () => {
 		// Pre-fix, better-call's form-body parser collapsed repeated keys to
 		// last-write-wins, so `resource=A&resource=B` arrived in the handler
 		// as `{ resource: "B" }` and the issued JWT had `aud: [B]`. RFC 8707
 		// §2 explicitly permits repetition and the AS SHOULD reflect every
-		// requested resource in the audience claim.
+		// requested resource in the aud claim.
 		const audA = "https://api.example.com/bug-10-a";
 		const audB = "https://api.example.com/bug-10-b";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA, audB],
+			resources: [audA, audB],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: [audA, audB],
@@ -792,13 +791,13 @@ describe("repeated `resource` form parameter mints multi-audience tokens", () =>
 
 	it("refresh-token row persists every requested resource", async () => {
 		// RFC 8707 §2.2 narrowing: the refresh row must remember the full
-		// requested audience set so subsequent refresh exchanges can verify
+		// requested resource set so subsequent refresh exchanges can verify
 		// that the client only narrows, never widens. With the
 		// last-write-wins bug, only the trailing value was persisted.
 		const audA = "https://api.example.com/bug-10-refresh-a";
 		const audB = "https://api.example.com/bug-10-refresh-b";
 		const harness = await bootCodeFlowHarness({
-			audiences: [audA, audB],
+			resources: [audA, audB],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: [audA, audB],
@@ -810,7 +809,7 @@ describe("repeated `resource` form parameter mints multi-audience tokens", () =>
 			model: "oauthRefreshToken",
 			where: [{ field: "clientId", value: harness.oauthClient.client_id! }],
 		});
-		// Find the row whose resource set includes both audiences.
+		// Find the row whose resource set includes both resources.
 		const row = rows.find((r) => {
 			const resources = r.resources ?? [];
 			return resources.includes(audA) && resources.includes(audB);
@@ -825,7 +824,7 @@ describe("repeated `resource` form parameter mints multi-audience tokens", () =>
 		// zod validation and downstream code paths see no change.
 		const aud = "https://api.example.com/bug-10-single";
 		const harness = await bootCodeFlowHarness({
-			audiences: [aud],
+			resources: [aud],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: aud,
@@ -838,6 +837,26 @@ describe("repeated `resource` form parameter mints multi-audience tokens", () =>
 	});
 });
 
+describe("resource policy downscopes token responses", () => {
+	it("reports the effective scope after allowedScopes narrows the grant", async () => {
+		const identifier = "https://api.example.com/downscope-response";
+		const harness = await bootCodeFlowHarness({
+			resources: [{ identifier, allowedScopes: ["email"] }],
+		});
+		const result = await harness.runCodeFlow({
+			authorizeResource: identifier,
+			tokenResource: identifier,
+			scopes: ["profile", "email"],
+		});
+
+		expect(result.tokens?.data?.scope).toBe("email");
+		const decoded = decodeJwt(result.tokens!.data!.access_token!) as {
+			scope?: string;
+		};
+		expect(decoded.scope).toBe("email");
+	});
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // RFC 9068 §2.2.3 `client_id` claim emission
 // ────────────────────────────────────────────────────────────────────────────
@@ -845,30 +864,101 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 	it("emits both `client_id` and `azp` on a JWT access token", async () => {
 		const identifier = "https://api.example.com/bug-8";
 		const harness = await bootCodeFlowHarness({
-			audiences: [identifier],
+			resources: [identifier],
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: identifier,
 			tokenResource: identifier,
 		});
 		const accessToken = result.tokens!.data!.access_token!;
+		const protectedHeader = decodeProtectedHeader(accessToken);
 		const decoded = decodeJwt(accessToken) as {
 			client_id?: string;
 			azp?: string;
 		};
+		expect(protectedHeader.typ).toBe("at+jwt");
 		expect(decoded.client_id).toBe(harness.oauthClient.client_id);
 		// `azp` continues to be set for back-compat with code that keyed on it.
 		expect(decoded.azp).toBe(harness.oauthClient.client_id);
 	});
 
-	it("strips `client_id` from per-audience customClaims (AS owns it)", async () => {
+	it("uses the client identifier as sub for client_credentials JWT access tokens", async () => {
+		const authServerBaseUrl = "http://localhost:3000";
+		const resource = "https://api.example.com/m2m-sub";
+		const oauthOptions = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			scopes: ["read"],
+			resources: [resource],
+			enforcePerClientResources: false,
+			silenceWarnings,
+		} as OAuthOptions<Scope[]>;
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider(oauthOptions),
+				],
+			},
+		);
+		resetSeedStateForTests();
+		const ctx = await auth.$context;
+		await seedResourcesOnce(ctx as unknown as AuthContext, oauthOptions);
+		const { headers } = await signInWithTestUser();
+		const authClient = createAuthClient({
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl },
+		});
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				scope: "read",
+				grant_types: ["client_credentials"],
+				redirect_uris: ["https://client.example.com/callback"],
+			},
+		});
+		if (!client?.client_id || !client?.client_secret) {
+			throw new Error("client_credentials client creation failed");
+		}
+
+		const tokenResponse = await authClient.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					scope: "read",
+					resource,
+				}),
+				headers: {
+					authorization: `Basic ${Buffer.from(
+						`${client.client_id}:${client.client_secret}`,
+					).toString("base64")}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const accessToken = tokenResponse.data!.access_token!;
+		const protectedHeader = decodeProtectedHeader(accessToken);
+		const decoded = decodeJwt(accessToken) as {
+			sub?: string;
+			client_id?: string;
+		};
+
+		expect(protectedHeader.typ).toBe("at+jwt");
+		expect(decoded.sub).toBe(client.client_id);
+		expect(decoded.client_id).toBe(client.client_id);
+	});
+
+	it("strips `client_id` from per-resource customClaims (AS owns it)", async () => {
 		const identifier = "https://api.example.com/bug-8-strip";
 		const warnSpy = vi
 			.spyOn(console, "warn")
 			.mockImplementation(() => undefined);
 		try {
 			const harness = await bootCodeFlowHarness({
-				audiences: [
+				resources: [
 					{
 						identifier,
 						customClaims: {
@@ -923,21 +1013,21 @@ describe("seed path applies identifier validation and warns on failures", () => 
 		// { ok: false }. The seed path should warn-and-skip, NOT crash init.
 		const goodIdentifier = "https://api.example.com/bug-9-good";
 		const { ctx } = await bootProvider({
-			audiences: [
+			resources: [
 				goodIdentifier,
 				"not a uri", // invalid — must be skipped
 			],
 		});
 		// Good identifier seeded.
-		const goodRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const goodRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: goodIdentifier }],
 		});
 		expect(goodRow?.identifier).toBe(goodIdentifier);
 
 		// Bad identifier NOT seeded.
-		const badRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const badRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: "not a uri" }],
 		});
 		expect(badRow).toBeNull();
@@ -946,19 +1036,19 @@ describe("seed path applies identifier validation and warns on failures", () => 
 	it("skips identifiers with URI fragments (RFC 8707 §2)", async () => {
 		const goodIdentifier = "https://api.example.com/bug-9-frag-good";
 		const { ctx } = await bootProvider({
-			audiences: [
+			resources: [
 				goodIdentifier,
 				"https://api.example.com/bug-9#fragment", // RFC 8707 §2 violation
 			],
 		});
-		const goodRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const goodRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: goodIdentifier }],
 		});
 		expect(goodRow?.identifier).toBe(goodIdentifier);
 
-		const fragRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const fragRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [
 				{
 					field: "identifier",
@@ -974,16 +1064,16 @@ describe("seed path applies identifier validation and warns on failures", () => 
 		const blockedIdentifier = "https://blocked.example.com/bug-9";
 		const { ctx } = await bootProvider({
 			identifierValidator: (id: string) => !id.includes("blocked.example.com"),
-			audiences: [goodIdentifier, blockedIdentifier],
+			resources: [goodIdentifier, blockedIdentifier],
 		});
-		const goodRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const goodRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: goodIdentifier }],
 		});
 		expect(goodRow?.identifier).toBe(goodIdentifier);
 
-		const blockedRow = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const blockedRow = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: blockedIdentifier }],
 		});
 		expect(blockedRow).toBeNull();
@@ -996,7 +1086,7 @@ describe("seed path applies identifier validation and warns on failures", () => 
 		// honor and surface only as an opaque jose error at sign time.
 		const aud = "https://api.example.com/bug-5-seed-alg";
 		const { ctx } = await bootProvider({
-			audiences: [
+			resources: [
 				{
 					identifier: aud,
 					// Intentionally bogus — must be stripped to null, not persisted.
@@ -1004,8 +1094,8 @@ describe("seed path applies identifier validation and warns on failures", () => 
 				},
 			],
 		});
-		const row = await ctx.adapter.findOne<OAuthAudience>({
-			model: "oauthAudience",
+		const row = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
 			where: [{ field: "identifier", value: aud }],
 		});
 		expect(row?.identifier).toBe(aud);
