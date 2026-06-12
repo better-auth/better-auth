@@ -78,3 +78,35 @@ export const auth = betterAuth({
 ```
 
 **Note:** The `permissions` parameter only works when the `bot` scope is included in your OAuth2 scopes. Read more about [Discord bot permissions](https://discord.com/developers/docs/topics/permissions).
+
+### Usernames (Optional)
+
+To include the Discord username in your user model, add it to `additionalFields` and map it from the provider profile.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        discord: {
+            clientId: process.env.DISCORD_CLIENT_ID as string,
+            clientSecret: process.env.DISCORD_CLIENT_SECRET as string,
+            mapProfileToUser: (profile) => {
+                return {
+                    username: profile.username,
+                };
+            },
+        },
+    },
+    user: {
+        additionalFields: {
+            username: {
+                type: "string",
+                input: false,
+            },
+        },
+    },
+})
+```
+
+**Note:** To make custom fields available in client-side types, infer the additional fields in your `auth-client.ts`. See [Inferring Additional Fields on Client](/docs/concepts/typescript#inferring-additional-fields-on-client).
