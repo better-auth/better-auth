@@ -239,7 +239,6 @@ export const auth = betterAuth({
     plugins: [
         lastLoginMethod({
             // Cookie configuration
-            cookieName: "better-auth.last_used_login_method", // Default: "better-auth.last_used_login_method"
             maxAge: 60 * 60 * 24 * 30, // Default: 30 days in seconds
             
             // Database persistence
@@ -268,9 +267,9 @@ export const auth = betterAuth({
 
 **cookieName**: `string`
 
-* The name of the cookie used to store the last login method
-* Default: `"better-auth.last_used_login_method"`
-* **Note**: This cookie is `httpOnly: false` to allow client-side JavaScript access for UI features
+* Full literal cookie name. By default the cookie name composes `advanced.cookiePrefix` like other Better Auth cookies (e.g. `my-app.last_used_login_method`).
+* To use a custom name, set this and the matching client-side `cookieName` to the same value.
+* **Note**: By default this cookie is `httpOnly: false` so client-side JavaScript can read it for UI features. Overriding it to `true` via `advanced.cookies.last_used_login_method.attributes` breaks the client helper methods.
 
 **maxAge**: `number`
 
@@ -302,18 +301,14 @@ import { lastLoginMethodClient } from "better-auth/client/plugins"
 
 export const authClient = createAuthClient({
     plugins: [
-        lastLoginMethodClient({
-            cookieName: "better-auth.last_used_login_method" // Default: "better-auth.last_used_login_method"
-        })
+        lastLoginMethodClient()
     ]
 })
 ```
 
 **cookieName**: `string`
 
-* The name of the cookie to read the last login method from
-* Must match the server-side `cookieName` configuration
-* Default: `"better-auth.last_used_login_method"`
+* Full literal cookie name to read. By default the cookie is resolved automatically regardless of `advanced.cookiePrefix`, so you only need to set this to match a custom server-side `cookieName`.
 
 ### Default Method Resolution
 

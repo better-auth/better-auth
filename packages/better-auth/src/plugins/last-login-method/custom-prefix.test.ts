@@ -1,15 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCookies } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 
 describe("lastLoginMethod custom cookie prefix", async () => {
-	it("should work with default cookie name regardless of custom prefix", async () => {
+	it("composes cookiePrefix into the default cookie name", async () => {
 		const { client, cookieSetter, testUser } = await getTestInstance(
 			{
 				advanced: {
-					cookiePrefix: "custom-auth",
+					cookiePrefix: "my-app",
 				},
 				plugins: [lastLoginMethod()],
 			},
@@ -33,8 +33,43 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 			},
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
-		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		expect(cookies.get("my-app.last_used_login_method")).toBe("email");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9695
+	 */
+	it("honors advanced.cookies.last_used_login_method.name override", async () => {
+		const { client, cookieSetter, testUser } = await getTestInstance(
+			{
+				advanced: {
+					cookies: {
+						last_used_login_method: { name: "custom_name" },
+					},
+				},
+				plugins: [lastLoginMethod()],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient()],
+				},
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("custom_name")).toBe("email");
 	});
 
 	it("should work with custom cookie name and prefix", async () => {
@@ -130,9 +165,9 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 					const setCookie = context.response.headers.get("set-cookie");
 					expect(setCookie).toContain("Domain=example.com");
 					expect(setCookie).toContain("SameSite=Lax");
-					// Uses exact cookie name from config, not affected by cookiePrefix
+					// Cookie name composes the configured cookiePrefix.
 					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
+						"custom-auth.last_used_login_method=email",
 					);
 				},
 			},
@@ -221,5 +256,59 @@ describe("lastLoginMethod custom cookie prefix", async () => {
 				},
 			},
 		);
+	});
+});
+
+describe("lastLoginMethod client read", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9695
+	 */
+	it("reads a prefixed cookie without any client configuration", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [lastLoginMethod()] },
+			{ clientOptions: { plugins: [lastLoginMethodClient()] } },
+		);
+		vi.stubGlobal("document", {
+			cookie: "__Secure-my-app.last_used_login_method=email",
+		});
+		expect(client.getLastUsedLoginMethod()).toBe("email");
+	});
+
+	it("prefers the __Secure- cookie over a leftover non-secure one", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [lastLoginMethod()] },
+			{ clientOptions: { plugins: [lastLoginMethodClient()] } },
+		);
+		vi.stubGlobal("document", {
+			cookie:
+				"my-app.last_used_login_method=google; __Secure-my-app.last_used_login_method=email",
+		});
+		expect(client.getLastUsedLoginMethod()).toBe("email");
+	});
+
+	it("does not resolve a fully custom name without a client cookieName", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [lastLoginMethod()] },
+			{ clientOptions: { plugins: [lastLoginMethodClient()] } },
+		);
+		vi.stubGlobal("document", { cookie: "custom_name=email" });
+		expect(client.getLastUsedLoginMethod()).toBeNull();
+	});
+
+	it("resolves a fully custom name via a matching client cookieName", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [lastLoginMethod()] },
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient({ cookieName: "custom_name" })],
+				},
+			},
+		);
+		vi.stubGlobal("document", { cookie: "custom_name=email" });
+		expect(client.getLastUsedLoginMethod()).toBe("email");
 	});
 });
