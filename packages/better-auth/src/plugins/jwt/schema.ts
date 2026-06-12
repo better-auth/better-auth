@@ -24,8 +24,8 @@ export const schema = {
 			// readers fall back to `options.jwks.keyPairConfig.alg` when
 			// `alg` is null (preserves pre-migration behavior).
 			//
-			// Required by per-audience signing in oauth-provider: different
-			// audiences can pin different algorithms, which is only meaningful
+			// Required by per-resource signing in oauth-provider: different
+			// protected resources can pin different algorithms, which is only meaningful
 			// if the AS can store and select keys by alg.
 			alg: {
 				type: "string",

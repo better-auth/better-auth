@@ -23,9 +23,9 @@ export interface JwtOptions {
 				 */
 				keyPairConfig?: JWKOptions | undefined;
 				/**
-				 * Additional key pair configurations to provision so per-audience
+				 * Additional key pair configurations to provision so per-resource
 				 * `signingAlgorithm` overrides (see the OAuth provider plugin's
-				 * audience entity) can resolve a key for algorithms other than
+				 * resource entity) can resolve a key for algorithms other than
 				 * {@link keyPairConfig}.
 				 *
 				 * Lazily minted: the first `signJWT` call that pins an algorithm
@@ -143,10 +143,10 @@ export interface JwtOptions {
 				 * such profiles stay conformant; `alg`/`kid` remain yours to set.
 				 *
 				 * The optional `signingConfig` third argument carries the
-				 * per-call signing overrides (e.g. an OAuth audience pinned
+				 * per-call signing overrides (e.g. an OAuth protected resource pinned
 				 * to a specific kid/alg). Implementations are free to ignore
 				 * it for backward compatibility, but remote KMS integrations
-				 * SHOULD honor it so per-audience pinning works end-to-end.
+				 * SHOULD honor it so per-resource pinning works end-to-end.
 				 *
 				 * @requires jwks.remoteUrl
 				 * @invalidates other jwt.* options

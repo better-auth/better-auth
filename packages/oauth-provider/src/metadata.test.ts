@@ -521,8 +521,8 @@ describe("oauth resource metadata", async () => {
 			resource: validResource,
 		});
 		expect(metadata).toMatchObject({
-			resource: validResource, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			resource: validResource,
+			authorization_servers: [authServerBaseUrl],
 		});
 	});
 

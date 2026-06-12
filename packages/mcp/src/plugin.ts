@@ -31,7 +31,7 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 	/**
 	 * The protected resource identifier (RFC 8707 / RFC 9728) that access tokens
 	 * are bound to. Published as `resource` in the protected resource metadata,
-	 * added to `resources`, and emitted as the token's `aud` claim.
+	 * added to `resources`, and used as the expected token audience.
 	 */
 	resource: string;
 }
@@ -124,7 +124,7 @@ export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
 		allowUnauthenticatedClientRegistration: true,
 		...oauthOptions,
 		// RFC 8707: bind issued tokens to the MCP resource so the resource server
-		// can validate the token's `aud` claim.
+		// can verify the token audience against its protected resource identifier.
 		resources: appendProtectedResource(oauthOptions.resources, resource),
 	});
 

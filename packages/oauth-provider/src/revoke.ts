@@ -35,10 +35,10 @@ import {
  * delete. Once the token is confirmed to be a valid JWT for this server, the
  * endpoint reports `unsupported_token_type` (RFC 7009 §2.2.1) instead of a
  * silent success, so callers can tell that no server-side revocation happened.
- * An expired JWT or a JWT with a mismatched `aud` claim is already inactive and
- * still resolves as a successful no-op. Session-bound tokens (carrying `sid`)
- * are cut off early by the session-liveness check in introspection and
- * userinfo.
+ * An expired JWT or a JWT with an audience rejected by the OAuth resource model
+ * is already inactive and still resolves as a successful no-op. Session-bound
+ * tokens (carrying `sid`) are cut off early by the session-liveness check in
+ * introspection and userinfo.
  */
 async function revokeJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -52,8 +52,8 @@ async function revokeJwtAccessToken(
 
 	// Verify signature + issuer first, then validate `aud` against the OAuth
 	// resource model. Do not pass jose's `audience` option here: access-token
-	// `aud` values are resource identifiers, not a single global AS `aud`
-	// verifier value.
+	// audiences are resource identifiers, not a single global authorization-server
+	// audience.
 	try {
 		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 			? jwtPluginOptions.jwks.remoteUrl
@@ -95,7 +95,7 @@ async function revokeJwtAccessToken(
 			} else if (error.name === "JWTExpired") {
 				return null;
 			} else if (error.name === "JWTInvalid") {
-				// `aud` claim or issuer mismatch
+				// issuer or other JWT claim validation failure
 				return null;
 			}
 			throw error;

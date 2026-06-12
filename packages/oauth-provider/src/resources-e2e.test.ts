@@ -389,21 +389,21 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-resource 
 		// Complement to the previous test: disabling stops NEW mint but does
 		// not retroactively invalidate. Confirm /oauth2/token rejects when the
 		// resource is already disabled at request time.
-		const aud = "https://api.example.com/bug-1-disabled-mint";
+		const resourceIdentifier = "https://api.example.com/bug-1-disabled-mint";
 		const harness = await bootCodeFlowHarness({
-			resources: [aud],
+			resources: [resourceIdentifier],
 		});
 
 		const ctx = await harness.auth.$context;
 		await ctx.adapter.update({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: aud }],
+			where: [{ field: "identifier", value: resourceIdentifier }],
 			update: { disabled: true },
 		});
 
 		const result = await harness.runCodeFlow({
-			authorizeResource: aud,
-			tokenResource: aud,
+			authorizeResource: resourceIdentifier,
+			tokenResource: resourceIdentifier,
 		});
 		// authorize-time validation rejects → redirect with error, no code.
 		expect(result.code).toBeNull();
@@ -420,35 +420,36 @@ describe("code grant binds authorize-time `resource`", () => {
 		// authorized for resource A could be redeemed without `resource` and
 		// produce an opaque token bound to nothing. The fix reads
 		// verificationValue.query.resource and plumbs it through.
-		const audA = "https://api.example.com/bug-2-omit";
+		const resourceIdentifier = "https://api.example.com/bug-2-omit";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA],
+			resources: [resourceIdentifier],
 		});
 
 		const result = await harness.runCodeFlow({
-			authorizeResource: audA,
+			authorizeResource: resourceIdentifier,
 			// Intentionally omit tokenResource — pre-fix behavior would mint
-			// an opaque token here; post-fix the JWT carries `aud: audA`.
+			// an opaque token here; post-fix the JWT audience includes the
+			// authorize-time resource.
 			tokenResource: undefined,
 		});
 		expect(result.tokens?.data?.access_token).toBeDefined();
 		const decoded = decodeJwt(result.tokens!.data!.access_token!);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(audA);
+		expect(audClaim).toContain(resourceIdentifier);
 	});
 
 	it("rejects with invalid_target when /token widens the resource set", async () => {
 		// RFC 8707 §2.2 — the redemption resource MUST be a subset of the
 		// authorize-time resource set. Widening to a different resource is
 		// invalid_target even if that resource is otherwise configured.
-		const audA = "https://api.example.com/bug-2-widen-a";
-		const audB = "https://api.example.com/bug-2-widen-b";
+		const resourceA = "https://api.example.com/bug-2-widen-a";
+		const resourceB = "https://api.example.com/bug-2-widen-b";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA, audB],
+			resources: [resourceA, resourceB],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: audA,
-			tokenResource: audB,
+			authorizeResource: resourceA,
+			tokenResource: resourceB,
 		});
 		// better-fetch surfaces the JSON error body verbatim on `error`. The
 		// OAuth error envelope is `{ error, error_description }` so we read
@@ -458,18 +459,18 @@ describe("code grant binds authorize-time `resource`", () => {
 	});
 
 	it("accepts /token resource when it equals the authorize-time resource", async () => {
-		const audA = "https://api.example.com/bug-2-match";
+		const resourceIdentifier = "https://api.example.com/bug-2-match";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA],
+			resources: [resourceIdentifier],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: audA,
-			tokenResource: audA,
+			authorizeResource: resourceIdentifier,
+			tokenResource: resourceIdentifier,
 		});
 		expect(result.tokens?.data?.access_token).toBeDefined();
 		const decoded = decodeJwt(result.tokens!.data!.access_token!);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(audA);
+		expect(audClaim).toContain(resourceIdentifier);
 	});
 });
 
@@ -478,13 +479,13 @@ describe("code grant binds authorize-time `resource`", () => {
 // ────────────────────────────────────────────────────────────────────────────
 describe("refresh tokens preserve original resource", () => {
 	it("persists `resource` on the oauthRefreshToken row at issuance", async () => {
-		const audA = "https://api.example.com/bug-3-persist";
+		const resourceIdentifier = "https://api.example.com/bug-3-persist";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA],
+			resources: [resourceIdentifier],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: audA,
-			tokenResource: audA,
+			authorizeResource: resourceIdentifier,
+			tokenResource: resourceIdentifier,
 		});
 		expect(result.tokens?.data?.refresh_token).toBeDefined();
 
@@ -495,9 +496,11 @@ describe("refresh tokens preserve original resource", () => {
 		});
 		expect(rows.length).toBeGreaterThan(0);
 		// At least one row carries the resource we issued against.
-		const persisted = rows.find((r) => (r.resources ?? []).includes(audA));
+		const persisted = rows.find((r) =>
+			(r.resources ?? []).includes(resourceIdentifier),
+		);
 		expect(persisted).toBeDefined();
-		expect(persisted?.resources).toContain(audA);
+		expect(persisted?.resources).toContain(resourceIdentifier);
 	});
 
 	it("re-applies the original resource on refresh when /token omits resource", async () => {
@@ -505,13 +508,13 @@ describe("refresh tokens preserve original resource", () => {
 		// refresh without `resource` would lose the original resource binding
 		// (and per-resource TTL/signing/claims). Post-fix the persisted
 		// resource is the source of truth.
-		const audA = "https://api.example.com/bug-3-rebind";
+		const resourceIdentifier = "https://api.example.com/bug-3-rebind";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA],
+			resources: [resourceIdentifier],
 		});
 		const initial = await harness.runCodeFlow({
-			authorizeResource: audA,
-			tokenResource: audA,
+			authorizeResource: resourceIdentifier,
+			tokenResource: resourceIdentifier,
 		});
 		const refreshToken = initial.tokens!.data!.refresh_token!;
 
@@ -535,18 +538,18 @@ describe("refresh tokens preserve original resource", () => {
 		expect(refreshed.data?.access_token).toBeDefined();
 		const decoded = decodeJwt(refreshed.data!.access_token!);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(audA);
+		expect(audClaim).toContain(resourceIdentifier);
 	});
 
 	it("rejects refresh that widens the resource beyond the persisted set", async () => {
-		const audA = "https://api.example.com/bug-3-widen-a";
-		const audB = "https://api.example.com/bug-3-widen-b";
+		const resourceA = "https://api.example.com/bug-3-widen-a";
+		const resourceB = "https://api.example.com/bug-3-widen-b";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA, audB],
+			resources: [resourceA, resourceB],
 		});
 		const initial = await harness.runCodeFlow({
-			authorizeResource: audA,
-			tokenResource: audA,
+			authorizeResource: resourceA,
+			tokenResource: resourceA,
 		});
 		const refreshToken = initial.tokens!.data!.refresh_token!;
 
@@ -559,7 +562,7 @@ describe("refresh tokens preserve original resource", () => {
 				refresh_token: refreshToken,
 				client_id: harness.oauthClient.client_id!,
 				client_secret: harness.oauthClient.client_secret!,
-				resource: audB, // not in the persisted set
+				resource: resourceB, // not in the persisted set
 			}),
 			headers: {
 				"content-type": "application/x-www-form-urlencoded",
@@ -766,27 +769,27 @@ describe("refreshTokenTtl from oauthResource is applied at issuance", () => {
 // RFC 8707 §2: repeated `resource` form parameters
 // ────────────────────────────────────────────────────────────────────────────
 describe("repeated `resource` form parameter mints multi-resource tokens", () => {
-	it("token aud carries every requested resource (auth code grant)", async () => {
+	it("JWT audience carries every requested resource (auth code grant)", async () => {
 		// Pre-fix, better-call's form-body parser collapsed repeated keys to
 		// last-write-wins, so `resource=A&resource=B` arrived in the handler
-		// as `{ resource: "B" }` and the issued JWT had `aud: [B]`. RFC 8707
-		// §2 explicitly permits repetition and the AS SHOULD reflect every
-		// requested resource in the aud claim.
-		const audA = "https://api.example.com/bug-10-a";
-		const audB = "https://api.example.com/bug-10-b";
+		// as `{ resource: "B" }` and the issued JWT audience only included B.
+		// RFC 8707 §2 explicitly permits repetition and the AS SHOULD reflect every
+		// requested resource in the token audience.
+		const resourceA = "https://api.example.com/bug-10-a";
+		const resourceB = "https://api.example.com/bug-10-b";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA, audB],
+			resources: [resourceA, resourceB],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: [audA, audB],
-			tokenResource: [audA, audB],
+			authorizeResource: [resourceA, resourceB],
+			tokenResource: [resourceA, resourceB],
 		});
 		const accessToken = result.tokens!.data!.access_token!;
 		expect(accessToken).toBeDefined();
 		const decoded = decodeJwt(accessToken);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(audA);
-		expect(audClaim).toContain(audB);
+		expect(audClaim).toContain(resourceA);
+		expect(audClaim).toContain(resourceB);
 	});
 
 	it("refresh-token row persists every requested resource", async () => {
@@ -794,14 +797,14 @@ describe("repeated `resource` form parameter mints multi-resource tokens", () =>
 		// requested resource set so subsequent refresh exchanges can verify
 		// that the client only narrows, never widens. With the
 		// last-write-wins bug, only the trailing value was persisted.
-		const audA = "https://api.example.com/bug-10-refresh-a";
-		const audB = "https://api.example.com/bug-10-refresh-b";
+		const resourceA = "https://api.example.com/bug-10-refresh-a";
+		const resourceB = "https://api.example.com/bug-10-refresh-b";
 		const harness = await bootCodeFlowHarness({
-			resources: [audA, audB],
+			resources: [resourceA, resourceB],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: [audA, audB],
-			tokenResource: [audA, audB],
+			authorizeResource: [resourceA, resourceB],
+			tokenResource: [resourceA, resourceB],
 		});
 		expect(result.tokens?.data?.refresh_token).toBeDefined();
 		const ctx = await harness.auth.$context;
@@ -812,7 +815,7 @@ describe("repeated `resource` form parameter mints multi-resource tokens", () =>
 		// Find the row whose resource set includes both resources.
 		const row = rows.find((r) => {
 			const resources = r.resources ?? [];
-			return resources.includes(audA) && resources.includes(audB);
+			return resources.includes(resourceA) && resources.includes(resourceB);
 		});
 		expect(row).toBeDefined();
 	});
@@ -822,18 +825,18 @@ describe("repeated `resource` form parameter mints multi-resource tokens", () =>
 		// ctx.body.resource when the raw body carries >1 entry. A single
 		// `resource=X` form must still arrive as the string "X" so existing
 		// zod validation and downstream code paths see no change.
-		const aud = "https://api.example.com/bug-10-single";
+		const resourceIdentifier = "https://api.example.com/bug-10-single";
 		const harness = await bootCodeFlowHarness({
-			resources: [aud],
+			resources: [resourceIdentifier],
 		});
 		const result = await harness.runCodeFlow({
-			authorizeResource: aud,
-			tokenResource: aud,
+			authorizeResource: resourceIdentifier,
+			tokenResource: resourceIdentifier,
 		});
 		const accessToken = result.tokens!.data!.access_token!;
 		const decoded = decodeJwt(accessToken);
 		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
-		expect(audClaim).toContain(aud);
+		expect(audClaim).toContain(resourceIdentifier);
 	});
 });
 
@@ -1084,11 +1087,11 @@ describe("seed path applies identifier validation and warns on failures", () => 
 		// endpoint. The seed path is its own surface — without runtime
 		// validation, a config typo would persist an alg the JWT plugin can't
 		// honor and surface only as an opaque jose error at sign time.
-		const aud = "https://api.example.com/bug-5-seed-alg";
+		const resourceIdentifier = "https://api.example.com/bug-5-seed-alg";
 		const { ctx } = await bootProvider({
 			resources: [
 				{
-					identifier: aud,
+					identifier: resourceIdentifier,
 					// Intentionally bogus — must be stripped to null, not persisted.
 					signingAlgorithm: "HS256" as never,
 				},
@@ -1096,15 +1099,15 @@ describe("seed path applies identifier validation and warns on failures", () => 
 		});
 		const row = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: aud }],
+			where: [{ field: "identifier", value: resourceIdentifier }],
 		});
-		expect(row?.identifier).toBe(aud);
+		expect(row?.identifier).toBe(resourceIdentifier);
 		expect(row?.signingAlgorithm).toBeNull();
 		expect(
 			warnMessages.some(
 				(m) =>
 					m.includes(`dropping unsupported signingAlgorithm "HS256"`) &&
-					m.includes(aud),
+					m.includes(resourceIdentifier),
 			),
 		).toBe(true);
 	});

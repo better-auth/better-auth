@@ -76,7 +76,7 @@ type JWTPayloadWithOptional = {
  *   demand. Otherwise throws with a descriptive error naming what IS
  *   provisioned.
  *
- * Used by the OAuth provider plugin to honor per-audience `signingAlgorithm` /
+ * Used by the OAuth provider plugin to honor per-resource `signingAlgorithm` /
  * `signingKeyId` overrides without re-implementing key resolution.
  */
 export interface SigningKeyOverrides {
@@ -315,7 +315,7 @@ export async function signJWT(
 		// so profiles that require an explicit media type stay conformant even
 		// with a remote signer. The signer still owns `alg`/`kid`. Also forward
 		// per-call signing overrides as a third arg so remote KMS integrations
-		// can honor per-audience kid/alg pinning. Both extra args are optional,
+		// can honor per-resource kid/alg pinning. Both extra args are optional,
 		// so existing single-arg implementations continue to work unchanged.
 		return options.jwt.sign(jwtPayload, config.header, {
 			signingKeyId: config.signingKeyId,

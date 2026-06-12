@@ -442,7 +442,7 @@ describe("jwks.alg / jwks.crv persistence after createJwk", () => {
 	it("persists alg and crv on a freshly-minted EdDSA key", async () => {
 		// Without these columns, getLatestKeyByAlg falls back to scanning
 		// every row and only matching via keyPairConfig.alg — a downstream
-		// consumer who forgot to migrate would silently lose per-audience
+		// consumer who forgot to migrate would silently lose per-resource
 		// signing pins. This test pins the schema contract so the failure
 		// mode is "test fails because column is missing" rather than the
 		// cryptic `signJWT: no key with alg "X" found` runtime error.
@@ -491,12 +491,12 @@ describe("jwks.alg / jwks.crv persistence after createJwk", () => {
 });
 
 /* -----------------------------------------------------------------------
- * keyPairConfigs[] — lazy-mint additional algorithms for per-audience pins
+ * keyPairConfigs[] — lazy-mint additional algorithms for per-resource pins
  * --------------------------------------------------------------------- */
 
 describe("keyPairConfigs[] lazy-mint", () => {
 	it("lazy-mints a key the first time signingAlgorithm pins an alg declared in keyPairConfigs[]", async () => {
-		// Plugin default minted at first signJWT is EdDSA. When an audience
+		// Plugin default minted at first signJWT is EdDSA. When a resource
 		// pin requests ES256 and the alg is present in keyPairConfigs[], the
 		// plugin must materialize an ES256 row on demand. Without this path,
 		// the request would throw "no key with alg X" even though the
@@ -690,7 +690,7 @@ describe("primary-alg pin on an empty JWKS", () => {
 describe("unpinned tokens stay on keyPairConfig.alg after lazy-minting extras", () => {
 	it("ID token (unpinned) signs with primary alg even after a non-primary alg is lazy-minted", async () => {
 		// Before the fix, the unpinned path used getLatestKey() which returns
-		// the newest row across ALL algs. Once a per-audience pin lazy-minted
+		// the newest row across ALL algs. Once a per-resource pin lazy-minted
 		// an extra alg (ES256), it became "newer" than the primary EdDSA key
 		// and unpinned tokens silently switched algs. ID tokens are unpinned;
 		// flipping their alg breaks resource-server verifiers and OIDC
