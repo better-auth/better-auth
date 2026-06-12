@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SafeUrlSchema } from "./redirect-uri";
-import { isSafeUrlScheme } from "./url";
+import { isSafeUrlScheme, normalizePathname } from "./url";
 
 describe("isSafeUrlScheme", () => {
 	it("rejects code-execution schemes", () => {
@@ -21,6 +21,45 @@ describe("isSafeUrlScheme", () => {
 		expect(isSafeUrlScheme("http://localhost:3000/callback")).toBe(true);
 		expect(isSafeUrlScheme("/dashboard")).toBe(true);
 		expect(isSafeUrlScheme("myapp://callback")).toBe(true);
+	});
+});
+
+describe("normalizePathname", () => {
+	it("strips the basePath prefix", () => {
+		expect(
+			normalizePathname("http://localhost:3000/api/auth/sign-in", "/api/auth"),
+		).toBe("/sign-in");
+	});
+
+	it("canonicalizes a trailing-slash basePath", () => {
+		// A baseURL of "https://app.com/api/auth/" yields basePath "/api/auth/".
+		// Without canonicalization the prefix never matches and the full path
+		// leaks through to disabledPaths / rate-limit special-rule matching.
+		expect(
+			normalizePathname("http://localhost:3000/api/auth/sign-in", "/api/auth/"),
+		).toBe("/sign-in");
+		expect(
+			normalizePathname("http://localhost:3000/api/auth", "/api/auth/"),
+		).toBe("/");
+	});
+
+	it("treats '/' and empty basePath as no prefix", () => {
+		expect(normalizePathname("http://localhost:3000/sign-in/", "/")).toBe(
+			"/sign-in",
+		);
+		expect(normalizePathname("http://localhost:3000/sign-in", "")).toBe(
+			"/sign-in",
+		);
+	});
+
+	it("does not strip a basePath that is only a string prefix of the path", () => {
+		expect(
+			normalizePathname("http://localhost:3000/api/authevil/x", "/api/auth"),
+		).toBe("/api/authevil/x");
+	});
+
+	it("returns '/' for a malformed URL", () => {
+		expect(normalizePathname("not a url", "/api/auth")).toBe("/");
 	});
 });
 

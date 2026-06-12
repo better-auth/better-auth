@@ -3,9 +3,14 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import type { WhereOperator } from "@better-auth/core/db/adapter";
+import type {
+	DBTransactionAdapter,
+	WhereOperator,
+} from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
@@ -24,6 +29,151 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+type StoredTeamMember = TeamMember & {
+	membershipKey?: string;
+};
+
+async function computeTeamMembershipKey(data: {
+	teamId: string;
+	userId: string;
+}) {
+	const digest = await createHash("SHA-256").digest(
+		new TextEncoder().encode(JSON.stringify([data.teamId, data.userId])),
+	);
+	return base64Url.encode(new Uint8Array(digest), { padding: false });
+}
+
+async function findTeamMemberByKeyOrPair(
+	adapter: DBTransactionAdapter,
+	data: {
+		teamId: string;
+		userId: string;
+		membershipKey: string;
+	},
+) {
+	const memberByKey = await adapter.findOne<StoredTeamMember>({
+		model: "teamMember",
+		where: [{ field: "membershipKey", value: data.membershipKey }],
+	});
+	if (memberByKey) return memberByKey;
+
+	return adapter.findOne<StoredTeamMember>({
+		model: "teamMember",
+		where: [
+			{ field: "teamId", value: data.teamId },
+			{ field: "userId", value: data.userId },
+		],
+	});
+}
+
+async function syncTeamMemberCount(
+	adapter: DBTransactionAdapter,
+	teamId: string,
+) {
+	const memberCount = await adapter.count({
+		model: "teamMember",
+		where: [{ field: "teamId", value: teamId }],
+	});
+	await adapter.incrementOne<Team>({
+		model: "team",
+		where: [
+			{ field: "id", value: teamId },
+			{ field: "memberCount", operator: "lt", value: memberCount },
+		],
+		increment: {},
+		set: { memberCount },
+	});
+}
+
+async function reserveTeamSeat(
+	adapter: DBTransactionAdapter,
+	data: {
+		teamId: string;
+		maximumMembersPerTeam: number;
+	},
+) {
+	const team = await adapter.incrementOne<Team>({
+		model: "team",
+		where: [
+			{ field: "id", value: data.teamId },
+			{
+				field: "memberCount",
+				operator: "lt",
+				value: data.maximumMembersPerTeam,
+			},
+		],
+		increment: { memberCount: 1 },
+	});
+	return Boolean(team);
+}
+
+async function incrementTeamMemberCount(
+	adapter: DBTransactionAdapter,
+	teamId: string,
+) {
+	await adapter.incrementOne<Team>({
+		model: "team",
+		where: [{ field: "id", value: teamId }],
+		increment: { memberCount: 1 },
+	});
+}
+
+async function releaseTeamSeats(
+	adapter: DBTransactionAdapter,
+	teamId: string,
+	count: number,
+) {
+	if (count <= 0) return;
+	await adapter.incrementOne<Team>({
+		model: "team",
+		where: [
+			{ field: "id", value: teamId },
+			{ field: "memberCount", operator: "gte", value: count },
+		],
+		increment: { memberCount: -count },
+	});
+}
+
+async function createTeamMemberWithKey(
+	adapter: DBTransactionAdapter,
+	data: {
+		teamId: string;
+		userId: string;
+		membershipKey: string;
+	},
+) {
+	try {
+		const member = await adapter.create<
+			Omit<TeamMember, "id"> & { membershipKey: string },
+			StoredTeamMember
+		>({
+			model: "teamMember",
+			data: {
+				teamId: data.teamId,
+				userId: data.userId,
+				membershipKey: data.membershipKey,
+				createdAt: new Date(),
+			},
+		});
+		return { status: "created" as const, member };
+	} catch (error) {
+		const existing = await findTeamMemberByKeyOrPair(adapter, data);
+		if (existing) {
+			return { status: "existing" as const, member: existing };
+		}
+		throw error;
+	}
+}
+
+function stripTeamMembershipKey(member: StoredTeamMember): TeamMember {
+	const { membershipKey: _membershipKey, ...output } = member;
+	return output;
+}
+
+function stripTeamMembershipKeys(members: StoredTeamMember[]): TeamMember[] {
+	return members.map(stripTeamMembershipKey);
+}
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -360,18 +510,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						model: "team",
 						where: [{ field: "organizationId", value: organizationId }],
 					});
-					if (teams.length > 0) {
-						await adapter.deleteMany({
+					for (const team of teams) {
+						const deleted = await adapter.deleteMany({
 							model: "teamMember",
 							where: [
 								{ field: "userId", value: userId },
-								{
-									field: "teamId",
-									value: teams.map((team) => team.id),
-									operator: "in",
-								},
+								{ field: "teamId", value: team.id },
 							],
 						});
+						await releaseTeamSeats(adapter, team.id, deleted);
 					}
 				}
 				return member;
@@ -625,12 +772,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		createTeam: async (data: TeamInput) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<TeamInput, InferTeam<O, false>>({
+			const team = await adapter.create<
+				TeamInput & { memberCount: number },
+				InferTeam<O, false> & { memberCount?: number }
+			>({
 				model: "team",
-				data,
+				data: { ...data, memberCount: 0 },
 				forceAllowId: true,
 			});
-			return team;
+			const { memberCount: _memberCount, ...output } = team;
+			return filterOutputFields(
+				output,
+				teamAdditionalFields,
+			) as unknown as InferTeam<O>;
 		},
 		findTeamById: async <IncludeMembers extends boolean>({
 			teamId,
@@ -647,7 +801,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findOne<
-				InferTeam<O> & { teamMember: TeamMember[] }
+				InferTeam<O> & { teamMember: StoredTeamMember[] }
 			>({
 				model: "team",
 				where: [
@@ -672,11 +826,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (!result) {
 				return null;
 			}
-			const { teamMember, ...team } = result;
+			const {
+				teamMember,
+				memberCount: _memberCount,
+				...team
+			} = result as InferTeam<O> & {
+				teamMember?: StoredTeamMember[];
+				memberCount?: number;
+			};
 
 			return {
-				...team,
-				...(includeTeamMembers ? { members: teamMember } : {}),
+				...(filterOutputFields(
+					team,
+					teamAdditionalFields,
+				) as unknown as InferTeam<O>),
+				...(includeTeamMembers
+					? { members: stripTeamMembershipKeys(teamMember ?? []) }
+					: {}),
 			} as any;
 		},
 		updateTeam: async (
@@ -690,7 +856,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			if ("id" in data) data.id = undefined;
 			const team = await adapter.update<
-				InferTeam<O, false> & InferAdditionalFieldsFromPluginOptions<"team", O>
+				InferTeam<O, false> &
+					InferAdditionalFieldsFromPluginOptions<"team", O> & {
+						memberCount?: number;
+					}
 			>({
 				model: "team",
 				where: [
@@ -703,7 +872,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...data,
 				},
 			});
-			return team;
+			if (!team) return team;
+			const { memberCount: _memberCount, ...output } = team;
+			return filterOutputFields(
+				output,
+				teamAdditionalFields,
+			) as unknown as InferTeam<O>;
 		},
 
 		deleteTeam: async (teamId: string) => {
@@ -741,7 +915,16 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return teams;
+			return teams.map((team) => {
+				const { memberCount: _memberCount, ...output } = team as InferTeam<
+					O,
+					false
+				> & { memberCount?: number };
+				return filterOutputFields(
+					output,
+					teamAdditionalFields,
+				) as unknown as InferTeam<O>;
+			});
 		},
 
 		createTeamInvitation: async ({
@@ -797,7 +980,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		listTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await adapter.findMany<TeamMember>({
+			const members = await adapter.findMany<StoredTeamMember>({
 				model: "teamMember",
 				where: [
 					{
@@ -807,7 +990,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return members;
+			return stripTeamMembershipKeys(members);
 		},
 		countTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -840,12 +1023,20 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 
-			return results.map((result) => result.team);
+			return results.map((result) => {
+				const { memberCount: _memberCount, ...team } = result.team as Team & {
+					memberCount?: number;
+				};
+				return filterOutputFields(
+					team,
+					teamAdditionalFields,
+				) as unknown as InferTeam<O>;
+			});
 		},
 
 		findTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<TeamMember>({
+			const member = await adapter.findOne<StoredTeamMember>({
 				model: "teamMember",
 				where: [
 					{
@@ -859,44 +1050,90 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return member;
+			return member ? stripTeamMembershipKey(member) : null;
 		},
 
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
 		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<TeamMember>({
-				model: "teamMember",
-				where: [
-					{
-						field: "teamId",
-						value: data.teamId,
-					},
-					{
-						field: "userId",
-						value: data.userId,
-					},
-				],
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const membershipKey = await computeTeamMembershipKey(data);
+				const existing = await findTeamMemberByKeyOrPair(adapter, {
+					...data,
+					membershipKey,
+				});
+				if (existing) return stripTeamMembershipKey(existing);
+
+				await syncTeamMemberCount(adapter, data.teamId);
+				const result = await createTeamMemberWithKey(adapter, {
+					...data,
+					membershipKey,
+				});
+				if (result.status === "created") {
+					await incrementTeamMemberCount(adapter, data.teamId);
+				}
+				return stripTeamMembershipKey(result.member);
 			});
-
-			if (member) return member;
-
-			return await adapter.create<Omit<TeamMember, "id">, TeamMember>({
-				model: "teamMember",
-				data: {
+		},
+		/**
+		 * Adds a user to a team by reserving capacity on the team row before
+		 * creating the membership row. The durable team counter is the aggregate
+		 * capacity boundary; the membership key is the single-column uniqueness
+		 * boundary for a user within a team.
+		 */
+		addTeamMemberWithLimit: async (data: {
+			teamId: string;
+			userId: string;
+			maximumMembersPerTeam: number;
+		}): Promise<
+			{ status: "added"; member: TeamMember } | { status: "limitReached" }
+		> => {
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const membershipKey = await computeTeamMembershipKey(data);
+				const existing = await findTeamMemberByKeyOrPair(adapter, {
 					teamId: data.teamId,
 					userId: data.userId,
-					createdAt: new Date(),
-				},
+					membershipKey,
+				});
+				if (existing) {
+					return { status: "added", member: stripTeamMembershipKey(existing) };
+				}
+				await syncTeamMemberCount(adapter, data.teamId);
+				const reserved = await reserveTeamSeat(adapter, {
+					teamId: data.teamId,
+					maximumMembersPerTeam: data.maximumMembersPerTeam,
+				});
+				if (!reserved) {
+					return { status: "limitReached" };
+				}
+				let result: Awaited<ReturnType<typeof createTeamMemberWithKey>>;
+				try {
+					result = await createTeamMemberWithKey(adapter, {
+						teamId: data.teamId,
+						userId: data.userId,
+						membershipKey,
+					});
+				} catch (error) {
+					await releaseTeamSeats(adapter, data.teamId, 1);
+					throw error;
+				}
+				if (result.status === "existing") {
+					await releaseTeamSeats(adapter, data.teamId, 1);
+				}
+				return {
+					status: "added",
+					member: stripTeamMembershipKey(result.member),
+				};
 			});
 		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
 			// FKs do not count thus breaking the operation. As a solution, we'll use `deleteMany` instead.
-			await adapter.deleteMany({
+			const deleted = await adapter.deleteMany({
 				model: "teamMember",
 				where: [
 					{
@@ -909,6 +1146,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			await releaseTeamSeats(adapter, data.teamId, deleted);
 		},
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -1053,17 +1291,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "pending" | "accepted" | "canceled" | "rejected";
+			/**
+			 * Only transition when the invitation is currently in this status. The
+			 * guarded update is atomic, so a concurrent caller racing the same
+			 * transition gets `null` instead of both proceeding.
+			 */
+			fromStatus?: "pending" | "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [{ field: "id", value: data.invitationId }];
+			if (data.fromStatus) {
+				where.push({ field: "status", value: data.fromStatus });
+			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "id",
-						value: data.invitationId,
-					},
-				],
+				where,
 				update: {
 					status: data.status,
 				},

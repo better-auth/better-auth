@@ -14,6 +14,7 @@ export * from "./jwt";
 export * from "./last-login-method";
 export * from "./magic-link";
 export * from "./multi-session";
+export * from "./oauth-popup";
 export * from "./oauth-proxy";
 export * from "./oidc-provider";
 export * from "./one-tap";

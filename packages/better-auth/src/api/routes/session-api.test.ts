@@ -503,6 +503,16 @@ describe("session storage", async () => {
 			get(key) {
 				return store.get(key) || null;
 			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
 			delete(key) {
 				store.delete(key);
 			},
