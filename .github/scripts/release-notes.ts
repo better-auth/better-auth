@@ -833,7 +833,7 @@ function formatReleaseBody(opts: FormatOptions): string {
 	for (const pkg of packageOrder) {
 		const pkgEntries = grouped.get(pkg)!;
 
-		lines.push(newPackages.has(pkg) ? `## ✨ \`${pkg}\` ✨` : `## \`${pkg}\``);
+		lines.push(newPackages.has(pkg) ? `## \`${pkg}\` ✨` : `## \`${pkg}\``);
 		lines.push("");
 
 		for (const changeType of CHANGE_TYPE_ORDER) {
