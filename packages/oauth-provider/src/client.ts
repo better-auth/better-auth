@@ -1,47 +1,8 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthProvider } from "./oauth";
+import { buildSignedOAuthQuery } from "./signed-query";
 import { PACKAGE_VERSION } from "./version";
-
-const signedOAuthQueryKeys = new Set([
-	"acr_values",
-	"authorization_details",
-	"ba_iat",
-	"ba_pl",
-	"claims",
-	"client_id",
-	"code_challenge",
-	"code_challenge_method",
-	"display",
-	"exp",
-	"id_token_hint",
-	"login_hint",
-	"max_age",
-	"nonce",
-	"prompt",
-	"redirect_uri",
-	"request_uri",
-	"resource",
-	"response_mode",
-	"response_type",
-	"scope",
-	"sig",
-	"state",
-	"ui_locales",
-]);
-
-function parseSignedQuery(search: string) {
-	const params = new URLSearchParams(search);
-	if (params.has("sig")) {
-		const signedParams = new URLSearchParams();
-		for (const [key, value] of params.entries()) {
-			if (signedOAuthQueryKeys.has(key)) {
-				signedParams.append(key, value);
-			}
-		}
-		return signedParams.toString();
-	}
-}
 
 export const oauthProviderClient = () => {
 	return {
@@ -70,7 +31,7 @@ export const oauthProviderClient = () => {
 						) {
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query: parseSignedQuery(window.location.search),
+								oauth_query: buildSignedOAuthQuery(window.location.search),
 							});
 						}
 					},

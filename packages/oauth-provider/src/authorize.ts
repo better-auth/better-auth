@@ -6,6 +6,12 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import {
+	canonicalizeOAuthQueryParams,
+	postLoginClearedParam,
+	setSignedOAuthQueryParameterNames,
+	signedQueryIssuedAtParam,
+} from "./signed-query";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -16,13 +22,10 @@ import type {
 
 import {
 	clientAllowsGrant,
-	canonicalizeOAuthQueryParams,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
 	storeToken,
 } from "./utils";
 
@@ -662,6 +665,7 @@ async function signParams(
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
+	setSignedOAuthQueryParameterNames(params);
 
 	const signature = await makeSignature(
 		canonicalizeOAuthQueryParams(params).toString(),

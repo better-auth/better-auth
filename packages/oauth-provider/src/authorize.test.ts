@@ -7,13 +7,15 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
 import {
 	canonicalizeOAuthQueryParams,
 	postLoginClearedParam,
+	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
-	verifyOAuthQueryParams,
-} from "./utils";
+	signedQueryParameterNameParam,
+} from "./signed-query";
+import type { OAuthClient } from "./types/oauth";
+import { verifyOAuthQueryParams } from "./utils";
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {
@@ -95,6 +97,7 @@ describe("oauth signed query signatures", () => {
 		configure?.(params);
 		params.set("exp", String(Math.floor(Date.now() / 1000) + 600));
 		params.set(signedQueryIssuedAtParam, String(Date.now()));
+		setSignedOAuthQueryParameterNames(params);
 		params.set(
 			"sig",
 			await makeSignature(
@@ -152,11 +155,20 @@ describe("oauth signed query signatures", () => {
 		).toBe(false);
 	});
 
-	it("should preserve params after sig when the client copies signed queries", async () => {
+	it("should preserve custom signed params when the client copies reordered signed queries", async () => {
+		const signedParams = await createSignedParams("test-secret", (params) => {
+			params.set("custom_authorization_context", "tenant-a");
+			params.append("resource", "https://api.example.com");
+		});
+		const reorderedParams = new URLSearchParams();
+		for (const [key, value] of [...signedParams.entries()].reverse()) {
+			reorderedParams.append(key, value);
+		}
+		reorderedParams.append("utm_email", "user@example.com");
+
 		vi.stubGlobal("window", {
 			location: {
-				search:
-					"?client_id=client-a&sig=test-sig&scope=openid&exp=123&resource=https%3A%2F%2Fapi.example.com&utm_email=user%40example.com",
+				search: `?${reorderedParams.toString()}`,
 			},
 		});
 
@@ -173,8 +185,17 @@ describe("oauth signed query signatures", () => {
 		await onRequest?.(ctx as Parameters<NonNullable<typeof onRequest>>[0]);
 
 		const body = JSON.parse(String(ctx.body));
-		expect(body.oauth_query).toBe(
-			"client_id=client-a&sig=test-sig&scope=openid&exp=123&resource=https%3A%2F%2Fapi.example.com",
+		const forwardedParams = new URLSearchParams(body.oauth_query);
+		expect(await verifyOAuthQueryParams(body.oauth_query, "test-secret")).toBe(
+			true,
+		);
+		expect(forwardedParams.get("custom_authorization_context")).toBe(
+			"tenant-a",
+		);
+		expect(forwardedParams.get("resource")).toBe("https://api.example.com");
+		expect(forwardedParams.get("utm_email")).toBeNull();
+		expect(forwardedParams.getAll(signedQueryParameterNameParam)).toContain(
+			"custom_authorization_context",
 		);
 	});
 });

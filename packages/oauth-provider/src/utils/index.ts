@@ -11,6 +11,7 @@ import {
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
+import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
 	GrantType,
 	OAuthOptions,
@@ -19,6 +20,13 @@ import type {
 	Scope,
 	StoreTokenType,
 } from "../types";
+
+export {
+	canonicalizeOAuthQueryParams,
+	getSignedQueryIssuedAt,
+	postLoginClearedParam,
+	signedQueryIssuedAtParam,
+} from "../signed-query";
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -136,23 +144,6 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 }
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
-
-export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
-	const canonicalParams = new URLSearchParams();
-	const entries = [...params.entries()].sort(
-		([keyA, valueA], [keyB, valueB]) => {
-			if (keyA < keyB) return -1;
-			if (keyA > keyB) return 1;
-			if (valueA < valueB) return -1;
-			if (valueA > valueB) return 1;
-			return 0;
-		},
-	);
-	for (const [key, value] of entries) {
-		canonicalParams.append(key, value);
-	}
-	return canonicalParams;
-}
 
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
@@ -631,17 +622,6 @@ export function searchParamsToQuery(
 		result[key] = values.length === 1 ? values[0]! : values;
 	}
 	return result;
-}
-
-export const signedQueryIssuedAtParam = "ba_iat";
-export const postLoginClearedParam = "ba_pl";
-
-export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
-	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
-	if (!raw) return null;
-	const issuedAt = Number(raw);
-	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
-	return new Date(issuedAt);
 }
 
 export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
