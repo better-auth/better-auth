@@ -1,4 +1,56 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { APIError } from "better-auth/api";
+import { parseInputData, toZodSchema } from "better-auth/db";
 import * as z from "zod";
+import type { SSOOptions } from "../types";
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+function getSSOProviderAdditionalFieldsSchema(options?: SSOOptions) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const schema = toZodSchema({
+		fields: additionalFields,
+		isClientSide: true,
+	});
+	const blockedInputFields: Record<string, z.ZodOptional<z.ZodAny>> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.input === false) {
+			blockedInputFields[key] = z.any().optional();
+		}
+	}
+	return schema.extend(blockedInputFields);
+}
+
+function assertNoBlockedAdditionalFieldInput(
+	fields: Record<string, DBFieldAttribute>,
+	data: Record<string, unknown>,
+) {
+	for (const key in fields) {
+		if (fields[key]?.input === false && key in data) {
+			throw new APIError("BAD_REQUEST", {
+				message: `${key} is not allowed to be set`,
+			});
+		}
+	}
+}
+
+export function parseSSOProviderAdditionalFields(
+	options: SSOOptions | undefined,
+	data: Record<string, unknown>,
+	action: "create" | "update",
+) {
+	const fields = getSSOProviderAdditionalFields(options);
+	assertNoBlockedAdditionalFieldInput(fields, data);
+	return parseInputData(data, {
+		fields,
+		action,
+	});
+}
 
 const oidcMappingSchema = z
 	.object({
@@ -196,7 +248,7 @@ const samlConfigSchema = z.object({
 	mapping: samlMappingSchema,
 });
 
-export const registerSSOProviderBodySchema = z.object({
+const registerSSOProviderBodySchema = z.object({
 	providerId: z.string().meta({
 		description:
 			"The ID of the provider. This is used to identify the provider during login and callback",
@@ -228,9 +280,22 @@ export const registerSSOProviderBodySchema = z.object({
 		.optional(),
 });
 
-export const updateSSOProviderBodySchema = z.object({
+export function getRegisterSSOProviderBodySchema(options?: SSOOptions) {
+	return registerSSOProviderBodySchema.extend({
+		...getSSOProviderAdditionalFieldsSchema(options).shape,
+	});
+}
+
+const updateSSOProviderBodySchema = z.object({
 	issuer: z.string().url().optional(),
 	domain: z.string().optional(),
 	oidcConfig: oidcConfigSchema.partial().optional(),
 	samlConfig: samlConfigSchema.partial().optional(),
 });
+
+export function getUpdateSSOProviderBodySchema(options?: SSOOptions) {
+	return updateSSOProviderBodySchema.extend({
+		providerId: z.string(),
+		...getSSOProviderAdditionalFieldsSchema(options).partial().shape,
+	});
+}
