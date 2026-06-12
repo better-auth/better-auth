@@ -7,7 +7,7 @@ import type {
 } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { handleMcpErrors } from "./mcp";
+import { raiseResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -134,7 +134,7 @@ export const oauthProviderResourceClient = <
 									: undefined,
 						});
 					} catch (error) {
-						throw handleMcpErrors(error, audience, {
+						raiseResourceServerChallenge(error, audience, {
 							resourceMetadataMappings: opts?.resourceMetadataMappings,
 						});
 					}
