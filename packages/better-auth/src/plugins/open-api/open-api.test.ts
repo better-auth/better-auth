@@ -26,15 +26,28 @@ describe("open-api", async () => {
 		expect(schema).toMatchSnapshot("openAPISchema");
 	});
 
-	it("should have an id field in the User schema", async () => {
+	it("should mark model id fields as required and read-only", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
 			string,
 			Record<string, any>
 		>;
 		expect(schemas["User"]!.properties.id).toEqual({
+			readOnly: true,
 			type: "string",
 		});
+		expect(schemas["User"]!.required).toContain("id");
+		expect(schemas["User"]!.properties.emailVerified).toEqual({
+			default: false,
+			readOnly: true,
+			type: "boolean",
+		});
+		expect(schemas["User"]!.required).toContain("emailVerified");
+		expect(schemas["Session"]!.properties.id).toEqual({
+			readOnly: true,
+			type: "string",
+		});
+		expect(schemas["Session"]!.required).toContain("id");
 	});
 
 	it("should include additionalFields in the User schema", async () => {
