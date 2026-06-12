@@ -69,4 +69,54 @@ describe("redisStorage", () => {
 		);
 		expect(evalMock).not.toHaveBeenCalled();
 	});
+
+	it("increments atomically and sets the ttl only on creation", async () => {
+		const counters = new Map<string, number>();
+		const ttlByKey = new Map<string, number>();
+		const evalMock = vi.fn(
+			async (_script: string, _numKeys: number, key: string, ttl: string) => {
+				const next = (counters.get(key) ?? 0) + 1;
+				counters.set(key, next);
+				if (next === 1) {
+					ttlByKey.set(key, Number(ttl));
+				}
+				return next;
+			},
+		);
+		const storage = redisStorage({
+			client: { eval: evalMock } as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.increment!("rate:1", 60)).resolves.toBe(1);
+		expect(ttlByKey.get("ba:rate:1")).toBe(60);
+
+		await expect(storage.increment!("rate:1", 60)).resolves.toBe(2);
+		await expect(storage.increment!("rate:1", 60)).resolves.toBe(3);
+		// TTL captured on creation must not be reset by later increments.
+		expect(ttlByKey.get("ba:rate:1")).toBe(60);
+
+		expect(evalMock).toHaveBeenCalledWith(
+			expect.stringContaining('redis.call("INCR", KEYS[1])'),
+			1,
+			"ba:rate:1",
+			60,
+		);
+	});
+
+	it("only sets the ttl on the call that creates the key", async () => {
+		const evalMock = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+		const storage = redisStorage({
+			client: { eval: evalMock } as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.increment!("rate:2", 30)).resolves.toBe(1);
+		await expect(storage.increment!("rate:2", 30)).resolves.toBe(2);
+
+		const script = evalMock.mock.calls[0]![0] as string;
+		expect(script).toContain('redis.call("INCR", KEYS[1])');
+		expect(script).toContain("== 1");
+		expect(script).toContain('redis.call("EXPIRE"');
+	});
 });

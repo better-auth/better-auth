@@ -35,6 +35,7 @@ import {
 	parseSecretsEnv,
 	validateSecretsArray,
 } from "./secret-utils";
+import { hasServerSessionStore } from "./store-capabilities";
 
 /**
  * Estimates the entropy of a string in bits.
@@ -94,8 +95,9 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	options: Options,
 	getDatabaseType: (database: Options["database"]) => string,
 ): Promise<AuthContext<Options>> {
-	// secondaryStorage is a durable server-side store, so treat it like a database.
-	const isStateful = !!options.database || !!options.secondaryStorage;
+	// secondaryStorage is a durable server-side session store, so treat it like
+	// a database for session cache defaults.
+	const isStateful = hasServerSessionStore(options);
 
 	// Cookie-cached sessions stand in for a durable store; only default them on
 	// when there is no durable store at all.

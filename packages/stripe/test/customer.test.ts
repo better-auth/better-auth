@@ -15,6 +15,19 @@ const testUser = {
 	name: "Test User",
 };
 
+// Mark created users as verified. Reusing an existing Stripe customer found by
+// email now requires a verified email, so tests that exercise that reuse
+// (duplicate prevention) need a verified user.
+const autoVerifyUserHooks = {
+	user: {
+		create: {
+			before: async (user: User) => ({
+				data: { ...user, emailVerified: true },
+			}),
+		},
+	},
+};
+
 describe("stripe customer", () => {
 	test("should create a customer on sign up", async ({
 		stripeMock,
@@ -443,6 +456,7 @@ describe("stripe customer", () => {
 				{
 					database: memory,
 					plugins: [stripe(testOptionsWithHook)],
+					databaseHooks: autoVerifyUserHooks,
 				},
 				{
 					disableTestUser: true,
@@ -659,7 +673,6 @@ describe("stripe customer", () => {
 						name: "Existing User Customer",
 						metadata: {
 							customerType: "user",
-							userId: "some-old-user-id",
 						},
 					},
 				],
@@ -674,6 +687,7 @@ describe("stripe customer", () => {
 				{
 					database: memory,
 					plugins: [stripe(testOptions)],
+					databaseHooks: autoVerifyUserHooks,
 				},
 				{
 					disableTestUser: true,
@@ -828,6 +842,7 @@ describe("stripe customer", () => {
 				{
 					database: memory,
 					plugins: [stripe(testOptions)],
+					databaseHooks: autoVerifyUserHooks,
 				},
 				{
 					disableTestUser: true,
@@ -889,6 +904,7 @@ describe("stripe customer", () => {
 				{
 					database: memory,
 					plugins: [stripe(stripeOptions)],
+					databaseHooks: autoVerifyUserHooks,
 				},
 				{
 					disableTestUser: true,
@@ -957,6 +973,120 @@ describe("stripe customer", () => {
 			});
 			// Should use existing customer, not create a new one
 			expect(stripeMock.customers.create).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("Customer ownership when linking by email", () => {
+		// Reuse a customer matched by email only when the email is verified and
+		// the customer is not already associated with a different user.
+		test.for([
+			{
+				when: "a customer owned by another user is not reused",
+				metadata: { userId: "another_user_id", customerType: "user" },
+				verified: false,
+				createCalls: 1,
+				expectedId: "cus_fresh",
+			},
+			{
+				when: "an unverified email does not reuse a customer",
+				metadata: undefined,
+				verified: false,
+				createCalls: 1,
+				expectedId: "cus_fresh",
+			},
+			{
+				when: "a verified email reuses an unowned customer",
+				metadata: undefined,
+				verified: true,
+				createCalls: 0,
+				expectedId: "cus_existing",
+			},
+		])("signup: $when", async ({
+			metadata,
+			verified,
+			createCalls,
+			expectedId,
+		}, { stripeMock, memory, stripeOptions }) => {
+			const email = "owner@example.com";
+			stripeMock.customers.search.mockResolvedValueOnce({
+				data: [{ id: "cus_existing", email, ...(metadata && { metadata }) }],
+			});
+			stripeMock.customers.create.mockResolvedValueOnce({ id: "cus_fresh" });
+
+			const { client, auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+					...(verified && { databaseHooks: autoVerifyUserHooks }),
+				},
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ email, password: "password", name: "Me" },
+				{ throw: true },
+			);
+
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(createCalls);
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({ model: "user", where: [{ field: "id", value: userRes.user.id }] });
+			expect(user?.stripeCustomerId).toBe(expectedId);
+		});
+
+		test("creates a new customer on upgrade when the matched customer belongs to another user", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const email = "upgrade-owner@example.com";
+			const options = {
+				...stripeOptions,
+				createCustomerOnSignUp: false,
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{ database: memory, plugins: [stripe(options)] },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+
+			await client.signUp.email(
+				{ email, password: "password", name: "Me" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			stripeMock.customers.search.mockResolvedValueOnce({
+				data: [
+					{
+						id: "cus_other_owner",
+						email,
+						metadata: { userId: "another_user_id", customerType: "user" },
+					},
+				],
+			});
+			stripeMock.customers.create.mockResolvedValueOnce({
+				id: "cus_fresh_upgrade",
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
 		});
 	});
 });

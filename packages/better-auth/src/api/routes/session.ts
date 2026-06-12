@@ -13,6 +13,7 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
+import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -517,6 +518,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			}
 		},
 	);
+
+/**
+ * Whether the deployment keeps sessions in a durable server-side store
+ * (a database or secondary storage) rather than only in the signed cookie.
+ *
+ * Sensitive operations use this to decide whether the cookie cache is merely an
+ * optimization that must be bypassed for an authoritative read (`true`), or the
+ * only place the session lives and therefore the authority itself (`false`, for
+ * stateless / DB-less deployments). Pass the result as `disableCookieCache` so a
+ * revoked-but-cached session cannot authorize a sensitive action.
+ */
+export const isStateful = (ctx: GenericEndpointContext): boolean =>
+	hasServerSessionStore(ctx.context.options);
 
 export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,

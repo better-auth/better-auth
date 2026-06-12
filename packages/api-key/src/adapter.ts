@@ -235,6 +235,41 @@ async function getApiKeyByIdFromStorage(
 }
 
 /**
+ * Serializes reference-list mutations per `refKey` within a single process.
+ * Each new mutation chains onto the previous one for the same key, so the
+ * read/modify/write below never interleaves with another mutation of the same
+ * list. This closes the lost-update race in secondary-storage-only mode, where
+ * the serialized list is the source of truth for listing.
+ *
+ * Limitation: the lock is in-process only. Across multiple server instances
+ * sharing one secondary storage, concurrent writers can still lose updates.
+ * Secondary storage with `fallbackToDatabase` avoids this by treating the list
+ * as an invalidate-only cache with the database as the source of truth.
+ * FIXME(api-key-reflist-durable): on `next`, drop the source-of-truth reference
+ * list entirely and make the database authoritative for listing, removing this
+ * in-process lock.
+ */
+const refListLocks = new Map<string, Promise<unknown>>();
+
+function withRefListLock<T>(
+	refKey: string,
+	task: () => Promise<T>,
+): Promise<T> {
+	const previous = refListLocks.get(refKey) ?? Promise.resolve();
+	const run = previous.then(task, task);
+	// The map holds the `.finally()` chain, so the cleanup must compare against
+	// that same promise (not `run`) or the entry is never removed and the map
+	// grows without bound.
+	const tracked = run.finally(() => {
+		if (refListLocks.get(refKey) === tracked) {
+			refListLocks.delete(refKey);
+		}
+	});
+	refListLocks.set(refKey, tracked);
+	return run;
+}
+
+/**
  * Read-modify-write the ref list:
  * used only when the list is the source of truth.
  */
@@ -243,23 +278,25 @@ async function modifyRefList(
 	refKey: string,
 	modify: (ids: string[]) => string[],
 ): Promise<void> {
-	const refListData = await storage.get(refKey);
-	let keyIds: string[] = [];
-	if (refListData && typeof refListData === "string") {
-		try {
-			keyIds = JSON.parse(refListData);
-		} catch {
-			keyIds = [];
+	await withRefListLock(refKey, async () => {
+		const refListData = await storage.get(refKey);
+		let keyIds: string[] = [];
+		if (refListData && typeof refListData === "string") {
+			try {
+				keyIds = JSON.parse(refListData);
+			} catch {
+				keyIds = [];
+			}
+		} else if (Array.isArray(refListData)) {
+			keyIds = refListData;
 		}
-	} else if (Array.isArray(refListData)) {
-		keyIds = refListData;
-	}
-	const next = modify(keyIds);
-	if (next.length === 0) {
-		await storage.delete(refKey);
-	} else {
-		await storage.set(refKey, JSON.stringify(next));
-	}
+		const next = modify(keyIds);
+		if (next.length === 0) {
+			await storage.delete(refKey);
+		} else {
+			await storage.set(refKey, JSON.stringify(next));
+		}
+	});
 }
 
 async function setApiKeyInStorage(

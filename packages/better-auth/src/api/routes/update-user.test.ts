@@ -620,6 +620,62 @@ describe("delete user", async () => {
 		});
 	});
 
+	// The delete-account token is single-use: two concurrent callbacks with
+	// the same token must delete the account exactly once. Whichever request
+	// consumes the verification row first wins; the loser sees an invalid
+	// token. The destructive beforeDelete/afterDelete hooks must each fire
+	// once, and no verification row may survive the deletion.
+	it("should delete only once when the same token is used concurrently", async () => {
+		let token = "";
+		const beforeDelete = vi.fn(async () => {
+			// Widen the race so both requests pass the token lookup before
+			// either one finishes the destructive work.
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const afterDelete = vi.fn(async () => {});
+		const { client, signInWithTestUser, testUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+					beforeDelete,
+					afterDelete,
+				},
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const requestRes = await client.deleteUser({
+				password: testUser.password,
+			});
+			expect(requestRes.data).toMatchObject({ success: true });
+			expect(token.length).toBe(32);
+
+			const [first, second] = await Promise.all([
+				client.deleteUser({ token }),
+				client.deleteUser({ token }),
+			]);
+
+			const successes = [first, second].filter(
+				(res) => res.data && (res.data as { success?: boolean }).success,
+			);
+			const failures = [first, second].filter((res) => res.error);
+			expect(successes.length).toBe(1);
+			expect(failures.length).toBe(1);
+
+			expect(beforeDelete).toHaveBeenCalledTimes(1);
+			expect(afterDelete).toHaveBeenCalledTimes(1);
+
+			const remaining = await db.findMany({
+				model: "verification",
+				where: [{ field: "identifier", value: `delete-account-${token}` }],
+			});
+			expect(remaining.length).toBe(0);
+		});
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(
@@ -680,6 +736,62 @@ describe("delete user", async () => {
 		});
 
 		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
+
+	it("rejects /delete-user/callback when the backing session was revoked", async () => {
+		let token = "";
+		const { client, auth, db, sessionSetter } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const email = `delete-callback-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await client.signUp.email({ email, password, name: "Delete Callback" });
+
+		const headers = new Headers();
+		await client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		// Materialize the cookie cache and capture the backing session token.
+		const sessionRes = await client.getSession({ fetchOptions: { headers } });
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+
+		// Request deletion while the session is still valid to obtain a token.
+		await client.deleteUser({ password, fetchOptions: { headers } });
+		expect(token.length).toBe(32);
+
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		// The GET callback (the email-link path) must not complete deletion from
+		// the stale cookie-cache session now that the backing row is gone.
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headers.get("cookie") ?? "" } },
+			),
+		);
+		expect(response.status).toBe(404);
 	});
 });
 

@@ -19,6 +19,18 @@ import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
+type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: string | number | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
+function isNonEmptyOAuthId(
+	id: string | number | null | undefined,
+): id is string | number {
+	return id !== undefined && id !== null && id !== "";
+}
+
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
@@ -99,7 +111,7 @@ async function fetchDiscovery(
 async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
-): Promise<OAuth2UserInfo | null> {
+): Promise<GenericOAuthUserInfo | null> {
 	// When the provider declares an `idToken` config (OIDC discovery published
 	// a jwks_uri), the caller has already verified this token through
 	// `verifyProviderIdToken`. Without one, decoding without signature
@@ -132,8 +144,9 @@ async function fetchUserInfo(
 	}
 
 	const userInfo = await betterFetch<{
+		id?: string | number | null | undefined;
 		email: string;
-		sub?: string | undefined;
+		sub?: string | number | null | undefined;
 		name: string;
 		email_verified: boolean;
 		picture: string;
@@ -146,18 +159,22 @@ async function fetchUserInfo(
 	if (userInfo.error || !userInfo.data) {
 		return null;
 	}
-	const data = userInfo.data;
-	const subjectId = data.sub ?? (data as Record<string, unknown>).id;
-	if (subjectId === undefined || subjectId === null || subjectId === "") {
-		return null;
-	}
+	const { id: profileId, ...profileFields } = userInfo.data;
+	// Non-empty `id` wins over `sub` to keep stored account ids stable. OIDC
+	// UserInfo responses must include `sub`; generic OAuth profiles may omit it
+	// and let `mapProfileToUser` derive the account id from another field.
+	const subjectId = isNonEmptyOAuthId(profileId)
+		? profileId
+		: isNonEmptyOAuthId(userInfo.data.sub)
+			? userInfo.data.sub
+			: undefined;
 	return {
-		...data,
-		id: String(subjectId),
-		emailVerified: data.email_verified ?? false,
-		email: data.email,
-		image: data.picture,
-		name: data.name,
+		...profileFields,
+		...(subjectId !== undefined ? { id: subjectId } : {}),
+		email: userInfo.data.email,
+		emailVerified: userInfo.data.email_verified ?? false,
+		image: userInfo.data.picture,
+		name: userInfo.data.name,
 	};
 }
 
@@ -366,22 +383,36 @@ export const genericOAuth = <const ID extends string>(
 								return null;
 							}
 						}
-						const raw = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await fetchUserInfo(tokens, userInfoUrl);
+						const raw = (
+							c.getUserInfo
+								? await c.getUserInfo(tokens)
+								: await fetchUserInfo(tokens, userInfoUrl)
+						) as GenericOAuthUserInfo | null;
 						if (!raw) {
 							return null;
 						}
 						const mapped = c.mapProfileToUser
-							? await c.mapProfileToUser(raw)
+							? await c.mapProfileToUser(
+									raw as OAuth2UserInfo & Record<string, unknown>,
+								)
 							: {};
+						const rawId = isNonEmptyOAuthId(mapped.id)
+							? mapped.id
+							: isNonEmptyOAuthId(raw.id)
+								? raw.id
+								: isNonEmptyOAuthId(raw.sub)
+									? raw.sub
+									: undefined;
+						if (rawId === undefined) {
+							return null;
+						}
 						const user = {
-							id: raw.id,
 							email: raw.email,
 							emailVerified: raw.emailVerified,
 							image: raw.image,
 							name: raw.name,
 							...mapped,
+							id: String(rawId),
 						};
 						return {
 							user: {

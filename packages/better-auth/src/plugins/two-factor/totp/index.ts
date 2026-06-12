@@ -92,7 +92,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 
 	const twoFactorTable = "twoFactor";
 
-	const generateTOTP = createAuthEndpoint(
+	const generateTOTP = createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: generateTOTPBodySchema,

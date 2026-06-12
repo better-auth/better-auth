@@ -2023,6 +2023,101 @@ describe("race condition protection", async () => {
 		});
 		expect(res2.error?.code).toBe("INVALID_OTP");
 	});
+
+	it("should allow exactly one success when the same OTP is verified concurrently", async () => {
+		const email = "race-concurrent-signin@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		const results = await Promise.all([
+			client.signIn.emailOtp({ email, otp }),
+			client.signIn.emailOtp({ email, otp }),
+		]);
+
+		const successes = results.filter((r) => r.data?.token);
+		const failures = results.filter((r) => r.error);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.error?.code).toBe("INVALID_OTP");
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`sign-in-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
+	});
+
+	it("should allow exactly one success when the same email-verification OTP is verified concurrently", async () => {
+		const email = "race-concurrent-verify@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.signIn.emailOtp({ email, otp });
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
+
+		const results = await Promise.all([
+			client.emailOtp.verifyEmail({ email, otp }),
+			client.emailOtp.verifyEmail({ email, otp }),
+		]);
+
+		const successes = results.filter((r) => r.data?.status === true);
+		const failures = results.filter((r) => r.error);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.error?.code).toBe("INVALID_OTP");
+	});
+
+	it("should increment attempts on a wrong code without burning a valid OTP, and reject replay of a consumed code", async () => {
+		const email = "race-wrong-code@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const validOtp = otp;
+
+		const wrong = await client.signIn.emailOtp({
+			email,
+			otp: "000000" === validOtp ? "111111" : "000000",
+		});
+		expect(wrong.error?.code).toBe("INVALID_OTP");
+
+		const afterWrong = await authCtx.internalAdapter.findVerificationValue(
+			`sign-in-otp-${email}`,
+		);
+		expect(afterWrong).not.toBeNull();
+		const [, attempts] = splitAtLastColon(afterWrong!.value);
+		expect(parseInt(attempts)).toBe(1);
+
+		const success = await client.signIn.emailOtp({ email, otp: validOtp });
+		expect(success.data?.token).toBeDefined();
+
+		const replay = await client.signIn.emailOtp({ email, otp: validOtp });
+		expect(replay.error?.code).toBe("INVALID_OTP");
+	});
+
+	it("should lock out after the attempt budget is exhausted and not recreate the OTP", async () => {
+		const email = "race-lockout@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const validOtp = otp;
+		const wrongOtp = "000000" === validOtp ? "111111" : "000000";
+
+		// The default budget is 3 wrong tries; the next one is locked out.
+		await client.signIn.emailOtp({ email, otp: wrongOtp });
+		await client.signIn.emailOtp({ email, otp: wrongOtp });
+		await client.signIn.emailOtp({ email, otp: wrongOtp });
+		const lockedOut = await client.signIn.emailOtp({ email, otp: wrongOtp });
+		expect(lockedOut.error?.code).toBe("TOO_MANY_ATTEMPTS");
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`sign-in-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
+
+		const afterLockout = await client.signIn.emailOtp({
+			email,
+			otp: validOtp,
+		});
+		expect(afterLockout.error?.code).toBe("INVALID_OTP");
+	});
 });
 
 describe("email-otp-resendStrategy", async () => {

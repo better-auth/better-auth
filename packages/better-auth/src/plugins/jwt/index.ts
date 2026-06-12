@@ -248,7 +248,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					});
 				},
 			),
-			signJWT: createAuthEndpoint(
+			signJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {
@@ -272,7 +272,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					return c.json({ token: jwt });
 				},
 			),
-			verifyJWT: createAuthEndpoint(
+			verifyJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {

@@ -467,6 +467,40 @@ describe("SCIM provider management", () => {
 			await expect(createUser()).resolves.toBeTruthy();
 		});
 
+		it("rejects a SCIM token whose secret does not match the stored value", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "hashed",
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			const [secret, ...rest] = Buffer.from(response.scimToken, "base64url")
+				.toString()
+				.split(":");
+			// Tamper the secret while preserving its length, so verification cannot
+			// short-circuit on a length mismatch and must reject the value itself
+			// through the constant-time comparison.
+			const forgedSecret = `${secret.slice(0, -1)}${
+				secret.endsWith("x") ? "y" : "x"
+			}`;
+			const forgedToken = Buffer.from(
+				[forgedSecret, ...rest].join(":"),
+			).toString("base64url");
+
+			await expect(
+				auth.api.createSCIMUser({
+					body: { userName: "the-username" },
+					headers: { authorization: `Bearer ${forgedToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ status: "UNAUTHORIZED" }),
+			);
+		});
+
 		it("should generate a new scim token associated to an org", async () => {
 			const { auth, registerOrganization, getAuthCookieHeaders } =
 				createTestInstance();

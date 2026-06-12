@@ -6,7 +6,8 @@ import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
-import { getOrgAdapter } from "../adapter";
+import { defaultRoles } from "../access/statement";
+import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -47,7 +48,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		fields: option?.schema?.member?.additionalFields || {},
 		isClientSide: true,
 	});
-	return createAuthEndpoint(
+	return createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: z.object({
@@ -193,14 +194,43 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				}
 			}
 
-			const createdMember = await adapter.createMember(memberData);
+			const maximumMembersPerTeam = teamId
+				? await resolveMaximumMembersPerTeam(ctx.context.orgOptions.teams, {
+						teamId,
+						organizationId: orgId,
+						session,
+					})
+				: undefined;
 
+			// Charge team capacity before creating the organization member so a full
+			// team rejects the request before any row is written.
+			// FIXME(team-add-atomicity): addTeamMemberWithLimit commits on its own
+			// transaction, so on adapters without isolated transactions a later
+			// createMember failure can orphan the teamMember row. Same residual as
+			// acceptInvitation; closed by the planned isolated-transaction adapter
+			// contract.
 			if (teamId) {
-				await adapter.findOrCreateTeamMember({
-					userId: user.id,
-					teamId,
-				});
+				if (maximumMembersPerTeam !== undefined) {
+					const result = await adapter.addTeamMemberWithLimit({
+						teamId,
+						userId: user.id,
+						maximumMembersPerTeam,
+					});
+					if (result.status === "limitReached") {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+						);
+					}
+				} else {
+					await adapter.findOrCreateTeamMember({
+						userId: user.id,
+						teamId,
+					});
+				}
 			}
+
+			const createdMember = await adapter.createMember(memberData);
 
 			// Run afterAddMember hook
 			if (option?.organizationHooks?.afterAddMember) {
@@ -525,11 +555,52 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? ctx.body.role
-				: ctx.body.role
-					? [ctx.body.role]
-					: [];
+			const roleToSet: string[] = (
+				Array.isArray(ctx.body.role) ? ctx.body.role : [ctx.body.role]
+			)
+				.flatMap((role) => role.split(","))
+				.map((role) => role.trim())
+				.filter(Boolean);
+
+			if (roleToSet.length === 0) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
+			const validStaticRoles = new Set([
+				...Object.keys(defaultRoles),
+				...Object.keys(ctx.context.orgOptions.roles || {}),
+			]);
+			const unknownRoles = roleToSet.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany<{
+						role: string;
+					}>({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
+					});
+				}
+			}
 
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -647,7 +718,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const previousRole = toBeUpdatedMember.role;
-			const newRole = parseRoles(ctx.body.role as string | string[]);
+			const newRole = parseRoles(roleToSet);
 
 			// Run beforeUpdateMemberRole hook
 			if (option?.organizationHooks?.beforeUpdateMemberRole) {

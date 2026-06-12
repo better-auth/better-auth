@@ -71,5 +71,10 @@ resynced
 resyncs
 unioned
 bpchar
+apng
+jfif
+pcss
+pjpeg
+styl
 vbscript
 unvalidated

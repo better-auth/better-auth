@@ -5058,6 +5058,182 @@ describe("verify should not write back stale state", async () => {
 	});
 });
 
+describe("concurrent verification enforces atomic counters", async () => {
+	describe("database storage", async () => {
+		// A gate that releases all waiters only once `size` of them have arrived,
+		// forcing every concurrent verification to read the same pre-update row
+		// before any write runs. Without this, the synchronous SQLite driver lets
+		// each verification finish before the next begins and no race is observed.
+		function createArrivalGate(size: number) {
+			let arrived = 0;
+			let release!: () => void;
+			const ready = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return async () => {
+				arrived++;
+				if (arrived >= size) release();
+				await ready;
+			};
+		}
+
+		const concurrency = 8;
+		let gate: (() => Promise<void>) | null = null;
+		const customAPIKeyValidator = async () => {
+			if (gate) await gate();
+			return true;
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey({ customAPIKeyValidator })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		afterEach(() => {
+			gate = null;
+		});
+
+		it("does not let concurrent verifications drop remaining below zero", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: { remaining: 1, userId: user.id },
+			});
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			const accepted = results.filter((r) => r.valid);
+			expect(accepted.length).toBe(1);
+			for (const r of results) {
+				if (!r.valid) {
+					expect(r.error?.code).toBe("USAGE_EXCEEDED");
+				}
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.remaining).toBe(0);
+		});
+
+		it("does not let concurrent verifications exceed the per-key rate limit", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+
+			// Prime the window with one accepted request so the concurrent burst
+			// races the in-window increment path, not the first-request branch.
+			// With max 2 and one already used, exactly one of the burst may pass.
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			const accepted = results.filter((r) => r.valid);
+			expect(accepted.length).toBe(1);
+			for (const r of results) {
+				if (!r.valid) {
+					expect(r.error?.code).toBe("RATE_LIMITED");
+				}
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.requestCount).toBe(2);
+		});
+	});
+
+	describe("secondary storage reference list", async () => {
+		const store = new Map<string, string>();
+		// A read of the gated key yields for a tick before returning. Two
+		// concurrent writers without a lock therefore both read the same pre-write
+		// reference list and the lost update is exercised deterministically; a
+		// correctly serialized writer reads the gated key one at a time and keeps
+		// both entries.
+		let gatedKey: string | null = null;
+
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value as string);
+			},
+			async get(key) {
+				if (key === gatedKey) {
+					await new Promise((resolve) => setTimeout(resolve, 5));
+				}
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [apiKey({ storage: "secondary-storage" })],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		beforeEach(() => {
+			store.clear();
+			gatedKey = null;
+		});
+
+		it("does not hide an active key when two creates run concurrently", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			gatedKey = `api-key:by-ref:${user.id}`;
+
+			const [keyA, keyB] = await Promise.all([
+				auth.api.createApiKey({ body: {}, headers }),
+				auth.api.createApiKey({ body: {}, headers }),
+			]);
+
+			gatedKey = null;
+
+			const listed = await auth.api.listApiKeys({ headers });
+			const listedIds = listed.apiKeys.map((k) => k.id);
+			expect(listedIds).toContain(keyA.id);
+			expect(listedIds).toContain(keyB.id);
+
+			for (const created of [keyA, keyB]) {
+				const verified = await auth.api.verifyApiKey({
+					body: { key: created.key },
+				});
+				expect(verified.valid).toBe(true);
+			}
+		});
+	});
+});
+
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(

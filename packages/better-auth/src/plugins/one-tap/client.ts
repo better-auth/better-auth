@@ -250,12 +250,18 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 
 						async function callback(idToken: string) {
-							await $fetch("/one-tap/callback", {
+							const res = await $fetch("/one-tap/callback", {
 								method: "POST",
-								body: { idToken },
+								body: { idToken, callbackURL: opts?.callbackURL },
 								...opts?.fetchOptions,
 								...fetchOptions,
 							});
+
+							// The server validates callbackURL against trustedOrigins; do
+							// not navigate if it rejected the request.
+							if (res?.error) {
+								return;
+							}
 
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 								const target = opts?.callbackURL ?? "/";
@@ -299,12 +305,18 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					async function callback(idToken: string) {
-						await $fetch("/one-tap/callback", {
+						const res = await $fetch("/one-tap/callback", {
 							method: "POST",
-							body: { idToken },
+							body: { idToken, callbackURL: opts?.callbackURL },
 							...opts?.fetchOptions,
 							...fetchOptions,
 						});
+
+						// The server validates callbackURL against trustedOrigins; do
+						// not navigate if it rejected the request.
+						if (res?.error) {
+							return;
+						}
 
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 							const target = opts?.callbackURL ?? "/";

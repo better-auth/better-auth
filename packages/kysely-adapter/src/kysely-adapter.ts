@@ -805,13 +805,102 @@ export const kyselyAdapter = (
 							: db.transaction().execute(claimFromTransaction);
 					}
 
-					const targetIds = applyWhere(
+					const selectIds = applyWhere(
 						db.selectFrom(model).select(`${model}.${idField}`),
-					).limit(1);
+					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
 					const query = db
 						.deleteFrom(model)
 						.where(`${model}.${idField}`, "in", targetIds);
 					return deleteWithReturning(query);
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const { and, or } = convertWhereClause(model, where);
+					const applyWhere = (query: any) => {
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					// Each increment field becomes a self-referential assignment
+					// (`field = field + delta`) so the database, not the
+					// application, performs the arithmetic atomically. Absolute
+					// `set` assignments are applied in the same statement.
+					const assignments: Record<string, any> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						assignments[field] = sql`${sql.ref(field)} + ${delta}`;
+					}
+					const idField = getFieldName({ model, field: "id" });
+
+					if (config?.type === "mysql") {
+						// MySQL does not support `UPDATE ... RETURNING`. Hold the
+						// target row under `SELECT ... FOR UPDATE`, apply the guarded
+						// update inside the same transaction, then read the row back.
+						// Concurrent claimants block on the lock; a racer that
+						// invalidated the guard observes zero updated rows.
+						const incrementInTransaction = async (trx: any) => {
+							const target = await applyWhere(
+								trx.selectFrom(model).select(`${model}.${idField}`).forUpdate(),
+							)
+								.limit(1)
+								.executeTakeFirst();
+							if (!target) return null;
+							const targetId = target[idField] ?? target.id;
+							if (targetId === undefined || targetId === null) return null;
+							const updated = await applyWhere(
+								trx.updateTable(model).set(assignments),
+							)
+								.where(`${model}.${idField}`, "=", targetId)
+								.executeTakeFirst();
+							if (Number(updated.numUpdatedRows) === 0) return null;
+							return (
+								(await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(`${model}.${idField}`, "=", targetId)
+									.limit(1)
+									.executeTakeFirst()) ?? null
+							);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+
+					// Scope the update to a single matching row by targeting
+					// `id IN (SELECT id WHERE guard LIMIT 1)`, mirroring consumeOne. A
+					// bare guarded UPDATE would mutate every matching row, violating the
+					// single-row contract when the guard is non-unique.
+					const selectIds = applyWhere(
+						db.selectFrom(model).select(`${model}.${idField}`),
+					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
+					const updateQuery = db
+						.updateTable(model)
+						.set(assignments)
+						.where(`${model}.${idField}`, "in", targetIds);
+					if (config?.type === "mssql") {
+						return (
+							(await updateQuery.outputAll("inserted").executeTakeFirst()) ??
+							null
+						);
+					}
+					return (await updateQuery.returningAll().executeTakeFirst()) ?? null;
 				},
 				options: config,
 			};

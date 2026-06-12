@@ -519,7 +519,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
-			viewBackupCodes: createAuthEndpoint(
+			viewBackupCodes: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					body: viewBackupCodesBodySchema,
