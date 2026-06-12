@@ -139,7 +139,7 @@ const SAML_SKIP_ORIGIN_CHECK_PATHS = [
 	"/sso/saml2/sp/slo", // SAML SLO endpoint (prefix matches /sp/slo/:providerId)
 ];
 
-const SSO_PROVIDER_BUILT_IN_FIELD_KEYS = new Set([
+const SSO_PROVIDER_BUILT_IN_FIELD_KEYS = [
 	"id",
 	"issuer",
 	"oidcConfig",
@@ -149,14 +149,61 @@ const SSO_PROVIDER_BUILT_IN_FIELD_KEYS = new Set([
 	"organizationId",
 	"domain",
 	"domainVerified",
-]);
+] as const;
+
+const SSO_PROVIDER_RESPONSE_FIELD_KEYS = [
+	"type",
+	"spMetadataUrl",
+	"redirectURI",
+	"domainVerificationToken",
+] as const;
+
+const SSO_PROVIDER_BUILT_IN_FIELD_KEY_SET = new Set<string>(
+	SSO_PROVIDER_BUILT_IN_FIELD_KEYS,
+);
+
+const SSO_PROVIDER_RESPONSE_FIELD_KEY_SET = new Set<string>(
+	SSO_PROVIDER_RESPONSE_FIELD_KEYS,
+);
+
+type SSOProviderBuiltInFieldKey =
+	(typeof SSO_PROVIDER_BUILT_IN_FIELD_KEYS)[number];
+
+function getSSOProviderBuiltInFieldName(
+	options: SSOOptions | undefined,
+	key: SSOProviderBuiltInFieldKey,
+) {
+	const fieldNames = options?.fields as
+		| Partial<Record<SSOProviderBuiltInFieldKey, string>>
+		| undefined;
+	const schemaFieldNames = options?.schema?.ssoProvider?.fields as
+		| Partial<Record<SSOProviderBuiltInFieldKey, string>>
+		| undefined;
+	return fieldNames?.[key] ?? schemaFieldNames?.[key] ?? key;
+}
 
 function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
 	const additionalFields = options?.schema?.ssoProvider?.additionalFields ?? {};
-	for (const key in additionalFields) {
-		if (SSO_PROVIDER_BUILT_IN_FIELD_KEYS.has(key)) {
+	const builtInFieldNames = new Set(
+		SSO_PROVIDER_BUILT_IN_FIELD_KEYS.map((key) =>
+			getSSOProviderBuiltInFieldName(options, key),
+		),
+	);
+	for (const [key, field] of Object.entries(additionalFields)) {
+		if (SSO_PROVIDER_BUILT_IN_FIELD_KEY_SET.has(key)) {
 			throw new Error(
 				`ssoProvider additional field "${key}" conflicts with a built-in field`,
+			);
+		}
+		if (SSO_PROVIDER_RESPONSE_FIELD_KEY_SET.has(key)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" conflicts with a returned provider field`,
+			);
+		}
+		const fieldName = field.fieldName ?? key;
+		if (builtInFieldNames.has(fieldName)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" maps to built-in field "${fieldName}"`,
 			);
 		}
 	}

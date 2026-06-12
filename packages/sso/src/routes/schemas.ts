@@ -11,7 +11,7 @@ function getSSOProviderAdditionalFields(options?: SSOOptions) {
 	>;
 }
 
-export function getSSOProviderAdditionalFieldsSchema(options?: SSOOptions) {
+function getSSOProviderAdditionalFieldsSchema(options?: SSOOptions) {
 	const additionalFields = getSSOProviderAdditionalFields(options);
 	const schema = toZodSchema({
 		fields: additionalFields,
@@ -248,7 +248,7 @@ const samlConfigSchema = z.object({
 	mapping: samlMappingSchema,
 });
 
-export const registerSSOProviderBodySchema = z.object({
+const registerSSOProviderBodySchema = z.object({
 	providerId: z.string().meta({
 		description:
 			"The ID of the provider. This is used to identify the provider during login and callback",
@@ -286,7 +286,7 @@ export function getRegisterSSOProviderBodySchema(options?: SSOOptions) {
 	});
 }
 
-export const updateSSOProviderBodySchema = z.object({
+const updateSSOProviderBodySchema = z.object({
 	issuer: z.string().url().optional(),
 	domain: z.string().optional(),
 	oidcConfig: oidcConfigSchema.partial().optional(),

@@ -174,8 +174,13 @@ function sanitizeProvider(
 	}
 
 	const type = samlConfig ? "saml" : "oidc";
+	const returnedAdditionalFields = getReturnedSSOProviderAdditionalFields(
+		provider,
+		options,
+	);
 
 	return {
+		...returnedAdditionalFields,
 		providerId: provider.providerId,
 		type,
 		issuer: provider.issuer,
@@ -208,7 +213,6 @@ function sanitizeProvider(
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
-		...getReturnedSSOProviderAdditionalFields(provider, options),
 	};
 }
 
