@@ -20,6 +20,10 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { jwt } from "../../plugins";
 import { admin } from "../../plugins/admin";
+import {
+	COOKIE_CACHE_JWT_AUDIENCE,
+	COOKIE_CACHE_JWT_TYPE,
+} from "../../plugins/jwt/cookie-cache";
 import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
@@ -889,7 +893,7 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				strategy: "jwt",
 				refreshCache: false,
 				jwt: {
-					keySource: "jwks",
+					signingKey: "jwt-plugin",
 				},
 			},
 		},
@@ -932,15 +936,85 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 
 		const protectedHeader = decodeProtectedHeader(token);
 		expect(protectedHeader.kid).toEqual(expect.any(String));
+		expect(protectedHeader.typ).toBe(COOKIE_CACHE_JWT_TYPE);
 
 		const jwks = await auth.api.getJwks();
 		const localJwks = createLocalJWKSet(jwks);
-		const verified = await jwtVerify(token, localJwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
 
 		expect(verified.payload.session).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(session.data?.user.id);
+		expect(verified.payload.sid).toBe(session.data?.session.token);
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
 		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("should ignore a JWKS cookie cache from a different session token", async () => {
+		const firstHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(firstHeaders),
+			},
+		);
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers: firstHeaders,
+			},
+		});
+
+		const secondHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(secondHeaders),
+			},
+		);
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: secondHeaders,
+			},
+		});
+
+		const firstCookieCache = parseCookies(firstHeaders.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		const secondSessionCookie = parseCookies(
+			secondHeaders.get("cookie") || "",
+		).get("better-auth.session_token");
+		if (!firstCookieCache || !secondSessionCookie || !secondSession.data) {
+			throw new Error("Expected both session cookies to be present");
+		}
+
+		const mixedHeaders = new Headers();
+		mixedHeaders.set(
+			"cookie",
+			`better-auth.session_data=${firstCookieCache}; better-auth.session_token=${secondSessionCookie}`,
+		);
+
+		const mixedSession = await client.getSession({
+			fetchOptions: {
+				headers: mixedHeaders,
+			},
+		});
+
+		expect(mixedSession.data?.session.token).toBe(
+			secondSession.data.session.token,
+		);
+		expect(mixedSession.data?.session.token).not.toBe(
+			firstSession.data?.session.token,
+		);
 	});
 
 	it("should not allow tampering with the cookie in JWKS mode", async () => {
@@ -965,7 +1039,9 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 
 		const jwks = await auth.api.getJwks();
 		const localJwks = createLocalJWKSet(jwks);
-		const verified = await jwtVerify(token, localJwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
 		const verifiedPayload = verified.payload as {
 			session: Record<string, any>;
 			user: Record<string, any>;
@@ -989,8 +1065,10 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 			throw new Error("Session cookie not found");
 		}
 
-		headers.set("cookie", `better-auth.session_data=${tamperedToken}`);
-		headers.append("cookie", `better-auth.session_token=${sessionCookie}`);
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${tamperedToken}; better-auth.session_token=${sessionCookie}`,
+		);
 		const res = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -1008,7 +1086,7 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 					enabled: true,
 					strategy: "jwt",
 					jwt: {
-						keySource: "jwks",
+						signingKey: "jwt-plugin",
 					},
 				},
 			},
@@ -1053,7 +1131,9 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 		expect(jwks.keys.length).toBeGreaterThan(1);
 
 		const localJwks = createLocalJWKSet(jwks);
-		const verified = await jwtVerify(originalToken, localJwks);
+		const verified = await jwtVerify(originalToken, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
 		expect(verified.payload.session).toBeDefined();
 	});
 });

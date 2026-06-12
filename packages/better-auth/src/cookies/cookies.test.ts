@@ -25,6 +25,10 @@ import {
 } from "../cookies";
 import { signJWT, symmetricDecodeJWT } from "../crypto";
 import { jwt } from "../plugins";
+import {
+	COOKIE_CACHE_JWT_AUDIENCE,
+	COOKIE_CACHE_JWT_TYPE,
+} from "../plugins/jwt/cookie-cache";
 import { getTestInstance } from "../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../utils/constants";
 import {
@@ -1176,7 +1180,7 @@ describe("Cookie Cache Field Filtering", () => {
 					enabled: true,
 					strategy: "jwt",
 					jwt: {
-						keySource: "jwks",
+						signingKey: "jwt-plugin",
 					},
 				},
 			},
@@ -1214,7 +1218,7 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				keySource: "jwks",
+				signingKey: "jwt-plugin",
 				jwks,
 			},
 		});
@@ -1222,9 +1226,16 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.user?.email).toEqual(testUser.email);
 
 		const localJwks = createLocalJWKSet(jwks);
-		const verified = await jwtVerify(token, localJwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		expect(header.typ).toBe(COOKIE_CACHE_JWT_TYPE);
 		expect(verified.payload.session).toBeDefined();
 		expect(verified.payload.user).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(cache?.user?.id);
+		expect(verified.payload.sid).toBe(cache?.session?.token);
 	});
 
 	it("should work with compact strategy", async () => {
@@ -1291,12 +1302,42 @@ describe("Cookie Cache Field Filtering", () => {
 			getCookieCache(request, {
 				strategy: "jwt",
 				jwt: {
-					keySource: "jwks",
+					signingKey: "jwt-plugin",
 				},
 			}),
 		).rejects.toThrow(
-			"getCookieCache requires `jwt.jwks` when `jwt.keySource` is set to `jwks`.",
+			'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
 		);
+	});
+
+	it("should reject JWT plugin tokens that are not cookie-cache JWTs", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+		});
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "user-id",
+				},
+			},
+		});
+		const jwks = await auth.api.getJwks();
+
+		const headers = new Headers();
+		headers.set("cookie", `better-auth.session_data=${token.token}`);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks,
+			},
+		});
+
+		expect(cache).toBeNull();
 	});
 
 	it("should return null when JWKS verification uses the wrong key set", async () => {
@@ -1306,7 +1347,7 @@ describe("Cookie Cache Field Filtering", () => {
 					enabled: true,
 					strategy: "jwt",
 					jwt: {
-						keySource: "jwks",
+						signingKey: "jwt-plugin",
 					},
 				},
 			},
@@ -1333,7 +1374,7 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				keySource: "jwks",
+				signingKey: "jwt-plugin",
 				jwks: {
 					keys: [],
 				},
@@ -1481,7 +1522,7 @@ describe("Cookie Chunking", () => {
 					enabled: true,
 					strategy: "jwt",
 					jwt: {
-						keySource: "jwks",
+						signingKey: "jwt-plugin",
 					},
 				},
 			},
@@ -1527,7 +1568,7 @@ describe("Cookie Chunking", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				keySource: "jwks",
+				signingKey: "jwt-plugin",
 				jwks: await auth.api.getJwks(),
 			},
 		});

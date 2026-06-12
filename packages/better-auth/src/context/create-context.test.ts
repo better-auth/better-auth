@@ -424,13 +424,13 @@ describe("base context creation", () => {
 							enabled: true,
 							strategy: "jwt",
 							jwt: {
-								keySource: "jwks",
+								signingKey: "jwt-plugin",
 							},
 						} as any,
 					},
 				}),
 			).rejects.toThrow(
-				'`session.cookieCache.jwt.keySource = "jwks"` requires the `jwt()` plugin to be installed.',
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
 			);
 		});
 
@@ -442,7 +442,7 @@ describe("base context creation", () => {
 							enabled: true,
 							strategy: "jwt",
 							jwt: {
-								keySource: "jwks",
+								signingKey: "jwt-plugin",
 							},
 						} as any,
 					},
@@ -461,7 +461,7 @@ describe("base context creation", () => {
 					],
 				}),
 			).rejects.toThrow(
-				"Cookie-cache JWT JWKS mode does not support `jwt({ jwt: { sign } })`.",
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
 			);
 		});
 
@@ -478,7 +478,7 @@ describe("base context creation", () => {
 						strategy: "jwt",
 						maxAge: 301,
 						jwt: {
-							keySource: "jwks",
+							signingKey: "jwt-plugin",
 						},
 					} as any,
 				},

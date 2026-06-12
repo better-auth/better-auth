@@ -5,33 +5,105 @@ import type {
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { decodeProtectedHeader, importJWK, jwtVerify, SignJWT } from "jose";
-import { symmetricDecrypt } from "../../crypto";
+import type { Session, User } from "../../types";
 import { getJwksAdapter } from "./adapter";
+import { resolveSigningKey } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
 
-type CookieCacheKeySource = "secret" | "jwks";
+export const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+export const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
+export const COOKIE_CACHE_JWT_ISSUER = "better-auth:session-cache";
 
-export function getCookieCacheJwtKeySource(
+type CookieCacheJwtSigningKey = "secret" | "jwt-plugin";
+
+type CookieCacheJwtPayload = {
+	session: Session & Record<string, unknown>;
+	user: User & Record<string, unknown>;
+	updatedAt: number;
+	version?: string;
+};
+
+export type VerifyCookieCacheJwtOptions = {
+	issuer?: string | undefined;
+	audience?: string | undefined;
+};
+
+export function getCookieCacheJwtSigningKey(
 	options: Pick<BetterAuthOptions, "session"> | undefined,
-): CookieCacheKeySource {
-	return options?.session?.cookieCache?.jwt?.keySource ?? "secret";
+): CookieCacheJwtSigningKey {
+	return options?.session?.cookieCache?.jwt?.signingKey ?? "secret";
 }
 
 function getJwtPluginOptions(ctx: GenericEndpointContext): JwtOptions {
 	const plugin = ctx.context.getPlugin?.("jwt");
 	if (!plugin) {
 		throw new BetterAuthError(
-			'`session.cookieCache.jwt.keySource = "jwks"` requires the `jwt()` plugin to be installed.',
+			'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
 		);
 	}
 	const options = (plugin.options ?? {}) as JwtOptions;
 	if (options.jwt?.sign) {
 		throw new BetterAuthError(
-			"Cookie-cache JWT JWKS mode does not support `jwt({ jwt: { sign } })`. Use locally managed JWKS keys instead.",
+			'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
 		);
 	}
 	return options;
+}
+
+function getCookieCacheJwtIssuer(ctx: GenericEndpointContext) {
+	const baseURL = ctx.context.options.baseURL;
+	return typeof baseURL === "string"
+		? baseURL || COOKIE_CACHE_JWT_ISSUER
+		: ctx.context.baseURL || COOKIE_CACHE_JWT_ISSUER;
+}
+
+function getCookieCacheJwtVerifyOptions(options?: VerifyCookieCacheJwtOptions) {
+	const verifyOptions: {
+		clockTolerance: number;
+		audience: string;
+		issuer?: string;
+	} = {
+		clockTolerance: 15,
+		audience: options?.audience ?? COOKIE_CACHE_JWT_AUDIENCE,
+	};
+
+	if (options?.issuer) {
+		verifyOptions.issuer = options.issuer;
+	}
+
+	return verifyOptions;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function parseCookieCacheJwtPayload<T extends CookieCacheJwtPayload>(
+	payload: JWTPayload,
+): (T & JWTPayload) | null {
+	if (
+		!isRecord(payload.session) ||
+		!isRecord(payload.user) ||
+		typeof payload.updatedAt !== "number"
+	) {
+		return null;
+	}
+
+	if (typeof payload.iss !== "string" || payload.iss.length === 0) {
+		return null;
+	}
+
+	const userId = payload.user.id;
+	const sessionToken = payload.session.token;
+	if (typeof userId !== "string" || typeof sessionToken !== "string") {
+		return null;
+	}
+
+	if (payload.sub !== userId || payload.sid !== sessionToken) {
+		return null;
+	}
+
+	return payload as T & JWTPayload;
 }
 
 async function importLocalPublicKey(
@@ -72,75 +144,88 @@ async function importLocalPublicKey(
 		return null;
 	}
 
-	return importJWK(JSON.parse(key.publicKey), alg);
+	return {
+		alg,
+		publicKey: await importJWK(JSON.parse(key.publicKey), alg),
+	};
 }
 
-export async function signCookieCacheJWT<T extends Record<string, any>>(
+export async function signCookieCacheJWT<T extends CookieCacheJwtPayload>(
 	ctx: GenericEndpointContext,
 	payload: T,
 	expiresIn: number,
 ): Promise<string> {
 	const options = getJwtPluginOptions(ctx);
-	const adapter = getJwksAdapter(ctx.context.adapter, options);
-	let key = await adapter.getLatestKey(ctx);
-	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
-		key = await createJwk(ctx, options);
+	const resolvedKey = await resolveSigningKey(ctx, options);
+	if (!resolvedKey) {
+		throw new BetterAuthError(
+			'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
+		);
 	}
 
-	const privateKeyEncryptionEnabled =
-		!options.jwks?.disablePrivateKeyEncryption;
-	const privateWebKey = privateKeyEncryptionEnabled
-		? await symmetricDecrypt({
-				key: ctx.context.secretConfig,
-				data: JSON.parse(key.privateKey),
-			}).catch(() => {
-				throw new BetterAuthError(
-					"Failed to decrypt private key for cookie-cache JWT signing. Make sure the current secret can decrypt your JWKS private key material.",
-				);
-			})
-		: key.privateKey;
-
-	const alg = key.alg ?? options.jwks?.keyPairConfig?.alg ?? "EdDSA";
-	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
-
-	return await new SignJWT(payload)
+	const jwt = new SignJWT({
+		...payload,
+		sid: payload.session.token,
+	})
 		.setProtectedHeader({
-			alg,
-			kid: key.id,
+			alg: resolvedKey.alg,
+			kid: resolvedKey.kid,
+			typ: COOKIE_CACHE_JWT_TYPE,
 		})
 		.setIssuedAt()
 		.setExpirationTime(Math.floor(Date.now() / 1000) + expiresIn)
-		.sign(privateKey);
+		.setIssuer(getCookieCacheJwtIssuer(ctx))
+		.setAudience(COOKIE_CACHE_JWT_AUDIENCE)
+		.setSubject(payload.user.id);
+
+	return await jwt.sign(resolvedKey.privateKey);
 }
 
-export async function verifyCookieCacheJWT<T = JWTPayload>(
+export async function verifyCookieCacheJWT<
+	T extends CookieCacheJwtPayload = CookieCacheJwtPayload,
+>(
 	ctx: GenericEndpointContext,
 	token: string,
-): Promise<T | null> {
+): Promise<(T & JWTPayload) | null> {
 	try {
-		const options = getJwtPluginOptions(ctx);
-		const publicKey = await importLocalPublicKey(ctx, token, options);
-		if (!publicKey) {
+		const header = decodeProtectedHeader(token);
+		if (header.typ !== COOKIE_CACHE_JWT_TYPE) {
 			return null;
 		}
 
-		const { payload } = await jwtVerify(token, publicKey, {
-			clockTolerance: 15,
+		const options = getJwtPluginOptions(ctx);
+		const key = await importLocalPublicKey(ctx, token, options);
+		if (!key) {
+			return null;
+		}
+
+		const { payload } = await jwtVerify(token, key.publicKey, {
+			...getCookieCacheJwtVerifyOptions({
+				issuer: getCookieCacheJwtIssuer(ctx),
+			}),
+			algorithms: [key.alg],
 		});
 
-		return payload as T;
+		return parseCookieCacheJwtPayload<T>(payload);
 	} catch (error) {
 		ctx.context.logger.debug("Cookie-cache JWT verification failed", error);
 		return null;
 	}
 }
 
-export async function verifyCookieCacheJWTWithJWKS<T = JWTPayload>(
+export async function verifyCookieCacheJWTWithJWKS<
+	T extends CookieCacheJwtPayload = CookieCacheJwtPayload,
+>(
 	token: string,
 	jwks: JSONWebKeySet,
-): Promise<T | null> {
+	options?: VerifyCookieCacheJwtOptions,
+): Promise<(T & JWTPayload) | null> {
 	try {
 		const header = decodeProtectedHeader(token);
+		if (header.typ !== COOKIE_CACHE_JWT_TYPE) {
+			return null;
+		}
+
 		const kid = header.kid;
 		if (!kid) {
 			return null;
@@ -158,9 +243,10 @@ export async function verifyCookieCacheJWTWithJWKS<T = JWTPayload>(
 
 		const publicKey = await importJWK(key, alg);
 		const { payload } = await jwtVerify(token, publicKey, {
-			clockTolerance: 15,
+			...getCookieCacheJwtVerifyOptions(options),
+			algorithms: [alg],
 		});
-		return payload as T;
+		return parseCookieCacheJwtPayload<T>(payload);
 	} catch {
 		return null;
 	}

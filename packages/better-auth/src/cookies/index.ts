@@ -22,7 +22,7 @@ import {
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
 import {
-	getCookieCacheJwtKeySource,
+	getCookieCacheJwtSigningKey,
 	signCookieCacheJWT,
 	verifyCookieCacheJWTWithJWKS,
 } from "../plugins/jwt/cookie-cache";
@@ -202,7 +202,7 @@ export async function setCookieCache(
 	const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
-	const jwtKeySource = getCookieCacheJwtKeySource(ctx.context.options);
+	const jwtSigningKey = getCookieCacheJwtSigningKey(ctx.context.options);
 
 	let data: string;
 
@@ -216,7 +216,7 @@ export async function setCookieCache(
 		);
 	} else if (strategy === "jwt") {
 		data =
-			jwtKeySource === "jwks"
+			jwtSigningKey === "jwt-plugin"
 				? await signCookieCacheJWT(ctx, sessionData, options.maxAge || 60 * 5)
 				: await signSecretJWT(
 						sessionData,
@@ -480,6 +480,19 @@ export function deleteSessionCookie(
 	}
 }
 
+function isEmbeddedSessionExpired(
+	session: { expiresAt?: unknown } | undefined,
+) {
+	if (!session?.expiresAt) {
+		return false;
+	}
+
+	const expiresAt = new Date(
+		session.expiresAt as string | number | Date,
+	).getTime();
+	return Number.isFinite(expiresAt) && expiresAt < Date.now();
+}
+
 export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
 
 export const getSessionCookie = (
@@ -536,8 +549,10 @@ export const getCookieCache = async <
 				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
 				jwt?:
 					| {
-							keySource?: "secret" | "jwks";
+							signingKey?: "secret" | "jwt-plugin";
 							jwks?: JSONWebKeySet;
+							issuer?: string;
+							audience?: string;
 					  }
 					| undefined;
 				version?:
@@ -598,16 +613,7 @@ export const getCookieCache = async <
 
 	if (sessionData) {
 		const strategy = config?.strategy || "compact";
-		const jwtKeySource = config?.jwt?.keySource ?? "secret";
-
-		// A valid signature/encryption only proves integrity, not freshness. Mirror
-		// the in-route session reader and reject a snapshot whose embedded session
-		// has already expired, so a caller using this helper as an auth gate cannot
-		// treat a stale-but-signed cookie as a live session.
-		const isEmbeddedSessionExpired = (payload: S): boolean => {
-			const expiresAt = payload.session?.expiresAt;
-			return !!expiresAt && new Date(expiresAt).getTime() < Date.now();
-		};
+		const jwtSigningKey = config?.jwt?.signingKey ?? "secret";
 
 		if (strategy === "jwe") {
 			const secret = config?.secret || env.BETTER_AUTH_SECRET;
@@ -638,7 +644,7 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
-				if (isEmbeddedSessionExpired(payload)) {
+				if (isEmbeddedSessionExpired(payload.session)) {
 					return null;
 				}
 				return payload;
@@ -646,15 +652,18 @@ export const getCookieCache = async <
 			return null;
 		} else if (strategy === "jwt") {
 			const payload =
-				jwtKeySource === "jwks"
+				jwtSigningKey === "jwt-plugin"
 					? await (() => {
 							const jwks = config?.jwt?.jwks;
 							if (!jwks) {
 								throw new BetterAuthError(
-									"getCookieCache requires `jwt.jwks` when `jwt.keySource` is set to `jwks`.",
+									'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
 								);
 							}
-							return verifyCookieCacheJWTWithJWKS<S>(sessionData, jwks);
+							return verifyCookieCacheJWTWithJWKS<S>(sessionData, jwks, {
+								issuer: config?.jwt?.issuer,
+								audience: config?.jwt?.audience,
+							});
 						})()
 					: await (() => {
 							const secret = config?.secret || env.BETTER_AUTH_SECRET;
@@ -681,7 +690,7 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
-				if (isEmbeddedSessionExpired(payload)) {
+				if (isEmbeddedSessionExpired(payload.session)) {
 					return null;
 				}
 				return payload;
@@ -714,7 +723,6 @@ export const getCookieCache = async <
 			if (!isValid) {
 				return null;
 			}
-
 			// Validate version if provided
 			if (config?.version && sessionDataPayload.session) {
 				const cookieVersion = sessionDataPayload.session.version || "1";
@@ -742,7 +750,7 @@ export const getCookieCache = async <
 			) {
 				return null;
 			}
-			if (isEmbeddedSessionExpired(sessionDataPayload.session)) {
+			if (isEmbeddedSessionExpired(sessionDataPayload.session?.session)) {
 				return null;
 			}
 

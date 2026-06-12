@@ -1064,14 +1064,14 @@ export type BetterAuthOptions = {
 					 */
 					jwt?: {
 						/**
-						 * Which key source signs and verifies cookie-cache JWTs.
+						 * Which signing key is used for cookie-cache JWTs.
 						 *
 						 * - `"secret"`: uses the Better Auth secret with HS256.
-						 * - `"jwks"`: uses the installed `jwt()` plugin's asymmetric JWKS keys.
+						 * - `"jwt-plugin"`: uses the installed `jwt()` plugin's asymmetric signing keys.
 						 *
 						 * @default "secret"
 						 */
-						keySource?: "secret" | "jwks";
+						signingKey?: "secret" | "jwt-plugin";
 					};
 					/**
 					 * Controls stateless cookie cache refresh behavior.
