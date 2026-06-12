@@ -158,7 +158,7 @@ export function createMcpResourceClient(
 		: options.authURL;
 	const fetchFn = options.fetch ?? globalThis.fetch;
 	const corsHeaders = buildCorsHeaders(authURL, options.allowedOrigin);
-	const audience = options.resource ?? authURL;
+	const expectedAudience = options.resource ?? authURL;
 
 	let discovery: { issuer: string; jwks_uri: string } | null = null;
 	let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -187,7 +187,7 @@ export function createMcpResourceClient(
 			const { discovery: meta, jwks: keySet } = await loadVerifier();
 			const { payload } = await jwtVerify(token, keySet, {
 				issuer: meta.issuer,
-				audience,
+				audience: expectedAudience,
 			});
 			return payload as McpSession;
 		} catch {

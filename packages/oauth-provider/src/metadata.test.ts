@@ -478,7 +478,7 @@ describe("dynamic baseURL metadata wrappers", async () => {
 
 describe("oauth resource metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const supportedScopes = [
 		"openid",
 		"profile",
@@ -497,7 +497,8 @@ describe("oauth resource metadata", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -517,11 +518,11 @@ describe("oauth resource metadata", async () => {
 
 	it("should provide resource discovery configuration", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			resource: validResource,
+			authorization_servers: [authServerBaseUrl],
 		});
 	});
 
@@ -541,7 +542,7 @@ describe("oauth resource metadata", async () => {
 	it("should not support 'openid' scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["openid"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -549,11 +550,11 @@ describe("oauth resource metadata", async () => {
 
 	it("should pass with supported scopes", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 			scopes_supported: ["read:posts"],
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl],
 			scopes_supported: ["read:posts"],
 		});
@@ -562,7 +563,7 @@ describe("oauth resource metadata", async () => {
 	it("should fail unsupported scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["write:posts"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -572,7 +573,7 @@ describe("oauth resource metadata", async () => {
 		const anotherAuthorizationServer = "https://auth.example.com";
 		const metadata = await authClient.getProtectedResourceMetadata(
 			{
-				resource: validAudience,
+				resource: validResource,
 				authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 				scopes_supported: ["read:posts", "write:posts"],
 			},
@@ -581,7 +582,7 @@ describe("oauth resource metadata", async () => {
 			},
 		);
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 			scopes_supported: ["read:posts", "write:posts"],
 		});

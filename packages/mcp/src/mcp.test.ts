@@ -119,7 +119,7 @@ describe("mcp - server-client flows", async () => {
 				oauthProvider({
 					loginPage: "/sign-in",
 					consentPage: "/consent",
-					validAudiences: [apiServerBaseUrl, mcpServerUrl],
+					resources: [apiServerBaseUrl, mcpServerUrl],
 					allowDynamicClientRegistration: true,
 					allowUnauthenticatedClientRegistration: true,
 					scopes,
@@ -309,6 +309,17 @@ describe("mcp - server-client flows", async () => {
 	}
 
 	let authorizeUrl: URL;
+	const clientMetadata = {
+		client_name: "my-client",
+		client_uri: "https://ai.example.com",
+		logo_uri: "https://ai.example.com/logo.png",
+		tos_uri: "https://ai.example.com/terms-of-service",
+		policy_uri: "https://ai.example.com/privacy-policy",
+		token_endpoint_auth_method: "none",
+		redirect_uris: [redirectUri],
+		resources: [resource],
+	} satisfies OAuthClientProvider["clientMetadata"] & { resources: string[] };
+
 	async function performAuthorize() {
 		let location = "";
 		await authClient.$fetch(authorizeUrl.toString(), {
@@ -359,15 +370,7 @@ describe("mcp - server-client flows", async () => {
 		if (provider) return provider;
 		provider = {
 			redirectUrl: redirectUri,
-			clientMetadata: {
-				client_name: "my-client",
-				client_uri: "https://ai.example.com",
-				logo_uri: "https://ai.example.com/logo.png",
-				tos_uri: "https://ai.example.com/terms-of-service",
-				policy_uri: "https://ai.example.com/privacy-policy",
-				token_endpoint_auth_method: "none",
-				redirect_uris: [redirectUri],
-			},
+			clientMetadata,
 			state() {
 				return state;
 			},

@@ -124,12 +124,17 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
-			?.alg
-			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
-			: opts.disableJwtPlugin
-				? ["HS256"]
-				: ["EdDSA"],
+		id_token_signing_alg_values_supported: (() => {
+			if (opts.disableJwtPlugin) return ["HS256" as const];
+			// Advertise every algorithm the plugin can sign with: the primary
+			// keyPairConfig.alg plus every alg declared in keyPairConfigs[]
+			// (lazy-minted on demand for per-resource signing pins).
+			// Deduplicated so overlapping declarations don't produce repeats.
+			const primary = jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+			const extras =
+				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
+			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
+		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
 		prompt_values_supported: [

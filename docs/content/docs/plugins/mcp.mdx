@@ -31,7 +31,8 @@ The **MCP** plugin lets your app act as an OAuth authorization server for [Model
             jwt(), // [!code highlight]
             mcp({ // [!code highlight]
                 loginPage: "/sign-in", // path to your login page // [!code highlight]
-                consentPage: "/consent" // path to your consent page // [!code highlight]
+                consentPage: "/consent", // path to your consent page // [!code highlight]
+                resource: "https://api.example.com/mcp" // protected resource identifier // [!code highlight]
             }) // [!code highlight]
         ]
     });
@@ -84,7 +85,7 @@ Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://da
 
 The [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) `/.well-known/oauth-protected-resource` document is served automatically at the well-known root (and the resource-path-inserted alias). It tells MCP clients which authorization server protects the resource, which scopes it supports, and which `resource` identifier their access tokens must be bound to.
 
-The `resource` defaults to the server's base URL. Set it explicitly when your resource server has a distinct identifier:
+Set `resource` to the protected resource identifier MCP clients request and access tokens carry as `aud`:
 
 ```ts title="auth.ts"
 mcp({
@@ -142,11 +143,11 @@ export { handler as GET, handler as POST, handler as DELETE };
 
 The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip.
 
-By default `requireMcpAuth` reads the server's resolved base URL from the auth context and uses it as both the expected token issuer and audience, with the JWKS at that base URL. This matches what the provider issues, so no configuration is needed for the common case. Override any value when the resource differs or `jwt.issuer` is custom:
+By default `requireMcpAuth` reads the server's resolved base URL from the auth context and uses it as both the expected token issuer and protected resource identifier, with the JWKS at that base URL. This matches what the provider issues, so no configuration is needed for the common case. Override any value when the resource differs or `jwt.issuer` is custom:
 
 ```ts
 requireMcpAuth(auth, handler, {
-    resource: "https://api.example.com/mcp", // token audience
+    resource: "https://api.example.com/mcp", // protected resource identifier
     issuer: "https://auth.example.com", // override when jwt.issuer is custom
     jwksUrl: "https://auth.example.com/api/auth/jwks",
     scope: "openid profile" // advertised in the 401 challenge
@@ -169,9 +170,9 @@ export const mcpPluginOptionsType = {
     required: true,
   },
   resource: {
-    description: "The protected resource identifier (RFC 8707 / RFC 9728) that access tokens are bound to. Advertised in the protected resource metadata and used as the token audience.",
+    description: "The protected resource identifier (RFC 8707 / RFC 9728) that access tokens are bound to. Advertised in the protected resource metadata and used as the expected token audience.",
     type: "string",
-    required: false,
+    required: true,
   },
 }
 
@@ -185,9 +186,9 @@ export const mcpOauthOptionsType = {
     type: "string[]",
     default: '["openid", "profile", "email", "offline_access"]',
   },
-  validAudiences: {
-    description: "Additional valid audiences when the resource server has more than one identifier.",
-    type: "string[]",
+  resources: {
+    description: "Protected resources the authorization server can issue access tokens for.",
+    type: "Array<string | OAuthResourceInput>",
   },
   accessTokenExpiresIn: {
     description: "Lifetime of access tokens in seconds.",
