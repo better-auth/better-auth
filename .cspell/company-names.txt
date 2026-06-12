@@ -28,3 +28,4 @@ razorpay
 payu
 PayU
 Mikro
+anthropics

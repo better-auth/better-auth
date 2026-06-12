@@ -363,6 +363,18 @@ describe("open-api", async () => {
 		expect(schemas["User"]!.required).not.toContain("preferences");
 	});
 
+	it("should omit runtime-generated defaults from model schemas", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.createdAt.default).toBeUndefined();
+		expect(schemas["User"]!.properties.updatedAt.default).toBeUndefined();
+		expect(schemas["Session"]!.properties.createdAt.default).toBeUndefined();
+	});
+
 	it("should properly handle nested objects in request body schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
@@ -458,6 +470,43 @@ describe("open-api", async () => {
 
 		expect(paths["/get-session"].get.operationId).toBe("getSession");
 		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
+	});
+
+	it("should infer path parameters for routes with dynamic segments", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		expect(paths["/callback/{id}"].get.parameters).toContainEqual({
+			name: "id",
+			in: "path",
+			required: true,
+			schema: {
+				type: "string",
+			},
+		});
+		expect(paths["/callback/{id}"].post.parameters).toContainEqual({
+			name: "id",
+			in: "path",
+			required: true,
+			schema: {
+				type: "string",
+			},
+		});
+	});
+
+	it("should not share operation parameter or response objects across methods", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		expect(paths["/get-session"].get.parameters).not.toBe(
+			paths["/get-session"].post.parameters,
+		);
+		expect(paths["/get-session"].get.responses["200"]).not.toBe(
+			paths["/get-session"].post.responses["200"],
+		);
+		expect(paths["/callback/{id}"].get.parameters).not.toBe(
+			paths["/callback/{id}"].post.parameters,
+		);
 	});
 
 	/**
