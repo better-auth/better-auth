@@ -260,6 +260,8 @@ function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
 		zodType instanceof z.ZodDefault ||
 		zodType instanceof z.ZodPrefault ||
 		zodType instanceof z.ZodCatch ||
+		zodType instanceof z.ZodAny ||
+		zodType instanceof z.ZodUnknown ||
 		zodType instanceof z.ZodUndefined ||
 		zodType instanceof z.ZodVoid
 	) {
@@ -421,7 +423,7 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	) {
 		return toOpenApiSchema(unwrapZodSchema(zodType));
 	}
-	if (zodType instanceof z.ZodAny) {
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
 		return withDescription({}, zodType);
 	}
 	if (zodType instanceof z.ZodObject) {
