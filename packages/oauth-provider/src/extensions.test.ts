@@ -1,5 +1,6 @@
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
+import { CLIENT_ASSERTION_TYPE } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin, User } from "better-auth/types";
@@ -185,7 +186,6 @@ describe("oauth-provider extensions", async () => {
 		const adminClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
-				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
@@ -196,11 +196,12 @@ describe("oauth-provider extensions", async () => {
 		expect(adminClient?.client_secret).toBeUndefined();
 		expect(adminClient?.token_endpoint_auth_method).toBe(extensionAuthMethod);
 		expect(adminClient?.grant_types).toEqual([extensionGrant]);
+		expect(adminClient?.redirect_uris).toEqual([]);
+		expect(adminClient?.response_types).toBeUndefined();
 
 		const registeredClient = await auth.api.registerOAuthClient({
 			headers,
 			body: {
-				redirect_uris: [`${redirectUri}/dcr`],
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
@@ -212,6 +213,33 @@ describe("oauth-provider extensions", async () => {
 		expect(registeredClient?.token_endpoint_auth_method).toBe(
 			extensionAuthMethod,
 		);
+		expect(registeredClient?.redirect_uris).toEqual([]);
+		expect(registeredClient?.response_types).toBeUndefined();
+	});
+
+	it("rejects code response type without authorization code grant", async () => {
+		let error: unknown;
+		try {
+			await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: extensionAuthMethod,
+					grant_types: [extensionGrant],
+					response_types: ["code"],
+					scope: "openid email vc",
+					type: "web",
+				},
+			});
+		} catch (e) {
+			error = e;
+		}
+		expect((error as { statusCode?: number } | undefined)?.statusCode).toBe(
+			400,
+		);
+		expect(
+			(error as { body?: { error_description?: string } } | undefined)?.body
+				?.error_description,
+		).toContain("authorization_code");
 	});
 
 	it("dispatches extension grants through shared token issuance", async () => {
@@ -330,27 +358,114 @@ describe("oauth-provider extensions", async () => {
 				});
 			},
 		} satisfies BetterAuthPlugin;
-		const { auth: invalidAuth } = await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						issuer: authServerBaseUrl,
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					invalidExtensionPlugin,
+				],
+			}),
+		).rejects.toThrow("grant type must be an absolute URI");
+	});
+
+	it("rejects extension auth method keys reserved by built-in client authentication", async () => {
+		const invalidExtensionPlugin = {
+			id: "invalid-oauth-auth-method-extension",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					clientAuthentication: {
+						private_key_jwt: {
+							assertionTypes: [extensionAssertionType],
+							authenticate: async () => {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_request",
+									error_description: "unreachable test authentication",
+								});
+							},
+						},
 					},
-				}),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					invalidExtensionPlugin,
+				],
+			}),
+		).rejects.toThrow(
+			"token_endpoint_auth_method is reserved: private_key_jwt",
+		);
+	});
+
+	it("rejects extension assertion types reserved by private_key_jwt", async () => {
+		const invalidExtensionPlugin = {
+			id: "invalid-oauth-assertion-type-extension",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					clientAuthentication: {
+						[extensionAuthMethod]: {
+							assertionTypes: [CLIENT_ASSERTION_TYPE],
+							authenticate: async () => {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_request",
+									error_description: "unreachable test authentication",
+								});
+							},
+						},
 					},
-				}),
-				invalidExtensionPlugin,
-			],
-		});
-		await expect(invalidAuth.api.getOpenIdConfig()).rejects.toThrow(
-			"absolute URI",
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					invalidExtensionPlugin,
+				],
+			}),
+		).rejects.toThrow(
+			`client_assertion_type is reserved: ${CLIENT_ASSERTION_TYPE}`,
 		);
 	});
 });

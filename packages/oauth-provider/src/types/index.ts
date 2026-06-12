@@ -217,7 +217,9 @@ export interface OAuthClientAuthenticationStrategy<
 > {
 	/**
 	 * Assertion type URIs this strategy consumes from `client_assertion_type`.
-	 * Defaults to the strategy key in `OAuthProviderExtension.clientAuthentication`.
+	 * Values must be absolute URIs per RFC 7521. When omitted, the strategy key
+	 * in `OAuthProviderExtension.clientAuthentication` is used and must also be
+	 * an absolute URI.
 	 */
 	assertionTypes?: string[];
 	authenticate: (

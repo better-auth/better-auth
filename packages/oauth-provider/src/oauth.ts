@@ -1394,7 +1394,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
+						redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),
@@ -1408,12 +1408,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						backchannel_logout_uri: SafeUrlSchema.optional(),
 						backchannel_logout_session_required: z.boolean().optional(),
-						token_endpoint_auth_method: z
-							.string()
-							.trim()
-							.min(1)
-							.default("client_secret_basic")
-							.optional(),
+						token_endpoint_auth_method: z.string().trim().min(1).optional(),
 						jwks: z
 							.union([
 								z.array(z.record(z.string(), z.unknown())).min(1),
@@ -1423,14 +1418,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							])
 							.optional(),
 						jwks_uri: z.string().optional(),
-						grant_types: z
-							.array(z.string().trim().min(1))
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code"]))
-							.default(["code"])
-							.optional(),
+						grant_types: z.array(z.string().trim().min(1)).optional(),
+						response_types: z.array(z.enum(["code"])).optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),
 						// RFC 7591 §2 extension: declare the resources this client
@@ -1563,25 +1552,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "string",
 														description:
 															"Requested authentication method for the token endpoint",
-														enum: [
-															"none",
-															"client_secret_basic",
-															"client_secret_post",
-															"private_key_jwt",
-														],
 													},
 													grant_types: {
 														type: "array",
 														items: {
 															type: "string",
-															enum: [
-																"authorization_code",
-																"client_credentials",
-																"refresh_token",
-															],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Grant types the client may use at the token endpoint",
 													},
 													response_types: {
 														type: "array",
@@ -1590,7 +1568,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															enum: ["code"],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Response types the client may use at the authorization endpoint",
 													},
 													public: {
 														type: "boolean",

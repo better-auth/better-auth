@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
 import type { oauthProvider } from "./oauth";
 import type {
 	OAuthClaimContributionInput,
@@ -26,17 +27,32 @@ const DEFAULT_GRANT_TYPES = [
 	"refresh_token",
 ] as const satisfies BuiltInGrantType[];
 
-const CONFIDENTIAL_AUTH_METHODS = [
+const BUILT_IN_CONFIDENTIAL_AUTH_METHODS = [
 	"client_secret_basic",
 	"client_secret_post",
 	"private_key_jwt",
 ] as const satisfies AuthMethod[];
 
+const RESERVED_TOKEN_ENDPOINT_AUTH_METHODS = [
+	"none",
+	...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
+] as const satisfies TokenEndpointAuthMethod[];
+
+const RESERVED_TOKEN_ENDPOINT_AUTH_METHOD_SET = new Set<string>(
+	RESERVED_TOKEN_ENDPOINT_AUTH_METHODS,
+);
+
 function appendUnique<T extends string>(values: T[]): T[] {
 	return Array.from(new Set(values));
 }
 
-function assertAbsoluteUri(value: string) {
+function assertNonEmptyExtensionValue(name: string, value: string) {
+	if (value.trim().length > 0) return;
+	throw new BetterAuthError(`OAuth Provider extension ${name} cannot be empty`);
+}
+
+function assertAbsoluteUri(name: string, value: string) {
+	assertNonEmptyExtensionValue(name, value);
 	let url: URL | undefined;
 	try {
 		url = new URL(value);
@@ -45,14 +61,54 @@ function assertAbsoluteUri(value: string) {
 	}
 	if (url?.protocol) return;
 	throw new BetterAuthError(
-		`OAuth Provider extension grant type must be an absolute URI: ${value}`,
+		`OAuth Provider extension ${name} must be an absolute URI: ${value}`,
 	);
+}
+
+function assertExtensionGrantType(grantType: string) {
+	assertAbsoluteUri("grant type", grantType);
+}
+
+function assertExtensionTokenEndpointAuthMethod(method: string) {
+	assertNonEmptyExtensionValue("token_endpoint_auth_method", method);
+	if (!RESERVED_TOKEN_ENDPOINT_AUTH_METHOD_SET.has(method)) return;
+	throw new BetterAuthError(
+		`OAuth Provider extension token_endpoint_auth_method is reserved: ${method}`,
+	);
+}
+
+function assertExtensionClientAssertionType(assertionType: string) {
+	assertAbsoluteUri("client_assertion_type", assertionType);
+	if (assertionType !== CLIENT_ASSERTION_TYPE) return;
+	throw new BetterAuthError(
+		`OAuth Provider extension client_assertion_type is reserved: ${assertionType}`,
+	);
+}
+
+function validateOAuthProviderExtension(
+	extension: OAuthProviderExtension<Scope[]>,
+) {
+	for (const grantType of Object.keys(extension.grants ?? {})) {
+		assertExtensionGrantType(grantType);
+	}
+	for (const [method, strategy] of Object.entries(
+		extension.clientAuthentication ?? {},
+	)) {
+		assertExtensionTokenEndpointAuthMethod(method);
+		for (const assertionType of strategy.assertionTypes ?? [method]) {
+			assertExtensionClientAssertionType(assertionType);
+		}
+	}
 }
 
 function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
 ): OAuthProviderExtension<Scope[]>[] {
-	return opts.extensions ?? [];
+	const extensions = opts.extensions ?? [];
+	for (const extension of extensions) {
+		validateOAuthProviderExtension(extension);
+	}
+	return extensions;
 }
 
 export function extendOAuthProvider(
@@ -67,6 +123,7 @@ export function extendOAuthProvider(
 			"extendOAuthProvider requires the oauth-provider plugin.",
 		);
 	}
+	validateOAuthProviderExtension(extension);
 	provider.options.extensions = [
 		...(provider.options.extensions ?? []),
 		extension,
@@ -76,9 +133,6 @@ export function extendOAuthProvider(
 function getExtensionGrantTypes(opts: OAuthOptions<Scope[]>): GrantType[] {
 	return getOAuthProviderExtensions(opts).flatMap((extension) => {
 		const grantTypes = Object.keys(extension.grants ?? {});
-		for (const grantType of grantTypes) {
-			assertAbsoluteUri(grantType);
-		}
 		return grantTypes;
 	});
 }
@@ -117,7 +171,7 @@ export function getSupportedTokenEndpointAuthMethods(
 ): TokenEndpointAuthMethod[] {
 	return appendUnique([
 		...(settings?.includeNone ? (["none"] as TokenEndpointAuthMethod[]) : []),
-		...CONFIDENTIAL_AUTH_METHODS,
+		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
 		...getExtensionTokenEndpointAuthMethods(opts),
 	]);
 }
@@ -126,7 +180,7 @@ export function getSupportedEndpointAuthMethods(
 	opts: OAuthOptions<Scope[]>,
 ): AuthMethod[] {
 	return appendUnique([
-		...CONFIDENTIAL_AUTH_METHODS,
+		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
 		...getExtensionTokenEndpointAuthMethods(opts),
 	]);
 }
@@ -149,7 +203,9 @@ export function getExtensionClientAuthenticationStrategy(
 			strategy: OAuthClientAuthenticationStrategy<Scope[]>;
 	  }
 	| undefined {
-	for (const extension of getOAuthProviderExtensions(opts)) {
+	const extensions = getOAuthProviderExtensions(opts);
+	if (assertionType === CLIENT_ASSERTION_TYPE) return undefined;
+	for (const extension of extensions) {
 		const strategies = extension.clientAuthentication ?? {};
 		for (const [method, strategy] of Object.entries(strategies)) {
 			const assertionTypes = strategy.assertionTypes ?? [method];

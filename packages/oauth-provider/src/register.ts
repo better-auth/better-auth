@@ -12,7 +12,11 @@ import {
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { buildClientResourceLinkId, getResource } from "./resources";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
-import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
+import type {
+	GrantType,
+	OAuthClient,
+	TokenEndpointAuthMethod,
+} from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 
@@ -34,6 +38,35 @@ function resolveUnauthenticatedAuth(body: OAuthClient): {
 	return {
 		tokenEndpointAuthMethod: "none",
 		type: body.type === "web" ? undefined : body.type,
+	};
+}
+
+const DEFAULT_REGISTRATION_GRANT_TYPES = [
+	"authorization_code",
+] as const satisfies GrantType[];
+
+function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
+	return client.grant_types ?? [...DEFAULT_REGISTRATION_GRANT_TYPES];
+}
+
+function resolveRegistrationResponseTypes(
+	client: OAuthClient,
+	grantTypes: GrantType[],
+): OAuthClient["response_types"] {
+	if (client.response_types) return client.response_types;
+	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
+}
+
+function applyOAuthClientRegistrationDefaults(
+	client: OAuthClient,
+): OAuthClient {
+	const grantTypes = resolveRegistrationGrantTypes(client);
+	return {
+		...client,
+		token_endpoint_auth_method:
+			client.token_endpoint_auth_method ?? "client_secret_basic",
+		grant_types: grantTypes,
+		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
 }
 
@@ -160,11 +193,12 @@ export async function checkOAuthClient(
 		ctx?: GenericEndpointContext;
 	},
 ) {
+	const clientWithDefaults = applyOAuthClientRegistrationDefaults(client);
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
-	const isPublic = client.token_endpoint_auth_method === "none";
+	const isPublic = clientWithDefaults.token_endpoint_auth_method === "none";
 	const tokenEndpointAuthMethod =
-		client.token_endpoint_auth_method ?? "client_secret_basic";
+		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
 	const supportedTokenEndpointAuthMethods = new Set(
 		getSupportedTokenEndpointAuthMethods(opts, { includeNone: true }),
 	);
@@ -176,16 +210,19 @@ export async function checkOAuthClient(
 	}
 
 	// Check value of type, if sent, matches isPublic
-	if (client.type) {
+	if (clientWithDefaults.type) {
 		if (
 			isPublic &&
-			!(client.type === "native" || client.type === "user-agent-based")
+			!(
+				clientWithDefaults.type === "native" ||
+				clientWithDefaults.type === "user-agent-based"
+			)
 		) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `Type must be 'native' or 'user-agent-based' for public applications`,
 			});
-		} else if (!isPublic && !(client.type === "web")) {
+		} else if (!isPublic && !(clientWithDefaults.type === "web")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `Type must be 'web' for confidential applications`,
@@ -193,11 +230,14 @@ export async function checkOAuthClient(
 		}
 	}
 
+	const grantTypes = clientWithDefaults.grant_types ?? [];
+	const responseTypes = clientWithDefaults.response_types;
+
 	// Validate redirect URIs for redirect-based flows
 	if (
-		(!client.grant_types ||
-			client.grant_types.includes("authorization_code")) &&
-		(!client.redirect_uris || client.redirect_uris.length === 0)
+		grantTypes.includes("authorization_code") &&
+		(!clientWithDefaults.redirect_uris ||
+			clientWithDefaults.redirect_uris.length === 0)
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_redirect_uri",
@@ -207,7 +247,6 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const grantTypes = client.grant_types ?? ["authorization_code"];
 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	for (const grantType of grantTypes) {
 		if (!supportedGrantTypes.has(grantType)) {
@@ -217,10 +256,9 @@ export async function checkOAuthClient(
 			});
 		}
 	}
-	const responseTypes = client.response_types ?? ["code"];
 	if (
 		grantTypes.includes("authorization_code") &&
-		!responseTypes.includes("code")
+		!responseTypes?.includes("code")
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
@@ -228,19 +266,32 @@ export async function checkOAuthClient(
 				"When 'authorization_code' grant type is used, 'code' response type must be included",
 		});
 	}
+	if (
+		!grantTypes.includes("authorization_code") &&
+		responseTypes?.includes("code")
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"When 'code' response type is used, 'authorization_code' grant type must be included",
+		});
+	}
 
 	// Validate subject_type
-	if (client.subject_type !== undefined) {
+	if (clientWithDefaults.subject_type !== undefined) {
 		if (
-			client.subject_type !== "public" &&
-			client.subject_type !== "pairwise"
+			clientWithDefaults.subject_type !== "public" &&
+			clientWithDefaults.subject_type !== "pairwise"
 		) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `subject_type must be "public" or "pairwise"`,
 			});
 		}
-		if (client.subject_type === "pairwise" && !opts.pairwiseSecret) {
+		if (
+			clientWithDefaults.subject_type === "pairwise" &&
+			!opts.pairwiseSecret
+		) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -251,12 +302,14 @@ export async function checkOAuthClient(
 		// a sector_identifier_uri is required (not yet supported). Reject registration
 		// until sector_identifier_uri support is added.
 		if (
-			client.subject_type === "pairwise" &&
-			client.redirect_uris &&
-			client.redirect_uris.length > 1
+			clientWithDefaults.subject_type === "pairwise" &&
+			clientWithDefaults.redirect_uris &&
+			clientWithDefaults.redirect_uris.length > 1
 		) {
 			const hosts = new Set(
-				client.redirect_uris.map((uri: string) => new URL(uri).host),
+				clientWithDefaults.redirect_uris.map(
+					(uri: string) => new URL(uri).host,
+				),
 			);
 			if (hosts.size > 1) {
 				throw new APIError("BAD_REQUEST", {
@@ -269,7 +322,7 @@ export async function checkOAuthClient(
 	}
 
 	// Check requested application scopes
-	const requestedScopes = (client?.scope as string | undefined)
+	const requestedScopes = (clientWithDefaults?.scope as string | undefined)
 		?.split(" ")
 		.filter((v) => v.length);
 	const allowedScopes = settings?.isRegister
@@ -287,7 +340,7 @@ export async function checkOAuthClient(
 		}
 	}
 
-	if (settings?.isRegister && client.require_pkce === false) {
+	if (settings?.isRegister && clientWithDefaults.require_pkce === false) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
 			error_description: `pkce is required for registered clients.`,
@@ -295,22 +348,22 @@ export async function checkOAuthClient(
 	}
 
 	// Validate private_key_jwt requirements
-	if (client.token_endpoint_auth_method === "private_key_jwt") {
-		if (client.jwks && client.jwks_uri) {
+	if (tokenEndpointAuthMethod === "private_key_jwt") {
+		if (clientWithDefaults.jwks && clientWithDefaults.jwks_uri) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: "jwks and jwks_uri are mutually exclusive",
 			});
 		}
-		if (!client.jwks && !client.jwks_uri) {
+		if (!clientWithDefaults.jwks && !clientWithDefaults.jwks_uri) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: "private_key_jwt requires either jwks or jwks_uri",
 			});
 		}
-		if (client.jwks_uri) {
+		if (clientWithDefaults.jwks_uri) {
 			try {
-				const uri = new URL(client.jwks_uri);
+				const uri = new URL(clientWithDefaults.jwks_uri);
 				if (uri.protocol !== "https:") {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_client_metadata",
@@ -338,11 +391,11 @@ export async function checkOAuthClient(
 				});
 			}
 		}
-		if (client.jwks) {
+		if (clientWithDefaults.jwks) {
 			// Accept both RFC 7517 JWKS object {"keys":[...]} and bare key array
-			const keys = Array.isArray(client.jwks)
-				? client.jwks
-				: (client.jwks as { keys?: unknown[] }).keys;
+			const keys = Array.isArray(clientWithDefaults.jwks)
+				? clientWithDefaults.jwks
+				: (clientWithDefaults.jwks as { keys?: unknown[] }).keys;
 			if (!Array.isArray(keys) || keys.length === 0) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_client_metadata",
@@ -353,7 +406,7 @@ export async function checkOAuthClient(
 		}
 	} else if (
 		!isExtensionTokenEndpointAuthMethod(opts, tokenEndpointAuthMethod) &&
-		(client.jwks || client.jwks_uri)
+		(clientWithDefaults.jwks || clientWithDefaults.jwks_uri)
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
@@ -362,7 +415,7 @@ export async function checkOAuthClient(
 		});
 	}
 
-	if (client.backchannel_logout_uri !== undefined) {
+	if (clientWithDefaults.backchannel_logout_uri !== undefined) {
 		if (opts.disableJwtPlugin) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
@@ -372,7 +425,7 @@ export async function checkOAuthClient(
 		}
 		let url: URL;
 		try {
-			url = new URL(client.backchannel_logout_uri);
+			url = new URL(clientWithDefaults.backchannel_logout_uri);
 		} catch {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
@@ -391,7 +444,7 @@ export async function checkOAuthClient(
 		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
 		// component." Check the raw value rather than `url.hash`, which is empty
 		// for a bare trailing `#` and would let that fragment delimiter through.
-		if (client.backchannel_logout_uri.includes("#")) {
+		if (clientWithDefaults.backchannel_logout_uri.includes("#")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -438,7 +491,7 @@ export async function createOAuthClientEndpoint(
 		resources?: string[] | undefined;
 	},
 ) {
-	const body = ctx.body as OAuthClient;
+	const body = applyOAuthClientRegistrationDefaults(ctx.body as OAuthClient);
 	const session = await getSessionFromCtx(ctx);
 
 	// Single authorization chokepoint for OAuth client creation. Every creation
@@ -466,7 +519,7 @@ export async function createOAuthClientEndpoint(
 	);
 
 	// Check if client parameters are valid combination
-	await checkOAuthClient(ctx.body, opts, {
+	await checkOAuthClient(body, opts, {
 		...settings,
 		ctx,
 	});
@@ -491,7 +544,8 @@ export async function createOAuthClientEndpoint(
 			})
 		: undefined;
 	const schema = oauthToSchema({
-		...((body ?? {}) as OAuthClient),
+		...body,
+		redirect_uris: body.redirect_uris ?? [],
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
 		// Required if client secret is issued
