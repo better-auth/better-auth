@@ -9,14 +9,24 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
-import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
-import type {
-	InsertQueryBuilder,
-	Kysely,
-	RawBuilder,
-	UpdateQueryBuilder,
-} from "kysely";
+import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
 import { sql } from "kysely";
+import {
+	jsonArrayFrom as jsonArrayFromMssql,
+	jsonObjectFrom as jsonObjectFromMssql,
+} from "kysely/helpers/mssql";
+import {
+	jsonArrayFrom as jsonArrayFromMysql,
+	jsonObjectFrom as jsonObjectFromMysql,
+} from "kysely/helpers/mysql";
+import {
+	jsonArrayFrom as jsonArrayFromPostgres,
+	jsonObjectFrom as jsonObjectFromPostgres,
+} from "kysely/helpers/postgres";
+import {
+	jsonArrayFrom as jsonArrayFromSqlite,
+	jsonObjectFrom as jsonObjectFromSqlite,
+} from "kysely/helpers/sqlite";
 import {
 	insensitiveEq,
 	insensitiveIlike,
@@ -53,12 +63,49 @@ interface KyselyAdapterConfig {
 	transaction?: boolean | undefined;
 }
 
+/**
+ * Selects the dialect's JSON aggregation helpers. SQLite helpers are the default
+ * for an unset type, matching the rest of the adapter's capability flags.
+ */
+function getJsonHelpers(type: KyselyDatabaseType | undefined) {
+	switch (type) {
+		case "postgres":
+			return {
+				array: jsonArrayFromPostgres,
+				object: jsonObjectFromPostgres,
+			};
+		case "mysql":
+			return {
+				array: jsonArrayFromMysql,
+				object: jsonObjectFromMysql,
+			};
+		case "mssql":
+			return {
+				array: jsonArrayFromMssql,
+				object: jsonObjectFromMssql,
+			};
+		case "sqlite":
+			return {
+				array: jsonArrayFromSqlite,
+				object: jsonObjectFromSqlite,
+			};
+		default:
+			// `type` is unset. Fall back to SQLite's JSON syntax. The join path
+			// warns so a non-SQLite database gets a real type configured.
+			return {
+				array: jsonArrayFromSqlite,
+				object: jsonObjectFromSqlite,
+			};
+	}
+}
+
 export const kyselyAdapter = (
 	db: Kysely<any>,
 	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	let joinTypeWarned = false;
 	const createCustomAdapter = (
 		db: Kysely<any>,
 		inTransaction = false,
@@ -85,36 +132,70 @@ export const kyselyAdapter = (
 						'For reliable behavior, use Better Auth\'s default ID generation, a custom generateId function, or generateId: "serial" for auto-increment.',
 				);
 			}
-			const selectAllJoins = (join: JoinConfig | undefined) => {
-				// Use selectAll which will handle column naming appropriately
-				const allSelects: RawBuilder<unknown>[] = [];
-				const allSelectsStr: {
-					joinModel: string;
-					joinModelRef: string;
-					fieldName: string;
-				}[] = [];
-				if (join) {
-					for (const [joinModel, _] of Object.entries(join)) {
-						const fields = schema[getDefaultModelName(joinModel)]?.fields;
-						const [_joinModelSchema, joinModelName] = joinModel.includes(".")
-							? joinModel.split(".")
-							: [undefined, joinModel];
+			const { array: jsonArrayFrom, object: jsonObjectFrom } = getJsonHelpers(
+				config?.type,
+			);
 
-						if (!fields) continue;
-						fields.id = { type: "string" }; // make sure there is at least an id field
+			// Builds one JSON-aggregating correlated subquery per joined model. Each
+			// returns its rows pre-nested under the model's name, so there is no
+			// flat-join row multiplication to regroup afterwards.
+			const joinSelections = (eb: any, join: JoinConfig) => {
+				if (config?.type === undefined && !joinTypeWarned) {
+					joinTypeWarned = true;
+					logger.warn(
+						"[Kysely Adapter] No database type is configured, so joins fall back to SQLite JSON functions. " +
+							'Set the adapter type to "postgres", "mysql", or "mssql" so the correct JSON syntax is emitted.',
+					);
+				}
+				return Object.entries(join).map(([joinModel, joinAttr]) => {
+					const [, joinModelName] = joinModel.includes(".")
+						? joinModel.split(".")
+						: [undefined, joinModel];
+					const alias = `join_${joinModelName}`;
+					const idColumn = getFieldName({ model: joinModel, field: "id" });
+
+					const columns = new Set<string>([idColumn]);
+					const fields = schema[getDefaultModelName(joinModel)]?.fields;
+					if (fields) {
 						for (const [field, fieldAttr] of Object.entries(fields)) {
-							allSelects.push(
-								sql`${sql.ref(`join_${joinModelName}`)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModelName}_${fieldAttr.fieldName || field}`)}`,
-							);
-							allSelectsStr.push({
-								joinModel: joinModel,
-								joinModelRef: joinModelName,
-								fieldName: fieldAttr.fieldName || field,
-							});
+							columns.add(fieldAttr.fieldName || field);
+						}
+					}
+
+					const inner = eb
+						.selectFrom(`${joinModel} as ${alias}`)
+						.select([...columns].map((column) => `${alias}.${column}`))
+						.whereRef(
+							`${alias}.${joinAttr.on.to}`,
+							"=",
+							`primary.${joinAttr.on.from}`,
+						);
+
+					if (joinAttr.relation === "one-to-one") {
+						return jsonObjectFrom(inner).as(getModelName(joinModel));
+					}
+
+					return jsonArrayFrom(
+						inner.orderBy(`${alias}.${idColumn}`).limit(joinAttr.limit ?? 100),
+					).as(getModelName(joinModel));
+				});
+			};
+
+			// JSON aggregates come back as objects on some drivers and as JSON
+			// strings on others such as SQLite. Parse the strings so the factory's
+			// output transform receives nested objects.
+			const parseJoinedRows = (rows: any[], join: JoinConfig) => {
+				const joinKeys = Object.keys(join).map((joinModel) =>
+					getModelName(joinModel),
+				);
+				for (const row of rows) {
+					for (const key of joinKeys) {
+						if (typeof row[key] === "string") {
+							row[key] = JSON.parse(row[key]);
 						}
 					}
 				}
-				return { allSelectsStr, allSelects };
+				return rows;
 			};
 
 			const withReturning = async (
@@ -354,155 +435,6 @@ export const kyselyAdapter = (
 				};
 			}
 
-			function processJoinedResults(
-				rows: any[],
-				joinConfig: JoinConfig | undefined,
-				allSelectsStr: {
-					joinModel: string;
-					joinModelRef: string;
-					fieldName: string;
-				}[],
-			) {
-				if (!joinConfig || !rows.length) {
-					return rows;
-				}
-
-				// Group rows by main model ID
-				const groupedByMainId = new Map<string, any>();
-
-				for (const currentRow of rows) {
-					// Separate main model columns from joined columns
-					const mainModelFields: Record<string, any> = {};
-					const joinedModelFields: Record<string, Record<string, any>> = {};
-
-					// Initialize joined model fields map
-					for (const [joinModel] of Object.entries(joinConfig)) {
-						joinedModelFields[getModelName(joinModel)] = {};
-					}
-
-					// Distribute all columns - collect complete objects per model
-					for (const [key, value] of Object.entries(currentRow)) {
-						const keyStr = String(key);
-						let assigned = false;
-
-						// Check if this is a joined column
-						for (const {
-							joinModel,
-							fieldName,
-							joinModelRef,
-						} of allSelectsStr) {
-							if (
-								keyStr === `_joined_${joinModelRef}_${fieldName}` ||
-								// Edge case to catch capitalized results that derive from snake_case table names
-								// If anyone can identify the cause behind this, please note it here.
-								keyStr ===
-									`_Joined${capitalizeFirstLetter(joinModelRef)}${capitalizeFirstLetter(fieldName)}`
-							) {
-								joinedModelFields[getModelName(joinModel)]![
-									getFieldName({
-										model: joinModel,
-										field: fieldName,
-									})
-								] = value;
-								assigned = true;
-								break;
-							}
-						}
-
-						if (!assigned) {
-							mainModelFields[key] = value;
-						}
-					}
-
-					const mainId = mainModelFields.id;
-					if (!mainId) continue;
-
-					// Initialize or get existing entry for this main model
-					if (!groupedByMainId.has(mainId)) {
-						const entry: Record<string, any> = { ...mainModelFields };
-
-						// Initialize joined models based on uniqueness
-						for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-							entry[getModelName(joinModel)] =
-								joinAttr.relation === "one-to-one" ? null : [];
-						}
-
-						groupedByMainId.set(mainId, entry);
-					}
-
-					const entry = groupedByMainId.get(mainId)!;
-
-					// Add joined records to the entry
-					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-						const isUnique = joinAttr.relation === "one-to-one";
-						const limit = joinAttr.limit ?? 100;
-
-						const joinedObj = joinedModelFields[getModelName(joinModel)];
-
-						const hasData =
-							joinedObj &&
-							Object.keys(joinedObj).length > 0 &&
-							Object.values(joinedObj).some(
-								(value) => value !== null && value !== undefined,
-							);
-
-						if (isUnique) {
-							entry[getModelName(joinModel)] = hasData ? joinedObj : null;
-						} else {
-							// For arrays, append if not already there (deduplicate by id) and respect limit
-							const joinModelName = getModelName(joinModel);
-							if (Array.isArray(entry[joinModelName]) && hasData) {
-								// Check if we've reached the limit before processing
-								if (entry[joinModelName].length >= limit) {
-									continue;
-								}
-
-								// Get the id field name using getFieldName to ensure correct transformation
-								const idFieldName = getFieldName({
-									model: joinModel,
-									field: "id",
-								});
-								const joinedId = joinedObj[idFieldName];
-
-								// Only deduplicate if we have an id field
-								if (joinedId) {
-									const exists = entry[joinModelName].some(
-										(item: any) => item[idFieldName] === joinedId,
-									);
-									if (!exists && entry[joinModelName].length < limit) {
-										entry[joinModelName].push(joinedObj);
-									}
-								} else {
-									// If no id field, still add the object if it has data and limit not reached
-									if (entry[joinModelName].length < limit) {
-										entry[joinModelName].push(joinedObj);
-									}
-								}
-							}
-						}
-					}
-				}
-
-				const result = Array.from(groupedByMainId.values());
-
-				// Apply final limit to non-unique join arrays as a safety measure
-				for (const entry of result) {
-					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-						if (joinAttr.relation !== "one-to-one") {
-							const joinModelName = getModelName(joinModel);
-							if (Array.isArray(entry[joinModelName])) {
-								const limit = joinAttr.limit ?? 100;
-								if (entry[joinModelName].length > limit) {
-									entry[joinModelName] = entry[joinModelName].slice(0, limit);
-								}
-							}
-						}
-					}
-				}
-
-				return result;
-			}
-
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
@@ -536,43 +468,14 @@ export const kyselyAdapter = (
 						.selectAll("primary");
 
 					if (join) {
-						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
-								? joinModel.split(".")
-								: [undefined, joinModel];
-
-							query = query.leftJoin(
-								`${joinModel} as join_${joinModelName}`,
-								(join: any) =>
-									join.onRef(
-										`join_${joinModelName}.${joinAttr.on.to}`,
-										"=",
-										`primary.${joinAttr.on.from}`,
-									),
-							);
-						}
+						query = query.select((eb: any) => joinSelections(eb, join));
 					}
-
-					const { allSelectsStr, allSelects } = selectAllJoins(join);
-					query = query.select(allSelects);
 
 					const res = await query.execute();
 					if (!res || !Array.isArray(res) || res.length === 0) return null;
 
-					// Get the first row from the result array
-					const row = res[0];
-
-					if (join) {
-						const processedRows = processJoinedResults(
-							res,
-							join,
-							allSelectsStr,
-						);
-
-						return processedRows[0] as any;
-					}
-
-					return row as any;
+					if (join) return parseJoinedRows(res, join)[0] as any;
+					return res[0] as any;
 				},
 				async findMany({ model, where, limit, select, offset, sortBy, join }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -630,27 +533,8 @@ export const kyselyAdapter = (
 						.selectAll("primary");
 
 					if (join) {
-						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							// it's possible users provide a schema name in the model name (`<schema>.<model>`)
-							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
-								? joinModel.split(".")
-								: [undefined, joinModel];
-
-							query = query.leftJoin(
-								`${joinModel} as join_${joinModelName}`,
-								(join: any) =>
-									join.onRef(
-										`join_${joinModelName}.${joinAttr.on.to}`,
-										"=",
-										`primary.${joinAttr.on.from}`,
-									),
-							);
-						}
+						query = query.select((eb: any) => joinSelections(eb, join));
 					}
-
-					const { allSelectsStr, allSelects } = selectAllJoins(join);
-
-					query = query.select(allSelects);
 
 					if (sortBy?.field) {
 						query = query.orderBy(
@@ -662,7 +546,7 @@ export const kyselyAdapter = (
 					const res = await query.execute();
 
 					if (!res) return [];
-					if (join) return processJoinedResults(res, join, allSelectsStr);
+					if (join) return parseJoinedRows(res, join);
 					return res;
 				},
 				async update({ model, where, update: values }) {
