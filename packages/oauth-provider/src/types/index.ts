@@ -714,6 +714,14 @@ export interface OAuthOptions<
 		 * @default false
 		 */
 		openidConfig?: boolean;
+		/**
+		 * Warning emitted when a `pairwise` client is issued a JWT access token,
+		 * whose raw `sub` does not preserve pairwise subject isolation. Silence
+		 * once pairwise clients are configured to receive opaque access tokens.
+		 *
+		 * @default false
+		 */
+		pairwiseJwtAccessToken?: boolean;
 	};
 	/**
 	 * By default, access and id tokens can be issued and verified
@@ -784,6 +792,31 @@ export interface OAuthOptions<
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
 	 */
 	pairwiseSecret?: string;
+	/**
+	 * Resolve the *base* subject identifier, defaulting to the `user.id`. Lets a
+	 * multi-tenant issuer return a per-(user, workspace) `sub` (pairwise hashing
+	 * still applies on top).
+	 *
+	 * Must be deterministic for a given `(userId, client, referenceId)` and must
+	 * return a stable, non-empty subject. It is invoked only for user-bound flows
+	 * (skipped for `client_credentials`), and it must not throw — a thrown error
+	 * fails the token, `/userinfo`, and `/introspect` request rather than falling
+	 * back to a different identity.
+	 *
+	 * @example
+	 * getSubject: ({ userId, referenceId }) => referenceId ?? userId
+	 */
+	getSubject?: (context: {
+		/** The Better Auth `user.id`. Also the access token's internal subject. */
+		userId: string;
+		/** The client the token is being issued for / introspected by. */
+		client: SchemaClient<Scopes>;
+		/**
+		 * The consent reference persisted with the grant/token, when present.
+		 * Produced by `postLogin.consentReferenceId`.
+		 */
+		referenceId?: string;
+	}) => Awaitable<string>;
 	/**
 	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
 	 *

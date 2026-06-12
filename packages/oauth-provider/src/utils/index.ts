@@ -807,8 +807,18 @@ async function computePairwiseSub(
 }
 
 /**
- * Returns the appropriate subject identifier for a user+client pair.
- * Uses pairwise when the client opts in and the server has a secret configured.
+ * Private, URI-namespaced claim embedding the resolved presentation subject on
+ * stateless JWT access tokens (the same value as the id token `sub`, so it
+ * discloses nothing new). Stripped before any response leaves the server.
+ *
+ * @internal
+ */
+export const resolvedSubjectClaim =
+	"https://better-auth.com/oauth/resolved-sub";
+
+/**
+ * Resolves the subject for a user+client pair: the `getSubject` hook (or raw
+ * `user.id`) as the base, with pairwise hashing applied on top when enabled.
  *
  * @internal
  */
@@ -816,11 +826,15 @@ export async function resolveSubjectIdentifier(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	opts: OAuthOptions<Scope[]>,
+	referenceId?: string,
 ): Promise<string> {
+	const base = opts.getSubject
+		? await opts.getSubject({ userId, client, referenceId })
+		: userId;
 	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
-		return computePairwiseSub(userId, client, opts.pairwiseSecret);
+		return computePairwiseSub(base, client, opts.pairwiseSecret);
 	}
-	return userId;
+	return base;
 }
 
 /**
