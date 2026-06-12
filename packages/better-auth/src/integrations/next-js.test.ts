@@ -160,4 +160,59 @@ describe("next-js integration", () => {
 
 		expect(session).not.toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9705
+	 */
+	it("should forward every set-cookie header to next cookies()", async () => {
+		const cookieSet = vi.fn();
+		vi.doMock("next/headers.js", () => ({
+			cookies: vi.fn(async () => ({
+				set: cookieSet,
+				delete: vi.fn(),
+				get: vi.fn(),
+			})),
+			headers: vi.fn(async () => new Headers()),
+		}));
+
+		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
+			import("../test-utils/test-instance"),
+			import("./next-js"),
+		]);
+
+		const { auth, testUser } = await getTestInstance({
+			plugins: [nextCookies()],
+			session: {
+				cookieCache: {
+					enabled: true,
+					maxAge: 600,
+				},
+			},
+		});
+		// drop the forwarding recorded for the test-user sign-up
+		cookieSet.mockClear();
+
+		const { headers } = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		// cookieCache makes sign-in emit two set-cookie headers on one response
+		const setCookieNames = headers
+			.getSetCookie()
+			.map((cookie) => cookie.split("=")[0]!);
+		expect(setCookieNames).toEqual([
+			"better-auth.session_token",
+			"better-auth.session_data",
+		]);
+
+		expect(cookieSet.mock.calls.map(([name]) => name)).toEqual(setCookieNames);
+		const sessionDataCall = cookieSet.mock.calls.find(
+			([name]) => name === "better-auth.session_data",
+		);
+		expect(sessionDataCall?.[2]).toMatchObject({ maxAge: 600 });
+	});
 });

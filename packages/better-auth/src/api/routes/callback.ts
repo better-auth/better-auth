@@ -98,7 +98,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!code) {
-			c.context.logger.error("Code not found");
+			c.context.logger.warn("Code not found");
 			redirectOnError(c, resolvedErrorURL, "no_code");
 		}
 
@@ -107,11 +107,9 @@ export const callbackOAuth = createAuthEndpoint(
 		});
 
 		if (!provider) {
-			c.context.logger.error(
-				"Oauth provider with id",
-				c.params.id,
-				"not found",
-			);
+			c.context.logger.warn("OAuth provider not found", {
+				providerId: c.params.id,
+			});
 			redirectOnError(c, resolvedErrorURL, "oauth_provider_not_found");
 		}
 

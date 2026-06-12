@@ -1686,3 +1686,190 @@ describe("accept-invitation validates team capacity before adding the member", a
 		expect(orgMembers.filter((m) => m.userId === userId)).toHaveLength(1);
 	});
 });
+
+describe("direct team-add paths enforce maximumMembersPerTeam", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+					maximumMembersPerTeam: 1,
+				},
+			}),
+		],
+		logger: { level: "error" },
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+	const owner = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		headers: owner.headers,
+		body: { name: "Direct Add Org", slug: "direct-add-org" },
+	});
+	if (!org) throw new Error("failed to create organization");
+
+	let userCounter = 0;
+	const createOrgMember = async () => {
+		const created = await auth.api.signUpEmail({
+			body: {
+				name: `Direct ${userCounter}`,
+				email: `direct-${userCounter++}@email.com`,
+				password: "password12345",
+			},
+		});
+		await auth.api.addMember({
+			headers: owner.headers,
+			body: { userId: created.user.id, role: "member", organizationId: org.id },
+		});
+		return created.user.id;
+	};
+
+	const countTeamMembers = async (teamId: string) =>
+		(
+			await ctx.adapter.findMany<{ userId: string }>({
+				model: "teamMember",
+				where: [{ field: "teamId", value: teamId }],
+			})
+		).length;
+
+	it("rejects add-team-member once the team is at capacity", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Full Direct Team", organizationId: org.id },
+		});
+		const firstUserId = await createOrgMember();
+		const secondUserId = await createOrgMember();
+
+		await auth.api.addTeamMember({
+			headers: owner.headers,
+			body: { teamId: team.id, userId: firstUserId },
+		});
+
+		await expect(
+			auth.api.addTeamMember({
+				headers: owner.headers,
+				body: { teamId: team.id, userId: secondUserId },
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
+		});
+
+		expect(await countTeamMembers(team.id)).toBe(1);
+	});
+
+	it("rejects addMember with a teamId over capacity without creating the org member", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Full AddMember Team", organizationId: org.id },
+		});
+		const seatedUserId = await createOrgMember();
+		await auth.api.addTeamMember({
+			headers: owner.headers,
+			body: { teamId: team.id, userId: seatedUserId },
+		});
+
+		const overflowUser = await auth.api.signUpEmail({
+			body: {
+				name: "Overflow",
+				email: "addmember-overflow@email.com",
+				password: "password12345",
+			},
+		});
+
+		await expect(
+			auth.api.addMember({
+				headers: owner.headers,
+				body: {
+					userId: overflowUser.user.id,
+					role: "member",
+					organizationId: org.id,
+					teamId: team.id,
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
+		});
+
+		expect(await countTeamMembers(team.id)).toBe(1);
+
+		// Capacity is charged before the organization member is created, so a
+		// rejected team-add never leaves an orphan org membership.
+		const orgMembers = await ctx.adapter.findMany<{ userId: string }>({
+			model: "member",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+		expect(orgMembers.some((m) => m.userId === overflowUser.user.id)).toBe(
+			false,
+		);
+	});
+});
+
+describe("addMember fails closed when a function team cap needs a session", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+					maximumMembersPerTeam: () => 1,
+				},
+			}),
+		],
+		logger: { level: "error" },
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
+	});
+
+	const owner = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		headers: owner.headers,
+		body: { name: "Fn Cap Org", slug: "fn-cap-org" },
+	});
+	if (!org) throw new Error("failed to create organization");
+
+	it("rejects a sessionless add that cannot evaluate the function limit", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Fn Cap Team", organizationId: org.id },
+		});
+		const target = await auth.api.signUpEmail({
+			body: {
+				name: "Target",
+				email: "fncap-target@email.com",
+				password: "password12345",
+			},
+		});
+
+		// No headers: the cap function has no session to evaluate, so the add must
+		// fail closed rather than silently skip the limit.
+		await expect(
+			auth.api.addMember({
+				body: {
+					userId: target.user.id,
+					role: "member",
+					organizationId: org.id,
+					teamId: team.id,
+				},
+			}),
+		).rejects.toThrow();
+	});
+});
