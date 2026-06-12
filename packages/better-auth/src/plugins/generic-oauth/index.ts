@@ -2,7 +2,6 @@ import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
-	OAuth2UserInfo,
 	OAuthIdTokenConfig,
 	UpstreamProvider,
 } from "@better-auth/core/oauth2";
@@ -17,13 +16,11 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
-import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
-
-type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
-	id?: string | number | null | undefined;
-	sub?: string | number | null | undefined;
-	[key: string]: unknown;
-};
+import type {
+	GenericOAuthConfig,
+	GenericOAuthOptions,
+	GenericOAuthUserInfo,
+} from "./types";
 
 function isNonEmptyOAuthId(
 	id: string | number | null | undefined,
@@ -32,7 +29,11 @@ function isNonEmptyOAuthId(
 }
 
 export * from "./providers";
-export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+export type {
+	GenericOAuthConfig,
+	GenericOAuthOptions,
+	GenericOAuthUserInfo,
+} from "./types";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -383,18 +384,14 @@ export const genericOAuth = <const ID extends string>(
 								return null;
 							}
 						}
-						const raw = (
-							c.getUserInfo
-								? await c.getUserInfo(tokens)
-								: await fetchUserInfo(tokens, userInfoUrl)
-						) as GenericOAuthUserInfo | null;
+						const raw = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await fetchUserInfo(tokens, userInfoUrl);
 						if (!raw) {
 							return null;
 						}
 						const mapped = c.mapProfileToUser
-							? await c.mapProfileToUser(
-									raw as OAuth2UserInfo & Record<string, unknown>,
-								)
+							? await c.mapProfileToUser(raw)
 							: {};
 						const rawId = isNonEmptyOAuthId(mapped.id)
 							? mapped.id
@@ -419,7 +416,7 @@ export const genericOAuth = <const ID extends string>(
 								...user,
 								image: user.image ?? undefined,
 							},
-							data: raw as Record<string, any>,
+							data: raw,
 						};
 					},
 					async refreshAccessToken(
