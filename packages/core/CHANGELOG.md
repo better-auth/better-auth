@@ -38,6 +38,12 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.18
+
+### Patch Changes
+
+- [#9583](https://github.com/better-auth/better-auth/pull/9583) [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix plugin-provided client methods and additional session fields not being inferred in composite monorepos.
+
 ## 1.6.17
 
 ### Patch Changes
