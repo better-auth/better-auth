@@ -88,13 +88,13 @@ The plugin has a secured configuration by default providing ease to users unfami
   </Step>
 
   <Step>
-    ### Add `./well-known` endpoints
+    ### Confirm `/.well-known` endpoints
 
-    Please add all [Well-Known endpoints](#well-known) to your project. The locations are provided as warnings if you are unsure.
+    Better Auth serves the OAuth Authorization Server metadata and OpenID Connect discovery metadata from the auth handler automatically. If your framework only forwards requests under a catch-all auth route, make sure the issuer metadata URLs reach `auth.handler`.
 
-    * You **MUST** add the OAuth Authorization Server metadata endpoint at your issuer path (root if no path).
-    * If you are using the `openid` scope, you **MUST** add the openid configuration at your issuer path (root if no path).
-    * If you are using the resource server (ie for MCP), you **MUST** add the resource server metadata to your API, with the issuer path appended.
+    * OAuth Authorization Server metadata is available at both `{issuer}/.well-known/oauth-authorization-server` and `/.well-known/oauth-authorization-server/[issuer-path]`.
+    * OpenID Connect discovery metadata is available at `{issuer}/.well-known/openid-configuration` when you use the `openid` scope.
+    * If you are using the resource server (for example, for MCP), add the OAuth Protected Resource metadata endpoint to the API that receives access tokens.
   </Step>
 
   <Step>
@@ -614,18 +614,19 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 
 The `customUserInfoClaims` function receives the user object, requested scopes array, and the passed access token, allowing you to add additional information to the response.
 
-### Well known
+### Well-Known
 
-#### Openid Configuration
+#### OpenID Configuration
 
-Provides [OpenID connect discovery metadata](https://openid.net/specs/openid-connect-discovery-1_0.html) located at `/.well-known/openid-configuration`.
+Provides [OpenID Connect discovery metadata](https://openid.net/specs/openid-connect-discovery-1_0.html) at `{issuer}/.well-known/openid-configuration`.
 
 This endpoint requires the scope `openid`.
 
-You **must** add the configuration at the issuer path. If an issuer is unset, this will be your basePath `/api/auth`.
-If this path is not at the root and you don't have an openid-configuration already at the root, we recommend you to add one in case a client incorrectly hard-coded `/.well-known/openid-configuration` (ignoring the issuer path in the spec).
+The OAuth Provider plugin serves this endpoint automatically from the Better Auth handler. If you do not set a custom issuer, the issuer path is your basePath, such as `/api/auth`.
 
-NOTE: For issuers with paths, OpenId utilizes path appending, thus any path on the issuer should be prepended before `/.well-known/openid-configuration`. If no issuer path is specified, the path should start at the root.
+For issuers with paths, OpenID Connect uses path appending. For example, issuer `https://example.com/api/auth` uses `/api/auth/.well-known/openid-configuration`.
+
+If your framework route does not forward this URL to `auth.handler`, add a route at the issuer path:
 
 ```ts title="[issuer-path]/.well-known/openid-configuration/route.ts"
 import { oauthProviderOpenIdConfigMetadata } from "@better-auth/oauth-provider";
@@ -640,11 +641,16 @@ export const GET = oauthProviderOpenIdConfigMetadata(auth);
 
 #### OAuth Authorization Server
 
-Provides [RFC8414](https://datatracker.ietf.org/doc/html/rfc8414)-compliant metadata located at `/.well-known/oauth-authorization-server`.
+Provides [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)-compliant metadata for the authorization server.
 
-You **must** add the configuration at the issuer path. If an issuer is unset, this will be your basePath `/api/auth`.
+The OAuth Provider plugin serves both path-prefixed issuer aliases automatically from the Better Auth handler:
 
-NOTE: For issuers with paths, OAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-authorization-server`. If no issuer path is specified, the path should start at the root.
+* `{issuer}/.well-known/oauth-authorization-server`
+* `/.well-known/oauth-authorization-server/[issuer-path]`
+
+For example, issuer `https://example.com/api/auth` can use `/api/auth/.well-known/oauth-authorization-server` or `/.well-known/oauth-authorization-server/api/auth`. Both return the same metadata when the request reaches `auth.handler`.
+
+If your framework route does not forward one of these URLs to `auth.handler`, add a route and call the helper:
 
 ```ts title="/.well-known/oauth-authorization-server/[issuer-path]/route.ts"
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
@@ -797,7 +803,7 @@ During the OAuth flow, users are likely redirected between pages. For example, a
 
 To process each redirect step in the login flow, we verify the signed query provided in the initial `/oauth2/authorize` redirect. All parameters sent to the authorize endpoint (including any custom ones), are signed and verified.
 
-If your sign-in pages include any custom query parameters, you may append them to the end of the signed query (ie after the `sig` field).
+If your sign-in pages include custom page query parameters, they may coexist in the URL, but they should not be added to the signed `oauth_query`. The client plugin forwards only the parameters declared by the signed redirect.
 
 If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.
 

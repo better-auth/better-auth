@@ -4,6 +4,7 @@ import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -22,6 +23,26 @@ export async function handleOAuthUserInfo(
 		 * instead of looking up by email. Used by linkSocial through oauth-proxy.
 		 */
 		linkUserId?: string | undefined;
+		/**
+		 * Email of the user at the time linkSocial was initiated.
+		 * Used for email policy validation in proxy-based link flows,
+		 * consistent with the standard linkSocial callback which validates
+		 * against the email captured at flow start.
+		 */
+		linkEmail?: string | undefined;
+		/**
+		 * Whether `account.providerId` may be matched against the globally
+		 * configured `accountLinking.trustedProviders` list to infer trust.
+		 *
+		 * Defaults to `true` for built-in social/OAuth providers, whose
+		 * `providerId` namespace is controlled by the developer's config. Callers
+		 * whose `providerId` is user-controlled (e.g. the SSO plugin, where any
+		 * authenticated user can register a provider with an arbitrary id) must
+		 * pass `false` so a provider named after a trusted social provider can't
+		 * launder that trust. Such callers should supply their own
+		 * `isTrustedProvider` signal instead.
+		 */
+		trustProviderByName?: boolean | undefined;
 	},
 ) {
 	const {
@@ -33,14 +54,14 @@ export async function handleOAuthUserInfo(
 		linkUserId,
 	} = opts;
 
-	// If linkUserId is provided, this is a linking operation from linkSocial
-	// Link directly to the specified user instead of looking up by email
 	if (linkUserId) {
 		return handleLinkToUser(c, {
 			userInfo,
 			account,
 			linkUserId,
+			linkEmail: opts.linkEmail,
 			isTrustedProvider: opts.isTrustedProvider,
+			trustProviderByName: opts.trustProviderByName,
 		});
 	}
 
@@ -57,7 +78,7 @@ export async function handleOAuthUserInfo(
 			);
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
@@ -74,9 +95,15 @@ export async function handleOAuthUserInfo(
 			const accountLinking = c.context.options.account?.accountLinking;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				c.context.trustedProviders.includes(account.providerId);
+				(opts.trustProviderByName !== false &&
+					c.context.trustedProviders.includes(account.providerId));
+			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
+			// the gate unconditional.
+			const requireLocalEmailVerified =
+				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
 				accountLinking?.enabled === false ||
 				accountLinking?.disableImplicitLinking === true
 			) {
@@ -112,6 +139,10 @@ export async function handleOAuthUserInfo(
 				};
 			}
 
+			// Reachable only when `requireLocalEmailVerified: false` lets the link
+			// proceed for an unverified local row. The IdP's verified email is
+			// promoted to the local row so subsequent flows treat it as verified.
+			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
@@ -121,6 +152,9 @@ export async function handleOAuthUserInfo(
 					emailVerified: true,
 				});
 			}
+
+			user =
+				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
 		} else {
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
@@ -219,7 +253,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					callbackURL || "/",
+				)}`;
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
@@ -275,8 +311,24 @@ export async function handleOAuthUserInfo(
 }
 
 /**
+ * Expired placeholder session returned by link operations for type
+ * consistency. The oauth-proxy callback skips `setSessionCookie` for link
+ * flows, so this value is never persisted or sent to the client.
+ */
+function createLinkPlaceholderSession(userId: string) {
+	return {
+		id: "link-placeholder",
+		userId,
+		token: "link-operation-placeholder",
+		expiresAt: new Date(0),
+		createdAt: new Date(),
+		updatedAt: new Date(),
+	};
+}
+
+/**
  * Handle linking an OAuth account to a specific user (from linkSocial).
- * This is used when the linkUserId is provided, typically through oauth-proxy.
+ * Used when the linkUserId is provided, typically through oauth-proxy.
  */
 async function handleLinkToUser(
 	c: GenericEndpointContext,
@@ -284,12 +336,13 @@ async function handleLinkToUser(
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		linkUserId: string;
+		linkEmail?: string | undefined;
 		isTrustedProvider?: boolean | undefined;
+		trustProviderByName?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, linkUserId, isTrustedProvider } = opts;
+	const { userInfo, account, linkUserId, linkEmail } = opts;
 
-	// Find the user to link to
 	const targetUser = await c.context.internalAdapter.findUserById(linkUserId);
 	if (!targetUser) {
 		logger.error("Link target user not found", { linkUserId });
@@ -300,7 +353,6 @@ async function handleLinkToUser(
 		};
 	}
 
-	// Check if the account is already linked to this user
 	const existingAccounts =
 		await c.context.internalAdapter.findAccounts(linkUserId);
 	const alreadyLinked = existingAccounts.find(
@@ -309,21 +361,29 @@ async function handleLinkToUser(
 	);
 
 	if (alreadyLinked) {
-		// Account is already linked, we return a placeholder session for type consistency.
-		// For oauth-proxy link flows, the session cookie is NOT set since the user
-		// already has a session from initiating linkSocial. This placeholder is
-		// never used; it exists only to satisfy the return type required by other
-		// callers (sign-in flows) that do use the session.
-		const placeholderSession = {
-			id: "link-placeholder",
-			userId: targetUser.id,
-			token: "link-operation-placeholder",
-			expiresAt: new Date(0), // Already expired, cannot be used
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		};
+		// Refresh stored OAuth tokens/scopes, matching the direct callback behavior.
+		const freshTokens = Object.fromEntries(
+			Object.entries({
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: account.scope,
+			}).filter(([_, value]) => value !== undefined),
+		);
+		if (Object.keys(freshTokens).length > 0) {
+			await c.context.internalAdapter.updateAccount(
+				alreadyLinked.id,
+				freshTokens,
+			);
+		}
+
 		return {
-			data: { session: placeholderSession, user: targetUser },
+			data: {
+				session: createLinkPlaceholderSession(targetUser.id),
+				user: targetUser,
+			},
 			error: null,
 			isRegister: false,
 		};
@@ -344,11 +404,11 @@ async function handleLinkToUser(
 		};
 	}
 
-	// Verify linking is allowed
 	const accountLinking = c.context.options.account?.accountLinking;
 	const trusted =
-		isTrustedProvider ||
-		c.context.trustedProviders.includes(account.providerId);
+		opts.isTrustedProvider ||
+		(opts.trustProviderByName !== false &&
+			c.context.trustedProviders.includes(account.providerId));
 
 	if (
 		(!trusted && !userInfo.emailVerified) ||
@@ -366,9 +426,11 @@ async function handleLinkToUser(
 		};
 	}
 
-	// Check email policy for linking
+	// Compare against the email captured at flow start for consistency
+	// with the standard linkSocial callback.
+	const referenceEmail = linkEmail || targetUser.email;
 	if (
-		userInfo.email.toLowerCase() !== targetUser.email?.toLowerCase() &&
+		userInfo.email.toLowerCase() !== referenceEmail?.toLowerCase() &&
 		c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 	) {
 		return {
@@ -378,7 +440,6 @@ async function handleLinkToUser(
 		};
 	}
 
-	// Link the account
 	try {
 		await c.context.internalAdapter.linkAccount({
 			providerId: account.providerId,
@@ -400,7 +461,6 @@ async function handleLinkToUser(
 		};
 	}
 
-	// Update emailVerified if needed
 	if (
 		userInfo.emailVerified &&
 		!targetUser.emailVerified &&
@@ -411,23 +471,65 @@ async function handleLinkToUser(
 		});
 	}
 
-	// Return a placeholder session for type consistency.
-	// For oauth-proxy link flows, the session cookie is NOT set since the user
-	// already has a session from initiating linkSocial. This placeholder is
-	// never used; it exists only to satisfy the return type required by other
-	// callers (sign-in flows) that do use the session.
-	const placeholderSession = {
-		id: "link-placeholder",
-		userId: targetUser.id,
-		token: "link-operation-placeholder",
-		expiresAt: new Date(0), // Already expired - cannot be used
-		createdAt: new Date(),
-		updatedAt: new Date(),
-	};
+	const user =
+		(await applyUpdateUserInfoOnLink(c, targetUser.id, userInfo)) ?? targetUser;
 
 	return {
-		data: { session: placeholderSession, user: targetUser },
+		data: {
+			session: createLinkPlaceholderSession(targetUser.id),
+			user,
+		},
 		error: null,
 		isRegister: false,
 	};
+}
+
+/**
+ * Provider profile a freshly linked account may copy onto the local user.
+ * `id` is the provider's account id (never the local user id), and `email`/
+ * `emailVerified` are identity anchors; all three are stripped before the
+ * remaining fields are written.
+ */
+type LinkedProviderProfile = {
+	id: string | number;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	emailVerified?: boolean | undefined;
+	image?: string | null | undefined;
+};
+
+/**
+ * Apply the `account.accountLinking.updateUserInfoOnLink` policy: when enabled,
+ * copy the freshly linked provider's profile onto the local user, matching the
+ * field set persisted on sign-up. The local `email` and `emailVerified` are
+ * never changed, so a link can't rebind the account's identity, and
+ * `updateUser` drops `undefined` fields, so a provider that omits one leaves
+ * the existing column intact.
+ *
+ * Returns the updated user so a caller that issues a session can seed the
+ * cookie cache with the fresh row. Returns `undefined` when the policy is
+ * disabled or the update fails: a failed profile sync must not abort the link.
+ */
+export async function applyUpdateUserInfoOnLink(
+	c: GenericEndpointContext,
+	userId: string,
+	userInfo: LinkedProviderProfile,
+): Promise<User | undefined> {
+	if (
+		c.context.options.account?.accountLinking?.updateUserInfoOnLink !== true
+	) {
+		return undefined;
+	}
+	const {
+		id: _id,
+		email: _email,
+		emailVerified: _emailVerified,
+		...profile
+	} = userInfo;
+	try {
+		return await c.context.internalAdapter.updateUser(userId, profile);
+	} catch (e) {
+		c.context.logger.warn("Could not update user info on account link", e);
+		return undefined;
+	}
 }

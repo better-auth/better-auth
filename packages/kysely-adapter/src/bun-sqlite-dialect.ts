@@ -2,15 +2,13 @@
  * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
  */
 
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
-	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -18,20 +16,22 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
+import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
-	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+} from "./kysely-migration-tables";
 
-class BunSqliteAdapter implements DialectAdapterBase {
+class BunSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
+		return false;
+	}
+
+	get supportsMultipleConnections(): boolean {
 		return false;
 	}
 
@@ -130,10 +130,28 @@ class BunSqliteConnection implements DatabaseConnection {
 
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
-		const stmt = this.#db.prepare(sql);
+		const stmt = this.#db.prepare<O, SQLQueryBindings[]>(sql);
+		const params = parameters as SQLQueryBindings[];
+
+		// Row-producing statements (SELECT, RETURNING) expose column names, so
+		// they must read through `all()`. Plain mutations expose none; running
+		// them through `all()` would discard Bun's change metadata, leaving
+		// Kysely to report zero affected rows even when writes occurred.
+		if (stmt.columnNames.length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...params),
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(...params);
 
 		return Promise.resolve({
-			rows: stmt.all(parameters as any) as O[],
+			rows: [],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid),
 		});
 	}
 
@@ -203,14 +221,6 @@ class BunSqliteIntrospector implements DatabaseIntrospector {
 		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
 	}
 
-	async getMetadata(
-		options?: DatabaseMetadataOptions | undefined,
-	): Promise<DatabaseMetadata> {
-		return {
-			tables: await this.getTables(options),
-		};
-	}
-
 	async #getTableMetadata(table: string): Promise<TableMetadata> {
 		const db = this.#db;
 
@@ -252,7 +262,8 @@ class BunSqliteIntrospector implements DatabaseIntrospector {
 				isAutoIncrementing: col.name === autoIncrementCol,
 				hasDefaultValue: col.dflt_value != null,
 			})),
-			isView: true,
+			isView: false,
+			isForeign: false,
 		};
 	}
 }

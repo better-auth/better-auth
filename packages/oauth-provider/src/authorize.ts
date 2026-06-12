@@ -6,6 +6,12 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import {
+	canonicalizeOAuthQueryParams,
+	postLoginClearedParam,
+	setSignedOAuthQueryParameterNames,
+	signedQueryIssuedAtParam,
+} from "./signed-query";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -15,12 +21,11 @@ import type {
 } from "./types";
 
 import {
+	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
 	storeToken,
 } from "./utils";
 
@@ -149,13 +154,15 @@ function getErrorURL(
 	return formattedURL;
 }
 
+export type AuthorizeEndpointSettings = {
+	isAuthorize?: boolean;
+	postLogin?: boolean;
+};
+
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	settings?: {
-		isAuthorize?: boolean;
-		postLogin?: boolean;
-	},
+	settings?: AuthorizeEndpointSettings,
 ) {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
@@ -258,6 +265,18 @@ export async function authorizeEndpoint(
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
+		);
+	}
+	// The authorize endpoint only serves the authorization_code grant; reject
+	// clients that are not registered for it.
+	if (!clientAllowsGrant(client, "authorization_code")) {
+		return handleRedirect(
+			ctx,
+			getErrorURL(
+				ctx,
+				"unauthorized_client",
+				"client is not authorized to use the authorization_code grant",
+			),
 		);
 	}
 
@@ -640,13 +659,18 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	params.delete("sig");
 	// Reserved marker: only server-issued consent redirects may sign this.
 	params.delete(postLoginClearedParam);
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
+	setSignedOAuthQueryParameterNames(params);
 
-	const signature = await makeSignature(params.toString(), ctx.context.secret);
-	params.append("sig", signature);
+	const signature = await makeSignature(
+		canonicalizeOAuthQueryParams(params).toString(),
+		ctx.context.secret,
+	);
+	params.set("sig", signature);
 	return params.toString();
 }

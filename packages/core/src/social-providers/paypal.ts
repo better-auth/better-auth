@@ -1,10 +1,19 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
+import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
-import { BetterAuthError } from "../error";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
+
+/**
+ * ID token signing algorithms advertised by PayPal's OpenID configuration.
+ * Anything outside this allowlist is rejected so each token is only ever
+ * verified with the algorithm it was issued for.
+ *
+ * @see https://www.paypal.com/.well-known/openid-configuration
+ */
+const PAYPAL_ID_TOKEN_ALGORITHMS = ["RS256", "HS256"] as const;
 
 export interface PayPalProfile {
 	user_id: string;
@@ -74,6 +83,19 @@ export const paypal = (options: PayPalOptions) => {
 	const userInfoEndpoint = isSandbox
 		? "https://api-m.sandbox.paypal.com/v1/identity/oauth2/userinfo"
 		: "https://api-m.paypal.com/v1/identity/oauth2/userinfo";
+
+	/**
+	 * Issuer and JWKS endpoints used to cryptographically verify ID tokens.
+	 *
+	 * @see https://www.paypal.com/.well-known/openid-configuration
+	 */
+	const issuer = isSandbox
+		? "https://www.sandbox.paypal.com"
+		: "https://www.paypal.com";
+
+	const jwksEndpoint = isSandbox
+		? "https://api.sandbox.paypal.com/v1/oauth2/certs"
+		: "https://api.paypal.com/v1/oauth2/certs";
 
 	return {
 		id: "paypal",
@@ -201,9 +223,48 @@ export const paypal = (options: PayPalOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
+
+			// Cryptographically verify the ID token. Decoding alone is not enough:
+			// the signature, issuer, audience and expiration must all be checked
+			// before the token's claims can be relied on as proof of identity.
+			// See https://www.paypal.com/.well-known/openid-configuration
+
 			try {
-				const payload = decodeJwt(token);
-				return !!payload.sub;
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!jwtAlg) return false;
+				if (
+					!PAYPAL_ID_TOKEN_ALGORITHMS.includes(
+						jwtAlg as (typeof PAYPAL_ID_TOKEN_ALGORITHMS)[number],
+					)
+				) {
+					return false;
+				}
+
+				// PayPal can sign ID tokens either asymmetrically (RS256, verified
+				// against the published JWKS) or symmetrically (HS256, verified with
+				// the client secret). Selecting the key by algorithm keeps the two
+				// paths separate so each algorithm is only verified with its
+				// corresponding key type.
+				const key =
+					jwtAlg === "HS256"
+						? new TextEncoder().encode(options.clientSecret)
+						: kid
+							? await getPayPalPublicKey(kid, jwksEndpoint)
+							: undefined;
+				if (!key) return false;
+
+				const { payload: jwtClaims } = await jwtVerify(token, key, {
+					algorithms: [jwtAlg],
+					issuer,
+					audience: options.clientId,
+					maxTokenAge: "1h",
+				});
+
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				return true;
 			} catch (error) {
 				logger.error("Failed to verify PayPal ID token:", error);
 				return false;
@@ -260,4 +321,30 @@ export const paypal = (options: PayPalOptions) => {
 
 		options,
 	} satisfies OAuthProvider<PayPalProfile>;
+};
+
+export const getPayPalPublicKey = async (kid: string, jwksUri: string) => {
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+		}>;
+	}>(jwksUri);
+
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+
+	return await importJWK(jwk, jwk.alg);
 };
