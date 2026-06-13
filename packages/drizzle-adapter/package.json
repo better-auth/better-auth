@@ -37,15 +37,20 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
+      "dev-source": "./src/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./relations-v2": {
+      "types": "./dist/relations-v2/index.d.mts",
+      "dev-source": "./src/relations-v2/index.d.mts",
+      "default": "./dist/relations-v2/index.mjs"
     }
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0"
   },
   "peerDependenciesMeta": {
     "drizzle-orm": {

@@ -174,6 +174,72 @@ export const auth = betterAuth({
 });
 ```
 
+## Drizzle Relations v2
+
+The current Drizzle adapter uses Drizzle Relations v1.
+To use Drizzle Relations v2, you need to use the `@better-auth/drizzle-adapter/relations-v2` adapter.
+
+Install the adapter:
+
+```package-install
+npm install @better-auth/drizzle-adapter
+```
+
+Update your imports to use the relations-v2 adapter:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter/relations-v2'; // [!code highlight]
+import { db } from './database.ts';
+import * as schema from './schema.ts';
+
+export const auth = betterAuth({
+	database: drizzleAdapter(db, {
+		provider: 'sqlite', // or "pg" or "mysql"
+		schema,
+	}),
+	//... the rest of your config
+});
+```
+
+Then regenerate your schema using the Better Auth CLI:
+
+```package-install
+npx @better-auth/cli@latest generate
+```
+
+<Callout type="info">
+  You do not need to run database migrations when upgrading to Relations v2. The
+  database structure remains the same - only the relation definitions change.
+  The schema generator will output the new v2 format automatically.
+</Callout>
+
+The generated auth schema exports relations using `defineRelationsPart`, which is
+designed to be merged alongside your app's own `defineRelations`. Pass both to
+the drizzle instance — `schema` is no longer required since Drizzle v1 RC:
+
+```ts title="db.ts"
+import { drizzle } from 'drizzle-orm/...';
+// generated relations from auth CLI (uses defineRelationsPart)
+import { relations as authRelations } from './auth-schema.ts';
+// your app's own relations (uses defineRelations)
+import { relations } from './app-schema.ts';
+
+export const db = drizzle({
+	client,
+	// authRelations uses defineRelationsPart, // [!code highlight]
+	// so it must come after the main relations // [!code highlight]
+	relations: { ...relations, ...authRelations }, // [!code highlight]
+});
+```
+
+<Callout type="info">
+  `defineRelationsPart` is a partial relation definition that must be spread
+  after full `defineRelations` entries. See the
+  [Drizzle docs on relation parts](https://orm.drizzle.team/docs/relations-v2#relations-parts)
+  for details.
+</Callout>
+
 ## Additional Information
 
 * If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
