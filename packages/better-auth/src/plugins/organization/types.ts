@@ -121,6 +121,18 @@ export interface OrganizationOptions {
 			 */
 			enabled: boolean;
 			/**
+			 * The name for the default team. If not provided,
+			 * the organization name is used.
+			 *
+			 * You can also pass a function that receives the organization
+			 * and returns the team name.
+			 *
+			 * @default organization.name
+			 */
+			name?:
+				| string
+				| ((organization: Organization & Record<string, any>) => string);
+			/**
 			 * Pass a custom default team creator function
 			 */
 			customCreateDefaultTeam?: (
