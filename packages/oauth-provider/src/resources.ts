@@ -154,64 +154,6 @@ export async function assertIdentifierValid(
 }
 
 /**
- * Claim names reserved by RFC 9068 §2.2 for OAuth 2.0 JWT-formatted access
- * tokens. Customizations (`customClaims` on a resource row, or the existing
- * `customAccessTokenClaims` plugin option) cannot override these — the AS is
- * the only source of truth for issuer identity, subject, audience claim, lifetime,
- * and the token's stable ID.
- *
- * Reserved values found in untrusted input are stripped at issuance and
- * a `warn` log is emitted (never silently dropped — surfacing the override
- * attempt is more important than minimum log noise).
- *
- * @see RFC 9068 §2.2 (Header and Data Structures)
- */
-const RESERVED_RFC9068_CLAIMS = new Set([
-	"iss",
-	"sub",
-	"aud",
-	"exp",
-	"iat",
-	"jti",
-	"client_id",
-	"scope",
-	"auth_time",
-	"acr",
-	"amr",
-]);
-
-/**
- * Returns a copy of `claims` with reserved RFC 9068 names stripped. Logs a
- * warning naming the stripped keys when any were present. Callers pass the
- * returned record into the JWT payload.
- *
- * Stable iteration order (Object.entries) is preserved so token-debug logs
- * are reproducible across runs.
- *
- * @internal
- */
-export function stripReservedClaims(
-	claims: Record<string, unknown> | null | undefined,
-): Record<string, unknown> {
-	if (!claims) return {};
-	const stripped: string[] = [];
-	const safe: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(claims)) {
-		if (RESERVED_RFC9068_CLAIMS.has(key)) {
-			stripped.push(key);
-			continue;
-		}
-		safe[key] = value;
-	}
-	if (stripped.length > 0) {
-		logger.warn(
-			`oauth-provider: stripped reserved RFC 9068 claim name(s) from customClaims: ${stripped.join(", ")}. The AS owns these claim values.`,
-		);
-	}
-	return safe;
-}
-
-/**
  * Resolved resource policy for a single `/oauth2/token` (or `/oauth2/authorize`)
  * request. Computed by {@link resolveResourcePolicy} and consumed by the
  * token-issuance pipeline.
@@ -398,7 +340,8 @@ export async function isAudienceClaimAllowed(
  * 5. Pick the minimum `accessTokenTtl` across requested resources.
  * 6. Pick signing config — only honored for single-resource requests
  *    (a JWT can only have one signature).
- * 7. Merge per-resource `customClaims`, strip reserved claim names.
+ * 7. Merge per-resource `customClaims` (returned raw; reserved-claim
+ *    stripping is owned by `resolveAccessTokenClaims`).
  *
  * When no `resource` param is present, returns an empty policy: no `aud`
  * claim and no resource-specific overrides.
@@ -560,16 +503,17 @@ export async function resolveResourcePolicy(
 	const signingKeyId: string | null =
 		uniqueSigningKids.values().next().value ?? null;
 
-	// Per-resource custom claims: merge in declared order (later resources
-	// win on key collisions). Reserved-claim stripping is applied after the
-	// merge so the AS-owned claims are protected regardless of source.
+	// Per-resource custom claims: merge in declared order (later resources win
+	// on key collisions). Returned raw; `resolveAccessTokenClaims` strips
+	// reserved RFC 9068 names from the merged access-token claim set, so the
+	// JWT mint and the opaque introspection re-derive can never diverge on
+	// which claims are sanitized.
 	const mergedClaims: Record<string, unknown> = {};
 	for (const row of resolved) {
 		if (row.customClaims && typeof row.customClaims === "object") {
 			Object.assign(mergedClaims, row.customClaims);
 		}
 	}
-	const safeClaims = stripReservedClaims(mergedClaims);
 
 	const audienceIdentifiers = includesOpenid
 		? [...uniqueRequestedResources, userInfoResourceIdentifier]
@@ -582,7 +526,7 @@ export async function resolveResourcePolicy(
 		refreshTokenTtl,
 		signingAlgorithm,
 		signingKeyId,
-		customClaims: safeClaims,
+		customClaims: mergedClaims,
 		effectiveScopes,
 	};
 }
@@ -618,6 +562,31 @@ async function assertClientLinkedToResources(
 				.join(", ")}`,
 		});
 	}
+}
+
+/**
+ * Returns `true` when `clientId` is linked, via the `oauthClientResource` join
+ * table, to at least one of `resourceIdentifiers`. Authorizes cross-client token
+ * introspection (RFC 7662 §2.1/§4): a resource server may introspect a token
+ * whose audience it serves, even when a different client issued the token.
+ *
+ * @internal
+ */
+export async function isClientLinkedToAnyResource(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+	resourceIdentifiers: string[],
+): Promise<boolean> {
+	if (resourceIdentifiers.length === 0) return false;
+	const modelName =
+		opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+	const links = await ctx.context.adapter.findMany<OAuthClientResource>({
+		model: modelName,
+		where: [{ field: "clientId", value: clientId }],
+	});
+	const linkedSet = new Set(links?.map((l) => l.resourceId) ?? []);
+	return resourceIdentifiers.some((identifier) => linkedSet.has(identifier));
 }
 
 /**

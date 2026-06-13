@@ -8,7 +8,6 @@ import {
 	resetSeedStateForTests,
 	resolveResourcePolicy,
 	seedResourcesOnce,
-	stripReservedClaims,
 } from "./resources";
 import type { OAuthClientResource, OAuthOptions, Scope } from "./types";
 
@@ -16,20 +15,6 @@ const silenceWarnings = {
 	oauthAuthServerConfig: true,
 	openidConfig: true,
 } as const;
-const reservedAccessTokenClaimNames = [
-	"iss",
-	"sub",
-	"aud",
-	"exp",
-	"iat",
-	"jti",
-	"client_id",
-	"scope",
-	"auth_time",
-	"acr",
-	"amr",
-] as const;
-
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
@@ -54,43 +39,6 @@ const fakeEndpointCtx = (
 		context: authCtx,
 		body: {},
 	}) as never;
-
-describe("stripReservedClaims", () => {
-	it("preserves non-reserved claims and returns a fresh object", () => {
-		const input = { foo: "bar", role: "admin" };
-		const output = stripReservedClaims(input);
-		expect(output).toEqual({ foo: "bar", role: "admin" });
-		expect(output).not.toBe(input);
-	});
-
-	it("strips every RFC 9068 reserved claim", () => {
-		const allReserved = Object.fromEntries(
-			reservedAccessTokenClaimNames.map((key) => [key, "evil"]),
-		);
-		expect(stripReservedClaims(allReserved)).toEqual({});
-	});
-
-	it("logs a warning naming the stripped reserved keys", () => {
-		const warnSpy = vi
-			.spyOn(logger, "warn")
-			.mockImplementation(() => undefined);
-		try {
-			stripReservedClaims({ iss: "evil", foo: "ok", jti: "evil2" });
-			expect(warnSpy).toHaveBeenCalledOnce();
-			const [message] = warnSpy.mock.calls[0] ?? [];
-			expect(String(message)).toMatch(/stripped reserved RFC 9068 claim/i);
-			expect(String(message)).toMatch(/iss/);
-			expect(String(message)).toMatch(/jti/);
-		} finally {
-			warnSpy.mockRestore();
-		}
-	});
-
-	it("handles null and undefined input without crashing", () => {
-		expect(stripReservedClaims(null)).toEqual({});
-		expect(stripReservedClaims(undefined)).toEqual({});
-	});
-});
 
 describe("resolveResourcePolicy — resource omission", () => {
 	it("returns no aud claim when neither resource nor openid scope is present", async () => {
@@ -550,7 +498,7 @@ describe("resolveResourcePolicy — entity path", () => {
 		});
 	});
 
-	it("merges per-resource customClaims (later wins) and strips reserved", async () => {
+	it("merges per-resource customClaims (later wins), returning reserved names raw for the claim resolver to strip", async () => {
 		const idA = "https://api.example.com/claims-a";
 		const idB = "https://api.example.com/claims-b";
 		const { ctx, opts } = await bootProvider({
@@ -573,9 +521,9 @@ describe("resolveResourcePolicy — entity path", () => {
 		});
 		expect(policy.customClaims).toEqual({
 			dept: "ops", // later wins
+			iss: "evil-A", // returned raw; resolveAccessTokenClaims strips reserved names
 			region: "us",
 		});
-		expect(policy.customClaims).not.toHaveProperty("iss"); // reserved → stripped
 	});
 });
 

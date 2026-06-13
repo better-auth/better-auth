@@ -625,6 +625,18 @@ This endpoint provides details of the provided token. If the token is additional
 
 Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
+#### Who may introspect a token
+
+The introspecting client must authenticate ([RFC7662 §2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)). It may then introspect a token when it issued the token, or when it is a resource server linked to one of the token's audience resources. This is the standard split where a frontend client obtains a token and a separate API validates it. An authenticated client with no relationship to the token receives `{ active: false }`, the same response as an expired or unknown token, so introspection cannot be used to probe for valid tokens. A `refresh_token` can only be introspected by the client that requested it.
+
+To let a resource server introspect tokens issued to other clients, register it as a resource and link the client to it. Clients are linked to resources through the `oauthClientResource` table; dynamic client registration with a `resources` field creates the link automatically.
+
+#### Claims returned
+
+Opaque and JWT access tokens return the same enriched claim set for an equivalent grant: `customAccessTokenClaims` plus any per-resource `customClaims`. Reserved RFC 9068 claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, ...) are owned by the authorization server and are stripped from those callbacks' output.
+
+Opaque-token introspection reports the token's current authorization state, recomputed on each call. JWT-token introspection reports the signed snapshot taken at issuance. For claims frozen at issuance, use JWT access tokens (request a `resource`); for the current state, use opaque tokens.
+
 ### Revoke Endpoint
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
