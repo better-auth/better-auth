@@ -1,3 +1,4 @@
+export { getDatabaseType } from "./get-database-type";
 export { getAuthTables } from "./get-tables";
 export type { BetterAuthPluginDBSchema } from "./plugin";
 export {

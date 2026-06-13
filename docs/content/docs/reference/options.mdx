@@ -225,6 +225,12 @@ export const auth = betterAuth({
 })
 ```
 
+<Callout type="info">
+  Passing a raw database connection uses Better Auth's built-in Kysely adapter.
+  Install Kysely alongside Better Auth with `npm install kysely`. ORM adapters
+  (Drizzle, Prisma, MongoDB) don't need it.
+</Callout>
+
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
 
 Read more about [databases](/docs/concepts/database).

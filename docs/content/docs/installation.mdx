@@ -115,6 +115,12 @@ description: Learn how to configure Better Auth in your project.
       </Tab>
     </Tabs>
 
+    <Callout type="info">
+      Passing a raw database connection uses Better Auth's built-in Kysely adapter.
+      Install Kysely alongside Better Auth with `npm install kysely`. ORM adapters
+      (Drizzle, Prisma, MongoDB) don't need it.
+    </Callout>
+
     Alternatively, if you prefer to use an ORM, you can use one of the built-in adapters.
 
     <Tabs items={["drizzle", "prisma", "mongodb"]}>

@@ -2,7 +2,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { betterAuth } from "../auth/minimal";
+import { betterAuth } from "../auth/full";
 import type { InferCtx } from "../client/path-to-object";
 import { tanstackStartCookies } from "../integrations/tanstack-start";
 import { admin, organization, twoFactor } from "../plugins";

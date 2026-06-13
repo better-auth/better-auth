@@ -12,6 +12,7 @@ export type {
 	BetterAuthCookie,
 	BetterAuthCookies,
 } from "./cookie";
+export type * from "./database";
 export type * from "./helper";
 export type {
 	BaseURLConfig,

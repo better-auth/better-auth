@@ -1,59 +1,8 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { Dialect } from "kysely";
-import {
-	Kysely,
-	MssqlDialect,
-	MysqlDialect,
-	PostgresDialect,
-	SqliteDialect,
-} from "kysely";
-import type { KyselyDatabaseType } from "./types";
-
-export function getKyselyDatabaseType(
-	db: BetterAuthOptions["database"],
-): KyselyDatabaseType | null {
-	if (!db) {
-		return null;
-	}
-	if ("dialect" in db) {
-		return getKyselyDatabaseType(db.dialect as Dialect);
-	}
-	if ("createDriver" in db) {
-		if (db instanceof SqliteDialect) {
-			return "sqlite";
-		}
-		if (db instanceof MysqlDialect) {
-			return "mysql";
-		}
-		if (db instanceof PostgresDialect) {
-			return "postgres";
-		}
-		if (db instanceof MssqlDialect) {
-			return "mssql";
-		}
-	}
-	if ("aggregate" in db) {
-		return "sqlite";
-	}
-
-	if ("getConnection" in db) {
-		return "mysql";
-	}
-	if ("connect" in db) {
-		return "postgres";
-	}
-	if ("fileControl" in db) {
-		return "sqlite";
-	}
-	if ("open" in db && "close" in db && "prepare" in db) {
-		return "sqlite";
-	}
-	// Cloudflare D1
-	if ("batch" in db && "exec" in db && "prepare" in db) {
-		return "sqlite";
-	}
-	return null;
-}
+import { getDatabaseType } from "@better-auth/core/db";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { Dialect, PostgresPool, SqliteDatabase } from "kysely";
+import { Kysely, MysqlDialect, PostgresDialect, SqliteDialect } from "kysely";
 
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
@@ -68,7 +17,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("db" in db) {
 		return {
-			kysely: db.db,
+			kysely: db.db as Kysely<any>,
 			databaseType: db.type,
 			transaction: db.transaction,
 		};
@@ -76,23 +25,25 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("dialect" in db) {
 		return {
-			kysely: new Kysely<any>({ dialect: db.dialect }),
+			kysely: new Kysely<any>({ dialect: db.dialect as unknown as Dialect }),
 			databaseType: db.type,
 			transaction: db.transaction,
 		};
 	}
 
+	if ("createDriver" in db) {
+		throw new BetterAuthError(
+			"Pass a Kysely dialect as `{ dialect, type }` so the database type is explicit, instead of a bare Dialect.",
+		);
+	}
+
 	let dialect: Dialect | undefined = undefined;
 
-	const databaseType = getKyselyDatabaseType(db);
-
-	if ("createDriver" in db) {
-		dialect = db;
-	}
+	const databaseType = getDatabaseType(db);
 
 	if ("aggregate" in db && !("createSession" in db)) {
 		dialect = new SqliteDialect({
-			database: db,
+			database: db as unknown as SqliteDatabase,
 		});
 	}
 
@@ -103,7 +54,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("connect" in db) {
 		dialect = new PostgresDialect({
-			pool: db,
+			pool: db as unknown as PostgresPool,
 		});
 	}
 
