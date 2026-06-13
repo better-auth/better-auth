@@ -15,7 +15,7 @@ async function createAuthTestInstance(overrides?: Partial<BetterAuthOptions>) {
 					method: "GET",
 					query: z.object({
 						url: z.string(),
-						allowRelativePaths: z.coerce.boolean().optional(),
+						allowRelativePaths: z.stringbool().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -193,6 +193,22 @@ describe("trusted origins", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10022
 		 */
+		it("should reject relative paths with tildes when relative paths are disabled", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance();
+
+			await expect(isTrustedOrigin("/my-team/~settings/account")).resolves.toBe(
+				false,
+			);
+			await expect(
+				isTrustedOrigin("/my-team/~settings/account", {
+					allowRelativePaths: false,
+				}),
+			).resolves.toBe(false);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10022
+		 */
 		it("should allow relative paths with tildes", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 
@@ -221,9 +237,11 @@ describe("trusted origins", () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 
 			const maliciousPatterns = [
+				"/%2f/evil.com",
+				"/%2F/evil.com",
+				"/%5c/evil.com",
 				"/%5C/evil.com",
 				`/\\/\\/evil.com`,
-				"/%5C/evil.com",
 				"/..%2F..%2Fevil.com",
 				"javascript:alert('xss')",
 				"data:text/html,<script>alert('xss')</script>",
