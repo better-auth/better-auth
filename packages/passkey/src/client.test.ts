@@ -201,4 +201,105 @@ describe("passkey client", () => {
 			consoleError.mockRestore();
 		}
 	});
+
+	it("forwards createSession and notifies the session signal", async () => {
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-register-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rp: { name: "Test", id: "example.com" },
+						user: { id: "user", name: "user" },
+						pubKeyCredParams: [],
+					},
+				};
+			}
+			if (path === "/passkey/verify-registration") {
+				return {
+					data: {
+						id: "passkey-id",
+						userId: "user",
+						session: {
+							id: "session-id",
+							token: "session-token",
+						},
+						user: {
+							id: "user",
+						},
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startRegistration.mockResolvedValue({
+			clientExtensionResults: {},
+			response: {
+				transports: ["internal"],
+			},
+		});
+
+		await actions.passkey.addPasskey({
+			createSession: true,
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/passkey/verify-registration",
+			expect.objectContaining({
+				body: expect.objectContaining({
+					createSession: true,
+				}),
+			}),
+		);
+		expect(listPasskeys.set).toHaveBeenCalled();
+		expect(store.notify).toHaveBeenCalledWith("$sessionSignal");
+	});
+
+	it("does not notify the session signal when registration does not return a session", async () => {
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-register-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rp: { name: "Test", id: "example.com" },
+						user: { id: "user", name: "user" },
+						pubKeyCredParams: [],
+					},
+				};
+			}
+			if (path === "/passkey/verify-registration") {
+				return {
+					data: {
+						id: "passkey-id",
+						userId: "user",
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startRegistration.mockResolvedValue({
+			clientExtensionResults: {},
+			response: {
+				transports: ["internal"],
+			},
+		});
+
+		await actions.passkey.addPasskey();
+
+		expect(listPasskeys.set).toHaveBeenCalled();
+		expect(store.notify).not.toHaveBeenCalledWith("$sessionSignal");
+	});
 });

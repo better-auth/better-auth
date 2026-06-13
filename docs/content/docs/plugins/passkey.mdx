@@ -120,6 +120,7 @@ When using passkey-first flows (`registration.requireSession: false`), pass the 
 await authClient.passkey.addPasskey({
   name: "Primary passkey",
   context: "signed-registration-token",
+  createSession: true,
 })
 ```
 
@@ -152,6 +153,10 @@ To add or register a passkey make sure a user is authenticated and then call the
        * Optional context for passkey-first registration flows. Forwarded to `registration.resolveUser`.
        */
       context?: string
+      /**
+       * Create a session after successfully registering the passkey.
+       */
+      createSession?: boolean
   }
   ```
 </APIMethod>
