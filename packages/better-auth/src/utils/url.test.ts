@@ -11,6 +11,80 @@ import {
 	trimTrailingSlashes,
 } from "./url";
 
+describe("validateProxyHeader (ReDoS guard)", () => {
+	// Access the internal function through getHostFromSource since validateProxyHeader
+	// is not exported directly.  A valid host header goes through the same path.
+
+	it("accepts valid hostnames", () => {
+		const valid = [
+			"example.com",
+			"api.example.com",
+			"api.v1.staging.example.com",
+			"my-app.vercel.app",
+			"localhost",
+			"localhost:3000",
+			"example.com:8080",
+			"192.168.1.1",
+			"192.168.1.1:3000",
+			"[2001:db8::1]",
+			"[2001:db8::1]:443",
+		];
+		for (const host of valid) {
+			const request = new Request("http://fallback.invalid/test", {
+				headers: { host },
+			});
+			// If the host validates, getHostFromSource returns it; otherwise falls
+			// back to the URL host "fallback.invalid".
+			expect(getHostFromSource(request)).toBe(host);
+		}
+	});
+
+	it("rejects invalid hostnames", () => {
+		const invalid = [
+			"../etc/passwd",
+			"<script>alert(1)</script>",
+			"-bad-start.com",
+			"bad-.com",
+			"",
+			"   ",
+		];
+		for (const host of invalid) {
+			const request = new Request("http://fallback.invalid/test", {
+				headers: host ? { host } : {},
+			});
+			const result = getHostFromSource(request);
+			expect(result).not.toBe(host);
+		}
+	});
+
+	it("rejects and completes quickly on a crafted ReDoS payload", () => {
+		// The old single combined regex
+		//   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]...)*$/
+		// has a nested quantifier structure that is vulnerable to catastrophic
+		// backtracking (ReDoS) in regex engines without backtracking optimizations.
+		// The replacement splits on '.' and validates each label independently,
+		// eliminating the cross-label ambiguity entirely.
+		//
+		// This test exercises a payload with many dot-separated labels where the
+		// final label is invalid (ends with '-'), which forces the engine to
+		// exhaustively try all partitions in the old code.
+		const malicious =
+			"a".repeat(60) + "-." + "b".repeat(60) + "-." + "c".repeat(60) + "-";
+
+		const start = Date.now();
+		const request = new Request("http://fallback.invalid/test", {
+			headers: { host: malicious },
+		});
+		const result = getHostFromSource(request);
+		const elapsed = Date.now() - start;
+
+		// Must reject the malicious host
+		expect(result).toBe("fallback.invalid");
+		// Must finish quickly — the new per-label validation is O(n)
+		expect(elapsed).toBeLessThan(500);
+	});
+});
+
 describe("trimTrailingSlashes", () => {
 	it("should remove trailing slashes", () => {
 		expect(trimTrailingSlashes("https://example.com///")).toBe(
