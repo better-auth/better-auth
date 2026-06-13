@@ -183,6 +183,14 @@ export interface UpstreamProvider<
 	refreshAccessToken?:
 		| ((refreshToken: string) => Promise<OAuth2Tokens>)
 		| undefined;
+	revokeToken?: ((token: string) => Promise<void>) | undefined;
+	createEndSessionURL?:
+		| ((data: {
+				idToken?: string | null | undefined;
+				postLogoutRedirectURI?: string | undefined;
+				state?: string | undefined;
+		  }) => Awaitable<URL | null>)
+		| undefined;
 	/**
 	 * Declarative id_token verification config consumed by the shared
 	 * `verifyProviderIdToken` verifier. Providers set this instead of implementing a boolean
