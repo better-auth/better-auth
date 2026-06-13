@@ -6,10 +6,39 @@ import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { buildClientResourceLinkId, getResource } from "./resources";
-import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import type {
+	ClientRegistrationRequest,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	OAUTH_NO_STORE_HEADERS,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
+import { authorizeInitialAccessToken } from "./utils/registration-access-token";
+
+type CreateClientSettings = {
+	/**
+	 * Whether this comes from the DCR registration path (`POST /oauth2/register`)
+	 * rather than an admin endpoint. Gates the session privilege re-check and the
+	 * registration-only scope/PKCE rules.
+	 */
+	isRegister: boolean;
+	/**
+	 * Owner reference resolved by the caller (e.g. from an initial access token)
+	 * to attach to the new client. Takes precedence over `clientReference`.
+	 */
+	referenceId?: string;
+	/**
+	 * Pre-validated resource identifiers to link the new client to (RFC 7591 §2
+	 * extension). Existence and disabled checks are the caller's responsibility.
+	 */
+	resources?: string[] | undefined;
+};
 
 /**
  * Resolves the auth method and type for unauthenticated DCR.
@@ -44,16 +73,43 @@ export async function registerEndpoint(
 	}
 
 	const body = ctx.body as OAuthClient & { resources?: string[] };
+	// Resolve a session first. With the bearer plugin enabled it consumes the
+	// Authorization header (a valid bearer becomes the session); only when no
+	// session is resolved do we treat an Authorization: Bearer value as an
+	// RFC 7591 initial access token.
 	const session = await getSessionFromCtx(ctx);
+	const tokenAuthorization = session
+		? undefined
+		: await authorizeInitialAccessToken(
+				ctx,
+				opts,
+				body as ClientRegistrationRequest,
+			);
+	const isTokenAuthorized = Boolean(tokenAuthorization);
 
-	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
-		throw new APIError("UNAUTHORIZED", {
-			error: "invalid_token",
-			error_description: "Authentication required for client registration",
-		});
+	if (
+		!(
+			session ||
+			isTokenAuthorized ||
+			opts.allowUnauthenticatedClientRegistration
+		)
+	) {
+		// No session, no token, and open registration disabled. A presented but
+		// invalid token already threw above, so this is the no-credentials case:
+		// answer with a bare RFC 6750 §3.1 Bearer challenge and no error code.
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "Authentication required for client registration",
+			},
+			{
+				"WWW-Authenticate": "Bearer",
+				...OAUTH_NO_STORE_HEADERS,
+			},
+		);
 	}
 
-	if (!session) {
+	if (!session && !isTokenAuthorized) {
 		if (body.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
@@ -108,6 +164,7 @@ export async function registerEndpoint(
 
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
+		referenceId: tokenAuthorization?.referenceId,
 		resources: requestedResources.length > 0 ? requestedResources : undefined,
 	});
 }
@@ -364,32 +421,17 @@ export async function checkOAuthClient(
 export async function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	settings: {
-		isRegister: boolean;
-		/**
-		 * Pre-validated resource identifiers to link the new client to. Used
-		 * by the DCR registration path (RFC 7591 §2 extension). Validation
-		 * (existence, disabled) is the caller's responsibility — this branch
-		 * only writes the link rows and echoes the field in the response.
-		 */
-		resources?: string[] | undefined;
-	},
+	settings: CreateClientSettings,
 ) {
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
-	// Single authorization chokepoint for OAuth client creation. Every creation
-	// route reaches this function, so the create gate lives here rather than in
-	// each caller. Dynamic registration may be anonymous when
-	// allowUnauthenticatedClientRegistration is enabled, and registerEndpoint
-	// constrains that path to public clients, so it is authorized only when a
-	// session is present. Every other creation route requires an authorized
-	// session; assertClientPrivileges throws when none is present.
-	if (settings.isRegister) {
-		if (session) {
-			await assertClientPrivileges(ctx, session, opts, "create");
-		}
-	} else {
+	// Single authorization chokepoint for OAuth client creation. Admin creation
+	// always requires create privileges. DCR re-checks them only for
+	// session-backed requests; non-session DCR was already authorized in
+	// registerEndpoint (a valid RFC 7591 initial access token, or open
+	// registration constrained to public clients).
+	if (!settings.isRegister || session) {
 		await assertClientPrivileges(ctx, session, opts, "create");
 	}
 
@@ -417,12 +459,18 @@ export async function createOAuthClientEndpoint(
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
-	const referenceId = opts.clientReference
-		? await opts.clientReference({
-				user: session?.user,
-				session: session?.session,
-			})
-		: undefined;
+	// Ownership has one source per path: a caller-supplied referenceId (e.g. from
+	// the initial access token) wins; otherwise a session-backed creation may
+	// resolve one via clientReference. clientReference is never called without a
+	// session, so it cannot misattribute a token-registered client.
+	const referenceId =
+		settings.referenceId ??
+		(session && opts.clientReference
+			? await opts.clientReference({
+					user: session.user,
+					session: session.session,
+				})
+			: undefined);
 	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
@@ -492,12 +540,10 @@ export async function createOAuthClientEndpoint(
 		(responseBody as OAuthClient & { resources?: string[] }).resources =
 			resources;
 	}
+	// A newly created client is a 201 on every path (DCR and admin alike).
+	ctx.setStatus(201);
 	return ctx.json(responseBody, {
-		status: 201,
-		headers: {
-			"Cache-Control": "no-store",
-			Pragma: "no-cache",
-		},
+		headers: { ...OAUTH_NO_STORE_HEADERS },
 	});
 }
 
@@ -590,7 +636,9 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		softwareVersion,
 		softwareStatement,
 		// Authentication Metadata
-		redirectUris,
+		// Stored as [] (the column is non-null) for clients with no redirect-based
+		// flow, e.g. confidential client_credentials clients.
+		redirectUris: redirectUris ?? [],
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
