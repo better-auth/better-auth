@@ -83,11 +83,11 @@ The API Key plugin allows you to create and manage API keys for your application
 
 ## Usage
 
-You can view the list of API Key plugin options [here](/docs/plugins/api-key/reference#api-key-plugin-options).
+You can view the [API Key plugin options](/docs/plugins/api-key/reference#api-key-plugin-options).
 
 ### Create an API key
 
-<APIMethod path="/api-key/create" method="POST" serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys) or `organizationId` (for organization-owned keys)." clientOnlyNote="You can adjust more specific API key configurations by using the server method instead.">
+<APIMethod path="/api-key/create" method="POST" serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys). For organization-owned keys, pass the `organizationId` together with a `userId` that has permission to create keys in that organization." clientOnlyNote="You can adjust more specific API key configurations by using the server method instead.">
   ```ts
   type createApiKey = {
       /**
@@ -179,7 +179,7 @@ Otherwise if it throws, it will throw an `APIError`.
 
   type verifyApiKey = {
       /**
-       * The configuration ID to use for verification. If not provided, the default configuration is used.
+       * Configuration ID to scope verification to. When omitted, the key is validated against its own configuration.
        */
       configId?: string
       /**

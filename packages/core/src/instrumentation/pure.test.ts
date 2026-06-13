@@ -1,5 +1,15 @@
+// cspell:ignore workerd
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { withSpan } from "./pure.index";
+
+type CorePackageJSON = {
+	exports: {
+		"./instrumentation": {
+			workerd: string;
+		};
+	};
+};
 
 // @see https://github.com/better-auth/better-auth/issues/8765
 describe("instrumentation (pure entry)", () => {
@@ -41,5 +51,18 @@ describe("instrumentation (pure entry)", () => {
 		const pure = await import("./pure.index");
 		const main = await import("./index");
 		expect(Object.keys(pure).sort()).toEqual(Object.keys(main).sort());
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9365
+	 */
+	it("routes workerd package imports to the pure instrumentation entry", () => {
+		const pkg = JSON.parse(
+			readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+		) as CorePackageJSON;
+
+		expect(pkg.exports["./instrumentation"].workerd).toBe(
+			"./dist/instrumentation/pure.index.mjs",
+		);
 	});
 });

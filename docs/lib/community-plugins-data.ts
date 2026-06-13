@@ -216,6 +216,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
+	{
 		name: "better-auth-usos",
 		url: "https://github.com/qamarq/better-auth-usos",
 		description:
@@ -235,6 +246,49 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "C-W-D-Harshit",
 			github: "C-W-D-Harshit",
 			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
+		description:
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
+		author: {
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
+		},
+	},
+	{
+		name: "better-near-auth",
+		url: "https://github.com/elliotBraem/better-near-auth",
+		description:
+			"Sign in with NEAR plugin with built-in gasless relay for on-chain delegate actions.",
+		author: {
+			name: "efiz.near",
+			github: "elliotBraem",
+			avatar: "https://github.com/elliotBraem.png",
+		},
+	},
+	{
+		name: "ton-better-auth",
+		url: "https://github.com/mhbdev/ton-better-auth",
+		description: "Sign in with Ton Connect",
+		author: {
+			name: "mhbdev",
+			github: "mhbdev",
+			avatar: "https://github.com/mhbdev.png",
+		},
+	},
+	{
+		name: "@dbsc-toolkit/better-auth",
+		url: "https://www.npmjs.com/package/@dbsc-toolkit/better-auth",
+		description:
+			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+		author: {
+			name: "SulimanAbdulrazzaq",
+			github: "SulimanAbdulrazzaq",
+			avatar: "https://github.com/SulimanAbdulrazzaq.png",
 		},
 	},
 ];

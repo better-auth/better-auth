@@ -162,6 +162,8 @@ export const getAuthTables = (
 				},
 				email: {
 					type: "string",
+					// TODO(#9124): drop required+unique in v2; use a partial unique
+					// index where email is not null (see schema/user.ts).
 					unique: true,
 					required: true,
 					fieldName: options.user?.fields?.email || "email",

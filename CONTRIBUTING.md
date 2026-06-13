@@ -189,6 +189,13 @@ Pick the bump type based on user impact:
 - **`patch`** for bug fixes and additive changes existing users don't need to know about.
 - **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting)).
 
+A good description:
+
+- Write for end users reading the changelog, not for the PR reviewer.
+- Be clear and concise.
+- Explain what changed, not a commit-style prefix (e.g. `fix:`, `feat:`).
+- Describe the symptom users see, not the internal cause.
+
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.
 
@@ -216,6 +223,15 @@ it before merge.
    - Reference related issues (e.g. "Closes #1234")
    - List any potential breaking changes
    - Add screenshots for UI changes
+
+## Following Up on Closed Issues and PRs
+
+Closed issues and PRs are automatically locked after 7 days of inactivity
+and tagged with the `locked` label. This keeps follow-ups from piling up
+on stale threads, so any new context can be triaged on its own.
+
+If you're hitting a similar problem or have new information, open a new
+issue or PR and reference the locked one.
 
 ## AI Policy
 

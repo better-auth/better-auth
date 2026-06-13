@@ -1,5 +1,6 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -75,6 +76,7 @@ describe("Admin plugin", async () => {
 		customFetchImpl,
 	} = await getTestInstance(
 		{
+			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
@@ -83,16 +85,13 @@ describe("Admin plugin", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -623,7 +622,44 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(errorLocation).toBeDefined();
-		expect(errorLocation).toContain("error=banned");
+		expect(errorLocation).toContain("error=BANNED_USER");
+	});
+
+	it("should redirect banned social sign-in to a cross-origin errorCallbackURL", async () => {
+		const errorCallbackURL = "https://frontend.example.com/auth-error";
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				errorCallbackURL,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				errorLocation = context.response.headers.get("location");
+			},
+		});
+		expect(errorLocation).toBeTruthy();
+		const url = new URL(errorLocation!);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(`${url.origin}${url.pathname}`).toBe(errorCallbackURL);
+		expect(url.searchParams.get("error")).toBe("BANNED_USER");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Custom banned user message",
+		);
 	});
 
 	it("should change banned user message", async () => {
@@ -683,6 +719,62 @@ describe("Admin plugin", async () => {
 		expect(res.data?.sessions.length).toBe(1);
 	});
 
+	it("should return 404 from unbanUser when the target user does not exist", async () => {
+		const res = await client.admin.unbanUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from banUser when the target user does not exist", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from setRole when the target user does not exist", async () => {
+		const res = await client.admin.setRole(
+			{
+				userId: "nonexistent-user-id",
+				role: "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from admin.updateUser when the target user does not exist", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: "nonexistent-user-id",
+				data: {
+					name: "John Doe",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should not allow non-admin to list user sessions", async () => {
 		const res = await client.admin.listUserSessions(
 			{
@@ -724,6 +816,115 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.data?.session).toBeDefined();
 		expect(res.data?.user?.id).toBe(session.data?.user.id);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9401
+	 */
+	it("should revalidate useSession after admin impersonation", async () => {
+		vi.stubGlobal("window", {});
+		const { headers } = await signInWithTestUser();
+		const browserHeaders = new Headers(headers);
+		const browserClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [adminClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					const requestHeaders = new Headers(browserHeaders);
+					const nextHeaders = init?.headers;
+					if (nextHeaders instanceof Headers) {
+						for (const [key, value] of nextHeaders.entries()) {
+							requestHeaders.set(key, value);
+						}
+					} else if (nextHeaders && typeof nextHeaders === "object") {
+						for (const [key, value] of Object.entries(nextHeaders)) {
+							if (typeof value === "string") {
+								requestHeaders.set(key, value);
+							}
+						}
+					}
+					return customFetchImpl(url, {
+						...init,
+						headers: requestHeaders,
+					});
+				},
+			},
+		});
+		type SessionState = ReturnType<typeof browserClient.useSession.get>;
+		type SessionData = NonNullable<SessionState["data"]>;
+		const waitForSessionData = async (
+			matches: (session: SessionData) => boolean,
+			triggerRead = false,
+		) => {
+			return new Promise<SessionData>((resolve, reject) => {
+				let unsubscribe = () => {};
+				const timeoutId = setTimeout(() => {
+					unsubscribe();
+					reject(new Error("Timed out waiting for session data"));
+				}, 1500);
+
+				unsubscribe = browserClient.useSession.subscribe((state) => {
+					if (state.isPending || state.isRefetching || state.data === null) {
+						return;
+					}
+
+					if (!matches(state.data)) {
+						return;
+					}
+
+					clearTimeout(timeoutId);
+					unsubscribe();
+					resolve(state.data);
+				});
+
+				if (triggerRead) {
+					browserClient.useSession.get();
+				}
+			});
+		};
+		const targetUser = await client.signUp.email({
+			email: "impersonate-reactive@mail.com",
+			password: "password",
+			name: "Impersonate Reactive User",
+		});
+
+		try {
+			const freshAdminSession = await browserClient.getSession();
+			const reactiveAdminSession = await waitForSessionData(
+				(session) => session.user.id === freshAdminSession.data?.user.id,
+				true,
+			);
+
+			expect(reactiveAdminSession.user.id).toBe(
+				freshAdminSession.data?.user.id,
+			);
+
+			await browserClient.admin.impersonateUser(
+				{
+					userId: targetUser.data?.user.id || "",
+				},
+				{
+					onSuccess: (ctx) => {
+						cookieSetter(browserHeaders)(ctx);
+					},
+				},
+			);
+
+			const freshImpersonatedSession = await browserClient.getSession();
+			expect(freshImpersonatedSession.data?.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+
+			const reactiveImpersonatedSession = await waitForSessionData(
+				(session) => session.user.id === targetUser.data?.user.id,
+			);
+
+			expect(reactiveImpersonatedSession.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 
 	it("should not allow non-admin to impersonate user", async () => {
@@ -1132,6 +1333,64 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/3553
+	 */
+	it("should create a credential account when setting password for a user without one", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "No Credential User",
+				email: "no-credential@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user?.id || "";
+		expect(userId).not.toBe("");
+
+		const preSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(preSignIn.error).toBeDefined();
+
+		const setRes = await client.admin.setUserPassword(
+			{
+				userId,
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(setRes.data?.status).toBe(true);
+
+		const postSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(postSignIn.error).toBeNull();
+		expect(postSignIn.data?.user.id).toBe(userId);
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+	});
+
+	it("should return USER_NOT_FOUND when setting password for a non-existent user", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "non-existent-user-id",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{
@@ -1201,6 +1460,115 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
+
+	it("should not allow updating password through update-user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					password: "new-password",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER");
+	});
+
+	it("should revoke sessions when banning a user via update-user", async () => {
+		const targetHeaders = new Headers();
+		const { data: target } = await client.signUp.email(
+			{
+				email: "ban-via-update@test.com",
+				password: "password",
+				name: "Ban Via Update",
+			},
+			{
+				onSuccess: cookieSetter(targetHeaders),
+			},
+		);
+		const targetId = target?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetId,
+				data: {
+					banned: true,
+					banReason: "Violation",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.banned).toBe(true);
+
+		const sessions = await client.admin.listUserSessions(
+			{
+				userId: targetId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessions.data?.sessions.length).toBe(0);
+	});
+
+	it("should not allow admins to ban themselves via update-user", async () => {
+		const { data: session } = await client.getSession({
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.updateUser(
+			{
+				userId: session?.user.id || "",
+				data: {
+					banned: true,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("YOU_CANNOT_BAN_YOURSELF");
+	});
+
+	it("should reject email updates that collide with another user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					email: "ban-via-update@test.com",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+	});
+
+	it("should allow admin to update user email and normalize it", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					email: "Updated-Email@Test.com",
+					emailVerified: false,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.email).toBe("updated-email@test.com");
+		expect(res.data?.emailVerified).toBe(false);
+	});
 });
 
 describe("access control", async () => {
@@ -1229,6 +1597,10 @@ describe("access control", async () => {
 		user: ["update"],
 		order: ["update"],
 	});
+	const creatorAc = ac.newRole({
+		user: ["create"],
+		order: [],
+	});
 
 	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
 		await getTestInstance(
@@ -1240,6 +1612,7 @@ describe("access control", async () => {
 							admin: adminAc,
 							user: userAc,
 							support: supportAc,
+							creator: creatorAc,
 						},
 					}),
 				],
@@ -1263,6 +1636,14 @@ describe("access control", async () => {
 										},
 									};
 								}
+								if (user.name === "Creator") {
+									return {
+										data: {
+											...user,
+											role: "creator",
+										},
+									};
+								}
 							},
 						},
 					},
@@ -1283,6 +1664,7 @@ describe("access control", async () => {
 					admin: adminAc,
 					user: userAc,
 					support: supportAc,
+					creator: creatorAc,
 				},
 			}),
 		],
@@ -1390,6 +1772,159 @@ describe("access control", async () => {
 		);
 		expect(res.error).toBeNull();
 		expect(res.data?.role).toBe("support");
+	});
+
+	it("should require user:set-role to assign roles via create-user", async () => {
+		const creatorHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "creator@test.com",
+				password: "password",
+				name: "Creator",
+			},
+			{
+				onSuccess: cookieSetter(creatorHeaders),
+			},
+		);
+
+		// `user:create` alone is enough when no role is requested
+		const ok = await client.admin.createUser(
+			{
+				name: "Created User",
+				email: "created-by-creator@test.com",
+				password: "password",
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(ok.data?.user.role).toBe("user");
+
+		// but requesting a role requires `user:set-role`
+		const res = await client.admin.createUser(
+			{
+				name: "Role Requested User",
+				email: "role-requested@test.com",
+				password: "password",
+				role: "admin",
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE");
+
+		// `data.role` must go through the same check
+		const res2 = await client.admin.createUser(
+			{
+				name: "Role Requested User",
+				email: "role-requested2@test.com",
+				password: "password",
+				data: {
+					role: "admin",
+				},
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(res2.error?.status).toBe(403);
+		expect(res2.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE");
+	});
+
+	it("should reject non-existent roles via create-user", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Bad Role User",
+				email: "bad-role@test.com",
+				password: "password",
+				data: {
+					role: "non-existent-role",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should apply a validated data.role for callers with user:set-role", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Data Role User",
+				email: "data-role@test.com",
+				password: "password",
+				data: {
+					role: "support",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data?.user.role).toBe("support");
+	});
+
+	it("should require user:ban to update ban fields via update-user", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support-ban@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const targetUserId = supportSignUp?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					banned: true,
+					banReason: "self-served ban",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS");
+	});
+
+	it("should require user:set-email to update email fields via update-user", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support-email@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const targetUserId = supportSignUp?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					email: "new-address@example.com",
+					emailVerified: true,
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL");
 	});
 
 	it("should validate on the client", async () => {
@@ -1749,16 +2284,13 @@ describe("edge cases: userId validation", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -1830,5 +2362,69 @@ describe("edge cases: userId validation", async () => {
 				},
 			}),
 		).rejects.toThrow("user not found");
+	});
+});
+
+describe("Admin plugin id-token sign-in", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-admin-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const clientId = "admin-idtoken-client.googleusercontent.com";
+
+	const signIdToken = (email: string) =>
+		new SignJWT({
+			email,
+			email_verified: true,
+			name: "Banned ID Token User",
+			sub: "banned-google-sub",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(clientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		server.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it("should return BANNED_USER 403 JSON for id-token sign-in by banned user", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [admin({ bannedUserMessage: "Custom banned user message" })],
+				socialProviders: {
+					google: { clientId, clientSecret: "test-secret" },
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true, banned: true },
+							}),
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idToken = await signIdToken("banned-idtoken@test.com");
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.message).toBe("Custom banned user message");
 	});
 });

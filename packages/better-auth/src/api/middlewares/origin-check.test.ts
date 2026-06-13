@@ -75,7 +75,7 @@ describe("Origin Check", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
-	it("should allow untrusted origin if they don't contain cookies", async (ctx) => {
+	it("should reject untrusted origin even without cookies", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
@@ -89,7 +89,7 @@ describe("Origin Check", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(res.data?.user).toBeDefined();
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should reject untrusted redirectTo", async (ctx) => {
@@ -365,6 +365,68 @@ describe("Fetch Metadata CSRF Protection", async () => {
 		expect(response.status).not.toBe(403);
 	});
 
+	it("should reject an untrusted origin on first-login when Fetch Metadata is missing", async (ctx) => {
+		const crossOriginRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(crossOriginRequest);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("should reject an untrusted Referer on first-login when Fetch Metadata is missing", async (ctx) => {
+		const crossRefererRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					referer: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(crossRefererRequest);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("should allow a first-login request that sends no cookies, Fetch Metadata, or origin", async (ctx) => {
+		const nonBrowserRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(nonBrowserRequest);
+
+		expect(response.status).not.toBe(403);
+	});
+
 	it("should use existing origin validation when session cookie exists", async (ctx) => {
 		const signInResponse = await auth.api.signInEmail({
 			body: {
@@ -591,6 +653,98 @@ describe("origin check middleware", async () => {
 			"/protected/data?callbackURL=https://malicious.com",
 		);
 		expect(blocked.error?.status).toBe(403);
+	});
+
+	it("should not skip origin check for a path that only shares a prefix with a skip path", async () => {
+		const { client } = await getTestInstance({
+			trustedOrigins: ["https://trusted-site.com"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+			plugins: [
+				{
+					id: "test",
+					init() {
+						return {
+							context: {
+								skipOriginCheck: ["/public/data"],
+							},
+						};
+					},
+					endpoints: {
+						siblingEndpoint: createAuthEndpoint(
+							"/public/database",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => c.query.callbackURL,
+						),
+					},
+				},
+			],
+		});
+
+		// "/public/database" only shares a prefix with the configured skip path
+		// "/public/data"; it must still have its callbackURL validated.
+		const blocked = await client.$fetch(
+			"/public/database?callbackURL=https://malicious.com",
+		);
+		expect(blocked.error?.status).toBe(403);
+	});
+
+	it("should reject a non-string redirect parameter with 400, not 500", async () => {
+		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		// An object callbackURL reaches the global origin-check middleware before
+		// endpoint schema validation; it must produce a controlled 400.
+		const objectBodyRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "password12345",
+					callbackURL: { object: true },
+				}),
+			},
+		);
+		const objectRes = await auth.handler(objectBodyRequest);
+		expect(objectRes.status).toBe(400);
+
+		// Duplicate query callbackURL parameters arrive as an array.
+		const duplicateQueryRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email?callbackURL=/a&callbackURL=/b",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "password12345",
+				}),
+			},
+		);
+		const arrayRes = await auth.handler(duplicateQueryRequest);
+		expect(arrayRes.status).toBe(400);
 	});
 });
 
@@ -1005,5 +1159,107 @@ describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 		});
 
 		expect(res.data?.user).toBeDefined();
+	});
+});
+
+describe("request-scoped trusted origin isolation", async () => {
+	it("does not let one request's trusted origins bleed into a concurrent request", async () => {
+		let releaseA!: () => void;
+		const aPaused = new Promise<void>((resolve) => {
+			releaseA = resolve;
+		});
+		let signalAtPause!: () => void;
+		const aReachedPause = new Promise<void>((resolve) => {
+			signalAtPause = resolve;
+		});
+
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			advanced: { disableCSRFCheck: false, disableOriginCheck: false },
+			trustedOrigins: (request) =>
+				request?.headers.get("x-tenant") === "a"
+					? ["https://a.example"]
+					: ["https://b.example"],
+			plugins: [
+				{
+					id: "pause-tenant-a",
+					onRequest: async (request) => {
+						if (request.headers.get("x-tenant") === "a") {
+							signalAtPause();
+							await aPaused;
+						}
+						return undefined;
+					},
+				},
+			],
+		});
+
+		const makeRequest = (tenant: "a" | "b") =>
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-tenant": tenant,
+					// Tenant A carries tenant B's origin: only the shared-context
+					// bleed would let A trust it.
+					origin: "https://b.example",
+					cookie: "x=1",
+				},
+				body: JSON.stringify({
+					email: `${tenant}@example.com`,
+					password: "password1234",
+				}),
+			});
+
+		// Start A; it pauses inside onRequest after base.ts resolved A's origins.
+		const aResponsePromise = auth.handler(makeRequest("a"));
+		await aReachedPause;
+		// Run B to completion so it mutates any shared trust state.
+		await auth.handler(makeRequest("b"));
+		releaseA();
+
+		const aResponse = await aResponsePromise;
+		// A must reject tenant B's origin; b.example is not in A's trusted list.
+		expect(aResponse.status).toBe(403);
+	});
+});
+
+describe("inferred baseURL is not persisted across requests", async () => {
+	it("does not reuse one request's host for a later request's token links", async () => {
+		const resetURLs: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			baseURL: undefined,
+			emailAndPassword: {
+				enabled: true,
+				sendResetPassword: async ({ url }) => {
+					resetURLs.push(url);
+				},
+			},
+		});
+
+		// First request arrives from one host.
+		await auth.handler(
+			new Request("https://untrusted.example/api/auth/request-password-reset", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ email: testUser.email, redirectTo: "/" }),
+			}),
+		);
+
+		// A later request from the legitimate host must build its link from its
+		// own host, not the host carried by the first request.
+		await auth.handler(
+			new Request("https://app.example/api/auth/request-password-reset", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ email: testUser.email, redirectTo: "/" }),
+			}),
+		);
+
+		const legitURL = resetURLs.at(-1);
+		expect(legitURL).toBeDefined();
+		expect(legitURL).toContain("https://app.example");
+		expect(legitURL).not.toContain("untrusted.example");
 	});
 });

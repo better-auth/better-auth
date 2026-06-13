@@ -85,13 +85,13 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
             create: async ({ data, model, select }) => {
               // ...
             },
-            update: async ({ data, model, select }) => {
+            update: async ({ model, where, update }) => {
               // ...
             },
-            updateMany: async ({ data, model, select }) => {
+            updateMany: async ({ model, where, update }) => {
               // ...
             },
-            delete: async ({ data, model, select }) => {
+            delete: async ({ model, where }) => {
               // ...
             },
             // ...
@@ -101,7 +101,7 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
     ```
 
     <Callout>
-      Learn more about the `adapter` here [here](/docs/concepts/database#adapters).
+      Learn more about [database adapters](/docs/concepts/database#adapters).
     </Callout>
   </Step>
 </Steps>
@@ -117,8 +117,8 @@ Before we get into the adapter function, let's go over the parameters that are a
 * `options`: The Better Auth options.
 * `schema`: The schema from the user's Better Auth instance.
 * `debugLog`: The debug log function.
-* `getFieldName`: Function to get the transformed field name for the database.
 * `getModelName`: Function to get the transformed model name for the database.
+* `getFieldName`: Function to get the transformed field name for the database.
 * `getDefaultModelName`: Function to get the default model name from the schema.
 * `getDefaultFieldName`: Function to get the default field name from the schema.
 * `getFieldAttributes`: Function to get field attributes for a specific model and field.
@@ -131,8 +131,8 @@ adapter: ({
   options,
   schema,
   debugLog,
-  getFieldName,
   getModelName,
+  getFieldName,
   getDefaultModelName,
   getDefaultFieldName,
   getFieldAttributes,
@@ -168,9 +168,7 @@ parameters:
 * `data`: The data to insert into the database.
 * `select`: An array of fields to return from the database.
 
-<Callout>
-  Make sure to return the data that is inserted into the database.
-</Callout>
+**Returns** `Promise<T>`: the record that was inserted into the database.
 
 ```ts title="Example"
 create: async ({ model, data, select }) => {
@@ -189,10 +187,7 @@ parameters:
 * `where`: The `where` clause to update the record by.
 * `update`: The data to update the record with.
 
-<Callout>
-  Make sure to return the data in the row which is updated. This includes any
-  fields that were not updated.
-</Callout>
+**Returns** `Promise<T | null>`: the updated row, or `null` if no row matched. With multiple `where` clauses, some adapters cannot return it.
 
 ```ts title="Example"
 update: async ({ model, where, update }) => {
@@ -211,7 +206,7 @@ parameters:
 * `where`: The `where` clause to update the records by.
 * `update`: The data to update the records with.
 
-<Callout>Make sure to return the number of records that were updated.</Callout>
+**Returns** `Promise<number>`: the number of records that were updated.
 
 ```ts title="Example"
 updateMany: async ({ model, where, update }) => {
@@ -229,6 +224,8 @@ parameters:
 * `model`: The model/table name that the record will be deleted from.
 * `where`: The `where` clause to delete the record by.
 
+**Returns** `Promise<void>`: nothing.
+
 ```ts title="Example"
 delete: async ({ model, where }) => {
   // Example of deleting a record from the database.
@@ -245,7 +242,7 @@ parameters:
 * `model`: The model/table name that the records will be deleted from.
 * `where`: The `where` clause to delete the records by.
 
-<Callout>Make sure to return the number of records that were deleted.</Callout>
+**Returns** `Promise<number>`: the number of records that were deleted.
 
 ```ts title="Example"
 deleteMany: async ({ model, where }) => {
@@ -253,6 +250,29 @@ deleteMany: async ({ model, where }) => {
   return await db.delete(model).where(where);
 };
 ```
+
+### `consumeOne` method (optional)
+
+The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges. Implementing it is optional: when omitted, the adapter factory falls back to wrapping `findMany` + `deleteMany` in a `transaction`, using the deleted-row count as the race gate.
+
+parameters:
+
+* `model`: The model/table name to consume a record from.
+* `where`: The `where` clause to match the single record by.
+
+**Returns** `Promise<T | null>`: the consumed record, or `null` if no row matched (including when another request consumed it first). Implementations must delete at most one matching row.
+
+```ts title="Example"
+consumeOne: async ({ model, where }) => {
+  // Single DELETE ... RETURNING is atomic, so only one caller gets the row.
+  const [row] = await db.delete(model).where(where).returning();
+  return row ?? null;
+};
+```
+
+<Callout type="info">
+  Although the factory provides a fallback, implementing `consumeOne` natively is recommended: the fallback is race-safe only under a real `transaction` with an accurate delete count. Stores without multi-document transactions therefore need a native atomic delete-and-return (`DELETE ... RETURNING`, `findOneAndDelete`, or a revision-conditional delete).
+</Callout>
 
 ### `findOne` method
 
@@ -265,7 +285,7 @@ parameters:
 * `select`: The `select` clause to return.
 * `join`: Optional join configuration to fetch related records in a single query.
 
-<Callout>Make sure to return the data that is found in the database.</Callout>
+**Returns** `Promise<T | null>`: the matching record, or `null` if none was found.
 
 ```ts title="Example"
 findOne: async ({ model, where, select, join }) => {
@@ -283,16 +303,15 @@ parameters:
 * `model`: The model/table name that the records will be found in.
 * `where`: The `where` clause to find the records by.
 * `limit`: The limit of records to return.
+* `select`: The `select` clause to return.
 * `sortBy`: The `sortBy` clause to sort the records by.
 * `offset`: The offset of records to return.
 * `join`: Optional join configuration to fetch related records in a single query.
 
-<Callout>
-  Make sure to return the array of data that is found in the database.
-</Callout>
+**Returns** `Promise<T[]>`: an array of the matching records.
 
 ```ts title="Example"
-findMany: async ({ model, where, limit, sortBy, offset, join }) => {
+findMany: async ({ model, where, limit, select, sortBy, offset, join }) => {
   // Example of finding multiple records in the database.
   return await db
     .select()
@@ -313,7 +332,7 @@ parameters:
 * `model`: The model/table name that the records will be counted in.
 * `where`: The `where` clause to count the records by.
 
-<Callout>Make sure to return the number of records that were counted.</Callout>
+**Returns** `Promise<number>`: the number of records that were counted.
 
 ```ts title="Example"
 count: async ({ model, where }) => {
@@ -423,6 +442,10 @@ The name of the adapter.
 
 Whether the database supports numeric IDs. If this is set to `false` and the user's config has enabled `useNumberId`, then we will throw an error.
 
+### `supportsUUIDs`
+
+Whether the database can natively generate UUIDs. Defaults to `false`. Set this to `true` if your database generates UUIDs itself.
+
 ### `supportsJSON`
 
 Whether the database supports JSON. If the database doesn't support JSON, we will use a `string` to save the JSON data.And when we retrieve the data, we will safely parse the `string` back into a JSON object.
@@ -434,6 +457,10 @@ Whether the database supports dates. If the database doesn't support dates, we w
 ### `supportsBooleans`
 
 Whether the database supports booleans. If the database doesn't support booleans, we will use a `0` or `1` to save the boolean value. When we retrieve the data, we will safely parse the `0` or `1` back into a boolean value.
+
+### `supportsArrays`
+
+Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
 
 ### `usePlural`
 
@@ -601,14 +628,3 @@ Whether to disable join transformation. This should only be used if you know wha
 <Callout type="warn">
   Disabling join transformation can break join functionality.
 </Callout>
-
-### `supportsJoin`
-
-Whether the adapter supports native joins. If set to `false` (the default), Better-Auth will handle joins by making multiple queries and combining the results. If set to `true`, the adapter is expected to handle joins natively (e.g., SQL JOIN operations).
-
-```ts title="Example"
-// For adapters that support native SQL joins
-const adapter = myAdapter({
-  supportsJoin: true,
-});
-```

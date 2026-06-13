@@ -92,6 +92,35 @@ export const auth = betterAuth({
 });
 ```
 
+### Example: Handling Multiple Endpoints in a Single Hook
+
+Since `before` and `after` each accept a single `createAuthMiddleware` call, use conditional checks on `ctx.path` to handle multiple endpoints within the same hook:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auth = betterAuth({
+    hooks: {
+        after: createAuthMiddleware(async (ctx) => {
+            if (ctx.path === "/reset-password") {
+                // Auto-login user after password reset
+            }
+            if (ctx.path.startsWith("/sign-up")) {
+                // Send welcome notification after signup
+            }
+            if (ctx.path === "/sign-in/email") {
+                // Track login analytics
+            }
+        }),
+    },
+});
+```
+
+<Callout>
+Each hook (`before` / `after`) takes a single middleware function, not an array. To run logic for different endpoints, branch on `ctx.path` inside that single function.
+</Callout>
+
 ## Ctx
 
 When you call `createAuthMiddleware` a `ctx` object is passed that provides a lot of useful properties. Including:

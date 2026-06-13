@@ -31,7 +31,7 @@ export async function createEmailVerificationToken(
 	const token = await signJWT(
 		{
 			email: email.toLowerCase(),
-			updateTo,
+			updateTo: updateTo?.toLowerCase(),
 			...extraPayload,
 		},
 		secret,
@@ -64,15 +64,15 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.runInBackgroundOrAwait(
-		ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: user,
-				url,
-				token,
-			},
-			ctx.request,
-		),
+	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
+	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
+	await ctx.context.options.emailVerification.sendVerificationEmail(
+		{
+			user: user,
+			url,
+			token,
+		},
+		ctx.request,
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
@@ -80,6 +80,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		operationId: "sendVerificationEmail",
+		cloneRequest: true,
 		body: z.object({
 			email: z.email().meta({
 				description: "The email to send the verification email to",
@@ -170,7 +171,16 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
+			/**
+			 * Enforce a constant-time floor so an attacker cannot distinguish
+			 * "email not found / already verified" (fast local JWT sign) from
+			 * "email found and unverified" (slow external email-send) by
+			 * comparing response times.
+			 */
+			const MINIMUM_MS = 500;
+			const start = Date.now();
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let error: unknown;
 			if (!user || user.user.emailVerified) {
 				await createEmailVerificationToken(
 					ctx.context.secret,
@@ -178,17 +188,23 @@ export const sendVerificationEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				// We're returning true to avoid leaking information about the user
-				return ctx.json({
-					status: true,
-				});
+			} else {
+				try {
+					await sendVerificationEmailFn(ctx, user.user);
+				} catch (e) {
+					error = e;
+				}
 			}
-			await sendVerificationEmailFn(ctx, user.user);
+			const remaining = MINIMUM_MS - (Date.now() - start);
+			if (remaining > 0) {
+				await new Promise((resolve) => setTimeout(resolve, remaining));
+			}
+			if (error) throw error;
 			return ctx.json({
 				status: true,
 			});
 		}
-		if (session?.user.email !== email) {
+		if (session?.user.email.toLowerCase() !== email.toLowerCase()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		if (session?.user.emailVerified) {
@@ -338,7 +354,7 @@ export const verifyEmail = createAuthEndpoint(
 									url,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}
@@ -437,7 +453,7 @@ export const verifyEmail = createAuthEndpoint(
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}

@@ -311,6 +311,33 @@ export interface SecondaryStorage {
 	 * @returns - Value of the key
 	 */
 	get: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically get a value and delete it from storage.
+	 *
+	 * This is optional for backwards compatibility with existing secondary
+	 * storage implementations. Single-use credential consumers use it when
+	 * present to avoid a read-then-delete race.
+	 *
+	 * TODO(secondary-storage-atomic-consume): make this required in the next
+	 * breaking release, or require database-backed verification storage for
+	 * security-sensitive consume paths.
+	 */
+	getAndDelete?: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically increment the counter at `key` by one, returning the
+	 * post-increment value.
+	 *
+	 * When the key is absent, it is created with a value of `1` and the given
+	 * `ttl` (in SECONDS). The TTL is applied only on creation; later increments
+	 * never extend it, so the counter expires a fixed window after it was first
+	 * created.
+	 *
+	 * This is optional for backwards compatibility with existing secondary
+	 * storage implementations. TODO(secondary-storage-increment-required): make
+	 * this required for secondary-storage-backed rate limiting in the next minor
+	 * on `next`.
+	 */
+	increment?: (key: string, ttl: number) => Awaitable<number>;
 	set: (
 		/**
 		 * Key to store
