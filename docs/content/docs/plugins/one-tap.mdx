@@ -20,7 +20,9 @@ provides a simple way to integrate One Tap into your application, handling the c
 
     export const auth = betterAuth({
         plugins: [
-            oneTap(), // Add the One Tap server plugin  // [!code highlight]
+            oneTap({
+              clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
+            }),
         ]
     });
     ```
@@ -203,7 +205,7 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 ### Server Options
 
 * `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
-* `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+* `clientId`: Google client ID for ID token audience verification. Required unless `socialProviders.google.clientId` is configured.
 
 ### Authorized JavaScript origins
 
