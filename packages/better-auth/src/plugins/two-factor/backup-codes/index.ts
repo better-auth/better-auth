@@ -507,9 +507,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				},
 			),
 			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/view-backup-codes`
+			 * A server-only function that returns a user's decrypted two-factor
+			 * backup codes. It is not exposed over HTTP and has no client method;
+			 * call it from trusted server code with a `userId` taken from an
+			 * authenticated session.
 			 *
 			 * ### API Methods
 			 *
@@ -518,7 +519,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
-			viewBackupCodes: createAuthEndpoint(
+			viewBackupCodes: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					body: viewBackupCodesBodySchema,

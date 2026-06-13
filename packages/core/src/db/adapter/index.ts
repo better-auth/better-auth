@@ -15,6 +15,8 @@ export type DBAdapterDebugLogOption =
 			findMany?: boolean | undefined;
 			delete?: boolean | undefined;
 			deleteMany?: boolean | undefined;
+			consumeOne?: boolean | undefined;
+			incrementOne?: boolean | undefined;
 			count?: boolean | undefined;
 	  }
 	| {
@@ -211,6 +213,8 @@ export interface DBAdapterFactoryConfig<
 					| "updateMany"
 					| "delete"
 					| "deleteMany"
+					| "consumeOne"
+					| "incrementOne"
 					| "count";
 				/**
 				 * The model name.
@@ -446,6 +450,53 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
+	 * Atomically consume a single row matching the where clause: delete it and
+	 * return the deleted row, or return `null` if no row matched.
+	 * Implementations MUST NOT delete any additional rows that also match a
+	 * non-unique predicate.
+	 *
+	 * Under concurrent invocation against the same row, exactly one caller
+	 * receives the row; subsequent racers receive `null`. This is the
+	 * race-safe primitive for consuming single-use credentials
+	 * (verification tokens, authorization codes, one-time tokens).
+	 *
+	 * Always defined on the factory-wrapped adapter. When the underlying
+	 * `CustomAdapter` does not implement `consumeOne`, the factory provides
+	 * a fallback that wraps `findMany + deleteMany` in `transaction(...)`
+	 * and returns the row only when the delete reports an affected row.
+	 */
+	consumeOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
+	/**
+	 * Atomically apply signed numeric deltas to a single row matching the where
+	 * clause. For each entry in `increment`, the operation applies
+	 * `field = field + delta` in one atomic step; a negative delta decrements.
+	 *
+	 * The `where` clause is both the selector AND the guard: comparison
+	 * operators are honored, so passing `{ field: "remaining", operator: "gt",
+	 * value: 0 }` only mutates the row while `remaining` is still above zero.
+	 * When the guard matches no row, the operation makes no change and returns
+	 * `null`.
+	 *
+	 * The optional `set` map assigns absolute values to fields in the same
+	 * atomic operation, alongside the increments.
+	 *
+	 * Returns the updated row, or `null` when the guard matched no row. Under
+	 * concurrent invocation against the same row, this is the race-safe
+	 * primitive for guarded counter updates (e.g. decrementing a remaining-uses
+	 * counter only while it is still positive).
+	 *
+	 * Always defined on the factory-wrapped adapter. When the underlying
+	 * `CustomAdapter` does not implement `incrementOne`, the factory provides a
+	 * fallback that wraps `findMany + updateMany` in `transaction(...)` and
+	 * re-applies the where clause as a compare-and-swap guard on the update.
+	 */
+	incrementOne: <T>(data: {
+		model: string;
+		where: Where[];
+		increment: Record<string, number>;
+		set?: Record<string, unknown> | undefined;
+	}) => Promise<T | null>;
+	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
 	 */
@@ -531,6 +582,38 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<number>;
+	/**
+	 * Optional native atomic single-row consume. When omitted, the adapter
+	 * factory falls back to `transaction(findMany + deleteMany)`.
+	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
+	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
+	 * strongest race-safety guarantee. Implementations must delete at most
+	 * one matching row. TODO(consume-one-required): tighten to required in the
+	 * next minor on `next`.
+	 */
+	consumeOne?: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+	}) => Promise<T | null>;
+	/**
+	 * Optional native atomic guarded counter mutation. Applies
+	 * `field = field + delta` for each entry in `increment` (negative deltas
+	 * decrement), with `where` acting as both selector and guard and `set`
+	 * assigning absolute values in the same operation. Returns the updated row,
+	 * or `null` when the guard matched no row.
+	 *
+	 * Implementing this natively (e.g. `UPDATE ... SET n = n + $delta WHERE ...
+	 * RETURNING *`) gives one round trip and the strongest race-safety
+	 * guarantee. When omitted, the adapter factory provides a transaction-based
+	 * fallback over `findMany + updateMany`. TODO(increment-one-required):
+	 * tighten to required in the next minor on `next`.
+	 */
+	incrementOne?: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+		increment: Record<string, number>;
+		set?: Record<string, unknown> | undefined;
+	}) => Promise<T | null>;
 	count: ({
 		model,
 		where,

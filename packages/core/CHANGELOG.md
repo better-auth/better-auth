@@ -1,5 +1,107 @@
 # @better-auth/core
 
+## 1.6.18
+
+### Patch Changes
+
+- [#9583](https://github.com/better-auth/better-auth/pull/9583) [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix plugin-provided client methods and additional session fields not being inferred in composite monorepos.
+
+## 1.6.17
+
+### Patch Changes
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the optional `incrementOne` adapter method and the optional `SecondaryStorage.increment` method. `incrementOne` atomically applies signed numeric deltas to a single row under a where-clause guard (for example, decrementing a remaining-uses counter only while it is still positive) and returns the updated row, or null when the guard matched no row. Adapters that do not implement it natively keep working through a transaction-based fallback. `SecondaryStorage.increment` atomically increments a counter and sets its time-to-live only when the key is first created.
+
+- [#9987](https://github.com/better-auth/better-auth/pull/9987) [`7343284`](https://github.com/better-auth/better-auth/commit/73432841493a2d99144786c986ee57c071d816d8) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed a memory leak where the JWKS cache could grow on every access token verification.
+
+- [#10003](https://github.com/better-auth/better-auth/pull/10003) [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Microsoft Entra ID sign-in now honors the configured tenant restriction. `tenantId: "organizations"` rejects personal Microsoft accounts, and `tenantId: "consumers"` rejects work and school accounts. Both were accepted before.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Concurrent requests can no longer slip past the configured rate limit. The in-memory rate-limit store no longer grows without bound, and the database backend removes expired entries on its own. A custom rate-limit storage may implement a new optional `consume` method for strict enforcement; without it, the previous behavior is kept and a one-time warning is logged.
+
+- [#10003](https://github.com/better-auth/better-auth/pull/10003) [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A Reddit user with no email now receives a non-routable placeholder address (`<id>@reddit.invalid`) instead of one on the real `reddit.com` domain, so it cannot match a deliverable mailbox. The address stays unverified, and `mapProfileToUser` can supply a real email.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.reserveVerificationValue`. It atomically records a single-use marker (such as a replay tombstone) so that exactly one of several concurrent callers succeeds and the rest observe that the marker is already taken. Database-backed verification storage is atomic; secondary-storage-only verification is best-effort.
+
+- [#9990](https://github.com/better-auth/better-auth/pull/9990) [`1dbf5bb`](https://github.com/better-auth/better-auth/commit/1dbf5bb59de5d628f0d07d5e846eba8287b831d7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Hardens how requests are trusted across several flows. Rate limiting is now enforced even when a client IP cannot be determined, instead of being skipped. When `baseURL` is not configured, password-reset and verification links use the current request's host rather than the host of the first request the server handled, and a request-scoped `trustedOrigins` callback no longer affects other concurrent requests. The OAuth proxy, Google One Tap, and the Expo authorization proxy reject redirect and callback targets that are not in `trustedOrigins`. Google reCAPTCHA and Cloudflare Turnstile accept optional `expectedAction` and `allowedHostnames` to reject tokens minted for a different action or hostname. Server-side fetches reject additional reserved IPv6 ranges, and malformed redirect parameters return a 400 instead of a 500.
+
+- [#10003](https://github.com/better-auth/better-auth/pull/10003) [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - WeChat sign-in now succeeds with the documented default setup, which previously failed because WeChat returns no email address. The created user receives a stable, unverified placeholder email; supply a real one with `mapProfileToUser`.
+
+## 1.6.16
+
+### Patch Changes
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Validate Facebook opaque access tokens against the configured app. Previously `verifyIdToken` returned `true` for any non-JWT token and `getUserInfo` called Graph `/me` with the caller-supplied token without checking which app issued it, so tokens issued for other Facebook apps were not distinguished on the direct sign-in path. Facebook tokens are now inspected via the `debug_token` endpoint, requiring `is_valid`, an `app_id` that matches one of the configured client ids, and a `user_id` that matches the returned profile, before the token is accepted. A client secret must be configured for access-token sign-in to work.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Enforce the Google `hd` (hosted domain) option against the id token. Previously `hd` was only sent to Google as an authorization hint, which does not by itself restrict sign-in to the configured Workspace domain. When `hd` is set, the `hd` claim on the verified id token (`verifyIdToken`) and the decoded callback profile (`getUserInfo`) must be present and match, otherwise sign-in is rejected.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Scope the JWKS cache per source. Access-token verification previously kept a single global key set and reused it whenever it contained a key matching the token's `kid`, without considering which JWKS source the verification was for. When verifying tokens against more than one source, a token could end up matched against keys fetched for a different source if the two shared a `kid`. The cache is now keyed per JWKS source and honors a TTL, so each verification uses the keys for its own source and rotated or removed keys are no longer used after the TTL elapses.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Cryptographically verify PayPal ID tokens on direct sign-in. Previously `verifyIdToken` only decoded the JWT and checked that a `sub` claim was present, performing no signature, issuer, audience, or expiration checks, so any well-formed token paired with a valid access token would be accepted. The token is now verified against PayPal's issuer and published JWKS (RS256) or the client secret (HS256), with the `aud` pinned to the configured `clientId`, a `maxTokenAge` bound, and the `nonce` checked when supplied.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Stop mapping the Reddit `oauth_client_id` to the user's email. Reddit's `identity` scope does not return an email address, and the provider previously stored `oauth_client_id` (which identifies the OAuth application and is the same for every user of the app) as `user.email` with `has_verified_email` as `emailVerified`. This collapsed all Reddit users of the same app onto a single "verified" email, which could enable implicit account linking/takeover. The Reddit provider now uses the email returned from `mapProfileToUser` when provided, otherwise falls back to a unique per-user synthetic address (`<reddit-user-id>@reddit.com`), and no longer marks it as verified. Provide a real email via `mapProfileToUser` if you need the actual address.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Fix `verifyAccessToken` silently dropping the configured audience check during remote introspection. Previously, when a required `audience` was set in `verifyOptions` but the introspection response omitted the `aud` claim, audience validation was skipped and any active token from the issuer was accepted — so a token issued for a different resource or client on the same issuer could also pass verification. Verification now requires the claim: a missing or mismatching `aud` is rejected. Authorization servers that legitimately omit `aud` from introspection responses (it is OPTIONAL per RFC 7662) can opt back into the old behavior with the new `remoteVerify.allowMissingAudience: true` flag, which still rejects mismatching audiences.
+
+## 1.6.15
+
+## 1.6.14
+
+### Patch Changes
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+## 1.6.13
+
+### Patch Changes
+
+- [#9818](https://github.com/better-auth/better-auth/pull/9818) [`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix two buggy `internalAdapter` helpers.
+
+  Remove `findAccount(accountId)`. It looked accounts up by account ID alone, which is unique neither across providers nor across users, so it returned a non-deterministic match. All callers now use a user-scoped or provider-scoped lookup.
+
+  Replace the ambiguous `deleteSessions(string | string[])` with two explicit methods. `deleteUserSessions(userId)` revokes every session for a user, and `deleteSessions(tokens)` revokes sessions by token. The old single-string overload silently treated its argument as a user ID, so a caller that meant to delete one session token could instead wipe all of a user's sessions or quietly match nothing.
+
+- [#9831](https://github.com/better-auth/better-auth/pull/9831) [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066) Thanks [@bytaesu](https://github.com/bytaesu)! - Surface a clear error when an adapter's `deleteMany` returns a non-numeric value in the `consumeOne` fallback, instead of silently failing the consume.
+
+## 1.6.12
+
+### Patch Changes
+
+- [#8870](https://github.com/better-auth/better-auth/pull/8870) [`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3) Thanks [@jsj](https://github.com/jsj)! - fix(apple): accept hashed nonces for native iOS Sign In
+
+- [#9799](https://github.com/better-auth/better-auth/pull/9799) [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh access tokens from `genericOAuth` providers that omit `expires_in`.
+
+  When a provider's token response leaves out `expires_in`, Better Auth recorded no expiry, so `getAccessToken` couldn't tell the token had lapsed and never refreshed it; callers kept receiving a stale token. Set `accessTokenExpiresIn` (seconds) on a `genericOAuth` config entry to declare the token's lifetime; the expiry is then synthesized at sign-in and on refresh, and the existing refresh path works. The option is opt-in: providers that return `expires_in` or issue non-expiring tokens are unaffected.
+
+- [#9727](https://github.com/better-auth/better-auth/pull/9727) [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `toCamelCase`, `toSnakeCase`, `toPascalCase`, and `toKebabCase` to `@better-auth/core/utils/string`.
+
+- [#9683](https://github.com/better-auth/better-auth/pull/9683) [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3) Thanks [@yb175](https://github.com/yb175)! - Widen Kysely peer dependency ranges to support both 0.28.x and 0.29.x.
+
+- [#9655](https://github.com/better-auth/better-auth/pull/9655) [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799) Thanks [@cyphercodes](https://github.com/cyphercodes)! - `verifyAccessToken` now returns unauthorized API errors for invalid token-shape verification failures, including missing JWT key IDs, while preserving raw JOSE errors for JWKS infrastructure failures.
+
+## 1.6.11
+
+### Patch Changes
+
+- [#9568](https://github.com/better-auth/better-auth/pull/9568) [`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.consumeVerificationValue(identifier)`: atomically consume a verification row keyed by identifier. The first concurrent caller receives the row; later racers receive `null`. Backed by a new `DBAdapter.consumeOne` primitive implemented natively per adapter (memory, mongo, drizzle, kysely, prisma), with a `transaction(findMany + delete)` factory fallback. `SecondaryStorage.getAndDelete` is added as an optional companion; Redis ships it via an atomic Lua get-and-delete operation for compatibility with Redis versions before 6.2.
+
+- [#9578](https://github.com/better-auth/better-auth/pull/9578) [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `handleOAuthUserInfo` (used by every social provider, generic-oauth, oauth-proxy, SSO OIDC and SAML, and idToken sign-in) implicitly linked a returning OAuth identity into a local user row whenever the IdP's `email_verified` claim was true or the provider was trusted. The local row's own `emailVerified` flag was read only to flip it after linking, never as a precondition. `POST /sign-up/email` creates rows with `emailVerified: false` for any caller, so an attacker who pre-registered a victim's email at the application could wait for the legitimate user's first OAuth sign-in: the IdP's verified claim was treated as ownership proof, and the victim's IdP identity was linked into the attacker-owned row.
+
+  The implicit-link gate now requires `dbUser.user.emailVerified === true` in addition to the provider trust check by default. A new `account.accountLinking.requireLocalEmailVerified` option (default `true`) is the public surface for this gate. Apps whose users sign up via OAuth without verifying their email locally can opt back into the legacy behavior with `account: { accountLinking: { requireLocalEmailVerified: false } }`; understand the takeover risk before doing so. The option is `@deprecated`; a FIXME at each gate site points at the next-minor follow-up on `next` that drops the option and makes the gate unconditional.
+
+  The `one-tap` plugin honored its own copy of the gate and was updated identically: `requireLocalEmailVerified` and `accountLinking.disableImplicitLinking` both apply on `/one-tap/callback`. The `email_verified` claim from the Google ID token is now normalized via `toBoolean` so a string `"false"` is treated as falsy.
+
+  Test fixtures across `admin`, `oidc-provider`, `mcp`, `generic-oauth`, `last-login-method`, and `oauth-provider` suites now mark users `emailVerified: true` via a `databaseHooks.user.create.before` hook (or the `disableTestUser` opt-in on the oauth-provider RP) so the suites continue to exercise their role/flow logic rather than the new gate.
+
+- [#9582](https://github.com/better-auth/better-auth/pull/9582) [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: invalid instrumentation import list
+
+- [#9545](https://github.com/better-auth/better-auth/pull/9545) [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Widen `advanced.ipAddress.ipv6Subnet` to accept any integer prefix length from 0 to 128, not just `32 | 48 | 64 | 128`. The runtime mask code already handled any value in range; the type union was unnecessarily narrow and rejected valid prefix lengths like `/56` (residential ISP allocations) and `/40` (common cloud allocations). Existing values continue to work unchanged.
+
+## 1.6.10
+
+### Patch Changes
+
+- [#9395](https://github.com/better-auth/better-auth/pull/9395) [`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b) Thanks [@cyphercodes](https://github.com/cyphercodes)! - Route Cloudflare Workers instrumentation imports to the pure no-op entry when OpenTelemetry is not installed.
+
 ## 1.6.9
 
 ### Patch Changes

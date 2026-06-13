@@ -12,14 +12,16 @@ import type { DiscoveryError } from "./types";
  * Maps a DiscoveryError to an appropriate APIError for HTTP responses.
  *
  * Error code mapping:
- * - discovery_invalid_url       → 400 BAD_REQUEST
- * - discovery_not_found         → 400 BAD_REQUEST
- * - discovery_invalid_json      → 400 BAD_REQUEST
- * - discovery_incomplete        → 400 BAD_REQUEST
- * - issuer_mismatch             → 400 BAD_REQUEST
+ * - discovery_invalid_url        → 400 BAD_REQUEST
+ * - discovery_not_found          → 400 BAD_REQUEST
+ * - discovery_untrusted_origin   → 400 BAD_REQUEST
+ * - discovery_private_host       → 400 BAD_REQUEST
+ * - discovery_invalid_json       → 400 BAD_REQUEST
+ * - discovery_incomplete         → 400 BAD_REQUEST
+ * - issuer_mismatch              → 400 BAD_REQUEST
  * - unsupported_token_auth_method → 400 BAD_REQUEST
- * - discovery_timeout           → 502 BAD_GATEWAY
- * - discovery_unexpected_error  → 502 BAD_GATEWAY
+ * - discovery_timeout            → 502 BAD_GATEWAY
+ * - discovery_unexpected_error   → 502 BAD_GATEWAY
  *
  * @param error - The DiscoveryError to map
  * @returns An APIError with appropriate status and message
@@ -46,13 +48,19 @@ export function mapDiscoveryErrorToAPIError(error: DiscoveryError): APIError {
 
 		case "discovery_invalid_url":
 			return new APIError("BAD_REQUEST", {
-				message: `Invalid OIDC discovery URL: ${error.message}`,
+				message: `Invalid OIDC endpoint URL: ${error.message}`,
 				code: error.code,
 			});
 
 		case "discovery_untrusted_origin":
 			return new APIError("BAD_REQUEST", {
 				message: `Untrusted OIDC discovery URL: ${error.message}`,
+				code: error.code,
+			});
+
+		case "discovery_private_host":
+			return new APIError("BAD_REQUEST", {
+				message: error.message,
 				code: error.code,
 			});
 

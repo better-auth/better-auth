@@ -2,8 +2,10 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
+import { betterAuth } from "../auth/minimal";
 import type { InferCtx } from "../client/path-to-object";
-import { organization, twoFactor } from "../plugins";
+import { tanstackStartCookies } from "../integrations/tanstack-start";
+import { admin, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -268,6 +270,48 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8823
+ */
+describe("plugin types through factory and indirection patterns", () => {
+	it("preserves endpoint types through factory ReturnType", () => {
+		const createAuth = () =>
+			betterAuth({
+				plugins: [admin()],
+			});
+		type Auth = ReturnType<typeof createAuth>;
+
+		const auth = createAuth();
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.listUsers).toBeFunction();
+		expectTypeOf<Auth["api"]["createUser"]>().toBeFunction();
+		expectTypeOf<Auth["api"]["listUsers"]>().toBeFunction();
+	});
+
+	it("preserves endpoint types when options are stored in a variable", () => {
+		const opts = { plugins: [admin()] };
+		const auth = betterAuth(opts);
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.listUsers).toBeFunction();
+	});
+
+	it("preserves endpoint types with mixed-shape plugins", () => {
+		const auth = betterAuth({
+			plugins: [admin(), organization(), tanstackStartCookies()],
+		});
+		expectTypeOf(auth.api.createUser).toBeFunction();
+		expectTypeOf(auth.api.createOrganization).toBeFunction();
+	});
+
+	it("preserves $ERROR_CODES through factory ReturnType", () => {
+		const createAuth = () => betterAuth({ plugins: [admin()] });
+		type Codes = ReturnType<typeof createAuth>["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
+		expectTypeOf<Codes>().toHaveProperty("USER_ALREADY_EXISTS");
 	});
 });
 

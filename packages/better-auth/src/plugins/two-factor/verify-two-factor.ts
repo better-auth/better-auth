@@ -58,8 +58,24 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		);
 		return {
 			valid: async (ctx: GenericEndpointContext) => {
+				// The 2FA challenge is single-use and time-bounded. Burn it
+				// atomically before issuing a session so a stale (expired) replay
+				// or two concurrent verifications of the same cookie cannot each
+				// mint a session: the consume returns null for an expired or
+				// already-consumed row, and only the first racer wins it.
+				const consumed =
+					await ctx.context.internalAdapter.consumeVerificationValue(
+						signedTwoFactorCookie,
+					);
+				if (!consumed || consumed.value !== user.id) {
+					expireCookie(ctx, twoFactorCookie);
+					throw APIError.from(
+						"UNAUTHORIZED",
+						TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+					);
+				}
 				const session = await ctx.context.internalAdapter.createSession(
-					verificationToken.value,
+					consumed.value,
 					!!dontRememberMe,
 				);
 				if (!session) {
@@ -68,10 +84,6 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						code: "FAILED_TO_CREATE_SESSION",
 					});
 				}
-				// Delete the verification token from the database after successful verification
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					signedTwoFactorCookie,
-				);
 				await setSessionCookie(ctx, {
 					session,
 					user,
