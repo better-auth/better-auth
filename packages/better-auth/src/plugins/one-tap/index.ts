@@ -140,7 +140,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						sub,
 					} = payload;
 					if (typeof rawEmail !== "string" || !rawEmail) {
-						return ctx.json({ error: "Email not available in token" });
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
 					}
 					if (typeof sub !== "string" || !sub) {
 						throw new APIError("BAD_REQUEST", {

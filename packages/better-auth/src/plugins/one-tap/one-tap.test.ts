@@ -501,6 +501,10 @@ describe("one-tap callbackURL origin validation", async () => {
 });
 
 describe("one-tap audience enforcement", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
 	it("rejects the callback when no Google client ID is configured", async () => {
 		// No `socialProviders.google` and no `oneTap({ clientId })`, so there is no
 		// expected audience. Without one, jose would verify Google's signature but
@@ -552,5 +556,25 @@ describe("one-tap audience enforcement", async () => {
 				audience: "explicit-one-tap-client",
 			}),
 		);
+	});
+
+	it("rejects the callback when the verified token has no email", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		verifiedPayload.email = "";
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Email not available in token");
 	});
 });
