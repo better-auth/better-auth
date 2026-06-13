@@ -4,7 +4,6 @@ import type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 } from "@better-auth/core/db";
-import { toPascalCase } from "@better-auth/core/utils/string";
 import type {
 	OpenAPIParameter as BetterCallOpenAPIParameter,
 	Endpoint,
@@ -112,9 +111,7 @@ export type FieldSchema = {
 	type: DBFieldType | "array";
 	/** Element schema for `type: "array"` (JSON Schema / OpenAPI array shape). */
 	items?: { type: string };
-	default?:
-		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
-		| undefined;
+	default?: DBFieldAttributeConfig["defaultValue"] | undefined;
 	readOnly?: boolean | undefined;
 	format?: string;
 };
@@ -142,10 +139,9 @@ function getFieldSchema(field: DBFieldAttribute) {
 			};
 
 	if (field.defaultValue !== undefined) {
-		schema.default =
-			typeof field.defaultValue === "function"
-				? "Generated at runtime"
-				: field.defaultValue;
+		if (typeof field.defaultValue !== "function") {
+			schema.default = field.defaultValue;
+		}
 	}
 
 	if (field.input === false) {
@@ -230,9 +226,11 @@ function getParameters(options: EndpointOptions) {
 	const parameters: OpenAPIParameter[] = [];
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
-		return parameters;
 	}
-	if (options.query instanceof z.ZodObject) {
+	if (
+		!options.metadata?.openapi?.parameters &&
+		options.query instanceof z.ZodObject
+	) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
@@ -245,6 +243,28 @@ function getParameters(options: EndpointOptions) {
 		});
 	}
 	return parameters;
+}
+
+function getPathParameters(path: string, parameters: OpenAPIParameter[]) {
+	const existingParameters = new Set(
+		parameters.map((parameter) => `${parameter.in}:${parameter.name}`),
+	);
+	return path
+		.split("/")
+		.filter((part) => part.startsWith(":"))
+		.map((part) => part.slice(1))
+		.filter((name) => !existingParameters.has(`path:${name}`))
+		.map(
+			(name) =>
+				({
+					name,
+					in: "path",
+					required: true,
+					schema: {
+						type: "string",
+					},
+				}) satisfies OpenAPIParameter,
+		);
 }
 
 function getRequestBodySchemaInfo(zodType: z.ZodType<unknown>) {
@@ -676,6 +696,52 @@ function toOpenApiPath(path: string) {
 		.join("/");
 }
 
+function getOperationId(
+	operationId: string | undefined,
+	method: string,
+	usedOperationIds: Set<string>,
+) {
+	if (!operationId) {
+		return undefined;
+	}
+	if (!usedOperationIds.has(operationId)) {
+		usedOperationIds.add(operationId);
+		return operationId;
+	}
+	const normalizedMethod = method.toUpperCase();
+	const methodSuffix =
+		normalizedMethod.charAt(0) + normalizedMethod.slice(1).toLowerCase();
+	let candidate = `${operationId}${methodSuffix}`;
+	let duplicateIndex = 2;
+	while (usedOperationIds.has(candidate)) {
+		candidate = `${operationId}${methodSuffix}${duplicateIndex}`;
+		duplicateIndex += 1;
+	}
+	usedOperationIds.add(candidate);
+	return candidate;
+}
+
+function cloneOpenAPIValue<T>(value: T): T {
+	if (Array.isArray(value)) {
+		return value.map((item) => cloneOpenAPIValue(item)) as T;
+	}
+
+	if (value instanceof Date) {
+		return new Date(value) as T;
+	}
+
+	if (value && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value).map(([key, entry]) => [
+				key,
+				cloneOpenAPIValue(entry),
+			]),
+		) as T;
+	}
+
+	return value;
+}
+
 export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const baseEndpoints = getEndpoints(ctx, {
 		...options,
@@ -727,27 +793,18 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	};
 
 	const paths: Record<string, Path> = {};
-	const seenOperationIds = new Set<string>();
-	const uniqueOperationId = (
-		operationId: string | undefined,
-		method: string,
-	) => {
-		if (!operationId) return undefined;
-		const base = seenOperationIds.has(operationId)
-			? `${operationId}${toPascalCase(method)}`
-			: operationId;
-		let result = base;
-		let n = 2;
-		while (seenOperationIds.has(result)) result = `${base}${n++}`;
-		seenOperationIds.add(result);
-		return result;
-	};
+	const usedOperationIds = new Set<string>();
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
+		const operationParameters = getParameters(options);
+		const parameters = [
+			...operationParameters,
+			...getPathParameters(value.path, operationParameters),
+		];
 		const methods = Array.isArray(options.method)
 			? options.method
 			: [options.method];
@@ -757,17 +814,20 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: uniqueOperationId(
+					operationId: getOperationId(
 						options.metadata?.openapi?.operationId,
 						method,
+						usedOperationIds,
 					),
 					security: [
 						{
 							bearerAuth: [],
 						},
 					],
-					parameters: getParameters(options),
-					responses: getResponse(options.metadata?.openapi?.responses),
+					parameters: cloneOpenAPIValue(parameters),
+					responses: cloneOpenAPIValue(
+						getResponse(options.metadata?.openapi?.responses),
+					),
 				},
 			};
 		}
@@ -780,18 +840,19 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
-					operationId: uniqueOperationId(
+					operationId: getOperationId(
 						options.metadata?.openapi?.operationId,
 						method,
+						usedOperationIds,
 					),
 					security: [
 						{
 							bearerAuth: [],
 						},
 					],
-					parameters: getParameters(options),
+					parameters: cloneOpenAPIValue(parameters),
 					...(body
-						? { requestBody: body }
+						? { requestBody: cloneOpenAPIValue(body) }
 						: {
 								requestBody: {
 									//set body none
@@ -805,7 +866,9 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 									},
 								},
 							}),
-					responses: getResponse(options.metadata?.openapi?.responses),
+					responses: cloneOpenAPIValue(
+						getResponse(options.metadata?.openapi?.responses),
+					),
 				},
 			};
 		}
@@ -835,6 +898,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
+			const operationParameters = getParameters(options);
+			const parameters = [
+				...operationParameters,
+				...getPathParameters(value.path, operationParameters),
+			];
 			const methods = Array.isArray(options.method)
 				? options.method
 				: [options.method];
@@ -848,17 +916,20 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: uniqueOperationId(
+						operationId: getOperationId(
 							options.metadata?.openapi?.operationId,
 							method,
+							usedOperationIds,
 						),
 						security: [
 							{
 								bearerAuth: [],
 							},
 						],
-						parameters: getParameters(options),
-						responses: getResponse(options.metadata?.openapi?.responses),
+						parameters: cloneOpenAPIValue(parameters),
+						responses: cloneOpenAPIValue(
+							getResponse(options.metadata?.openapi?.responses),
+						),
 					},
 				};
 			}
@@ -872,18 +943,21 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
 						description: options.metadata?.openapi?.description,
-						operationId: uniqueOperationId(
+						operationId: getOperationId(
 							options.metadata?.openapi?.operationId,
 							method,
+							usedOperationIds,
 						),
 						security: [
 							{
 								bearerAuth: [],
 							},
 						],
-						parameters: getParameters(options),
-						requestBody: getRequestBody(options),
-						responses: getResponse(options.metadata?.openapi?.responses),
+						parameters: cloneOpenAPIValue(parameters),
+						requestBody: cloneOpenAPIValue(getRequestBody(options)),
+						responses: cloneOpenAPIValue(
+							getResponse(options.metadata?.openapi?.responses),
+						),
 					},
 				};
 			}
