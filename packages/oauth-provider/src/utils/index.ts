@@ -12,6 +12,7 @@ import {
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import {
+	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
 	isExtensionTokenEndpointAuthMethod,
 } from "../extensions";
@@ -212,7 +213,7 @@ export async function getClient(
 		where: [{ field: "clientId", value: clientId }],
 	});
 
-	const discoveries = toClientDiscoveryArray(options.clientDiscovery);
+	const discoveries = getClientDiscoveries(options);
 	for (const discovery of discoveries) {
 		if (!discovery.matches(clientId)) continue;
 		const resolved = await discovery.resolve(ctx, clientId, dbClient);
@@ -230,29 +231,15 @@ export async function getClient(
 }
 
 /**
- * Normalize the `clientDiscovery` option into an array. Accepts a single
- * {@link ClientDiscovery}, an array of them, or `undefined`.
- *
- * @internal
- */
-export function toClientDiscoveryArray(
-	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
-): ClientDiscovery<Scope[]>[] {
-	if (!discovery) return [];
-	return Array.isArray(discovery) ? discovery : [discovery];
-}
-
-/**
- * Merge `discoveryMetadata` from every configured {@link ClientDiscovery}
+ * Merge `discoveryMetadata` from every contributed {@link ClientDiscovery}
  * into a single object. Entries are spread in order; later entries override
  * earlier ones on key collisions.
  *
  * @internal
  */
 export function mergeDiscoveryMetadata(
-	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+	discoveries: ClientDiscovery<Scope[]>[],
 ): Record<string, unknown> {
-	const discoveries = toClientDiscoveryArray(discovery);
 	return discoveries.reduce<Record<string, unknown>>(
 		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
 		{},

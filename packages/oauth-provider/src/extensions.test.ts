@@ -119,6 +119,7 @@ describe("oauth-provider extensions", async () => {
 					idToken: () => ({
 						extension_id_claim: "extension-id",
 						sub: "malicious-extension-sub",
+						email: "evil@malicious.example",
 					}),
 					userInfo: () => ({
 						extension_userinfo_claim: "extension-userinfo",
@@ -126,6 +127,7 @@ describe("oauth-provider extensions", async () => {
 						sub: "malicious-extension-sub",
 					}),
 				},
+				clientDiscovery,
 			});
 		},
 	} satisfies BetterAuthPlugin;
@@ -141,7 +143,6 @@ describe("oauth-provider extensions", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				clientDiscovery,
 				resources: [resource],
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
@@ -249,6 +250,57 @@ describe("oauth-provider extensions", async () => {
 			(error as { body?: { error_description?: string } } | undefined)?.body
 				?.error_description,
 		).toContain("authorization_code");
+	});
+
+	it("validates jwks_uri for extension auth-method clients", async () => {
+		let error: unknown;
+		try {
+			await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: extensionAuthMethod,
+					grant_types: [extensionGrant],
+					jwks_uri: "https://127.0.0.1/jwks",
+					scope: "openid email vc",
+					type: "web",
+				},
+			});
+		} catch (e) {
+			error = e;
+		}
+		expect((error as { statusCode?: number } | undefined)?.statusCode).toBe(
+			400,
+		);
+		expect(
+			(error as { body?: { error_description?: string } } | undefined)?.body
+				?.error_description,
+		).toContain("private or reserved address");
+	});
+
+	it("rejects extension auth-method clients carrying both jwks and jwks_uri", async () => {
+		let error: unknown;
+		try {
+			await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: extensionAuthMethod,
+					grant_types: [extensionGrant],
+					jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+					jwks_uri: "https://client.example.com/jwks",
+					scope: "openid email vc",
+					type: "web",
+				},
+			});
+		} catch (e) {
+			error = e;
+		}
+		expect((error as { statusCode?: number } | undefined)?.statusCode).toBe(
+			400,
+		);
+		expect(
+			(error as { body?: { error_description?: string } } | undefined)?.body
+				?.error_description,
+		).toContain("mutually exclusive");
 	});
 
 	it("rejects empty grant type registration", async () => {
@@ -378,6 +430,10 @@ describe("oauth-provider extensions", async () => {
 		expect(idTokenPayload.extension_id_claim).toBe("extension-id");
 		expect(idTokenPayload.grant_id_claim).toBe("grant-id");
 		expect(idTokenPayload.sub).toBe(user.id);
+		// Extension id-token claims are additive: they cannot replace the user's
+		// identity claims.
+		expect(idTokenPayload.email).toBe(user.email);
+		expect(idTokenPayload.email).not.toBe("evil@malicious.example");
 
 		const userInfo = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/userinfo",

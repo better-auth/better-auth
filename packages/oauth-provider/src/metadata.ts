@@ -4,6 +4,7 @@ import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
+	getClientDiscoveries,
 	getSupportedEndpointAuthMethods,
 	getSupportedGrantTypes,
 	getSupportedTokenEndpointAuthMethods,
@@ -16,11 +17,7 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import {
-	getJwtPlugin,
-	mergeDiscoveryMetadata,
-	toClientDiscoveryArray,
-} from "./utils";
+import { getJwtPlugin, mergeDiscoveryMetadata } from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -109,9 +106,9 @@ export function oauthAuthorizationServerMetadata(
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
+	const clientDiscoveries = getClientDiscoveries(opts);
 	const publicClientSupported =
-		opts.allowUnauthenticatedClientRegistration ||
-		toClientDiscoveryArray(opts.clientDiscovery).length > 0;
+		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
@@ -129,7 +126,7 @@ export function oauthAuthorizationServerMetadata(
 		opts,
 		"oauth-authorization-server",
 		{
-			...mergeDiscoveryMetadata(opts.clientDiscovery),
+			...mergeDiscoveryMetadata(clientDiscoveries),
 			...authMetadata,
 		},
 	) as unknown as AuthServerMetadata;
@@ -143,23 +140,21 @@ export function oidcServerMetadata(
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
+	const clientDiscoveries = getClientDiscoveries(opts);
+	// Any contributed `clientDiscovery` implicitly produces public clients
+	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
+	// and the advertised `"none"` auth method alongside unauthenticated DCR.
+	const publicClientSupported =
+		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
-		// `public_client_supported` flips `"none"` into the advertised auth
-		// methods. Any configured `clientDiscovery` implicitly produces public
-		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
-		// that in addition to unauthenticated DCR.
-		public_client_supported:
-			opts.allowUnauthenticatedClientRegistration ||
-			toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+		public_client_supported: publicClientSupported,
 		grant_types_supported: getSupportedGrantTypes(opts),
 		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
 			opts,
 			{
-				includeNone:
-					opts.allowUnauthenticatedClientRegistration ||
-					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+				includeNone: publicClientSupported,
 			},
 		),
 		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
@@ -204,7 +199,7 @@ export function oidcServerMetadata(
 		opts,
 		"openid-configuration",
 		{
-			...mergeDiscoveryMetadata(opts.clientDiscovery),
+			...mergeDiscoveryMetadata(clientDiscoveries),
 			...metadata,
 		},
 	) as unknown as OIDCMetadata;

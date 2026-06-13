@@ -1,7 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
-import { collectExtensionUserInfoClaims } from "./extensions";
+import {
+	collectExtensionUserInfoClaims,
+	hasUserInfoClaimExtension,
+} from "./extensions";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
@@ -109,7 +112,13 @@ export async function userInfoEndpoint(
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
 	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
-	const client = clientId ? await getClient(ctx, opts, clientId) : undefined;
+	// Load the client only when something needs it: pairwise subject resolution
+	// or a UserInfo claim extension. The token was already validated against its
+	// issuing client, so an unconditional lookup here would be redundant.
+	const client =
+		clientId && (opts.pairwiseSecret || hasUserInfoClaimExtension(opts))
+			? await getClient(ctx, opts, clientId)
+			: undefined;
 
 	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
 	if (opts.pairwiseSecret && client) {

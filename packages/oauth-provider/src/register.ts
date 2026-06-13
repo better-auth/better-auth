@@ -320,18 +320,27 @@ export async function checkOAuthClient(
 		});
 	}
 
-	// Validate private_key_jwt requirements
-	if (tokenEndpointAuthMethod === "private_key_jwt") {
+	// Validate client key material (jwks / jwks_uri). These belong to
+	// assertion-based authentication: private_key_jwt and any extension method
+	// that consumes them. The validation (mutual exclusion, jwks_uri origin and
+	// SSRF guards, structure) is the same for all of them, so an extension cannot
+	// register an unvalidated jwks_uri or both jwks and jwks_uri.
+	const usesAssertionKeyMaterial =
+		tokenEndpointAuthMethod === "private_key_jwt" ||
+		isExtensionTokenEndpointAuthMethod(opts, tokenEndpointAuthMethod);
+	if (clientWithDefaults.jwks || clientWithDefaults.jwks_uri) {
+		if (!usesAssertionKeyMaterial) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"jwks and jwks_uri are only allowed with private_key_jwt or an assertion-based authentication method",
+			});
+		}
+		// OIDC Registration: jwks and jwks_uri must not both be present.
 		if (clientWithDefaults.jwks && clientWithDefaults.jwks_uri) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: "jwks and jwks_uri are mutually exclusive",
-			});
-		}
-		if (!clientWithDefaults.jwks && !clientWithDefaults.jwks_uri) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "private_key_jwt requires either jwks or jwks_uri",
 			});
 		}
 		if (clientWithDefaults.jwks_uri) {
@@ -377,14 +386,16 @@ export async function checkOAuthClient(
 				});
 			}
 		}
-	} else if (
-		!isExtensionTokenEndpointAuthMethod(opts, tokenEndpointAuthMethod) &&
-		(clientWithDefaults.jwks || clientWithDefaults.jwks_uri)
+	}
+	// private_key_jwt requires key material; extension methods may carry their own.
+	if (
+		tokenEndpointAuthMethod === "private_key_jwt" &&
+		!clientWithDefaults.jwks &&
+		!clientWithDefaults.jwks_uri
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
-			error_description:
-				"jwks and jwks_uri are only allowed with private_key_jwt authentication",
+			error_description: "private_key_jwt requires either jwks or jwks_uri",
 		});
 	}
 

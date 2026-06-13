@@ -45,9 +45,9 @@ export type AuthorizePrompt =
  * metadata document, a federated registry, an attestation header, etc.) and
  * what fields that source contributes to discovery metadata.
  *
- * Plugins install one of these onto {@link OAuthOptions.clientDiscovery}.
- * The host walks the configured entries in order and returns the first
- * non-null `resolve()` result.
+ * Plugins contribute one of these through
+ * {@link OAuthProviderExtension.clientDiscovery}. The host walks every
+ * configured entry in order and returns the first non-null `resolve()` result.
  */
 export interface ClientDiscovery<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
@@ -315,6 +315,14 @@ export interface OAuthProviderExtension<
 			input: OAuthUserInfoContributionInput<Scopes>,
 		) => Awaitable<Record<string, unknown>>;
 	};
+	/**
+	 * Client-id resolution sources consulted by `getClient()`, plus the
+	 * discovery-metadata fields they advertise. Entries across all extensions
+	 * run in order; the first to return a client wins. A plugin that resolves
+	 * clients from an external source (a metadata-document URL, a federated
+	 * registry, an attestation header) contributes it here.
+	 */
+	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
 }
 
 export interface OAuthOptions<
@@ -517,27 +525,13 @@ export interface OAuthOptions<
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
-	 * Discovery implementations consulted by `getClient()` when resolving
-	 * a `client_id`. Each entry decides whether it handles the `client_id`
-	 * via {@link ClientDiscovery.matches}, then creates, refreshes, or
-	 * passes on a client record. Entries run in order; the first one to
-	 * return a client wins.
-	 *
-	 * Each entry also contributes {@link ClientDiscovery.discoveryMetadata}
-	 * into the `/.well-known/oauth-authorization-server` and
-	 * `/.well-known/openid-configuration` responses.
-	 *
-	 * Plugins such as `@better-auth/cimd` install an entry here at init
-	 * time; users can also pass discovery implementations directly.
-	 */
-	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
-	/**
 	 * OAuth/OIDC extension points used by companion plugins to add protocol
-	 * grants, client authentication methods, metadata, and claims without
-	 * modifying oauth-provider core for each RFC.
+	 * grants, client authentication methods, metadata, claims, and client-id
+	 * discovery without modifying oauth-provider core for each RFC.
 	 *
 	 * Extension plugins should prefer `extendOAuthProvider(ctx, extension)` in
-	 * their `init()` hook so users can compose plugins declaratively.
+	 * their `init()` hook so users can compose plugins declaratively. Plugins
+	 * such as `@better-auth/cimd` contribute their client discovery this way.
 	 */
 	extensions?: OAuthProviderExtension<Scopes>[];
 	/**

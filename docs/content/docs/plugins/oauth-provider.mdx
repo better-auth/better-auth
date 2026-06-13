@@ -1339,7 +1339,7 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, and token or UserInfo claims.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";

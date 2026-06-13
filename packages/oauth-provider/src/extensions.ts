@@ -3,6 +3,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
 import type { oauthProvider } from "./oauth";
 import type {
+	ClientDiscovery,
 	OAuthClaimContributionInput,
 	OAuthClientAuthenticationStrategy,
 	OAuthMetadataContributionInput,
@@ -173,6 +174,21 @@ function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
 ): OAuthProviderExtension<Scope[]>[] {
 	return opts.extensions ?? [];
+}
+
+/**
+ * Flattens the client-id discovery sources contributed by every registered
+ * extension into a single ordered list. `getClient()` consults them in order;
+ * the metadata endpoints merge their `discoveryMetadata`.
+ */
+export function getClientDiscoveries(
+	opts: OAuthOptions<Scope[]>,
+): ClientDiscovery<Scope[]>[] {
+	return getOAuthProviderExtensions(opts).flatMap((extension) => {
+		const discovery = extension.clientDiscovery;
+		if (!discovery) return [];
+		return Array.isArray(discovery) ? discovery : [discovery];
+	});
 }
 
 /**
@@ -369,5 +385,17 @@ export function collectExtensionUserInfoClaims(
 ) {
 	return collectClaims(opts, (extension) =>
 		extension.claims?.userInfo?.(input),
+	);
+}
+
+/**
+ * Whether any registered extension contributes UserInfo claims. Lets the
+ * UserInfo endpoint skip loading the client when nothing needs it.
+ */
+export function hasUserInfoClaimExtension(
+	opts: OAuthOptions<Scope[]>,
+): boolean {
+	return getOAuthProviderExtensions(opts).some(
+		(extension) => extension.claims?.userInfo,
 	);
 }

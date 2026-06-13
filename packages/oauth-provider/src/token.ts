@@ -299,8 +299,12 @@ async function createIdToken(
 		client.enableEndSession || client.backchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
-		...userClaims,
+		// Extension and grant claims are additive: standard user claims
+		// (email/name/...) and the AS-owned claims below take precedence, so an
+		// extension cannot replace an identity claim. First-party
+		// `customIdTokenClaims` may still override auth_time/acr (spread after).
 		...extraClaims,
+		...userClaims,
 		auth_time: authTimeSec,
 		acr,
 		...customClaims,
