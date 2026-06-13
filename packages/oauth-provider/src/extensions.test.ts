@@ -7,9 +7,17 @@ import type { BetterAuthPlugin, User } from "better-auth/types";
 import { decodeJwt } from "jose";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
-import { extendOAuthProvider } from "./extensions";
+import {
+	extendOAuthProvider,
+	validateOAuthProviderExtensions,
+} from "./extensions";
 import { oauthProvider } from "./oauth";
-import type { ClientDiscovery, SchemaClient, Scope } from "./types";
+import type {
+	ClientDiscovery,
+	OAuthProviderExtension,
+	SchemaClient,
+	Scope,
+} from "./types";
 import { validateClientCredentials } from "./utils";
 
 describe("oauth-provider extensions", async () => {
@@ -278,6 +286,47 @@ describe("oauth-provider extensions", async () => {
 				error_description: `client registered for client_secret_basic cannot use ${extensionAuthMethod}`,
 			},
 		});
+	});
+
+	it("rejects invalid direct extension options during provider setup", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				extensions: [
+					{
+						grants: {
+							password: async () => {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_request",
+									error_description: "unreachable test grant",
+								});
+							},
+						},
+					},
+				],
+			}),
+		).toThrow("grant type must be an absolute URI");
+	});
+
+	it("does not revalidate extension objects after setup", () => {
+		let grantsReadCount = 0;
+		const extension = {
+			get grants() {
+				grantsReadCount++;
+				return {
+					[extensionGrant]: async () => {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description: "unreachable test grant",
+						});
+					},
+				};
+			},
+		} satisfies OAuthProviderExtension<Scope[]>;
+		validateOAuthProviderExtensions([extension]);
+		validateOAuthProviderExtensions([extension]);
+		expect(grantsReadCount).toBe(1);
 	});
 
 	it("dispatches extension grants through shared token issuance", async () => {

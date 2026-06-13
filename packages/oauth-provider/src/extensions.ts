@@ -85,6 +85,8 @@ function assertExtensionClientAssertionType(assertionType: string) {
 	);
 }
 
+const validatedExtensions = new WeakSet<OAuthProviderExtension<Scope[]>>();
+
 function validateOAuthProviderExtension(
 	extension: OAuthProviderExtension<Scope[]>,
 ) {
@@ -107,14 +109,20 @@ function validateOAuthProviderExtension(
 	}
 }
 
+export function validateOAuthProviderExtensions(
+	extensions: OAuthProviderExtension<Scope[]>[] | undefined,
+) {
+	for (const extension of extensions ?? []) {
+		if (validatedExtensions.has(extension)) continue;
+		validateOAuthProviderExtension(extension);
+		validatedExtensions.add(extension);
+	}
+}
+
 function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
 ): OAuthProviderExtension<Scope[]>[] {
-	const extensions = opts.extensions ?? [];
-	for (const extension of extensions) {
-		validateOAuthProviderExtension(extension);
-	}
-	return extensions;
+	return opts.extensions ?? [];
 }
 
 export function extendOAuthProvider(
@@ -129,7 +137,7 @@ export function extendOAuthProvider(
 			"extendOAuthProvider requires the oauth-provider plugin.",
 		);
 	}
-	validateOAuthProviderExtension(extension);
+	validateOAuthProviderExtensions([extension]);
 	provider.options.extensions = [
 		...(provider.options.extensions ?? []),
 		extension,

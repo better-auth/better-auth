@@ -20,6 +20,7 @@ import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
+import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import {
 	deliverBackchannelLogoutTokens,
@@ -177,6 +178,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
 	};
+	validateOAuthProviderExtensions(opts.extensions);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {

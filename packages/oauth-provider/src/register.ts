@@ -77,40 +77,11 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
-function assertSupportedRegistrationInputs(
-	client: OAuthClient,
-	opts: OAuthOptions<Scope[]>,
-) {
-	const tokenEndpointAuthMethod = client.token_endpoint_auth_method;
-	if (tokenEndpointAuthMethod) {
-		const supportedTokenEndpointAuthMethods = new Set(
-			getSupportedTokenEndpointAuthMethods(opts, { includeNone: true }),
-		);
-		if (!supportedTokenEndpointAuthMethods.has(tokenEndpointAuthMethod)) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `unsupported token_endpoint_auth_method ${tokenEndpointAuthMethod}`,
-			});
-		}
-	}
-
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
-	for (const grantType of client.grant_types ?? []) {
-		if (!supportedGrantTypes.has(grantType)) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `unsupported grant_type ${grantType}`,
-			});
-		}
-	}
-}
-
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const body = ctx.body as OAuthClient & { resources?: string[] };
-	assertSupportedRegistrationInputs(body, opts);
 
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
@@ -147,11 +118,6 @@ export async function registerEndpoint(
 			" ",
 		);
 	}
-
-	await checkOAuthClient(body, opts, {
-		isRegister: true,
-		ctx,
-	});
 
 	// RFC 7591 §2 extension: clients may declare which resources they need.
 	// Validate up front so the registration fails before we issue a clientId.
