@@ -141,7 +141,7 @@ const handler = requireMcpAuth(auth, (req, claims) => { // [!code highlight]
 export { handler as GET, handler as POST, handler as DELETE };
 ```
 
-The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip. DPoP-bound tokens must be sent as `Authorization: DPoP <access_token>` with a matching `DPoP` proof header.
+The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip. DPoP-bound tokens must be sent as `Authorization: DPoP <access_token>` with a matching `DPoP` proof header. DPoP proof replay is rejected through your auth instance's database adapter by default, so anti-replay holds across multiple server instances; pass `dpop.replayStore` only to use a different store.
 
 By default `requireMcpAuth` reads the server's resolved base URL from the auth context and uses it as both the expected token issuer and protected resource identifier, with the JWKS at that base URL. This matches what the provider issues, so no configuration is needed for the common case. Override any value when the resource differs or `jwt.issuer` is custom:
 

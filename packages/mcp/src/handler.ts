@@ -38,7 +38,7 @@ export const mcpHandler = (
 					verifyOptions.verifyOptions.audience,
 					{
 						...opts,
-						dpopSigningAlgorithms: verifyOptions.dpop?.supportedAlgorithms,
+						dpopSigningAlgorithms: verifyOptions.dpop?.signingAlgorithms,
 					},
 				);
 			} catch (err) {

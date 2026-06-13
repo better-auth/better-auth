@@ -1,12 +1,16 @@
 import type { Awaitable } from "@better-auth/core";
 import {
+	createOauthDpopReplayStore,
 	ResourceUriSchema,
 	raiseResourceServerChallenge,
 } from "@better-auth/oauth-provider";
+import type { DpopReplayStore } from "better-auth/oauth2";
 import { verifyAccessTokenRequest } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
+
+type ReplayStoreAdapter = Parameters<typeof createOauthDpopReplayStore>[0];
 
 interface RequireMcpAuthOptions {
 	/**
@@ -29,6 +33,16 @@ interface RequireMcpAuthOptions {
 	 * (RFC 6750), hinting which scopes the client should request.
 	 */
 	scope?: string;
+	/**
+	 * DPoP proof validation settings. By default the replay store is backed by
+	 * the auth instance's database adapter, so anti-replay holds across multiple
+	 * server instances. Override `replayStore` only to point at a different store.
+	 */
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		signingAlgorithms?: readonly string[];
+		replayStore?: DpopReplayStore;
+	};
 }
 
 const unauthorized = (error: APIError): Response => {
@@ -63,7 +77,7 @@ const unauthorized = (error: APIError): Response => {
 export const requireMcpAuth = <
 	Auth extends {
 		options: BetterAuthOptions;
-		$context: Promise<{ baseURL: string }>;
+		$context: Promise<{ baseURL: string; adapter: ReplayStoreAdapter }>;
 	},
 >(
 	auth: Auth,
@@ -82,7 +96,7 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL } = await auth.$context;
+		const { baseURL, adapter } = await auth.$context;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `mcpHandler` with explicit verify options.",
@@ -102,6 +116,14 @@ export const requireMcpAuth = <
 				{
 					verifyOptions: { issuer, audience: resource },
 					jwksUrl,
+					dpop: {
+						proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
+						signingAlgorithms: opts?.dpop?.signingAlgorithms,
+						// Default to the database-backed store so proof replay is
+						// rejected across instances, not just within one process.
+						replayStore:
+							opts?.dpop?.replayStore ?? createOauthDpopReplayStore(adapter),
+					},
 				},
 			);
 			return handler(req, jwt);

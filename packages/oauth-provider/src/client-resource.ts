@@ -1,13 +1,13 @@
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type {
-	AccessTokenRequestInput,
+	ResourceRequestInput,
 	VerifyAccessTokenRequestOptions,
 } from "better-auth/oauth2";
 import {
 	DPOP_SIGNING_ALGORITHMS,
-	verifyAccessToken,
 	verifyAccessTokenRequest,
+	verifyBearerToken,
 } from "better-auth/oauth2";
 import type {
 	BetterAuthClientPlugin,
@@ -118,9 +118,9 @@ export const oauthProviderResourceClient = <
 					: undefined,
 		};
 	};
-	const toAccessTokenRequestInput = (
-		request: Request | AccessTokenRequestInput,
-	): AccessTokenRequestInput => {
+	const toResourceRequestInput = (
+		request: Request | ResourceRequestInput,
+	): ResourceRequestInput => {
 		if (request instanceof Request) {
 			return {
 				authorizationHeader: request.headers.get("authorization"),
@@ -145,7 +145,7 @@ export const oauthProviderResourceClient = <
 				 *
 				 * The optional auth parameter can fill known values automatically.
 				 */
-				verifyAccessToken: (async (
+				verifyBearerToken: (async (
 					token: string | undefined,
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
@@ -164,7 +164,7 @@ export const oauthProviderResourceClient = <
 								message: "missing authorization header",
 							});
 						}
-						return await verifyAccessToken(token, verifyOptions);
+						return await verifyBearerToken(token, verifyOptions);
 					} catch (error) {
 						raiseResourceServerChallenge(
 							error,
@@ -183,7 +183,7 @@ export const oauthProviderResourceClient = <
 				 * scheme, DPoP proof, `ath`, and `cnf.jkt` binding.
 				 */
 				verifyAccessTokenRequest: (async (
-					request: Request | AccessTokenRequestInput,
+					request: Request | ResourceRequestInput,
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
@@ -198,7 +198,7 @@ export const oauthProviderResourceClient = <
 					const verifyOptions = await resolveVerifyAccessTokenOptions(opts);
 					try {
 						return await verifyAccessTokenRequest(
-							toAccessTokenRequestInput(request),
+							toResourceRequestInput(request),
 							verifyOptions,
 						);
 					} catch (error) {
@@ -208,7 +208,7 @@ export const oauthProviderResourceClient = <
 							{
 								resourceMetadataMappings: opts?.resourceMetadataMappings,
 								dpopSigningAlgorithms:
-									opts?.dpop?.supportedAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
+									opts?.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
 							},
 						);
 					}
@@ -335,11 +335,11 @@ type VerifyAccessTokenOutput<T> = T extends undefined
 		) => Promise<JWTPayload>;
 type VerifyAccessTokenRequestOutput<T> = T extends undefined
 	? (
-			request: Request | AccessTokenRequestInput,
+			request: Request | ResourceRequestInput,
 			opts: VerifyAccessTokenRequestNoAuthOpts,
 		) => Promise<JWTPayload>
 	: (
-			request: Request | AccessTokenRequestInput,
+			request: Request | ResourceRequestInput,
 			opts?: VerifyAccessTokenRequestAuthOpts,
 		) => Promise<JWTPayload>;
 type VerifyAccessTokenAuthOpts = {

@@ -648,9 +648,12 @@ async function resolveDpopTokenBinding(
 			method: "POST",
 			url: getEndpointUrl(ctx, "/oauth2/token"),
 			expectedJkt,
-			maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
-			supportedAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createOauthDpopReplayStore(ctx, opts),
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createOauthDpopReplayStore(
+				ctx.context.adapter,
+				opts.schema?.oauthDpopProof?.modelName,
+			),
 		});
 		return proof.jkt;
 	} catch (error) {

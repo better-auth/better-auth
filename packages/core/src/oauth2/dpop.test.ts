@@ -5,9 +5,10 @@ import {
 	createInMemoryDpopReplayStore,
 	deriveDpopAth,
 	deriveDpopJkt,
+	enforceDpopBinding,
 	verifyDpopProof,
 } from "./dpop";
-import { verifyAccessToken, verifyAccessTokenRequest } from "./verify";
+import { verifyAccessTokenRequest, verifyBearerToken } from "./verify";
 
 const method = "GET";
 const url = "https://api.example.com/resource";
@@ -210,7 +211,7 @@ describe("verifyDpopProof", () => {
 		});
 
 		await expect(
-			verifyAccessToken(accessToken, remoteVerifyOptions()),
+			verifyBearerToken(accessToken, remoteVerifyOptions()),
 		).rejects.toThrow("DPoP-bound access token requires");
 
 		const proofJwt = await createProof({
@@ -231,5 +232,84 @@ describe("verifyDpopProof", () => {
 		);
 
 		expect(payload.cnf).toMatchObject({ jkt });
+	});
+});
+
+describe("enforceDpopBinding", () => {
+	it("passes a bearer token with no DPoP binding", async () => {
+		await expect(
+			enforceDpopBinding({
+				payload: { sub: "user" },
+				authorization: { scheme: "Bearer", token: accessToken },
+				proofJwt: undefined,
+				method,
+				url,
+			}),
+		).resolves.toBeUndefined();
+	});
+
+	it("rejects a non-bound token presented with the DPoP scheme", async () => {
+		await expect(
+			enforceDpopBinding({
+				payload: { sub: "user" },
+				authorization: { scheme: "DPoP", token: accessToken },
+				proofJwt: undefined,
+				method,
+				url,
+			}),
+		).rejects.toMatchObject({ code: "invalid_token" });
+	});
+
+	it("rejects a DPoP-bound token presented with the bearer scheme", async () => {
+		const { publicKey } = await generateKeyPair("ES256", { extractable: true });
+		const jkt = await deriveDpopJkt(await exportJWK(publicKey));
+		await expect(
+			enforceDpopBinding({
+				payload: { sub: "user", cnf: { jkt } },
+				authorization: { scheme: "Bearer", token: accessToken },
+				proofJwt: undefined,
+				method,
+				url,
+			}),
+		).rejects.toMatchObject({ code: "invalid_token" });
+	});
+
+	it("requires a proof header for a DPoP-bound token", async () => {
+		const { publicKey } = await generateKeyPair("ES256", { extractable: true });
+		const jkt = await deriveDpopJkt(await exportJWK(publicKey));
+		await expect(
+			enforceDpopBinding({
+				payload: { sub: "user", cnf: { jkt } },
+				authorization: { scheme: "DPoP", token: accessToken },
+				proofJwt: undefined,
+				method,
+				url,
+			}),
+		).rejects.toMatchObject({ code: "invalid_dpop_proof" });
+	});
+
+	it("accepts a DPoP-bound token with a matching, ath-bound proof", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		const proofJwt = await createProof({
+			privateKey,
+			publicJwk,
+			accessToken,
+			iat: Math.floor(Date.now() / 1000),
+			jti: "enforce-accepts",
+		});
+		await expect(
+			enforceDpopBinding({
+				payload: { sub: "user", cnf: { jkt } },
+				authorization: { scheme: "DPoP", token: accessToken },
+				proofJwt,
+				method,
+				url,
+				replayStore: createInMemoryDpopReplayStore(),
+			}),
+		).resolves.toBeUndefined();
 	});
 });

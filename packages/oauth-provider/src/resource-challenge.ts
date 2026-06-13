@@ -2,7 +2,7 @@ import { isAPIError } from "better-auth/api";
 import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import { APIError } from "better-call";
 
-const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
+const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof"]);
 
 function quoteAuthParam(value: string): string {
 	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');

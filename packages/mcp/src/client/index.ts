@@ -2,10 +2,10 @@ import type { DpopReplayStore } from "better-auth/oauth2";
 import {
 	createInMemoryDpopReplayStore,
 	DPOP_SIGNING_ALGORITHMS,
+	enforceDpopBinding,
 	getDpopJktFromPayload,
-	isDpopProofError,
+	isDpopBindingError,
 	parseAccessTokenAuthorization,
-	verifyDpopProof,
 } from "better-auth/oauth2";
 import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -18,7 +18,7 @@ export interface McpResourceClientOptions {
 	dpop?: {
 		proofMaxAgeSeconds?: number;
 		replayStore?: DpopReplayStore;
-		supportedAlgorithms?: readonly string[];
+		signingAlgorithms?: readonly string[];
 	};
 }
 
@@ -187,7 +187,7 @@ export function createMcpResourceClient(
 	const dpopReplayStore =
 		options.dpop?.replayStore ?? createInMemoryDpopReplayStore();
 	const dpopSigningAlgorithms =
-		options.dpop?.supportedAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
+		options.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
 
 	let discovery: { issuer: string; jwks_uri: string } | null = null;
 	let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -230,6 +230,13 @@ export function createMcpResourceClient(
 		return session;
 	};
 
+	/**
+	 * Verifies a request's access token and, when the token is DPoP-bound, its
+	 * RFC 9449 sender-constraint. Returns `null` when there is no usable token
+	 * or the JWT itself is invalid. Throws a `DpopBindingError` when a
+	 * DPoP-bound token fails the binding check, so the caller can answer with a
+	 * `WWW-Authenticate: DPoP` challenge rather than a bearer one.
+	 */
 	const verifyRequest = async (req: Request): Promise<McpSession | null> => {
 		const authorization = parseAccessTokenAuthorization(
 			req.headers.get("Authorization"),
@@ -238,30 +245,17 @@ export function createMcpResourceClient(
 		const session = await verifyJwtToken(authorization.token);
 		if (!session) return null;
 
-		const dpopJkt = getDpopJktFromPayload(session);
-		if (!dpopJkt) {
-			return authorization.scheme === "DPoP" ? null : session;
-		}
-		if (authorization.scheme !== "DPoP") return null;
-		const dpopProofJwt = req.headers.get("DPoP");
-		if (!dpopProofJwt) return null;
-		try {
-			await verifyDpopProof({
-				proofJwt: dpopProofJwt,
-				method: req.method,
-				url: req.url,
-				accessToken: authorization.token,
-				expectedJkt: dpopJkt,
-				requireAth: true,
-				maxAgeSeconds: options.dpop?.proofMaxAgeSeconds,
-				supportedAlgorithms: dpopSigningAlgorithms,
-				replayStore: dpopReplayStore,
-			});
-			return session;
-		} catch (error) {
-			if (isDpopProofError(error)) return null;
-			throw error;
-		}
+		await enforceDpopBinding({
+			payload: session,
+			authorization,
+			proofJwt: req.headers.get("DPoP"),
+			method: req.method,
+			url: req.url,
+			proofMaxAgeSeconds: options.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: dpopSigningAlgorithms,
+			replayStore: dpopReplayStore,
+		});
+		return session;
 	};
 
 	const getHeader = (
@@ -296,7 +290,17 @@ export function createMcpResourceClient(
 				return new Response(null, { status: 204, headers: corsHeaders });
 			}
 
-			const session = await verifyRequest(req);
+			let session: McpSession | null;
+			try {
+				session = await verifyRequest(req);
+			} catch (error) {
+				if (isDpopBindingError(error)) {
+					return make401Response(
+						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
+					);
+				}
+				throw error;
+			}
 			if (!session) {
 				const challenge =
 					req.headers.get("Authorization")?.startsWith("DPoP ") ||
@@ -377,7 +381,20 @@ export function createMcpResourceClient(
 				method: req.method ?? "GET",
 				headers: requestHeaders,
 			});
-			const session = await verifyRequest(request);
+			let session: McpSession | null;
+			try {
+				session = await verifyRequest(request);
+			} catch (error) {
+				if (isDpopBindingError(error)) {
+					send401Node(
+						res,
+						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
+						"Invalid or expired token",
+					);
+					return;
+				}
+				throw error;
+			}
 			if (!session) {
 				const challenge =
 					authHeader?.startsWith("DPoP ") || getHeader(req, "dpop")

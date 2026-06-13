@@ -1,10 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import {
-	getDpopJktFromPayload,
-	isDpopProofError,
+	enforceDpopBinding,
+	isDpopBindingError,
 	parseAccessTokenAuthorization,
-	verifyDpopProof,
 } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
 import {
@@ -73,49 +72,28 @@ export async function userInfoEndpoint(
 		});
 	}
 
-	const dpopJkt = getDpopJktFromPayload(jwt);
-	if (dpopJkt) {
-		if (accessTokenAuthorization.scheme !== "DPoP") {
-			throw new APIError("UNAUTHORIZED", {
-				error_description:
-					"DPoP-bound access token requires the DPoP authorization scheme",
-				error: "invalid_token",
-			});
-		}
-		const dpopProofJwt = getDpopProofJwt(ctx);
-		if (!dpopProofJwt) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "DPoP proof header is required",
-				error: "invalid_dpop_proof",
-			});
-		}
-		try {
-			await verifyDpopProof({
-				proofJwt: dpopProofJwt,
-				method: getEndpointMethod(ctx, "GET"),
-				url: getEndpointUrl(ctx, "/oauth2/userinfo"),
-				accessToken: accessTokenAuthorization.token,
-				expectedJkt: dpopJkt,
-				requireAth: true,
-				maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
-				supportedAlgorithms: opts.dpop?.signingAlgorithms,
-				replayStore: createOauthDpopReplayStore(ctx, opts),
-			});
-		} catch (error) {
-			if (isDpopProofError(error)) {
-				throw new APIError("UNAUTHORIZED", {
-					error_description: error.message,
-					error: error.code,
-				});
-			}
-			throw error;
-		}
-	} else if (accessTokenAuthorization.scheme === "DPoP") {
-		throw new APIError("UNAUTHORIZED", {
-			error_description:
-				"DPoP authorization requires a DPoP-bound access token",
-			error: "invalid_token",
+	try {
+		await enforceDpopBinding({
+			payload: jwt,
+			authorization: accessTokenAuthorization,
+			proofJwt: getDpopProofJwt(ctx),
+			method: getEndpointMethod(ctx, "GET"),
+			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createOauthDpopReplayStore(
+				ctx.context.adapter,
+				opts.schema?.oauthDpopProof?.modelName,
+			),
 		});
+	} catch (error) {
+		if (isDpopBindingError(error)) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: error.message,
+				error: error.code,
+			});
+		}
+		throw error;
 	}
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");

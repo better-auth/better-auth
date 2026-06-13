@@ -861,7 +861,14 @@ export const POST = async (req: Request) => {
 }
 ```
 
-`verifyAccessToken` is still available when you already extracted a raw bearer token and intentionally do not accept DPoP-bound tokens on that path.
+`verifyBearerToken` is still available when you already extracted a raw bearer token and intentionally do not accept DPoP-bound tokens on that path. It rejects DPoP-bound tokens, so prefer `verifyAccessTokenRequest` for any endpoint that may receive them.
+
+<Callout type="warn">
+  DPoP verification compares the proof's `htu` against the request URL, and rejects replayed proofs through a `jti` store. Two deployment details matter:
+
+  * **Behind a proxy:** the proof is checked against `request.url`, so a TLS-terminating or path-rewriting proxy must forward the externally visible scheme, host, and path, or legitimate proofs are rejected.
+  * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` (the provider's own endpoints already use a database-backed store).
+</Callout>
 
 #### JWT Verification
 

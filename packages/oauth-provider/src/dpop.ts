@@ -1,6 +1,19 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { DpopReplayStore } from "better-auth/oauth2";
-import type { OAuthOptions, Scope } from "./types";
+
+/**
+ * The slice of the database adapter the replay store needs. Kept structural
+ * (rather than the full `DBAdapter`) so any concrete auth instance's adapter
+ * satisfies it without dragging in the adapter's options generic.
+ */
+export interface DpopReplayStoreAdapter {
+	create: (data: {
+		model: string;
+		data: Record<string, unknown>;
+	}) => Promise<unknown>;
+}
+
+export const DPOP_PROOF_MODEL = "oauthDpopProof";
 
 export function getDpopProofJwt(
 	ctx: Pick<GenericEndpointContext, "headers">,
@@ -22,22 +35,27 @@ export function getEndpointMethod(
 	return ctx.request?.method ?? fallback;
 }
 
+/**
+ * Database-backed DPoP proof replay store. A reservation is a single insert
+ * against the unique `replayId`, so a replayed `jti` collides on the primary
+ * key and the insert fails atomically across every adapter and every server
+ * process. This is shared by the token, userinfo, and resource-server paths so
+ * multi-instance deployments get real anti-replay (unlike the in-memory
+ * default in `verifyAccessTokenRequest`).
+ *
+ * TODO(dpop-replay-cleanup): expired rows accumulate until a deployment-level
+ * sweep removes them, matching the `oauthClientAssertion` table. A scheduled
+ * prune keyed on `expiresAt` is the follow-up.
+ */
 export function createOauthDpopReplayStore(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
+	adapter: DpopReplayStoreAdapter,
+	modelName: string = DPOP_PROOF_MODEL,
 ): DpopReplayStore {
-	const model = opts.schema?.oauthDpopProof?.modelName ?? "oauthDpopProof";
 	return {
 		async reserve({ key, expiresAt, now }) {
-			await ctx.context.adapter.deleteMany({
-				model,
-				where: [
-					{ field: "expiresAt", operator: "lt", value: now.toISOString() },
-				],
-			});
 			try {
-				await ctx.context.adapter.create({
-					model,
+				await adapter.create({
+					model: modelName,
 					data: {
 						replayId: key,
 						expiresAt,
@@ -47,7 +65,7 @@ export function createOauthDpopReplayStore(
 				return true;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				if (/unique|duplicate|UNIQUE/i.test(message)) return false;
+				if (/unique|duplicate/i.test(message)) return false;
 				throw error;
 			}
 		},

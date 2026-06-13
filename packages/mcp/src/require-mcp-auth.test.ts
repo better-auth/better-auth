@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,11 +8,25 @@ const { verifyAccessTokenRequest } = vi.hoisted(() => ({
 	verifyAccessTokenRequest: vi.fn(),
 }));
 
-vi.mock("better-auth/oauth2", () => ({ verifyAccessTokenRequest }));
+// Partial mock: only `verifyAccessTokenRequest` is stubbed. The real exports
+// (e.g. `DPOP_SIGNING_ALGORITHMS`, used by the DPoP challenge builder) stay so
+// the resource-server challenge path works.
+vi.mock("better-auth/oauth2", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("better-auth/oauth2")>();
+	return { ...actual, verifyAccessTokenRequest };
+});
+
+// These tests mock `verifyAccessTokenRequest`, so the replay-store adapter is
+// never exercised; the stub only needs to satisfy the context type.
+type ContextAdapter = GenericEndpointContext["context"]["adapter"];
+const adapterStub = {} as unknown as ContextAdapter;
 
 const authWith = (baseURL: string, resolvedBaseURL: string) => ({
 	options: { baseURL },
-	$context: Promise.resolve({ baseURL: resolvedBaseURL }),
+	$context: Promise.resolve({
+		baseURL: resolvedBaseURL,
+		adapter: adapterStub,
+	}),
 });
 
 describe("requireMcpAuth", () => {
@@ -75,6 +90,27 @@ describe("requireMcpAuth", () => {
 		expect(response.headers.get("WWW-Authenticate")).toBe(
 			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth"`,
 		);
+	});
+
+	it("answers a DPoP-bound failure with an RFC 9449 DPoP challenge", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", {
+				message: "DPoP proof header is required",
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof header is required",
+			}),
+		);
+		const response = await requireMcpAuth(
+			authWith("https://app.example.com", "https://app.example.com/api/auth"),
+			async () => new Response("unreachable"),
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "DPoP access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toMatch(/^DPoP /);
 	});
 
 	it("verifies against an explicit resource override", async () => {

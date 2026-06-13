@@ -35,14 +35,14 @@ const JWK_PRIVATE_FIELDS = new Set([
 
 export type DpopSigningAlgorithm = (typeof DPOP_SIGNING_ALGORITHMS)[number];
 
-export type AccessTokenAuthorizationScheme = "Bearer" | "DPoP" | "Raw";
+export type AccessTokenAuthorizationScheme = "Bearer" | "DPoP" | "Unknown";
 
 export interface AccessTokenAuthorization {
 	scheme: AccessTokenAuthorizationScheme;
 	token: string;
 }
 
-export type DpopProofErrorCode = "invalid_dpop_proof" | "use_dpop_nonce";
+export type DpopProofErrorCode = "invalid_dpop_proof";
 
 export type DpopProofError = Error & {
 	code: DpopProofErrorCode;
@@ -81,11 +81,10 @@ export interface VerifyDpopProofOptions {
 	url: string;
 	accessToken?: string;
 	expectedJkt?: string;
-	expectedNonce?: string;
 	requireAth?: boolean;
 	nowSeconds?: number;
-	maxAgeSeconds?: number;
-	supportedAlgorithms?: readonly string[];
+	proofMaxAgeSeconds?: number;
+	signingAlgorithms?: readonly string[];
 	replayStore?: DpopReplayStore;
 }
 
@@ -97,7 +96,6 @@ export interface VerifiedDpopProof {
 	htu: string;
 	iat: number;
 	ath?: string;
-	nonce?: string;
 	replayKey: string;
 	expiresAt: Date;
 }
@@ -113,7 +111,7 @@ export function isDpopProofError(error: unknown): error is DpopProofError {
 	return (
 		error instanceof Error &&
 		"code" in error &&
-		(error.code === "invalid_dpop_proof" || error.code === "use_dpop_nonce")
+		error.code === "invalid_dpop_proof"
 	);
 }
 
@@ -125,7 +123,7 @@ export function parseAccessTokenAuthorization(
 	if (!value) return undefined;
 	const match = /^([A-Za-z][A-Za-z0-9!#$%&'*+.^_`|~-]*)\s+(.+)$/.exec(value);
 	if (!match) {
-		return { scheme: "Raw", token: value };
+		return { scheme: "Unknown", token: value };
 	}
 	const scheme = match[1] ?? "";
 	const token = match[2]?.trim() ?? "";
@@ -135,7 +133,7 @@ export function parseAccessTokenAuthorization(
 	if (scheme.toLowerCase() === "dpop") {
 		return { scheme: "DPoP", token };
 	}
-	return { scheme: "Raw", token: value };
+	return { scheme: "Unknown", token: value };
 }
 
 export function stripAccessTokenAuthorizationScheme(token: string): string {
@@ -186,7 +184,7 @@ function getNumberClaim(
 
 function assertSupportedDpopAlgorithm(
 	alg: string | undefined,
-	supportedAlgorithms: readonly string[],
+	signingAlgorithms: readonly string[],
 ) {
 	if (!alg || alg === "none" || alg.startsWith("HS")) {
 		throw createDpopProofError(
@@ -194,7 +192,7 @@ function assertSupportedDpopAlgorithm(
 			"DPoP proof must use an asymmetric JWS algorithm",
 		);
 	}
-	if (!supportedAlgorithms.includes(alg)) {
+	if (!signingAlgorithms.includes(alg)) {
 		throw createDpopProofError(
 			"invalid_dpop_proof",
 			"DPoP proof uses an unsupported JWS algorithm",
@@ -259,11 +257,10 @@ export async function verifyDpopProof({
 	url,
 	accessToken,
 	expectedJkt,
-	expectedNonce,
 	requireAth = false,
 	nowSeconds = Math.floor(Date.now() / 1000),
-	maxAgeSeconds = DEFAULT_DPOP_PROOF_MAX_AGE_SECONDS,
-	supportedAlgorithms = DPOP_SIGNING_ALGORITHMS,
+	proofMaxAgeSeconds = DEFAULT_DPOP_PROOF_MAX_AGE_SECONDS,
+	signingAlgorithms = DPOP_SIGNING_ALGORITHMS,
 	replayStore,
 }: VerifyDpopProofOptions): Promise<VerifiedDpopProof> {
 	if (!proofJwt || proofJwt.split(".").length !== 3) {
@@ -288,7 +285,7 @@ export async function verifyDpopProof({
 			'DPoP proof typ must be "dpop+jwt"',
 		);
 	}
-	assertSupportedDpopAlgorithm(protectedHeader.alg, supportedAlgorithms);
+	assertSupportedDpopAlgorithm(protectedHeader.alg, signingAlgorithms);
 	assertPublicJwk(protectedHeader.jwk);
 
 	const publicKey = await importJWK(protectedHeader.jwk, protectedHeader.alg);
@@ -346,18 +343,10 @@ export async function verifyDpopProof({
 			"DPoP proof htu does not match the request URL",
 		);
 	}
-	if (iat > nowSeconds + 5 || nowSeconds - iat > maxAgeSeconds) {
+	if (iat > nowSeconds + 5 || nowSeconds - iat > proofMaxAgeSeconds) {
 		throw createDpopProofError(
 			"invalid_dpop_proof",
 			"DPoP proof iat is outside the accepted window",
-		);
-	}
-
-	const nonce = getStringClaim(payload, "nonce");
-	if (expectedNonce !== undefined && nonce !== expectedNonce) {
-		throw createDpopProofError(
-			"use_dpop_nonce",
-			"DPoP proof nonce is required or invalid",
 		);
 	}
 
@@ -387,7 +376,7 @@ export async function verifyDpopProof({
 	}
 
 	const replayKey = await deriveDpopReplayKey({ jkt, htm, htu, jti });
-	const expiresAt = new Date((iat + maxAgeSeconds) * 1000);
+	const expiresAt = new Date((iat + proofMaxAgeSeconds) * 1000);
 	await reserveDpopReplay(replayStore, {
 		key: replayKey,
 		expiresAt,
@@ -402,8 +391,108 @@ export async function verifyDpopProof({
 		htu: normalizedHtu,
 		iat,
 		ath,
-		nonce,
 		replayKey,
 		expiresAt,
 	};
+}
+
+export type DpopBindingErrorCode = "invalid_token" | "invalid_dpop_proof";
+
+export type DpopBindingError = Error & {
+	code: DpopBindingErrorCode;
+};
+
+export function createDpopBindingError(
+	code: DpopBindingErrorCode,
+	message: string,
+): DpopBindingError {
+	return Object.assign(new Error(message), { code });
+}
+
+export function isDpopBindingError(error: unknown): error is DpopBindingError {
+	return (
+		error instanceof Error &&
+		"code" in error &&
+		(error.code === "invalid_token" || error.code === "invalid_dpop_proof")
+	);
+}
+
+export interface EnforceDpopBindingParams {
+	/** The already-verified access-token payload (from JWKS or introspection). */
+	payload: JWTPayload;
+	/** The parsed `Authorization` header (scheme + token). */
+	authorization: AccessTokenAuthorization;
+	/** The `DPoP` proof header value, if any. */
+	proofJwt: string | null | undefined;
+	method: string;
+	url: string;
+	replayStore?: DpopReplayStore;
+	proofMaxAgeSeconds?: number;
+	signingAlgorithms?: readonly string[];
+}
+
+/**
+ * Enforces the RFC 9449 §7.1 sender-constraint check for a resource request,
+ * given an access-token payload that has already been validated (by JWKS or
+ * introspection). This is the single source of truth for the
+ * "is the token DPoP-bound? then require the DPoP scheme, a proof, and a
+ * matching key" decision, shared by every resource-server entry point.
+ *
+ * Throws a {@link DpopBindingError} on any mismatch so callers map the
+ * `invalid_token` / `invalid_dpop_proof` code into their own transport. Returns
+ * normally for a valid bearer token (no `cnf.jkt`, no DPoP scheme).
+ */
+export async function enforceDpopBinding({
+	payload,
+	authorization,
+	proofJwt,
+	method,
+	url,
+	replayStore,
+	proofMaxAgeSeconds,
+	signingAlgorithms,
+}: EnforceDpopBindingParams): Promise<void> {
+	const dpopJkt = getDpopJktFromPayload(payload);
+
+	if (!dpopJkt) {
+		if (authorization.scheme === "DPoP") {
+			throw createDpopBindingError(
+				"invalid_token",
+				"DPoP authorization requires a DPoP-bound access token",
+			);
+		}
+		return;
+	}
+
+	if (authorization.scheme !== "DPoP") {
+		throw createDpopBindingError(
+			"invalid_token",
+			"DPoP-bound access token requires the DPoP authorization scheme",
+		);
+	}
+	if (!proofJwt) {
+		throw createDpopBindingError(
+			"invalid_dpop_proof",
+			"DPoP proof header is required",
+		);
+	}
+
+	try {
+		await verifyDpopProof({
+			proofJwt,
+			method,
+			url,
+			accessToken: authorization.token,
+			expectedJkt: dpopJkt,
+			requireAth: true,
+			proofMaxAgeSeconds,
+			signingAlgorithms,
+			replayStore,
+		});
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			throw createDpopBindingError("invalid_dpop_proof", error.message);
+		}
+		throw error;
+	}
 }

@@ -29,16 +29,20 @@ export {
 export type {
 	AccessTokenAuthorization,
 	AccessTokenAuthorizationScheme,
+	DpopBindingError,
+	DpopBindingErrorCode,
 	DpopProofError,
 	DpopProofErrorCode,
 	DpopReplayReservation,
 	DpopReplayStore,
 	DpopSigningAlgorithm,
+	EnforceDpopBindingParams,
 	VerifiedDpopProof,
 	VerifyDpopProofOptions,
 } from "./dpop";
 export {
 	BEARER_AUTHORIZATION_SCHEME,
+	createDpopBindingError,
 	createDpopProofError,
 	createInMemoryDpopReplayStore,
 	DPOP_AUTHORIZATION_SCHEME,
@@ -46,7 +50,9 @@ export {
 	DPOP_SIGNING_ALGORITHMS,
 	deriveDpopAth,
 	deriveDpopJkt,
+	enforceDpopBinding,
 	getDpopJktFromPayload,
+	isDpopBindingError,
 	isDpopProofError,
 	normalizeDpopHtu,
 	parseAccessTokenAuthorization,
@@ -92,14 +98,14 @@ export {
 	validateToken,
 } from "./validate-authorization-code";
 export type {
-	AccessTokenRequestInput,
+	ResourceRequestInput,
 	VerifyAccessTokenOptions,
 	VerifyAccessTokenRequestOptions,
 } from "./verify";
 export {
 	getJwks,
-	verifyAccessToken,
 	verifyAccessTokenRequest,
+	verifyBearerToken,
 	verifyJwsAccessToken,
 } from "./verify";
 export {

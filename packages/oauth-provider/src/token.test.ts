@@ -5,11 +5,22 @@ import type { ProviderOptions } from "better-auth/oauth2";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	deriveDpopAth,
+	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { base64url, createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
+import type { JWK } from "jose";
+import {
+	base64url,
+	createLocalJWKSet,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -3423,5 +3434,290 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			},
 		});
 		expect(location).toContain("error=unauthorized_client");
+	});
+});
+
+describe("oauth token - DPoP", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const jwtResource = "https://dpop-api.example.com";
+	const dpopRequiredResource = "https://dpop-required.example.com";
+	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [
+					jwtResource,
+					{
+						identifier: dpopRequiredResource,
+						dpopBoundAccessTokensRequired: true,
+					},
+				],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	async function createDpopKey() {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		return { privateKey, publicJwk, jkt };
+	}
+
+	async function createDpopProof(params: {
+		privateKey: CryptoKey;
+		publicJwk: JWK;
+		method: string;
+		url: string;
+		jti: string;
+		accessToken?: string;
+	}) {
+		return new SignJWT({
+			jti: params.jti,
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.accessToken
+				? { ath: await deriveDpopAth(params.accessToken) }
+				: {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: params.publicJwk,
+			})
+			.sign(params.privateKey);
+	}
+
+	async function createAuthUrl(
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+			...overrides,
+		});
+		return { url, codeVerifier };
+	}
+
+	async function exchangeCode(
+		code: string,
+		codeVerifier: string,
+		resource: string,
+		dpopProof?: string,
+	) {
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource,
+			options: {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokenHeaders = new Headers(reqHeaders);
+		if (dpopProof) tokenHeaders.set("DPoP", dpopProof);
+		return client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+			token_type?: string;
+			error?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+	}
+
+	async function authorizeForCode(jkt: string | undefined, resource: string) {
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			jkt ? { additionalParams: { dpop_jkt: jkt } } : undefined,
+		);
+		authUrl.searchParams.set("resource", resource);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		return { code: url.searchParams.get("code")!, codeVerifier };
+	}
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("issues a JWT access token bound to the proof key via cnf.jkt", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "issue-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		const payload = decodeJwt(tokens.data!.access_token!);
+		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("rejects a token request without a proof when the resource requires DPoP", async () => {
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+		const tokens = await exchangeCode(code, codeVerifier, dpopRequiredResource);
+
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+
+	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof?: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			if (dpopProof) refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<{
+				access_token?: string;
+				token_type?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const proofless = await refresh();
+		expect((proofless.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const refreshProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-refresh-proof",
+		});
+		const rotated = await refresh(refreshProof);
+		expect(rotated.error).toBeNull();
+		expect(rotated.data?.token_type).toBe("DPoP");
+		const rotatedPayload = decodeJwt(rotated.data!.access_token!);
+		expect(rotatedPayload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("rejects a replayed DPoP proof at the token endpoint", async () => {
+		const dpopKey = await createDpopKey();
+		// One proof (a single jti) reused across two authorization codes. The
+		// database-backed replay store must reject the second presentation.
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "replayed-proof",
+		});
+
+		const first = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const firstTokens = await exchangeCode(
+			first.code,
+			first.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(firstTokens.error).toBeNull();
+		expect(firstTokens.data?.token_type).toBe("DPoP");
+
+		const second = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const replayed = await exchangeCode(
+			second.code,
+			second.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(replayed.data?.access_token).toBeUndefined();
+		expect((replayed.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
 	});
 });

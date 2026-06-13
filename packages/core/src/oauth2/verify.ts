@@ -18,10 +18,10 @@ import { logger } from "../env";
 import type { DpopReplayStore } from "./dpop";
 import {
 	createInMemoryDpopReplayStore,
+	enforceDpopBinding,
 	getDpopJktFromPayload,
-	isDpopProofError,
+	isDpopBindingError,
 	parseAccessTokenAuthorization,
-	verifyDpopProof,
 } from "./dpop";
 
 const joseInfrastructureErrorCodes = new Set([
@@ -176,19 +176,33 @@ export interface VerifyAccessTokenRequestOptions
 	extends VerifyAccessTokenOptions {
 	dpop?: {
 		proofMaxAgeSeconds?: number;
+		/**
+		 * Store used to reject replayed DPoP proof `jti` values.
+		 *
+		 * Defaults to a process-local in-memory store, which is only safe for a
+		 * single-instance deployment: it shares no state across instances and
+		 * resets on cold start, so a captured proof can be replayed against
+		 * another instance within the proof's lifetime. Supply a shared,
+		 * persistent store (for example one backed by your database) for any
+		 * multi-instance or serverless resource server.
+		 */
 		replayStore?: DpopReplayStore;
-		nonce?: string;
-		supportedAlgorithms?: readonly string[];
+		signingAlgorithms?: readonly string[];
 	};
 }
 
-export interface AccessTokenRequestInput {
+export interface ResourceRequestInput {
 	authorizationHeader: string | null | undefined;
 	dpopProofJwt?: string | null | undefined;
 	method: string;
 	url: string;
 }
 
+/**
+ * Process-local, single-instance replay store. See the warning on
+ * {@link VerifyAccessTokenRequestOptions.dpop.replayStore}; multi-instance
+ * resource servers must pass their own shared store.
+ */
 const defaultDpopReplayStore = createInMemoryDpopReplayStore();
 
 /**
@@ -432,7 +446,7 @@ async function verifyAccessTokenPayload(
 
 function throwDpopUnauthorized(
 	message: string,
-	error?: "invalid_dpop_proof" | "invalid_token" | "use_dpop_nonce",
+	error?: "invalid_dpop_proof" | "invalid_token",
 ): never {
 	throw new APIError(
 		"UNAUTHORIZED",
@@ -452,9 +466,11 @@ function throwDpopUnauthorized(
  * Can also be configured for remote verification. DPoP-bound access tokens
  * require {@link verifyAccessTokenRequest}, because sender-constraining cannot
  * be verified without the HTTP method, URL, Authorization scheme, DPoP proof,
- * and access-token hash.
+ * and access-token hash. This function rejects DPoP-bound tokens; reach for it
+ * only when you hold a raw token string and intentionally accept bearer tokens
+ * alone.
  */
-export async function verifyAccessToken(
+export async function verifyBearerToken(
 	token: string,
 	opts: VerifyAccessTokenOptions,
 ) {
@@ -469,14 +485,16 @@ export async function verifyAccessToken(
 }
 
 /**
- * Verifies an HTTP resource request carrying an OAuth access token.
+ * Verifies an HTTP resource request carrying an OAuth access token. This is the
+ * recommended resource-server entry point: it handles both bearer and
+ * DPoP-bound tokens, the bearer case being the request with no DPoP proof.
  *
- * This performs the same token validation as {@link verifyAccessToken}, then
- * adds the RFC 9449 sender-constraint checks that need request context:
- * authorization scheme, method, URL, DPoP proof, `ath`, and `cnf.jkt` binding.
+ * It performs the same token validation as {@link verifyBearerToken}, then adds
+ * the RFC 9449 sender-constraint checks that need request context: authorization
+ * scheme, method, URL, DPoP proof, `ath`, and `cnf.jkt` binding.
  */
 export async function verifyAccessTokenRequest(
-	request: AccessTokenRequestInput,
+	request: ResourceRequestInput,
 	opts: VerifyAccessTokenRequestOptions,
 ) {
 	const authorization = parseAccessTokenAuthorization(
@@ -487,46 +505,20 @@ export async function verifyAccessTokenRequest(
 	}
 
 	const payload = await verifyAccessTokenPayload(authorization.token, opts);
-	const dpopJkt = getDpopJktFromPayload(payload);
-
-	if (!dpopJkt) {
-		if (authorization.scheme === "DPoP") {
-			throwDpopUnauthorized(
-				"DPoP authorization requires a DPoP-bound access token",
-				"invalid_token",
-			);
-		}
-		return payload;
-	}
-
-	if (authorization.scheme !== "DPoP") {
-		throwDpopUnauthorized(
-			"DPoP-bound access token requires the DPoP authorization scheme",
-			"invalid_token",
-		);
-	}
-	if (!request.dpopProofJwt) {
-		throwDpopUnauthorized(
-			"DPoP proof header is required",
-			"invalid_dpop_proof",
-		);
-	}
 
 	try {
-		await verifyDpopProof({
+		await enforceDpopBinding({
+			payload,
+			authorization,
 			proofJwt: request.dpopProofJwt,
 			method: request.method,
 			url: request.url,
-			accessToken: authorization.token,
-			expectedJkt: dpopJkt,
-			expectedNonce: opts.dpop?.nonce,
-			requireAth: true,
-			maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
-			supportedAlgorithms: opts.dpop?.supportedAlgorithms,
 			replayStore: opts.dpop?.replayStore ?? defaultDpopReplayStore,
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
 		});
 	} catch (error) {
-		if (isDpopProofError(error)) {
+		if (isDpopBindingError(error)) {
 			throwDpopUnauthorized(error.message, error.code);
 		}
 		throw error;
