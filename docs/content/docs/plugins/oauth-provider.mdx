@@ -1575,7 +1575,9 @@ Pairwise `sub` appears in:
 
 * `id_token`
 * `/oauth2/userinfo` response
-* Token introspection (`/oauth2/introspect`)
+* Token introspection (`/oauth2/introspect`), resolved for the token's **issuing** client
+
+A resource server that introspects a token issued to a different client receives the `sub` the issuing client sees, a stable identifier for that (user, issuing client) pair. Introspection does not re-derive `sub` for the resource server's own sector, so the response reflects the subject the token actually represents.
 
 JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
 

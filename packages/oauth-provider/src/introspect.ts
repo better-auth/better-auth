@@ -7,9 +7,9 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
+	getResourceCustomClaims,
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
-	resolveResourcePolicy,
 } from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
@@ -325,9 +325,22 @@ async function validateOpaqueAccessToken(
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
 		: undefined;
+	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+
+	// Deleting a resource row revokes the tokens bound to it: introspection
+	// reports inactive (RFC 7662 §2.2 stable failure), mirroring the JWT path so
+	// a resource server enforces deletion without per-token revocation. A
+	// disabled row still resolves, so an already-issued token keeps verifying
+	// until it expires.
+	if (
+		resources?.length &&
+		!(await isAudienceClaimAllowed(ctx, opts, resources, [userInfoEndpoint]))
+	) {
+		return { active: false };
+	}
+
 	const audienceClaim = resources ? [...resources] : undefined;
 	if (audienceClaim?.length && accessToken.scopes?.includes("openid")) {
-		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 		if (!audienceClaim.includes(userInfoEndpoint)) {
 			audienceClaim.push(userInfoEndpoint);
 		}
@@ -336,22 +349,12 @@ async function validateOpaqueAccessToken(
 	// Re-derive the enriched access-token claim set through the same authority
 	// the JWT mint uses, so opaque introspection carries the claims a JWT would
 	// for this grant, with reserved RFC 9068 names stripped. Per-resource
-	// customClaims are resolved only for resource-bound tokens (the no-resource
-	// hot path stays a single lookup), and a resource deleted after issuance
-	// degrades to no resource claims rather than failing introspection.
-	let resourcePolicyClaims: Record<string, unknown> = {};
-	if (resources?.length) {
-		try {
-			const policy = await resolveResourcePolicy(ctx, opts, {
-				resource: resources,
-				clientId: accessToken.clientId,
-				requestedScopes: accessToken.scopes ?? [],
-			});
-			resourcePolicyClaims = policy.customClaims;
-		} catch (error) {
-			if (!(error instanceof APIError)) throw error;
-		}
-	}
+	// customClaims come from the existing rows directly, with no new-issuance
+	// gates: the deleted-resource case already returned inactive above, and a
+	// disabled resource keeps serving its claims to outstanding tokens.
+	const resourcePolicyClaims = resources?.length
+		? await getResourceCustomClaims(ctx, opts, resources)
+		: {};
 	const accessTokenClaims = await resolveAccessTokenClaims({
 		opts,
 		user,

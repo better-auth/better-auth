@@ -74,20 +74,21 @@ async function bootHarness(
 	const seedCtx = await auth.$context;
 	await seedResourcesOnce(seedCtx as unknown as AuthContext, opts);
 
-	const { headers } = await signInWithTestUser();
+	const { headers, user } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
 
-	const registerClient = async () => {
+	const registerClient = async (overrides: Record<string, unknown> = {}) => {
 		const created = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
 				scope: scopes.join(" "),
 				skip_consent: true,
+				...overrides,
 			},
 		});
 		if (!created?.client_id || !created?.client_secret) {
@@ -187,6 +188,7 @@ async function bootHarness(
 		auth,
 		client,
 		headers,
+		user,
 		registerClient,
 		mintToken,
 		introspect,
@@ -343,5 +345,155 @@ describe("introspection authorization (#8267)", async () => {
 			client_secret: resourceServerB.client_secret,
 		});
 		expect(nonIssuerView.data?.active).toBe(false);
+	});
+});
+
+describe("opaque introspection — resource lifecycle", async () => {
+	// Deleting a resource row revokes outstanding opaque tokens bound to it
+	// (mirrors the JWT delete contract); disabling a row blocks new issuance but
+	// keeps existing tokens, and their claims, valid until expiry.
+	const deletedResource = "https://api.example.com/lifecycle-deleted";
+	const disabledResource = "https://api.example.com/lifecycle-disabled";
+	const harness = await bootHarness({
+		disableJwtPlugin: true,
+		resources: [
+			{ identifier: deletedResource, customClaims: { dept: "ops" } },
+			{ identifier: disabledResource, customClaims: { dept: "sec" } },
+		],
+	});
+	let oauthClient: OAuthClient;
+
+	beforeAll(async () => {
+		oauthClient = await harness.registerClient();
+	});
+
+	it("reports inactive once the bound resource row is deleted", async () => {
+		const token = await harness.mintToken(oauthClient, {
+			resource: deletedResource,
+		});
+		const before = await harness.introspect({
+			token,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+		});
+		expect(before.data?.active).toBe(true);
+		expect(before.data?.dept).toBe("ops");
+
+		const ctx = await harness.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: deletedResource }],
+		});
+
+		const after = await harness.introspect({
+			token,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+		});
+		expect(after.data?.active).toBe(false);
+	});
+
+	it("stays active and keeps its claims after the bound resource is disabled", async () => {
+		const token = await harness.mintToken(oauthClient, {
+			resource: disabledResource,
+		});
+		const ctx = await harness.auth.$context;
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: disabledResource }],
+			update: { disabled: true },
+		});
+
+		const introspection = await harness.introspect({
+			token,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+		});
+		expect(introspection.data?.active).toBe(true);
+		expect(introspection.data?.dept).toBe("sec");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8267
+ */
+describe("introspection authorization (#8267) — opaque tokens", async () => {
+	// The audience-scoped gate runs on the opaque re-derive path, not only the
+	// JWT path covered above.
+	const resource = "https://api.example.com/rs-8267-opaque";
+	const harness = await bootHarness({
+		disableJwtPlugin: true,
+		resources: [resource],
+	});
+	let issuerClientA: OAuthClient;
+	let resourceServerB: OAuthClient;
+	let unrelatedClientC: OAuthClient;
+
+	beforeAll(async () => {
+		issuerClientA = await harness.registerClient();
+		resourceServerB = await harness.registerClient();
+		unrelatedClientC = await harness.registerClient();
+		await harness.linkClientToResource(resourceServerB.client_id!, resource);
+	});
+
+	it("lets a linked resource server introspect an opaque resource-bound token", async () => {
+		const token = await harness.mintToken(issuerClientA, { resource });
+		const introspection = await harness.introspect({
+			token,
+			client_id: resourceServerB.client_id,
+			client_secret: resourceServerB.client_secret,
+		});
+		expect(introspection.data?.active).toBe(true);
+	});
+
+	it("reports inactive to an unlinked client for an opaque token", async () => {
+		const token = await harness.mintToken(issuerClientA, { resource });
+		const introspection = await harness.introspect({
+			token,
+			client_id: unrelatedClientC.client_id,
+			client_secret: unrelatedClientC.client_secret,
+		});
+		expect(introspection.data?.active).toBe(false);
+	});
+});
+
+describe("introspection — pairwise sub across clients", async () => {
+	// Cross-client introspection resolves pairwise `sub` for the token's ISSUING
+	// client, so a resource server sees the subject the token actually
+	// represents (stable for the user + issuing client), not one re-derived for
+	// its own sector.
+	const resource = "https://api.example.com/rs-pairwise";
+	const harness = await bootHarness({
+		pairwiseSecret: "pairwise-secret-at-least-32-chars-long",
+		resources: [resource],
+	});
+	let issuerClient: OAuthClient;
+	let resourceServer: OAuthClient;
+
+	beforeAll(async () => {
+		issuerClient = await harness.registerClient({ subject_type: "pairwise" });
+		resourceServer = await harness.registerClient();
+		await harness.linkClientToResource(resourceServer.client_id!, resource);
+	});
+
+	it("returns the issuing client's pairwise sub to a linked resource server", async () => {
+		const token = await harness.mintToken(issuerClient, { resource });
+
+		const issuerView = await harness.introspect({
+			token,
+			client_id: issuerClient.client_id,
+			client_secret: issuerClient.client_secret,
+		});
+		const resourceServerView = await harness.introspect({
+			token,
+			client_id: resourceServer.client_id,
+			client_secret: resourceServer.client_secret,
+		});
+
+		expect(issuerView.data?.active).toBe(true);
+		expect(resourceServerView.data?.active).toBe(true);
+		// Pairwise applied (not the raw user id), and identical for both callers.
+		expect(issuerView.data?.sub).not.toBe(harness.user.id);
+		expect(resourceServerView.data?.sub).toBe(issuerView.data?.sub);
 	});
 });

@@ -583,10 +583,40 @@ export async function isClientLinkedToAnyResource(
 		opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
 	const links = await ctx.context.adapter.findMany<OAuthClientResource>({
 		model: modelName,
-		where: [{ field: "clientId", value: clientId }],
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "resourceId", operator: "in", value: resourceIdentifiers },
+		],
+		limit: 1,
 	});
-	const linkedSet = new Set(links?.map((l) => l.resourceId) ?? []);
-	return resourceIdentifiers.some((identifier) => linkedSet.has(identifier));
+	return (links?.length ?? 0) > 0;
+}
+
+/**
+ * Merges `customClaims` from the existing rows of `resourceIdentifiers` in
+ * order (later resources win on collision). Missing rows are skipped; disabled
+ * rows are included, since an already-issued token keeps its claims until it
+ * expires. Returned raw; `resolveAccessTokenClaims` strips reserved names.
+ *
+ * Unlike {@link resolveResourcePolicy}, this applies none of the new-issuance
+ * gates (disabled, scope allowlist, client linkage), so it is the right way to
+ * re-derive claims for an already-issued token at introspection.
+ *
+ * @internal
+ */
+export async function getResourceCustomClaims(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	resourceIdentifiers: string[],
+): Promise<Record<string, unknown>> {
+	const merged: Record<string, unknown> = {};
+	for (const identifier of resourceIdentifiers) {
+		const row = await getResource(ctx, opts, identifier);
+		if (row?.customClaims && typeof row.customClaims === "object") {
+			Object.assign(merged, row.customClaims);
+		}
+	}
+	return merged;
 }
 
 /**
