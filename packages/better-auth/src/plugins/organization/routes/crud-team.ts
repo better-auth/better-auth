@@ -137,7 +137,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 					ctx,
 				);
 
-				if (!canCreate) {
+				if (!canCreate.success) {
 					throw APIError.from(
 						"FORBIDDEN",
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION,
@@ -302,7 +302,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 					ctx,
 				);
 
-				if (!canRemove) {
+				if (!canRemove.success) {
 					throw APIError.from(
 						"FORBIDDEN",
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION,
@@ -513,7 +513,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				ctx,
 			);
 
-			if (!canUpdate) {
+			if (!canUpdate.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
@@ -1100,7 +1100,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
-			if (!canUpdateMember) {
+			if (!canUpdateMember.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER,
@@ -1299,7 +1299,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
-			if (!canDeleteMember) {
+			if (!canDeleteMember.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,

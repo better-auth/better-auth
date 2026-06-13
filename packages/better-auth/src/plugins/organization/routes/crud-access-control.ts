@@ -185,7 +185,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 				ctx,
 			);
-			if (!canCreateRole) {
+			if (!canCreateRole.success) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to create a role. If this is unexpected, please make sure the role associated to that member has the "ac" resource with the "create" permission.`,
 					{
@@ -377,7 +377,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 				ctx,
 			);
-			if (!canDeleteRole) {
+			if (!canDeleteRole.success) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to delete a role. If this is unexpected, please make sure the role associated to that member has the "ac" resource with the "delete" permission.`,
 					{
@@ -606,7 +606,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				},
 				ctx,
 			);
-			if (!canListRoles) {
+			if (!canListRoles.success) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to list roles.`,
 					{
@@ -734,7 +734,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 
-			const canListRoles = await hasPermission(
+			const canReadRole = await hasPermission(
 				{
 					options,
 					organizationId,
@@ -745,7 +745,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 				ctx,
 			);
-			if (!canListRoles) {
+			if (!canReadRole.success) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to read a role.`,
 					{
@@ -949,7 +949,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				},
 				ctx,
 			);
-			if (!canUpdateRole) {
+			if (!canUpdateRole.success) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to update a role.`,
 				);
@@ -1152,18 +1152,19 @@ async function checkIfMemberHasPermission({
 	const permissionEntries = Object.entries(permission);
 	for await (const [resource, permissions] of permissionEntries) {
 		for await (const perm of permissions) {
+			const result = await hasPermission(
+				{
+					options,
+					organizationId,
+					permissions: { [resource]: [perm] },
+					useMemoryCache: true,
+					role: member.role,
+				},
+				ctx,
+			);
 			hasNecessaryPermissions.push({
 				resource: { [resource]: [perm] },
-				hasPermission: await hasPermission(
-					{
-						options,
-						organizationId,
-						permissions: { [resource]: [perm] },
-						useMemoryCache: true,
-						role: member.role,
-					},
-					ctx,
-				),
+				hasPermission: result.success,
 			});
 		}
 	}
