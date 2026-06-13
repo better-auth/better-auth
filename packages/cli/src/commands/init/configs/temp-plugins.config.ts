@@ -636,29 +636,6 @@ export const tempPluginsConfig = {
 			],
 		},
 	},
-	oidc: {
-		displayName: "OIDC",
-		auth: {
-			function: "oidc",
-			imports: [
-				{
-					path: "better-auth/plugins",
-					imports: [createImport({ name: "oidc" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "oidcClient",
-			imports: [
-				{
-					path: "better-auth/client/plugins",
-					imports: [createImport({ name: "oidcClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
 	admin: {
 		displayName: "Admin",
 		auth: {

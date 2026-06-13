@@ -597,4 +597,42 @@ describe("oauth-provider extensions", async () => {
 			}),
 		).rejects.toThrow("client_assertion_type list cannot be empty");
 	});
+
+	it("rejects two extensions registering the same grant type", async () => {
+		const sharedGrant = "urn:better-auth:test:shared-grant";
+		const makeExtensionPlugin = (id: string) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						grants: {
+							[sharedGrant]: async () => {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_request",
+									error_description: "unreachable test grant",
+								});
+							},
+						},
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					makeExtensionPlugin("ext-a"),
+					makeExtensionPlugin("ext-b"),
+				],
+			}),
+		).rejects.toThrow("register grant type");
+	});
 });

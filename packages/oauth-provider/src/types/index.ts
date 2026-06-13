@@ -261,17 +261,49 @@ export interface OAuthUserInfoContributionInput<
 	client?: SchemaClient<Scopes>;
 }
 
+/**
+ * What a companion plugin contributes to the OAuth Provider, registered through
+ * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
+ * option). Every field is additive: extensions never override authorization
+ * server core. Contributions across extensions must be disjoint; registering
+ * the same grant type, auth method, or assertion type as another extension is
+ * rejected at setup, and a colliding metadata or claim key resolves to the
+ * first-registered extension.
+ */
 export interface OAuthProviderExtension<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
+	/**
+	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
+	 * dispatches a matching `grant_type` to the handler, which authenticates the
+	 * client and issues tokens through the shared `tools`.
+	 */
 	grants?: Record<string, OAuthExtensionGrantHandler<Scopes>>;
+	/**
+	 * Assertion-based client authentication, keyed by the advertised
+	 * `token_endpoint_auth_method`. Consumes the matching `client_assertion_type`
+	 * at the token, introspection, and revocation endpoints. Built-in method
+	 * names (`client_secret_basic`/`_post`, `private_key_jwt`, `none`) are
+	 * reserved.
+	 */
 	clientAuthentication?: Record<
 		string,
 		OAuthClientAuthenticationStrategy<Scopes>
 	>;
+	/**
+	 * Additional discovery metadata fields. Core fields (`issuer`,
+	 * `token_endpoint`, advertised grants and auth methods, ...) stay owned by
+	 * the provider; only absent keys are added.
+	 */
 	metadata?: (
 		input: OAuthMetadataContributionInput<Scopes>,
 	) => Record<string, unknown>;
+	/**
+	 * Additional claims for access tokens, ID tokens, and the UserInfo response.
+	 * Reserved RFC 9068 / OIDC names stay owned by the provider. Access-token
+	 * claims are re-derived at opaque-token introspection, so they must be
+	 * grant-type-stable (a contributor receives `grantType: undefined` there).
+	 */
 	claims?: {
 		accessToken?: (
 			input: OAuthClaimContributionInput<Scopes>,

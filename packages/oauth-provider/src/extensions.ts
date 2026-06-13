@@ -85,38 +85,88 @@ function assertExtensionClientAssertionType(assertionType: string) {
 	);
 }
 
-const validatedExtensions = new WeakSet<OAuthProviderExtension<Scope[]>>();
+interface ExtensionKeys {
+	grantTypes: string[];
+	authMethods: string[];
+	assertionTypes: string[];
+}
+
+// Caches the registered keys of each validated extension. Extensions are read
+// once at setup and treated as immutable after, so per-extension validation and
+// the cross-extension disjointness check below never re-read their getters.
+const validatedExtensions = new WeakMap<
+	OAuthProviderExtension<Scope[]>,
+	ExtensionKeys
+>();
 
 function validateOAuthProviderExtension(
 	extension: OAuthProviderExtension<Scope[]>,
-) {
-	for (const grantType of Object.keys(extension.grants ?? {})) {
+): ExtensionKeys {
+	const grantTypes = Object.keys(extension.grants ?? {});
+	for (const grantType of grantTypes) {
 		assertExtensionGrantType(grantType);
 	}
+	const authMethods: string[] = [];
+	const assertionTypes: string[] = [];
 	for (const [method, strategy] of Object.entries(
 		extension.clientAuthentication ?? {},
 	)) {
 		assertExtensionTokenEndpointAuthMethod(method);
-		const assertionTypes = strategy.assertionTypes ?? [method];
-		if (assertionTypes.length === 0) {
+		authMethods.push(method);
+		const methodAssertionTypes = strategy.assertionTypes ?? [method];
+		if (methodAssertionTypes.length === 0) {
 			throw new BetterAuthError(
 				`OAuth Provider extension client_assertion_type list cannot be empty for ${method}`,
 			);
 		}
-		for (const assertionType of assertionTypes) {
+		for (const assertionType of methodAssertionTypes) {
 			assertExtensionClientAssertionType(assertionType);
+			assertionTypes.push(assertionType);
 		}
+	}
+	return { grantTypes, authMethods, assertionTypes };
+}
+
+function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
+	const seen = new Set<string>();
+	for (const value of values) {
+		if (seen.has(value)) {
+			throw new BetterAuthError(
+				`OAuth Provider extensions register ${label} "${value}" more than once. Extension contributions must be disjoint.`,
+			);
+		}
+		seen.add(value);
 	}
 }
 
 export function validateOAuthProviderExtensions(
 	extensions: OAuthProviderExtension<Scope[]>[] | undefined,
 ) {
-	for (const extension of extensions ?? []) {
+	const all = extensions ?? [];
+	for (const extension of all) {
 		if (validatedExtensions.has(extension)) continue;
-		validateOAuthProviderExtension(extension);
-		validatedExtensions.add(extension);
+		validatedExtensions.set(
+			extension,
+			validateOAuthProviderExtension(extension),
+		);
 	}
+	// Reject two extensions registering the same grant type, auth method, or
+	// assertion type: otherwise the first wins and the second is silently
+	// unreachable. Uses the keys cached at first validation.
+	const keysOf = (extension: OAuthProviderExtension<Scope[]>) =>
+		validatedExtensions.get(extension);
+	assertNoDuplicateAcrossExtensions(
+		"grant type",
+		all.flatMap((extension) => keysOf(extension)?.grantTypes ?? []),
+	);
+	assertNoDuplicateAcrossExtensions(
+		"token_endpoint_auth_method",
+		all.flatMap((extension) => keysOf(extension)?.authMethods ?? []),
+	);
+	assertNoDuplicateAcrossExtensions(
+		"client_assertion_type",
+		all.flatMap((extension) => keysOf(extension)?.assertionTypes ?? []),
+	);
 }
 
 function getOAuthProviderExtensions(
@@ -125,6 +175,27 @@ function getOAuthProviderExtensions(
 	return opts.extensions ?? [];
 }
 
+/**
+ * Registers an {@link OAuthProviderExtension} with the OAuth Provider plugin
+ * from a companion plugin's `init()` hook. An extension can add token grants,
+ * assertion-based client authentication methods, additive discovery metadata,
+ * and access-token, ID-token, or UserInfo claims, without forking provider core.
+ *
+ * Call this once, at `init()` time. It throws if the oauth-provider plugin is
+ * not installed, if a grant type or assertion type is not an absolute URI, if a
+ * client authentication method reuses a built-in name, or if the extension
+ * registers a grant type, auth method, or assertion type that another extension
+ * already registered (contributions must be disjoint).
+ *
+ * @example
+ * ```ts
+ * init(ctx) {
+ *   extendOAuthProvider(ctx, {
+ *     grants: { "urn:example:grant": async ({ tools }) => tools.issueTokens(...) },
+ *   });
+ * }
+ * ```
+ */
 export function extendOAuthProvider(
 	ctx: AuthContext,
 	extension: OAuthProviderExtension<Scope[]>,
@@ -137,11 +208,9 @@ export function extendOAuthProvider(
 			"extendOAuthProvider requires the oauth-provider plugin.",
 		);
 	}
-	validateOAuthProviderExtensions([extension]);
-	provider.options.extensions = [
-		...(provider.options.extensions ?? []),
-		extension,
-	];
+	const extensions = [...(provider.options.extensions ?? []), extension];
+	validateOAuthProviderExtensions(extensions);
+	provider.options.extensions = extensions;
 }
 
 function getExtensionGrantTypes(opts: OAuthOptions<Scope[]>): GrantType[] {
@@ -264,8 +333,16 @@ async function collectClaims(
 	) => Awaitable<Record<string, unknown> | undefined>,
 ) {
 	const claims: Record<string, unknown> = {};
+	// First contributor wins a key, matching metadata extensions
+	// (`applyOAuthProviderMetadataExtensions`). Extensions are expected to
+	// contribute disjoint claims; this only fixes the resolution if they don't.
 	for (const extension of getOAuthProviderExtensions(opts)) {
-		Object.assign(claims, (await run(extension)) ?? {});
+		const contribution = (await run(extension)) ?? {};
+		for (const [key, value] of Object.entries(contribution)) {
+			if (!(key in claims)) {
+				claims[key] = value;
+			}
+		}
 	}
 	return claims;
 }

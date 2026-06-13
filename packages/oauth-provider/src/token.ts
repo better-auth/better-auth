@@ -6,14 +6,14 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import { resolveAccessTokenClaims } from "./claims";
 import {
-	collectExtensionAccessTokenClaims,
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
 	getSupportedGrantTypes,
 } from "./extensions";
 import type { ResolvedResourcePolicy } from "./resources";
-import { resolveResourcePolicy, stripReservedClaims } from "./resources";
+import { resolveResourcePolicy } from "./resources";
 import type {
 	OAuthAuthenticatedClient,
 	OAuthClientAuthenticationRequest,
@@ -159,8 +159,6 @@ async function createJwtAccessToken(
 	client: SchemaClient<Scope[]>,
 	audienceClaim: string | string[],
 	scopes: string[],
-	resources?: string[],
-	referenceId?: string,
 	overrides?: {
 		iat?: number;
 		exp?: number;
@@ -171,33 +169,16 @@ async function createJwtAccessToken(
 		 */
 		signingAlgorithm?: ResolvedResourcePolicy["signingAlgorithm"];
 		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
-		/** Per-resource custom claims (already reserved-claim-stripped). */
-		resourceCustomClaims?: Record<string, unknown>;
-		/** Extension or grant-level custom claims. */
-		additionalClaims?: Record<string, unknown>;
+		/**
+		 * Enriched access-token claims from {@link resolveAccessTokenClaims}
+		 * (reserved RFC 9068 names already stripped). The AS-owned claims below
+		 * are stamped after and always win.
+		 */
+		accessTokenClaims?: Record<string, unknown>;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
-	const pluginCustomClaims = opts.customAccessTokenClaims
-		? await opts.customAccessTokenClaims({
-				user,
-				scopes,
-				resources,
-				referenceId,
-				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
-
-	// Reserved-claim stripping is server-enforced for BOTH the resource-level
-	// customClaims (already stripped during policy resolution) AND the legacy
-	// plugin-level `customAccessTokenClaims` callback. The AS owns RFC 9068
-	// reserved names regardless of which extension surface tries to set them.
-	const safeAdditionalClaims = stripReservedClaims(
-		overrides?.additionalClaims ?? {},
-	);
-	const safePluginClaims = stripReservedClaims(pluginCustomClaims);
-	const safeResourceClaims = overrides?.resourceCustomClaims ?? {};
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	const subject = user?.id ?? client.clientId;
@@ -210,9 +191,7 @@ async function createJwtAccessToken(
 		signingKeyId: overrides?.signingKeyId ?? undefined,
 		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
-			...safeAdditionalClaims,
-			...safePluginClaims,
-			...safeResourceClaims,
+			...(overrides?.accessTokenClaims ?? {}),
 			// RFC 9068 §2.2 requires `sub` on every JWT access token. For
 			// client_credentials, no resource owner participates, so the client is
 			// the subject represented to the resource server.
@@ -221,8 +200,8 @@ async function createJwtAccessToken(
 			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
 			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
 			// with introspection flows that key on it. The AS owns this value;
-			// `stripReservedClaims` removes any `client_id` from custom claims so
-			// resource/plugin extensions can't override it.
+			// `resolveAccessTokenClaims` strips reserved names so resource or
+			// plugin claims can't override it.
 			client_id: client.clientId,
 			azp: client.clientId,
 			scope: scopes.join(" "),
@@ -654,7 +633,7 @@ async function resolveResourceGrantIssuance(
 			params.resources,
 		signingAlgorithm: resourcePolicy.signingAlgorithm,
 		signingKeyId: resourcePolicy.signingKeyId,
-		resourceCustomClaims: resourcePolicy.customClaims,
+		resourceCustomClaims: resourcePolicy.rawCustomClaims,
 	};
 }
 
@@ -716,27 +695,7 @@ async function createUserTokens(
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && effectiveScopes.includes("openid");
-	const metadata = parseClientMetadata(client.metadata) as
-		| Record<string, unknown>
-		| undefined;
-	const extensionAccessTokenClaims = await collectExtensionAccessTokenClaims(
-		opts,
-		{
-			ctx,
-			opts,
-			user,
-			client,
-			scopes: effectiveScopes,
-			grantType,
-			referenceId,
-			resources: params.resources,
-			metadata,
-		},
-	);
-	const additionalAccessTokenClaims = {
-		...extensionAccessTokenClaims,
-		...(params.extra?.accessTokenClaims ?? {}),
-	};
+	const metadata = parseClientMetadata(client.metadata);
 	const additionalIdTokenClaims =
 		isIdToken && user
 			? {
@@ -789,6 +748,25 @@ async function createUserTokens(
 				)
 			: undefined;
 
+	// Enriched (non-AS-owned) access-token claims, resolved once for the JWT
+	// mint. Opaque tokens persist no claims and re-derive the same set at
+	// introspection through this same resolver, so the formats cannot drift.
+	const accessTokenClaims = isJwtAccessToken
+		? await resolveAccessTokenClaims({
+				ctx,
+				opts,
+				user,
+				client,
+				scopes: effectiveScopes,
+				grantType,
+				resources: params.resources,
+				referenceId,
+				metadata,
+				perRequestClaims: params.extra?.accessTokenClaims,
+				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
+			})
+		: undefined;
+
 	// Create access token and refresh token in parallel
 	const [accessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
@@ -799,16 +777,13 @@ async function createUserTokens(
 					client,
 					audienceClaim,
 					effectiveScopes,
-					params?.resources,
-					referenceId,
 					{
 						iat,
 						exp,
 						sid: sessionId,
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
-						resourceCustomClaims: grantIssuance.resourceCustomClaims,
-						additionalClaims: additionalAccessTokenClaims,
+						accessTokenClaims,
 					},
 				)
 			: createOpaqueAccessToken(
