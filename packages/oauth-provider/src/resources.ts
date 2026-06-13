@@ -609,9 +609,18 @@ export async function getResourceCustomClaims(
 	opts: OAuthOptions<Scope[]>,
 	resourceIdentifiers: string[],
 ): Promise<Record<string, unknown>> {
+	if (resourceIdentifiers.length === 0) return {};
+	const rows = await ctx.context.adapter.findMany<OAuthResource>({
+		model: opts.schema?.oauthResource?.modelName ?? "oauthResource",
+		where: [
+			{ field: "identifier", operator: "in", value: resourceIdentifiers },
+		],
+	});
+	const rowByIdentifier = new Map(rows.map((row) => [row.identifier, row]));
 	const merged: Record<string, unknown> = {};
+	// Merge in the token's resource order so "later resource wins" still holds.
 	for (const identifier of resourceIdentifiers) {
-		const row = await getResource(ctx, opts, identifier);
+		const row = rowByIdentifier.get(identifier);
 		if (row?.customClaims && typeof row.customClaims === "object") {
 			Object.assign(merged, row.customClaims);
 		}
