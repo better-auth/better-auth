@@ -141,6 +141,11 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			dpopBoundAccessTokens: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
 			// All other metadata
 			referenceId: {
 				type: "string",
@@ -205,6 +210,11 @@ export const schema = {
 			customClaims: {
 				type: "json",
 				required: false,
+			},
+			dpopBoundAccessTokensRequired: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
 			},
 			// Lifecycle: disabled → no new issuance, existing tokens still verify.
 			disabled: {
@@ -359,6 +369,10 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			dpopJkt: {
+				type: "string",
+				required: false,
+			},
 			// Immutable
 			scopes: {
 				type: "string[]",
@@ -443,9 +457,32 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			dpopJkt: {
+				type: "string",
+				required: false,
+			},
 			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
 				type: "string[]",
+				required: true,
+			},
+		},
+	},
+	oauthDpopProof: {
+		modelName: "oauthDpopProof",
+		fields: {
+			replayId: {
+				type: "string",
+				required: true,
+				unique: true,
+			},
+			expiresAt: {
+				type: "date",
+				required: true,
+				index: true,
+			},
+			createdAt: {
+				type: "date",
 				required: true,
 			},
 		},

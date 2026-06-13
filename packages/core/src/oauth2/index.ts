@@ -27,6 +27,39 @@ export {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
 } from "./create-authorization-url";
 export type {
+	AccessTokenAuthorization,
+	AccessTokenAuthorizationScheme,
+	DpopBindingError,
+	DpopBindingErrorCode,
+	DpopProofError,
+	DpopProofErrorCode,
+	DpopReplayReservation,
+	DpopReplayStore,
+	DpopSigningAlgorithm,
+	EnforceDpopBindingParams,
+	VerifiedDpopProof,
+	VerifyDpopProofOptions,
+} from "./dpop";
+export {
+	BEARER_AUTHORIZATION_SCHEME,
+	createDpopBindingError,
+	createDpopProofError,
+	createInMemoryDpopReplayStore,
+	DPOP_AUTHORIZATION_SCHEME,
+	DPOP_PROOF_TYPE,
+	DPOP_SIGNING_ALGORITHMS,
+	deriveDpopAth,
+	deriveDpopJkt,
+	enforceDpopBinding,
+	getDpopJktFromPayload,
+	isDpopBindingError,
+	isDpopProofError,
+	normalizeDpopHtu,
+	parseAccessTokenAuthorization,
+	stripAccessTokenAuthorizationScheme,
+	verifyDpopProof,
+} from "./dpop";
+export type {
 	AuthorizationURLResult,
 	GrantAuthority,
 	OAuth2Tokens,
@@ -64,9 +97,15 @@ export {
 	validateAuthorizationCode,
 	validateToken,
 } from "./validate-authorization-code";
+export type {
+	ResourceRequestInput,
+	VerifyAccessTokenOptions,
+	VerifyAccessTokenRequestOptions,
+} from "./verify";
 export {
 	getJwks,
-	verifyAccessToken,
+	verifyAccessTokenRequest,
+	verifyBearerToken,
 	verifyJwsAccessToken,
 } from "./verify";
 export {

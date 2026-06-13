@@ -1,3 +1,12 @@
+import type { DpopReplayStore } from "better-auth/oauth2";
+import {
+	createInMemoryDpopReplayStore,
+	DPOP_SIGNING_ALGORITHMS,
+	enforceDpopBinding,
+	getDpopJktFromPayload,
+	isDpopBindingError,
+	parseAccessTokenAuthorization,
+} from "better-auth/oauth2";
 import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
@@ -6,6 +15,11 @@ export interface McpResourceClientOptions {
 	resource?: string;
 	allowedOrigin?: string;
 	fetch?: typeof globalThis.fetch;
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		replayStore?: DpopReplayStore;
+		signingAlgorithms?: readonly string[];
+	};
 }
 
 export interface McpSession extends JWTPayload {
@@ -32,8 +46,14 @@ interface NodeLikeRequest {
 	headers: Record<string, string | string[] | undefined> & {
 		get?: (name: string) => string | undefined;
 		authorization?: string;
+		host?: string;
+		"x-forwarded-proto"?: string;
 	};
 	get?: (name: string) => string | undefined;
+	method?: string;
+	originalUrl?: string;
+	protocol?: string;
+	url?: string;
 	mcpSession?: McpSession;
 }
 
@@ -50,6 +70,7 @@ const PROTECTED_RESOURCE_METADATA_PATH =
 
 export interface McpResourceClient {
 	verifyToken: (token: string) => Promise<McpSession | null>;
+	verifyRequest: (req: Request) => Promise<McpSession | null>;
 	handler: (
 		fn: (req: Request, session: McpSession) => Response | Promise<Response>,
 	) => (req: Request) => Promise<Response>;
@@ -82,7 +103,8 @@ function buildCorsHeaders(
 	return {
 		"Access-Control-Allow-Origin": origin,
 		"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-		"Access-Control-Allow-Headers": "Content-Type, Authorization",
+		"Access-Control-Allow-Headers": "Content-Type, Authorization, DPoP",
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
 		"Access-Control-Max-Age": "86400",
 	};
 }
@@ -106,8 +128,11 @@ function makeWWWAuthenticate(authURL: string, resource?: string): string {
 	return `Bearer resource_metadata="${resourceMetadataURL}"`;
 }
 
-function make401Response(authURL: string, resource?: string): Response {
-	const wwwAuth = makeWWWAuthenticate(authURL, resource);
+function makeDpopWWWAuthenticate(algorithms: readonly string[]): string {
+	return `DPoP algs="${algorithms.join(" ")}"`;
+}
+
+function make401Response(wwwAuth: string): Response {
 	return Response.json(
 		{
 			jsonrpc: "2.0",
@@ -159,6 +184,10 @@ export function createMcpResourceClient(
 	const fetchFn = options.fetch ?? globalThis.fetch;
 	const corsHeaders = buildCorsHeaders(authURL, options.allowedOrigin);
 	const expectedAudience = options.resource ?? authURL;
+	const dpopReplayStore =
+		options.dpop?.replayStore ?? createInMemoryDpopReplayStore();
+	const dpopSigningAlgorithms =
+		options.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
 
 	let discovery: { issuer: string; jwks_uri: string } | null = null;
 	let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -182,7 +211,7 @@ export function createMcpResourceClient(
 		return { discovery, jwks };
 	};
 
-	const verifyToken = async (token: string): Promise<McpSession | null> => {
+	const verifyJwtToken = async (token: string): Promise<McpSession | null> => {
 		try {
 			const { discovery: meta, jwks: keySet } = await loadVerifier();
 			const { payload } = await jwtVerify(token, keySet, {
@@ -195,21 +224,90 @@ export function createMcpResourceClient(
 		}
 	};
 
+	const verifyToken = async (token: string): Promise<McpSession | null> => {
+		const session = await verifyJwtToken(token);
+		if (!session || getDpopJktFromPayload(session)) return null;
+		return session;
+	};
+
+	/**
+	 * Verifies a request's access token and, when the token is DPoP-bound, its
+	 * RFC 9449 sender-constraint. Returns `null` when there is no usable token
+	 * or the JWT itself is invalid. Throws a `DpopBindingError` when a
+	 * DPoP-bound token fails the binding check, so the caller can answer with a
+	 * `WWW-Authenticate: DPoP` challenge rather than a bearer one.
+	 */
+	const verifyRequest = async (req: Request): Promise<McpSession | null> => {
+		const authorization = parseAccessTokenAuthorization(
+			req.headers.get("Authorization"),
+		);
+		if (!authorization?.token) return null;
+		const session = await verifyJwtToken(authorization.token);
+		if (!session) return null;
+
+		await enforceDpopBinding({
+			payload: session,
+			authorization,
+			proofJwt: req.headers.get("DPoP"),
+			method: req.method,
+			url: req.url,
+			proofMaxAgeSeconds: options.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: dpopSigningAlgorithms,
+			replayStore: dpopReplayStore,
+		});
+		return session;
+	};
+
+	const getHeader = (
+		req: NodeLikeRequest,
+		name: string,
+	): string | undefined => {
+		const lower = name.toLowerCase();
+		const value =
+			req.headers?.[lower] ??
+			req.headers?.[name] ??
+			req.headers?.get?.(name) ??
+			req.get?.(name);
+		if (Array.isArray(value)) return value[0];
+		return value;
+	};
+
+	const getNodeRequestUrl = (req: NodeLikeRequest): string => {
+		const rawUrl = req.originalUrl ?? req.url ?? "/";
+		if (URL.canParse(rawUrl)) return rawUrl;
+		const fallbackUrl = new URL(authURL);
+		const host = getHeader(req, "host") ?? fallbackUrl.host;
+		const protocol =
+			getHeader(req, "x-forwarded-proto") ??
+			req.protocol ??
+			fallbackUrl.protocol.replace(":", "");
+		return `${protocol}://${host}${rawUrl.startsWith("/") ? rawUrl : `/${rawUrl}`}`;
+	};
+
 	const handler: McpResourceClient["handler"] = (fn) => {
 		return async (req: Request) => {
 			if (req.method === "OPTIONS") {
 				return new Response(null, { status: 204, headers: corsHeaders });
 			}
 
-			const authHeader = req.headers.get("Authorization");
-			if (!authHeader || !authHeader.startsWith("Bearer ")) {
-				return make401Response(authURL, options.resource);
+			let session: McpSession | null;
+			try {
+				session = await verifyRequest(req);
+			} catch (error) {
+				if (isDpopBindingError(error)) {
+					return make401Response(
+						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
+					);
+				}
+				throw error;
 			}
-
-			const token = authHeader.slice(7);
-			const session = await verifyToken(token);
 			if (!session) {
-				return make401Response(authURL, options.resource);
+				const challenge =
+					req.headers.get("Authorization")?.startsWith("DPoP ") ||
+					req.headers.has("DPoP")
+						? makeDpopWWWAuthenticate(dpopSigningAlgorithms)
+						: makeWWWAuthenticate(authURL, options.resource);
+				return make401Response(challenge);
 			}
 
 			return fn(req, session);
@@ -256,6 +354,7 @@ export function createMcpResourceClient(
 				resource,
 				authorization_servers: [authURL],
 				bearer_methods_supported: ["header"],
+				dpop_signing_alg_values_supported: [...dpopSigningAlgorithms],
 			};
 
 			return async (_req: Request) => {
@@ -269,27 +368,44 @@ export function createMcpResourceClient(
 			res: NodeLikeResponse,
 			next: () => void,
 		) => {
-			const authHeader =
-				req.headers?.authorization ??
-				req.headers?.get?.("Authorization") ??
-				req.get?.("Authorization");
-
-			if (!authHeader || !authHeader.startsWith("Bearer ")) {
-				send401Node(
-					res,
-					makeWWWAuthenticate(authURL, options.resource),
-					"Unauthorized: Authentication required",
-				);
-				return;
+			const authHeader = getHeader(req, "authorization");
+			const requestHeaders = new Headers();
+			if (authHeader) {
+				requestHeaders.set("Authorization", authHeader);
 			}
-
-			const token = authHeader.slice(7);
-			const session = await verifyToken(token);
+			const dpop = getHeader(req, "dpop");
+			if (dpop) {
+				requestHeaders.set("DPoP", dpop);
+			}
+			const request = new Request(getNodeRequestUrl(req), {
+				method: req.method ?? "GET",
+				headers: requestHeaders,
+			});
+			let session: McpSession | null;
+			try {
+				session = await verifyRequest(request);
+			} catch (error) {
+				if (isDpopBindingError(error)) {
+					send401Node(
+						res,
+						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
+						"Invalid or expired token",
+					);
+					return;
+				}
+				throw error;
+			}
 			if (!session) {
+				const challenge =
+					authHeader?.startsWith("DPoP ") || getHeader(req, "dpop")
+						? makeDpopWWWAuthenticate(dpopSigningAlgorithms)
+						: makeWWWAuthenticate(authURL, options.resource);
 				send401Node(
 					res,
-					makeWWWAuthenticate(authURL, options.resource),
-					"Invalid or expired token",
+					challenge,
+					authHeader
+						? "Invalid or expired token"
+						: "Unauthorized: Authentication required",
 				);
 				return;
 			}
@@ -301,6 +417,7 @@ export function createMcpResourceClient(
 
 	return {
 		verifyToken,
+		verifyRequest,
 		handler,
 		discoveryHandler,
 		protectedResourceHandler,

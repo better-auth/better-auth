@@ -1,4 +1,5 @@
 export { getIssuer } from "./authorize";
+export { createOauthDpopReplayStore, DPOP_PROOF_MODEL } from "./dpop";
 export {
 	authServerMetadata,
 	metadataResponse,

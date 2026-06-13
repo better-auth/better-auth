@@ -173,6 +173,7 @@ const RESERVED_RFC9068_CLAIMS = new Set([
 	"exp",
 	"iat",
 	"jti",
+	"cnf",
 	"client_id",
 	"scope",
 	"auth_time",
@@ -263,6 +264,11 @@ export interface ResolvedResourcePolicy {
 	 * claim names are stripped — callers don't need to re-strip.
 	 */
 	customClaims: Record<string, unknown>;
+	/**
+	 * True when at least one requested resource requires DPoP-bound access
+	 * tokens.
+	 */
+	dpopBoundAccessTokensRequired: boolean;
 	/**
 	 * The intersection of the caller's `requestedScopes` with each requested
 	 * resource's `allowedScopes`. When no requested resource defines an
@@ -432,6 +438,7 @@ export async function resolveResourcePolicy(
 			signingAlgorithm: null,
 			signingKeyId: null,
 			customClaims: {},
+			dpopBoundAccessTokensRequired: false,
 			effectiveScopes: [...params.requestedScopes],
 		};
 	}
@@ -570,6 +577,9 @@ export async function resolveResourcePolicy(
 		}
 	}
 	const safeClaims = stripReservedClaims(mergedClaims);
+	const dpopBoundAccessTokensRequired = resolved.some(
+		(row) => row.dpopBoundAccessTokensRequired === true,
+	);
 
 	const audienceIdentifiers = includesOpenid
 		? [...uniqueRequestedResources, userInfoResourceIdentifier]
@@ -583,6 +593,7 @@ export async function resolveResourcePolicy(
 		signingAlgorithm,
 		signingKeyId,
 		customClaims: safeClaims,
+		dpopBoundAccessTokensRequired,
 		effectiveScopes,
 	};
 }
@@ -753,6 +764,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		signingKeyId: input.signingKeyId ?? null,
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
+		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
 		policyVersion: 1,
 		metadata: input.metadata ?? null,
@@ -795,6 +807,9 @@ function buildSeedUpdate(
 		update.allowedScopes = input.allowedScopes;
 	if (input.customClaims !== undefined)
 		update.customClaims = input.customClaims;
+	if (input.dpopBoundAccessTokensRequired !== undefined) {
+		update.dpopBoundAccessTokensRequired = input.dpopBoundAccessTokensRequired;
+	}
 	if (input.disabled !== undefined) update.disabled = input.disabled;
 	if (input.metadata !== undefined) update.metadata = input.metadata;
 	return update;

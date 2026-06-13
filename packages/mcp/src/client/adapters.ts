@@ -1,3 +1,7 @@
+import {
+	DPOP_SIGNING_ALGORITHMS,
+	isDpopBindingError,
+} from "better-auth/oauth2";
 import type {
 	McpResourceClient,
 	McpResourceClientOptions,
@@ -59,42 +63,44 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 		options.resource ?? client.authURL,
 	);
 
+	const dpopAlgorithms =
+		options.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
+	const dpopChallenge = `DPoP algs="${dpopAlgorithms.join(" ")}"`;
+
+	const unauthorized = (c: HonoContext, challenge: string, message: string) => {
+		c.header("WWW-Authenticate", challenge);
+		return c.json(
+			{
+				jsonrpc: "2.0",
+				error: { code: -32000, message },
+				id: null,
+			},
+			401,
+		);
+	};
+
 	const middleware: HonoMiddleware = async (c, next) => {
 		const authHeader = c.req.header("Authorization");
-		const token = authHeader?.startsWith("Bearer ")
-			? authHeader.slice(7)
-			: undefined;
-		if (!token) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
-			return c.json(
-				{
-					jsonrpc: "2.0",
-					error: {
-						code: -32000,
-						message: "Unauthorized: Authentication required",
-					},
-					id: null,
-				},
-				401,
-			);
+		let session: McpSession | null;
+		try {
+			session = await client.verifyRequest(c.req.raw);
+		} catch (error) {
+			if (isDpopBindingError(error)) {
+				return unauthorized(c, dpopChallenge, "Invalid or expired token");
+			}
+			throw error;
 		}
-
-		const session = await client.verifyToken(token);
 		if (!session) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
-			return c.json(
-				{
-					jsonrpc: "2.0",
-					error: { code: -32000, message: "Invalid or expired token" },
-					id: null,
-				},
-				401,
+			const challenge =
+				authHeader?.startsWith("DPoP ") || c.req.header("DPoP")
+					? dpopChallenge
+					: `Bearer resource_metadata="${resourceMetadata}"`;
+			return unauthorized(
+				c,
+				challenge,
+				authHeader
+					? "Invalid or expired token"
+					: "Unauthorized: Authentication required",
 			);
 		}
 

@@ -78,23 +78,44 @@ describe("oauth provider schema", () => {
 		expect(resource.fields.metadata).toBeDefined();
 	});
 
-	it("defers DPoP/mTLS/JWE/opaque-token columns to follow-up PRs", () => {
-		// Reserving columns without enforcement was rejected as security theater
-		// (see RFC §"Suggested rollout"). Each deferred column lands alongside
-		// its enforcement code in the relevant follow-up PR. This test guards
-		// against an accidental re-introduction in this PR's scope.
+	it("declares DPoP sender-constraint storage with enforcement state", () => {
 		const oauthSchema = schema as Record<
 			string,
-			{ fields: Record<string, unknown> }
+			{
+				fields: Record<
+					string,
+					{
+						type?: string;
+						required?: boolean;
+						unique?: boolean;
+						defaultValue?: unknown;
+					}
+				>;
+			}
 		>;
+		const clientFields = oauthSchema.oauthClient?.fields ?? {};
 		const resourceFields = oauthSchema.oauthResource?.fields ?? {};
 		const refreshFields = oauthSchema.oauthRefreshToken?.fields ?? {};
+		const accessFields = oauthSchema.oauthAccessToken?.fields ?? {};
+		const dpopProofFields = oauthSchema.oauthDpopProof?.fields ?? {};
+
+		expect(clientFields.dpopBoundAccessTokens?.defaultValue).toBe(false);
+		expect(resourceFields.dpopBoundAccessTokensRequired?.defaultValue).toBe(
+			false,
+		);
+		expect(refreshFields.dpopJkt).toBeDefined();
+		expect(accessFields.dpopJkt).toBeDefined();
+		expect(dpopProofFields.replayId?.unique).toBe(true);
+		expect(dpopProofFields.expiresAt?.required).toBe(true);
+		expect(dpopProofFields.createdAt?.required).toBe(true);
+
+		// Other sender-constraint/token-format families are still deferred until
+		// they land with enforcement rather than inert schema surface.
 
 		const deferredOnResource = [
 			"tokenFormat",
 			"encryptionAlgorithm",
 			"encryptionKeyId",
-			"requireDpop",
 			"requireMtls",
 		];
 		for (const fieldName of deferredOnResource) {

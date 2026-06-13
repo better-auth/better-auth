@@ -94,6 +94,13 @@ const maxAgeSchema = z
 		return maxAge;
 	});
 
+const dpopJktSchema = z
+	.string()
+	.regex(
+		/^[A-Za-z0-9_-]{43}$/,
+		"dpop_jkt must be a base64url-encoded SHA-256 JWK thumbprint",
+	);
+
 /**
  * Runtime schema for OAuthAuthorizationQuery.
  * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
@@ -122,6 +129,7 @@ export const authorizationQuerySchema = z
 			.pipe(z.enum(["S256"]))
 			.optional(),
 		nonce: z.string().optional(),
+		dpop_jkt: dpopJktSchema.optional(),
 		resource: z
 			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 			.optional(),

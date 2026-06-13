@@ -15,6 +15,14 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import type { DpopReplayStore } from "./dpop";
+import {
+	createInMemoryDpopReplayStore,
+	enforceDpopBinding,
+	getDpopJktFromPayload,
+	isDpopBindingError,
+	parseAccessTokenAuthorization,
+} from "./dpop";
 
 const joseInfrastructureErrorCodes = new Set([
 	joseErrors.JWKSTimeout.code,
@@ -152,6 +160,51 @@ export interface VerifyAccessTokenRemote {
 	allowMissingAudience?: boolean;
 }
 
+export interface VerifyAccessTokenOptions {
+	/** Verify options */
+	verifyOptions: JWTVerifyOptions &
+		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+	/** Scopes to additionally verify. Token must include all but not exact. */
+	scopes?: string[];
+	/** Required to verify access token locally */
+	jwksUrl?: string;
+	/** If provided, can verify a token remotely */
+	remoteVerify?: VerifyAccessTokenRemote;
+}
+
+export interface VerifyAccessTokenRequestOptions
+	extends VerifyAccessTokenOptions {
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		/**
+		 * Store used to reject replayed DPoP proof `jti` values.
+		 *
+		 * Defaults to a process-local in-memory store, which is only safe for a
+		 * single-instance deployment: it shares no state across instances and
+		 * resets on cold start, so a captured proof can be replayed against
+		 * another instance within the proof's lifetime. Supply a shared,
+		 * persistent store (for example one backed by your database) for any
+		 * multi-instance or serverless resource server.
+		 */
+		replayStore?: DpopReplayStore;
+		signingAlgorithms?: readonly string[];
+	};
+}
+
+export interface ResourceRequestInput {
+	authorizationHeader: string | null | undefined;
+	dpopProofJwt?: string | null | undefined;
+	method: string;
+	url: string;
+}
+
+/**
+ * Process-local, single-instance replay store. See the warning on
+ * {@link VerifyAccessTokenRequestOptions.dpop.replayStore}; multi-instance
+ * resource servers must pass their own shared store.
+ */
+const defaultDpopReplayStore = createInMemoryDpopReplayStore();
+
 /**
  * Performs local verification of an access token for your APIs.
  *
@@ -279,24 +332,9 @@ async function getJwksForVerification(
 	};
 }
 
-/**
- * Performs local verification of an access token for your API.
- *
- * Can also be configured for remote verification.
- */
-export async function verifyAccessToken(
+async function verifyAccessTokenPayload(
 	token: string,
-	opts: {
-		/** Verify options */
-		verifyOptions: JWTVerifyOptions &
-			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-		/** Scopes to additionally verify. Token must include all but not exact. */
-		scopes?: string[];
-		/** Required to verify access token locally */
-		jwksUrl?: string;
-		/** If provided, can verify a token remotely */
-		remoteVerify?: VerifyAccessTokenRemote;
-	},
+	opts: VerifyAccessTokenOptions,
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
@@ -401,6 +439,89 @@ export async function verifyAccessToken(
 				});
 			}
 		}
+	}
+
+	return payload;
+}
+
+function throwDpopUnauthorized(
+	message: string,
+	error?: "invalid_dpop_proof" | "invalid_token",
+): never {
+	throw new APIError(
+		"UNAUTHORIZED",
+		error
+			? {
+					message,
+					error,
+					error_description: message,
+				}
+			: { message },
+	);
+}
+
+/**
+ * Performs local verification of a bearer access token for your API.
+ *
+ * Can also be configured for remote verification. DPoP-bound access tokens
+ * require {@link verifyAccessTokenRequest}, because sender-constraining cannot
+ * be verified without the HTTP method, URL, Authorization scheme, DPoP proof,
+ * and access-token hash. This function rejects DPoP-bound tokens; reach for it
+ * only when you hold a raw token string and intentionally accept bearer tokens
+ * alone.
+ */
+export async function verifyBearerToken(
+	token: string,
+	opts: VerifyAccessTokenOptions,
+) {
+	const payload = await verifyAccessTokenPayload(token, opts);
+	if (getDpopJktFromPayload(payload)) {
+		throwDpopUnauthorized(
+			"DPoP-bound access token requires verifyAccessTokenRequest",
+			"invalid_token",
+		);
+	}
+	return payload;
+}
+
+/**
+ * Verifies an HTTP resource request carrying an OAuth access token. This is the
+ * recommended resource-server entry point: it handles both bearer and
+ * DPoP-bound tokens, the bearer case being the request with no DPoP proof.
+ *
+ * It performs the same token validation as {@link verifyBearerToken}, then adds
+ * the RFC 9449 sender-constraint checks that need request context: authorization
+ * scheme, method, URL, DPoP proof, `ath`, and `cnf.jkt` binding.
+ */
+export async function verifyAccessTokenRequest(
+	request: ResourceRequestInput,
+	opts: VerifyAccessTokenRequestOptions,
+) {
+	const authorization = parseAccessTokenAuthorization(
+		request.authorizationHeader,
+	);
+	if (!authorization?.token) {
+		throwDpopUnauthorized("missing authorization header");
+	}
+
+	const payload = await verifyAccessTokenPayload(authorization.token, opts);
+
+	try {
+		await enforceDpopBinding({
+			payload,
+			authorization,
+			proofJwt: request.dpopProofJwt,
+			method: request.method,
+			url: request.url,
+			replayStore: opts.dpop?.replayStore ?? defaultDpopReplayStore,
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+		});
+	} catch (error) {
+		if (isDpopBindingError(error)) {
+			throwDpopUnauthorized(error.message, error.code);
+		}
+		throw error;
 	}
 
 	return payload;

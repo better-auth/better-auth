@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
+import {
+	DPOP_SIGNING_ALGORITHMS,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+} from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
@@ -24,6 +27,7 @@ export function authServerMetadata(
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
+		dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -84,6 +88,9 @@ export function authServerMetadata(
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		dpop_signing_alg_values_supported:
+			overrides?.dpop_signing_alg_values_supported ??
+			([...DPOP_SIGNING_ALGORITHMS] as JWSAlgorithms[]),
 		backchannel_logout_supported: backchannelSupported,
 		backchannel_logout_session_supported: backchannelSupported,
 	};
@@ -110,6 +117,7 @@ export function oidcServerMetadata(
 			toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
+		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
 	});
 	const metadata: Omit<
 		OIDCMetadata,
