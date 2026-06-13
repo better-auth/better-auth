@@ -1,3 +1,4 @@
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import type {
 	McpResourceClient,
 	McpResourceClientOptions,
@@ -61,37 +62,24 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 
 	const middleware: HonoMiddleware = async (c, next) => {
 		const authHeader = c.req.header("Authorization");
-		const token = authHeader?.startsWith("Bearer ")
-			? authHeader.slice(7)
-			: undefined;
-		if (!token) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
+		const session = await client.verifyRequest(c.req.raw);
+		if (!session) {
+			const dpopAlgorithms =
+				options.dpop?.supportedAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
+			const challenge =
+				authHeader?.startsWith("DPoP ") || c.req.header("DPoP")
+					? `DPoP algs="${dpopAlgorithms.join(" ")}"`
+					: `Bearer resource_metadata="${resourceMetadata}"`;
+			c.header("WWW-Authenticate", challenge);
 			return c.json(
 				{
 					jsonrpc: "2.0",
 					error: {
 						code: -32000,
-						message: "Unauthorized: Authentication required",
+						message: authHeader
+							? "Invalid or expired token"
+							: "Unauthorized: Authentication required",
 					},
-					id: null,
-				},
-				401,
-			);
-		}
-
-		const session = await client.verifyToken(token);
-		if (!session) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
-			return c.json(
-				{
-					jsonrpc: "2.0",
-					error: { code: -32000, message: "Invalid or expired token" },
 					id: null,
 				},
 				401,

@@ -1,11 +1,20 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { generateCodeChallenge } from "better-auth/oauth2";
+import {
+	generateCodeChallenge,
+	isDpopProofError,
+	verifyDpopProof,
+} from "better-auth/oauth2";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	createOauthDpopReplayStore,
+	getDpopProofJwt,
+	getEndpointUrl,
+} from "./dpop";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy, stripReservedClaims } from "./resources";
 import type {
@@ -88,6 +97,7 @@ async function createJwtAccessToken(
 		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
 		/** Per-resource custom claims (already reserved-claim-stripped). */
 		resourceCustomClaims?: Record<string, unknown>;
+		dpopJkt?: string;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -143,6 +153,7 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
+			...(overrides?.dpopJkt ? { cnf: { jkt: overrides.dpopJkt } } : {}),
 		},
 	});
 }
@@ -335,6 +346,7 @@ async function createOpaqueAccessToken(
 	resources?: string[],
 	referenceId?: string,
 	refreshId?: string,
+	dpopJkt?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -351,6 +363,7 @@ async function createOpaqueAccessToken(
 			referenceId,
 			resources,
 			refreshId,
+			dpopJkt,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -420,6 +433,7 @@ async function createRefreshToken(
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
 	authTime?: Date,
 	resources?: string[],
+	dpopJkt?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -439,6 +453,7 @@ async function createRefreshToken(
 		userId: user.id,
 		referenceId,
 		authTime,
+		dpopJkt,
 		scopes,
 		resources,
 		createdAt: new Date(iat * 1000),
@@ -532,6 +547,7 @@ interface ResourceGrantIssuance {
 	signingAlgorithm: ResolvedResourcePolicy["signingAlgorithm"];
 	signingKeyId: ResolvedResourcePolicy["signingKeyId"];
 	resourceCustomClaims: Record<string, unknown>;
+	dpopBoundAccessTokensRequired: boolean;
 }
 
 async function resolveResourceGrantIssuance(
@@ -577,7 +593,72 @@ async function resolveResourceGrantIssuance(
 		signingAlgorithm: resourcePolicy.signingAlgorithm,
 		signingKeyId: resourcePolicy.signingKeyId,
 		resourceCustomClaims: resourcePolicy.customClaims,
+		dpopBoundAccessTokensRequired: resourcePolicy.dpopBoundAccessTokensRequired,
 	};
+}
+
+function throwInvalidDpopProof(errorDescription: string): never {
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_dpop_proof",
+		error_description: errorDescription,
+	});
+}
+
+function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
+	const metadata = (parseClientMetadata(client.metadata) ?? {}) as Record<
+		string,
+		unknown
+	>;
+	return (
+		client.dpopBoundAccessTokens === true ||
+		metadata.dpop_bound_access_tokens === true
+	);
+}
+
+async function resolveDpopTokenBinding(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		grantIssuance: ResourceGrantIssuance;
+		verificationValue?: VerificationValue;
+		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+	},
+): Promise<string | undefined> {
+	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
+	const refreshTokenDpopJkt = params.refreshToken?.dpopJkt;
+	const expectedJkt = refreshTokenDpopJkt ?? authCodeDpopJkt;
+	const dpopProofJwt = getDpopProofJwt(ctx);
+	const dpopRequired =
+		clientRequiresDpopBoundAccessTokens(params.client) ||
+		params.grantIssuance.dpopBoundAccessTokensRequired ||
+		!!authCodeDpopJkt ||
+		!!refreshTokenDpopJkt;
+
+	if (!dpopProofJwt) {
+		if (dpopRequired) {
+			throwInvalidDpopProof("DPoP proof header is required");
+		}
+		return undefined;
+	}
+
+	try {
+		const proof = await verifyDpopProof({
+			proofJwt: dpopProofJwt,
+			method: "POST",
+			url: getEndpointUrl(ctx, "/oauth2/token"),
+			expectedJkt,
+			maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			supportedAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createOauthDpopReplayStore(ctx, opts),
+		});
+		return proof.jkt;
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			throwInvalidDpopProof(error.message);
+		}
+		throw error;
+	}
 }
 
 async function createUserTokens(
@@ -651,6 +732,12 @@ async function createUserTokens(
 		: undefined;
 
 	const refreshResources = grantIssuance.refreshResources;
+	const dpopJkt = await resolveDpopTokenBinding(ctx, opts, {
+		client,
+		grantIssuance,
+		verificationValue,
+		refreshToken: existingRefreshToken,
+	});
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -670,6 +757,7 @@ async function createUserTokens(
 					existingRefreshToken,
 					authTime,
 					refreshResources,
+					dpopJkt,
 				)
 			: undefined;
 
@@ -692,6 +780,7 @@ async function createUserTokens(
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						resourceCustomClaims: grantIssuance.resourceCustomClaims,
+						dpopJkt,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -708,6 +797,7 @@ async function createUserTokens(
 					params?.resources,
 					referenceId,
 					earlyRefreshToken?.id,
+					dpopJkt,
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
@@ -727,6 +817,7 @@ async function createUserTokens(
 						existingRefreshToken,
 						authTime,
 						refreshResources,
+						dpopJkt,
 					)
 				: undefined,
 	]);
@@ -752,7 +843,7 @@ async function createUserTokens(
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
-			token_type: "Bearer" as const,
+			token_type: dpopJkt ? ("DPoP" as const) : ("Bearer" as const),
 			refresh_token: refreshToken?.token,
 			scope: effectiveScopes.join(" "),
 			id_token: idToken,

@@ -214,6 +214,12 @@ export interface AuthServerMetadata {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
 	 */
 	backchannel_logout_session_supported?: boolean;
+	/**
+	 * JWS algorithms supported for RFC 9449 DPoP proof JWTs.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449
+	 */
+	dpop_signing_alg_values_supported?: JWSAlgorithms[];
 }
 
 /**
@@ -361,6 +367,12 @@ export interface OAuthClient {
 	 * requesting offline_access scope, regardless of this setting.
 	 */
 	require_pkce?: boolean;
+	/**
+	 * RFC 9449 dynamic client metadata. When true, token requests from this
+	 * client must include a valid DPoP proof and receive DPoP-bound access
+	 * tokens.
+	 */
+	dpop_bound_access_tokens?: boolean;
 	/**
 	 * Subject identifier type for this client.
 	 *

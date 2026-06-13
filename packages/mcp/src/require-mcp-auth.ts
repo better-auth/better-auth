@@ -1,7 +1,11 @@
 import type { Awaitable } from "@better-auth/core";
-import { ResourceUriSchema } from "@better-auth/oauth-provider";
-import { verifyAccessToken } from "better-auth/oauth2";
+import {
+	ResourceUriSchema,
+	raiseResourceServerChallenge,
+} from "@better-auth/oauth-provider";
+import { verifyAccessTokenRequest } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
+import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 
 interface RequireMcpAuthOptions {
@@ -27,27 +31,18 @@ interface RequireMcpAuthOptions {
 	scope?: string;
 }
 
-const unauthorized = (
-	message: string,
-	resourceMetadata: string,
-	scope?: string,
-): Response => {
-	let challenge = `Bearer resource_metadata="${resourceMetadata}"`;
-	if (scope) {
-		challenge += `, scope="${scope}"`;
-	}
+const unauthorized = (error: APIError): Response => {
+	const headers = new Headers(error.headers as HeadersInit);
+	headers.set("Content-Type", "application/json");
 	return new Response(
 		JSON.stringify({
 			jsonrpc: "2.0",
-			error: { code: -32000, message },
+			error: { code: -32000, message: error.message },
 			id: null,
 		}),
 		{
-			status: 401,
-			headers: {
-				"Content-Type": "application/json",
-				"WWW-Authenticate": challenge,
-			},
+			status: error.statusCode,
+			headers,
 		},
 	);
 };
@@ -96,38 +91,33 @@ export const requireMcpAuth = <
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
-		// RFC 9728: insert the resource path after the well-known segment. The
-		// provider serves the document at this root-mounted location.
-		const resourceUrl = new URL(resource);
-		const resourcePath =
-			resourceUrl.pathname === "/"
-				? ""
-				: resourceUrl.pathname.replace(/\/$/, "");
-		const resourceMetadata = `${resourceUrl.origin}/.well-known/oauth-protected-resource${resourcePath}${resourceUrl.search}`;
-
-		const authorization = req.headers?.get("authorization") ?? undefined;
-		const accessToken = authorization?.startsWith("Bearer ")
-			? authorization.slice("Bearer ".length)
-			: authorization;
-		if (!accessToken?.length) {
-			return unauthorized(
-				"Unauthorized: Authentication required",
-				resourceMetadata,
-				opts?.scope,
-			);
-		}
 		try {
-			const jwt = await verifyAccessToken(accessToken, {
-				verifyOptions: { issuer, audience: resource },
-				jwksUrl,
-			});
-			return handler(req, jwt);
-		} catch {
-			return unauthorized(
-				"Unauthorized: invalid token",
-				resourceMetadata,
-				opts?.scope,
+			const jwt = await verifyAccessTokenRequest(
+				{
+					authorizationHeader: req.headers.get("authorization"),
+					dpopProofJwt: req.headers.get("dpop"),
+					method: req.method,
+					url: req.url,
+				},
+				{
+					verifyOptions: { issuer, audience: resource },
+					jwksUrl,
+				},
 			);
+			return handler(req, jwt);
+		} catch (error) {
+			try {
+				raiseResourceServerChallenge(error, resource, {
+					scope: opts?.scope,
+				});
+			} catch (challengeError) {
+				if (challengeError instanceof APIError) {
+					return unauthorized(challengeError);
+				}
+				if (challengeError instanceof Error) throw challengeError;
+				throw new Error(String(challengeError));
+			}
+			throw new Error(String(error));
 		}
 	};
 };

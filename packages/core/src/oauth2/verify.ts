@@ -15,6 +15,14 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import type { DpopReplayStore } from "./dpop";
+import {
+	createInMemoryDpopReplayStore,
+	getDpopJktFromPayload,
+	isDpopProofError,
+	parseAccessTokenAuthorization,
+	verifyDpopProof,
+} from "./dpop";
 
 const joseInfrastructureErrorCodes = new Set([
 	joseErrors.JWKSTimeout.code,
@@ -152,6 +160,37 @@ export interface VerifyAccessTokenRemote {
 	allowMissingAudience?: boolean;
 }
 
+export interface VerifyAccessTokenOptions {
+	/** Verify options */
+	verifyOptions: JWTVerifyOptions &
+		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+	/** Scopes to additionally verify. Token must include all but not exact. */
+	scopes?: string[];
+	/** Required to verify access token locally */
+	jwksUrl?: string;
+	/** If provided, can verify a token remotely */
+	remoteVerify?: VerifyAccessTokenRemote;
+}
+
+export interface VerifyAccessTokenRequestOptions
+	extends VerifyAccessTokenOptions {
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		replayStore?: DpopReplayStore;
+		nonce?: string;
+		supportedAlgorithms?: readonly string[];
+	};
+}
+
+export interface AccessTokenRequestInput {
+	authorizationHeader: string | null | undefined;
+	dpopProofJwt?: string | null | undefined;
+	method: string;
+	url: string;
+}
+
+const defaultDpopReplayStore = createInMemoryDpopReplayStore();
+
 /**
  * Performs local verification of an access token for your APIs.
  *
@@ -279,24 +318,9 @@ async function getJwksForVerification(
 	};
 }
 
-/**
- * Performs local verification of an access token for your API.
- *
- * Can also be configured for remote verification.
- */
-export async function verifyAccessToken(
+async function verifyAccessTokenPayload(
 	token: string,
-	opts: {
-		/** Verify options */
-		verifyOptions: JWTVerifyOptions &
-			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-		/** Scopes to additionally verify. Token must include all but not exact. */
-		scopes?: string[];
-		/** Required to verify access token locally */
-		jwksUrl?: string;
-		/** If provided, can verify a token remotely */
-		remoteVerify?: VerifyAccessTokenRemote;
-	},
+	opts: VerifyAccessTokenOptions,
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
@@ -401,6 +425,111 @@ export async function verifyAccessToken(
 				});
 			}
 		}
+	}
+
+	return payload;
+}
+
+function throwDpopUnauthorized(
+	message: string,
+	error?: "invalid_dpop_proof" | "invalid_token" | "use_dpop_nonce",
+): never {
+	throw new APIError(
+		"UNAUTHORIZED",
+		error
+			? {
+					message,
+					error,
+					error_description: message,
+				}
+			: { message },
+	);
+}
+
+/**
+ * Performs local verification of a bearer access token for your API.
+ *
+ * Can also be configured for remote verification. DPoP-bound access tokens
+ * require {@link verifyAccessTokenRequest}, because sender-constraining cannot
+ * be verified without the HTTP method, URL, Authorization scheme, DPoP proof,
+ * and access-token hash.
+ */
+export async function verifyAccessToken(
+	token: string,
+	opts: VerifyAccessTokenOptions,
+) {
+	const payload = await verifyAccessTokenPayload(token, opts);
+	if (getDpopJktFromPayload(payload)) {
+		throwDpopUnauthorized(
+			"DPoP-bound access token requires verifyAccessTokenRequest",
+			"invalid_token",
+		);
+	}
+	return payload;
+}
+
+/**
+ * Verifies an HTTP resource request carrying an OAuth access token.
+ *
+ * This performs the same token validation as {@link verifyAccessToken}, then
+ * adds the RFC 9449 sender-constraint checks that need request context:
+ * authorization scheme, method, URL, DPoP proof, `ath`, and `cnf.jkt` binding.
+ */
+export async function verifyAccessTokenRequest(
+	request: AccessTokenRequestInput,
+	opts: VerifyAccessTokenRequestOptions,
+) {
+	const authorization = parseAccessTokenAuthorization(
+		request.authorizationHeader,
+	);
+	if (!authorization?.token) {
+		throwDpopUnauthorized("missing authorization header");
+	}
+
+	const payload = await verifyAccessTokenPayload(authorization.token, opts);
+	const dpopJkt = getDpopJktFromPayload(payload);
+
+	if (!dpopJkt) {
+		if (authorization.scheme === "DPoP") {
+			throwDpopUnauthorized(
+				"DPoP authorization requires a DPoP-bound access token",
+				"invalid_token",
+			);
+		}
+		return payload;
+	}
+
+	if (authorization.scheme !== "DPoP") {
+		throwDpopUnauthorized(
+			"DPoP-bound access token requires the DPoP authorization scheme",
+			"invalid_token",
+		);
+	}
+	if (!request.dpopProofJwt) {
+		throwDpopUnauthorized(
+			"DPoP proof header is required",
+			"invalid_dpop_proof",
+		);
+	}
+
+	try {
+		await verifyDpopProof({
+			proofJwt: request.dpopProofJwt,
+			method: request.method,
+			url: request.url,
+			accessToken: authorization.token,
+			expectedJkt: dpopJkt,
+			expectedNonce: opts.dpop?.nonce,
+			requireAth: true,
+			maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			supportedAlgorithms: opts.dpop?.supportedAlgorithms,
+			replayStore: opts.dpop?.replayStore ?? defaultDpopReplayStore,
+		});
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			throwDpopUnauthorized(error.message, error.code);
+		}
+		throw error;
 	}
 
 	return payload;

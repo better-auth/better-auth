@@ -83,7 +83,7 @@ Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://da
 
 ### Protected Resource Metadata
 
-The [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) `/.well-known/oauth-protected-resource` document is served automatically at the well-known root (and the resource-path-inserted alias). It tells MCP clients which authorization server protects the resource, which scopes it supports, and which `resource` identifier their access tokens must be bound to.
+The [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) `/.well-known/oauth-protected-resource` document is served automatically at the well-known root (and the resource-path-inserted alias). It tells MCP clients which authorization server protects the resource, which scopes it supports, which `resource` identifier their access tokens must be bound to, and which DPoP proof algorithms are supported.
 
 Set `resource` to the protected resource identifier MCP clients request and access tokens carry as `aud`:
 
@@ -97,7 +97,7 @@ mcp({
 
 ### MCP Session Handling
 
-Use `requireMcpAuth` to protect an MCP route. It reads the `Authorization` header, verifies the bearer access token against the authorization server's JWKS (signature, issuer, audience, and expiry), and forwards the verified JWT claims to your handler. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow.
+Use `requireMcpAuth` to protect an MCP route. It reads the `Authorization` header, verifies Bearer access tokens against the authorization server's JWKS (signature, issuer, audience, and expiry), and enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) DPoP proofs when the access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow.
 
 ```ts title="api/[transport]/route.ts"
 import { auth } from "@/lib/auth";
@@ -141,7 +141,7 @@ const handler = requireMcpAuth(auth, (req, claims) => { // [!code highlight]
 export { handler as GET, handler as POST, handler as DELETE };
 ```
 
-The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip.
+The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip. DPoP-bound tokens must be sent as `Authorization: DPoP <access_token>` with a matching `DPoP` proof header.
 
 By default `requireMcpAuth` reads the server's resolved base URL from the auth context and uses it as both the expected token issuer and protected resource identifier, with the JWKS at that base URL. This matches what the provider issues, so no configuration is needed for the common case. Override any value when the resource differs or `jwt.issuer` is custom:
 

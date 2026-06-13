@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -113,6 +114,7 @@ describe("oauth metadata", async () => {
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
@@ -523,6 +525,7 @@ describe("oauth resource metadata", async () => {
 		expect(metadata).toMatchObject({
 			resource: validResource,
 			authorization_servers: [authServerBaseUrl],
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 		});
 	});
 

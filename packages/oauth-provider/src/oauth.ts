@@ -294,6 +294,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 				grant_types_supported: opts.grantTypes,
 				jwt_disabled: opts.disableJwtPlugin,
+				dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
 			});
 			return {
 				response: createMetadataResponse({
@@ -721,6 +722,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
+							dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
 						});
 						return {
 							...authMetadata,
@@ -898,6 +900,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
+							parameters: [
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT for issuing DPoP-bound tokens",
+								},
+							],
 							requestBody: {
 								required: true,
 								content: {
@@ -985,7 +997,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													token_type: {
 														type: "string",
 														description: "The type of the token issued",
-														enum: ["Bearer"],
+														enum: ["Bearer", "DPoP"],
 													},
 													expires_in: {
 														type: "number",
@@ -1291,7 +1303,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									in: "header",
 									required: false,
 									schema: { type: "string" },
-									description: "Bearer access token",
+									description: "Bearer or DPoP access token",
+								},
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT when using a DPoP-bound access token",
 								},
 							],
 							responses: {

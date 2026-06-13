@@ -1,6 +1,18 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
+import {
+	getDpopJktFromPayload,
+	isDpopProofError,
+	parseAccessTokenAuthorization,
+	verifyDpopProof,
+} from "better-auth/oauth2";
 import type { User } from "better-auth/types";
+import {
+	createOauthDpopReplayStore,
+	getDpopProofJwt,
+	getEndpointMethod,
+	getEndpointUrl,
+} from "./dpop";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
@@ -38,17 +50,18 @@ export async function userInfoEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const authorization = ctx.headers?.get("authorization");
-	const token =
-		typeof authorization === "string" && authorization?.startsWith("Bearer ")
-			? authorization?.replace("Bearer ", "")
-			: authorization;
-	if (!token?.length) {
+	const accessTokenAuthorization = parseAccessTokenAuthorization(authorization);
+	if (!accessTokenAuthorization?.token) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "authorization header not found",
 			error: "invalid_request",
 		});
 	}
-	const jwt = await validateAccessToken(ctx, opts, token);
+	const jwt = await validateAccessToken(
+		ctx,
+		opts,
+		accessTokenAuthorization.token,
+	);
 
 	// A token that is expired, revoked, or bound to an ended session resolves to
 	// `{ active: false }`. RFC 6750 §3.1 wants `invalid_token` (401) for that,
@@ -56,6 +69,51 @@ export async function userInfoEndpoint(
 	if (!jwt.active) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "the access token is invalid or has been revoked",
+			error: "invalid_token",
+		});
+	}
+
+	const dpopJkt = getDpopJktFromPayload(jwt);
+	if (dpopJkt) {
+		if (accessTokenAuthorization.scheme !== "DPoP") {
+			throw new APIError("UNAUTHORIZED", {
+				error_description:
+					"DPoP-bound access token requires the DPoP authorization scheme",
+				error: "invalid_token",
+			});
+		}
+		const dpopProofJwt = getDpopProofJwt(ctx);
+		if (!dpopProofJwt) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "DPoP proof header is required",
+				error: "invalid_dpop_proof",
+			});
+		}
+		try {
+			await verifyDpopProof({
+				proofJwt: dpopProofJwt,
+				method: getEndpointMethod(ctx, "GET"),
+				url: getEndpointUrl(ctx, "/oauth2/userinfo"),
+				accessToken: accessTokenAuthorization.token,
+				expectedJkt: dpopJkt,
+				requireAth: true,
+				maxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+				supportedAlgorithms: opts.dpop?.signingAlgorithms,
+				replayStore: createOauthDpopReplayStore(ctx, opts),
+			});
+		} catch (error) {
+			if (isDpopProofError(error)) {
+				throw new APIError("UNAUTHORIZED", {
+					error_description: error.message,
+					error: error.code,
+				});
+			}
+			throw error;
+		}
+	} else if (accessTokenAuthorization.scheme === "DPoP") {
+		throw new APIError("UNAUTHORIZED", {
+			error_description:
+				"DPoP authorization requires a DPoP-bound access token",
 			error: "invalid_token",
 		});
 	}
