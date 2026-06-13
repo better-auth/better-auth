@@ -190,6 +190,25 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10022
+		 */
+		it("should allow relative paths with tildes", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance();
+
+			await expect(
+				isTrustedOrigin("/my-team/~settings/account", {
+					allowRelativePaths: true,
+				}),
+			).resolves.toBe(true);
+
+			await expect(
+				isTrustedOrigin("/~settings?next=/~account", {
+					allowRelativePaths: true,
+				}),
+			).resolves.toBe(true);
+		});
+
 		it("should reject urls with double dash", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 
