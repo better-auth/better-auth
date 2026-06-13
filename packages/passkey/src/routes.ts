@@ -21,6 +21,7 @@ import {
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
+import type { OpenAPIParameter } from "better-call";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type {
@@ -120,6 +121,41 @@ const generatePasskeyQuerySchema = z
 	})
 	.optional();
 
+const generatePasskeyRegistrationOptionsOpenAPIParameters: OpenAPIParameter[] =
+	[
+		{
+			name: "authenticatorAttachment",
+			in: "query",
+			required: false,
+			description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
+                          "cross-platform" for authenticators that can be used across devices.`,
+			schema: {
+				type: "string",
+				enum: ["platform", "cross-platform"],
+			},
+		},
+		{
+			name: "name",
+			in: "query",
+			required: false,
+			description: `Optional custom name for the passkey.
+                          This can help identify the passkey when managing multiple credentials.`,
+			schema: {
+				type: "string",
+			},
+		},
+		{
+			name: "context",
+			in: "query",
+			required: false,
+			description: "Optional context for passkey-first registration flows.",
+			schema: {
+				type: "string",
+			},
+		},
+	];
+
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
 	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
@@ -135,29 +171,10 @@ export const generatePasskeyRegistrationOptions = (
 				openapi: {
 					operationId: "generatePasskeyRegistrationOptions",
 					description: "Generate registration options for a new passkey",
+					parameters: generatePasskeyRegistrationOptionsOpenAPIParameters,
 					responses: {
 						200: {
 							description: "Success",
-							parameters: {
-								query: {
-									authenticatorAttachment: {
-										description: `Type of authenticator to use for registration.
-                          "platform" for device-specific authenticators,
-                          "cross-platform" for authenticators that can be used across devices.`,
-										required: false,
-									},
-									name: {
-										description: `Optional custom name for the passkey.
-                          This can help identify the passkey when managing multiple credentials.`,
-										required: false,
-									},
-									context: {
-										description:
-											"Optional context for passkey-first registration flows.",
-										required: false,
-									},
-								},
-							},
 							content: {
 								"application/json": {
 									schema: {
