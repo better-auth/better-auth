@@ -1,5 +1,6 @@
 import type { JWTVerifyGetKey } from "jose";
 import type { Awaitable, LiteralString } from "../types";
+import type { GenericEndpointContext } from "../types/context";
 
 /**
  * id_token verification config for a social provider.
@@ -178,10 +179,19 @@ export interface UpstreamProvider<
 		data: T;
 	} | null>;
 	/**
-	 * Custom function to refresh a token
+	 * Custom function to refresh a token.
+	 *
+	 * Receives the optional `GenericEndpointContext` of the request that
+	 * triggered the refresh. Providers that don't need request-scoped data can
+	 * ignore the second argument; passing it through lets plugins read headers
+	 * or cookies (e.g. an active organization id) on refresh without
+	 * out-of-band state like AsyncLocalStorage.
 	 */
 	refreshAccessToken?:
-		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| ((
+				refreshToken: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
 	 * Declarative id_token verification config consumed by the shared
