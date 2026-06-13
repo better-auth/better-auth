@@ -8,11 +8,19 @@ import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import {
 	DiscoveryError,
+	decryptOIDCConfig,
+	encryptOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 	validateSkipDiscoveryEndpoints,
 } from "../oidc";
 import { validateConfigAlgorithms } from "../saml";
-import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
+import type {
+	EncryptedOIDCConfig,
+	Member,
+	OIDCConfig,
+	SAMLConfig,
+	SSOOptions,
+} from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
 
@@ -500,9 +508,15 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					throw error;
 				}
 
-				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
-					existingProvider.oidcConfig,
-					"OIDC",
+				const currentOidcConfig = await decryptOIDCConfig(
+					parseAndValidateConfig<OIDCConfig | EncryptedOIDCConfig>(
+						existingProvider.oidcConfig,
+						"OIDC",
+					),
+					{
+						authSecret: ctx.context.secret,
+						ssoOptions: options ?? {},
+					},
 				);
 
 				const updatedOidcConfig = mergeOIDCConfig(
@@ -513,7 +527,12 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
-				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+				updateData.oidcConfig = JSON.stringify(
+					await encryptOIDCConfig(updatedOidcConfig, {
+						authSecret: ctx.context.secret,
+						ssoOptions: options ?? {},
+					}),
+				);
 			}
 
 			await ctx.context.adapter.update({
