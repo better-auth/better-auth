@@ -359,6 +359,62 @@ export async function checkOAuthClient(
 			});
 		}
 	}
+
+	// Front-channel logout never signs anything, so unlike the back-channel
+	// URI this one has no JWT-plugin requirement.
+	if (client.frontchannel_logout_uri !== undefined) {
+		let url: URL;
+		try {
+			url = new URL(client.frontchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "frontchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// Only http/https can be rendered as an iframe `src` from the OP's
+		// logout page; reject anything else up front to avoid storing URIs
+		// that can never be rendered.
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "frontchannel_logout_uri must use http or https",
+			});
+		}
+		// The OP extends this URI with `iss`/`sid` query parameters, so a
+		// fragment has no defined meaning; reject the raw value (mirrors the
+		// back-channel §2.2 treatment, including the bare trailing `#` case
+		// that `url.hash` misses).
+		if (client.frontchannel_logout_uri.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not include a fragment component",
+			});
+		}
+		const loopback = isLoopbackHost(url.hostname);
+		// Spec §2: SHOULD be https. Enforce on confidential clients, with a
+		// loopback carve-out (RFC 8252 §7.3) so local development against
+		// http://127.0.0.1:<port> works.
+		if (!isPublic && url.protocol !== "https:" && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must use https for confidential clients",
+			});
+		}
+		// The OP directs every end-user's browser at this URI from its own
+		// logout page, so reject non-public hosts to keep the page from
+		// becoming a vector for driving browsers at internal endpoints (same
+		// policy as the back-channel POST target, applied browser-side).
+		if (isPrivateHostname(url.hostname) && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not point to a private or reserved address",
+			});
+		}
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -536,6 +592,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		post_logout_redirect_uris: postLogoutRedirectUris,
 		backchannel_logout_uri: backchannelLogoutUri,
 		backchannel_logout_session_required: backchannelLogoutSessionRequired,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		frontchannel_logout_session_required: frontchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -594,6 +652,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -653,6 +713,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -714,6 +776,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
 		backchannel_logout_session_required:
 			backchannelLogoutSessionRequired ?? undefined,
+		frontchannel_logout_uri: frontchannelLogoutUri ?? undefined,
+		frontchannel_logout_session_required:
+			frontchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,

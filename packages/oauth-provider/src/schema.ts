@@ -108,6 +108,14 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			frontchannelLogoutUri: {
+				type: "string",
+				required: false,
+			},
+			frontchannelLogoutSessionRequired: {
+				type: "boolean",
+				required: false,
+			},
 			tokenEndpointAuthMethod: {
 				type: "string",
 				required: false,

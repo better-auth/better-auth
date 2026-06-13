@@ -86,6 +86,11 @@ export function authServerMetadata(
 		authorization_response_iss_parameter_supported: true,
 		backchannel_logout_supported: backchannelSupported,
 		backchannel_logout_session_supported: backchannelSupported,
+		// Front-channel logout renders iframes carrying plain `iss`/`sid` query
+		// parameters — no signed artifact — so support is independent of the
+		// JWT plugin.
+		frontchannel_logout_supported: true,
+		frontchannel_logout_session_supported: true,
 	};
 	return metadata;
 }

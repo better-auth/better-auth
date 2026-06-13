@@ -115,6 +115,8 @@ describe("oauth metadata", async () => {
 			authorization_response_iss_parameter_supported: true,
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
+			frontchannel_logout_supported: true,
+			frontchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
@@ -290,6 +292,8 @@ describe("oauth metadata", async () => {
 			authorization_response_iss_parameter_supported: true,
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
+			frontchannel_logout_supported: true,
+			frontchannel_logout_session_supported: true,
 		});
 	});
 
@@ -302,6 +306,20 @@ describe("oauth metadata", async () => {
 		const metadata = await auth.api.getOpenIdConfig();
 		expect(metadata.backchannel_logout_supported).toBe(false);
 		expect(metadata.backchannel_logout_session_supported).toBe(false);
+	});
+
+	it("advertises front-channel logout support even when the jwt plugin is disabled", async () => {
+		// Front-channel logout renders iframes carrying plain `iss`/`sid` query
+		// parameters — no signed artifact — so support does not depend on the
+		// jwt plugin.
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.frontchannel_logout_supported).toBe(true);
+		expect(metadata.frontchannel_logout_session_supported).toBe(true);
 	});
 
 	it("should not provide dynamic client registration endpoint when disabled", async () => {

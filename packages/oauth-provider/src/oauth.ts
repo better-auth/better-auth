@@ -1405,7 +1405,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							responses: {
 								"200": {
 									description:
-										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
+										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided. Browser navigations receive an HTML front-channel logout page when clients with a registered frontchannel_logout_uri hold tokens on the session.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1422,6 +1422,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description: "Success message",
 													},
 												},
+											},
+										},
+										"text/html": {
+											schema: {
+												type: "string",
+												description:
+													"OIDC Front-Channel Logout page with one hidden iframe per registered RP",
 											},
 										},
 									},
@@ -1453,6 +1460,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						backchannel_logout_uri: SafeUrlSchema.optional(),
 						backchannel_logout_session_required: z.boolean().optional(),
+						frontchannel_logout_uri: SafeUrlSchema.optional(),
+						frontchannel_logout_session_required: z.boolean().optional(),
 						token_endpoint_auth_method: z
 							.enum([
 								"none",
@@ -1612,6 +1621,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "boolean",
 														description:
 															"Whether the RP requires a `sid` claim in every Logout Token",
+													},
+													frontchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL rendered in a hidden iframe on the OP's logout page when the end-user's OP session terminates",
+													},
+													frontchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the OP appends `iss` and `sid` query parameters to the front-channel logout URI",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
