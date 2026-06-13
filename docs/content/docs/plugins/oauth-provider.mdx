@@ -625,6 +625,23 @@ This endpoint provides details of the provided token. If the token is additional
 
 Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
+#### Who can introspect a token
+
+The caller must authenticate as a registered client ([RFC 7662 §2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)). It can then introspect a token in two cases:
+
+* it issued the token, or
+* it is a resource server linked to one of the token's resources.
+
+The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic client registration with a `resources` field creates the link for you; otherwise add a row to the `oauthClientResource` table.
+
+Any other authenticated client gets `{ active: false }`, the same response as an unknown or expired token, so introspection can't be used to fish for valid tokens. Refresh tokens are stricter: only the client that requested one can introspect it.
+
+#### Which claims come back
+
+Opaque and JWT access tokens return the same claims for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
+
+The two formats differ in one way. An opaque token is recomputed on each call, so introspection shows its current state: change a resource's claims, and the next introspection reflects the change. A JWT carries what was signed at issuance and never changes. Request a JWT (by passing a `resource`) when you want claims frozen at issuance; use an opaque token when you want the current state.
+
 ### Revoke Endpoint
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
@@ -1564,6 +1581,8 @@ Pairwise `sub` appears in:
 * `id_token`
 * `/oauth2/userinfo` response
 * Token introspection (`/oauth2/introspect`)
+
+When a resource server introspects a token issued to another client, it gets the `sub` that the issuing client sees, not one computed for the resource server itself. So a given user always appears under the same `sub` for that issuing client, whichever resource server asks.
 
 JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
 

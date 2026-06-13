@@ -5,7 +5,12 @@ import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
-import { isAudienceClaimAllowed } from "./resources";
+import { resolveAccessTokenClaims } from "./claims";
+import {
+	getResourceCustomClaims,
+	isAudienceClaimAllowed,
+	isClientLinkedToAnyResource,
+} from "./resources";
 import { decodeRefreshToken } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
@@ -33,6 +38,51 @@ import {
  * - APIError: Continue catches (returnable to client)
  * - Error: Should immediately stop catches (internal error)
  */
+
+/**
+ * Resource identifiers in a token's audience, excluding the implicit
+ * `/oauth2/userinfo` audience (which is not a configured resource server).
+ */
+function audienceResourceIdentifiers(
+	aud: unknown,
+	userInfoAud: string,
+): string[] {
+	if (aud == null) return [];
+	const values = Array.isArray(aud) ? aud : [aud];
+	return values.filter(
+		(value): value is string =>
+			typeof value === "string" && value !== userInfoAud,
+	);
+}
+
+/**
+ * Authorizes an introspection request (RFC 7662 §2.1/§4). The caller is already
+ * authenticated as a registered client; it may introspect the token when it
+ * issued the token, or when it is a resource server linked to one of the token's
+ * audience resources. Tokens with no resource audience stay issuer-only. An
+ * unauthorized caller receives `{active:false}` (indistinguishable from an
+ * expired or unknown token), preserving the §4 anti-scanning property.
+ */
+async function isIntrospectionAuthorized(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		introspectingClientId: string | undefined;
+		issuerClientId: string | undefined;
+		audienceResources: string[];
+	},
+): Promise<boolean> {
+	const { introspectingClientId, issuerClientId, audienceResources } = params;
+	if (!introspectingClientId) return true;
+	if (introspectingClientId === issuerClientId) return true;
+	if (audienceResources.length === 0) return false;
+	return isClientLinkedToAnyResource(
+		ctx,
+		opts,
+		introspectingClientId,
+		audienceResources,
+	);
+}
 
 /**
  * Validates a JWT access token against the configured JWKs.
@@ -135,10 +185,17 @@ async function validateJwtAccessToken(
 			active: false,
 		};
 	}
-	if (clientId && jwtPayload.azp !== clientId) {
-		return {
-			active: false,
-		};
+	// RFC 7662 §2.1/§4: the introspecting client need not be the issuer. Allow
+	// the issuer, or a resource server linked to one of the token's audience
+	// resources; otherwise report the token inactive (no scanning signal).
+	if (
+		!(await isIntrospectionAuthorized(ctx, opts, {
+			introspectingClientId: clientId,
+			issuerClientId: jwtPayload.azp,
+			audienceResources: audienceResourceIdentifiers(rawAud, userInfoAud),
+		}))
+	) {
+		return { active: false };
 	}
 
 	// A JWT access token carrying `sid` is bound to that OP session; once the
@@ -226,10 +283,18 @@ async function validateOpaqueAccessToken(
 				active: false,
 			};
 		}
-		if (clientId && accessToken.clientId !== clientId) {
-			return {
-				active: false,
-			};
+		// RFC 7662 §2.1/§4: allow the issuer, or a resource server linked to one
+		// of the token's audience resources; otherwise report inactive.
+		if (
+			!(await isIntrospectionAuthorized(ctx, opts, {
+				introspectingClientId: clientId,
+				issuerClientId: accessToken.clientId,
+				audienceResources: Array.isArray(accessToken.resources)
+					? accessToken.resources
+					: [],
+			}))
+		) {
+			return { active: false };
 		}
 	}
 
@@ -260,24 +325,45 @@ async function validateOpaqueAccessToken(
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
 		: undefined;
+	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+
+	// Deleting a resource row revokes the tokens bound to it: introspection
+	// reports inactive (RFC 7662 §2.2 stable failure), mirroring the JWT path so
+	// a resource server enforces deletion without per-token revocation. A
+	// disabled row still resolves, so an already-issued token keeps verifying
+	// until it expires.
+	if (
+		resources?.length &&
+		!(await isAudienceClaimAllowed(ctx, opts, resources, [userInfoEndpoint]))
+	) {
+		return { active: false };
+	}
+
 	const audienceClaim = resources ? [...resources] : undefined;
 	if (audienceClaim?.length && accessToken.scopes?.includes("openid")) {
-		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 		if (!audienceClaim.includes(userInfoEndpoint)) {
 			audienceClaim.push(userInfoEndpoint);
 		}
 	}
 
-	// Add Custom Claims
-	const customClaims = opts.customAccessTokenClaims
-		? await opts.customAccessTokenClaims({
-				user,
-				scopes: accessToken.scopes,
-				referenceId: accessToken?.referenceId,
-				resources,
-				metadata: parseClientMetadata(client?.metadata),
-			})
+	// Re-derive the enriched access-token claim set through the same authority
+	// the JWT mint uses, so opaque introspection carries the claims a JWT would
+	// for this grant, with reserved RFC 9068 names stripped. Per-resource
+	// customClaims come from the existing rows directly, with no new-issuance
+	// gates: the deleted-resource case already returned inactive above, and a
+	// disabled resource keeps serving its claims to outstanding tokens.
+	const resourcePolicyClaims = resources?.length
+		? await getResourceCustomClaims(ctx, opts, resources)
 		: {};
+	const accessTokenClaims = await resolveAccessTokenClaims({
+		opts,
+		user,
+		scopes: accessToken.scopes ?? [],
+		resources,
+		referenceId: accessToken.referenceId,
+		metadata: parseClientMetadata(client?.metadata),
+		resourcePolicyClaims,
+	});
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
@@ -286,11 +372,12 @@ async function validateOpaqueAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
-		...customClaims,
+		...accessTokenClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		aud: toAudienceClaim(audienceClaim),
 		client_id: accessToken.clientId,
+		azp: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
 		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
@@ -434,19 +521,33 @@ export async function validateAccessToken(
  * keep real user.id (needed for user lookup in /userinfo).
  */
 async function resolveIntrospectionSub(
+	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	payload: JWTPayload,
-	client: SchemaClient<Scope[]>,
+	introspectingClient: SchemaClient<Scope[]>,
 ): Promise<JWTPayload> {
-	if (payload.active && payload.sub) {
-		const resolvedSub = await resolveSubjectIdentifier(
-			payload.sub as string,
-			client,
-			opts,
-		);
-		return { ...payload, sub: resolvedSub };
-	}
-	return payload;
+	if (!payload.active || !payload.sub) return payload;
+	// Pairwise `sub` is scoped to the TOKEN's client (its sector), not the
+	// caller. Resolve against the issuing client so a resource server that
+	// introspects a token issued to a different client sees the token's actual
+	// subject, not one re-derived for the caller's sector. The issuer is the
+	// caller for same-client and refresh-token introspection, so reuse the
+	// already-loaded client there instead of a second lookup.
+	const issuerClientId = (payload.client_id ?? payload.azp) as
+		| string
+		| undefined;
+	if (!issuerClientId) return payload;
+	const issuingClient =
+		issuerClientId === introspectingClient.clientId
+			? introspectingClient
+			: await getClient(ctx, opts, issuerClientId);
+	if (!issuingClient) return payload;
+	const resolvedSub = await resolveSubjectIdentifier(
+		payload.sub as string,
+		issuingClient,
+		opts,
+	);
+	return { ...payload, sub: resolvedSub };
 }
 
 export async function introspectEndpoint(
@@ -515,7 +616,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return resolveIntrospectionSub(opts, payload, client);
+				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -538,7 +639,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return resolveIntrospectionSub(opts, payload, client);
+				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {
