@@ -1,6 +1,25 @@
 import type { BetterAuthOptions } from "../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "./type";
 
+/**
+ * Adds a `deletedAt` field to every soft-deletable table that doesn't
+ * already define one. Tables can provide their own `deletedAt` field
+ * definition (e.g. to customize the column name via `fieldName`).
+ */
+const applySoftDeleteFields = (schema: BetterAuthDBSchema) => {
+	for (const table of Object.values(schema)) {
+		if (table.softDelete && !table.fields.deletedAt) {
+			table.fields.deletedAt = {
+				type: "date",
+				required: false,
+				input: false,
+				fieldName: "deletedAt",
+			};
+		}
+	}
+	return schema;
+};
+
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDBSchema => {
@@ -15,13 +34,18 @@ export const getAuthTables = (
 						...value.fields,
 					},
 					modelName: value.modelName || key,
+					softDelete: value.softDelete || acc[key]?.softDelete,
 				};
 			}
 			return acc;
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, DBFieldAttribute>; modelName: string }
+			{
+				fields: Record<string, DBFieldAttribute>;
+				modelName: string;
+				softDelete?: boolean | undefined;
+			}
 		>,
 	);
 
@@ -92,6 +116,7 @@ export const getAuthTables = (
 				...options.verification?.additionalFields,
 			},
 			order: 4,
+			softDelete: verification?.softDelete,
 		},
 	} satisfies BetterAuthDBSchema;
 
@@ -147,10 +172,11 @@ export const getAuthTables = (
 				...options.session?.additionalFields,
 			},
 			order: 2,
+			softDelete: session?.softDelete,
 		},
 	} satisfies BetterAuthDBSchema;
 
-	return {
+	return applySoftDeleteFields({
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
@@ -198,6 +224,7 @@ export const getAuthTables = (
 				...options.user?.additionalFields,
 			},
 			order: 1,
+			softDelete: user?.softDelete,
 		},
 		//only add session table if it's not stored in secondary storage
 		...(!options.secondaryStorage || options.session?.storeSessionInDatabase
@@ -293,11 +320,12 @@ export const getAuthTables = (
 				...options.account?.additionalFields,
 			},
 			order: 3,
+			softDelete: account?.softDelete,
 		},
 		...(!options.secondaryStorage || options.verification?.storeInDatabase
 			? verificationTable
 			: {}),
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
-	} satisfies BetterAuthDBSchema;
+	} satisfies BetterAuthDBSchema);
 };

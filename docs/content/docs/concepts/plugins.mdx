@@ -209,6 +209,8 @@ const myPlugin = (opts: PluginOptions) => {
 }
 ```
 
+`softDelete`: if the model should support soft deletion. (default: `false`) See [Soft Delete](#soft-delete) below.
+
 if you add additional fields to a `user` or `session` table, the types will be inferred automatically on `getSession` and `signUpEmail` calls.
 
 ```ts title="plugin.ts"
@@ -235,6 +237,114 @@ This will add an `age` field to the `user` table and all `user` returning endpoi
 <Callout type="warn">
   Don't store sensitive information in the `user` or `session` table. Create a new table if you need to store sensitive information.
 </Callout>
+
+### Soft Delete
+
+As a plugin author, you can mark a model as soft-deletable by setting `softDelete: true` on its schema definition. When enabled, a nullable `deletedAt` date column is added to the table, delete operations performed through the adapter set `deletedAt` to the current date instead of removing the row, and queries automatically exclude soft-deleted rows.
+
+Soft delete is implemented in the adapter factory, so your plugin gets the same behavior across every database adapter without adapter-specific code. The `deletedAt` column is picked up automatically by the CLI's `generate` and `migrate` commands.
+
+This works both for tables your plugin owns and for core tables (`user`, `session`, `account`, `verification`) your plugin extends:
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        schema: {
+            // a table owned by the plugin
+            workspace: {
+                fields: {
+                    name: {
+                        type: "string",
+                    },
+                },
+                softDelete: true, // [!code highlight]
+            },
+            // mark a core table as soft-deletable
+            user: {
+                fields: {},
+                softDelete: true, // [!code highlight]
+            },
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+If you want a different column name, define the `deletedAt` field yourself with a custom `fieldName` and it won't be overridden:
+
+```ts
+schema: {
+    workspace: {
+        fields: {
+            name: { type: "string" },
+            deletedAt: {
+                type: "date",
+                required: false,
+                input: false,
+                fieldName: "removed_at",
+            },
+        },
+        softDelete: true,
+    },
+},
+```
+
+**Behavior**
+
+For soft-deletable models, the adapter behaves as follows:
+
+| Operation                        | Behavior                                                                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delete` / `deleteMany`          | Sets `deletedAt` to the current date instead of removing the row(s). `deleteMany` returns the number of newly soft-deleted rows (already deleted rows are skipped). |
+| `findOne` / `findMany` / `count` | Automatically exclude soft-deleted rows.                                                                                                                            |
+| `update` / `updateMany`          | Automatically skip soft-deleted rows.                                                                                                                               |
+| `consumeOne`                     | Atomically reads and soft-deletes the consumed row.                                                                                                                 |
+
+**Working with soft-deleted rows**
+
+Read and update operations accept a `withDeleted` flag to include soft-deleted rows, and delete operations accept a `hardDelete` flag to bypass soft deletion and physically remove rows:
+
+```ts
+// inside an endpoint or hook
+const adapter = ctx.context.adapter;
+
+// find a row even if it was soft-deleted
+const row = await adapter.findOne({
+    model: "workspace",
+    where: [{ field: "id", value: workspaceId }],
+    withDeleted: true,
+});
+
+// query only soft-deleted rows: an explicit `deletedAt` filter
+// always takes precedence over the automatic exclusion
+const deletedRows = await adapter.findMany({
+    model: "workspace",
+    where: [{ field: "deletedAt", operator: "ne", value: null }],
+});
+
+// restore a soft-deleted row
+await adapter.update({
+    model: "workspace",
+    where: [{ field: "id", value: workspaceId }],
+    update: { deletedAt: null },
+    withDeleted: true,
+});
+
+// permanently purge soft-deleted rows
+await adapter.deleteMany({
+    model: "workspace",
+    where: [{ field: "deletedAt", operator: "ne", value: null }],
+    hardDelete: true,
+});
+```
+
+**Caveats**
+
+* **Unique constraints**: soft-deleted rows still occupy unique columns. For example, a soft-deleted user still holds its unique `email`, so a new user can't sign up with the same email until the row is hard-deleted.
+* **Joins**: the automatic `deletedAt` filter is not applied to joined models. If a joined model is soft-deletable, filter its rows after the query or query it separately.
+* **Database-level cascades**: soft deletes are updates, so `onDelete: "cascade"` foreign key actions won't fire. Related rows must be soft-deleted explicitly if needed.
 
 ### Hooks
 
