@@ -1,5 +1,124 @@
+import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8969
+ */
+describe("Email Verification - Request body consumption bug", () => {
+	it("should not throw 'body already consumed' error when sendVerificationEmail callback reads the request", async () => {
+		const mockSendEmail = vi.fn();
+		let requestBodyReadError: Error | null = null;
+
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }, request) {
+					mockSendEmail(user.email, url);
+					if (request) {
+						try {
+							await request.text();
+						} catch (error) {
+							requestBodyReadError = error as Error;
+						}
+					}
+				},
+			},
+		});
+
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		expect(mockSendEmail).toHaveBeenCalledWith(
+			testUser.email,
+			expect.any(String),
+		);
+		expect(requestBodyReadError).toBeNull();
+	});
+
+	it("should not throw 'body already consumed' error when sendVerificationEmail is called during sign-up", async () => {
+		const mockSendEmail = vi.fn();
+		let requestBodyReadError: Error | null = null;
+
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail({ user, url, token }, request) {
+					mockSendEmail(user.email, url);
+					if (request) {
+						try {
+							await request.text();
+						} catch (error) {
+							requestBodyReadError = error as Error;
+						}
+					}
+				},
+			},
+		});
+
+		await client.signUp.email({
+			name: "Test User",
+			email: "newuser@example.com",
+			password: "password123",
+		});
+
+		expect(mockSendEmail).toHaveBeenCalledWith(
+			"newuser@example.com",
+			expect.any(String),
+		);
+		expect(requestBodyReadError).toBeNull();
+	});
+
+	it("should not throw 'body already consumed' error when sendVerificationEmail is called during sign-in", async () => {
+		const mockSendEmail = vi.fn();
+		let requestBodyReadError: Error | null = null;
+
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignIn: true,
+				async sendVerificationEmail({ user, url, token }, request) {
+					mockSendEmail(user.email, url);
+					if (request) {
+						try {
+							await request.text();
+						} catch (error) {
+							requestBodyReadError = error as Error;
+						}
+					}
+				},
+			},
+		});
+
+		try {
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+		} catch {
+			// Expected to throw EMAIL_NOT_VERIFIED, but we're testing the request body
+		}
+
+		expect(mockSendEmail).toHaveBeenCalledWith(
+			testUser.email,
+			expect.any(String),
+		);
+		expect(requestBodyReadError).toBeNull();
+	});
+});
 
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
@@ -31,6 +150,45 @@ describe("Email Verification", async () => {
 			testUser.email,
 			expect.any(String),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8757
+	 */
+	it("should return APIError status when sendVerificationEmail throws (e.g. rate limit)", async () => {
+		let sendCalls = 0;
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {
+					sendCalls += 1;
+					if (sendCalls >= 2) {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests. Please try again later.",
+						});
+					}
+				},
+			},
+		});
+
+		try {
+			await auth.api.sendVerificationEmail({
+				body: {
+					email: testUser.email,
+				},
+			});
+			expect.fail("Expected sendVerificationEmail to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+				expect(error.body?.code).toBe("RATE_LIMIT_EXCEEDED");
+			}
+		}
 	});
 
 	it("should send a verification email if verification is required and user is not verified", async () => {
@@ -350,6 +508,77 @@ describe("Email Verification", async () => {
 	});
 });
 
+describe("Email Verification - Timing-safe unauthenticated path", () => {
+	it("should enforce a constant-time floor for both existing and non-existing emails", async () => {
+		const mockSendEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user }) {
+					mockSendEmail(user.email);
+				},
+			},
+		});
+
+		const startExisting = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: testUser.email },
+		});
+		const elapsedExisting = Date.now() - startExisting;
+
+		const startMissing = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: "nonexistent@example.com" },
+		});
+		const elapsedMissing = Date.now() - startMissing;
+
+		expect(elapsedExisting).toBeGreaterThanOrEqual(450);
+		expect(elapsedMissing).toBeGreaterThanOrEqual(450);
+
+		expect(mockSendEmail).toHaveBeenCalledWith(testUser.email);
+		expect(mockSendEmail).not.toHaveBeenCalledWith("nonexistent@example.com");
+	});
+
+	it("should still surface errors from sendVerificationEmail after the minimum delay", async () => {
+		let calls = 0;
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {
+					calls += 1;
+					if (calls >= 2) {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests.",
+						});
+					}
+				},
+			},
+		});
+
+		const start = Date.now();
+		try {
+			await auth.api.sendVerificationEmail({
+				body: { email: testUser.email },
+			});
+			expect.fail("Expected to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+			}
+		}
+		const elapsed = Date.now() - start;
+		expect(elapsed).toBeGreaterThanOrEqual(450);
+	});
+});
+
 describe("Email Verification Secondary Storage", async () => {
 	const store = new Map<string, string>();
 	let token: string;
@@ -361,6 +590,16 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);
@@ -639,5 +878,48 @@ describe("Email Verification Secondary Storage", async () => {
 				expect.any(Object),
 			);
 		});
+	});
+
+	it("should handle email case insensitivity when sending verification email while signed in", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, signInWithUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendVerificationEmail,
+			},
+		});
+
+		const mixedCaseEmail = "Test.Email.Case@Example.COM";
+		const password = "password123";
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Test User",
+			},
+		});
+		expect(signUpResult.user.email).toBe(mixedCaseEmail.toLowerCase());
+		expect(signUpResult.user.emailVerified).toBe(false);
+
+		const { headers } = await signInWithUser(
+			mixedCaseEmail.toLowerCase(),
+			password,
+		);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session).toBeTruthy();
+		expect(session?.user.email).toBe(mixedCaseEmail.toLowerCase());
+		expect(session?.user.emailVerified).toBe(false);
+
+		const result = await auth.api.sendVerificationEmail({
+			body: {
+				email: mixedCaseEmail.toUpperCase(),
+			},
+			headers,
+		});
+		expect(result.status).toBe(true);
 	});
 });

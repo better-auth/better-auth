@@ -50,7 +50,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
-			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when options.jwks.remoteUrl is used for OpenID metadata",
 		);
 	}
 
@@ -248,7 +248,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					});
 				},
 			),
-			signJWT: createAuthEndpoint(
+			signJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {
@@ -272,7 +272,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					return c.json({ token: jwt });
 				},
 			),
-			verifyJWT: createAuthEndpoint(
+			verifyJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {

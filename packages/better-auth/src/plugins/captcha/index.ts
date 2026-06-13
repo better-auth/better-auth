@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
+import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
@@ -18,6 +19,20 @@ import * as verifyHandlers from "./verify-handlers";
 
 export type * from "./types";
 
+const normalizeEndpointPath = (pathname: string, basePath: string) => {
+	const pathWithoutBase = pathname.startsWith(basePath)
+		? pathname.slice(basePath.length)
+		: pathname;
+	let normalizedPathname = pathWithoutBase.replace(/\/{2,}/g, "/");
+	if (!normalizedPathname.startsWith("/")) {
+		normalizedPathname = `/${normalizedPathname}`;
+	}
+	if (normalizedPathname.length > 1 && normalizedPathname.endsWith("/")) {
+		normalizedPathname = normalizedPathname.slice(0, -1);
+	}
+	return normalizedPathname;
+};
+
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
@@ -29,8 +44,19 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				const url = new URL(request.url);
+				const basePath = ctx.options.basePath ?? "/api/auth";
+				const pathname = normalizeEndpointPath(url.pathname, basePath);
+
+				const match = endpoints.some((endpoint) =>
+					endpoint.includes("*")
+						? wildcardMatch(endpoint)(pathname)
+						: endpoint === pathname,
+				);
+
+				if (!match) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
@@ -58,13 +84,19 @@ export const captcha = (options: CaptchaOptions) =>
 				};
 
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
-					return await verifyHandlers.cloudflareTurnstile(handlerParams);
+					return await verifyHandlers.cloudflareTurnstile({
+						...handlerParams,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
+					});
 				}
 
 				if (options.provider === Providers.GOOGLE_RECAPTCHA) {
 					return await verifyHandlers.googleRecaptcha({
 						...handlerParams,
 						minScore: options.minScore,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
 					});
 				}
 

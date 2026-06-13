@@ -1,5 +1,5 @@
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
@@ -96,7 +96,7 @@ describe("oauth logout", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -119,7 +119,7 @@ describe("oauth logout", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -127,7 +127,7 @@ describe("oauth logout", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -459,7 +459,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -482,7 +482,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -490,7 +490,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {

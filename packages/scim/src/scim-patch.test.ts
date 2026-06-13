@@ -23,6 +23,10 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};

@@ -24,6 +24,10 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};
@@ -338,13 +342,116 @@ describe("SCIM", () => {
 				        "urn:ietf:params:scim:schemas:core:2.0:Schema",
 				      ],
 				    },
+				    {
+				      "attributes": [
+				        {
+				          "caseExact": true,
+				          "description": "Unique opaque identifier for the Group",
+				          "multiValued": false,
+				          "mutability": "readOnly",
+				          "name": "id",
+				          "required": false,
+				          "returned": "default",
+				          "type": "string",
+				          "uniqueness": "server",
+				        },
+				        {
+				          "caseExact": true,
+				          "description": "An identifier for the Group as defined by the provisioning client.",
+				          "multiValued": false,
+				          "mutability": "readWrite",
+				          "name": "externalId",
+				          "required": false,
+				          "returned": "default",
+				          "type": "string",
+				          "uniqueness": "none",
+				        },
+				        {
+				          "caseExact": false,
+				          "description": "A human-readable name for the Group.",
+				          "multiValued": false,
+				          "mutability": "readWrite",
+				          "name": "displayName",
+				          "required": true,
+				          "returned": "default",
+				          "type": "string",
+				          "uniqueness": "none",
+				        },
+				        {
+				          "description": "A list of members of the Group.",
+				          "multiValued": true,
+				          "mutability": "readWrite",
+				          "name": "members",
+				          "required": false,
+				          "returned": "default",
+				          "subAttributes": [
+				            {
+				              "caseExact": true,
+				              "description": "Identifier of the member of this Group.",
+				              "multiValued": false,
+				              "mutability": "immutable",
+				              "name": "value",
+				              "required": false,
+				              "returned": "default",
+				              "type": "string",
+				              "uniqueness": "none",
+				            },
+				            {
+				              "caseExact": true,
+				              "description": "The URI corresponding to a SCIM member resource.",
+				              "multiValued": false,
+				              "mutability": "immutable",
+				              "name": "$ref",
+				              "required": false,
+				              "returned": "default",
+				              "type": "reference",
+				              "uniqueness": "none",
+				            },
+				            {
+				              "caseExact": false,
+				              "description": "A human-readable name for the member.",
+				              "multiValued": false,
+				              "mutability": "immutable",
+				              "name": "display",
+				              "required": false,
+				              "returned": "default",
+				              "type": "string",
+				              "uniqueness": "none",
+				            },
+				            {
+				              "caseExact": false,
+				              "description": "A label indicating the member resource type.",
+				              "multiValued": false,
+				              "mutability": "immutable",
+				              "name": "type",
+				              "required": false,
+				              "returned": "default",
+				              "type": "string",
+				              "uniqueness": "none",
+				            },
+				          ],
+				          "type": "complex",
+				          "uniqueness": "none",
+				        },
+				      ],
+				      "description": "Group",
+				      "id": "urn:ietf:params:scim:schemas:core:2.0:Group",
+				      "meta": {
+				        "location": "http://localhost:3000/api/auth/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:Group",
+				        "resourceType": "Schema",
+				      },
+				      "name": "Group",
+				      "schemas": [
+				        "urn:ietf:params:scim:schemas:core:2.0:Schema",
+				      ],
+				    },
 				  ],
-				  "itemsPerPage": 1,
+				  "itemsPerPage": 2,
 				  "schemas": [
 				    "urn:ietf:params:scim:api:messages:2.0:ListResponse",
 				  ],
 				  "startIndex": 1,
-				  "totalResults": 1,
+				  "totalResults": 2,
 				}
 			`);
 		});
@@ -536,13 +643,27 @@ describe("SCIM", () => {
 				        "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
 				      ],
 				    },
+				    {
+				      "description": "Group",
+				      "endpoint": "/Groups",
+				      "id": "Group",
+				      "meta": {
+				        "location": "http://localhost:3000/api/auth/scim/v2/ResourceTypes/Group",
+				        "resourceType": "ResourceType",
+				      },
+				      "name": "Group",
+				      "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+				      "schemas": [
+				        "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
+				      ],
+				    },
 				  ],
-				  "itemsPerPage": 1,
+				  "itemsPerPage": 2,
 				  "schemas": [
 				    "urn:ietf:params:scim:api:messages:2.0:ListResponse",
 				  ],
 				  "startIndex": 1,
-				  "totalResults": 1,
+				  "totalResults": 2,
 				}
 			`);
 		});
@@ -644,7 +765,11 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new account linked to an existing user", async () => {
-			const { auth, authClient, getSCIMToken } = createTestInstance();
+			// Linking a pre-existing user by email is opt-in via
+			// `linkExistingUsers`; enable the legacy behavior for this test.
+			const { auth, authClient, getSCIMToken } = createTestInstance({
+				linkExistingUsers: true,
+			});
 			const scimToken = await getSCIMToken();
 
 			await authClient.signUp.email({
@@ -695,6 +820,83 @@ describe("SCIM", () => {
 				]),
 				userName: "existing@email.com",
 			});
+		});
+
+		it("should NOT link a pre-existing user by email when linkExistingUsers is disabled (default)", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "existing-user@email.com",
+				password: "the password",
+				name: "existing-user",
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "existing-user",
+						emails: [{ value: "existing-user@email.com" }],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+
+			// Must not silently link to the existing account.
+			await expect(createUser()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "User already exists",
+					body: expect.objectContaining({
+						scimType: "uniqueness",
+						status: "409",
+					}),
+				}),
+			);
+		});
+
+		it("should only link a pre-existing user whose email domain is trusted", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance({
+				linkExistingUsers: { trustedDomains: ["trusted.com"] },
+			});
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "user@other.com",
+				password: "the password",
+				name: "other",
+			});
+			await authClient.signUp.email({
+				email: "user@trusted.com",
+				password: "the password",
+				name: "trusted",
+			});
+
+			// Domain not in trustedDomains: rejected.
+			await expect(
+				auth.api.createSCIMUser({
+					body: {
+						userName: "other",
+						emails: [{ value: "user@other.com" }],
+					},
+					headers: { authorization: `Bearer ${scimToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ message: "User already exists" }),
+			);
+
+			// Trusted domain: linked.
+			const linked = await auth.api.createSCIMUser({
+				body: {
+					userName: "trusted",
+					emails: [{ value: "user@trusted.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(linked.id).toBeTruthy();
+			expect(linked.emails).toEqual([
+				{ primary: true, value: "user@trusted.com" },
+			]);
 		});
 
 		it("should create a new user with external id", async () => {

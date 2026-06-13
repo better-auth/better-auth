@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { ASSERTION_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
+import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
@@ -20,12 +20,16 @@ export function authServerMetadata(
 	opts?: JwtOptions,
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
+		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
+	// Back-channel logout requires a verifiable Logout Token, which depends on
+	// the JWT plugin's JWKS. Advertise support only when the plugin is enabled.
+	const backchannelSupported = !overrides?.jwt_disabled;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
@@ -35,7 +39,9 @@ export function authServerMetadata(
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
 				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
-		registration_endpoint: `${baseURL}/oauth2/register`,
+		registration_endpoint: overrides?.dynamic_client_registration_supported
+			? `${baseURL}/oauth2/register`
+			: undefined,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
 		response_types_supported:
@@ -58,7 +64,7 @@ export function authServerMetadata(
 			"private_key_jwt",
 		],
 		token_endpoint_auth_signing_alg_values_supported: [
-			...ASSERTION_SIGNING_ALGORITHMS,
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
 		introspection_endpoint_auth_methods_supported: [
 			"client_secret_basic",
@@ -66,7 +72,7 @@ export function authServerMetadata(
 			"private_key_jwt",
 		],
 		introspection_endpoint_auth_signing_alg_values_supported: [
-			...ASSERTION_SIGNING_ALGORITHMS,
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
 		revocation_endpoint_auth_methods_supported: [
 			"client_secret_basic",
@@ -74,10 +80,12 @@ export function authServerMetadata(
 			"private_key_jwt",
 		],
 		revocation_endpoint_auth_signing_alg_values_supported: [
-			...ASSERTION_SIGNING_ALGORITHMS,
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		backchannel_logout_supported: backchannelSupported,
+		backchannel_logout_session_supported: backchannelSupported,
 	};
 	return metadata;
 }
@@ -92,6 +100,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		// `public_client_supported` flips `"none"` into the advertised auth
 		// methods. Any configured `clientDiscovery` implicitly produces public
 		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
@@ -115,12 +124,17 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
-			?.alg
-			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
-			: opts.disableJwtPlugin
-				? ["HS256"]
-				: ["EdDSA"],
+		id_token_signing_alg_values_supported: (() => {
+			if (opts.disableJwtPlugin) return ["HS256" as const];
+			// Advertise every algorithm the plugin can sign with: the primary
+			// keyPairConfig.alg plus every alg declared in keyPairConfigs[]
+			// (lazy-minted on demand for per-resource signing pins).
+			// Deduplicated so overlapping declarations don't produce repeats.
+			const primary = jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+			const extras =
+				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
+			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
+		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
 		prompt_values_supported: [
@@ -141,7 +155,10 @@ export function oidcServerMetadata(
 const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
 
-function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+export function metadataResponse(
+	body: unknown,
+	extraHeaders?: HeadersInit,
+): Response {
 	const headers = new Headers(extraHeaders);
 	if (!headers.has("Cache-Control")) {
 		headers.set("Cache-Control", METADATA_CACHE_CONTROL);

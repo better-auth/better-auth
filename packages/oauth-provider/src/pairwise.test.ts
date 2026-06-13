@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -17,7 +17,7 @@ describe("pairwise subject identifiers", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const rpBaseUrl2 = "http://localhost:6000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -31,7 +31,8 @@ describe("pairwise subject identifiers", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -114,7 +115,7 @@ describe("pairwise subject identifiers", async () => {
 		},
 	) {
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,
@@ -138,7 +139,7 @@ describe("pairwise subject identifiers", async () => {
 		const callbackUrl = new URL(callbackRedirectUrl);
 		const code = callbackUrl.searchParams.get("code")!;
 
-		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -288,7 +289,7 @@ describe("pairwise subject identifiers", async () => {
 
 	it("should keep user.id in JWT access token sub (not pairwise)", async () => {
 		const tokens = await getTokensForClient(pairwiseClientA!, redirectUriA, {
-			resource: validAudience,
+			resource: validResource,
 		});
 
 		const accessToken = decodeJwt(tokens.data!.access_token!);

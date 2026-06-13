@@ -44,6 +44,7 @@ export function keycloak(
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

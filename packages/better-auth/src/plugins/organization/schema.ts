@@ -56,6 +56,13 @@ interface TeamDefaultFields {
 		type: "string";
 		required: true;
 	};
+	memberCount: {
+		type: "number";
+		required: true;
+		defaultValue: 0;
+		input: false;
+		returned: false;
+	};
 	organizationId: {
 		type: "string";
 		required: true;
@@ -90,6 +97,13 @@ interface TeamMemberDefaultFields {
 			model: "user";
 			field: "id";
 		};
+	};
+	membershipKey: {
+		type: "string";
+		required: false;
+		unique: true;
+		input: false;
+		returned: false;
 	};
 	createdAt: {
 		type: "date";
@@ -199,6 +213,7 @@ interface SessionDefaultFields {
 	activeOrganizationId: {
 		type: "string";
 		required: false;
+		input: false;
 	};
 }
 
@@ -278,6 +293,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								activeTeamId: {
 									type: "string";
 									required: false;
+									input: false;
 								};
 							}
 						: {});
@@ -354,7 +370,7 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
-export type TeamInput = z.infer<typeof teamSchema>;
+export type TeamInput = z.input<typeof teamSchema>;
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;

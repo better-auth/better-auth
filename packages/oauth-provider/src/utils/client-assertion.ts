@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
 import {
-	ASSERTION_SIGNING_ALGORITHMS,
 	CLIENT_ASSERTION_TYPE,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
+import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import {
@@ -29,70 +31,23 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 		if (oldest !== undefined) jwksCache.delete(oldest);
 	}
 }
-const ALGORITHMS_LIST = [...ASSERTION_SIGNING_ALGORITHMS] as string[];
-const pendingAssertionIds = new Set<string>();
+const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 
 /**
- * Block SSRF: reject jwks_uri pointing at private/reserved IP ranges.
- * Only HTTPS with public hostnames is allowed.
+ * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
+ * `backchannel_logout_uri`): returns true when the host is NOT publicly
+ * routable. That covers loopback, RFC 1918 private, link-local (including AWS
+ * IMDS `169.254.169.254`), shared-address-space (carrier-grade NAT),
+ * IPv4-mapped IPv6, 6to4/NAT64/Teredo tunnels, every other RFC 6890
+ * special-purpose range, and cloud-metadata FQDNs.
+ *
+ * Delegates to the audited single source of truth so this check cannot drift
+ * into the kind of encoding bypass that bespoke regexes invite. This is a
+ * syntactic check only: it does not resolve DNS, so a public name that
+ * resolves to a private address at fetch time is not caught here.
  */
-function isPrivateIpv4(hostname: string): boolean {
-	const parts = hostname.split(".");
-	if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
-		return false;
-	}
-	const octets = parts.map(Number);
-	const a = octets[0]!;
-	const b = octets[1]!;
-	return (
-		a === 10 ||
-		a === 0 ||
-		(a === 172 && b >= 16 && b <= 31) ||
-		(a === 192 && b === 168) ||
-		(a === 169 && b === 254) ||
-		a === 127
-	);
-}
-
 export function isPrivateHostname(hostname: string): boolean {
-	const lower = hostname.toLowerCase();
-	// Strip IPv6 brackets for uniform prefix matching
-	const host =
-		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
-
-	if (host === "localhost" || host === "::1") {
-		return true;
-	}
-	if (isPrivateIpv4(host)) {
-		return true;
-	}
-	// Only apply IPv6 heuristics when the hostname contains ":" (the IPv6
-	// separator). Without this gate, DNS names starting with "fc"/"fd"
-	// would be incorrectly blocked by the unique-local prefix check.
-	if (host.includes(":")) {
-		// IPv4-mapped IPv6 (::ffff:a.b.c.d): extract the trailing IPv4 and check it
-		const v4MappedMatch = host.match(
-			/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
-		);
-		if (v4MappedMatch && isPrivateIpv4(v4MappedMatch[1]!)) {
-			return true;
-		}
-		// Link-local IPv6: fe80::/10 covers fe8*-feb*
-		const isLinkLocal =
-			host.startsWith("fe8") ||
-			host.startsWith("fe9") ||
-			host.startsWith("fea") ||
-			host.startsWith("feb");
-		// Unique-local IPv6: fc00::/7 covers fc* and fd*
-		const isUniqueLocal = host.startsWith("fc") || host.startsWith("fd");
-		if (isLinkLocal || isUniqueLocal) {
-			return true;
-		}
-	}
-	if (host === "metadata.google.internal") {
-		return true;
-	}
-	return false;
+	return !isPublicRoutableHost(hostname);
 }
 
 function validateJwksUri(
@@ -251,12 +206,7 @@ export async function verifyClientAssertion(
 			error: "invalid_client",
 		});
 	}
-	if (
-		!header.alg ||
-		!ASSERTION_SIGNING_ALGORITHMS.includes(
-			header.alg as AssertionSigningAlgorithm,
-		)
-	) {
+	if (!header.alg || !ALGORITHMS_LIST.includes(header.alg)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported assertion signing algorithm: ${header.alg}`,
 			error: "invalid_client",
@@ -408,51 +358,45 @@ export async function verifyClientAssertion(
 		});
 	}
 
-	const jtiIdentifier = `private_key_jwt:${clientId}:${payload.jti}`;
-	if (pendingAssertionIds.has(jtiIdentifier)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion jti has already been used",
-			error: "invalid_client",
-		});
-	}
-
-	pendingAssertionIds.add(jtiIdentifier);
+	// Consume the jti with a single insert keyed by a digest of the per-client
+	// assertion identifier. The primary key is the atomic gate on every adapter
+	// (SQL primary key, MongoDB `_id`), so concurrent token requests across
+	// workers cannot both pass. A duplicate-key failure means the jti was
+	// already used (replay); any other failure is surfaced unchanged.
+	const jtiDigest = await createHash("SHA-256").digest(
+		new TextEncoder().encode(`private_key_jwt:${clientId}:${payload.jti}`),
+	);
+	const jtiId = base64Url.encode(new Uint8Array(jtiDigest).slice(0, 24), {
+		padding: false,
+	});
 	try {
-		const existingJti =
-			await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-		if (existingJti) {
+		await ctx.context.adapter.create({
+			model: "oauthClientAssertion",
+			data: {
+				id: jtiId,
+				expiresAt: new Date(payload.exp * 1000),
+			},
+			forceAllowId: true,
+		});
+	} catch (createErr) {
+		let alreadyUsed = false;
+		try {
+			alreadyUsed = Boolean(
+				await ctx.context.adapter.findOne({
+					model: "oauthClientAssertion",
+					where: [{ field: "id", value: jtiId }],
+				}),
+			);
+		} catch {
+			// Lookup failed, so a replay cannot be confirmed; surface the insert error.
+		}
+		if (alreadyUsed) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "client assertion jti has already been used",
 				error: "invalid_client",
 			});
 		}
-
-		// Store JTI tombstone until the assertion's actual expiry.
-		// If another instance created the tombstone between our find and create
-		// (race in multi-instance deployments), the create may succeed as a
-		// duplicate or throw; either way the assertion is consumed.
-		const jtiExpiry = new Date(payload.exp * 1000);
-		try {
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: jtiIdentifier,
-				value: clientId,
-				expiresAt: jtiExpiry,
-			});
-		} catch (createErr) {
-			// If the tombstone already exists (created by another instance in
-			// the race window), treat it as a replay.
-			const doubleCheck =
-				await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-			if (doubleCheck) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "client assertion jti has already been used",
-					error: "invalid_client",
-				});
-			}
-			throw createErr;
-		}
-	} finally {
-		pendingAssertionIds.delete(jtiIdentifier);
+		throw createErr;
 	}
 
 	return { clientId, client };

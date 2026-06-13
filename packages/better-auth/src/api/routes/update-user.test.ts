@@ -332,6 +332,16 @@ describe("updateUser", async () => {
 					get(key) {
 						return store.get(key) || null;
 					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
 					delete(key) {
 						store.delete(key);
 					},
@@ -378,6 +388,16 @@ describe("updateUser", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);
@@ -553,6 +573,16 @@ describe("delete user", async () => {
 				get(key) {
 					return store.get(key) || null;
 				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
+				},
 				delete(key) {
 					store.delete(key);
 				},
@@ -620,6 +650,62 @@ describe("delete user", async () => {
 		});
 	});
 
+	// The delete-account token is single-use: two concurrent callbacks with
+	// the same token must delete the account exactly once. Whichever request
+	// consumes the verification row first wins; the loser sees an invalid
+	// token. The destructive beforeDelete/afterDelete hooks must each fire
+	// once, and no verification row may survive the deletion.
+	it("should delete only once when the same token is used concurrently", async () => {
+		let token = "";
+		const beforeDelete = vi.fn(async () => {
+			// Widen the race so both requests pass the token lookup before
+			// either one finishes the destructive work.
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const afterDelete = vi.fn(async () => {});
+		const { client, signInWithTestUser, testUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+					beforeDelete,
+					afterDelete,
+				},
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const requestRes = await client.deleteUser({
+				password: testUser.password,
+			});
+			expect(requestRes.data).toMatchObject({ success: true });
+			expect(token.length).toBe(32);
+
+			const [first, second] = await Promise.all([
+				client.deleteUser({ token }),
+				client.deleteUser({ token }),
+			]);
+
+			const successes = [first, second].filter(
+				(res) => res.data && (res.data as { success?: boolean }).success,
+			);
+			const failures = [first, second].filter((res) => res.error);
+			expect(successes.length).toBe(1);
+			expect(failures.length).toBe(1);
+
+			expect(beforeDelete).toHaveBeenCalledTimes(1);
+			expect(afterDelete).toHaveBeenCalledTimes(1);
+
+			const remaining = await db.findMany({
+				model: "verification",
+				where: [{ field: "identifier", value: `delete-account-${token}` }],
+			});
+			expect(remaining.length).toBe(0);
+		});
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(
@@ -680,6 +766,62 @@ describe("delete user", async () => {
 		});
 
 		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
+
+	it("rejects /delete-user/callback when the backing session was revoked", async () => {
+		let token = "";
+		const { client, auth, db, sessionSetter } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const email = `delete-callback-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await client.signUp.email({ email, password, name: "Delete Callback" });
+
+		const headers = new Headers();
+		await client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		// Materialize the cookie cache and capture the backing session token.
+		const sessionRes = await client.getSession({ fetchOptions: { headers } });
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+
+		// Request deletion while the session is still valid to obtain a token.
+		await client.deleteUser({ password, fetchOptions: { headers } });
+		expect(token.length).toBe(32);
+
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		// The GET callback (the email-link path) must not complete deletion from
+		// the stale cookie-cache session now that the backing row is gone.
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headers.get("cookie") ?? "" } },
+			),
+		);
+		expect(response.status).toBe(404);
 	});
 });
 
@@ -762,6 +904,83 @@ describe("change-email without sendVerificationEmail", async () => {
 			expect(resExisting.error?.status).toBe(400);
 			expect(resNonExisting.error?.status).toBe(400);
 			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
+	});
+});
+
+describe("change-email callbackURL preservation", async () => {
+	const sendChangeEmail = vi.fn();
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail() {},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async ({ url }) => {
+					sendChangeEmail(url);
+				},
+			},
+		},
+	});
+
+	it("preserves a callbackURL that carries its own query string", async () => {
+		// Verified user routes through the sendChangeEmailConfirmation branch.
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const callback = "/dashboard?tab=settings&from=email";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail: "new-email@email.com",
+				callbackURL: callback,
+			});
+		});
+
+		expect(sendChangeEmail).toHaveBeenCalledOnce();
+		const sent = sendChangeEmail.mock.calls[0]?.[0] as string;
+		expect(sent).toBeTypeOf("string");
+
+		// Round-tripping through URLSearchParams recovers the callbackURL verbatim.
+		const parsed = new URL(sent);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callback);
+		// The trailing `from=email` segment must not leak into the outer URL.
+		expect(parsed.searchParams.get("from")).toBeNull();
+	});
+});
+
+describe("change-email rejects confirmation-only config for verified users", async () => {
+	// Verified user with sendChangeEmailConfirmation but no sendVerificationEmail
+	// cannot complete the flow: the confirmation step generates a second token
+	// that requires sendVerificationEmail to deliver. The request must fail at
+	// the gate rather than return a misleading success.
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async () => {},
+			},
+		},
+	});
+
+	it("returns 400 when sendVerificationEmail is not configured", async () => {
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "unreachable@email.com",
+			});
+			expect(res.error?.status).toBe(400);
 		});
 	});
 });

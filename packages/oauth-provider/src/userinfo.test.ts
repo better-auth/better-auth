@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -17,7 +17,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -29,7 +29,8 @@ describe("oauth userinfo", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -61,7 +62,7 @@ describe("oauth userinfo", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
+		const { url } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -83,7 +84,7 @@ describe("oauth userinfo", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -91,7 +92,7 @@ describe("oauth userinfo", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -177,6 +178,32 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.error?.status).toBe(400);
 	});
 
+	it("rejects a revoked access token with invalid_token (401), not invalid_scope", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const ctx = await auth.$context;
+		const session = await auth.api.getSession({ headers });
+		await ctx.adapter.updateMany({
+			model: "oauthAccessToken",
+			where: [{ field: "sessionId", value: session!.session.id }],
+			update: { revoked: new Date() },
+		});
+
+		try {
+			await auth.api.oauth2UserInfo({
+				headers: new Headers({
+					Authorization: `Bearer ${tokens.data!.access_token!}`,
+				}),
+			});
+			expect.unreachable();
+		} catch (error) {
+			const err = error as APIError;
+			expect(err.statusCode).toBe(401);
+			expect(err.body).toMatchObject({ error: "invalid_token" });
+		}
+	});
+
 	it("should pass provide all user information - opaque", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();
@@ -196,6 +223,21 @@ describe("oauth userinfo", async () => {
 			email: user.email,
 			email_verified: user.emailVerified,
 		});
+	});
+
+	it("should accept POST with the bearer token in the Authorization header", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+			},
+		);
+		expect(userinfo.data).toMatchObject({ sub: user.id });
 	});
 
 	/**
@@ -237,7 +279,7 @@ describe("oauth userinfo", async () => {
 	});
 
 	it("should pass provide all user information - jwt", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens(undefined, validResource);
 		expect(tokens.data?.access_token).toBeDefined();
 		const userinfo = await client.$fetch<Record<string, string>>(
 			"/oauth2/userinfo",

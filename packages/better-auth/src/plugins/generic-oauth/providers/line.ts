@@ -124,6 +124,7 @@ export function line(options: LineOptions): GenericOAuthConfig {
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

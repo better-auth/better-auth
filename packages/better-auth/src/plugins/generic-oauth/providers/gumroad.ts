@@ -76,6 +76,7 @@ export function gumroad(
 		tokenUrl: "https://api.gumroad.com/oauth/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

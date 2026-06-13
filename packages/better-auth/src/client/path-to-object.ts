@@ -135,6 +135,15 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+export type InferSessionUpdateCtx<
+	ClientOpts extends BetterAuthClientOptions,
+	FetchOptions extends ClientFetchOption,
+> = {
+	fetchOptions?: FetchOptions | undefined;
+} & Partial<
+	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "session", "input">>
+>;
+
 type InferCtxQuery<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
@@ -223,7 +232,9 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 													Prettify<
 														T["path"] extends `/update-user`
 															? InferUserUpdateCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: T["path"] extends `/update-session`
+																? InferSessionUpdateCtx<COpts, FetchOptions>
+																: InferCtx<C, FetchOptions>
 													>?,
 													FetchOptions?,
 												]

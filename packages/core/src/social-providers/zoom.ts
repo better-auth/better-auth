@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
-	generateCodeChallenge,
+	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -143,6 +144,8 @@ export interface ZoomOptions extends ProviderOptions<ZoomProfile> {
 	pkce?: boolean | undefined;
 }
 
+const ZOOM_DEFAULT_SCOPES: string[] = [];
+
 export const zoom = (userOptions: ZoomOptions) => {
 	const options = {
 		pkce: true,
@@ -152,24 +155,30 @@ export const zoom = (userOptions: ZoomOptions) => {
 	return {
 		id: "zoom",
 		name: "Zoom",
-		createAuthorizationURL: async ({ state, redirectURI, codeVerifier }) => {
-			const params = new URLSearchParams({
-				response_type: "code",
-				redirect_uri: options.redirectURI ? options.redirectURI : redirectURI,
-				client_id: options.clientId,
+		callbackPath: "/callback/zoom",
+		createAuthorizationURL: ({
+			state,
+			scopes,
+			redirectURI,
+			codeVerifier,
+			additionalParams,
+		}) => {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				ZOOM_DEFAULT_SCOPES,
+				scopes,
+			);
+
+			return createAuthorizationURL({
+				id: "zoom",
+				options,
+				authorizationEndpoint: "https://zoom.us/oauth/authorize",
+				scopes: requestedScopes,
 				state,
+				redirectURI,
+				codeVerifier: options.pkce ? codeVerifier : undefined,
+				additionalParams,
 			});
-
-			if (options.pkce) {
-				const codeChallenge = await generateCodeChallenge(codeVerifier);
-				params.set("code_challenge_method", "S256");
-				params.set("code_challenge", codeChallenge);
-			}
-
-			const url = new URL("https://zoom.us/oauth/authorize");
-			url.search = params.toString();
-
-			return url;
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
@@ -226,5 +235,5 @@ export const zoom = (userOptions: ZoomOptions) => {
 				},
 			};
 		},
-	} satisfies OAuthProvider<ZoomProfile>;
+	} satisfies UpstreamProvider<ZoomProfile>;
 };

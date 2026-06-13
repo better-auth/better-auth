@@ -1,7 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import { assertClientPrivileges } from "./oauthClient/privileges";
+import { buildClientResourceLinkId, getResource } from "./resources";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
@@ -39,7 +43,7 @@ export async function registerEndpoint(
 		});
 	}
 
-	const body = ctx.body as OAuthClient;
+	const body = ctx.body as OAuthClient & { resources?: string[] };
 	const session = await getSessionFromCtx(ctx);
 
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
@@ -69,8 +73,42 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §2 extension: clients may declare which resources they need.
+	// Validate up front so the registration fails before we issue a clientId.
+	// Linking happens inside createOAuthClientEndpoint so the response shape
+	// stays type-stable for existing DCR consumers (the resources are echoed
+	// as an added field, not via a separate Response wrapper).
+	const requestedResources = Array.isArray(body.resources)
+		? [
+				...new Set(
+					body.resources.filter(
+						(resource): resource is string =>
+							typeof resource === "string" && resource.length > 0,
+					),
+				),
+			]
+		: [];
+	if (requestedResources.length > 0) {
+		for (const identifier of requestedResources) {
+			const row = await getResource(ctx, opts, identifier);
+			if (!row) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested resource ${identifier} does not exist`,
+				});
+			}
+			if (row.disabled) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_target",
+					error_description: `requested resource ${identifier} is disabled`,
+				});
+			}
+		}
+	}
+
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
+		resources: requestedResources.length > 0 ? requestedResources : undefined,
 	});
 }
 
@@ -260,6 +298,67 @@ export async function checkOAuthClient(
 				"jwks and jwks_uri are only allowed with private_key_jwt authentication",
 		});
 	}
+
+	if (client.backchannel_logout_uri !== undefined) {
+		if (opts.disableJwtPlugin) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
+			});
+		}
+		let url: URL;
+		try {
+			url = new URL(client.backchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// Only http/https make sense for a POST target and the server will
+		// refuse anything else at fetch time; reject up front to avoid storing
+		// unreachable URIs.
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must use http or https",
+			});
+		}
+		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
+		// component." Check the raw value rather than `url.hash`, which is empty
+		// for a bare trailing `#` and would let that fragment delimiter through.
+		if (client.backchannel_logout_uri.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not include a fragment component",
+			});
+		}
+		const loopback = isLoopbackHost(url.hostname);
+		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
+		// confidential clients, with a loopback carve-out (RFC 8252 §7.3) so
+		// local development against http://127.0.0.1:<port> works.
+		if (!isPublic && url.protocol !== "https:" && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must use https for confidential clients",
+			});
+		}
+		// SSRF guard: the OP issues an outbound POST to this URI on every
+		// session end, so reject any host that is not publicly routable.
+		// Loopback is exempt for local development (e.g.
+		// http://127.0.0.1:<port> or https://localhost); non-loopback private,
+		// link-local, tunneled, and cloud-metadata targets are always rejected.
+		if (isPrivateHostname(url.hostname) && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not point to a private or reserved address",
+			});
+		}
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -267,10 +366,32 @@ export async function createOAuthClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings: {
 		isRegister: boolean;
+		/**
+		 * Pre-validated resource identifiers to link the new client to. Used
+		 * by the DCR registration path (RFC 7591 §2 extension). Validation
+		 * (existence, disabled) is the caller's responsibility — this branch
+		 * only writes the link rows and echoes the field in the response.
+		 */
+		resources?: string[] | undefined;
 	},
 ) {
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
+
+	// Single authorization chokepoint for OAuth client creation. Every creation
+	// route reaches this function, so the create gate lives here rather than in
+	// each caller. Dynamic registration may be anonymous when
+	// allowUnauthenticatedClientRegistration is enabled, and registerEndpoint
+	// constrains that path to public clients, so it is authorized only when a
+	// session is present. Every other creation route requires an authorized
+	// session; assertClientPrivileges throws when none is present.
+	if (settings.isRegister) {
+		if (session) {
+			await assertClientPrivileges(ctx, session, opts, "create");
+		}
+	} else {
+		await assertClientPrivileges(ctx, session, opts, "create");
+	}
 
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
@@ -320,30 +441,64 @@ export async function createOAuthClientEndpoint(
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
 	});
-	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
-		model: "oauthClient",
-		data: {
-			...schema,
-			createdAt: new Date(iat * 1000),
-			updatedAt: new Date(iat * 1000),
+	const resources = settings.resources ?? [];
+	const client = await runWithTransaction(ctx.context.adapter, async () => {
+		const createdClient = await ctx.context.adapter.create<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			data: {
+				...schema,
+				createdAt: new Date(iat * 1000),
+				updatedAt: new Date(iat * 1000),
+			},
+		});
+
+		// DCR resource linkage (RFC 7591 §2 extension). The caller pre-validated
+		// each identifier; here we write the join rows in the same transaction as
+		// the client so a failed link cannot leave a half-registered client.
+		if (resources.length > 0) {
+			const linkModel =
+				opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+			const now = new Date();
+			for (const resourceId of resources) {
+				// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
+				// constraint enforces composite (clientId, resourceId) uniqueness.
+				await ctx.context.adapter.create({
+					model: linkModel,
+					forceAllowId: true,
+					data: {
+						id: buildClientResourceLinkId(clientId, resourceId),
+						clientId,
+						resourceId,
+						createdAt: now,
+					} as never,
+				});
+			}
+		}
+		return createdClient;
+	});
+
+	// Format the response according to RFC7591. When resources were linked
+	// during registration, echo them back per RFC 7591 §3 server response
+	// conventions — clients can verify the registration succeeded.
+	const responseBody = schemaToOAuth({
+		...client,
+		clientSecret: clientSecret
+			? (opts.prefix?.clientSecret ?? "") + clientSecret
+			: undefined,
+	});
+	if (resources.length > 0) {
+		(responseBody as OAuthClient & { resources?: string[] }).resources =
+			resources;
+	}
+	return ctx.json(responseBody, {
+		status: 201,
+		headers: {
+			"Cache-Control": "no-store",
+			Pragma: "no-cache",
 		},
 	});
-	// Format the response according to RFC7591
-	return ctx.json(
-		schemaToOAuth({
-			...client,
-			clientSecret: clientSecret
-				? (opts.prefix?.clientSecret ?? "") + clientSecret
-				: undefined,
-		}),
-		{
-			status: 201,
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
 }
 
 /**
@@ -379,6 +534,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirect_uris: redirectUris,
 		post_logout_redirect_uris: postLogoutRedirectUris,
+		backchannel_logout_uri: backchannelLogoutUri,
+		backchannel_logout_session_required: backchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -435,6 +592,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -492,6 +651,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -550,6 +711,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
+		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
+		backchannel_logout_session_required:
+			backchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,

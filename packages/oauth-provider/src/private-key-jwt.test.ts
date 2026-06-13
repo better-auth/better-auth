@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/client";
-import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -38,7 +37,7 @@ describe("private_key_jwt authentication", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -133,7 +132,7 @@ describe("private_key_jwt authentication", async () => {
 		codeVerifier: string,
 		scopes = ["openid", "profile"],
 	) {
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: "test",
 			options: { clientId, redirectURI: redirectUri },
 			redirectURI: "",
@@ -360,20 +359,23 @@ describe("private_key_jwt authentication", async () => {
 		const code1 = await getAuthCode(assertionClient.client_id, cv1);
 		const assertion1 = await signAssertion({ jti });
 
-		const result1 = await client.$fetch("/oauth2/token", {
-			method: "POST",
-			body: new URLSearchParams({
-				grant_type: "authorization_code",
-				code: code1,
-				redirect_uri: redirectUri,
-				client_id: assertionClient.client_id,
-				client_assertion_type:
-					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: assertion1,
-				code_verifier: cv1,
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
+		const result1 = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: code1,
+					redirect_uri: redirectUri,
+					client_id: assertionClient.client_id,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: assertion1,
+					code_verifier: cv1,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
 		expect(result1.data?.access_token).toBeDefined();
 
 		// Second request with same jti should fail
@@ -664,8 +666,25 @@ describe("isPrivateHostname", () => {
 		expect(isPrivateHostname("[::ffff:8.8.8.8]")).toBe(false);
 	});
 
+	it("should block IPv4-mapped IPv6 written in hex", () => {
+		// ::ffff:7f00:1 == 127.0.0.1, ::ffff:a9fe:a9fe == 169.254.169.254 (IMDS)
+		expect(isPrivateHostname("[::ffff:7f00:1]")).toBe(true);
+		expect(isPrivateHostname("[::ffff:a9fe:a9fe]")).toBe(true);
+	});
+
+	it("should block NAT64 and 6to4 tunnels to private targets", () => {
+		expect(isPrivateHostname("[64:ff9b::7f00:1]")).toBe(true); // NAT64 -> 127.0.0.1
+		expect(isPrivateHostname("[2002:a9fe:a9fe::]")).toBe(true); // 6to4 -> IMDS
+	});
+
+	it("should block shared address space (carrier-grade NAT)", () => {
+		expect(isPrivateHostname("100.64.0.1")).toBe(true);
+	});
+
 	it("should block cloud metadata endpoints", () => {
 		expect(isPrivateHostname("metadata.google.internal")).toBe(true);
+		expect(isPrivateHostname("metadata.goog")).toBe(true);
+		expect(isPrivateHostname("instance-data")).toBe(true);
 	});
 });
 
@@ -678,6 +697,7 @@ describe("private_key_jwt registration validation", async () => {
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
+				consentPage: "/consent",
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,

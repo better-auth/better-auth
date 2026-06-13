@@ -445,6 +445,83 @@ describe("organization hooks", async () => {
 		expect(afterCreateTeam).toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9288
+	 */
+	it("should allow passing id through `beforeCreateTeam`", async () => {
+		const customTeamId = "custom-team-id";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeCreateTeam: async () => {
+							return {
+								data: {
+									id: customTeamId,
+								},
+							};
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const result = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const teams = await auth.api.listOrganizationTeams({
+			headers,
+			query: {
+				organizationId: result?.id,
+			},
+		});
+		expect(teams[0]?.id).toBe(customTeamId);
+	});
+
+	it("should allow passing id through `beforeCreateInvitation`", async () => {
+		const customInvitationId = "custom-invitation-id";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeCreateInvitation: async () => {
+							return {
+								data: {
+									id: customInvitationId,
+								},
+							};
+						},
+					},
+					async sendInvitationEmail() {},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const invitation = await auth.api.createInvitation({
+			body: {
+				email: "invited@test.com",
+				role: "member",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+		expect(invitation?.id).toBe(customInvitationId);
+	});
+
 	it("should allow internal organization creation when disabled for users", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
@@ -471,5 +548,54 @@ describe("organization hooks", async () => {
 		});
 		expect(internalOrg).toBeDefined();
 		expect(internalOrg?.name).toBe("Internal Org");
+	});
+});
+
+describe("updateOrganization", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9829
+	 */
+	it("should clear the logo when passing null", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Logo Org",
+				slug: "logo-org",
+				logo: "https://example.com/logo.png",
+			},
+			headers,
+		});
+		expect(org?.logo).toBe("https://example.com/logo.png");
+
+		const updated = await auth.api.updateOrganization({
+			body: {
+				organizationId: org!.id,
+				data: {
+					logo: null,
+				},
+			},
+			headers,
+		});
+		expect(updated?.logo).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9829
+	 */
+	it("should accept a null logo on create", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Null Logo Org",
+				slug: "null-logo-org",
+				logo: null,
+			},
+			headers,
+		});
+		expect(org?.logo).toBeNull();
 	});
 });

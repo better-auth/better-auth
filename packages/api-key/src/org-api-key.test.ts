@@ -37,6 +37,15 @@ describe("organization API keys", async () => {
 							},
 						]),
 					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => ({
+									data: { ...user, emailVerified: true },
+								}),
+							},
+						},
+					},
 				},
 				{
 					clientOptions: {
@@ -330,6 +339,15 @@ describe("organization API keys", async () => {
 							},
 						]),
 					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => ({
+									data: { ...user, emailVerified: true },
+								}),
+							},
+						},
+					},
 				},
 				{
 					clientOptions: {
