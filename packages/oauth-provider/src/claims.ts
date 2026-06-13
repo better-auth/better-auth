@@ -69,8 +69,8 @@ export interface AccessTokenClaimsInput {
 	scopes: string[];
 	resources: string[] | undefined;
 	referenceId: string | undefined;
-	/** Parsed client metadata. */
-	metadata: Record<string, unknown> | undefined;
+	/** Parsed client metadata, as returned by `parseClientMetadata`. */
+	metadata: object | undefined;
 	/** Per-resource `customClaims` from `resolveResourcePolicy` (raw, not yet stripped). */
 	resourcePolicyClaims: Record<string, unknown>;
 }
