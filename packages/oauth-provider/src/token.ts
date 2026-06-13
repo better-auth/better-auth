@@ -562,7 +562,7 @@ async function resolveResourceGrantIssuance(
 			params.resources,
 		signingAlgorithm: resourcePolicy.signingAlgorithm,
 		signingKeyId: resourcePolicy.signingKeyId,
-		resourceCustomClaims: resourcePolicy.customClaims,
+		resourceCustomClaims: resourcePolicy.rawCustomClaims,
 	};
 }
 

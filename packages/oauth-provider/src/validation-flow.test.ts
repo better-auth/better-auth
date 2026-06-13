@@ -519,7 +519,7 @@ describe("resolveResourcePolicy — entity path", () => {
 			clientId: "client-x",
 			requestedScopes: [],
 		});
-		expect(policy.customClaims).toEqual({
+		expect(policy.rawCustomClaims).toEqual({
 			dept: "ops", // later wins
 			iss: "evil-A", // returned raw; resolveAccessTokenClaims strips reserved names
 			region: "us",

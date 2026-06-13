@@ -201,10 +201,12 @@ export interface ResolvedResourcePolicy {
 	signingAlgorithm: JWSAlgorithms | null;
 	signingKeyId: string | null;
 	/**
-	 * Merged custom claims across requested resources. Reserved RFC 9068
-	 * claim names are stripped — callers don't need to re-strip.
+	 * Merged custom claims across requested resources, returned RAW: reserved
+	 * RFC 9068 names are NOT stripped here. Feed this into
+	 * `resolveAccessTokenClaims`, which owns the single strip; do not place it on
+	 * a token directly or a resource could override an AS-owned claim.
 	 */
-	customClaims: Record<string, unknown>;
+	rawCustomClaims: Record<string, unknown>;
 	/**
 	 * The intersection of the caller's `requestedScopes` with each requested
 	 * resource's `allowedScopes`. When no requested resource defines an
@@ -374,7 +376,7 @@ export async function resolveResourcePolicy(
 			refreshTokenTtl: null,
 			signingAlgorithm: null,
 			signingKeyId: null,
-			customClaims: {},
+			rawCustomClaims: {},
 			effectiveScopes: [...params.requestedScopes],
 		};
 	}
@@ -526,7 +528,7 @@ export async function resolveResourcePolicy(
 		refreshTokenTtl,
 		signingAlgorithm,
 		signingKeyId,
-		customClaims: mergedClaims,
+		rawCustomClaims: mergedClaims,
 		effectiveScopes,
 	};
 }
