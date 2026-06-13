@@ -29,6 +29,47 @@ export {
 	signedQueryIssuedAtParam,
 } from "../signed-query";
 
+/**
+ * Headers required on OAuth token and registration responses so credentials are
+ * never cached by intermediaries.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+ * @see https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1
+ */
+export const OAUTH_NO_STORE_HEADERS = {
+	"Cache-Control": "no-store",
+	Pragma: "no-cache",
+} as const;
+
+/**
+ * Extracts the credentials from an `Authorization: Bearer <token>` header.
+ *
+ * Returns `undefined` when the header is absent or carries a non-Bearer scheme,
+ * leaving the caller to decide whether that is an error. Throws an
+ * `invalid_request` `APIError` when the Bearer scheme is present but the
+ * credentials are missing or the header carries extra parts. The scheme match
+ * is case-insensitive and the credentials are the single token after it.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+ * @see https://datatracker.ietf.org/doc/html/rfc7235#section-2.1
+ */
+export function parseBearerToken(
+	authorization: string | null | undefined,
+): string | undefined {
+	if (!authorization) return undefined;
+	const [scheme, credentials, ...extraParts] = authorization
+		.trim()
+		.split(/\s+/);
+	if (scheme?.toLowerCase() !== "bearer") return undefined;
+	if (!credentials || extraParts.length > 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "Malformed Bearer Authorization header",
+		});
+	}
+	return credentials;
+}
+
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
 	constructor() {}

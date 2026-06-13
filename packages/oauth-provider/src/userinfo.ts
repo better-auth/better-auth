@@ -37,6 +37,9 @@ export async function userInfoEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
+	// TODO: converge on parseBearerToken (utils) once we decide whether userinfo
+	// should keep accepting a non-Bearer Authorization value as a bare token; the
+	// shared parser is strict and would reject that fallback.
 	const authorization = ctx.headers?.get("authorization");
 	const token =
 		typeof authorization === "string" && authorization?.startsWith("Bearer ")

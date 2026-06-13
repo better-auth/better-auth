@@ -1225,16 +1225,19 @@ oauthProvider({
   For MCP, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
 </Callout>
 
-Protected dynamic client registration allows machine callers to register public or confidential clients without a Better Auth user session. Issue an RFC 7591 initial access token out of band, then validate the token from the `Authorization: Bearer <token>` header.
+Protected dynamic client registration allows machine callers to register public or confidential clients without a Better Auth user session. Issue an RFC 7591 initial access token out of band, then validate the token from the `Authorization: Bearer <token>` header. Defining `validateInitialAccessToken` enables this path; while it is undefined, a Bearer token sent to the registration endpoint is rejected.
 
 ```ts title="auth.ts"
+import { createHash, timingSafeEqual } from "node:crypto"
+
+const digest = (value: string) => createHash("sha256").update(value).digest()
+
 oauthProvider({
   allowDynamicClientRegistration: true,
-  validateInitialClientRegistrationAccessToken: async ({
-    initialClientRegistrationAccessToken,
-    clientMetadata,
-  }) => {
-    if (initialClientRegistrationAccessToken !== process.env.CLIENT_REGISTRATION_TOKEN) {
+  validateInitialAccessToken: async ({ initialAccessToken, clientMetadata }) => {
+    // Compare in constant time; hashing both sides keeps the lengths equal.
+    const expected = digest(process.env.CLIENT_REGISTRATION_TOKEN ?? "")
+    if (!timingSafeEqual(digest(initialAccessToken), expected)) {
       return false
     }
 
@@ -1245,7 +1248,13 @@ oauthProvider({
 })
 ```
 
-The `referenceId` value attaches application ownership metadata to the created OAuth client. Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
+Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+
+Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
+
+<Callout type="info">
+  With the [Bearer](/docs/plugins/bearer) plugin enabled, an `Authorization: Bearer` value that resolves to a valid user session is handled as that session, not as an initial access token.
+</Callout>
 
 #### Dynamic Client Registration Expiration
 

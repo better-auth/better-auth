@@ -4,7 +4,8 @@ import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
-import type { GrantType, OAuthClient } from "./oauth";
+import type { GrantType } from "./oauth";
+import type { ClientRegistrationRequest } from "./zod";
 
 export type {
 	AuthMethod,
@@ -16,6 +17,7 @@ export type {
 	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
 } from "./oauth";
+export type { ClientRegistrationRequest } from "./zod";
 
 export type StoreTokenType =
 	| "access_token"
@@ -81,15 +83,13 @@ export interface ClientDiscovery<
 	discoveryMetadata?: Record<string, unknown>;
 }
 
-export type OAuthClientRegistrationMetadata = Omit<OAuthClient, "client_id"> &
-	Partial<Pick<OAuthClient, "client_id">>;
-
-export interface InitialClientRegistrationAccessTokenAuthorization {
+export interface InitialAccessTokenAuthorization {
 	/**
 	 * Ownership reference to attach to the created OAuth client.
 	 *
-	 * Use this to associate machine-provisioned clients with an organization,
-	 * team, tenant, or other application-level owner.
+	 * Associates machine-provisioned clients with an organization, team, tenant,
+	 * or other application-level owner. Omit to create an unowned client (the
+	 * client is stored with neither a `user_id` nor a `reference_id`).
 	 */
 	referenceId?: string;
 }
@@ -288,30 +288,48 @@ export interface OAuthOptions<
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
 	/**
-	 * Allow dynamic client registration.
+	 * Allow dynamic client registration (RFC 7591) at `POST /oauth2/register`.
+	 *
+	 * Once enabled, a registration request is authorized through one of three
+	 * modes:
+	 * - session-backed: a logged-in user with client-create privileges.
+	 * - token-backed: a valid initial access token, when
+	 *   {@link OAuthOptions.validateInitialAccessToken} is defined.
+	 * - open public-only: unauthenticated registration constrained to public
+	 *   clients, when {@link OAuthOptions.allowUnauthenticatedClientRegistration}
+	 *   is enabled.
 	 *
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
 	 * Validates an RFC 7591 initial access token for protected dynamic client
-	 * registration.
+	 * registration, read from the `Authorization: Bearer <token>` header on
+	 * `POST /oauth2/register`.
 	 *
-	 * The token is read from the `Authorization: Bearer <token>` header on
-	 * `POST /oauth2/register`. Return `true` to authorize registration, or
-	 * return an object with `referenceId` to attach ownership metadata to the
-	 * created OAuth client. Return `false` or `undefined` to reject the token.
+	 * Return an {@link InitialAccessTokenAuthorization} (optionally carrying a
+	 * `referenceId` owner) to authorize the registration, or `false` to reject
+	 * the token. Defining this callback enables the token-backed registration
+	 * mode; while it is undefined, a Bearer token presented to the endpoint is
+	 * rejected rather than downgraded to open registration.
 	 *
-	 * Token issuance, storage, expiration, and revocation are deployment-specific
-	 * in RFC 7591 and should be handled by your application.
+	 * `clientMetadata` is the schema-validated request body with defaults
+	 * applied. It is self-asserted (RFC 7591 §5) and not yet semantically
+	 * validated, so a request authorized here may still be rejected by a later
+	 * metadata check. Compare the token in constant time; issuance, storage,
+	 * expiration, and revocation are deployment-specific in RFC 7591 and belong
+	 * in your application.
+	 *
+	 * With the `bearer` plugin enabled, a Bearer value that resolves to a valid
+	 * user session is handled as that session, not as an initial access token.
+	 *
+	 * @see InitialAccessTokenAuthorization
 	 */
-	validateInitialClientRegistrationAccessToken?: (context: {
-		initialClientRegistrationAccessToken: string;
+	validateInitialAccessToken?: (context: {
+		initialAccessToken: string;
 		headers: Headers;
-		clientMetadata: OAuthClientRegistrationMetadata;
-	}) => Awaitable<
-		boolean | InitialClientRegistrationAccessTokenAuthorization | undefined
-	>;
+		clientMetadata: ClientRegistrationRequest;
+	}) => Awaitable<InitialAccessTokenAuthorization | false>;
 	/**
 	 * Discovery implementations consulted by `getClient()` when resolving
 	 * a `client_id`. Each entry decides whether it handles the `client_id`

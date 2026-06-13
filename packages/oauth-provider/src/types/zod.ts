@@ -148,3 +148,104 @@ export const verificationValueSchema = z
 		resource: z.array(z.string()).optional(),
 	})
 	.passthrough();
+
+/**
+ * Request body accepted at `POST /oauth2/register` (RFC 7591 §2 client
+ * metadata). This is the single source of truth for the registration contract:
+ * the endpoint validates against it and {@link ClientRegistrationRequest} is
+ * inferred from it, so the type a `validateInitialAccessToken` callback receives
+ * always matches what was actually validated. Server-assigned fields
+ * (`client_id`, `client_secret`, issued/expiry timestamps) and internal state
+ * (`disabled`, `reference_id`) are intentionally absent from the request.
+ */
+export const clientRegistrationRequestSchema = z
+	.object({
+		// Optional so confidential client_credentials clients can register without
+		// a redirect-based flow. checkOAuthClient still requires redirect_uris for
+		// authorization_code/implicit grants.
+		redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+		scope: z.string().optional(),
+		client_name: z.string().optional(),
+		client_uri: z.string().optional(),
+		logo_uri: z.string().optional(),
+		contacts: z.array(z.string().min(1)).min(1).optional(),
+		tos_uri: z.string().optional(),
+		policy_uri: z.string().optional(),
+		software_id: z.string().optional(),
+		software_version: z.string().optional(),
+		software_statement: z.string().optional(),
+		post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+		backchannel_logout_uri: SafeUrlSchema.optional(),
+		backchannel_logout_session_required: z.boolean().optional(),
+		token_endpoint_auth_method: z
+			.enum([
+				"none",
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			])
+			.default("client_secret_basic")
+			.optional(),
+		jwks: z
+			.union([
+				z.array(z.record(z.string(), z.unknown())).min(1),
+				z.object({
+					keys: z.array(z.record(z.string(), z.unknown())).min(1),
+				}),
+			])
+			.optional(),
+		jwks_uri: z.string().optional(),
+		grant_types: z
+			.array(
+				z.enum(["authorization_code", "client_credentials", "refresh_token"]),
+			)
+			.default(["authorization_code"])
+			.optional(),
+		response_types: z
+			.array(z.enum(["code"]))
+			.default(["code"])
+			.optional(),
+		type: z.enum(["web", "native", "user-agent-based"]).optional(),
+		subject_type: z.enum(["public", "pairwise"]).optional(),
+		// RFC 7591 §2 extension: declare the resources this client will request.
+		// Each must reference an existing oauthResource row; the registration
+		// handler links them on success.
+		resources: z.array(z.string().min(1)).optional(),
+		skip_consent: z
+			.never({
+				error: "skip_consent cannot be set during dynamic client registration",
+			})
+			.optional(),
+	})
+	.superRefine((data, ctx) => {
+		// Require redirect_uris for redirect-based flows so the RFC 7591
+		// invalid_redirect_uri envelope is returned before authorization, while
+		// still allowing clients with no redirect (e.g. client_credentials) to
+		// omit it. The grant_types default makes the absent case resolve to
+		// authorization_code; the explicit guard keeps it correct regardless.
+		const usesRedirectFlow =
+			!data.grant_types || data.grant_types.includes("authorization_code");
+		if (
+			usesRedirectFlow &&
+			(!data.redirect_uris || data.redirect_uris.length === 0)
+		) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["redirect_uris"],
+				message: "redirect_uris is required for the authorization_code grant",
+			});
+		}
+	});
+
+/**
+ * Client metadata as submitted in an RFC 7591 §2 registration request, inferred
+ * from {@link clientRegistrationRequestSchema} so it always matches the validated
+ * wire contract. Every value is self-asserted by the caller (RFC 7591 §5) and is
+ * not yet semantically validated when a `validateInitialAccessToken` callback
+ * receives it.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7591#section-2
+ */
+export type ClientRegistrationRequest = z.infer<
+	typeof clientRegistrationRequestSchema
+>;
