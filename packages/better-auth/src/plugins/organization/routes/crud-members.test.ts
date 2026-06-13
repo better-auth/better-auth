@@ -407,6 +407,166 @@ describe("updateMemberRole", async () => {
 				.message,
 		);
 	});
+
+	it("should not allow a comma-delimited role string", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "escalation",
+			slug: "escalation",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const adminUser = await auth.api.signUpEmail({
+			body: {
+				email: "admin-escalation@test.com",
+				name: "admin",
+				password: "password",
+			},
+		});
+
+		const adminMember = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: adminUser.user.id,
+				role: "admin",
+			},
+		});
+
+		const adminHeaders = new Headers({
+			authorization: `Bearer ${adminUser.token}`,
+		});
+
+		const escalated = await client.organization.updateMemberRole(
+			{
+				organizationId: org.data?.id as string,
+				memberId: adminMember?.id as string,
+				role: "admin,owner" as "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(escalated.error?.status).toBe(403);
+		expect(escalated.data).toBeNull();
+
+		const ctx = await auth.$context;
+		const persisted = await ctx.adapter.findOne<{ role: string }>({
+			model: "member",
+			where: [{ field: "id", value: adminMember?.id as string }],
+		});
+		expect(persisted?.role).toBe("admin");
+	});
+
+	it("should reject updating a member to an unknown role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "unknown-role",
+			slug: "unknown-role",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "unknown-role@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		const updated = await client.organization.updateMemberRole(
+			{
+				organizationId: org.data?.id as string,
+				memberId: member?.id as string,
+				role: "superadmin" as "admin",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(updated.error?.status).toBe(400);
+		expect(updated.error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+		);
+	});
+
+	it("should reject updating a member to an empty role list", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "empty-role",
+			slug: "empty-role",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "empty-role@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		for (const role of [[], ","] as ("admin" | "admin"[])[]) {
+			const updated = await client.organization.updateMemberRole(
+				{
+					organizationId: org.data?.id as string,
+					memberId: member?.id as string,
+					role,
+				},
+				{
+					headers,
+				},
+			);
+			expect(updated.error?.status).toBe(400);
+		}
+	});
 });
 
 describe("activeMemberRole", async () => {

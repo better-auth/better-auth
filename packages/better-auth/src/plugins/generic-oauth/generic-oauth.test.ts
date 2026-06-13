@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -29,6 +30,15 @@ describe("oauth2", async () => {
 	});
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => ({
+						data: { ...user, emailVerified: true },
+					}),
+				},
+			},
+		},
 		plugins: [
 			genericOAuth({
 				config: [
@@ -209,6 +219,69 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * The verify-email link sent to a new, unverified OAuth user must keep the
+	 * caller's `callbackURL` intact. A raw interpolation truncates any value
+	 * containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link for a new unverified OAuth user", async () => {
+		let capturedUrl = "";
+		const { customFetchImpl: localFetch } = await getTestInstance({
+			emailVerification: {
+				sendOnSignUp: true,
+				async sendVerificationEmail({ url }) {
+					capturedUrl = url;
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-encode-callback",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: localFetch },
+		});
+
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "encode-callback@test.com",
+				name: "Encode Callback",
+				sub: "encode-callback",
+				email_verified: false,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const callbackURL = "http://localhost:3000/welcome?ref=oauth&plan=pro";
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test-encode-callback",
+			callbackURL,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9375
 	 */
 	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
@@ -307,6 +380,264 @@ describe("oauth2", async () => {
 		);
 		expect(accessTokenRes.error).toBeNull();
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
+	/**
+	 * A provider that omits `expires_in` leaves the access token's expiry unknown,
+	 * so `getAccessToken` can never tell it lapsed and never refreshes it. Setting
+	 * `accessTokenExpiresIn` synthesizes the expiry so the existing refresh path
+	 * runs once the window passes.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("refreshes once the accessTokenExpiresIn window passes when the provider omits expires_in", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				// Simulate a provider that never returns `expires_in`.
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-fallback@test.com",
+				name: "Expires In Fallback",
+				sub: "exp-fallback",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-fallback",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-fallback",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// Within the synthesized window: no premature refresh.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-fallback" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBeTruthy();
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: the refresh that never used to fire now does.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-fallback" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * Opt-in: without `accessTokenExpiresIn`, a provider that omits `expires_in`
+	 * keeps the prior behavior. The expiry stays unknown and `getAccessToken` does
+	 * not refresh, so nothing churns for tokens that may never expire.
+	 */
+	it("does not refresh a provider that omits expires_in when accessTokenExpiresIn is unset", async () => {
+		let refreshCount = 0;
+		const omitExpiresIn = (response: any, req: any) => {
+			const body = response.body;
+			if (body && typeof body === "object" && "access_token" in body) {
+				body.expires_in = undefined;
+				if (req.body?.grant_type === "refresh_token") refreshCount++;
+			}
+		};
+		server.service.on("beforeResponse", omitExpiresIn);
+		server.service.once("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "exp-none@test.com",
+				name: "No Fallback",
+				sub: "exp-none",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-none",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-none",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const res = await client.getAccessToken(
+					{ providerId: "exp-none" },
+					{ headers: postCallbackHeaders },
+				);
+				// Expiry stays unknown: the stored token is returned as-is, no refresh.
+				expect(res.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(0);
+		} finally {
+			server.service.off("beforeResponse", omitExpiresIn);
+		}
+	});
+
+	/**
+	 * The `getToken` escape hatch returns tokens directly, bypassing the standard
+	 * exchange. `accessTokenExpiresIn` must still apply to its result, or a
+	 * `getToken` provider that omits the expiry hits the same no-refresh bug.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7703
+	 */
+	it("applies accessTokenExpiresIn to a custom getToken result", async () => {
+		let refreshCount = 0;
+		const countRefresh = (_response: any, req: any) => {
+			if (req.body?.grant_type === "refresh_token") refreshCount++;
+		};
+		server.service.on("beforeResponse", countRefresh);
+
+		try {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "exp-gettoken",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								accessTokenExpiresIn: 3600,
+								// Custom exchange that omits the expiry.
+								getToken: async () => ({
+									accessToken: "gettoken-initial",
+									refreshToken: "gettoken-refresh",
+								}),
+								getUserInfo: async () => ({
+									id: "exp-gettoken-user",
+									email: "exp-gettoken@test.com",
+									name: "GetToken User",
+									emailVerified: true,
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.oauth2({
+				providerId: "exp-gettoken",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			// getToken omitted the expiry; the fallback synthesized it, so within
+			// the window the stored token is returned without refreshing.
+			const fresh = await client.getAccessToken(
+				{ providerId: "exp-gettoken" },
+				{ headers: postCallbackHeaders },
+			);
+			expect(fresh.data?.accessToken).toBe("gettoken-initial");
+			expect(refreshCount).toBe(0);
+
+			// Past the synthesized expiry: refresh fires. Without the fallback on the
+			// getToken result, no expiry would be stored and this never happens.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+				const refreshed = await client.getAccessToken(
+					{ providerId: "exp-gettoken" },
+					{ headers: postCallbackHeaders },
+				);
+				expect(refreshed.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(refreshCount).toBe(1);
+		} finally {
+			server.service.off("beforeResponse", countRefresh);
+		}
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
@@ -474,6 +805,82 @@ describe("oauth2", async () => {
 		);
 		expect(callbackURL).toBe(
 			"http://localhost:3000/error?error=signup_disabled",
+		);
+	});
+
+	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "hook-reject@test.com",
+				name: "Hook Reject User",
+				sub: "hook-reject",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance(
+			{
+				trustedOrigins: ["https://frontend.example.com"],
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-hook-reject",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+					session: {
+						create: {
+							before: async () => {
+								throw APIError.from("FORBIDDEN", {
+									code: "HOOK_REJECTED",
+									message: "Session hook rejected this user",
+								});
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-hook-reject",
+			callbackURL: "https://frontend.example.com/dashboard",
+			errorCallbackURL: "https://frontend.example.com/auth-error",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		const url = new URL(callbackURL);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Session hook rejected this user",
 		);
 	});
 
@@ -783,6 +1190,530 @@ describe("oauth2", async () => {
 		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
 		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
+	});
+
+	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		// A userinfo response that includes email/name but no `sub`/`id`.
+		const respondWithoutSub = (email: string, name: string) => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email,
+					name,
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+		};
+
+		// First user signs in — must be rejected, not stored under an empty id.
+		respondWithoutSub("first-no-sub@test.com", "First No Sub");
+		const firstHeaders = new Headers();
+		const firstSignIn = await authClient.signIn.oauth2({
+			providerId: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			firstSignIn.data?.url || "",
+			firstHeaders,
+			customFetchImpl,
+		);
+		// Rejected at the error page rather than landing on a success URL.
+		expect(firstFlow.callbackURL).toContain("/error?error=");
+		expect(firstFlow.callbackURL).not.toContain("/dashboard");
+		expect(firstFlow.callbackURL).not.toContain("/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		expect(firstSession.data).toBeNull();
+
+		// No account should have been created with an empty/undefined account id.
+		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "providerId", value: "no-sub-test" }],
+		});
+		expect(emptyIdAccounts).toHaveLength(0);
+
+		// A second, different user signing in through the same provider must not
+		// resolve to the first user's account.
+		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
+		const secondHeaders = new Headers();
+		const secondSignIn = await authClient.signIn.oauth2({
+			providerId: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			secondSignIn.data?.url || "",
+			secondHeaders,
+			customFetchImpl,
+		);
+		expect(secondFlow.callbackURL).toContain("/error?error=");
+		const secondSession = await authClient.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		// Must NOT have resolved to the first user (the collision being fixed).
+		expect(secondSession.data).toBeNull();
+	});
+
+	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "empty-id-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							// A misconfigured custom mapper that yields no account id.
+							getUserInfo: async () => ({
+								id: "",
+								email: "empty-id@test.com",
+								name: "Empty Id",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.oauth2({
+			providerId: "empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		// The callback guard rejects the empty resolved account id.
+		expect(flow.callbackURL).toContain("error=id_is_missing");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).toBeNull();
+
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-test" }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
+
+	it("falls back to sub when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter, client } =
+			await getTestInstance(
+				{
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => ({
+									data: { ...user, emailVerified: true },
+								}),
+							},
+						},
+					},
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "empty-id-with-sub-test",
+									authorizationUrl: `http://localhost:${port}/authorize`,
+									tokenUrl: `http://localhost:${port}/token`,
+									clientId: clientId,
+									clientSecret: clientSecret,
+									pkce: true,
+									getUserInfo: async () => ({
+										id: "",
+										sub: "custom-sub-id",
+										email: "custom-sub@test.com",
+										name: "Custom Sub",
+										emailVerified: true,
+									}),
+								},
+							],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [genericOAuthClient()],
+					},
+				},
+			);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.oauth2({
+			providerId: "empty-id-with-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(flow.callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await client.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "empty-id-with-sub-test",
+			accountId: "custom-sub-id",
+		});
+	});
+
+	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				username: "derived-id-user",
+				email: "derived-id@test.com",
+				name: "Derived Id User",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "derived-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							mapProfileToUser: (profile) => {
+								return {
+									id: profile.username,
+									email: profile.email,
+									name: profile.name,
+									emailVerified: profile.email_verified,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "derived-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "derived-id-test",
+			accountId: "derived-id-user",
+		});
+	});
+
+	it("falls back to sub when the userinfo id field is empty", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "abc",
+				id: "",
+				email: "sub-over-empty-id@test.com",
+				name: "Sub Over Empty Id",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "sub-over-empty-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "sub-over-empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "sub-over-empty-id-test",
+			accountId: "abc",
+		});
+	});
+
+	it("falls back to sub when the userinfo id field is null", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "null-id-sub",
+				id: null,
+				email: "sub-over-null-id@test.com",
+				name: "Sub Over Null Id",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "sub-over-null-id-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "sub-over-null-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "sub-over-null-id-test",
+			accountId: "null-id-sub",
+		});
+	});
+
+	it("keeps a non-empty id field as the account id when the userinfo response also has sub", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "subject-1",
+				id: "raw-id-1",
+				email: "id-over-sub@test.com",
+				name: "Id Over Sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "id-over-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "id-over-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+		});
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(session.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "id-over-sub-test",
+			accountId: "raw-id-1",
+		});
 	});
 
 	it("should handle custom getUserInfo returning numeric ID", async () => {
@@ -1216,7 +2147,10 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("error=state_not_found");
+		expect(res.headers.get("location")).not.toContain(
+			"please_restart_the_process",
+		);
 	});
 
 	it("should await async mapProfileToUser", async () => {
@@ -1258,6 +2192,42 @@ describe("oauth2", async () => {
 		});
 
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
+	});
+
+	it("falls back to sub when provider wrapper getUserInfo returns an empty id", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-wrapper-sub",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							getUserInfo: async () => ({
+								id: "",
+								sub: "wrapped-sub",
+								email: "wrapped-sub@test.com",
+								name: "Wrapped Sub",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+		const context = await auth.$context;
+		const provider = await getAwaitableValue(context.socialProviders, {
+			value: "test-wrapper-sub",
+		});
+
+		const result = await provider!.getUserInfo({
+			accessToken: "test-access-token",
+			idToken: undefined,
+			refreshToken: undefined,
+		});
+
+		expect(result?.user.id).toBe("wrapped-sub");
 	});
 
 	describe("Okta Provider Helper", () => {

@@ -6,6 +6,11 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
+import {
+	DiscoveryError,
+	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
+} from "../oidc";
 import { validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
@@ -238,7 +243,7 @@ const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
 });
 
-async function checkProviderAccess(
+export async function checkProviderAccess(
 	ctx: {
 		context: AuthContext & {
 			session: { user: { id: string } };
@@ -484,6 +489,17 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			}
 
 			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+
 				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
 					existingProvider.oidcConfig,
 					"OIDC",

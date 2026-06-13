@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -146,6 +152,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -395,8 +402,32 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Atomically claim the approved code as the single race gate:
+				// concurrent polls contend on this delete-and-return, and only the
+				// caller that removes the row may issue a session. Losers receive
+				// null and are rejected, so the code is redeemed at most once.
+				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
+					id: string;
+					userId?: string | undefined;
+					scope?: string | undefined;
+				}>({
+					model: "deviceCode",
+					where: [
+						{ field: "deviceCode", value: device_code },
+						{ field: "status", value: "approved" },
+					],
+				});
+
+				if (!claimedDeviceCode?.userId) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_grant",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+					});
+				}
+
 				const user = await ctx.context.internalAdapter.findUserById(
-					deviceCodeRecord.userId,
+					claimedDeviceCode.userId,
 				);
 
 				if (!user) {
@@ -441,17 +472,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					);
 				}
 
-				// Delete the device code after successful authorization
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-
 				// Return OAuth 2.0 compliant token response
 				return ctx.json(
 					{
@@ -460,7 +480,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						expires_in: Math.floor(
 							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
 						),
-						scope: deviceCodeRecord.scope || "",
+						scope: claimedDeviceCode.scope || "",
 					},
 					{
 						headers: {
@@ -553,6 +573,27 @@ export const deviceVerify = createAuthEndpoint(
 				error_description:
 					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
 			});
+		}
+
+		const session = await getSessionFromCtx(ctx);
+		if (
+			session?.user?.id &&
+			!deviceCodeRecord.userId &&
+			deviceCodeRecord.status === "pending"
+		) {
+			const claimedDeviceCodeRecord =
+				await ctx.context.adapter.update<DeviceCode>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "status", value: "pending" },
+						{ field: "userId", operator: "eq", value: null },
+					],
+					update: { userId: session.user.id },
+				});
+			if (claimedDeviceCodeRecord) {
+				deviceCodeRecord.userId = session.user.id;
+			}
 		}
 
 		return ctx.json({
@@ -659,11 +700,15 @@ export const deviceApprove = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -788,11 +833,15 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -800,7 +849,6 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Update device code with denied status and userId if not already set
 		await ctx.context.adapter.update({
 			model: "deviceCode",
 			where: [
@@ -811,7 +859,7 @@ export const deviceDeny = createAuthEndpoint(
 			],
 			update: {
 				status: "denied",
-				userId: deviceCodeRecord.userId || session.user.id,
+				userId: session.user.id,
 			},
 		});
 

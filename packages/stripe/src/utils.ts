@@ -43,13 +43,13 @@ export function isStripePendingCancel(stripeSub: Stripe.Subscription): boolean {
 
 /**
  * Escapes a value for use in Stripe search queries.
- * Stripe search query uses double quotes for string values,
- * and double quotes within the value need to be escaped with backslash.
+ * Stripe search query uses backslash escaping inside double-quoted
+ * string values, so literal backslashes must be escaped before quotes.
  *
  * @see https://docs.stripe.com/search#search-query-language
  */
 export function escapeStripeSearchValue(value: string): string {
-	return value.replace(/"/g, '\\"');
+	return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 /**

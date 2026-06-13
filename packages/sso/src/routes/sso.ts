@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
 	createAuthorizationURL,
@@ -19,6 +20,7 @@ import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -28,6 +30,7 @@ import {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
+	validateSkipDiscoveryEndpoints,
 } from "../oidc";
 import { validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
@@ -43,7 +46,13 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	domainMatches,
+	normalizePem,
+	parseProviderEmailVerified,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
@@ -194,19 +203,19 @@ const ssoProviderBodySchema = z.object({
 				description: "The client secret",
 			}),
 			authorizationEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The authorization endpoint",
 				})
 				.optional(),
 			tokenEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The token endpoint",
 				})
 				.optional(),
 			userInfoEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The user info endpoint",
 				})
@@ -215,12 +224,12 @@ const ssoProviderBodySchema = z.object({
 				.enum(["client_secret_post", "client_secret_basic"])
 				.optional(),
 			jwksEndpoint: z
-				.string({})
+				.url()
 				.meta({
 					description: "The JWKS endpoint",
 				})
 				.optional(),
-			discoveryEndpoint: z.string().optional(),
+			discoveryEndpoint: z.url().optional(),
 			skipDiscovery: z
 				.boolean()
 				.meta({
@@ -650,6 +659,27 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
+			// SSO provider ids share the account-linking provider namespace with
+			// social/OAuth providers. Reject ids that collide with a configured
+			// social provider, a trusted provider, or a reserved built-in id so a
+			// user-registered SSO provider can't be confused with one of them.
+			// Trust for SSO providers is established separately via
+			// verified domain ownership, never by this shared namespace.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				...ctx.context.socialProviders.map((p) => p.id),
+				...ctx.context.trustedProviders,
+			]);
+			if (reservedProviderIds.has(body.providerId)) {
+				ctx.context.logger.warn(
+					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+				);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message:
+						"This providerId is reserved and cannot be used for an SSO provider",
+				});
+			}
+
 			const existingProvider = await ctx.context.adapter.findOne({
 				model: "ssoProvider",
 				where: [
@@ -667,6 +697,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message: "SSO provider with this providerId already exists",
 				});
+			}
+
+			if (body.oidcConfig) {
+				try {
+					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+						ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
 			}
 
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
@@ -1276,9 +1319,10 @@ export const signInSSO = (options?: SSOOptions) => {
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
-					privateKey:
+					privateKey: normalizePem(
 						parsedSamlConfig.spMetadata?.privateKey ||
-						parsedSamlConfig.privateKey,
+							parsedSamlConfig.privateKey,
+					),
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 					relayState,
 				});
@@ -1298,16 +1342,16 @@ export const signInSSO = (options?: SSOOptions) => {
 						wantAuthnRequestsSigned:
 							parsedSamlConfig.authnRequestsSigned || false,
 						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: idpData?.encPrivateKey,
+						encPrivateKey: normalizePem(idpData?.encPrivateKey),
 						encPrivateKeyPass: idpData?.encPrivateKeyPass,
 					});
 				} else {
 					idp = saml.IdentityProvider({
 						metadata: idpData.metadata,
-						privateKey: idpData.privateKey,
+						privateKey: normalizePem(idpData.privateKey),
 						privateKeyPass: idpData.privateKeyPass,
 						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: idpData.encPrivateKey,
+						encPrivateKey: normalizePem(idpData.encPrivateKey),
 						encPrivateKeyPass: idpData.encPrivateKeyPass,
 					});
 				}
@@ -1544,6 +1588,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				redirect: "error",
 			},
 		);
 		if (userInfoResponse.error) {
@@ -1564,9 +1609,9 @@ async function handleOIDCCallback(
 			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
+				? parseProviderEmailVerified(
+						rawUserInfo[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: rawUserInfo[mapping.name || "name"] as string | undefined,
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
@@ -1609,7 +1654,9 @@ async function handleOIDCCallback(
 			id: idToken[mapping.id || "sub"],
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
-				? idToken[mapping.emailVerified || "email_verified"]
+				? parseProviderEmailVerified(
+						idToken[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
@@ -1640,33 +1687,53 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	const linked = await handleOAuthUserInfo(ctx, {
-		userInfo: {
-			email: userInfo.email,
-			name: userInfo.name || "",
-			id: userInfo.id,
-			image: userInfo.image,
-			emailVerified: options?.trustEmailVerified
-				? userInfo.emailVerified || false
-				: false,
-		},
-		account: {
-			idToken: tokenResponse.idToken,
-			accessToken: tokenResponse.accessToken,
-			refreshToken: tokenResponse.refreshToken,
-			accountId: userInfo.id,
-			providerId: provider.providerId,
-			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-			scope: tokenResponse.scopes?.join(","),
-		},
-		callbackURL,
-		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-		overrideUserInfo: config.overrideUserInfo,
-		isTrustedProvider,
-	});
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	try {
+		linked = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				email: userInfo.email,
+				name: userInfo.name || "",
+				id: userInfo.id,
+				image: userInfo.image,
+				emailVerified: options?.trustEmailVerified
+					? userInfo.emailVerified || false
+					: false,
+			},
+			account: {
+				idToken: tokenResponse.idToken,
+				accessToken: tokenResponse.accessToken,
+				refreshToken: tokenResponse.refreshToken,
+				accountId: userInfo.id,
+				providerId: provider.providerId,
+				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+				scope: tokenResponse.scopes?.join(","),
+			},
+			callbackURL,
+			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+			overrideUserInfo: config.overrideUserInfo,
+			isTrustedProvider,
+			// SSO provider ids are user-controlled and live in the same namespace
+			// as social providers. Never inherit trust from the global
+			// `trustedProviders` list by name — rely solely on the SSO-specific
+			// `isTrustedProvider` (verified domain ownership) computed above.
+			trustProviderByName: false,
+		});
+	} catch (e) {
+		if (isAPIError(e) && e.body?.code) {
+			const baseURL = errorURL || callbackURL;
+			const params = new URLSearchParams({ error: e.body.code });
+			if (e.body.message) params.set("error_description", e.body.message);
+			const sep = baseURL.includes("?") ? "&" : "?";
+			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		}
+		throw e;
+	}
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({ error: linked.error });
+		const sep = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
 	const { session, user } = linked.data!;
 
@@ -2159,7 +2226,7 @@ async function handleLogoutRequest(
 				sessionIndex === data.sessionIndex
 			) {
 				await ctx.context.internalAdapter
-					.deleteSession(data.sessionId)
+					.deleteSession(data.sessionToken)
 					.catch((e: unknown) =>
 						ctx.context.logger.warn("Failed to delete session during SLO", {
 							error: e,
@@ -2198,22 +2265,24 @@ async function handleLogoutRequest(
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
-		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
+		await ctx.context.internalAdapter.deleteSession(
+			currentSession.session.token,
+		);
 	}
 
 	deleteSessionCookie(ctx);
 
-	const requestId = parsed.extract.request?.id || "";
+	// Pass the parsed request so samlify links `InResponseTo` and fills the
+	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
 		idp,
-		null,
+		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
-		(template: string) =>
-			template
-				.replace("{InResponseTo}", requestId)
-				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-	) as { context: string; entityEndpoint?: string };
+	) as {
+		context: string;
+		entityEndpoint?: string;
+	};
 
 	if (binding === "post" && res.entityEndpoint) {
 		return createSAMLPostForm(
@@ -2341,7 +2410,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					),
 				);
 
-			await ctx.context.internalAdapter.deleteSession(session.session.id);
+			await ctx.context.internalAdapter.deleteSession(session.session.token);
 
 			deleteSessionCookie(ctx);
 
