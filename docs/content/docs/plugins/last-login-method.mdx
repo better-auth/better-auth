@@ -303,7 +303,8 @@ import { lastLoginMethodClient } from "better-auth/client/plugins"
 export const authClient = createAuthClient({
     plugins: [
         lastLoginMethodClient({
-            cookieName: "better-auth.last_used_login_method" // Default: "better-auth.last_used_login_method"
+            cookieName: "better-auth.last_used_login_method", // Default: "better-auth.last_used_login_method"
+            domain: ".example.com" // Required for cross-subdomain cookie clearing
         })
     ]
 })
@@ -314,6 +315,12 @@ export const authClient = createAuthClient({
 * The name of the cookie to read the last login method from
 * Must match the server-side `cookieName` configuration
 * Default: `"better-auth.last_used_login_method"`
+
+**domain**: `string`
+
+* The domain to use when clearing the cookie
+* Required when using `crossSubDomainCookies` so the client can properly expire the cookie set by the server
+* Should match the `domain` value in your server's `crossSubDomainCookies` configuration
 
 ### Default Method Resolution
 
@@ -339,6 +346,23 @@ The plugin automatically inherits cookie settings from Better Auth's centralized
 * **Cross-origin setups**: `api.company.com` → `app.different.com`
 
 When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better Auth config, the plugin will automatically use the same domain, secure, and sameSite settings as your session cookies, ensuring consistent behavior across your application.
+
+<Callout type="warn">
+  When using `crossSubDomainCookies`, you must pass the `domain` option to `lastLoginMethodClient()` so that `clearLastUsedLoginMethod()` can properly expire the cookie. Without it, browsers will silently ignore the clear request because the domain doesn't match.
+</Callout>
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { lastLoginMethodClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        lastLoginMethodClient({
+            domain: ".example.com" // Must match server crossSubDomainCookies domain // [!code highlight]
+        })
+    ]
+})
+```
 
 ## Advanced Examples
 
