@@ -36,7 +36,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			method: ["GET", "POST"],
 			operationId: "getSession",
 			query: getSessionQuerySchema,
-			requireHeaders: true,
 			metadata: {
 				openapi: {
 					operationId: "getSession",
