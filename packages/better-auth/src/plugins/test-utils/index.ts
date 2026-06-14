@@ -77,6 +77,7 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 		init(ctx) {
 			// Check if organization plugin is present
 			const hasOrgPlugin = ctx.hasPlugin("organization");
+			const hasEmailOTPPlugin = ctx.hasPlugin("email-otp");
 
 			// Build core helpers
 			const helpers: TestHelpers = {
@@ -103,6 +104,24 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 
 			// Instance-scoped OTP store
 			const otpStore = createOTPStore();
+
+			// Track identifiers captured via onOTPCreated callback
+			// so DB hook doesn't overwrite plaintext with hashed value
+			const plaintextCaptured = new Set<string>();
+
+			// Inject onOTPCreated callback into emailOTP plugin if present
+			// This captures the plaintext OTP before it gets hashed
+			if (options.captureOTP && hasEmailOTPPlugin) {
+				const emailOTP = ctx.getPlugin("email-otp");
+				if (emailOTP?.options) {
+					const existingCallback = emailOTP.options.onOTPCreated;
+					emailOTP.options.onOTPCreated = (data) => {
+						existingCallback?.(data);
+						otpStore.capture(data.email, data.otp);
+						plaintextCaptured.add(data.email);
+					};
+				}
+			}
 
 			// Add OTP helpers if enabled
 			if (options.captureOTP) {
@@ -140,7 +159,12 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 													break;
 												}
 											}
-											otpStore.capture(identifier, otpPart);
+											// Skip if already captured via onOTPCreated callback (plaintext)
+											// to avoid overwriting with hashed value.
+											// Otherwise always capture (supports resend flows).
+											if (!plaintextCaptured.has(identifier)) {
+												otpStore.capture(identifier, otpPart);
+											}
 										}
 									}
 								},
