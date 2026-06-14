@@ -310,10 +310,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 						? "varchar(255)"
 						: field.references
 							? "varchar(36)"
-							: // mssql deprecated `text`, and the alternative is `varchar(max)`.
-								// Kysely type interface doesn't support `text`, so we set this to `varchar(8000)` as
-								// that's the max length for `varchar`
-								"varchar(8000)",
+							: field.index
+								? "varchar(255)"
+								: // mssql deprecated `text`, and the alternative is `varchar(max)`.
+									// Kysely type interface doesn't support `text`, so we set this to `varchar(8000)` as
+									// that's the max length for `varchar`
+									"varchar(8000)",
 			},
 			boolean: {
 				sqlite: "integer",
