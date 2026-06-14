@@ -1,5 +1,12 @@
 # @better-auth/mongo-adapter
 
+## 1.6.19
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.19
+
 ## 1.6.18
 
 ### Patch Changes
