@@ -270,6 +270,107 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
+	describe("consumeOne MySQL affected-row count", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const verificationTable = {
+			id: { name: "id" },
+			identifier: { name: "identifier" },
+			value: { name: "value" },
+			expiresAt: { name: "expiresAt" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+
+		/**
+		 * Mirrors the adapter's MySQL `consumeOne` path: a SELECT FOR UPDATE
+		 * picks the latest row, then DELETE removes it. The captured row is
+		 * returned only when the driver reports a non-zero affected-row count.
+		 */
+		function createConsumeDb(
+			rowToClaim: Record<string, unknown> | null,
+			deleteResult: unknown,
+		) {
+			return {
+				_: { fullSchema: { verification: verificationTable } },
+				transaction: vi.fn((fn: any) =>
+					fn({
+						select: vi.fn().mockReturnValue({
+							from: vi.fn().mockReturnValue({
+								where: vi.fn().mockReturnValue({
+									for: vi.fn().mockReturnValue({
+										limit: vi
+											.fn()
+											.mockResolvedValue(rowToClaim ? [rowToClaim] : []),
+									}),
+								}),
+							}),
+						}),
+						delete: vi.fn().mockReturnValue({
+							where: vi.fn().mockReturnValue({
+								execute: vi.fn().mockResolvedValue(deleteResult),
+							}),
+						}),
+					}),
+				),
+			} as any;
+		}
+
+		/**
+		 * Regression for https://github.com/better-auth/better-auth/issues/10054 —
+		 * drizzle-orm/mysql2 returns the raw DELETE result as a
+		 * `[ResultSetHeader, FieldPacket[]]` tuple. Reading `.affectedRows`
+		 * directly off the tuple returns undefined, so `consumeOne` was
+		 * dropping the row but reporting null, surfacing as INVALID_TOKEN
+		 * from `resetPassword` even though the verification row was gone
+		 * from the table.
+		 */
+		it.each([
+			// Shape returned by drizzle-orm/mysql2 (the bug case).
+			{ deleteResult: [{ affectedRows: 1, insertId: 0 }] as unknown },
+			// Shape some older drizzle versions return for mysql.
+			{ deleteResult: { rowsAffected: 1 } as unknown },
+			// SQLite-style header (defensive — same code path now handles it).
+			{ deleteResult: { changes: 1 } as unknown },
+		])("returns the claimed row when the driver reports >=1 affected rows (#10054)", async ({
+			deleteResult,
+		}) => {
+			const target = {
+				id: "ver-1",
+				identifier: "reset-password:token-abc",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			};
+			const db = createConsumeDb(target, deleteResult);
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const claimed = await adapter.consumeOne!({
+				model: "verification",
+				where: [{ field: "identifier", value: "reset-password:token-abc" }],
+			});
+
+			expect(claimed).not.toBeNull();
+			expect((claimed as any).id).toBe("ver-1");
+		});
+
+		it("returns null when the SELECT FOR UPDATE finds no row", async () => {
+			const db = createConsumeDb(null, [{ affectedRows: 0 }]);
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const claimed = await adapter.consumeOne!({
+				model: "verification",
+				where: [{ field: "identifier", value: "missing" }],
+			});
+
+			expect(claimed).toBeNull();
+		});
+	});
+
 	describe("incrementOne", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
 		// `attempts` is a plain numeric column the increment targets; the rest
