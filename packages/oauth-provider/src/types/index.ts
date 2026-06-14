@@ -189,6 +189,13 @@ export interface OAuthProviderApi {
 	 * sources. Returns `null` when no client matches.
 	 */
 	getClient: (clientId: string) => Awaitable<SchemaClient<Scope[]> | null>;
+	/**
+	 * Authenticates the calling client from the request (client secret, assertion,
+	 * or none). For assertion-based methods, the RFC 7523 audience is bound to the
+	 * endpoint serving the request, so an assertion cannot be replayed across
+	 * endpoints. Returns the authenticated client, plus any `confirmation` an
+	 * assertion strategy proved.
+	 */
 	authenticateClient: (
 		request?: OAuthClientAuthenticationRequest,
 	) => Awaitable<OAuthAuthenticatedClient>;

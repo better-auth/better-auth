@@ -125,7 +125,12 @@ export function getOAuthProviderApi(
 			const credentials = await extractClientCredentials(
 				ctx,
 				opts,
-				`${ctx.context.baseURL}/oauth2/token`,
+				// Bind the RFC 7523 assertion audience to the endpoint actually
+				// serving this request: the token endpoint for an in-grant handler,
+				// or a plugin's own endpoint out-of-grant. A fixed token-endpoint
+				// audience would let an assertion be replayed across endpoints, or
+				// reject a valid assertion minted for the real endpoint.
+				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
 			);
 			const {
 				clientId,

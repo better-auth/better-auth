@@ -1066,6 +1066,53 @@ describe("oauth-provider extensions", async () => {
 		expect(response.error?.status).toBe(500);
 	});
 
+	it("authenticateClient binds the assertion audience to the served endpoint", async () => {
+		let observedAudience: string | undefined;
+		const opts = {
+			extensions: [
+				{
+					clientAuthentication: {
+						audience_probe_method: {
+							assertionTypes: ["urn:better-auth:test:audience-probe"],
+							authenticate: async ({
+								expectedAudience,
+							}: {
+								expectedAudience?: string;
+							}) => {
+								observedAudience = expectedAudience;
+								// Stop before client validation; we only assert the audience.
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_client",
+									error_description: "audience recorded",
+								});
+							},
+						},
+					},
+				},
+			],
+		} as unknown as Parameters<typeof getOAuthProviderApi>[1];
+		const ctx = {
+			path: "/oauth2/bc-authorize",
+			context: { baseURL: authServerBaseUrl },
+			body: {
+				client_id: "probe-client",
+				client_assertion: "probe-assertion",
+				client_assertion_type: "urn:better-auth:test:audience-probe",
+			},
+			request: { headers: new Headers() },
+		} as unknown as Parameters<typeof getOAuthProviderApi>[0];
+		await expect(
+			getOAuthProviderApi(
+				ctx,
+				opts,
+				"urn:better-auth:test:grant",
+			).authenticateClient(),
+		).rejects.toBeDefined();
+		// The audience is the endpoint serving the request, not a hardcoded token
+		// endpoint, so the same assertion cannot be replayed at another endpoint.
+		expect(observedAudience).toBe(`${authServerBaseUrl}/oauth2/bc-authorize`);
+	});
+
 	it("getOAuthProviderApi.issueTokens requires a bound grant type", () => {
 		const api = getOAuthProviderApi(
 			{
