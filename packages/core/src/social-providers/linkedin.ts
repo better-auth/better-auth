@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -16,13 +17,15 @@ export interface LinkedInProfile {
 		country: string;
 		language: string;
 	};
-	email: string;
-	email_verified: boolean;
+	email?: string;
+	email_verified?: boolean;
 }
 
 export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {
 	clientId: string;
 }
+
+const LINKEDIN_DEFAULT_SCOPES = ["profile", "email", "openid"];
 
 export const linkedin = (options: LinkedInOptions) => {
 	const authorizationEndpoint =
@@ -32,25 +35,28 @@ export const linkedin = (options: LinkedInOptions) => {
 	return {
 		id: "linkedin",
 		name: "Linkedin",
-		createAuthorizationURL: async ({
+		callbackPath: "/callback/linkedin",
+		createAuthorizationURL: ({
 			state,
 			scopes,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) => {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["profile", "email", "openid"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				LINKEDIN_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "linkedin",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				loginHint,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -98,7 +104,7 @@ export const linkedin = (options: LinkedInOptions) => {
 					id: profile.sub,
 					name: profile.name,
 					email: profile.email,
-					emailVerified: profile.email_verified || false,
+					emailVerified: profile.email_verified ?? false,
 					image: profile.picture,
 					...userMap,
 				},
@@ -106,5 +112,5 @@ export const linkedin = (options: LinkedInOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<LinkedInProfile>;
+	} satisfies UpstreamProvider<LinkedInProfile>;
 };

@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -123,7 +123,7 @@ describe("PKCE optional - default behavior", async () => {
 
 	it("confidential client with PKCE should succeed", async () => {
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -254,7 +254,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			options: {
@@ -346,7 +346,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 	it("offline_access with PKCE should succeed", async () => {
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -376,7 +376,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier,
@@ -448,7 +448,7 @@ describe("PKCE optional - consistency checks", async () => {
 	it("PKCE in auth but not in token should fail", async () => {
 		// Authorize WITH PKCE
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -474,7 +474,7 @@ describe("PKCE optional - consistency checks", async () => {
 		expect(code).toBeDefined();
 
 		// Try to exchange WITHOUT code_verifier (should fail)
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			// Intentionally omit codeVerifier
@@ -522,7 +522,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange WITH code_verifier (should fail)
 		const wrongCodeVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongCodeVerifier,
@@ -551,7 +551,7 @@ describe("PKCE optional - consistency checks", async () => {
 	it("mismatched PKCE challenge should fail", async () => {
 		// Authorize with PKCE
 		const codeVerifier = generateRandomString(64);
-		const authUrl = await createAuthorizationURL({
+		const { url: authUrl } = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: confidentialClient.client_id,
@@ -578,7 +578,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange with WRONG code_verifier
 		const wrongVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongVerifier,

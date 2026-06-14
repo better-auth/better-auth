@@ -1,8 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -23,24 +24,36 @@ export interface NotionOptions extends ProviderOptions<NotionProfile> {
 	clientId: string;
 }
 
+const NOTION_DEFAULT_SCOPES: string[] = [];
+
 export const notion = (options: NotionOptions) => {
 	const tokenEndpoint = "https://api.notion.com/v1/oauth/token";
 	return {
 		id: "notion",
 		name: "Notion",
-		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
-			const _scopes: string[] = options.disableDefaultScope ? [] : [];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+		callbackPath: "/callback/notion",
+		createAuthorizationURL({
+			state,
+			scopes,
+			loginHint,
+			redirectURI,
+			additionalParams,
+		}) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				NOTION_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "notion",
 				options,
 				authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				redirectURI,
 				loginHint,
 				additionalParams: {
+					...(additionalParams ?? {}),
 					owner: "user",
 				},
 			});
@@ -104,5 +117,5 @@ export const notion = (options: NotionOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<NotionProfile>;
+	} satisfies UpstreamProvider<NotionProfile>;
 };

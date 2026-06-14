@@ -34,7 +34,7 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 	return hasPermissionFn(input, acRoles);
 };
 
-interface OrganizationClientOptions {
+export interface OrganizationClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {
@@ -248,7 +248,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization");
+					return path === "/sign-out" || path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
 			},

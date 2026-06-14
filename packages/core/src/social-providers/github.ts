@@ -1,12 +1,13 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
+	resolveRequestedScopes,
 } from "../oauth2";
-import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code";
+import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
 	login: string;
@@ -31,7 +32,7 @@ export interface GithubProfile {
 	company: string;
 	blog: string;
 	location: string;
-	email: string;
+	email: string | null;
 	hireable: boolean;
 	bio: string;
 	twitter_username: string;
@@ -58,37 +59,42 @@ export interface GithubProfile {
 export interface GithubOptions extends ProviderOptions<GithubProfile> {
 	clientId: string;
 }
+const GITHUB_DEFAULT_SCOPES = ["read:user", "user:email"];
+
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
 		name: "GitHub",
+		callbackPath: "/callback/github",
 		createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["read:user", "user:email"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				GITHUB_DEFAULT_SCOPES,
+				scopes,
+			);
 			return createAuthorizationURL({
 				id: "github",
 				options,
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				loginHint,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI,
@@ -180,5 +186,5 @@ export const github = (options: GithubOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<GithubProfile>;
+	} satisfies UpstreamProvider<GithubProfile>;
 };

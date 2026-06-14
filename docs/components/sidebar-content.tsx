@@ -17,7 +17,6 @@ import {
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
-	Navigation,
 	Phone,
 	Route,
 	ScanFace,
@@ -1881,24 +1880,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
 			},
 			{
-				title: "OIDC Provider",
-				href: "/docs/plugins/oidc-provider",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 32 32"
-					>
-						<path
-							fill="currentColor"
-							d="M16 2a8 8 0 1 0 8 8a8.01 8.01 0 0 0-8-8m5.91 7h-2.438a15.3 15.3 0 0 0-.791-4.36A6.01 6.01 0 0 1 21.91 9m-5.888 6.999h-.008c-.38-.12-1.309-1.821-1.479-4.999h2.93c-.17 3.176-1.094 4.877-1.443 4.999M14.535 9c.17-3.176 1.094-4.877 1.443-4.999h.008c.38.12 1.309 1.821 1.479 4.999zM13.32 4.64A15.3 15.3 0 0 0 12.528 9H10.09a6.01 6.01 0 0 1 3.23-4.36M10.09 11h2.437a15.3 15.3 0 0 0 .792 4.36A6.01 6.01 0 0 1 10.09 11m8.59 4.36a15.3 15.3 0 0 0 .792-4.36h2.438a6.01 6.01 0 0 1-3.23 4.36M28 30H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M4 22v6h24v-6z"
-						></path>
-						<circle cx="7" cy="25" r="1" fill="currentColor"></circle>
-					</svg>
-				),
-			},
-			{
 				title: "OAuth Provider",
 				href: "/docs/plugins/oauth-provider",
 				icon: () => (
@@ -2314,6 +2295,40 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Commet",
+				href: "/docs/plugins/commet",
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="50 55.5 400 400"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<mask
+							id="commet-mark"
+							maskUnits="userSpaceOnUse"
+							x="0"
+							y="0"
+							width="500"
+							height="500"
+						>
+							<rect width="500" height="500" fill="white" />
+							<rect
+								width="253.649"
+								height="17.0192"
+								transform="matrix(0.718749 0.695269 -0.64697 0.762515 143.458 243.867)"
+								fill="black"
+							/>
+						</mask>
+						<g mask="url(#commet-mark)" fill="currentColor">
+							<path d="M250 71L356.521 255.5H143.479L250 71Z" />
+							<path d="M250 440L356.521 255.5H143.479L250 440Z" />
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Others",
 				group: true,
 				icon: () => null,
@@ -2455,11 +2470,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Optimize for Performance",
 				href: "/docs/guides/optimizing-for-performance",
 				icon: () => <Gauge className="size-4" />,
-			},
-			{
-				title: "Dynamic Base URL",
-				href: "/docs/guides/dynamic-base-url",
-				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "Migration",
@@ -2795,6 +2805,10 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						href: "/docs/reference/errors/state_not_found",
 					},
 					{
+						title: "state_invalid",
+						href: "/docs/reference/errors/state_invalid",
+					},
+					{
 						title: "state_mismatch",
 						href: "/docs/reference/errors/state_mismatch",
 					},
@@ -2842,10 +2856,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "signup_disabled",
 						href: "/docs/reference/errors/signup_disabled",
-					},
-					{
-						title: "please_restart_the_process",
-						href: "/docs/reference/errors/please_restart_the_process",
 					},
 				],
 			},

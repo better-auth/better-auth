@@ -1,11 +1,16 @@
-export { mcpHandler } from "./mcp";
+export { getIssuer } from "./authorize";
 export {
 	authServerMetadata,
+	metadataResponse,
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
 	oidcServerMetadata,
 } from "./metadata";
-export { getOAuthProviderState, oauthProvider } from "./oauth";
+export {
+	DEFAULT_OAUTH_SCOPES,
+	getOAuthProviderState,
+	oauthProvider,
+} from "./oauth";
 export type {
 	OAuthEndpointErrorResult,
 	OAuthEndpointRedirectContext,
@@ -15,4 +20,7 @@ export type {
 	OAuthRedirectOnError,
 } from "./oauth-endpoint";
 export { checkOAuthClient, oauthToSchema } from "./register";
+export { raiseResourceServerChallenge } from "./resource-challenge";
 export type * from "./types";
+export type { OAuthClient, ResourceServerMetadata } from "./types/oauth";
+export { ResourceUriSchema } from "./types/zod";

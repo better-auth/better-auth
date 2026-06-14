@@ -156,7 +156,7 @@ export const auth = betterAuth({
   **Notes**
 
   * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-  * For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+  * For custom schemes (like `exp://` or `myapp://`), wildcard patterns match against the full URL including paths. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
   * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
@@ -227,7 +227,7 @@ export const auth = betterAuth({
 
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
 
-Read more about databases [here](/docs/concepts/database).
+Read more about [databases](/docs/concepts/database).
 
 ## `secondaryStorage`
 
@@ -244,7 +244,7 @@ export const auth = betterAuth({
 })
 ```
 
-Read more about secondary storage [here](/docs/concepts/database#secondary-storage).
+Read more about [secondary storage](/docs/concepts/database#secondary-storage).
 
 ## `emailVerification`
 
@@ -342,11 +342,12 @@ export const auth = betterAuth({
 * `clientSecret`: OAuth client secret from the provider
 * `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
 * `redirectURI`: Custom redirect URI for the OAuth callback (optional)
-* `scope`: Additional OAuth scopes to request (optional)
+* `scope`: Extra OAuth scopes to request, added on top of the provider's default scopes (optional). The scopes a user actually grants are accumulated on the account's `grantedScopes` array. For union-only providers (generic OAuth, most social providers, and Google with `includeGrantedScopes: false`), the stored grant only grows: a narrower sign-in or refresh response never shrinks it. The one exception is Google with the default `includeGrantedScopes: true`, where each sign-in resyncs `grantedScopes` to Google's authoritative combined grant, so a scope the user revoked at Google drops on the next sign-in. Token refresh never changes the grant for any provider. Use `signIn.social({ scopes })` or `linkSocial({ scopes })` to request additional scopes per request, which are also additive to the defaults.
 * `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `requireEmailVerification`: Require this provider's email to be verified before a session is created. Opt-in per provider and independent of `emailAndPassword.requireEmailVerification`. Only enable it for providers that report a trustworthy `email_verified` signal (optional)
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
@@ -355,6 +356,7 @@ export const auth = betterAuth({
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
+* `includeGrantedScopes`: (Google only) Controls Google's server-side incremental authorization via `include_granted_scopes` (default: `true`). When enabled, Google's token response is the authoritative combined grant for the project, so on each sign-in the account's `grantedScopes` is resynced (replaced) to it: scopes the user revoked at Google are reflected and the stored grant can shrink. Set to `false` to authorize only the scopes requested in the current flow; the stored grant then becomes union-only and only ever grows.
 
 ## `plugins`
 
@@ -446,9 +448,13 @@ export const auth = betterAuth({
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
 			enabled: true, // Enable caching session in cookie (default: `false`)	
-			maxAge: 300 // 5 minutes
-		}
-	},
+				maxAge: 300, // 5 minutes
+				strategy: "jwt",
+				jwt: {
+					signingKey: "jwt-plugin" // or "secret" (default for JWT strategy)
+				}
+			}
+		},
 })
 ```
 
@@ -460,6 +466,7 @@ export const auth = betterAuth({
 * `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
 * `cookieCache`: Enable caching session in cookie
+* `cookieCache.jwt.signingKey`: For `strategy: "jwt"`, choose `"secret"` (HS256, default) or `"jwt-plugin"` (asymmetric JWTs backed by the `jwt()` plugin)
 
 ## `account`
 
@@ -474,6 +481,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeStateStrategy: "database", // Store OAuth state payload in verification storage
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
@@ -495,6 +503,15 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeStateStrategy`
+
+Controls where OAuth state data is stored during the authentication flow.
+
+* `"cookie"`: Store the state payload in an encrypted cookie. This keeps OAuth state stateless and avoids a database write during the start of the flow.
+* `"database"`: Store the state payload in the verification storage/table, set a signed state cookie when starting the flow, and validate the stored state against the signed cookie sent by the browser on the OAuth callback request.
+
+Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
 
 ### `storeAccountCookie`
 

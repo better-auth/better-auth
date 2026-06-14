@@ -17,14 +17,83 @@ export type SCIMName = {
 
 export type SCIMEmail = { value?: string; primary?: boolean };
 
-export type SCIMOptions = {
-	/**
-	 * SCIM provider ownership configuration. When enabled, each provider
-	 * connection is linked to the user who generated its token.
-	 */
-	providerOwnership?: {
-		enabled: boolean;
+export type SCIMGroupMemberInput = {
+	value?: string;
+	$ref?: string;
+	display?: string;
+	type?: string;
+};
+
+export type SCIMGroupInput = {
+	externalId?: string;
+	displayName: string;
+	members?: SCIMGroupMemberInput[];
+};
+
+export type MapGroupToRolesInput = {
+	group: SCIMGroupInput;
+	provider: {
+		providerId: string;
+		organizationId: string;
 	};
+};
+
+export type SCIMGroupMemberReference = {
+	value: string;
+	$ref: string;
+	display: string;
+	type: "User";
+};
+
+export type SCIMUserGroupReference = {
+	value: string;
+	$ref: string;
+	display: string;
+};
+
+export interface SCIMGroup {
+	id: string;
+	providerId: string;
+	organizationId: string;
+	scimGroupId: string;
+	externalId?: string;
+	externalIdKey?: string;
+	displayName: string;
+	createdAt: Date;
+	updatedAt?: Date;
+}
+
+export interface SCIMGroupMember {
+	id: string;
+	groupId: string;
+	providerId: string;
+	organizationId: string;
+	userId: string;
+	membershipKey: string;
+	createdAt: Date;
+}
+
+export interface SCIMGroupRole {
+	id: string;
+	groupId: string;
+	role: string;
+	roleKey: string;
+	createdAt: Date;
+}
+
+export interface SCIMGroupRoleGrant {
+	id: string;
+	groupId: string;
+	providerId: string;
+	organizationId: string;
+	userId: string;
+	role: string;
+	roleGrantKey: string;
+	isRoleProjected: boolean;
+	createdAt: Date;
+}
+
+export type SCIMOptions = {
 	/**
 	 * Minimum organization role(s) required for SCIM management operations
 	 * (generate-token, list/get/delete provider connections).
@@ -37,6 +106,51 @@ export type SCIMOptions = {
 	 * These will take precedence over the database when present.
 	 */
 	defaultSCIM?: Omit<SCIMProvider, "id">[];
+	/**
+	 * Maps an incoming SCIM Group resource to Better Auth organization role(s).
+	 *
+	 * Defaults to using the group's displayName as the role name.
+	 */
+	mapGroupToRoles?: (
+		input: MapGroupToRolesInput,
+	) => string | string[] | Promise<string | string[]>;
+	/**
+	 * Controls whether SCIM provisioning may link to a *pre-existing* Better
+	 * Auth user whose email matches the incoming SCIM resource.
+	 *
+	 * Disabled by default: when a user with the same email already exists,
+	 * `createSCIMUser` returns `409` (uniqueness) instead of silently creating a
+	 * SCIM account link for that user. Linking by email alone would give a SCIM
+	 * token access to an account it never provisioned.
+	 *
+	 * - `true` restores the legacy behavior of linking any existing user that
+	 *   matches by email. Only use this with a fully trusted token-issuance flow.
+	 * - An object enables linking only when *every* provided constraint passes.
+	 */
+	linkExistingUsers?:
+		| boolean
+		| {
+				/**
+				 * Only link when the email's domain is in this allow-list
+				 * (case-insensitive). An empty/absent list is not a match.
+				 */
+				trustedDomains?: string[];
+				/**
+				 * For organization-scoped tokens, only link a user who is already
+				 * a member of the token's organization (never auto-add them). Has
+				 * no effect for non-org (personal) tokens, which then never match
+				 * on this constraint.
+				 */
+				requireExistingOrgMembership?: boolean;
+				/**
+				 * Full control: return `true` to allow linking the matched user.
+				 */
+				shouldLinkUser?: (payload: {
+					user: User;
+					email: string;
+					provider: { providerId: string; organizationId?: string };
+				}) => boolean | Promise<boolean>;
+		  };
 	/**
 	 * A callback that runs before a new SCIM token is generated.
 	 * Runs after the built-in role check, so it can add additional
@@ -56,6 +170,22 @@ export type SCIMOptions = {
 		scimToken: string;
 		scimProvider: SCIMProvider;
 	}) => Promise<void>;
+	/**
+	 * Authorize who may generate a SCIM token. Runs after the built-in checks
+	 * (org-scoped tokens still require org membership + the required role), so it
+	 * can add restrictions but cannot loosen them.
+	 *
+	 * Use this to lock down *personal* (non-org-scoped) token creation, which is
+	 * otherwise available to any authenticated user. SCIM tokens can provision
+	 * and manage users, so return `false` to deny. `member` is `null` for
+	 * personal tokens.
+	 */
+	canGenerateToken?: (payload: {
+		user: User;
+		providerId: string;
+		organizationId?: string;
+		member: Member | null;
+	}) => boolean | Promise<boolean>;
 	/**
 	 * How to store the SCIM token in the database.
 	 *

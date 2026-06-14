@@ -329,6 +329,7 @@ export const router = <Option extends BetterAuthOptions>(
 		},
 		async onResponse(res, req) {
 			let currentResponse = res;
+			let caughtError: unknown;
 			try {
 				for (const plugin of ctx.options.plugins || []) {
 					if (plugin.onResponse) {
@@ -352,9 +353,19 @@ export const router = <Option extends BetterAuthOptions>(
 					status: 500,
 					statusText: "Internal Server Error",
 				});
-				throw error;
+				caughtError = error;
 			} finally {
-				await onResponseRateLimit(req, ctx, currentResponse);
+				const rateLimitResponse = await onResponseRateLimit(
+					req,
+					ctx,
+					currentResponse,
+				);
+				if (rateLimitResponse) {
+					return rateLimitResponse;
+				}
+			}
+			if (caughtError) {
+				throw caughtError;
 			}
 			return currentResponse;
 		},
@@ -422,9 +433,10 @@ export {
 export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
+export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { addOAuthServerContext, getOAuthState } from "./state/oauth";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,

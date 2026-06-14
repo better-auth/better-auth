@@ -1,7 +1,4 @@
-import type {
-	BetterAuthClientOptions,
-	BetterAuthClientPlugin,
-} from "@better-auth/core";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
@@ -28,8 +25,10 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;
 }
 	? UnionToIntersection<
-			Plugin extends BetterAuthClientPlugin
-				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			Plugin extends {
+				getAtoms?: infer GetAtoms;
+			}
+				? GetAtoms extends (fetch: any) => infer Atoms
 					? Atoms extends Record<string, any>
 						? {
 								[key in keyof Atoms as IsSignal<key> extends true
@@ -51,6 +50,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
+		hydrateSession,
 		$fetch,
 		$store,
 		atomListeners,
@@ -63,6 +63,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		hydrateSession,
 		$fetch,
 		$store,
 	};
@@ -85,6 +86,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
+			hydrateSession: (session: NonNullable<Session> | null) => void;
 			useSession: () => {
 				data: Session;
 				isPending: boolean;

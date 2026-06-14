@@ -1,38 +1,66 @@
+export { additionalAuthorizationParamsSchema } from "./authorization-params";
+export {
+	decodeBasicCredentials,
+	encodeBasicCredentials,
+} from "./basic-credentials";
 export type {
-	AssertionSigningAlgorithm,
-	ClientAssertionConfig,
+	ClientAssertionContext,
+	ClientAssertionGetter,
+	ClientAssertionGrantType,
+	PrivateKeyJwtClientAssertionGetterOptions,
+	PrivateKeyJwtSigningAlgorithm,
 } from "./client-assertion";
 export {
-	ASSERTION_SIGNING_ALGORITHMS,
 	CLIENT_ASSERTION_TYPE,
-	resolveAssertionParams,
-	signClientAssertion,
+	createPrivateKeyJwtClientAssertionGetter,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+	resolveClientAssertionParams,
+	signPrivateKeyJwtClientAssertion,
 } from "./client-assertion";
 export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,
-	createClientCredentialsTokenRequest,
 } from "./client-credentials-token";
-export { createAuthorizationURL } from "./create-authorization-url";
+export {
+	createAuthorizationURL,
+	RESERVED_AUTHORIZATION_PARAMS,
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+} from "./create-authorization-url";
 export type {
+	AuthorizationURLResult,
+	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthProvider,
+	OAuthIdTokenConfig,
+	ProviderGrantAuthority,
 	ProviderOptions,
+	UpstreamProvider,
 } from "./oauth-provider";
 export {
-	createRefreshAccessTokenRequest,
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
 export {
+	includesGrantedScope,
+	normalizeScopes,
+	parseScopeField,
+	readGrantedScopes,
+	resolveRequestedScopes,
+	unionGrantedScopes,
+} from "./scopes";
+export type {
+	TokenEndpointAuth,
+	TokenEndpointAuthMethod,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+export {
+	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
 } from "./utils";
 export {
 	authorizationCodeRequest,
-	createAuthorizationCodeRequest,
 	validateAuthorizationCode,
 	validateToken,
 } from "./validate-authorization-code";
@@ -41,3 +69,7 @@ export {
 	verifyAccessToken,
 	verifyJwsAccessToken,
 } from "./verify";
+export {
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "./verify-id-token";

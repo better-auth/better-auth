@@ -1,8 +1,47 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { normalizeIP } from "@better-auth/core/utils/ip";
+import type { SecondaryStorage } from "@better-auth/core/db";
+import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
+
+function createRateLimitSecondaryStorage(
+	store: Map<string, string>,
+	expirationMap?: Map<string, number>,
+): SecondaryStorage {
+	return {
+		set(key, value, ttl) {
+			store.set(key, value);
+			if (ttl !== undefined) expirationMap?.set(key, ttl);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			expirationMap?.delete(key);
+			return value;
+		},
+		increment(key, ttl) {
+			const existing = store.get(key);
+			const current = existing ? (JSON.parse(existing) as RateLimit) : null;
+			const count = (current?.count ?? 0) + 1;
+			const next: RateLimit = {
+				key,
+				count,
+				lastRequest: Date.now(),
+			};
+			store.set(key, JSON.stringify(next));
+			if (!current && ttl !== undefined) expirationMap?.set(key, ttl);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+			expirationMap?.delete(key);
+		},
+	};
+}
 
 describe("rate-limiter", async () => {
 	const { client, testUser } = await getTestInstance({
@@ -267,6 +306,224 @@ describe("rate-limiter response outcome when plugin response hook throws", async
 	});
 });
 
+describe("atomic concurrent enforcement", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { client, testUser } = await getTestInstance({
+				rateLimit: {
+					enabled: true,
+					storage,
+					customRules: {
+						"/sign-in/email": { window: 10, max: 1 },
+					},
+				},
+			});
+
+			// The memory backend keeps a process-global store shared across test
+			// instances. Fake timers let each case advance the clock far past any
+			// prior 10s window so it starts from a clean window for this key. Each
+			// case advances by a distinct offset so frozen fake clocks across cases
+			// never collide on the same instant.
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("lets exactly one of two simultaneous requests through", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(120000);
+				const [a, b] = await Promise.all([
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+				]);
+				const statuses = [a.error?.status, b.error?.status].sort();
+				expect(statuses).toEqual([429, undefined]);
+			});
+
+			it("resets the count once the window elapses", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(240000);
+				// Exhaust the max=1 budget, confirm the next request is blocked.
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(11000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
+
+			it("resets the count at the exact window boundary", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(360000);
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(10000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
+		});
+	}
+});
+
+describe("database rate-limit pruning", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/get-session": { window: 120, max: 10 },
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("keeps active rows from longer configured windows", async () => {
+		const now = Date.now();
+		const longWindowKey = createRateLimitKey("127.0.0.1", "/get-session");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: longWindowKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 11_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeLongWindowRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: longWindowKey }],
+		});
+		expect(activeLongWindowRow).not.toBeNull();
+	});
+});
+
+describe("database rate-limit pruning with dynamic rules", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": () => ({ window: 120, max: 10 }),
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes stale rows using the longest observed dynamic window", async () => {
+		const now = Date.now();
+		const activeDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-active");
+		const staleDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-stale");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: activeDynamicKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleDynamicKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: activeDynamicKey }],
+		});
+		expect(activeDynamicRow).not.toBeNull();
+
+		const staleDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleDynamicKey }],
+		});
+		expect(staleDynamicRow).toBeNull();
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
@@ -274,19 +531,7 @@ describe("custom rate limiting storage", async () => {
 		rateLimit: {
 			enabled: true,
 		},
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-				if (ttl) expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-				expirationMap.delete(key);
-			},
-		},
+		secondaryStorage: createRateLimitSecondaryStorage(store, expirationMap),
 	});
 
 	it("should use custom storage", async () => {
@@ -305,11 +550,10 @@ describe("custom rate limiting storage", async () => {
 			lastRequest = rateLimitData.lastRequest;
 			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
-				expect(rateLimitData.count).toBe(3);
 			} else {
 				expect(response.error).toBeNull();
-				expect(rateLimitData.count).toBe(i + 1);
 			}
+			expect(rateLimitData.count).toBe(i + 1);
 			const rateLimitExp = expirationMap.get("127.0.0.1|/sign-in/email");
 			expect(rateLimitExp).toBe(10);
 		}
@@ -407,17 +651,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -451,17 +685,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -488,8 +712,9 @@ describe("should work in development/test environment", () => {
 
 describe("missing client IP warning", () => {
 	const warningMessage =
-		"Rate limiting skipped: could not determine client IP address. " +
-		"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+		"Rate limiting could not determine a client IP and is falling back to a " +
+		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
+		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
@@ -527,6 +752,36 @@ describe("missing client IP warning", () => {
 				`${message}`.includes("trustedProxies"),
 			),
 		).toBe(false);
+	});
+
+	it("should fail closed and still enforce the limit when no client IP is available", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+		});
+
+		// With no derivable client IP, requests share one per-path bucket and
+		// must still be limited rather than skipped (the previous fail-open let a
+		// client omit the IP header to bypass rate limiting entirely).
+		let limited = false;
+		for (let i = 0; i < 6; i++) {
+			const res = await client.getSession();
+			if (res.error?.status === 429) {
+				limited = true;
+				break;
+			}
+		}
+		expect(limited).toBe(true);
 	});
 });
 

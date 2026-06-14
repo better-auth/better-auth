@@ -1,9 +1,8 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
 
 export interface PayPalProfile {
@@ -78,7 +77,13 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
-		async createAuthorizationURL({ state, codeVerifier, redirectURI }) {
+		callbackPath: "/callback/paypal",
+		createAuthorizationURL({
+			state,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for PayPal. Make sure to provide them in the options.",
@@ -92,19 +97,17 @@ export const paypal = (options: PayPalOptions) => {
 			 * We don't pass any scopes to avoid "invalid scope" errors
 			 **/
 
-			const _scopes: string[] = [];
-
-			const url = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "paypal",
 				options,
 				authorizationEndpoint,
-				scopes: _scopes,
+				scopes: [],
 				state,
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams,
 			});
-			return url;
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -194,22 +197,6 @@ export const paypal = (options: PayPalOptions) => {
 					}
 				},
 
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const payload = decodeJwt(token);
-				return !!payload.sub;
-			} catch (error) {
-				logger.error("Failed to verify PayPal ID token:", error);
-				return false;
-			}
-		},
-
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -259,5 +246,5 @@ export const paypal = (options: PayPalOptions) => {
 		},
 
 		options,
-	} satisfies OAuthProvider<PayPalProfile>;
+	} satisfies UpstreamProvider<PayPalProfile>;
 };

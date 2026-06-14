@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -19,12 +20,21 @@ export interface FigmaOptions extends ProviderOptions<FigmaProfile> {
 	clientId: string;
 }
 
+const FIGMA_DEFAULT_SCOPES = ["current_user:read"];
+
 export const figma = (options: FigmaOptions) => {
 	const tokenEndpoint = "https://api.figma.com/v1/oauth/token";
 	return {
 		id: "figma",
 		name: "Figma",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		callbackPath: "/callback/figma",
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
@@ -35,21 +45,22 @@ export const figma = (options: FigmaOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Figma");
 			}
 
-			const _scopes = options.disableDefaultScope ? [] : ["current_user:read"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				FIGMA_DEFAULT_SCOPES,
+				scopes,
+			);
 
-			const url = await createAuthorizationURL({
+			return createAuthorizationURL({
 				id: "figma",
 				options,
 				authorizationEndpoint: "https://www.figma.com/oauth",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
-
-			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -114,5 +125,5 @@ export const figma = (options: FigmaOptions) => {
 			}
 		},
 		options,
-	} satisfies OAuthProvider<FigmaProfile>;
+	} satisfies UpstreamProvider<FigmaProfile>;
 };

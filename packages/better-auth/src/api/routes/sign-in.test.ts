@@ -103,6 +103,83 @@ describe("sign-in", async () => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	it("logs expected auth validation failures below error level", async () => {
+		const log = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+			},
+			logger: {
+				level: "info",
+				log,
+			},
+		});
+		const expectWarnWithoutError = (message: string) => {
+			expect(
+				log.mock.calls.some(
+					([level, loggedMessage]) =>
+						level === "warn" &&
+						typeof loggedMessage === "string" &&
+						loggedMessage.includes(message),
+				),
+			).toBe(true);
+			expect(log.mock.calls.some(([level]) => level === "error")).toBe(false);
+		};
+
+		log.mockClear();
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: "wrong-password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD),
+		);
+
+		expectWarnWithoutError("Invalid password");
+
+		log.mockClear();
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: "missing-sign-in@test.com",
+					password: "password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD),
+		);
+
+		expectWarnWithoutError("User not found");
+
+		log.mockClear();
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "short-password@test.com",
+					password: "short",
+					name: "Short Password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT),
+		);
+		expectWarnWithoutError("Password is too short");
+
+		log.mockClear();
+		const resetRes = await auth.api.requestPasswordReset({
+			body: {
+				email: "reset-missing@test.com",
+			},
+		});
+		expect(resetRes.status).toBe(true);
+		expectWarnWithoutError("Reset Password: User not found");
+	});
 });
 
 describe("url checks", async () => {
@@ -377,5 +454,93 @@ describe("sign-in with form data", async () => {
 
 		const response = await auth.handler(formRequest);
 		expect(response.status).toBe(200);
+	});
+});
+
+describe("email case insensitivity", async () => {
+	/**
+	 * Tests that sign-in works regardless of email case, preventing
+	 * "User not found" errors when users sign up with mixed case
+	 * but sign in with different casing.
+	 */
+	it("should sign in with different email casing than sign-up", async () => {
+		const { auth } = await getTestInstance();
+		const mixedCaseEmail = "Test.User@Example.COM";
+		const password = "securePassword123";
+
+		await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Test User",
+			},
+		});
+
+		const signInLowercase = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail.toLowerCase(),
+				password,
+			},
+		});
+		expect(signInLowercase.user).toBeDefined();
+		expect(signInLowercase.user.email).toBe(mixedCaseEmail.toLowerCase());
+
+		const signInUppercase = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail.toUpperCase(),
+				password,
+			},
+		});
+		expect(signInUppercase.user).toBeDefined();
+		expect(signInUppercase.user.email).toBe(mixedCaseEmail.toLowerCase());
+
+		const signInOriginal = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+			},
+		});
+		expect(signInOriginal.user).toBeDefined();
+		expect(signInOriginal.user.email).toBe(mixedCaseEmail.toLowerCase());
+	});
+
+	it("should store email as lowercase regardless of input casing", async () => {
+		const { auth } = await getTestInstance();
+		const mixedCaseEmail = "Another.User@DOMAIN.com";
+		const password = "password123";
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Another User",
+			},
+		});
+
+		expect(signUpResult.user.email).toBe(mixedCaseEmail.toLowerCase());
+	});
+
+	it("should not allow duplicate sign-ups with different email casing", async () => {
+		const { auth } = await getTestInstance();
+		const email = "duplicate.test@example.com";
+		const password = "password123";
+
+		await auth.api.signUpEmail({
+			body: {
+				email: email.toLowerCase(),
+				password,
+				name: "First User",
+			},
+		});
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: email.toUpperCase(),
+					password,
+					name: "Second User",
+				},
+			}),
+		).rejects.toThrow();
 	});
 });
