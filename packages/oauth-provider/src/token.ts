@@ -7,18 +7,28 @@ import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import {
+	collectExtensionIdTokenClaims,
+	getExtensionGrantHandler,
+	getSupportedGrantTypes,
+} from "./extensions";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import type {
+	OAuthAuthenticatedClient,
+	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthRefreshToken,
+	OAuthTokenIssueParams,
+	OAuthTokenResponse,
 	SchemaClient,
 	Scope,
+	StoreTokenType,
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
-import { userNormalClaims } from "./userinfo";
+import { pickClaims, userNormalClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
 	decryptStoredClientSecret,
@@ -49,7 +59,7 @@ export async function tokenEndpoint(
 ) {
 	const grantType: GrantType = ctx.body.grant_type;
 
-	if (opts.grantTypes && !opts.grantTypes.includes(grantType)) {
+	if (!getSupportedGrantTypes(opts).includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -63,7 +73,81 @@ export async function tokenEndpoint(
 			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
+		default: {
+			const handler = getExtensionGrantHandler(opts, grantType);
+			if (handler) {
+				return handler({
+					ctx,
+					opts,
+					grantType,
+					tools: createExtensionGrantTools(ctx, opts, grantType),
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: `unsupported grant_type ${grantType}`,
+				error: "unsupported_grant_type",
+			});
+		}
 	}
+}
+
+function createExtensionGrantTools(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	grantType: GrantType,
+) {
+	return {
+		authenticateClient: async (
+			request?: OAuthClientAuthenticationRequest,
+		): Promise<OAuthAuthenticatedClient> => {
+			const credentials = await extractClientCredentials(
+				ctx,
+				opts,
+				`${ctx.context.baseURL}/oauth2/token`,
+			);
+			const { clientId, clientSecret, preVerifiedClient, authMethod } =
+				destructureCredentials(credentials);
+			if (!clientId) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client_id",
+					error: "invalid_grant",
+				});
+			}
+			if (
+				request?.requireCredentials !== false &&
+				!clientSecret &&
+				!preVerifiedClient
+			) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client credentials",
+					error: "invalid_grant",
+				});
+			}
+			const client = await validateClientCredentials(
+				ctx,
+				opts,
+				clientId,
+				clientSecret,
+				request?.scopes,
+				preVerifiedClient,
+				request?.grantType ?? grantType,
+				authMethod,
+			);
+			return {
+				clientId,
+				client,
+				method: authMethod,
+			};
+		},
+		issueTokens: (params: OAuthTokenIssueParams) =>
+			createUserTokens(ctx, opts, { ...params, grantType }),
+		hashToken: (token: string, type: StoreTokenType) =>
+			storeToken(opts.storeTokens, token, type),
+		validateAccessToken: async (token: string, clientId?: string) => {
+			const { validateAccessToken } = await import("./introspect");
+			return validateAccessToken(ctx, opts, token, clientId);
+		},
+	};
 }
 
 // User Jwt SHALL follow oAuth 2
@@ -172,6 +256,7 @@ async function createIdToken(
 	sessionId?: string,
 	authTime?: Date,
 	accessToken?: string,
+	extraClaims?: Record<string, unknown>,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -227,6 +312,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
+	// Extension and grant claims are additive: they only fill keys the provider
+	// does not already own, so a contributor cannot replace an identity claim
+	// (email/name/...), the authentication context, or an AS-owned claim.
+	// First-party `customIdTokenClaims` already overrode auth_time/acr above.
+	Object.assign(payload, pickClaims(extraClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
@@ -492,22 +582,9 @@ async function createRefreshToken(
 	};
 }
 
-interface CreateUserTokensParams {
-	client: SchemaClient<Scope[]>;
-	scopes: string[];
+type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
-	user?: User;
-	referenceId?: string;
-	sessionId?: string;
-	nonce?: string;
-	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	authTime?: Date;
-	verificationValue?: VerificationValue;
-	resources?: string[];
-	/** Full original authorized resources for the grant, used to seed the refresh token
-	 * when the token request narrows the resource (RFC 8707 §2.2). */
-	originalResources?: string[];
-}
+};
 
 interface ResourceGrantIssuance {
 	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
@@ -570,7 +647,7 @@ async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: CreateUserTokensParams,
-) {
+): Promise<OAuthTokenResponse> {
 	const {
 		client,
 		scopes,
@@ -623,7 +700,25 @@ async function createUserTokens(
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
-	const isIdToken = user && scopes.includes("openid");
+	const isIdToken = user && effectiveScopes.includes("openid");
+	const metadata = parseClientMetadata(client.metadata);
+	const additionalIdTokenClaims =
+		isIdToken && user
+			? {
+					...(await collectExtensionIdTokenClaims(opts, {
+						ctx,
+						opts,
+						user,
+						client,
+						scopes: effectiveScopes,
+						grantType,
+						referenceId,
+						resources: params.resources,
+						metadata,
+					})),
+					...(params.idTokenClaims ?? {}),
+				}
+			: undefined;
 
 	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
 	const customFields = opts.customTokenResponseFields
@@ -631,7 +726,7 @@ async function createUserTokens(
 				grantType,
 				user,
 				scopes: effectiveScopes,
-				metadata: parseClientMetadata(client.metadata),
+				metadata,
 				verificationValue,
 			})
 		: undefined;
@@ -664,12 +759,16 @@ async function createUserTokens(
 	// introspection through this same resolver, so the formats cannot drift.
 	const accessTokenClaims = isJwtAccessToken
 		? await resolveAccessTokenClaims({
+				ctx,
 				opts,
 				user,
+				client,
 				scopes: effectiveScopes,
+				grantType,
 				resources: params.resources,
 				referenceId,
-				metadata: parseClientMetadata(client.metadata),
+				metadata,
+				perRequestClaims: params.accessTokenClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
@@ -737,17 +836,19 @@ async function createUserTokens(
 				opts,
 				user,
 				client,
-				scopes,
+				effectiveScopes,
 				nonce,
 				sessionId,
 				authTime,
 				accessToken,
+				additionalIdTokenClaims,
 			)
 		: undefined;
 
 	return ctx.json(
 		{
 			...customFields,
+			...(params.tokenResponse ?? {}),
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
@@ -865,6 +966,7 @@ async function handleAuthorizationCodeGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -936,6 +1038,7 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 		preVerifiedClient,
 		"authorization_code",
+		authMethod,
 	);
 
 	// Parse scopes from the authorization request
@@ -1077,6 +1180,7 @@ async function handleClientCredentialsGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
 		ctx.body;
@@ -1104,6 +1208,7 @@ async function handleClientCredentialsGrant(
 		undefined,
 		preVerifiedClient,
 		"client_credentials",
+		authMethod,
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -1162,6 +1267,7 @@ async function handleRefreshTokenGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -1270,6 +1376,7 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 		preVerifiedClient,
 		"refresh_token",
+		authMethod,
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

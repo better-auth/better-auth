@@ -2,6 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
+import {
+	applyOAuthProviderMetadataExtensions,
+	getClientDiscoveries,
+	getSupportedAuthMethods,
+	getSupportedGrantTypes,
+} from "./extensions";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -9,11 +15,7 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import {
-	getJwtPlugin,
-	mergeDiscoveryMetadata,
-	toClientDiscoveryArray,
-} from "./utils";
+import { getJwtPlugin, mergeDiscoveryMetadata } from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -23,6 +25,8 @@ export function authServerMetadata(
 		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
+		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
+		endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		jwt_disabled?: boolean;
 	},
 ) {
@@ -55,30 +59,33 @@ export function authServerMetadata(
 			"client_credentials",
 			"refresh_token",
 		],
-		token_endpoint_auth_methods_supported: [
-			...(overrides?.public_client_supported
-				? (["none"] satisfies TokenEndpointAuthMethod[])
-				: []),
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		token_endpoint_auth_methods_supported:
+			overrides?.token_endpoint_auth_methods_supported ?? [
+				...(overrides?.public_client_supported
+					? (["none"] satisfies TokenEndpointAuthMethod[])
+					: []),
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		token_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		introspection_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		introspection_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		introspection_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		revocation_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
-			"private_key_jwt",
-		],
+		revocation_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
 		revocation_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
@@ -90,27 +97,64 @@ export function authServerMetadata(
 	return metadata;
 }
 
+/**
+ * Builds the authorization-server metadata shared by the
+ * `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration`
+ * responses, plus the inputs both need to finish their own document.
+ */
+function buildAuthServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const jwtPluginOptions = opts.disableJwtPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+	const clientDiscoveries = getClientDiscoveries(opts);
+	// Any contributed `clientDiscovery` implicitly produces public clients
+	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
+	// and the advertised `"none"` auth method alongside unauthenticated DCR.
+	const publicClientSupported =
+		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
+	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
+		public_client_supported: publicClientSupported,
+		grant_types_supported: getSupportedGrantTypes(opts),
+		token_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
+			includeNone: publicClientSupported,
+		}),
+		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
+		jwt_disabled: opts.disableJwtPlugin,
+	});
+	return { jwtPluginOptions, clientDiscoveries, authMetadata };
+}
+
+export function oauthAuthorizationServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): AuthServerMetadata {
+	const { clientDiscoveries, authMetadata } = buildAuthServerMetadata(
+		ctx,
+		opts,
+	);
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"oauth-authorization-server",
+		{
+			...mergeDiscoveryMetadata(clientDiscoveries),
+			...authMetadata,
+		},
+	);
+}
+
 export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
 	const baseURL = ctx.context.baseURL;
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
-		// `public_client_supported` flips `"none"` into the advertised auth
-		// methods. Any configured `clientDiscovery` implicitly produces public
-		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
-		// that in addition to unauthenticated DCR.
-		public_client_supported:
-			opts.allowUnauthenticatedClientRegistration ||
-			toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-		grant_types_supported: opts.grantTypes,
-		jwt_disabled: opts.disableJwtPlugin,
-	});
+	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
+		buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
 		OIDCMetadata,
 		"id_token_signing_alg_values_supported"
@@ -145,10 +189,15 @@ export function oidcServerMetadata(
 			"none",
 		],
 	};
-	return {
-		...metadata,
-		...mergeDiscoveryMetadata(opts.clientDiscovery),
-	};
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"openid-configuration",
+		{
+			...mergeDiscoveryMetadata(clientDiscoveries),
+			...metadata,
+		},
+	);
 }
 
 // Cache for 15s with a short stale window; metadata rarely changes.

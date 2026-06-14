@@ -11,6 +11,11 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import {
+	getClientDiscoveries,
+	getExtensionClientAuthenticationStrategy,
+	isExtensionTokenEndpointAuthMethod,
+} from "../extensions";
 import type { oauthProvider } from "../oauth";
 import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
@@ -21,6 +26,7 @@ import type {
 	SchemaClient,
 	Scope,
 	StoreTokenType,
+	TokenEndpointAuthMethod,
 } from "../types";
 
 export {
@@ -207,7 +213,7 @@ export async function getClient(
 		where: [{ field: "clientId", value: clientId }],
 	});
 
-	const discoveries = toClientDiscoveryArray(options.clientDiscovery);
+	const discoveries = getClientDiscoveries(options);
 	for (const discovery of discoveries) {
 		if (!discovery.matches(clientId)) continue;
 		const resolved = await discovery.resolve(ctx, clientId, dbClient);
@@ -225,29 +231,15 @@ export async function getClient(
 }
 
 /**
- * Normalize the `clientDiscovery` option into an array. Accepts a single
- * {@link ClientDiscovery}, an array of them, or `undefined`.
- *
- * @internal
- */
-export function toClientDiscoveryArray(
-	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
-): ClientDiscovery<Scope[]>[] {
-	if (!discovery) return [];
-	return Array.isArray(discovery) ? discovery : [discovery];
-}
-
-/**
- * Merge `discoveryMetadata` from every configured {@link ClientDiscovery}
+ * Merge `discoveryMetadata` from every contributed {@link ClientDiscovery}
  * into a single object. Entries are spread in order; later entries override
  * earlier ones on key collisions.
  *
  * @internal
  */
 export function mergeDiscoveryMetadata(
-	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+	discoveries: ClientDiscovery[],
 ): Record<string, unknown> {
-	const discoveries = toClientDiscoveryArray(discovery);
 	return discoveries.reduce<Record<string, unknown>>(
 		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
 		{},
@@ -513,6 +505,7 @@ export async function validateClientCredentials(
 	scopes?: string[], // checks requested scopes against allowed scopes
 	preVerifiedClient?: SchemaClient<Scope[]>,
 	grantType?: GrantType, // if set, enforces the client is registered for this grant type
+	authMethod?: TokenEndpointAuthMethod,
 ) {
 	const client = preVerifiedClient ?? (await getClient(ctx, options, clientId));
 	if (!client) {
@@ -528,14 +521,27 @@ export async function validateClientCredentials(
 		});
 	}
 
-	// Enforce registered auth method: private_key_jwt clients must use assertion
+	// Enforce registered auth method for assertion/pre-verified methods.
+	if (preVerifiedClient && authMethod) {
+		const registeredAuthMethod =
+			client.tokenEndpointAuthMethod ?? "client_secret_basic";
+		if (registeredAuthMethod !== authMethod) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
+				error: "invalid_client",
+			});
+		}
+	}
 	if (
-		client.tokenEndpointAuthMethod === "private_key_jwt" &&
+		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
+			isExtensionTokenEndpointAuthMethod(
+				options,
+				client.tokenEndpointAuthMethod,
+			)) &&
 		!preVerifiedClient
 	) {
 		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"client registered for private_key_jwt must use client_assertion",
+			error_description: `client registered for ${client.tokenEndpointAuthMethod} must use client_assertion`,
 			error: "invalid_client",
 		});
 	}
@@ -608,23 +614,28 @@ export async function validateClientCredentials(
  */
 export function parseClientMetadata(
 	metadata: string | object | undefined,
-): object | undefined {
+): Record<string, unknown> | undefined {
 	if (!metadata) return undefined;
-	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+	return typeof metadata === "string"
+		? JSON.parse(metadata)
+		: (metadata as Record<string, unknown>);
 }
 
 export type ExtractedCredentials =
 	| {
+			kind: "client_secret";
 			method: "client_secret_basic" | "client_secret_post";
 			clientId: string;
 			clientSecret: string;
 	  }
 	| {
-			method: "private_key_jwt";
+			kind: "pre_verified";
+			method: TokenEndpointAuthMethod;
 			clientId: string;
 			client: SchemaClient<Scope[]>;
 	  }
 	| {
+			kind: "public";
 			method: "none";
 			clientId: string;
 	  };
@@ -636,14 +647,12 @@ export function destructureCredentials(
 	return {
 		clientId: credentials?.clientId,
 		clientSecret:
-			credentials?.method === "client_secret_basic" ||
-			credentials?.method === "client_secret_post"
+			credentials?.kind === "client_secret"
 				? credentials.clientSecret
 				: undefined,
 		preVerifiedClient:
-			credentials?.method === "private_key_jwt"
-				? credentials.client
-				: undefined,
+			credentials?.kind === "pre_verified" ? credentials.client : undefined,
+		authMethod: credentials?.method,
 	};
 }
 
@@ -659,7 +668,7 @@ export async function extractClientCredentials(
 	const body = (ctx.body ?? {}) as Record<string, unknown>;
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
-	// 1. Check for private_key_jwt assertion
+	// 1. Check for assertion-based client authentication.
 	if (body.client_assertion_type || body.client_assertion) {
 		if (!body.client_assertion || !body.client_assertion_type) {
 			throw new APIError("BAD_REQUEST", {
@@ -668,12 +677,37 @@ export async function extractClientCredentials(
 				error: "invalid_client",
 			});
 		}
-		if (body.client_secret || authorization?.startsWith("Basic ")) {
+		if (
+			body.client_secret ||
+			(authorization && BASIC_SCHEME_PREFIX.test(authorization))
+		) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client_assertion cannot be combined with client_secret or Basic auth",
 				error: "invalid_client",
 			});
+		}
+		const assertion = body.client_assertion as string;
+		const assertionType = body.client_assertion_type as string;
+		const extensionStrategy = getExtensionClientAuthenticationStrategy(
+			opts,
+			assertionType,
+		);
+		if (extensionStrategy) {
+			const result = await extensionStrategy.strategy.authenticate({
+				ctx,
+				opts,
+				assertion,
+				assertionType,
+				clientId: body.client_id as string | undefined,
+				expectedAudience,
+			});
+			return {
+				kind: "pre_verified",
+				method: extensionStrategy.method,
+				clientId: result.clientId,
+				client: result.client,
+			};
 		}
 		const { verifyClientAssertion: verify } = await import(
 			"./client-assertion"
@@ -681,12 +715,13 @@ export async function extractClientCredentials(
 		const result = await verify(
 			ctx,
 			opts,
-			body.client_assertion as string,
-			body.client_assertion_type as string,
+			assertion,
+			assertionType,
 			body.client_id as string | undefined,
 			expectedAudience,
 		);
 		return {
+			kind: "pre_verified",
 			method: "private_key_jwt",
 			clientId: result.clientId,
 			client: result.client,
@@ -694,10 +729,11 @@ export async function extractClientCredentials(
 	}
 
 	// 2. Check for Basic auth header
-	if (authorization?.startsWith("Basic ")) {
+	if (authorization && BASIC_SCHEME_PREFIX.test(authorization)) {
 		const res = basicToClientCredentials(authorization);
 		if (res) {
 			return {
+				kind: "client_secret",
 				method: "client_secret_basic",
 				clientId: res.client_id,
 				clientSecret: res.client_secret,
@@ -708,6 +744,7 @@ export async function extractClientCredentials(
 	// 3. Check body params
 	if (body.client_id && body.client_secret) {
 		return {
+			kind: "client_secret",
 			method: "client_secret_post",
 			clientId: body.client_id as string,
 			clientSecret: body.client_secret as string,
@@ -716,7 +753,11 @@ export async function extractClientCredentials(
 
 	// 4. client_id only (public client)
 	if (body.client_id) {
-		return { method: "none", clientId: body.client_id as string };
+		return {
+			kind: "public",
+			method: "none",
+			clientId: body.client_id as string,
+		};
 	}
 
 	return null;

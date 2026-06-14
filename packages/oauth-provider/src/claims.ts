@@ -1,6 +1,9 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import type { User } from "better-auth/types";
-import type { OAuthOptions, Scope } from "./types";
+import { collectExtensionAccessTokenClaims } from "./extensions";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import type { GrantType } from "./types/oauth";
 
 /**
  * Claim names reserved by RFC 9068 §2.2 for OAuth 2.0 JWT-formatted access
@@ -62,15 +65,28 @@ function stripReservedClaims(
  * stored opaque-token row).
  */
 export interface AccessTokenClaimsInput {
+	ctx: GenericEndpointContext;
 	opts: OAuthOptions<Scope[]>;
 	/** Token subject; `null`/`undefined` for `client_credentials`. */
 	user: User | null | undefined;
+	client: SchemaClient<Scope[]>;
 	/** Effective (post resource-allowlist narrowing) scopes. */
 	scopes: string[];
 	resources: string[] | undefined;
 	referenceId: string | undefined;
 	/** Parsed client metadata, as returned by `parseClientMetadata`. */
-	metadata: object | undefined;
+	metadata: Record<string, unknown> | undefined;
+	/**
+	 * Grant type passed to extension claim contributors. Pass `undefined` at
+	 * introspection: the opaque-token row does not persist the grant, so
+	 * contributed access-token claims must be grant-type-stable.
+	 */
+	grantType: GrantType | undefined;
+	/**
+	 * Per-issuance claims a grant handler supplied via `extra.accessTokenClaims`.
+	 * Available only at issuance; `undefined` at introspection.
+	 */
+	perRequestClaims: Record<string, unknown> | undefined;
 	/** Per-resource `customClaims` from `resolveResourcePolicy` (raw, not yet stripped). */
 	resourcePolicyClaims: Record<string, unknown>;
 }
@@ -82,7 +98,8 @@ export interface AccessTokenClaimsInput {
  * reserved RFC 9068 names are stripped unconditionally here so no caller can
  * forget to.
  *
- * Precedence, lowest to highest: plugin `customAccessTokenClaims` < per-resource
+ * Precedence, lowest to highest: extension contributors < per-issuance
+ * `extra.accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
  * `customClaims`. Reserved names are removed from the merged result.
  *
  * Returns only the enriched claims; the caller stamps the AS-owned claims
@@ -92,17 +109,43 @@ export interface AccessTokenClaimsInput {
 export async function resolveAccessTokenClaims(
 	input: AccessTokenClaimsInput,
 ): Promise<Record<string, unknown>> {
-	const pluginClaims = input.opts.customAccessTokenClaims
-		? await input.opts.customAccessTokenClaims({
-				user: input.user,
-				scopes: input.scopes,
-				resources: input.resources,
-				referenceId: input.referenceId,
-				metadata: input.metadata,
+	const {
+		ctx,
+		opts,
+		user,
+		client,
+		scopes,
+		resources,
+		referenceId,
+		metadata,
+		grantType,
+		perRequestClaims,
+		resourcePolicyClaims,
+	} = input;
+	const extensionClaims = await collectExtensionAccessTokenClaims(opts, {
+		ctx,
+		opts,
+		user,
+		client,
+		scopes,
+		grantType,
+		referenceId,
+		resources,
+		metadata,
+	});
+	const pluginClaims = opts.customAccessTokenClaims
+		? await opts.customAccessTokenClaims({
+				user,
+				scopes,
+				resources,
+				referenceId,
+				metadata,
 			})
 		: {};
 	return stripReservedClaims({
+		...extensionClaims,
+		...(perRequestClaims ?? {}),
 		...pluginClaims,
-		...input.resourcePolicyClaims,
+		...resourcePolicyClaims,
 	});
 }

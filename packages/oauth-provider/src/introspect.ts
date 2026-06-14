@@ -275,6 +275,10 @@ async function validateOpaqueAccessToken(
 		};
 	}
 
+	const resources = Array.isArray(accessToken.resources)
+		? accessToken.resources
+		: undefined;
+
 	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
 		client = await getClient(ctx, opts, accessToken.clientId);
@@ -289,9 +293,7 @@ async function validateOpaqueAccessToken(
 			!(await isIntrospectionAuthorized(ctx, opts, {
 				introspectingClientId: clientId,
 				issuerClientId: accessToken.clientId,
-				audienceResources: Array.isArray(accessToken.resources)
-					? accessToken.resources
-					: [],
+				audienceResources: resources ?? [],
 			}))
 		) {
 			return { active: false };
@@ -322,9 +324,6 @@ async function validateOpaqueAccessToken(
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
 	}
-	const resources = Array.isArray(accessToken.resources)
-		? accessToken.resources
-		: undefined;
 	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 
 	// Deleting a resource row revokes the tokens bound to it: introspection
@@ -355,15 +354,24 @@ async function validateOpaqueAccessToken(
 	const resourcePolicyClaims = resources?.length
 		? await getResourceCustomClaims(ctx, opts, resources)
 		: {};
-	const accessTokenClaims = await resolveAccessTokenClaims({
-		opts,
-		user,
-		scopes: accessToken.scopes ?? [],
-		resources,
-		referenceId: accessToken.referenceId,
-		metadata: parseClientMetadata(client?.metadata),
-		resourcePolicyClaims,
-	});
+	// `grantType` and per-issuance extras are not persisted on the opaque row,
+	// so extension claims are re-derived grant-type-stable and per-request
+	// extras are JWT-only (see `resolveAccessTokenClaims`).
+	const accessTokenClaims = client
+		? await resolveAccessTokenClaims({
+				ctx,
+				opts,
+				user,
+				client,
+				scopes: accessToken.scopes ?? [],
+				grantType: undefined,
+				resources,
+				referenceId: accessToken.referenceId,
+				metadata: parseClientMetadata(client.metadata),
+				perRequestClaims: undefined,
+				resourcePolicyClaims,
+			})
+		: {};
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
@@ -577,6 +585,7 @@ export async function introspectEndpoint(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerifiedClient)) {
@@ -605,6 +614,8 @@ export async function introspectEndpoint(
 		client_secret,
 		undefined,
 		preVerifiedClient,
+		undefined,
+		authMethod,
 	);
 
 	try {

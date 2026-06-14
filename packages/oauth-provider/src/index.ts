@@ -1,7 +1,9 @@
 export { getIssuer } from "./authorize";
+export { extendOAuthProvider } from "./extensions";
 export {
 	authServerMetadata,
 	metadataResponse,
+	oauthAuthorizationServerMetadata,
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
 	oidcServerMetadata,
@@ -24,3 +26,4 @@ export { raiseResourceServerChallenge } from "./resource-challenge";
 export type * from "./types";
 export type { OAuthClient, ResourceServerMetadata } from "./types/oauth";
 export { ResourceUriSchema } from "./types/zod";
+export { consumeClientAssertion } from "./utils/client-assertion";
