@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-auth/api";
+import { APIError, isAPIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
@@ -48,7 +48,32 @@ export async function userInfoEndpoint(
 			error: "invalid_request",
 		});
 	}
-	const jwt = await validateAccessToken(ctx, opts, token);
+	let jwt: Awaited<ReturnType<typeof validateAccessToken>>;
+	try {
+		jwt = await validateAccessToken(ctx, opts, token);
+	} catch (error) {
+		// RFC 6750 §3.1: an invalid or expired bearer token is `invalid_token` and
+		// must be answered with 401 (+ a WWW-Authenticate challenge), not the generic
+		// 400 `invalid_request` that `validateAccessToken` throws when both JWT and
+		// opaque validation fail. Resource clients (e.g. OAuth integrations that rely
+		// on auto-refresh) only renew their token on a 401, so a 400 strands otherwise
+		// valid sessions. The legacy oidc-provider plugin also returned 401 here.
+		if (
+			isAPIError(error) &&
+			(error.body as { error_description?: string } | undefined)
+				?.error_description === "Invalid access token"
+		) {
+			throw new APIError(
+				"UNAUTHORIZED",
+				{ error: "invalid_token", error_description: "Invalid access token" },
+				{
+					"WWW-Authenticate":
+						'Bearer error="invalid_token", error_description="Invalid access token"',
+				},
+			);
+		}
+		throw error;
+	}
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");
 	if (!scopes?.includes("openid")) {
