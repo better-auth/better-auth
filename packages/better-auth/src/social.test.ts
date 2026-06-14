@@ -3,6 +3,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
+	CloudflareProfile,
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
@@ -2287,6 +2288,337 @@ describe("Microsoft Provider", async () => {
 
 		expect(res.data?.url).toContain("public-ms-client");
 		expect(res.data?.redirect).toBe(true);
+	});
+});
+
+describe("Cloudflare Provider", async () => {
+	beforeAll(() => {
+		mswServer.use(
+			http.post(
+				"https://dash.cloudflare.com/oauth2/token",
+				async ({ request }) => {
+					const authHeader = request.headers.get("authorization");
+					expect(authHeader).toMatch(/^Basic /);
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("grant_type")).toBe("authorization_code");
+					expect(params.get("code")).toBeDefined();
+					expect(params.get("redirect_uri")).toBeDefined();
+					expect(params.get("code_verifier")).not.toBeNull();
+					expect(params.get("client_secret")).toBeNull();
+
+					return HttpResponse.json({
+						access_token: "cloudflare_access_token",
+						refresh_token: "cloudflare_refresh_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://dash.cloudflare.com/oauth2/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "cloudflare_user_123",
+					email: "cloudflare@test.com",
+					email_verified: true,
+					name: "Cloudflare User",
+					picture: "https://dash.cloudflare.com/avatar.png",
+				} satisfies CloudflareProfile);
+			}),
+		);
+	});
+
+	it("should configure Cloudflare provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				cloudflare: {
+					clientId: "cloudflare-test-client-id",
+					clientSecret: "cloudflare-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const cloudflareProvider = ctx.socialProviders.find(
+			(p) => p.id === "cloudflare",
+		);
+
+		expect(cloudflareProvider).toBeDefined();
+		expect(cloudflareProvider?.id).toBe("cloudflare");
+		expect(cloudflareProvider?.name).toBe("Cloudflare");
+	});
+
+	it("should initiate Cloudflare OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				cloudflare: {
+					clientId: "cloudflare-test-client-id",
+					clientSecret: "cloudflare-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("dash.cloudflare.com/oauth2/auth");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toContain("user-details.read");
+		expect(authUrl.searchParams.get("scope")).not.toContain("openid");
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should not send an empty scope parameter when default scopes are disabled", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				cloudflare: {
+					clientId: "cloudflare-test-client-id",
+					clientSecret: "cloudflare-test-client-secret",
+					disableDefaultScope: true,
+					scope: [],
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data?.url).toBeDefined();
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toBeNull();
+	});
+
+	it("should include additional Cloudflare API scopes", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				cloudflare: {
+					clientId: "cloudflare-test-client-id",
+					clientSecret: "cloudflare-test-client-secret",
+					scope: ["workers-platform.read"],
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data?.url).toBeDefined();
+		const authUrl = new URL(signInRes.data!.url!);
+		const scopes = authUrl.searchParams.get("scope");
+
+		expect(scopes).toContain("user-details.read");
+		expect(scopes).toContain("workers-platform.read");
+		expect(scopes).not.toContain("openid");
+	});
+
+	it("should complete Cloudflare OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					cloudflare: {
+						clientId: "cloudflare-test-client-id",
+						clientSecret: "cloudflare-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/cloudflare", {
+			query: {
+				state,
+				code: "cloudflare_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+
+				cookieSetter(headers)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.email).toBe("cloudflare@test.com");
+		expect(session.data?.user.name).toBe("Cloudflare User");
+		expect(session.data?.user.image).toBe(
+			"https://dash.cloudflare.com/avatar.png",
+		);
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("cloudflare");
+		expect(accounts[0]?.accountId).toBe("cloudflare_user_123");
+	});
+
+	it("should support client_secret_post token authentication", async () => {
+		mswServer.use(
+			http.post(
+				"https://dash.cloudflare.com/oauth2/token",
+				async ({ request }) => {
+					expect(request.headers.get("authorization")).toBeNull();
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("client_id")).toBe("cloudflare-post-client-id");
+					expect(params.get("client_secret")).toBe(
+						"cloudflare-post-client-secret",
+					);
+
+					return HttpResponse.json({
+						access_token: "cloudflare_post_access_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					cloudflare: {
+						clientId: "cloudflare-post-client-id",
+						clientSecret: "cloudflare-post-client-secret",
+						tokenEndpointAuthMethod: "client_secret_post",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/cloudflare", {
+			query: { state, code: "cloudflare_post_code" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.email).toBe("cloudflare@test.com");
+	});
+
+	it("should support public clients", async () => {
+		mswServer.use(
+			http.post(
+				"https://dash.cloudflare.com/oauth2/token",
+				async ({ request }) => {
+					expect(request.headers.get("authorization")).toBeNull();
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("client_id")).toBe("cloudflare-public-client-id");
+					expect(params.get("client_secret")).toBeNull();
+
+					return HttpResponse.json({
+						access_token: "cloudflare_public_access_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					cloudflare: {
+						clientId: "cloudflare-public-client-id",
+						tokenEndpointAuthMethod: "none",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/cloudflare", {
+			query: { state, code: "cloudflare_public_code" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.email).toBe("cloudflare@test.com");
 	});
 });
 

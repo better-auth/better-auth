@@ -1,0 +1,170 @@
+---
+title: Cloudflare
+description: Cloudflare provider setup and usage.
+---
+
+<Steps>
+  <Step>
+    ### Get your Cloudflare credentials
+
+    To use Cloudflare as a social provider, create an OAuth client from the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/oauth-clients).
+
+    1. Select your account in the Cloudflare dashboard
+    2. Go to **Manage Account** > **OAuth clients**
+    3. Select **Create client**
+    4. Use the Authorization Code flow with `code` as the response type
+    5. Set **Token Authentication Method** to `client_secret_basic`
+    6. Set the redirect URL to `http://localhost:3000/api/auth/callback/cloudflare` for local development. For production, set it to your application URL, for example `https://example.com/api/auth/callback/cloudflare`
+    7. Select **User Details Read** and any other Cloudflare API scopes your application needs
+    8. Save your client ID and client secret securely
+
+    If you change the base path of the auth routes, update the redirect URL accordingly.
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    To configure the provider, pass the `clientId` and `clientSecret` to `socialProviders.cloudflare` in your auth configuration. The provider requests `user-details.read` by default so Better Auth can read the user's profile details.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            cloudflare: { // [!code highlight]
+                clientId: process.env.CLOUDFLARE_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Sign in with Cloudflare
+
+To sign in with Cloudflare, use the `signIn.social` function provided by the client. The `provider` should be set to `cloudflare`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "cloudflare"
+    })
+}
+```
+
+## Options
+
+For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Scopes
+
+Cloudflare OAuth scope names correspond to Cloudflare API token permission names. Select the scopes your application needs when creating the OAuth client. Better Auth does not limit which Cloudflare scopes you can request; pass any scope IDs that are configured on your Cloudflare OAuth client.
+
+The provider requests `user-details.read` by default. To request additional Cloudflare API scopes, select them on your Cloudflare OAuth client and add their exact scope IDs with the `scope` option.
+
+For example:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
+            scope: [
+                "workers-platform.read",
+            ], // [!code highlight]
+        },
+    },
+})
+```
+
+<Callout type="warn">
+  The authorization request must not include scopes that are missing from the Cloudflare OAuth client configuration. Cloudflare's docs say exact OAuth scope IDs are available from `GET https://api.cloudflare.com/client/v4/oauth/scopes`.
+</Callout>
+
+### Token authentication method
+
+Use `client_secret_basic` for regular server-side Better Auth applications. This is the default used by the Cloudflare provider when `clientSecret` is configured.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
+            // tokenEndpointAuthMethod: "client_secret_basic", // default // [!code highlight]
+        },
+    },
+})
+```
+
+If your Cloudflare OAuth client is configured with `client_secret_post`, set `tokenEndpointAuthMethod` to `client_secret_post`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
+            tokenEndpointAuthMethod: "client_secret_post", // [!code highlight]
+        },
+    },
+})
+```
+
+### Public clients
+
+Cloudflare supports public OAuth clients. If your Cloudflare OAuth client is configured with `token_endpoint_auth_method` set to `none`, omit `clientSecret` and set `tokenEndpointAuthMethod` to `none`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            tokenEndpointAuthMethod: "none", // [!code highlight]
+        },
+    },
+})
+```
+
+### Handling missing email
+
+If your Cloudflare client does not return an email from the user info endpoint, Better Auth cannot create a user unless you map one yourself.
+
+Use `mapProfileToUser` to provide an application-specific placeholder email:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
+            mapProfileToUser: (profile) => ({
+                email: profile.email ?? `${profile.sub}@cloudflare.placeholder.local`, // [!code highlight]
+            }),
+        },
+    },
+})
+```
+
+<Callout type="warn">
+  Synthesized emails are placeholders, not contact addresses. Use a domain you control, or a reserved suffix like `.invalid` or `.local`, so no real inbox is addressed by mistake.
+</Callout>
+
+For more information about Cloudflare OAuth, refer to the [Cloudflare OAuth documentation](https://developers.cloudflare.com/fundamentals/oauth/).
