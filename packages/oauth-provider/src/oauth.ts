@@ -48,6 +48,7 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	authorizationQuerySchema,
+	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
 } from "./types/zod";
@@ -1395,57 +1396,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						scope: z.string().optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						contacts: z.array(z.string().min(1)).min(1).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						backchannel_logout_uri: SafeUrlSchema.optional(),
-						backchannel_logout_session_required: z.boolean().optional(),
-						token_endpoint_auth_method: z.string().trim().min(1).optional(),
-						jwks: z
-							.union([
-								z.array(z.record(z.string(), z.unknown())).min(1),
-								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())).min(1),
-								}),
-							])
-							.optional(),
-						jwks_uri: z.string().optional(),
-						grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
-						response_types: z.array(z.enum(["code"])).optional(),
-						type: z.enum(["web", "native", "user-agent-based"]).optional(),
-						subject_type: z.enum(["public", "pairwise"]).optional(),
-						// RFC 7591 §2 extension: declare the resources this client
-						// will request. Each must reference an existing oauthResource
-						// row; the registration handler links them on success.
-						resources: z.array(z.string().min(1)).optional(),
-						skip_consent: z
-							.never({
-								error:
-									"skip_consent cannot be set during dynamic client registration",
-							})
-							.optional(),
-					}),
+					body: clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
 						software_statement: "invalid_software_statement",
+						// RFC 8707 §2: a malformed resource indicator is invalid_target,
+						// matching the existence check in registerEndpoint.
+						resources: "invalid_target",
 					},
 					defaultError: "invalid_client_metadata",
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
-								"200": {
+								"201": {
 									description: "OAuth2 application registered successfully",
 									content: {
 										"application/json": {
