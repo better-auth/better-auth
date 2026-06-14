@@ -35,6 +35,20 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 
+function hydrateVerification(raw: unknown): Verification | null {
+	if (!raw) return null;
+	const candidate =
+		typeof raw === "string"
+			? safeJSONParse<Verification>(raw)
+			: typeof raw === "object"
+				? (raw as Verification)
+				: null;
+	if (!candidate) return null;
+	const expiresAt = new Date(candidate.expiresAt);
+	if (!Number.isFinite(expiresAt.getTime())) return null;
+	return { ...candidate, expiresAt };
+}
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -1267,30 +1281,12 @@ export const createInternalAdapter = (
 					? [storedIdentifier, identifier]
 					: [storedIdentifier];
 
-			// After a JSON round-trip `expiresAt` arrives as a string, so coerce
-			// it back to a valid `Date` to match what the DB adapter returns.
-			const hydrateCachedVerification = (raw: unknown): Verification | null => {
-				if (!raw) return null;
-				const candidate =
-					typeof raw === "string"
-						? safeJSONParse<Verification>(raw)
-						: typeof raw === "object"
-							? (raw as Verification)
-							: null;
-				if (!candidate) return null;
-				const expiresAt = new Date(candidate.expiresAt);
-				if (!Number.isFinite(expiresAt.getTime())) return null;
-				return { ...candidate, expiresAt };
-			};
-
 			let consumed: Verification | null = null;
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
 				const consumeCacheKey = async (key: string) => {
 					if (secondaryStorage.getAndDelete) {
-						return hydrateCachedVerification(
-							await secondaryStorage.getAndDelete(key),
-						);
+						return hydrateVerification(await secondaryStorage.getAndDelete(key));
 					}
 					if (!warnedNonAtomicConsume) {
 						warnedNonAtomicConsume = true;
@@ -1300,7 +1296,7 @@ export const createInternalAdapter = (
 					}
 					return withVerificationConsumeLock(key, async () => {
 						const raw = await secondaryStorage.get(key);
-						const parsed = hydrateCachedVerification(raw);
+						const parsed = hydrateVerification(raw);
 						if (!parsed) return null;
 						await secondaryStorage.delete(key);
 						return parsed;
@@ -1378,8 +1374,9 @@ export const createInternalAdapter = (
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already
 			// invalid, so callers can rely on a non-null return meaning "valid".
-			if (!consumed || consumed.expiresAt < new Date()) return null;
-			return consumed;
+			const hydrated = hydrateVerification(consumed);
+			if (!hydrated || hydrated.expiresAt < new Date()) return null;
+			return hydrated;
 		},
 		/**
 		 * First-writer-wins create keyed by a deterministic primary key derived
