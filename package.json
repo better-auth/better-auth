@@ -53,5 +53,8 @@
     "turbo": "^2.9.14",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
+  },
+  "bugs": {
+    "url": "https://github.com/better-auth/better-auth/issues"
   }
 }
