@@ -121,6 +121,12 @@ jobs:
           VERSION=$(jq -r '.version' packages/better-auth/package.json)
           gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
 
+      - name: Verify npm time metadata
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: node .github/scripts/verify-npm-packument-time.ts
+
       - name: Generate raw release notes
         id: raw-notes
         if: steps.changesets.outputs.published == 'true'
