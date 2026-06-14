@@ -11,6 +11,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
+import { sanitizeErrorCode } from "../../api/routes/callback";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
 import {
@@ -578,11 +579,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw e;
 			}
 
-			if (result.error) {
+			if (result.error || !result.data) {
 				redirectOnError(
 					ctx,
 					resolvedErrorURL,
-					result.error.split(" ").join("_"),
+					sanitizeErrorCode(result.error || "unable_to_create_user"),
 				);
 			}
 			const { session, user } = result.data!;
