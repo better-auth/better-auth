@@ -686,9 +686,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				session.session.activeOrganizationId;
 			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 200,
-				});
+				return ctx.json(null);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const organization = await adapter.findFullOrganization({

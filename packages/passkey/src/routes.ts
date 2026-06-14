@@ -346,9 +346,7 @@ export const generatePasskeyRegistrationOptions = (
 				} satisfies StoredChallengeValue),
 				expiresAt: expirationTime,
 			});
-			return ctx.json(options, {
-				status: 200,
-			});
+			return ctx.json(options);
 		},
 	);
 };
@@ -516,9 +514,7 @@ export const generatePasskeyAuthenticationOptions = (
 				value: JSON.stringify(data),
 				expiresAt: expirationTime,
 			});
-			return ctx.json(options, {
-				status: 200,
-			});
+			return ctx.json(options);
 		},
 	);
 
@@ -703,9 +699,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					model: "passkey",
 					data: newPasskey,
 				});
-				return ctx.json(newPasskeyRes, {
-					status: 200,
-				});
+				return ctx.json(newPasskeyRes);
 			} catch (e) {
 				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify registration", e);
@@ -888,15 +882,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					user,
 				});
 
-				return ctx.json(
-					{
-						session: s,
-						user,
-					},
-					{
-						status: 200,
-					},
-				);
+				return ctx.json({
+					session: s,
+					user,
+				});
 			} catch (e) {
 				if (e instanceof APIError) throw e;
 				ctx.context.logger.error("Failed to verify authentication", e);
@@ -963,9 +952,7 @@ export const listPasskeys = createAuthEndpoint(
 			model: "passkey",
 			where: [{ field: "userId", value: ctx.context.session.user.id }],
 		});
-		return ctx.json(passkeys, {
-			status: 200,
-		});
+		return ctx.json(passkeys);
 	},
 );
 
@@ -1127,13 +1114,8 @@ export const updatePasskey = createAuthEndpoint(
 				PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
 			);
 		}
-		return ctx.json(
-			{
-				passkey: updatedPasskey,
-			},
-			{
-				status: 200,
-			},
-		);
+		return ctx.json({
+			passkey: updatedPasskey,
+		});
 	},
 );
