@@ -507,7 +507,7 @@ export async function processSAMLResponse(
 			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
 		};
 		await ctx.context.internalAdapter
-			.createVerificationValue({
+			.createOrReplaceVerificationValue({
 				identifier: samlSessionKey,
 				value: JSON.stringify(samlSessionData),
 				expiresAt: session.expiresAt,

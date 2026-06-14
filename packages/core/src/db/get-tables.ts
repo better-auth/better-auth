@@ -64,6 +64,11 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.verification?.fields?.identifier || "identifier",
 					index: true,
+					/**
+					 * This field can not be `unique: true`, several plugins create verification records with deterministic identifiers and do NOT delete/upsert
+					 * before creating. Plugins include: SWIE, phone-number, email-otp (some paths), 2FA OTP, and others.
+					 */
+					unique: false,
 				},
 				value: {
 					type: "string",

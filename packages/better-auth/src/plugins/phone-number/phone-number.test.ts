@@ -104,6 +104,33 @@ describe("phone-number", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6354
+	 */
+	it("should handle sending OTP twice without consuming the first", async () => {
+		const phone = "+251999888777";
+		const firstRes = await client.phoneNumber.sendOtp({
+			phoneNumber: phone,
+		});
+		expect(firstRes.error).toBe(null);
+		const firstOtp = otp;
+
+		const secondRes = await client.phoneNumber.sendOtp({
+			phoneNumber: phone,
+		});
+		expect(secondRes.error).toBe(null);
+		const secondOtp = otp;
+
+		expect(secondOtp).not.toBe(firstOtp);
+
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: phone,
+			code: secondOtp,
+		});
+		expect(verifyRes.error).toBe(null);
+		expect(verifyRes.data?.status).toBe(true);
+	});
 });
 
 /**
