@@ -1,5 +1,18 @@
 # auth
 
+## 1.6.19
+
+### Patch Changes
+
+- [#9564](https://github.com/better-auth/better-auth/pull/9564) [`cfbb9a0`](https://github.com/better-auth/better-auth/commit/cfbb9a05243da942d4c5f9fae80077bbccd17f5c) Thanks [@brone1323](https://github.com/brone1323)! - fix(cli): handle directory path passed to --output in generate command
+
+- [#10048](https://github.com/better-auth/better-auth/pull/10048) [`d6aec12`](https://github.com/better-auth/better-auth/commit/d6aec123d8cf9f50e357e67c2916010f9f09b561) Thanks [@tsushanth](https://github.com/tsushanth)! - fix(cli): serialize array additionalField defaultValue in drizzle generator
+
+- Updated dependencies [[`b4b0266`](https://github.com/better-auth/better-auth/commit/b4b02660c760fe4c8889d1311a3dbf3165f88d0b), [`581f827`](https://github.com/better-auth/better-auth/commit/581f8271fb911cea2ce74810e086709909457cd3), [`c1a8a64`](https://github.com/better-auth/better-auth/commit/c1a8a64c146fab20c7ad0076ffdf12eff9adc17a), [`c2f718f`](https://github.com/better-auth/better-auth/commit/c2f718fcdeec0c1767bb8acd5fefdd3810863b0a), [`7d18175`](https://github.com/better-auth/better-auth/commit/7d18175637a0b95a501fde0cf3db080879367a9d)]:
+  - better-auth@1.6.19
+  - @better-auth/core@1.6.19
+  - @better-auth/telemetry@1.6.19
+
 ## 1.6.18
 
 ### Patch Changes
