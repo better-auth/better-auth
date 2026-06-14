@@ -927,6 +927,63 @@ describe("Enum field support in Drizzle schemas", () => {
 	});
 });
 
+describe("Drizzle array defaultValue serialization", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10046
+	 */
+	it("emits a JS array literal for string[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						roles: {
+							type: "string[]",
+							required: true,
+							defaultValue: ["customer"],
+							input: false,
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'roles: text("roles").array().default(["customer"]).notNull()',
+		);
+		expect(schema.code).not.toContain(".default(customer)");
+	});
+
+	it("emits a JS array literal for number[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						scores: {
+							type: "number[]",
+							required: true,
+							defaultValue: [1, 2, 3],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'scores: integer("scores").array().default([1, 2, 3]).notNull()',
+		);
+	});
+});
+
 describe("usePlural schema generation", () => {
 	it("should generate drizzle schema with usePlural option", async () => {
 		const schema = await generateDrizzleSchema({
