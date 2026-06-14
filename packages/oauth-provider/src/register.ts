@@ -5,8 +5,8 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import {
+	getSupportedAuthMethods,
 	getSupportedGrantTypes,
-	getSupportedTokenEndpointAuthMethods,
 	isExtensionTokenEndpointAuthMethod,
 } from "./extensions";
 import { assertClientPrivileges } from "./oauthClient/privileges";
@@ -173,7 +173,7 @@ export async function checkOAuthClient(
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
 	const supportedTokenEndpointAuthMethods = new Set(
-		getSupportedTokenEndpointAuthMethods(opts, { includeNone: true }),
+		getSupportedAuthMethods(opts, { includeNone: true }),
 	);
 	if (!supportedTokenEndpointAuthMethods.has(tokenEndpointAuthMethod)) {
 		throw new APIError("BAD_REQUEST", {

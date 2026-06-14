@@ -7,10 +7,7 @@ import type { BetterAuthPlugin, User } from "better-auth/types";
 import { decodeJwt } from "jose";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
-import {
-	extendOAuthProvider,
-	validateOAuthProviderExtensions,
-} from "./extensions";
+import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
 import type {
 	ClientDiscovery,
@@ -25,6 +22,7 @@ describe("oauth-provider extensions", async () => {
 	const resource = "https://vc.example.com/credential";
 	const redirectUri = "https://client.example.com/callback";
 	const extensionGrant = "urn:better-auth:test:grant";
+	const extensionOpaqueGrant = "urn:better-auth:test:opaque-grant";
 	const extensionAuthMethod = "test_attestation_jwt";
 	const extensionAssertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
@@ -39,7 +37,7 @@ describe("oauth-provider extensions", async () => {
 			token_endpoint: "https://malicious-discovery.example.com/token",
 			client_id_metadata_document_supported: true,
 		},
-	} satisfies ClientDiscovery<Scope[]>;
+	} satisfies ClientDiscovery;
 
 	const extensionPlugin = {
 		id: "test-oauth-extension",
@@ -64,19 +62,43 @@ describe("oauth-provider extensions", async () => {
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
 							resources: [resource],
-							extra: {
-								accessTokenClaims: {
-									grant_claim: "grant-access",
-									client_id: "malicious-client",
-								},
-								idTokenClaims: {
-									grant_id_claim: "grant-id",
-									sub: "malicious-sub",
-								},
-								tokenResponse: {
-									issued_token_type: "urn:better-auth:test:access_token",
-								},
+							accessTokenClaims: {
+								grant_claim: "grant-access",
+								client_id: "malicious-client",
 							},
+							idTokenClaims: {
+								grant_id_claim: "grant-id",
+								sub: "malicious-sub",
+								// Collides with the extension idToken contributor below;
+								// the per-issuance value must win.
+								order_probe: "grant",
+							},
+							tokenResponse: {
+								issued_token_type: "urn:better-auth:test:access_token",
+							},
+						});
+					},
+					// Issues an opaque access token (no resource -> no audience), so
+					// introspection re-derives extension claims through the resolver
+					// instead of returning a signed JWT payload verbatim.
+					[extensionOpaqueGrant]: async ({ grantType, tools }) => {
+						if (!grantUser) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "test user is not ready",
+							});
+						}
+						const { client } = await tools.authenticateClient({
+							scopes: ["openid", "email", "vc"],
+							grantType,
+						});
+						return tools.issueTokens({
+							client,
+							scopes: ["openid", "email", "vc"],
+							user: grantUser,
+							// Per-issuance claims are JWT-only; an opaque token persists
+							// none, so this must be absent at introspection.
+							accessTokenClaims: { opaque_per_issuance: "jwt-only" },
 						});
 					},
 				},
@@ -119,6 +141,7 @@ describe("oauth-provider extensions", async () => {
 						extension_id_claim: "extension-id",
 						sub: "malicious-extension-sub",
 						email: "evil@malicious.example",
+						order_probe: "extension",
 					}),
 					userInfo: () => ({
 						extension_userinfo_claim: "extension-userinfo",
@@ -148,7 +171,11 @@ describe("oauth-provider extensions", async () => {
 				scopes: ["openid", "profile", "email", "offline_access", "vc"],
 				customUserInfoClaims: () => ({
 					custom_userinfo_claim: "custom-userinfo",
+					// Re-pinned by the endpoint; proves first-party cannot move `sub`.
 					sub: "malicious-custom-sub",
+					// First-party config MAY override a provider base claim (unlike a
+					// third-party extension): the response must reflect this value.
+					email_verified: true,
 				}),
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -360,24 +387,32 @@ describe("oauth-provider extensions", async () => {
 		).toThrow("grant type must be an absolute URI");
 	});
 
-	it("does not revalidate extension objects after setup", () => {
-		let grantsReadCount = 0;
+	it("registers an extension at most once per extension object", () => {
+		const provider = oauthProvider({
+			loginPage: "/login",
+			consentPage: "/consent",
+		});
+		const ctx = {
+			getPlugin: (id: string) => (id === "oauth-provider" ? provider : null),
+		} as unknown as Parameters<typeof extendOAuthProvider>[0];
 		const extension = {
-			get grants() {
-				grantsReadCount++;
-				return {
-					[extensionGrant]: async () => {
-						throw new APIError("BAD_REQUEST", {
-							error: "invalid_request",
-							error_description: "unreachable test grant",
-						});
-					},
-				};
+			grants: {
+				[extensionGrant]: async () => {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description: "unreachable test grant",
+					});
+				},
 			},
-		} satisfies OAuthProviderExtension<Scope[]>;
-		validateOAuthProviderExtensions([extension]);
-		validateOAuthProviderExtensions([extension]);
-		expect(grantsReadCount).toBe(1);
+		} satisfies OAuthProviderExtension;
+		extendOAuthProvider(ctx, extension);
+		// A re-run of the plugin's init() (for example when one factory result is
+		// shared across two betterAuth() instances) must not append the extension
+		// again, which would otherwise reject as a duplicate grant type.
+		extendOAuthProvider(ctx, extension);
+		expect(
+			(provider.options as { extensions?: unknown[] }).extensions,
+		).toHaveLength(1);
 	});
 
 	it("dispatches extension grants through shared token issuance", async () => {
@@ -433,6 +468,9 @@ describe("oauth-provider extensions", async () => {
 		// identity claims.
 		expect(idTokenPayload.email).toBe(user.email);
 		expect(idTokenPayload.email).not.toBe("evil@malicious.example");
+		// Per-issuance idTokenClaims win a collision against an extension idToken
+		// contributor (extension < per-issuance), matching the access-token ladder.
+		expect(idTokenPayload.order_probe).toBe("grant");
 
 		const userInfo = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/userinfo",
@@ -447,6 +485,9 @@ describe("oauth-provider extensions", async () => {
 		expect(userInfo.data?.email).toBe(user.email);
 		expect(userInfo.data?.extension_userinfo_claim).toBe("extension-userinfo");
 		expect(userInfo.data?.custom_userinfo_claim).toBe("custom-userinfo");
+		// First-party customUserInfoClaims may override a provider base claim,
+		// unlike an additive third-party extension claim. `sub` stays re-pinned.
+		expect(userInfo.data?.email_verified).toBe(true);
 
 		const introspection = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/introspect",
@@ -689,5 +730,255 @@ describe("oauth-provider extensions", async () => {
 				],
 			}),
 		).rejects.toThrow("register grant type");
+	});
+
+	it("rejects two extensions registering the same auth method", async () => {
+		const sharedMethod = "shared_attestation_jwt";
+		const makeAuthExtensionPlugin = (id: string, assertionType: string) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[sharedMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async () => {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_request",
+										error_description: "unreachable test authentication",
+									});
+								},
+							},
+						},
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					makeAuthExtensionPlugin("auth-ext-a", "urn:better-auth:test:a"),
+					makeAuthExtensionPlugin("auth-ext-b", "urn:better-auth:test:b"),
+				],
+			}),
+		).rejects.toThrow("register token_endpoint_auth_method");
+	});
+
+	it("rejects two extensions registering the same assertion type", async () => {
+		const sharedAssertion = "urn:better-auth:test:shared-assertion";
+		const makeAssertionExtensionPlugin = (id: string, method: string) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[method]: {
+								assertionTypes: [sharedAssertion],
+								authenticate: async () => {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_request",
+										error_description: "unreachable test authentication",
+									});
+								},
+							},
+						},
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					makeAssertionExtensionPlugin("assert-ext-a", "method_a_jwt"),
+					makeAssertionExtensionPlugin("assert-ext-b", "method_b_jwt"),
+				],
+			}),
+		).rejects.toThrow("register client_assertion_type");
+	});
+
+	it("resolves a metadata key collision to the first-registered extension", async () => {
+		const makeMetadataExtensionPlugin = (id: string, value: string) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						metadata: () => ({ shared_metadata_field: value }),
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+				makeMetadataExtensionPlugin("meta-ext-a", "first"),
+				makeMetadataExtensionPlugin("meta-ext-b", "second"),
+			],
+		});
+		const metadata =
+			(await instance.auth.api.getOpenIdConfig()) as unknown as Record<
+				string,
+				unknown
+			>;
+		expect(metadata.shared_metadata_field).toBe("first");
+	});
+
+	it("re-derives extension access-token claims on opaque-token introspection", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionOpaqueGrant],
+				scope: "openid email vc",
+				type: "web",
+			},
+		});
+		const tokenResponse = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: extensionOpaqueGrant,
+					client_id: oauthClient!.client_id,
+					client_assertion_type: extensionAssertionType,
+					client_assertion: `assertion:${oauthClient!.client_id}`,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(tokenResponse.error).toBeNull();
+		// Opaque, not a JWT: a random string with no dot-delimited JWT segments.
+		expect(tokenResponse.data!.access_token).not.toContain(".");
+
+		const introspection = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					token: tokenResponse.data!.access_token,
+					client_id: oauthClient!.client_id,
+					client_assertion_type: extensionAssertionType,
+					client_assertion: `assertion:${oauthClient!.client_id}`,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(introspection.error).toBeNull();
+		expect(introspection.data?.active).toBe(true);
+		// Re-derived through the claim authority, not stored on the opaque row.
+		expect(introspection.data?.extension_access_claim).toBe("extension-access");
+		// The contributor tried to set the reserved client_id; the AS owns it.
+		expect(introspection.data?.client_id).toBe(oauthClient!.client_id);
+		// Per-issuance extras are JWT-only and must not reappear on opaque tokens.
+		expect(introspection.data?.opaque_per_issuance).toBeUndefined();
+	});
+
+	it("surfaces an extension assertion rejection as invalid_client", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: oauthClient!.client_id,
+				client_assertion_type: extensionAssertionType,
+				client_assertion: "assertion:wrong",
+				resource,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+	});
+
+	it("authenticates an extension assertion on the revoke endpoint", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionOpaqueGrant],
+				scope: "openid email vc",
+				type: "web",
+			},
+		});
+		const tokenResponse = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: extensionOpaqueGrant,
+					client_id: oauthClient!.client_id,
+					client_assertion_type: extensionAssertionType,
+					client_assertion: `assertion:${oauthClient!.client_id}`,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(tokenResponse.error).toBeNull();
+		const accessToken = tokenResponse.data!.access_token;
+
+		const revoke = await client.$fetch("/oauth2/revoke", {
+			method: "POST",
+			body: new URLSearchParams({
+				token: accessToken,
+				client_id: oauthClient!.client_id,
+				client_assertion_type: extensionAssertionType,
+				client_assertion: `assertion:${oauthClient!.client_id}`,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		// No invalid_client: the extension assertion authenticated on /revoke.
+		expect(revoke.error).toBeNull();
+
+		const introspection = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					token: accessToken,
+					client_id: oauthClient!.client_id,
+					client_assertion_type: extensionAssertionType,
+					client_assertion: `assertion:${oauthClient!.client_id}`,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		// The revoked token is gone: introspection reports it inactive or unknown,
+		// never active.
+		expect(introspection.data?.active).not.toBe(true);
 	});
 });

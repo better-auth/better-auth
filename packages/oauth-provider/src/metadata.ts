@@ -5,13 +5,11 @@ import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
 	getClientDiscoveries,
-	getSupportedEndpointAuthMethods,
+	getSupportedAuthMethods,
 	getSupportedGrantTypes,
-	getSupportedTokenEndpointAuthMethods,
 } from "./extensions";
 import type { OAuthOptions, Scope } from "./types";
 import type {
-	AuthMethod,
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
@@ -28,7 +26,7 @@ export function authServerMetadata(
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
-		endpoint_auth_methods_supported?: AuthMethod[];
+		endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		jwt_disabled?: boolean;
 	},
 ) {
@@ -122,11 +120,10 @@ function buildAuthServerMetadata(
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		public_client_supported: publicClientSupported,
 		grant_types_supported: getSupportedGrantTypes(opts),
-		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
-			opts,
-			{ includeNone: publicClientSupported },
-		),
-		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
+		token_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
+			includeNone: publicClientSupported,
+		}),
+		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 	});
 	return { jwtPluginOptions, clientDiscoveries, authMetadata };
@@ -135,7 +132,7 @@ function buildAuthServerMetadata(
 export function oauthAuthorizationServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-) {
+): AuthServerMetadata {
 	const { clientDiscoveries, authMetadata } = buildAuthServerMetadata(
 		ctx,
 		opts,
@@ -148,7 +145,7 @@ export function oauthAuthorizationServerMetadata(
 			...mergeDiscoveryMetadata(clientDiscoveries),
 			...authMetadata,
 		},
-	) as unknown as AuthServerMetadata;
+	);
 }
 
 export function oidcServerMetadata(
@@ -200,7 +197,7 @@ export function oidcServerMetadata(
 			...mergeDiscoveryMetadata(clientDiscoveries),
 			...metadata,
 		},
-	) as unknown as OIDCMetadata;
+	);
 }
 
 // Cache for 15s with a short stale window; metadata rarely changes.

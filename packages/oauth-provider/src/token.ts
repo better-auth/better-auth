@@ -99,7 +99,7 @@ function createExtensionGrantTools(
 	return {
 		authenticateClient: async (
 			request?: OAuthClientAuthenticationRequest,
-		): Promise<OAuthAuthenticatedClient<Scope[]>> => {
+		): Promise<OAuthAuthenticatedClient> => {
 			const credentials = await extractClientCredentials(
 				ctx,
 				opts,
@@ -139,9 +139,9 @@ function createExtensionGrantTools(
 				method: authMethod,
 			};
 		},
-		issueTokens: (params: OAuthTokenIssueParams<Scope[]>) =>
+		issueTokens: (params: OAuthTokenIssueParams) =>
 			createUserTokens(ctx, opts, { ...params, grantType }),
-		hashTokenIdentifier: (token: string, type: StoreTokenType) =>
+		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
 			const { validateAccessToken } = await import("./introspect");
@@ -582,7 +582,7 @@ async function createRefreshToken(
 	};
 }
 
-type CreateUserTokensParams = OAuthTokenIssueParams<Scope[]> & {
+type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
 };
 
@@ -716,7 +716,7 @@ async function createUserTokens(
 						resources: params.resources,
 						metadata,
 					})),
-					...(params.extra?.idTokenClaims ?? {}),
+					...(params.idTokenClaims ?? {}),
 				}
 			: undefined;
 
@@ -768,7 +768,7 @@ async function createUserTokens(
 				resources: params.resources,
 				referenceId,
 				metadata,
-				perRequestClaims: params.extra?.accessTokenClaims,
+				perRequestClaims: params.accessTokenClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
@@ -848,7 +848,7 @@ async function createUserTokens(
 	return ctx.json(
 		{
 			...customFields,
-			...(params.extra?.tokenResponse ?? {}),
+			...(params.tokenResponse ?? {}),
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,

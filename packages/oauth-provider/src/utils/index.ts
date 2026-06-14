@@ -238,7 +238,7 @@ export async function getClient(
  * @internal
  */
 export function mergeDiscoveryMetadata(
-	discoveries: ClientDiscovery<Scope[]>[],
+	discoveries: ClientDiscovery[],
 ): Record<string, unknown> {
 	return discoveries.reduce<Record<string, unknown>>(
 		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),

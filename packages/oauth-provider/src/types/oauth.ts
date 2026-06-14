@@ -140,7 +140,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	revocation_endpoint_auth_methods_supported?: AuthMethod[];
+	revocation_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the revocation endpoint for
@@ -161,7 +161,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	introspection_endpoint_auth_methods_supported?: AuthMethod[];
+	introspection_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the introspection endpoint

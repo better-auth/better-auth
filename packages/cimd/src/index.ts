@@ -1,4 +1,4 @@
-import type { ClientDiscovery, Scope } from "@better-auth/oauth-provider";
+import type { ClientDiscovery } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { createCimdResolver } from "./resolver";
@@ -24,7 +24,7 @@ declare module "@better-auth/core" {
  */
 export function cimdClientDiscovery(
 	options: CimdOptions = {},
-): ClientDiscovery<Scope[]> {
+): ClientDiscovery {
 	const resolver = createCimdResolver(options);
 	return {
 		id: "cimd",

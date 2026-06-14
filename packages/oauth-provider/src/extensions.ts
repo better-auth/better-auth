@@ -1,15 +1,15 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
-import type { oauthProvider } from "./oauth";
 import type {
 	ClientDiscovery,
-	OAuthClaimContributionInput,
+	OAuthClaimExtensionInput,
 	OAuthClientAuthenticationStrategy,
-	OAuthMetadataContributionInput,
+	OAuthMetadataExtensionInput,
 	OAuthOptions,
 	OAuthProviderExtension,
-	OAuthUserInfoContributionInput,
+	OAuthUserInfoExtensionInput,
 	Scope,
 } from "./types";
 import type { Awaitable } from "./types/helpers";
@@ -42,10 +42,6 @@ const RESERVED_TOKEN_ENDPOINT_AUTH_METHODS = [
 const RESERVED_TOKEN_ENDPOINT_AUTH_METHOD_SET = new Set<string>(
 	RESERVED_TOKEN_ENDPOINT_AUTH_METHODS,
 );
-
-function dedupe<T extends string>(values: T[]): T[] {
-	return Array.from(new Set(values));
-}
 
 function assertNonEmptyExtensionValue(name: string, value: string) {
 	if (value.trim().length > 0) return;
@@ -92,16 +88,14 @@ interface ExtensionKeys {
 	assertionTypes: string[];
 }
 
-// Caches the registered keys of each validated extension. Extensions are read
-// once at setup and treated as immutable after, so per-extension validation and
-// the cross-extension disjointness check below never re-read their getters.
-const validatedExtensions = new WeakMap<
-	OAuthProviderExtension<Scope[]>,
-	ExtensionKeys
->();
-
-function validateOAuthProviderExtension(
-	extension: OAuthProviderExtension<Scope[]>,
+/**
+ * Validates one extension's dispatched keys (grant types, auth methods,
+ * assertion types) and returns them for the cross-extension disjointness check.
+ * Throws on a non-absolute grant/assertion URI, a reserved auth-method name, or
+ * an empty assertion-type list.
+ */
+function collectExtensionKeys(
+	extension: OAuthProviderExtension,
 ): ExtensionKeys {
 	const grantTypes = Object.keys(extension.grants ?? {});
 	for (const grantType of grantTypes) {
@@ -140,39 +134,34 @@ function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
 	}
 }
 
+/**
+ * Validates every extension and rejects two extensions registering the same
+ * grant type, auth method, or assertion type: otherwise the first would win and
+ * the second be silently unreachable. Runs at setup over the whole list;
+ * extensions number in the single digits, so a full re-scan per registration is
+ * cheaper than the bookkeeping to cache it.
+ */
 export function validateOAuthProviderExtensions(
-	extensions: OAuthProviderExtension<Scope[]>[] | undefined,
+	extensions: OAuthProviderExtension[] | undefined,
 ) {
-	const all = extensions ?? [];
-	for (const extension of all) {
-		if (validatedExtensions.has(extension)) continue;
-		validatedExtensions.set(
-			extension,
-			validateOAuthProviderExtension(extension),
-		);
-	}
-	// Reject two extensions registering the same grant type, auth method, or
-	// assertion type: otherwise the first wins and the second is silently
-	// unreachable. Uses the keys cached at first validation.
-	const keysOf = (extension: OAuthProviderExtension<Scope[]>) =>
-		validatedExtensions.get(extension);
+	const keys = (extensions ?? []).map(collectExtensionKeys);
 	assertNoDuplicateAcrossExtensions(
 		"grant type",
-		all.flatMap((extension) => keysOf(extension)?.grantTypes ?? []),
+		keys.flatMap((k) => k.grantTypes),
 	);
 	assertNoDuplicateAcrossExtensions(
 		"token_endpoint_auth_method",
-		all.flatMap((extension) => keysOf(extension)?.authMethods ?? []),
+		keys.flatMap((k) => k.authMethods),
 	);
 	assertNoDuplicateAcrossExtensions(
 		"client_assertion_type",
-		all.flatMap((extension) => keysOf(extension)?.assertionTypes ?? []),
+		keys.flatMap((k) => k.assertionTypes),
 	);
 }
 
 function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
-): OAuthProviderExtension<Scope[]>[] {
+): OAuthProviderExtension[] {
 	return opts.extensions ?? [];
 }
 
@@ -183,7 +172,7 @@ function getOAuthProviderExtensions(
  */
 export function getClientDiscoveries(
 	opts: OAuthOptions<Scope[]>,
-): ClientDiscovery<Scope[]>[] {
+): ClientDiscovery[] {
 	return getOAuthProviderExtensions(opts).flatMap((extension) => {
 		const discovery = extension.clientDiscovery;
 		if (!discovery) return [];
@@ -195,13 +184,17 @@ export function getClientDiscoveries(
  * Registers an {@link OAuthProviderExtension} with the OAuth Provider plugin
  * from a companion plugin's `init()` hook. An extension can add token grants,
  * assertion-based client authentication methods, additive discovery metadata,
- * and access-token, ID-token, or UserInfo claims, without forking provider core.
+ * access-token / ID-token / UserInfo claims, and client-id discovery, without
+ * forking provider core.
  *
- * Call this once, at `init()` time. It throws if the oauth-provider plugin is
- * not installed, if a grant type or assertion type is not an absolute URI, if a
- * client authentication method reuses a built-in name, or if the extension
- * registers a grant type, auth method, or assertion type that another extension
- * already registered (contributions must be disjoint).
+ * Call this once, at `init()` time. It is idempotent in the same `extension`
+ * object, so re-running a plugin's `init()` (for example when one plugin factory
+ * result is shared across two `betterAuth()` instances) does not register it
+ * twice. It throws if the oauth-provider plugin is not installed, if a grant
+ * type or assertion type is not an absolute URI, if a client authentication
+ * method reuses a built-in name, or if the extension registers a grant type,
+ * auth method, or assertion type that another extension already registered
+ * (contributions must be disjoint).
  *
  * @example
  * ```ts
@@ -214,17 +207,17 @@ export function getClientDiscoveries(
  */
 export function extendOAuthProvider(
 	ctx: AuthContext,
-	extension: OAuthProviderExtension<Scope[]>,
+	extension: OAuthProviderExtension,
 ) {
-	const provider = ctx.getPlugin("oauth-provider") satisfies ReturnType<
-		typeof oauthProvider
-	> | null;
+	const provider = ctx.getPlugin("oauth-provider");
 	if (!provider) {
 		throw new BetterAuthError(
 			"extendOAuthProvider requires the oauth-provider plugin.",
 		);
 	}
-	const extensions = [...(provider.options.extensions ?? []), extension];
+	const existing = provider.options.extensions ?? [];
+	if (existing.includes(extension)) return;
+	const extensions = [...existing, extension];
 	validateOAuthProviderExtensions(extensions);
 	provider.options.extensions = extensions;
 }
@@ -238,10 +231,12 @@ function getExtensionGrantTypes(opts: OAuthOptions<Scope[]>): GrantType[] {
 export function getSupportedGrantTypes(
 	opts: OAuthOptions<Scope[]>,
 ): GrantType[] {
-	return dedupe([
-		...(opts.grantTypes ?? DEFAULT_GRANT_TYPES),
-		...getExtensionGrantTypes(opts),
-	]);
+	return Array.from(
+		new Set<GrantType>([
+			...(opts.grantTypes ?? DEFAULT_GRANT_TYPES),
+			...getExtensionGrantTypes(opts),
+		]),
+	);
 }
 
 export function getExtensionGrantHandler(
@@ -263,24 +258,23 @@ function getExtensionTokenEndpointAuthMethods(
 	);
 }
 
-export function getSupportedTokenEndpointAuthMethods(
+/**
+ * Confidential and extension client-authentication methods the provider
+ * supports. Pass `includeNone` to prepend `"none"` for the token endpoint and
+ * DCR, where public clients are allowed; the introspection and revocation
+ * endpoints, which never accept public clients, omit it (the default).
+ */
+export function getSupportedAuthMethods(
 	opts: OAuthOptions<Scope[]>,
 	settings?: { includeNone?: boolean },
 ): TokenEndpointAuthMethod[] {
-	return dedupe([
-		...(settings?.includeNone ? (["none"] as TokenEndpointAuthMethod[]) : []),
-		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
-		...getExtensionTokenEndpointAuthMethods(opts),
-	]);
-}
-
-export function getSupportedEndpointAuthMethods(
-	opts: OAuthOptions<Scope[]>,
-): AuthMethod[] {
-	return dedupe([
-		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
-		...getExtensionTokenEndpointAuthMethods(opts),
-	]);
+	return Array.from(
+		new Set<TokenEndpointAuthMethod>([
+			...(settings?.includeNone ? (["none"] as TokenEndpointAuthMethod[]) : []),
+			...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
+			...getExtensionTokenEndpointAuthMethods(opts),
+		]),
+	);
 }
 
 export function isExtensionTokenEndpointAuthMethod(
@@ -298,65 +292,69 @@ export function getExtensionClientAuthenticationStrategy(
 ):
 	| {
 			method: TokenEndpointAuthMethod;
-			strategy: OAuthClientAuthenticationStrategy<Scope[]>;
+			strategy: OAuthClientAuthenticationStrategy;
 	  }
 	| undefined {
-	const extensions = getOAuthProviderExtensions(opts);
 	if (assertionType === CLIENT_ASSERTION_TYPE) return undefined;
-	for (const extension of extensions) {
+	for (const extension of getOAuthProviderExtensions(opts)) {
 		const strategies = extension.clientAuthentication ?? {};
 		for (const [method, strategy] of Object.entries(strategies)) {
 			const assertionTypes = strategy.assertionTypes ?? [method];
 			if (assertionTypes.includes(assertionType)) {
-				return {
-					method,
-					strategy,
-				};
+				return { method, strategy };
 			}
 		}
 	}
 	return undefined;
 }
 
-export function applyOAuthProviderMetadataExtensions(
+/**
+ * Merges the discovery-document fields contributed by every registered
+ * extension into `document`. The provider owns every key it already wrote, and
+ * the first extension to contribute a given key wins, so an extension can add
+ * fields but never override authorization-server core.
+ */
+export function applyOAuthProviderMetadataExtensions<
+	T extends AuthServerMetadata | OIDCMetadata,
+>(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	type: OAuthMetadataContributionInput<Scope[]>["type"],
-	metadata: AuthServerMetadata | OIDCMetadata,
-) {
-	const next: Record<string, unknown> = { ...metadata };
+	type: OAuthMetadataExtensionInput["type"],
+	document: T,
+): T {
+	const next: Record<string, unknown> = { ...document };
 	for (const extension of getOAuthProviderExtensions(opts)) {
-		const contribution = extension.metadata?.({
-			ctx,
-			opts,
-			type,
-			metadata,
-		});
+		const contribution = extension.metadata?.({ ctx, opts, type, document });
 		for (const [key, value] of Object.entries(contribution ?? {})) {
 			if (!(key in next)) {
 				next[key] = value;
 			}
 		}
 	}
-	return next;
+	return next as T;
 }
 
 async function collectClaims(
 	opts: OAuthOptions<Scope[]>,
 	run: (
-		extension: OAuthProviderExtension<Scope[]>,
+		extension: OAuthProviderExtension,
 	) => Awaitable<Record<string, unknown> | undefined>,
 ) {
 	const claims: Record<string, unknown> = {};
-	// First contributor wins a key, matching metadata extensions
-	// (`applyOAuthProviderMetadataExtensions`). Extensions are expected to
-	// contribute disjoint claims; this only fixes the resolution if they don't.
+	// First contributor wins a key, matching metadata extensions. Extensions are
+	// expected to contribute disjoint claims, so a collision is a
+	// misconfiguration: keep the first value and warn rather than silently
+	// shadow the later contributor.
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		const contribution = (await run(extension)) ?? {};
 		for (const [key, value] of Object.entries(contribution)) {
-			if (!(key in claims)) {
-				claims[key] = value;
+			if (key in claims) {
+				logger.warn(
+					`oauth-provider: two extensions contributed the claim "${key}"; keeping the first-registered value.`,
+				);
+				continue;
 			}
+			claims[key] = value;
 		}
 	}
 	return claims;
@@ -364,7 +362,7 @@ async function collectClaims(
 
 export function collectExtensionAccessTokenClaims(
 	opts: OAuthOptions<Scope[]>,
-	input: OAuthClaimContributionInput<Scope[]>,
+	input: OAuthClaimExtensionInput,
 ) {
 	return collectClaims(opts, (extension) =>
 		extension.claims?.accessToken?.(input),
@@ -373,14 +371,14 @@ export function collectExtensionAccessTokenClaims(
 
 export function collectExtensionIdTokenClaims(
 	opts: OAuthOptions<Scope[]>,
-	input: OAuthClaimContributionInput<Scope[]>,
+	input: OAuthClaimExtensionInput,
 ) {
 	return collectClaims(opts, (extension) => extension.claims?.idToken?.(input));
 }
 
 export function collectExtensionUserInfoClaims(
 	opts: OAuthOptions<Scope[]>,
-	input: OAuthUserInfoContributionInput<Scope[]>,
+	input: OAuthUserInfoExtensionInput,
 ) {
 	return collectClaims(opts, (extension) =>
 		extension.claims?.userInfo?.(input),
