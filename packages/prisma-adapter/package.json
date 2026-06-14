@@ -10,6 +10,9 @@
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/prisma-adapter"
   },
+  "bugs": {
+    "url": "https://github.com/better-auth/better-auth/issues"
+  },
   "keywords": [
     "auth",
     "prisma",
