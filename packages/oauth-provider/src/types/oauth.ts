@@ -5,7 +5,7 @@ import type { Prompt } from ".";
 /**
  * Supported grant types of the token endpoint
  */
-export type GrantType =
+export type BuiltInGrantType =
 	| "authorization_code"
 	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
 	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
@@ -15,13 +15,32 @@ export type GrantType =
 // | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
 // | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
 
-export type AuthMethod =
+export type GrantType = BuiltInGrantType | (string & {});
+
+export type BuiltInAuthMethod =
 	| "client_secret_basic" // Basic header
 	| "client_secret_post" // POST
 	| "private_key_jwt"; // JWT signed with client's private key (RFC 7523)
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
+export type AuthMethod = BuiltInAuthMethod | (string & {});
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 export type BearerMethodsSupported = "header" | "body";
+
+/**
+ * RFC 7800 `cnf` (confirmation) members that sender-constrain an access token to
+ * a key the client must prove possession of. Each binding mechanism populates
+ * one member of the same object: DPoP sets `jkt` (RFC 9449 §6), mTLS sets
+ * `x5t#S256` (RFC 8705 §3.1). The authorization server is the sole authority
+ * over this value; it is token material, never a contributed claim.
+ */
+export type Confirmation = { jkt: string } | { "x5t#S256": string };
+
+/**
+ * Token presentation scheme returned in `token_type`. A DPoP-bound token uses
+ * `"DPoP"` (RFC 9449 §5); everything else (including mTLS-bound) uses
+ * `"Bearer"`, since the mTLS constraint lives at the TLS layer.
+ */
+export type TokenType = "Bearer" | "DPoP";
 
 /**
  * Metadata for authentication servers.
@@ -137,7 +156,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	revocation_endpoint_auth_methods_supported?: AuthMethod[];
+	revocation_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the revocation endpoint for
@@ -158,7 +177,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	introspection_endpoint_auth_methods_supported?: AuthMethod[];
+	introspection_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the introspection endpoint
@@ -337,11 +356,7 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
 	 */
 	backchannel_logout_session_required?: boolean;
-	token_endpoint_auth_method?:
-		| "none"
-		| "client_secret_basic"
-		| "client_secret_post"
-		| "private_key_jwt";
+	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1

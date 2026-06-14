@@ -205,7 +205,7 @@ describe("Client ID Metadata Document - integration", async () => {
 
 	it("should advertise client_id_metadata_document_supported in discovery", async () => {
 		const config =
-			(await authorizationServer.api.getOAuthServerConfig()) as Record<
+			(await authorizationServer.api.getOAuthServerConfig()) as unknown as Record<
 				string,
 				unknown
 			>;

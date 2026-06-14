@@ -1,5 +1,5 @@
-import { BetterAuthError } from "@better-auth/core/error";
-import type { ClientDiscovery, Scope } from "@better-auth/oauth-provider";
+import type { ClientDiscovery } from "@better-auth/oauth-provider";
+import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { createCimdResolver } from "./resolver";
 import type { CimdOptions } from "./types";
@@ -17,14 +17,14 @@ declare module "@better-auth/core" {
 /**
  * Build a {@link ClientDiscovery} for Client ID Metadata Documents.
  *
- * Users who prefer explicit composition can pass the result directly to
- * `oauthProvider({ clientDiscovery })`; most users should install the
- * {@link cimd} plugin instead, which appends this discovery to whatever
- * is already configured.
+ * Users who prefer explicit composition can contribute the result through
+ * `oauthProvider({ extensions: [{ clientDiscovery }] })`; most users should
+ * install the {@link cimd} plugin instead, which contributes this discovery
+ * alongside whatever else is configured.
  */
 export function cimdClientDiscovery(
 	options: CimdOptions = {},
-): ClientDiscovery<Scope[]> {
+): ClientDiscovery {
 	const resolver = createCimdResolver(options);
 	return {
 		id: "cimd",
@@ -52,18 +52,7 @@ export const cimd = (options: CimdOptions = {}) => {
 		id: "cimd",
 		version: PACKAGE_VERSION,
 		init(ctx) {
-			const provider = ctx.getPlugin("oauth-provider");
-			if (!provider) {
-				throw new BetterAuthError(
-					"The cimd plugin requires the oauth-provider plugin.",
-				);
-			}
-			const existing = provider.options.clientDiscovery;
-			provider.options.clientDiscovery = Array.isArray(existing)
-				? [...existing, discovery]
-				: existing
-					? [existing, discovery]
-					: discovery;
+			extendOAuthProvider(ctx, { clientDiscovery: discovery });
 		},
 	} satisfies BetterAuthPlugin;
 };

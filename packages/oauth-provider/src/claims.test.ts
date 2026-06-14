@@ -1,7 +1,8 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { describe, expect, it, vi } from "vitest";
 import { resolveAccessTokenClaims } from "./claims";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
 
 function optsWith(
 	customAccessTokenClaims?: OAuthOptions<Scope[]>["customAccessTokenClaims"],
@@ -9,12 +10,19 @@ function optsWith(
 	return { customAccessTokenClaims } as unknown as OAuthOptions<Scope[]>;
 }
 
+// These cases exercise the merge/strip/precedence logic with no extensions
+// configured, so `ctx` and `client` are never dereferenced; typed stubs satisfy
+// the resolver's input contract without a live request.
 const baseInput = {
+	ctx: {} as unknown as GenericEndpointContext,
+	client: {} as unknown as SchemaClient<Scope[]>,
 	user: undefined,
 	scopes: ["openid"],
 	resources: undefined,
 	referenceId: undefined,
 	metadata: undefined,
+	grantType: undefined,
+	perRequestClaims: undefined,
 };
 
 describe("resolveAccessTokenClaims", () => {
@@ -63,7 +71,7 @@ describe("resolveAccessTokenClaims", () => {
 			});
 			expect(warnSpy).toHaveBeenCalledOnce();
 			const [message] = warnSpy.mock.calls[0] ?? [];
-			expect(String(message)).toMatch(/stripped reserved RFC 9068 claim/i);
+			expect(String(message)).toMatch(/stripped reserved access-token claim/i);
 			expect(String(message)).toMatch(/jti/);
 			expect(String(message)).toMatch(/iss/);
 		} finally {
@@ -74,11 +82,11 @@ describe("resolveAccessTokenClaims", () => {
 	it("hands derivable token context to customAccessTokenClaims", async () => {
 		let received: Record<string, unknown> | undefined;
 		await resolveAccessTokenClaims({
+			...baseInput,
 			opts: optsWith((info) => {
 				received = info as Record<string, unknown>;
 				return {};
 			}),
-			user: undefined,
 			scopes: ["openid", "email"],
 			resources: ["https://api.example.com"],
 			referenceId: "ref-1",
