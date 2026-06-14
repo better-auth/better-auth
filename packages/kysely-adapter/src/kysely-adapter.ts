@@ -126,7 +126,16 @@ export const kyselyAdapter = (
 				where: Where[],
 			) => {
 				if (config?.type === "mysql") {
-					await builder.execute();
+					const result = await builder.executeTakeFirst();
+					const insertId = result?.insertId;
+
+					if (insertId) {
+						return await db
+							.selectFrom(model)
+							.selectAll()
+							.where(getFieldName({ model, field: "id" }), "=", insertId)
+							.executeTakeFirst();
+					}
 
 					// Updates: re-query by the where clause field
 					if (where.length > 0) {
