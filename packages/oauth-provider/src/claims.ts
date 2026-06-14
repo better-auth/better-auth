@@ -6,15 +6,17 @@ import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { GrantType } from "./types/oauth";
 
 /**
- * Claim names reserved by RFC 9068 §2.2 for OAuth 2.0 JWT-formatted access
- * tokens. No claim source (the `customAccessTokenClaims` plugin option or a
- * resource row's `customClaims`) can override these: the authorization server
- * is the only source of truth for issuer identity, subject, audience, lifetime,
- * scope, authentication context, and the token's stable ID.
+ * Claim names the authorization server owns on a JWT access token, which no
+ * claim source (the `customAccessTokenClaims` plugin option, an extension
+ * contributor, or a resource row's `customClaims`) may override. The AS is the
+ * only source of truth for issuer identity, subject, audience, lifetime, scope,
+ * authentication context, the token's stable ID, and its sender-constraint
+ * (`cnf`).
  *
- * @see RFC 9068 §2.2 (Header and Data Structures)
+ * @see RFC 9068 §2.2 (registered access-token claims)
+ * @see RFC 7800 / RFC 9449 §6 (`cnf` confirmation — the token's bound key)
  */
-const RESERVED_RFC9068_CLAIMS = new Set([
+const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"iss",
 	"sub",
 	"aud",
@@ -26,10 +28,11 @@ const RESERVED_RFC9068_CLAIMS = new Set([
 	"auth_time",
 	"acr",
 	"amr",
+	"cnf",
 ]);
 
 /**
- * Returns a copy of `claims` with reserved RFC 9068 names removed. Emits a
+ * Returns a copy of `claims` with reserved AS-owned names removed. Emits a
  * `warn` naming the stripped keys when any were present (never silently
  * dropped: surfacing the override attempt matters more than minimizing log
  * noise). Stable iteration order (`Object.entries`) is preserved so token-debug
@@ -42,7 +45,7 @@ function stripReservedClaims(
 	const stripped: string[] = [];
 	const safe: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(claims)) {
-		if (RESERVED_RFC9068_CLAIMS.has(key)) {
+		if (RESERVED_ACCESS_TOKEN_CLAIMS.has(key)) {
 			stripped.push(key);
 			continue;
 		}
@@ -50,7 +53,7 @@ function stripReservedClaims(
 	}
 	if (stripped.length > 0) {
 		logger.warn(
-			`oauth-provider: stripped reserved RFC 9068 claim name(s) from access-token claims: ${stripped.join(
+			`oauth-provider: stripped reserved access-token claim name(s): ${stripped.join(
 				", ",
 			)}. The AS owns these claim values.`,
 		);

@@ -15,15 +15,18 @@ import {
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import type {
+	Confirmation,
 	OAuthAuthenticatedClient,
 	OAuthClientAuthenticationRequest,
 	OAuthOptions,
+	OAuthProviderApi,
 	OAuthRefreshToken,
 	OAuthTokenIssueParams,
 	OAuthTokenResponse,
 	SchemaClient,
 	Scope,
 	StoreTokenType,
+	TokenType,
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
@@ -34,6 +37,7 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	isPKCERequired,
@@ -46,6 +50,15 @@ import {
 	toResourceList,
 	validateClientCredentials,
 } from "./utils";
+
+/**
+ * Token presentation scheme implied by a confirmation: a DPoP key thumbprint
+ * (`jkt`) yields `"DPoP"`; any other confirmation (including mTLS `x5t#S256`)
+ * keeps `"Bearer"`, since that constraint lives at the TLS layer.
+ */
+function confirmationTokenType(confirmation?: Confirmation): TokenType {
+	return confirmation && "jkt" in confirmation ? "DPoP" : "Bearer";
+}
 
 const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
@@ -80,7 +93,7 @@ export async function tokenEndpoint(
 					ctx,
 					opts,
 					grantType,
-					tools: createExtensionGrantTools(ctx, opts, grantType),
+					provider: getOAuthProviderApi(ctx, opts, grantType),
 				});
 			}
 			throw new APIError("BAD_REQUEST", {
@@ -91,12 +104,21 @@ export async function tokenEndpoint(
 	}
 }
 
-function createExtensionGrantTools(
+/**
+ * Returns the OAuth Provider's server-side capability surface bound to `ctx`.
+ * The token endpoint passes one (pre-bound to the dispatched grant) to each
+ * extension grant handler; a companion plugin's own endpoint calls this directly
+ * with its grant type. `grantType` is bound here, not per issuance, so a handler
+ * cannot mislabel the grant; omit it for capabilities that do not issue tokens
+ * (`getClient`, `validateAccessToken`), and `issueTokens` then throws.
+ */
+export function getOAuthProviderApi(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	grantType: GrantType,
-) {
+	grantType?: GrantType,
+): OAuthProviderApi {
 	return {
+		getClient: (clientId: string) => getClient(ctx, opts, clientId),
 		authenticateClient: async (
 			request?: OAuthClientAuthenticationRequest,
 		): Promise<OAuthAuthenticatedClient> => {
@@ -139,8 +161,16 @@ function createExtensionGrantTools(
 				method: authMethod,
 			};
 		},
-		issueTokens: (params: OAuthTokenIssueParams) =>
-			createUserTokens(ctx, opts, { ...params, grantType }),
+		issueTokens: (params: OAuthTokenIssueParams) => {
+			if (!grantType) {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					error_description:
+						"issueTokens requires a grant type; pass it to getOAuthProviderApi(ctx, opts, grantType).",
+					error: "server_error",
+				});
+			}
+			return createUserTokens(ctx, opts, { ...params, grantType });
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -171,10 +201,16 @@ async function createJwtAccessToken(
 		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
 		/**
 		 * Enriched access-token claims from {@link resolveAccessTokenClaims}
-		 * (reserved RFC 9068 names already stripped). The AS-owned claims below
+		 * (reserved AS-owned names already stripped). The AS-owned claims below
 		 * are stamped after and always win.
 		 */
 		accessTokenClaims?: Record<string, unknown>;
+		/**
+		 * Sender-constraint to stamp as the RFC 7800 `cnf` claim. AS-owned: it is
+		 * stamped after the enriched claims (which have `cnf` stripped), so a
+		 * contributor cannot forge it.
+		 */
+		confirmation?: Confirmation;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -213,6 +249,8 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
+			// RFC 7800 sender-constraint, stamped last so the AS owns it.
+			...(overrides?.confirmation ? { cnf: overrides.confirmation } : {}),
 		},
 	});
 }
@@ -773,6 +811,11 @@ async function createUserTokens(
 			})
 		: undefined;
 
+	// Sender-constraint stamped onto JWT access tokens now. Opaque-token binding
+	// persistence (a stored confirmation column) ships with the DPoP mechanism,
+	// which also derives the confirmation from a request proof.
+	const confirmation = isJwtAccessToken ? params.confirmation : undefined;
+
 	// Create access token and refresh token in parallel
 	const [accessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
@@ -790,6 +833,7 @@ async function createUserTokens(
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
+						confirmation,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -852,7 +896,7 @@ async function createUserTokens(
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
-			token_type: "Bearer" as const,
+			token_type: confirmationTokenType(confirmation),
 			refresh_token: refreshToken?.token,
 			scope: effectiveScopes.join(" "),
 			id_token: idToken,

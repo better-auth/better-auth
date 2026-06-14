@@ -27,6 +27,22 @@ export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client supp
 export type BearerMethodsSupported = "header" | "body";
 
 /**
+ * RFC 7800 `cnf` (confirmation) members that sender-constrain an access token to
+ * a key the client must prove possession of. Each binding mechanism populates
+ * one member of the same object: DPoP sets `jkt` (RFC 9449 §6), mTLS sets
+ * `x5t#S256` (RFC 8705 §3.1). The authorization server is the sole authority
+ * over this value; it is token material, never a contributed claim.
+ */
+export type Confirmation = { jkt: string } | { "x5t#S256": string };
+
+/**
+ * Token presentation scheme returned in `token_type`. A DPoP-bound token uses
+ * `"DPoP"` (RFC 9449 §5); everything else (including mTLS-bound) uses
+ * `"Bearer"`, since the mTLS constraint lives at the TLS layer.
+ */
+export type TokenType = "Bearer" | "DPoP";
+
+/**
  * Metadata for authentication servers.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2

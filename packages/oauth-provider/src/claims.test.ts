@@ -71,7 +71,7 @@ describe("resolveAccessTokenClaims", () => {
 			});
 			expect(warnSpy).toHaveBeenCalledOnce();
 			const [message] = warnSpy.mock.calls[0] ?? [];
-			expect(String(message)).toMatch(/stripped reserved RFC 9068 claim/i);
+			expect(String(message)).toMatch(/stripped reserved access-token claim/i);
 			expect(String(message)).toMatch(/jti/);
 			expect(String(message)).toMatch(/iss/);
 		} finally {

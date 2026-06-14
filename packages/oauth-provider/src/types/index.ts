@@ -6,20 +6,24 @@ import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
 import type {
 	AuthServerMetadata,
+	Confirmation,
 	GrantType,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
+	TokenType,
 } from "./oauth";
 
 export type {
 	AuthMethod,
 	AuthServerMetadata,
 	BearerMethodsSupported,
+	Confirmation,
 	GrantType,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
+	TokenType,
 } from "./oauth";
 
 export type StoreTokenType =
@@ -89,6 +93,14 @@ export interface OAuthAuthenticatedClient {
 	clientId: string;
 	client: SchemaClient<Scope[]>;
 	method?: TokenEndpointAuthMethod;
+	/**
+	 * A sender-constraint the authentication step already proved (for example a
+	 * wallet-instance key thumbprint). Pass it to `issueTokens` as
+	 * {@link OAuthTokenIssueParams.confirmation} to bind the issued token to it.
+	 * The authorization server writes this as token material and does not verify
+	 * it again, so a strategy must set it only after proving possession.
+	 */
+	confirmation?: Confirmation;
 }
 
 export interface OAuthClientAuthenticationRequest {
@@ -142,42 +154,62 @@ export interface OAuthTokenIssueParams {
 	 * response fields stay owned by the authorization server.
 	 */
 	tokenResponse?: Record<string, unknown>;
+	/**
+	 * Sender-constraint to bind this issuance to (RFC 7800 `cnf`). When set, the
+	 * issuer stamps it as the access token's `cnf` and derives `token_type` from
+	 * it, instead of leaving the token a bearer token. Use it to carry a
+	 * confirmation a client-auth strategy or an out-of-band flow already proved
+	 * (see {@link OAuthAuthenticatedClient.confirmation}). `cnf` is AS-owned: it
+	 * is stamped after, and cannot be overridden by, contributed claims.
+	 */
+	confirmation?: Confirmation;
 }
 
 export interface OAuthTokenResponse {
 	access_token: string;
 	expires_in: number;
 	expires_at: number;
-	token_type: "Bearer";
+	token_type: TokenType;
 	refresh_token: string | undefined;
 	scope: string;
 	id_token: string | undefined;
 	[key: string]: unknown;
 }
 
-export interface OAuthExtensionGrantTools {
+/**
+ * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
+ * A grant handler receives one as `provider`; a companion plugin's own endpoint
+ * obtains one with `getOAuthProviderApi(ctx, opts, grantType?)`. The same object
+ * serves both, so issuance, client resolution, and token verification behave the
+ * same inside and outside a grant.
+ */
+export interface OAuthProviderApi {
+	/**
+	 * Resolves a registered client by id, consulting extension client-discovery
+	 * sources. Returns `null` when no client matches.
+	 */
+	getClient: (clientId: string) => Awaitable<SchemaClient<Scope[]> | null>;
 	authenticateClient: (
 		request?: OAuthClientAuthenticationRequest,
 	) => Awaitable<OAuthAuthenticatedClient>;
 	/**
 	 * Issues the token set for this grant (access token, optional refresh token,
-	 * optional ID token, resource policy, and response envelope). The grant type
-	 * is taken from the request the handler was dispatched for, not from the
-	 * caller, so contributed claims and hooks are always labeled with the real
-	 * grant type.
+	 * optional ID token, resource policy, response envelope, and any
+	 * sender-constraint). The grant type is fixed by the `getOAuthProviderApi`
+	 * binding (the dispatcher's grant for an in-grant handler, the caller's grant
+	 * for an out-of-grant endpoint), so it cannot be mislabeled per issuance.
 	 *
-	 * Authorization is the handler's responsibility. The authorization server
-	 * does NOT re-check that `params.scopes`, `params.user`, or `params.resources`
-	 * are a subset of what `authenticateClient` validated: this is a raw minting
+	 * Authorization is the caller's responsibility. The authorization server does
+	 * NOT re-check that `params.scopes`, `params.user`, or `params.resources` are
+	 * a subset of what `authenticateClient` validated: this is a raw minting
 	 * primitive, and the built-in grants each validate scopes themselves before
-	 * calling it. A grant handler owns the decision of which subject and scopes
-	 * the authenticated client may receive.
+	 * calling it.
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
-	 * provider persists), so a grant handler can find or revoke a previously
-	 * issued opaque token by its value.
+	 * provider persists), so a caller can find or revoke a previously issued
+	 * opaque token by its value.
 	 */
 	hashToken: (token: string, type: StoreTokenType) => Awaitable<string>;
 	validateAccessToken: (
@@ -190,7 +222,8 @@ export interface OAuthExtensionGrantHandlerInput {
 	ctx: GenericEndpointContext;
 	opts: OAuthOptions<Scope[]>;
 	grantType: GrantType;
-	tools: OAuthExtensionGrantTools;
+	/** The provider capability surface, pre-bound to this grant's `grantType`. */
+	provider: OAuthProviderApi;
 }
 
 export type OAuthExtensionGrantHandler = (
@@ -300,7 +333,7 @@ export interface OAuthProviderExtension {
 	/**
 	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
 	 * dispatches a matching `grant_type` to the handler, which authenticates the
-	 * client and issues tokens through the shared `tools`.
+	 * client and issues tokens through the shared `provider`.
 	 */
 	grants?: Record<string, OAuthExtensionGrantHandler>;
 	/**

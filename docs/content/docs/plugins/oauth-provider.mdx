@@ -1353,10 +1353,10 @@ export const customOAuthExtension = () =>
         grants: {
           "urn:example:params:oauth:grant-type:custom": async ({
             grantType,
-            tools,
+            provider,
           }) => {
-            const { client } = await tools.authenticateClient({ grantType });
-            return tools.issueTokens({
+            const { client } = await provider.authenticateClient({ grantType });
+            return provider.issueTokens({
               client,
               scopes: ["openid"],
               tokenResponse: {
@@ -1380,6 +1380,12 @@ Extension contributions follow two disciplines:
 * **Additive kinds** (`metadata`, `claims`) never override authorization-server core. A metadata field the provider already owns (`issuer`, `token_endpoint`, `grant_types_supported`, the authentication-method lists, ...) is kept, and a key two extensions both contribute resolves to the first-registered extension.
 
 A claims contributor can add new claim names but never replaces an identity, authentication-context, reserved RFC 9068, or other provider-owned claim. To advertise the claim names an extension emits, set `advertisedMetadata.claims_supported`: the provider owns `claims_supported` and does not infer it from contributors.
+
+#### Provider capabilities outside a grant
+
+A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
+
+To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or set it on the authenticated client a `clientAuthentication` strategy returns. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
 
 #### Client authentication obligations
 

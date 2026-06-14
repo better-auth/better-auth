@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
+import { getOAuthProviderApi } from "./token";
 import type {
 	ClientDiscovery,
 	OAuthProviderExtension,
@@ -45,7 +46,7 @@ describe("oauth-provider extensions", async () => {
 		init(ctx) {
 			extendOAuthProvider(ctx, {
 				grants: {
-					[extensionGrant]: async ({ ctx, grantType, tools }) => {
+					[extensionGrant]: async ({ ctx, grantType, provider }) => {
 						observedCustomParam = (ctx.body as { custom_param?: string })
 							.custom_param;
 						if (!grantUser) {
@@ -54,15 +55,16 @@ describe("oauth-provider extensions", async () => {
 								error_description: "test user is not ready",
 							});
 						}
-						const { client } = await tools.authenticateClient({
+						const { client } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
 							grantType,
 						});
-						return tools.issueTokens({
+						return provider.issueTokens({
 							client,
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
 							resources: [resource],
+							confirmation: { jkt: "test-jkt-thumbprint" },
 							accessTokenClaims: {
 								grant_claim: "grant-access",
 								client_id: "malicious-client",
@@ -82,18 +84,18 @@ describe("oauth-provider extensions", async () => {
 					// Issues an opaque access token (no resource -> no audience), so
 					// introspection re-derives extension claims through the resolver
 					// instead of returning a signed JWT payload verbatim.
-					[extensionOpaqueGrant]: async ({ grantType, tools }) => {
+					[extensionOpaqueGrant]: async ({ grantType, provider }) => {
 						if (!grantUser) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_request",
 								error_description: "test user is not ready",
 							});
 						}
-						const { client } = await tools.authenticateClient({
+						const { client } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
 							grantType,
 						});
-						return tools.issueTokens({
+						return provider.issueTokens({
 							client,
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
@@ -137,6 +139,7 @@ describe("oauth-provider extensions", async () => {
 					accessToken: () => ({
 						extension_access_claim: "extension-access",
 						client_id: "malicious-extension-client",
+						cnf: { jkt: "forged-by-extension" },
 					}),
 					idToken: () => ({
 						extension_id_claim: "extension-id",
@@ -429,6 +432,7 @@ describe("oauth-provider extensions", async () => {
 			id_token: string;
 			issued_token_type: string;
 			scope: string;
+			token_type: string;
 		}>("/oauth2/token", {
 			method: "POST",
 			body: new URLSearchParams({
@@ -455,6 +459,11 @@ describe("oauth-provider extensions", async () => {
 		expect(accessTokenPayload.grant_claim).toBe("grant-access");
 		expect(accessTokenPayload.client_id).toBe(oauthClient!.client_id);
 		expect(accessTokenPayload.aud).toContain(resource);
+		// The grant supplied a confirmation: it is stamped as `cnf` and the token
+		// becomes sender-constrained. `cnf` is AS-owned, so the extension's forged
+		// `cnf` is stripped and the grant's confirmation is the only one present.
+		expect(accessTokenPayload.cnf).toEqual({ jkt: "test-jkt-thumbprint" });
+		expect(tokenResponse.data?.token_type).toBe("DPoP");
 
 		const idTokenPayload = decodeJwt(tokenResponse.data!.id_token);
 		expect(idTokenPayload.extension_id_claim).toBe("extension-id");
@@ -1000,6 +1009,29 @@ describe("oauth-provider extensions", async () => {
 				error: "invalid_client",
 				error_description: "client assertion has expired",
 			},
+		});
+	});
+
+	it("getOAuthProviderApi.issueTokens requires a bound grant type", () => {
+		const api = getOAuthProviderApi(
+			{
+				context: { baseURL: authServerBaseUrl },
+			} as Parameters<typeof getOAuthProviderApi>[0],
+			{} as Parameters<typeof getOAuthProviderApi>[1],
+		);
+		// No grantType bound (the accessor was obtained for non-issuing
+		// capabilities): issuing must fail loudly rather than mislabel the grant.
+		let thrown: unknown;
+		try {
+			api.issueTokens({
+				client: { clientId: "x" } as SchemaClient<Scope[]>,
+				scopes: [],
+			});
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toMatchObject({
+			body: { error_description: expect.stringContaining("grant type") },
 		});
 	});
 });
