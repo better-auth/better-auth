@@ -1639,6 +1639,476 @@ describe("oauth-proxy", async () => {
 			},
 		});
 	});
+
+	/**
+	 * Tests for linkSocial compatibility with OAuth proxy.
+	 *
+	 * The OAuth proxy now supports linking social accounts in cross-origin
+	 * scenarios. When a user initiates linkSocial on a preview environment,
+	 * the proxy:
+	 * 1. Encrypts the state (including link.userId) in the after hook
+	 * 2. Production decrypts the state, exchanges the code, and creates
+	 *    an encrypted payload with the link info
+	 * 3. Preview receives the payload and links the account to the
+	 *    specified user
+	 */
+	describe("linkSocial compatibility", () => {
+		it("should redirect to proxy url with profile data when using linkSocial", async () => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview-localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Create a user and session first
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "test@example.com",
+					password: "password123",
+					name: "Test User",
+				},
+				{
+					onSuccess: sessionSetter(headers),
+				},
+			);
+
+			// Now try to link a social account
+			const res = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{
+					headers,
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// The callback should redirect to the proxy URL with profile data
+			// (just like signIn.social does)
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				onError(context) {
+					const location = context.response.headers.get("location") ?? "";
+					if (!location) {
+						throw new Error("Location header not found");
+					}
+					// This should pass - linkSocial should work like signIn.social
+					expect(location).toContain(
+						"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
+					);
+					expect(location).toContain("callbackURL");
+					// Should have profile parameter (passthrough mode)
+					const profile = new URL(location).searchParams.get("profile");
+					expect(profile).toBeTruthy();
+				},
+			});
+		});
+
+		it("should encrypt state package for cross-origin OAuth when using linkSocial", async () => {
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					database: undefined, // Stateless mode
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview-localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const { secret } = await auth.$context;
+
+			// Create a user and session first
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "test@example.com",
+					password: "password123",
+					name: "Test User",
+				},
+				{
+					onSuccess: sessionSetter(headers),
+				},
+			);
+
+			// Now try to link a social account
+			const res = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{
+					headers,
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+			expect(state).toBeTruthy();
+
+			// State should be an encrypted package (like signIn.social produces)
+			// In cross-origin mode, the state parameter should contain encrypted data
+			// which is longer than the original state
+			expect(state!.length).toBeGreaterThan(50);
+
+			// Verify we can decrypt the state package
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: state!,
+			});
+
+			const statePackage = parseJSON<{
+				state: string;
+				stateCookie: string;
+				isOAuthProxy: boolean;
+			}>(decrypted);
+
+			// Verify state package structure
+			expect(statePackage).toHaveProperty("state");
+			expect(statePackage).toHaveProperty("stateCookie");
+			expect(statePackage).toHaveProperty("isOAuthProxy");
+			expect(statePackage.isOAuthProxy).toBe(true);
+		});
+
+		it("should link account on preview from profile data (passthrough mode)", async () => {
+			const sharedSecret = "shared-secret-for-link-social-passthrough";
+
+			// Preview instance - where user is logged in and initiates linkSocial
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+							secret: sharedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Production instance - handles OAuth callback from provider
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [
+						oAuthProxy({
+							secret: sharedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Create a user on preview (this is where the user is logged in)
+			const previewHeaders = new Headers();
+			await preview.client.signUp.email(
+				{
+					email: "user@email.com",
+					password: "password123",
+					name: "Test User",
+				},
+				{
+					onSuccess: preview.sessionSetter(previewHeaders),
+				},
+			);
+
+			// Step 1: Start linkSocial on preview (user is logged in here)
+			const res = await preview.client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{
+					headers: previewHeaders,
+					throw: true,
+				},
+			);
+
+			// The state should be encrypted (oauth-proxy after hook ran)
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+			expect(encryptedState!.length).toBeGreaterThan(50);
+
+			// Step 2: OAuth callback arrives at production
+			// Production decrypts state, exchanges code, creates payload
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should redirect to preview's oauth-proxy-callback
+						expect(location).toContain("preview.example.com");
+						expect(location).toContain("/oauth-proxy-callback");
+
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			// Verify production has NO users (passthrough mode)
+			const productionCtx = await production.auth.$context;
+			const productionUsers = await productionCtx.internalAdapter.listUsers();
+			expect(productionUsers.length).toBe(0);
+
+			// Step 3: Call oauth-proxy-callback on preview instance
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/settings");
+					},
+				},
+			);
+
+			// Step 4: Verify account was linked on preview
+			const previewCtx = await preview.auth.$context;
+			const previewUsers = await previewCtx.internalAdapter.listUsers();
+			const previewUser = previewUsers.find(
+				(u) => u.email === "user@email.com",
+			);
+			expect(previewUser).toBeTruthy();
+			const previewAccounts = await previewCtx.internalAdapter.findAccounts(
+				previewUser!.id,
+			);
+			// Should have google account linked (in addition to credential)
+			expect(
+				previewAccounts.filter((a) => a.providerId === "google").length,
+			).toBe(1);
+		});
+
+		it("should not redirect to proxy url on same origin when using linkSocial", async () => {
+			const { client, cookieSetter, sessionSetter } = await getTestInstance(
+				{
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Create a user and session first - use user@email.com to match mock OAuth email
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "user@email.com",
+					password: "password123",
+					name: "Test User",
+				},
+				{
+					onSuccess: (ctx) => {
+						sessionSetter(headers)(ctx);
+						cookieSetter(headers)(ctx);
+					},
+				},
+			);
+
+			const res = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{
+					headers,
+					throw: true,
+					onSuccess: cookieSetter(headers),
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				headers,
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (!location) {
+						throw new Error("Location header not found");
+					}
+					// On same origin, should NOT redirect to proxy
+					expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+					expect(location).toContain("/settings");
+				},
+			});
+		});
+
+		it("should work with shared secret when using linkSocial", async () => {
+			const sharedProxySecret = "shared-oauth-proxy-secret-for-link-social";
+
+			// Preview instance with shared proxy secret
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					secret: "preview-main-secret",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+							secret: sharedProxySecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Production instance with the SAME shared proxy secret
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					secret: "production-main-secret",
+					plugins: [
+						oAuthProxy({
+							secret: sharedProxySecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Create user on preview
+			const previewHeaders = new Headers();
+			await preview.client.signUp.email(
+				{
+					email: "user@email.com",
+					password: "password123",
+					name: "Test User",
+				},
+				{
+					onSuccess: preview.sessionSetter(previewHeaders),
+				},
+			);
+
+			// Step 1: Start linkSocial on preview (the non-production environment)
+			const res = await preview.client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{
+					headers: previewHeaders,
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Step 2: OAuth callback arrives at production
+			// Production can decrypt because it uses the same shared secret
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should redirect to preview's oauth-proxy-callback
+						expect(location).toContain("preview.example.com");
+						expect(location).toContain("/oauth-proxy-callback");
+
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			// Step 3: Preview receives the callback and links the account
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					headers: previewHeaders,
+					onError(context) {
+						const location = context.response.headers.get("location");
+						// Should successfully redirect to settings
+						expect(location).not.toContain("error=");
+						expect(location).toContain("/settings");
+					},
+				},
+			);
+
+			// Verify account was linked on preview
+			const previewCtx = await preview.auth.$context;
+			const users = await previewCtx.internalAdapter.listUsers();
+			const user = users.find((u) => u.email === "user@email.com");
+			expect(user).toBeTruthy();
+			const accounts = await previewCtx.internalAdapter.findAccounts(user!.id);
+			expect(accounts.filter((a) => a.providerId === "google").length).toBe(1);
+		});
+	});
 });
 
 describe("oauth-proxy current URL trust", () => {

@@ -19,6 +19,18 @@ export async function handleOAuthUserInfo(
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
 		/**
+		 * When provided, the account will be linked to this specific user
+		 * instead of looking up by email. Used by linkSocial through oauth-proxy.
+		 */
+		linkUserId?: string | undefined;
+		/**
+		 * Email of the user at the time linkSocial was initiated.
+		 * Used for email policy validation in proxy-based link flows,
+		 * consistent with the standard linkSocial callback which validates
+		 * against the email captured at flow start.
+		 */
+		linkEmail?: string | undefined;
+		/**
 		 * Whether `account.providerId` may be matched against the globally
 		 * configured `accountLinking.trustedProviders` list to infer trust.
 		 *
@@ -33,8 +45,26 @@ export async function handleOAuthUserInfo(
 		trustProviderByName?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const {
+		userInfo,
+		account,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+		linkUserId,
+	} = opts;
+
+	if (linkUserId) {
+		return handleLinkToUser(c, {
+			userInfo,
+			account,
+			linkUserId,
+			linkEmail: opts.linkEmail,
+			isTrustedProvider: opts.isTrustedProvider,
+			trustProviderByName: opts.trustProviderByName,
+		});
+	}
+
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -85,6 +115,7 @@ export async function handleOAuthUserInfo(
 				return {
 					error: "account not linked",
 					data: null,
+					isRegister: false,
 				};
 			}
 			try {
@@ -104,6 +135,7 @@ export async function handleOAuthUserInfo(
 				return {
 					error: "unable to link account",
 					data: null,
+					isRegister: false,
 				};
 			}
 
@@ -275,6 +307,180 @@ export async function handleOAuthUserInfo(
 		},
 		error: null,
 		isRegister,
+	};
+}
+
+/**
+ * Expired placeholder session returned by link operations for type
+ * consistency. The oauth-proxy callback skips `setSessionCookie` for link
+ * flows, so this value is never persisted or sent to the client.
+ */
+function createLinkPlaceholderSession(userId: string) {
+	return {
+		id: "link-placeholder",
+		userId,
+		token: "link-operation-placeholder",
+		expiresAt: new Date(0),
+		createdAt: new Date(),
+		updatedAt: new Date(),
+	};
+}
+
+/**
+ * Handle linking an OAuth account to a specific user (from linkSocial).
+ * Used when the linkUserId is provided, typically through oauth-proxy.
+ */
+async function handleLinkToUser(
+	c: GenericEndpointContext,
+	opts: {
+		userInfo: Omit<User, "createdAt" | "updatedAt">;
+		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+		linkUserId: string;
+		linkEmail?: string | undefined;
+		isTrustedProvider?: boolean | undefined;
+		trustProviderByName?: boolean | undefined;
+	},
+) {
+	const { userInfo, account, linkUserId, linkEmail } = opts;
+
+	const targetUser = await c.context.internalAdapter.findUserById(linkUserId);
+	if (!targetUser) {
+		logger.error("Link target user not found", { linkUserId });
+		return {
+			error: "user not found",
+			data: null,
+			isRegister: false,
+		};
+	}
+
+	const existingAccounts =
+		await c.context.internalAdapter.findAccounts(linkUserId);
+	const alreadyLinked = existingAccounts.find(
+		(a) =>
+			a.providerId === account.providerId && a.accountId === account.accountId,
+	);
+
+	if (alreadyLinked) {
+		// Refresh stored OAuth tokens/scopes, matching the direct callback behavior.
+		const freshTokens = Object.fromEntries(
+			Object.entries({
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: account.scope,
+			}).filter(([_, value]) => value !== undefined),
+		);
+		if (Object.keys(freshTokens).length > 0) {
+			await c.context.internalAdapter.updateAccount(
+				alreadyLinked.id,
+				freshTokens,
+			);
+		}
+
+		return {
+			data: {
+				session: createLinkPlaceholderSession(targetUser.id),
+				user: targetUser,
+			},
+			error: null,
+			isRegister: false,
+		};
+	}
+
+	// Check if account is already linked to a different user
+	const accountLinkedToOther =
+		await c.context.internalAdapter.findAccountByProviderId(
+			account.accountId,
+			account.providerId,
+		);
+	if (accountLinkedToOther && accountLinkedToOther.userId !== linkUserId) {
+		logger.error("Account already linked to a different user");
+		return {
+			error: "account_already_linked_to_different_user",
+			data: null,
+			isRegister: false,
+		};
+	}
+
+	const accountLinking = c.context.options.account?.accountLinking;
+	const trusted =
+		opts.isTrustedProvider ||
+		(opts.trustProviderByName !== false &&
+			c.context.trustedProviders.includes(account.providerId));
+
+	if (
+		(!trusted && !userInfo.emailVerified) ||
+		accountLinking?.enabled === false
+	) {
+		if (isDevelopment()) {
+			logger.warn(
+				`Cannot link account from ${account.providerId}: provider not trusted and email not verified, or account linking is disabled.`,
+			);
+		}
+		return {
+			error: "account not linked",
+			data: null,
+			isRegister: false,
+		};
+	}
+
+	// Compare against the email captured at flow start for consistency
+	// with the standard linkSocial callback.
+	const referenceEmail = linkEmail || targetUser.email;
+	if (
+		userInfo.email.toLowerCase() !== referenceEmail?.toLowerCase() &&
+		c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+	) {
+		return {
+			error: "email doesn't match",
+			data: null,
+			isRegister: false,
+		};
+	}
+
+	try {
+		await c.context.internalAdapter.linkAccount({
+			providerId: account.providerId,
+			accountId: userInfo.id.toString(),
+			userId: linkUserId,
+			accessToken: await setTokenUtil(account.accessToken, c.context),
+			refreshToken: await setTokenUtil(account.refreshToken, c.context),
+			idToken: account.idToken,
+			accessTokenExpiresAt: account.accessTokenExpiresAt,
+			refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+			scope: account.scope,
+		});
+	} catch (e) {
+		logger.error("Unable to link account", e);
+		return {
+			error: "unable to link account",
+			data: null,
+			isRegister: false,
+		};
+	}
+
+	if (
+		userInfo.emailVerified &&
+		!targetUser.emailVerified &&
+		userInfo.email.toLowerCase() === targetUser.email?.toLowerCase()
+	) {
+		await c.context.internalAdapter.updateUser(targetUser.id, {
+			emailVerified: true,
+		});
+	}
+
+	const user =
+		(await applyUpdateUserInfoOnLink(c, targetUser.id, userInfo)) ?? targetUser;
+
+	return {
+		data: {
+			session: createLinkPlaceholderSession(targetUser.id),
+			user,
+		},
+		error: null,
+		isRegister: false,
 	};
 }
 
