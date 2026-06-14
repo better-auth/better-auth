@@ -142,9 +142,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					);
 				}
 			}
-			const accounts = await ctx.context.internalAdapter.findAccountByUserId(
-				user.id,
-			);
+			const accounts = await ctx.context.internalAdapter.findAccounts(user.id);
 			const credentialAccount = accounts.find(
 				(a) => a.providerId === "credential",
 			);
