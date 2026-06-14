@@ -99,44 +99,15 @@ export function authServerMetadata(
 	return metadata;
 }
 
-export function oauthAuthorizationServerMetadata(
+/**
+ * Builds the authorization-server metadata shared by the
+ * `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration`
+ * responses, plus the inputs both need to finish their own document.
+ */
+function buildAuthServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const clientDiscoveries = getClientDiscoveries(opts);
-	const publicClientSupported =
-		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
-	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
-		public_client_supported: publicClientSupported,
-		grant_types_supported: getSupportedGrantTypes(opts),
-		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
-			opts,
-			{ includeNone: publicClientSupported },
-		),
-		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
-		jwt_disabled: opts.disableJwtPlugin,
-	});
-	return applyOAuthProviderMetadataExtensions(
-		ctx,
-		opts,
-		"oauth-authorization-server",
-		{
-			...mergeDiscoveryMetadata(clientDiscoveries),
-			...authMetadata,
-		},
-	) as unknown as AuthServerMetadata;
-}
-
-export function oidcServerMetadata(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]> & { claims?: string[] },
-) {
-	const baseURL = ctx.context.baseURL;
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
@@ -153,13 +124,40 @@ export function oidcServerMetadata(
 		grant_types_supported: getSupportedGrantTypes(opts),
 		token_endpoint_auth_methods_supported: getSupportedTokenEndpointAuthMethods(
 			opts,
-			{
-				includeNone: publicClientSupported,
-			},
+			{ includeNone: publicClientSupported },
 		),
 		endpoint_auth_methods_supported: getSupportedEndpointAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 	});
+	return { jwtPluginOptions, clientDiscoveries, authMetadata };
+}
+
+export function oauthAuthorizationServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const { clientDiscoveries, authMetadata } = buildAuthServerMetadata(
+		ctx,
+		opts,
+	);
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"oauth-authorization-server",
+		{
+			...mergeDiscoveryMetadata(clientDiscoveries),
+			...authMetadata,
+		},
+	) as unknown as AuthServerMetadata;
+}
+
+export function oidcServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]> & { claims?: string[] },
+) {
+	const baseURL = ctx.context.baseURL;
+	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
+		buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
 		OIDCMetadata,
 		"id_token_signing_alg_values_supported"

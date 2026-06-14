@@ -275,6 +275,10 @@ async function validateOpaqueAccessToken(
 		};
 	}
 
+	const resources = Array.isArray(accessToken.resources)
+		? accessToken.resources
+		: undefined;
+
 	let client: SchemaClient<Scope[]> | null | undefined;
 	if (accessToken.clientId) {
 		client = await getClient(ctx, opts, accessToken.clientId);
@@ -289,9 +293,7 @@ async function validateOpaqueAccessToken(
 			!(await isIntrospectionAuthorized(ctx, opts, {
 				introspectingClientId: clientId,
 				issuerClientId: accessToken.clientId,
-				audienceResources: Array.isArray(accessToken.resources)
-					? accessToken.resources
-					: [],
+				audienceResources: resources ?? [],
 			}))
 		) {
 			return { active: false };
@@ -322,9 +324,6 @@ async function validateOpaqueAccessToken(
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
 	}
-	const resources = Array.isArray(accessToken.resources)
-		? accessToken.resources
-		: undefined;
 	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 
 	// Deleting a resource row revokes the tokens bound to it: introspection

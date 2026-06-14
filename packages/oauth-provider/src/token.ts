@@ -28,7 +28,7 @@ import type {
 } from "./types";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
-import { userNormalClaims } from "./userinfo";
+import { pickClaims, userNormalClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
 	decryptStoredClientSecret,
@@ -299,11 +299,6 @@ async function createIdToken(
 		client.enableEndSession || client.backchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
-		// Extension and grant claims are additive: standard user claims
-		// (email/name/...) and the AS-owned claims below take precedence, so an
-		// extension cannot replace an identity claim. First-party
-		// `customIdTokenClaims` may still override auth_time/acr (spread after).
-		...extraClaims,
 		...userClaims,
 		auth_time: authTimeSec,
 		acr,
@@ -317,6 +312,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
+	// Extension and grant claims are additive: they only fill keys the provider
+	// does not already own, so a contributor cannot replace an identity claim
+	// (email/name/...), the authentication context, or an AS-owned claim.
+	// First-party `customIdTokenClaims` already overrode auth_time/acr above.
+	Object.assign(payload, pickClaims(extraClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret

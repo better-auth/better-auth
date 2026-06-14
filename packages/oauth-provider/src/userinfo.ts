@@ -34,25 +34,21 @@ export function userNormalClaims(user: User, scopes: string[]) {
 	};
 }
 
-function omitUndefinedClaims(claims?: Record<string, unknown>) {
-	const next: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(claims ?? {})) {
-		if (value !== undefined) {
-			next[key] = value;
-		}
-	}
-	return next;
-}
-
-function additiveClaims(
-	baseClaims: Record<string, unknown>,
+/**
+ * Returns the defined-valued entries of `claims`, dropping any key already
+ * present in `base` when given. This is the additive-claim rule shared by the
+ * /userinfo response and the ID token: a contributor may add new claims but
+ * never replace one the provider already owns.
+ */
+export function pickClaims(
 	claims?: Record<string, unknown>,
+	base?: Record<string, unknown>,
 ) {
 	const next: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(claims ?? {})) {
-		if (value !== undefined && !(key in baseClaims)) {
-			next[key] = value;
-		}
+		if (value === undefined) continue;
+		if (base && key in base) continue;
+		next[key] = value;
 	}
 	return next;
 }
@@ -140,8 +136,8 @@ export async function userInfoEndpoint(
 			: {};
 	return {
 		...baseUserClaims,
-		...additiveClaims(baseUserClaims, extensionUserClaims),
-		...omitUndefinedClaims(additionalInfoUserClaims),
+		...pickClaims(extensionUserClaims, baseUserClaims),
+		...pickClaims(additionalInfoUserClaims),
 		sub: baseUserClaims.sub,
 	};
 }

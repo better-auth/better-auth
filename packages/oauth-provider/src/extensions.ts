@@ -43,7 +43,7 @@ const RESERVED_TOKEN_ENDPOINT_AUTH_METHOD_SET = new Set<string>(
 	RESERVED_TOKEN_ENDPOINT_AUTH_METHODS,
 );
 
-function appendUnique<T extends string>(values: T[]): T[] {
+function dedupe<T extends string>(values: T[]): T[] {
 	return Array.from(new Set(values));
 }
 
@@ -230,16 +230,15 @@ export function extendOAuthProvider(
 }
 
 function getExtensionGrantTypes(opts: OAuthOptions<Scope[]>): GrantType[] {
-	return getOAuthProviderExtensions(opts).flatMap((extension) => {
-		const grantTypes = Object.keys(extension.grants ?? {});
-		return grantTypes;
-	});
+	return getOAuthProviderExtensions(opts).flatMap((extension) =>
+		Object.keys(extension.grants ?? {}),
+	);
 }
 
 export function getSupportedGrantTypes(
 	opts: OAuthOptions<Scope[]>,
 ): GrantType[] {
-	return appendUnique([
+	return dedupe([
 		...(opts.grantTypes ?? DEFAULT_GRANT_TYPES),
 		...getExtensionGrantTypes(opts),
 	]);
@@ -268,7 +267,7 @@ export function getSupportedTokenEndpointAuthMethods(
 	opts: OAuthOptions<Scope[]>,
 	settings?: { includeNone?: boolean },
 ): TokenEndpointAuthMethod[] {
-	return appendUnique([
+	return dedupe([
 		...(settings?.includeNone ? (["none"] as TokenEndpointAuthMethod[]) : []),
 		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
 		...getExtensionTokenEndpointAuthMethods(opts),
@@ -278,7 +277,7 @@ export function getSupportedTokenEndpointAuthMethods(
 export function getSupportedEndpointAuthMethods(
 	opts: OAuthOptions<Scope[]>,
 ): AuthMethod[] {
-	return appendUnique([
+	return dedupe([
 		...BUILT_IN_CONFIDENTIAL_AUTH_METHODS,
 		...getExtensionTokenEndpointAuthMethods(opts),
 	]);

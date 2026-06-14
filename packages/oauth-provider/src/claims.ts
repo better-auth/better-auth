@@ -109,15 +109,26 @@ export interface AccessTokenClaimsInput {
 export async function resolveAccessTokenClaims(
 	input: AccessTokenClaimsInput,
 ): Promise<Record<string, unknown>> {
-	const { ctx, opts, user, client, scopes, resources, referenceId, metadata } =
-		input;
+	const {
+		ctx,
+		opts,
+		user,
+		client,
+		scopes,
+		resources,
+		referenceId,
+		metadata,
+		grantType,
+		perRequestClaims,
+		resourcePolicyClaims,
+	} = input;
 	const extensionClaims = await collectExtensionAccessTokenClaims(opts, {
 		ctx,
 		opts,
 		user,
 		client,
 		scopes,
-		grantType: input.grantType,
+		grantType,
 		referenceId,
 		resources,
 		metadata,
@@ -133,8 +144,8 @@ export async function resolveAccessTokenClaims(
 		: {};
 	return stripReservedClaims({
 		...extensionClaims,
-		...(input.perRequestClaims ?? {}),
+		...(perRequestClaims ?? {}),
 		...pluginClaims,
-		...input.resourcePolicyClaims,
+		...resourcePolicyClaims,
 	});
 }
