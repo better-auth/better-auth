@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
+import {
+	collectExtensionUserInfoClaims,
+	hasUserInfoClaimExtension,
+} from "./extensions";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
@@ -28,6 +32,34 @@ export function userNormalClaims(user: User, scopes: string[]) {
 		...(scopes.includes("profile") ? profile : {}),
 		...(scopes.includes("email") ? email : {}),
 	};
+}
+
+/**
+ * Returns the defined-valued entries of `claims`, dropping any key already
+ * present in `base` when given.
+ *
+ * This is the two-tier claim authority shared by the /userinfo response and the
+ * ID token:
+ * - Called WITH `base` (the provider's own claims): the additive rule for
+ *   third-party extension claims. A contributor may add new keys but never
+ *   replace a claim the provider already owns.
+ * - Called WITHOUT `base`: the deliberate first-party override path for the
+ *   operator's own `customUserInfoClaims` / `customIdTokenClaims`, which is
+ *   trusted to override identity claims (for example a formatted `name`). The
+ *   caller re-pins `sub` afterwards, so subject integrity holds either way
+ *   (OIDC Core §5.3.2: UserInfo `sub` MUST match the ID Token `sub`).
+ */
+export function pickClaims(
+	claims?: Record<string, unknown>,
+	base?: Record<string, unknown>,
+) {
+	const next: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(claims ?? {})) {
+		if (value === undefined) continue;
+		if (base && key in base) continue;
+		next[key] = value;
+	}
+	return next;
 }
 
 /**
@@ -84,27 +116,37 @@ export async function userInfoEndpoint(
 	}
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
+	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
+	// Load the client only when something needs it: pairwise subject resolution
+	// or a UserInfo claim extension. The token was already validated against its
+	// issuing client, so an unconditional lookup here would be redundant.
+	const client =
+		clientId && (opts.pairwiseSecret || hasUserInfoClaimExtension(opts))
+			? await getClient(ctx, opts, clientId)
+			: undefined;
 
 	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
-	if (opts.pairwiseSecret) {
-		const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
-		if (clientId) {
-			const client = await getClient(ctx, opts, clientId);
-			if (client) {
-				baseUserClaims.sub = await resolveSubjectIdentifier(
-					user.id,
-					client,
-					opts,
-				);
-			}
-		}
+	if (opts.pairwiseSecret && client) {
+		baseUserClaims.sub = await resolveSubjectIdentifier(user.id, client, opts);
 	}
+	const extensionUserClaims = scopes?.length
+		? await collectExtensionUserInfoClaims(opts, {
+				ctx,
+				opts,
+				user,
+				scopes,
+				jwt,
+				client: client ?? undefined,
+			})
+		: {};
 	const additionalInfoUserClaims =
 		opts.customUserInfoClaims && scopes?.length
 			? await opts.customUserInfoClaims({ user, scopes, jwt })
 			: {};
 	return {
 		...baseUserClaims,
-		...additionalInfoUserClaims,
+		...pickClaims(extensionUserClaims, baseUserClaims),
+		...pickClaims(additionalInfoUserClaims),
+		sub: baseUserClaims.sub,
 	};
 }

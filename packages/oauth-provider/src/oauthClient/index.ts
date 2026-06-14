@@ -13,13 +13,16 @@ import {
 	updateClientEndpoint,
 } from "./endpoints";
 
+const tokenEndpointAuthMethodSchema = z.string().trim().min(1);
+const grantTypesSchema = z.array(z.string().trim().min(1)).min(1);
+
 export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
 		"/admin/oauth2/create-client",
 		{
 			method: "POST",
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1),
+				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -33,15 +36,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
-				token_endpoint_auth_method: z
-					.enum([
-						"none",
-						"client_secret_basic",
-						"client_secret_post",
-						"private_key_jwt",
-					])
-					.default("client_secret_basic")
-					.optional(),
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				jwks: z
 					.union([
 						z.array(z.record(z.string(), z.unknown())).min(1),
@@ -51,20 +46,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					])
 					.optional(),
 				jwks_uri: z.string().optional(),
-				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
-					.default(["authorization_code"])
-					.optional(),
-				response_types: z
-					.array(z.enum(["code"]))
-					.default(["code"])
-					.optional(),
+				grant_types: grantTypesSchema.optional(),
+				response_types: z.array(z.enum(["code"])).optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
@@ -171,24 +154,14 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												type: "string",
 												description:
 													"Requested authentication method for the token endpoint",
-												enum: [
-													"none",
-													"client_secret_basic",
-													"client_secret_post",
-												],
 											},
 											grant_types: {
 												type: "array",
 												items: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Grant types the client may use at the token endpoint",
 											},
 											response_types: {
 												type: "array",
@@ -197,7 +170,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													enum: ["code"],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Response types the client may use at the authorization endpoint",
 											},
 											public: {
 												type: "boolean",
@@ -248,7 +221,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1),
+				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -262,15 +235,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
-				token_endpoint_auth_method: z
-					.enum([
-						"none",
-						"client_secret_basic",
-						"client_secret_post",
-						"private_key_jwt",
-					])
-					.default("client_secret_basic")
-					.optional(),
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				jwks: z
 					.union([
 						z.array(z.record(z.string(), z.unknown())).min(1),
@@ -280,20 +245,8 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					])
 					.optional(),
 				jwks_uri: z.string().optional(),
-				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
-					.default(["authorization_code"])
-					.optional(),
-				response_types: z
-					.array(z.enum(["code"]))
-					.default(["code"])
-					.optional(),
+				grant_types: grantTypesSchema.optional(),
+				response_types: z.array(z.enum(["code"])).optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
 			}),
 			metadata: {
@@ -387,25 +340,16 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											token_endpoint_auth_method: {
 												type: "string",
-												description: "Response types the client may use",
-												enum: [
-													"none",
-													"client_secret_basic",
-													"client_secret_post",
-												],
+												description:
+													"Requested authentication method for the token endpoint",
 											},
 											grant_types: {
 												type: "array",
 												items: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Grant types the client may use at the token endpoint",
 											},
 											response_types: {
 												type: "array",
@@ -414,7 +358,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													enum: ["code"],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Response types the client may use at the authorization endpoint",
 											},
 											public: {
 												type: "boolean",
@@ -557,15 +501,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					backchannel_logout_uri: SafeUrlSchema.optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
-						.optional(),
+					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					// SERVER_ONLY applicable fields
@@ -613,15 +549,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					backchannel_logout_uri: SafeUrlSchema.optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
-						.optional(),
+					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				}),

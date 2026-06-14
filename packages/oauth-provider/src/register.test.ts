@@ -74,6 +74,21 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(401);
 	});
 
+	it("should reject unauthenticated registration before metadata validation", async () => {
+		const unauthenticatedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const response = await unauthenticatedClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "not_a_real_method",
+		});
+		expect(response.error?.status).toBe(401);
+	});
+
 	it("should register private client with minimum requirements", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],

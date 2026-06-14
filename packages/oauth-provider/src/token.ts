@@ -7,23 +7,37 @@ import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import {
+	collectExtensionIdTokenClaims,
+	getExtensionGrantHandler,
+	getSupportedGrantTypes,
+} from "./extensions";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import type {
+	Confirmation,
+	OAuthAuthenticatedClient,
+	OAuthClientAuthenticationRequest,
 	OAuthOptions,
+	OAuthProviderApi,
 	OAuthRefreshToken,
+	OAuthTokenIssueParams,
+	OAuthTokenResponse,
 	SchemaClient,
 	Scope,
+	StoreTokenType,
+	TokenType,
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
-import { userNormalClaims } from "./userinfo";
+import { pickClaims, userNormalClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	isPKCERequired,
@@ -37,6 +51,15 @@ import {
 	validateClientCredentials,
 } from "./utils";
 
+/**
+ * Token presentation scheme implied by a confirmation: a DPoP key thumbprint
+ * (`jkt`) yields `"DPoP"`; any other confirmation (including mTLS `x5t#S256`)
+ * keeps `"Bearer"`, since that constraint lives at the TLS layer.
+ */
+function confirmationTokenType(confirmation?: Confirmation): TokenType {
+	return confirmation && "jkt" in confirmation ? "DPoP" : "Bearer";
+}
+
 const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
 /**
@@ -49,7 +72,7 @@ export async function tokenEndpoint(
 ) {
 	const grantType: GrantType = ctx.body.grant_type;
 
-	if (opts.grantTypes && !opts.grantTypes.includes(grantType)) {
+	if (!getSupportedGrantTypes(opts).includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -63,7 +86,109 @@ export async function tokenEndpoint(
 			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
+		default: {
+			const handler = getExtensionGrantHandler(opts, grantType);
+			if (handler) {
+				return handler({
+					ctx,
+					opts,
+					grantType,
+					provider: getOAuthProviderApi(ctx, opts, grantType),
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: `unsupported grant_type ${grantType}`,
+				error: "unsupported_grant_type",
+			});
+		}
 	}
+}
+
+/**
+ * Returns the OAuth Provider's server-side capability surface bound to `ctx`.
+ * The token endpoint passes one (pre-bound to the dispatched grant) to each
+ * extension grant handler; a companion plugin's own endpoint calls this directly
+ * with its grant type. `grantType` is bound here, not per issuance, so a handler
+ * cannot mislabel the grant; omit it for capabilities that do not issue tokens
+ * (`getClient`, `validateAccessToken`), and `issueTokens` then throws.
+ */
+export function getOAuthProviderApi(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	grantType?: GrantType,
+): OAuthProviderApi {
+	return {
+		getClient: (clientId: string) => getClient(ctx, opts, clientId),
+		authenticateClient: async (
+			request?: OAuthClientAuthenticationRequest,
+		): Promise<OAuthAuthenticatedClient> => {
+			const credentials = await extractClientCredentials(
+				ctx,
+				opts,
+				// Bind the RFC 7523 assertion audience to the endpoint actually
+				// serving this request: the token endpoint for an in-grant handler,
+				// or a plugin's own endpoint out-of-grant. A fixed token-endpoint
+				// audience would let an assertion be replayed across endpoints, or
+				// reject a valid assertion minted for the real endpoint.
+				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
+			);
+			const {
+				clientId,
+				clientSecret,
+				preVerifiedClient,
+				authMethod,
+				confirmation,
+			} = destructureCredentials(credentials);
+			if (!clientId) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client_id",
+					error: "invalid_grant",
+				});
+			}
+			if (
+				request?.requireCredentials !== false &&
+				!clientSecret &&
+				!preVerifiedClient
+			) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "Missing required client credentials",
+					error: "invalid_grant",
+				});
+			}
+			const client = await validateClientCredentials(
+				ctx,
+				opts,
+				clientId,
+				clientSecret,
+				request?.scopes,
+				preVerifiedClient,
+				request?.grantType ?? grantType,
+				authMethod,
+			);
+			return {
+				clientId,
+				client,
+				method: authMethod,
+				confirmation,
+			};
+		},
+		issueTokens: (params: OAuthTokenIssueParams) => {
+			if (!grantType) {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					error_description:
+						"issueTokens requires a grant type; pass it to getOAuthProviderApi(ctx, opts, grantType).",
+					error: "server_error",
+				});
+			}
+			return createUserTokens(ctx, opts, { ...params, grantType });
+		},
+		hashToken: (token: string, type: StoreTokenType) =>
+			storeToken(opts.storeTokens, token, type),
+		validateAccessToken: async (token: string, clientId?: string) => {
+			const { validateAccessToken } = await import("./introspect");
+			return validateAccessToken(ctx, opts, token, clientId);
+		},
+	};
 }
 
 // User Jwt SHALL follow oAuth 2
@@ -87,10 +212,16 @@ async function createJwtAccessToken(
 		signingKeyId?: ResolvedResourcePolicy["signingKeyId"];
 		/**
 		 * Enriched access-token claims from {@link resolveAccessTokenClaims}
-		 * (reserved RFC 9068 names already stripped). The AS-owned claims below
+		 * (reserved AS-owned names already stripped). The AS-owned claims below
 		 * are stamped after and always win.
 		 */
 		accessTokenClaims?: Record<string, unknown>;
+		/**
+		 * Sender-constraint to stamp as the RFC 7800 `cnf` claim. AS-owned: it is
+		 * stamped after the enriched claims (which have `cnf` stripped), so a
+		 * contributor cannot forge it.
+		 */
+		confirmation?: Confirmation;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -129,6 +260,8 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
+			// RFC 7800 sender-constraint, stamped last so the AS owns it.
+			...(overrides?.confirmation ? { cnf: overrides.confirmation } : {}),
 		},
 	});
 }
@@ -172,6 +305,7 @@ async function createIdToken(
 	sessionId?: string,
 	authTime?: Date,
 	accessToken?: string,
+	extraClaims?: Record<string, unknown>,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -227,6 +361,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
+	// Extension and grant claims are additive: they only fill keys the provider
+	// does not already own, so a contributor cannot replace an identity claim
+	// (email/name/...), the authentication context, or an AS-owned claim.
+	// First-party `customIdTokenClaims` already overrode auth_time/acr above.
+	Object.assign(payload, pickClaims(extraClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
@@ -492,22 +631,9 @@ async function createRefreshToken(
 	};
 }
 
-interface CreateUserTokensParams {
-	client: SchemaClient<Scope[]>;
-	scopes: string[];
+type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
-	user?: User;
-	referenceId?: string;
-	sessionId?: string;
-	nonce?: string;
-	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	authTime?: Date;
-	verificationValue?: VerificationValue;
-	resources?: string[];
-	/** Full original authorized resources for the grant, used to seed the refresh token
-	 * when the token request narrows the resource (RFC 8707 §2.2). */
-	originalResources?: string[];
-}
+};
 
 interface ResourceGrantIssuance {
 	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
@@ -570,7 +696,7 @@ async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: CreateUserTokensParams,
-) {
+): Promise<OAuthTokenResponse> {
 	const {
 		client,
 		scopes,
@@ -623,7 +749,25 @@ async function createUserTokens(
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
-	const isIdToken = user && scopes.includes("openid");
+	const isIdToken = user && effectiveScopes.includes("openid");
+	const metadata = parseClientMetadata(client.metadata);
+	const additionalIdTokenClaims =
+		isIdToken && user
+			? {
+					...(await collectExtensionIdTokenClaims(opts, {
+						ctx,
+						opts,
+						user,
+						client,
+						scopes: effectiveScopes,
+						grantType,
+						referenceId,
+						resources: params.resources,
+						metadata,
+					})),
+					...(params.idTokenClaims ?? {}),
+				}
+			: undefined;
 
 	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
 	const customFields = opts.customTokenResponseFields
@@ -631,7 +775,7 @@ async function createUserTokens(
 				grantType,
 				user,
 				scopes: effectiveScopes,
-				metadata: parseClientMetadata(client.metadata),
+				metadata,
 				verificationValue,
 			})
 		: undefined;
@@ -664,15 +808,32 @@ async function createUserTokens(
 	// introspection through this same resolver, so the formats cannot drift.
 	const accessTokenClaims = isJwtAccessToken
 		? await resolveAccessTokenClaims({
+				ctx,
 				opts,
 				user,
+				client,
 				scopes: effectiveScopes,
+				grantType,
 				resources: params.resources,
 				referenceId,
-				metadata: parseClientMetadata(client.metadata),
+				metadata,
+				perRequestClaims: params.accessTokenClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
+
+	// A sender-constraint is stamped onto JWT access tokens. Opaque-token binding
+	// persistence (a stored confirmation column) ships with the binding
+	// mechanism, so fail closed rather than silently mint an unbound opaque token
+	// a caller believes is sender-constrained.
+	if (params.confirmation && !isJwtAccessToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error_description:
+				"Cannot sender-constrain an opaque access token; confirmation is supported only for JWT access tokens.",
+			error: "server_error",
+		});
+	}
+	const confirmation = params.confirmation;
 
 	// Create access token and refresh token in parallel
 	const [accessToken, refreshToken] = await Promise.all([
@@ -691,6 +852,7 @@ async function createUserTokens(
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
+						confirmation,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -737,21 +899,23 @@ async function createUserTokens(
 				opts,
 				user,
 				client,
-				scopes,
+				effectiveScopes,
 				nonce,
 				sessionId,
 				authTime,
 				accessToken,
+				additionalIdTokenClaims,
 			)
 		: undefined;
 
 	return ctx.json(
 		{
 			...customFields,
+			...(params.tokenResponse ?? {}),
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
-			token_type: "Bearer" as const,
+			token_type: confirmationTokenType(confirmation),
 			refresh_token: refreshToken?.token,
 			scope: effectiveScopes.join(" "),
 			id_token: idToken,
@@ -865,6 +1029,7 @@ async function handleAuthorizationCodeGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -936,6 +1101,7 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 		preVerifiedClient,
 		"authorization_code",
+		authMethod,
 	);
 
 	// Parse scopes from the authorization request
@@ -1077,6 +1243,7 @@ async function handleClientCredentialsGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
 		ctx.body;
@@ -1104,6 +1271,7 @@ async function handleClientCredentialsGrant(
 		undefined,
 		preVerifiedClient,
 		"client_credentials",
+		authMethod,
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -1162,6 +1330,7 @@ async function handleRefreshTokenGrant(
 		clientId: client_id,
 		clientSecret: client_secret,
 		preVerifiedClient,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	const {
@@ -1270,6 +1439,7 @@ async function handleRefreshTokenGrant(
 		requestedScopes ?? scopes,
 		preVerifiedClient,
 		"refresh_token",
+		authMethod,
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

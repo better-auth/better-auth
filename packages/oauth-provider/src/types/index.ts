@@ -4,23 +4,33 @@ import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
-import type { GrantType } from "./oauth";
+import type {
+	AuthServerMetadata,
+	Confirmation,
+	GrantType,
+	OIDCMetadata,
+	TokenEndpointAuthMethod,
+	TokenType,
+} from "./oauth";
 
 export type {
 	AuthMethod,
 	AuthServerMetadata,
 	BearerMethodsSupported,
+	Confirmation,
 	GrantType,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
 	TokenEndpointAuthMethod,
+	TokenType,
 } from "./oauth";
 
 export type StoreTokenType =
 	| "access_token"
 	| "refresh_token"
-	| "authorization_code";
+	| "authorization_code"
+	| (string & {});
 
 type InternallySupportedScopes =
 	| "openid"
@@ -39,13 +49,11 @@ export type AuthorizePrompt =
  * metadata document, a federated registry, an attestation header, etc.) and
  * what fields that source contributes to discovery metadata.
  *
- * Plugins install one of these onto {@link OAuthOptions.clientDiscovery}.
- * The host walks the configured entries in order and returns the first
- * non-null `resolve()` result.
+ * Plugins contribute one of these through
+ * {@link OAuthProviderExtension.clientDiscovery}. The host walks every
+ * configured entry in order and returns the first non-null `resolve()` result.
  */
-export interface ClientDiscovery<
-	Scopes extends readonly Scope[] = InternallySupportedScopes[],
-> {
+export interface ClientDiscovery {
 	/**
 	 * Stable identifier used in error messages and diagnostics. Convention
 	 * is to match the plugin id (for example `"cimd"`).
@@ -70,8 +78,8 @@ export interface ClientDiscovery<
 	resolve: (
 		ctx: GenericEndpointContext,
 		clientId: string,
-		existing: SchemaClient<Scopes> | null,
-	) => Awaitable<SchemaClient<Scopes> | null>;
+		existing: SchemaClient<Scope[]> | null,
+	) => Awaitable<SchemaClient<Scope[]> | null>;
 	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
@@ -79,6 +87,306 @@ export interface ClientDiscovery<
 	 * `client_id_metadata_document_supported`.
 	 */
 	discoveryMetadata?: Record<string, unknown>;
+}
+
+export interface OAuthAuthenticatedClient {
+	clientId: string;
+	client: SchemaClient<Scope[]>;
+	method?: TokenEndpointAuthMethod;
+	/**
+	 * A sender-constraint the authentication step already proved (for example a
+	 * wallet-instance key thumbprint). Pass it to `issueTokens` as
+	 * {@link OAuthTokenIssueParams.confirmation} to bind the issued token to it.
+	 * The authorization server writes this as token material and does not verify
+	 * it again, so a strategy must set it only after proving possession.
+	 */
+	confirmation?: Confirmation;
+}
+
+export interface OAuthClientAuthenticationRequest {
+	/**
+	 * Scopes to validate against the registered client.
+	 */
+	scopes?: string[];
+	/**
+	 * Grant type to enforce for the registered client.
+	 */
+	grantType?: GrantType;
+	/**
+	 * Set to `false` for public extension grants that only require client_id.
+	 *
+	 * @default true
+	 */
+	requireCredentials?: boolean;
+}
+
+export interface OAuthTokenIssueParams {
+	client: SchemaClient<Scope[]>;
+	scopes: string[];
+	user?: User;
+	referenceId?: string;
+	sessionId?: string;
+	nonce?: string;
+	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+	authTime?: Date;
+	verificationValue?: VerificationValue;
+	resources?: string[];
+	/** Full original authorized resources for the grant, used to seed refresh tokens. */
+	originalResources?: string[];
+	/**
+	 * Additional JWT access-token claims for this single issuance.
+	 *
+	 * JWT-only: these are baked into the signed token at mint. Opaque access
+	 * tokens persist no per-issuance claims, so they do NOT reappear at
+	 * introspection. A claim that must be visible at opaque-token introspection
+	 * belongs in a grant-type-stable `claims.accessToken` contributor instead,
+	 * which the introspection path re-derives. Reserved RFC 9068 claim names stay
+	 * owned by the authorization server.
+	 */
+	accessTokenClaims?: Record<string, unknown>;
+	/**
+	 * Additional ID-token claims for this single issuance. Additive: they cannot
+	 * replace identity, authentication-context, or AS-owned claims.
+	 */
+	idTokenClaims?: Record<string, unknown>;
+	/**
+	 * Additional fields for the token response envelope. Standard OAuth token
+	 * response fields stay owned by the authorization server.
+	 */
+	tokenResponse?: Record<string, unknown>;
+	/**
+	 * Sender-constraint to bind this issuance to (RFC 7800 `cnf`). When set, the
+	 * issuer stamps it as the access token's `cnf` and derives `token_type` from
+	 * it, instead of leaving the token a bearer token. Use it to carry a
+	 * confirmation a client-auth strategy or an out-of-band flow already proved
+	 * (see {@link OAuthAuthenticatedClient.confirmation}). `cnf` is AS-owned: it
+	 * is stamped after, and cannot be overridden by, contributed claims.
+	 */
+	confirmation?: Confirmation;
+}
+
+export interface OAuthTokenResponse {
+	access_token: string;
+	expires_in: number;
+	expires_at: number;
+	token_type: TokenType;
+	refresh_token: string | undefined;
+	scope: string;
+	id_token: string | undefined;
+	[key: string]: unknown;
+}
+
+/**
+ * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
+ * A grant handler receives one as `provider`; a companion plugin's own endpoint
+ * obtains one with `getOAuthProviderApi(ctx, opts, grantType?)`. The same object
+ * serves both, so issuance, client resolution, and token verification behave the
+ * same inside and outside a grant.
+ */
+export interface OAuthProviderApi {
+	/**
+	 * Resolves a registered client by id, consulting extension client-discovery
+	 * sources. Returns `null` when no client matches.
+	 */
+	getClient: (clientId: string) => Awaitable<SchemaClient<Scope[]> | null>;
+	/**
+	 * Authenticates the calling client from the request (client secret, assertion,
+	 * or none). For assertion-based methods, the RFC 7523 audience is bound to the
+	 * endpoint serving the request, so an assertion cannot be replayed across
+	 * endpoints. Returns the authenticated client, plus any `confirmation` an
+	 * assertion strategy proved.
+	 */
+	authenticateClient: (
+		request?: OAuthClientAuthenticationRequest,
+	) => Awaitable<OAuthAuthenticatedClient>;
+	/**
+	 * Issues the token set for this grant (access token, optional refresh token,
+	 * optional ID token, resource policy, response envelope, and any
+	 * sender-constraint). The grant type is fixed by the `getOAuthProviderApi`
+	 * binding (the dispatcher's grant for an in-grant handler, the caller's grant
+	 * for an out-of-grant endpoint), so it cannot be mislabeled per issuance.
+	 *
+	 * Authorization is the caller's responsibility. The authorization server does
+	 * NOT re-check that `params.scopes`, `params.user`, or `params.resources` are
+	 * a subset of what `authenticateClient` validated: this is a raw minting
+	 * primitive, and the built-in grants each validate scopes themselves before
+	 * calling it.
+	 */
+	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
+	/**
+	 * Computes the stored lookup key for a token value (the same hash the
+	 * provider persists), so a caller can find or revoke a previously issued
+	 * opaque token by its value.
+	 */
+	hashToken: (token: string, type: StoreTokenType) => Awaitable<string>;
+	validateAccessToken: (
+		token: string,
+		clientId?: string,
+	) => Awaitable<JWTPayload>;
+}
+
+export interface OAuthExtensionGrantHandlerInput {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scope[]>;
+	grantType: GrantType;
+	/** The provider capability surface, pre-bound to this grant's `grantType`. */
+	provider: OAuthProviderApi;
+}
+
+export type OAuthExtensionGrantHandler = (
+	input: OAuthExtensionGrantHandlerInput,
+) => Awaitable<OAuthTokenResponse>;
+
+export interface OAuthClientAuthenticationInput {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scope[]>;
+	assertion: string;
+	assertionType: string;
+	clientId?: string;
+	/**
+	 * The endpoint URL the assertion was presented to. A strategy MUST bind the
+	 * assertion to this audience (see {@link OAuthClientAuthenticationStrategy.authenticate}).
+	 */
+	expectedAudience?: string;
+}
+
+export interface OAuthClientAuthenticationStrategy {
+	/**
+	 * Assertion type URIs this strategy consumes from `client_assertion_type`.
+	 * Values must be absolute URIs per RFC 7521. When omitted, the strategy key
+	 * in `OAuthProviderExtension.clientAuthentication` is used and must also be
+	 * an absolute URI.
+	 */
+	assertionTypes?: string[];
+	/**
+	 * Verifies the presented assertion and returns the authenticated client.
+	 *
+	 * The strategy owns the full RFC 7521/7523 verification. After verifying the
+	 * signature against its own key source, it MUST enforce the assertion-hygiene
+	 * checks the built-in `private_key_jwt` path enforces, or the provider will
+	 * accept a forged or replayed assertion:
+	 * - bind the assertion to `input.expectedAudience` (RFC 7523 §3 rule 3),
+	 * - require a bounded `exp` (RFC 7523 §3 rule 4),
+	 * - reject replays via a single-use `jti`.
+	 *
+	 * The exported `consumeClientAssertion` helper performs the audience,
+	 * lifetime, and `jti` single-use checks for a decoded payload; call it after
+	 * signature verification so an extension method inherits the same guarantees
+	 * as `private_key_jwt`.
+	 */
+	authenticate: (
+		input: OAuthClientAuthenticationInput,
+	) => Awaitable<OAuthAuthenticatedClient>;
+}
+
+export interface OAuthMetadataExtensionInput {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scope[]>;
+	type: "oauth-authorization-server" | "openid-configuration";
+	/**
+	 * The discovery document the provider assembled (core authorization-server
+	 * fields plus any client-discovery metadata). Contributions from other
+	 * extensions are merged afterwards and are not reflected here, so a
+	 * contributor decides what to add from provider state alone, independent of
+	 * extension registration order. The contributor returns the fields to add.
+	 */
+	document: AuthServerMetadata | OIDCMetadata;
+}
+
+export interface OAuthClaimExtensionInput {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scope[]>;
+	user?: (User & Record<string, unknown>) | null;
+	client: SchemaClient<Scope[]>;
+	scopes: string[];
+	grantType?: GrantType;
+	referenceId?: string;
+	resources?: string[];
+	/** Parsed client metadata, as returned by `parseClientMetadata`. */
+	metadata?: Record<string, unknown>;
+}
+
+export interface OAuthUserInfoExtensionInput {
+	ctx: GenericEndpointContext;
+	opts: OAuthOptions<Scope[]>;
+	user: User & Record<string, unknown>;
+	scopes: string[];
+	jwt: JWTPayload;
+	client?: SchemaClient<Scope[]>;
+}
+
+/**
+ * What a companion plugin contributes to the OAuth Provider, registered through
+ * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
+ * option).
+ *
+ * All five kinds live on one object so a single protocol plugin (for example
+ * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
+ * claims) registers atomically and the host validates the combined surface in
+ * one place. Every field is independently optional, so a single-concern plugin
+ * (such as `@better-auth/cimd`, which contributes only `clientDiscovery`) sets
+ * just the one it needs. This is the shape every future OAuth RFC plugin copies.
+ *
+ * Two contribution disciplines:
+ * - Dispatched kinds (`grants`, `clientAuthentication`) must be disjoint across
+ *   extensions: registering a grant type, auth method, or assertion type that
+ *   another extension already registered is rejected at setup, since the second
+ *   would otherwise be silently unreachable.
+ * - Additive kinds (`metadata`, `claims`) never override authorization-server
+ *   core; a key already owned by the provider is kept, and a key two extensions
+ *   both contribute resolves to the first-registered extension.
+ */
+export interface OAuthProviderExtension {
+	/**
+	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
+	 * dispatches a matching `grant_type` to the handler, which authenticates the
+	 * client and issues tokens through the shared `provider`.
+	 */
+	grants?: Record<string, OAuthExtensionGrantHandler>;
+	/**
+	 * Assertion-based client authentication, keyed by the advertised
+	 * `token_endpoint_auth_method`. Consumes the matching `client_assertion_type`
+	 * at the token, introspection, and revocation endpoints. Built-in method
+	 * names (`client_secret_basic`/`_post`, `private_key_jwt`, `none`) are
+	 * reserved.
+	 */
+	clientAuthentication?: Record<string, OAuthClientAuthenticationStrategy>;
+	/**
+	 * Additional discovery metadata fields. Core fields (`issuer`,
+	 * `token_endpoint`, advertised grants and auth methods, ...) stay owned by
+	 * the provider; only absent keys are added. To advertise the claim names a
+	 * claims contributor emits, set `advertisedMetadata.claims_supported`: the
+	 * provider owns `claims_supported` and does not infer it from contributors.
+	 */
+	metadata?: (input: OAuthMetadataExtensionInput) => Record<string, unknown>;
+	/**
+	 * Additional claims for access tokens, ID tokens, and the UserInfo response.
+	 * Strictly additive: a contributor can add new claims but never replace an
+	 * identity, authentication-context, reserved RFC 9068, or other AS-owned
+	 * claim. Access-token claims are re-derived at opaque-token introspection, so
+	 * they must be grant-type-stable (a contributor receives `grantType:
+	 * undefined` there). See the claim-authority overview in the docs for the
+	 * full per-token precedence ladder.
+	 */
+	claims?: {
+		accessToken?: (
+			input: OAuthClaimExtensionInput,
+		) => Awaitable<Record<string, unknown>>;
+		idToken?: (
+			input: OAuthClaimExtensionInput,
+		) => Awaitable<Record<string, unknown>>;
+		userInfo?: (
+			input: OAuthUserInfoExtensionInput,
+		) => Awaitable<Record<string, unknown>>;
+	};
+	/**
+	 * Client-id resolution sources consulted by `getClient()`, plus the
+	 * discovery-metadata fields they advertise. Entries across all extensions
+	 * run in order; the first to return a client wins. A plugin that resolves
+	 * clients from an external source (a metadata-document URL, a federated
+	 * registry, an attestation header) contributes it here.
+	 */
+	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
 }
 
 export interface OAuthOptions<
@@ -281,20 +589,15 @@ export interface OAuthOptions<
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
-	 * Discovery implementations consulted by `getClient()` when resolving
-	 * a `client_id`. Each entry decides whether it handles the `client_id`
-	 * via {@link ClientDiscovery.matches}, then creates, refreshes, or
-	 * passes on a client record. Entries run in order; the first one to
-	 * return a client wins.
+	 * OAuth/OIDC extension points used by companion plugins to add protocol
+	 * grants, client authentication methods, metadata, claims, and client-id
+	 * discovery without modifying oauth-provider core for each RFC.
 	 *
-	 * Each entry also contributes {@link ClientDiscovery.discoveryMetadata}
-	 * into the `/.well-known/oauth-authorization-server` and
-	 * `/.well-known/openid-configuration` responses.
-	 *
-	 * Plugins such as `@better-auth/cimd` install an entry here at init
-	 * time; users can also pass discovery implementations directly.
+	 * Extension plugins should prefer `extendOAuthProvider(ctx, extension)` in
+	 * their `init()` hook so users can compose plugins declaratively. Plugins
+	 * such as `@better-auth/cimd` contribute their client discovery this way.
 	 */
-	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
+	extensions?: OAuthProviderExtension[];
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
@@ -1187,11 +1490,7 @@ export interface SchemaClient<
 	 * @default false
 	 */
 	backchannelLogoutSessionRequired?: boolean;
-	tokenEndpointAuthMethod?:
-		| "none"
-		| "client_secret_basic"
-		| "client_secret_post"
-		| "private_key_jwt";
+	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
 	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */

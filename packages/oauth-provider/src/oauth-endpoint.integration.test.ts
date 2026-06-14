@@ -152,19 +152,19 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("registerOAuthClient (JSON delivery)", () => {
-		it("missing redirect_uris → invalid_redirect_uri", async () => {
+		it("disabled registration rejects before metadata validation", async () => {
 			const { status, body } = await postJson("/oauth2/register", {});
-			expect(status).toBe(400);
-			expect(body?.error).toBe("invalid_redirect_uri");
+			expect(status).toBe(403);
+			expect(body?.error).toBe("access_denied");
 		});
 
-		it("unsupported token_endpoint_auth_method → invalid_client_metadata default", async () => {
+		it("disabled registration does not leak supported auth methods", async () => {
 			const { status, body } = await postJson("/oauth2/register", {
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "not_a_real_method",
 			});
-			expect(status).toBe(400);
-			expect(body?.error).toBe("invalid_client_metadata");
+			expect(status).toBe(403);
+			expect(body?.error).toBe("access_denied");
 		});
 	});
 

@@ -1337,6 +1337,91 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 * **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a public client at request time.
 * **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
 
+### Provider extensions
+
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery.
+
+```ts title="custom-oauth-extension.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { extendOAuthProvider } from "@better-auth/oauth-provider";
+
+export const customOAuthExtension = () =>
+  ({
+    id: "custom-oauth-extension",
+    init(ctx) {
+      extendOAuthProvider(ctx, {
+        grants: {
+          "urn:example:params:oauth:grant-type:custom": async ({
+            grantType,
+            provider,
+          }) => {
+            const { client } = await provider.authenticateClient({ grantType });
+            return provider.issueTokens({
+              client,
+              scopes: ["openid"],
+              tokenResponse: {
+                issued_token_type:
+                  "urn:ietf:params:oauth:token-type:access_token",
+              },
+            });
+          },
+        },
+        metadata: () => ({
+          custom_grant_supported: true,
+        }),
+      });
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+Extension contributions follow two disciplines:
+
+* **Dispatched kinds** (`grants`, `clientAuthentication`) must be disjoint across extensions. Registering a grant type, `token_endpoint_auth_method`, or `client_assertion_type` that another extension already registered is rejected at setup, so a contribution can never be silently shadowed. Extension grants and auth methods are advertised in discovery automatically.
+* **Additive kinds** (`metadata`, `claims`) never override authorization-server core. A metadata field the provider already owns (`issuer`, `token_endpoint`, `grant_types_supported`, the authentication-method lists, ...) is kept, and a key two extensions both contribute resolves to the first-registered extension.
+
+A claims contributor can add new claim names but never replaces an identity, authentication-context, reserved RFC 9068, or other provider-owned claim. To advertise the claim names an extension emits, set `advertisedMetadata.claims_supported`: the provider owns `claims_supported` and does not infer it from contributors.
+
+#### Provider capabilities outside a grant
+
+A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
+
+To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or set it on the authenticated client a `clientAuthentication` strategy returns. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
+
+#### Client authentication obligations
+
+A `clientAuthentication` strategy verifies the assertion against its own key source and returns the registered client. After verifying the signature it must enforce the same assertion hygiene the built-in `private_key_jwt` method enforces, or the provider will accept a forged or replayed assertion. Use the exported `consumeClientAssertion` helper to bind the assertion to the endpoint audience, require a bounded lifetime, and reject `jti` replays:
+
+```ts
+import { consumeClientAssertion } from "@better-auth/oauth-provider";
+
+authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
+  const payload = await verifyAssertionSignature(assertion); // your key source
+  await consumeClientAssertion(ctx, opts, {
+    // Scopes the replay tombstone; the same jti may recur across distinct
+    // methods or clients but never within one.
+    namespace: `urn:example:attestation:${payload.sub}`,
+    payload,
+    expectedAudience: expectedAudience!,
+  });
+  return {
+    clientId: payload.sub as string,
+    client: await loadRegisteredClient(ctx, opts, payload.sub),
+  };
+};
+```
+
+#### Claim precedence
+
+Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override identity claims; subject identity is always pinned by the provider.
+
+| Token        | Order (lowest to highest authority)                                                                                                                 | Always provider-owned                                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                      | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing |
+| ID token     | base identity claims \< `auth_time`/`acr` \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are additive (fill absent keys only) | `at_hash`, `iss`, `sub`, `aud`, `nonce`, `iat`, `exp`, `sid`                                                                                 |
+| UserInfo     | base identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                                                       | `sub` (re-pinned last)                                                                                                                       |
+
+Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
+
 ### Organizations
 
 OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
