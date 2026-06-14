@@ -148,3 +148,69 @@ export const verificationValueSchema = z
 		resource: z.array(z.string()).optional(),
 	})
 	.passthrough();
+
+/**
+ * Request body accepted at `POST /oauth2/register` (RFC 7591 §2 client
+ * metadata). This is the single source of truth for the registration contract:
+ * the endpoint validates against it and {@link ClientRegistrationRequest} is
+ * inferred from it, so the type a `validateInitialAccessToken` callback receives
+ * always matches what is actually validated. `grant_types` and
+ * `token_endpoint_auth_method` are open strings because extensions can register
+ * custom values. Server-assigned fields (`client_id`, `client_secret`, the
+ * issued/expiry timestamps) and internal state (`disabled`, `reference_id`) are
+ * never part of a registration request.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7591#section-2
+ */
+export const clientRegistrationRequestSchema = z.object({
+	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+	scope: z.string().optional(),
+	client_name: z.string().optional(),
+	client_uri: z.string().optional(),
+	logo_uri: z.string().optional(),
+	contacts: z.array(z.string().min(1)).min(1).optional(),
+	tos_uri: z.string().optional(),
+	policy_uri: z.string().optional(),
+	software_id: z.string().optional(),
+	software_version: z.string().optional(),
+	software_statement: z.string().optional(),
+	post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+	backchannel_logout_uri: SafeUrlSchema.optional(),
+	backchannel_logout_session_required: z.boolean().optional(),
+	token_endpoint_auth_method: z.string().trim().min(1).optional(),
+	jwks: z
+		.union([
+			z.array(z.record(z.string(), z.unknown())).min(1),
+			z.object({
+				keys: z.array(z.record(z.string(), z.unknown())).min(1),
+			}),
+		])
+		.optional(),
+	jwks_uri: z.string().optional(),
+	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
+	response_types: z.array(z.enum(["code"])).optional(),
+	type: z.enum(["web", "native", "user-agent-based"]).optional(),
+	subject_type: z.enum(["public", "pairwise"]).optional(),
+	// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
+	// will request. Each must be a valid resource URI matching an existing
+	// oauthResource row; the registration handler links them on success.
+	resources: z.array(ResourceUriSchema).optional(),
+	skip_consent: z
+		.never({
+			error: "skip_consent cannot be set during dynamic client registration",
+		})
+		.optional(),
+});
+
+/**
+ * Client metadata as submitted in an RFC 7591 §2 registration request, inferred
+ * from {@link clientRegistrationRequestSchema}. Every value is self-asserted by
+ * the caller (RFC 7591 §5) and is the raw request before registration defaults
+ * are applied, so a `validateInitialAccessToken` callback should treat it as
+ * untrusted and not assume defaulted fields are present.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7591#section-2
+ */
+export type ClientRegistrationRequest = z.infer<
+	typeof clientRegistrationRequestSchema
+>;

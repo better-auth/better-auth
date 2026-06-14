@@ -12,6 +12,7 @@ import type {
 	TokenEndpointAuthMethod,
 	TokenType,
 } from "./oauth";
+import type { ClientRegistrationRequest } from "./zod";
 
 export type {
 	AuthMethod,
@@ -25,6 +26,7 @@ export type {
 	TokenEndpointAuthMethod,
 	TokenType,
 } from "./oauth";
+export type { ClientRegistrationRequest } from "./zod";
 
 export type StoreTokenType =
 	| "access_token"
@@ -389,6 +391,21 @@ export interface OAuthProviderExtension {
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
 }
 
+/**
+ * Result of authorizing an RFC 7591 initial access token, returned by
+ * {@link OAuthOptions.validateInitialAccessToken}.
+ */
+export interface InitialAccessTokenAuthorization {
+	/**
+	 * Ownership reference to attach to the created OAuth client.
+	 *
+	 * Associates machine-provisioned clients with an organization, team, tenant,
+	 * or other application-level owner. Omit to create an unowned client (the
+	 * client is stored with neither a `user_id` nor a `reference_id`).
+	 */
+	referenceId?: string;
+}
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -583,11 +600,50 @@ export interface OAuthOptions<
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
 	/**
-	 * Allow dynamic client registration.
+	 * Allow dynamic client registration (RFC 7591) at `POST /oauth2/register`.
+	 *
+	 * Once enabled, a registration request is authorized through one of three
+	 * modes:
+	 * - session-backed: a logged-in user with client-create privileges.
+	 * - token-backed: a valid initial access token, when
+	 *   {@link OAuthOptions.validateInitialAccessToken} is defined.
+	 * - open public-only: unauthenticated registration constrained to public
+	 *   clients, when {@link OAuthOptions.allowUnauthenticatedClientRegistration}
+	 *   is enabled.
 	 *
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * Validates an RFC 7591 initial access token for protected dynamic client
+	 * registration, read from the `Authorization: Bearer <token>` header on
+	 * `POST /oauth2/register`.
+	 *
+	 * Return an {@link InitialAccessTokenAuthorization} (optionally carrying a
+	 * `referenceId` owner) to authorize the registration, or `false` to reject
+	 * the token. Defining this callback enables the token-backed registration
+	 * mode; while it is undefined, a Bearer token presented to the endpoint is
+	 * rejected rather than downgraded to open registration.
+	 *
+	 * `clientMetadata` is the schema-validated request body. It is self-asserted
+	 * (RFC 7591 §5) and not yet semantically validated, so a request authorized
+	 * here may still be rejected by a later metadata check. Compare the token in
+	 * constant time; issuance, storage, expiration, and revocation are
+	 * deployment-specific in RFC 7591 and belong in your application.
+	 *
+	 * `headers` is the raw request `Headers`, available to correlate the token
+	 * with other request context (a tenant header, a forwarded client identity).
+	 *
+	 * With the `bearer` plugin enabled, a Bearer value that resolves to a valid
+	 * user session is handled as that session, not as an initial access token.
+	 *
+	 * @see InitialAccessTokenAuthorization
+	 */
+	validateInitialAccessToken?: (context: {
+		initialAccessToken: string;
+		headers: Headers;
+		clientMetadata: ClientRegistrationRequest;
+	}) => Awaitable<InitialAccessTokenAuthorization | false>;
 	/**
 	 * OAuth/OIDC extension points used by companion plugins to add protocol
 	 * grants, client authentication methods, metadata, claims, and client-id

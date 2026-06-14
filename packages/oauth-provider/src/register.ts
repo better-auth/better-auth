@@ -11,14 +11,24 @@ import {
 } from "./extensions";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { buildClientResourceLinkId, getResource } from "./resources";
-import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import type {
+	ClientRegistrationRequest,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 import type {
 	GrantType,
 	OAuthClient,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	OAUTH_NO_STORE_HEADERS,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
+import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 /**
  * Resolves the auth method and type for unauthenticated DCR.
@@ -90,16 +100,43 @@ export async function registerEndpoint(
 		});
 	}
 
+	// Resolve a session first. With the bearer plugin enabled it consumes the
+	// Authorization header (a valid bearer becomes the session); only when no
+	// session is resolved do we treat an Authorization: Bearer value as an
+	// RFC 7591 initial access token.
 	const session = await getSessionFromCtx(ctx);
+	const tokenAuthorization = session
+		? undefined
+		: await authorizeInitialAccessToken(
+				ctx,
+				opts,
+				body as ClientRegistrationRequest,
+			);
+	const isTokenAuthorized = Boolean(tokenAuthorization);
 
-	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
-		throw new APIError("UNAUTHORIZED", {
-			error: "invalid_token",
-			error_description: "Authentication required for client registration",
-		});
+	if (
+		!(
+			session ||
+			isTokenAuthorized ||
+			opts.allowUnauthenticatedClientRegistration
+		)
+	) {
+		// No session, no token, and open registration disabled. A presented but
+		// invalid token already threw above, so this is the no-credentials case:
+		// answer with a bare RFC 6750 §3.1 Bearer challenge and no error code.
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "Authentication required for client registration",
+			},
+			{
+				"WWW-Authenticate": "Bearer",
+				...OAUTH_NO_STORE_HEADERS,
+			},
+		);
 	}
 
-	if (!session) {
+	if (!session && !isTokenAuthorized) {
 		if (body.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
@@ -154,6 +191,8 @@ export async function registerEndpoint(
 
 	return createOAuthClientEndpoint(ctx, opts, {
 		isRegister: true,
+		session,
+		referenceId: tokenAuthorization?.referenceId,
 		resources: requestedResources.length > 0 ? requestedResources : undefined,
 	});
 }
@@ -467,6 +506,18 @@ export async function createOAuthClientEndpoint(
 	settings: {
 		isRegister: boolean;
 		/**
+		 * Owner reference resolved by the caller (e.g. from an initial access
+		 * token) to attach to the new client. Takes precedence over
+		 * `clientReference`.
+		 */
+		referenceId?: string;
+		/**
+		 * Session already resolved by the caller, threaded to avoid resolving it
+		 * twice. The DCR path provides it (possibly `null`); admin callers omit it
+		 * and it is resolved here (cached by `sessionMiddleware`).
+		 */
+		session?: Awaited<ReturnType<typeof getSessionFromCtx>>;
+		/**
 		 * Pre-validated resource identifiers to link the new client to. Used
 		 * by the DCR registration path (RFC 7591 §2 extension). Validation
 		 * (existence, disabled) is the caller's responsibility — this branch
@@ -476,20 +527,17 @@ export async function createOAuthClientEndpoint(
 	},
 ) {
 	const body = applyOAuthClientRegistrationDefaults(ctx.body as OAuthClient);
-	const session = await getSessionFromCtx(ctx);
+	const session =
+		settings.session !== undefined
+			? settings.session
+			: await getSessionFromCtx(ctx);
 
-	// Single authorization chokepoint for OAuth client creation. Every creation
-	// route reaches this function, so the create gate lives here rather than in
-	// each caller. Dynamic registration may be anonymous when
-	// allowUnauthenticatedClientRegistration is enabled, and registerEndpoint
-	// constrains that path to public clients, so it is authorized only when a
-	// session is present. Every other creation route requires an authorized
-	// session; assertClientPrivileges throws when none is present.
-	if (settings.isRegister) {
-		if (session) {
-			await assertClientPrivileges(ctx, session, opts, "create");
-		}
-	} else {
+	// Single authorization chokepoint for OAuth client creation. Admin creation
+	// always requires create privileges. DCR re-checks them only for
+	// session-backed requests; non-session DCR was already authorized in
+	// registerEndpoint (a valid initial access token, or open registration
+	// constrained to public clients).
+	if (!settings.isRegister || session) {
 		await assertClientPrivileges(ctx, session, opts, "create");
 	}
 
@@ -521,12 +569,18 @@ export async function createOAuthClientEndpoint(
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
-	const referenceId = opts.clientReference
-		? await opts.clientReference({
-				user: session?.user,
-				session: session?.session,
-			})
-		: undefined;
+	// Ownership has one source per path: a caller-supplied referenceId (e.g. from
+	// the initial access token) wins; otherwise a session-backed creation may
+	// resolve one via clientReference. clientReference is never called without a
+	// session, so it cannot misattribute a token-registered client.
+	const referenceId =
+		settings.referenceId ??
+		(session && opts.clientReference
+			? await opts.clientReference({
+					user: session.user,
+					session: session.session,
+				})
+			: undefined);
 	const schema = oauthToSchema({
 		...body,
 		redirect_uris: body.redirect_uris ?? [],
@@ -597,13 +651,16 @@ export async function createOAuthClientEndpoint(
 		(responseBody as OAuthClient & { resources?: string[] }).resources =
 			resources;
 	}
-	return ctx.json(responseBody, {
-		status: 201,
-		headers: {
-			"Cache-Control": "no-store",
-			Pragma: "no-cache",
-		},
-	});
+	// A newly created client is a 201 on every path (DCR and admin alike). The
+	// response carries a client_secret, so it must not be cached (RFC 7591
+	// §3.2.1). setStatus/setHeader are the reliable way to set these here: the
+	// json `status`/`headers` options are dropped on the dispatched (asResponse:
+	// false) path that serves HTTP requests.
+	ctx.setStatus(201);
+	for (const [name, value] of Object.entries(OAUTH_NO_STORE_HEADERS)) {
+		ctx.setHeader(name, value);
+	}
+	return ctx.json(responseBody);
 }
 
 /**
