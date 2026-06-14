@@ -290,6 +290,49 @@ describe("getBaseURL", () => {
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8898
+		 */
+		describe("RFC-1035 length bounds (ReDoS hardening)", () => {
+			it("should reject hostnames longer than 255 chars", () => {
+				const tooLong = `${"a".repeat(254)}.com`;
+				const request = new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": tooLong,
+						"x-forwarded-proto": "http",
+					},
+				});
+
+				const result = getBaseURL(undefined, "/auth", request, false, true);
+				expect(result).toBe("http://localhost:3000/auth");
+			});
+
+			it("should reject a label longer than 63 chars (RFC 1035)", () => {
+				const longLabel = `${"a".repeat(64)}.example.com`;
+				const request = new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": longLabel,
+						"x-forwarded-proto": "http",
+					},
+				});
+
+				const result = getBaseURL(undefined, "/auth", request, false, true);
+				expect(result).toBe("http://localhost:3000/auth");
+			});
+
+			it("should reject a hyphen-tailed hostname (must end alphanumeric)", () => {
+				const request = new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": "example-.com",
+						"x-forwarded-proto": "http",
+					},
+				});
+
+				const result = getBaseURL(undefined, "/auth", request, false, true);
+				expect(result).toBe("http://localhost:3000/auth");
+			});
+		});
 	});
 });
 

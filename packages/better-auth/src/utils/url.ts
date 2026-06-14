@@ -88,6 +88,45 @@ function withPath(url: string, path = "/api/auth") {
 	return `${trimmedUrl}${path}`;
 }
 
+// Per RFC 1035: a DNS label is 1–63 chars of alphanumeric + hyphens, may not
+// start or end with a hyphen; total hostname length is at most 253 chars.
+// Single-label match — no quantifier nesting, so safe from ReDoS.
+const HOSTNAME_LABEL_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+
+function isValidHostnameHeader(header: string): boolean {
+	// Reject pathologically long inputs before any per-label work — a long string
+	// ending in `-` was the catastrophic-backtracking trigger on the previous
+	// nested-quantifier regex (see better-auth#8898).
+	if (header.length === 0 || header.length > 255) {
+		return false;
+	}
+
+	// Split off the optional `:port` suffix, then validate hostname labels
+	// individually. Per-label matching has no outer repetition over an
+	// optional inner group, so no ReDoS.
+	const colonIndex = header.lastIndexOf(":");
+	let hostname = header;
+	if (colonIndex !== -1) {
+		const portString = header.slice(colonIndex + 1);
+		if (!/^[0-9]{1,5}$/.test(portString)) {
+			return false;
+		}
+		hostname = header.slice(0, colonIndex);
+	}
+
+	if (hostname.length === 0 || hostname.length > 253) {
+		return false;
+	}
+
+	const labels = hostname.split(".");
+	for (const label of labels) {
+		if (!HOSTNAME_LABEL_REGEX.test(label)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	if (!header || header.trim() === "") {
 		return false;
@@ -114,11 +153,6 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 			return false;
 		}
 
-		// Basic hostname validation (allows localhost, IPs, and domains with ports)
-		// This is a simple check, not exhaustive RFC validation
-		const hostnameRegex =
-			/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
-
 		// Also allow IPv4 addresses
 		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
 
@@ -129,7 +163,7 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
 
 		return (
-			hostnameRegex.test(header) ||
+			isValidHostnameHeader(header) ||
 			ipv4Regex.test(header) ||
 			ipv6Regex.test(header) ||
 			localhostRegex.test(header)
