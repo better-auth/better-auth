@@ -1,12 +1,19 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { generateCodeChallenge } from "better-auth/oauth2";
+import {
+	createDpopReplayStore,
+	generateCodeChallenge,
+	getConfirmationJkt,
+	isDpopProofError,
+	verifyDpopProof,
+} from "better-auth/oauth2";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
@@ -56,8 +63,8 @@ import {
  * (`jkt`) yields `"DPoP"`; any other confirmation (including mTLS `x5t#S256`)
  * keeps `"Bearer"`, since that constraint lives at the TLS layer.
  */
-function confirmationTokenType(confirmation?: Confirmation): TokenType {
-	return confirmation && "jkt" in confirmation ? "DPoP" : "Bearer";
+export function confirmationTokenType(confirmation?: Confirmation): TokenType {
+	return getConfirmationJkt(confirmation) ? "DPoP" : "Bearer";
 }
 
 const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
@@ -460,6 +467,7 @@ async function createOpaqueAccessToken(
 	resources?: string[],
 	referenceId?: string,
 	refreshId?: string,
+	confirmation?: Confirmation,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -476,6 +484,7 @@ async function createOpaqueAccessToken(
 			referenceId,
 			resources,
 			refreshId,
+			confirmation,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -545,6 +554,7 @@ async function createRefreshToken(
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
 	authTime?: Date,
 	resources?: string[],
+	confirmation?: Confirmation,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -564,6 +574,7 @@ async function createRefreshToken(
 		userId: user.id,
 		referenceId,
 		authTime,
+		confirmation,
 		scopes,
 		resources,
 		createdAt: new Date(iat * 1000),
@@ -644,6 +655,7 @@ interface ResourceGrantIssuance {
 	signingAlgorithm: ResolvedResourcePolicy["signingAlgorithm"];
 	signingKeyId: ResolvedResourcePolicy["signingKeyId"];
 	resourceCustomClaims: Record<string, unknown>;
+	dpopBoundAccessTokensRequired: boolean;
 }
 
 async function resolveResourceGrantIssuance(
@@ -689,7 +701,72 @@ async function resolveResourceGrantIssuance(
 		signingAlgorithm: resourcePolicy.signingAlgorithm,
 		signingKeyId: resourcePolicy.signingKeyId,
 		resourceCustomClaims: resourcePolicy.rawCustomClaims,
+		dpopBoundAccessTokensRequired: resourcePolicy.dpopBoundAccessTokensRequired,
 	};
+}
+
+function throwInvalidDpopProof(errorDescription: string): never {
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_dpop_proof",
+		error_description: errorDescription,
+	});
+}
+
+function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
+	const metadata = (parseClientMetadata(client.metadata) ?? {}) as Record<
+		string,
+		unknown
+	>;
+	return (
+		client.dpopBoundAccessTokens === true ||
+		metadata.dpop_bound_access_tokens === true
+	);
+}
+
+async function resolveDpopTokenBinding(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		grantIssuance: ResourceGrantIssuance;
+		verificationValue?: VerificationValue;
+		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+	},
+): Promise<Confirmation | undefined> {
+	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
+	const refreshJkt = getConfirmationJkt(params.refreshToken?.confirmation);
+	const expectedJkt = refreshJkt ?? authCodeDpopJkt;
+	const dpopProofJwt = getDpopProofJwt(ctx);
+	const dpopRequired =
+		clientRequiresDpopBoundAccessTokens(params.client) ||
+		params.grantIssuance.dpopBoundAccessTokensRequired ||
+		!!authCodeDpopJkt ||
+		!!refreshJkt;
+
+	if (!dpopProofJwt) {
+		if (dpopRequired) {
+			throwInvalidDpopProof("DPoP proof header is required");
+		}
+		return undefined;
+	}
+
+	try {
+		const proof = await verifyDpopProof({
+			proofJwt: dpopProofJwt,
+			method: "POST",
+			url: getEndpointUrl(ctx, "/oauth2/token"),
+			expectedJkt,
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+		});
+		return { jkt: proof.jkt };
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			throwInvalidDpopProof(error.message);
+		}
+		throw error;
+	}
 }
 
 async function createUserTokens(
@@ -781,6 +858,20 @@ async function createUserTokens(
 		: undefined;
 
 	const refreshResources = grantIssuance.refreshResources;
+	// A confirmation supplied by the caller (an extension client-authentication
+	// strategy, for example mTLS `x5t#S256`, or a binding captured out-of-grant
+	// for CIBA push/ping) takes precedence; a DPoP proof on the token request is
+	// the fallback. Either way the AS owns the RFC 7800 `cnf`: stamped into a JWT
+	// access token, persisted on opaque access and refresh tokens, and surfaced
+	// as `cnf` at introspection.
+	const confirmation =
+		params.confirmation ??
+		(await resolveDpopTokenBinding(ctx, opts, {
+			client,
+			grantIssuance,
+			verificationValue,
+			refreshToken: existingRefreshToken,
+		}));
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -800,6 +891,7 @@ async function createUserTokens(
 					existingRefreshToken,
 					authTime,
 					refreshResources,
+					confirmation,
 				)
 			: undefined;
 
@@ -821,19 +913,6 @@ async function createUserTokens(
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
-
-	// A sender-constraint is stamped onto JWT access tokens. Opaque-token binding
-	// persistence (a stored confirmation column) ships with the binding
-	// mechanism, so fail closed rather than silently mint an unbound opaque token
-	// a caller believes is sender-constrained.
-	if (params.confirmation && !isJwtAccessToken) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description:
-				"Cannot sender-constrain an opaque access token; confirmation is supported only for JWT access tokens.",
-			error: "server_error",
-		});
-	}
-	const confirmation = params.confirmation;
 
 	// Create access token and refresh token in parallel
 	const [accessToken, refreshToken] = await Promise.all([
@@ -869,6 +948,7 @@ async function createUserTokens(
 					params?.resources,
 					referenceId,
 					earlyRefreshToken?.id,
+					confirmation,
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
@@ -888,6 +968,7 @@ async function createUserTokens(
 						existingRefreshToken,
 						authTime,
 						refreshResources,
+						confirmation,
 					)
 				: undefined,
 	]);

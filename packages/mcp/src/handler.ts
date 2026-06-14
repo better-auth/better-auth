@@ -1,6 +1,9 @@
 import type { Awaitable } from "@better-auth/core";
 import { raiseResourceServerChallenge } from "@better-auth/oauth-provider";
-import { verifyAccessToken } from "better-auth/oauth2";
+import {
+	requestToResourceInput,
+	verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 
@@ -12,7 +15,7 @@ import type { JWTPayload } from "jose";
  */
 export const mcpHandler = (
 	/** Verifier options. `audience` must match the protected resource identifier. */
-	verifyOptions: Parameters<typeof verifyAccessToken>[1],
+	verifyOptions: Parameters<typeof verifyAccessTokenRequest>[1],
 	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
 	opts?: {
 		/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -20,24 +23,21 @@ export const mcpHandler = (
 	},
 ) => {
 	return async (req: Request) => {
-		const authorization = req.headers?.get("authorization") ?? undefined;
-		const accessToken = authorization?.startsWith("Bearer ")
-			? authorization.replace("Bearer ", "")
-			: authorization;
 		try {
-			if (!accessToken?.length) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "missing authorization header",
-				});
-			}
-			const token = await verifyAccessToken(accessToken, verifyOptions);
+			const token = await verifyAccessTokenRequest(
+				requestToResourceInput(req),
+				verifyOptions,
+			);
 			return handler(req, token);
 		} catch (error) {
 			try {
 				raiseResourceServerChallenge(
 					error,
 					verifyOptions.verifyOptions.audience,
-					opts,
+					{
+						...opts,
+						dpopSigningAlgorithms: verifyOptions.dpop?.signingAlgorithms,
+					},
 				);
 			} catch (err) {
 				if (err instanceof APIError) {

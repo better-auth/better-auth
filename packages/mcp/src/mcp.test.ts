@@ -63,7 +63,7 @@ describe("mcp", async () => {
 		expected,
 	}) => {
 		try {
-			await apiClient.verifyAccessToken("bad_access_token", {
+			await apiClient.verifyBearerToken("bad_access_token", {
 				verifyOptions: {
 					issuer: authServerUrl,
 					audience: resource,
@@ -226,7 +226,7 @@ describe("mcp - server-client flows", async () => {
 					res.setHeader("Content-Type", "application/json");
 					res.end(JSON.stringify(config));
 				} else if (req.url === "/mcp") {
-					await verifyAccessToken(req, res);
+					await verifyBearerToken(req, res);
 					const mcpServer = createMcpServer();
 					const transport = new StreamableHTTPServerTransport({
 						sessionIdGenerator: undefined,
@@ -260,7 +260,7 @@ describe("mcp - server-client flows", async () => {
 		await authServer.close();
 	});
 
-	async function verifyAccessToken(
+	async function verifyBearerToken(
 		req: IncomingMessage & { auth?: AuthInfo },
 		res: ServerResponse,
 	) {
@@ -269,7 +269,7 @@ describe("mcp - server-client flows", async () => {
 			? authorization.replace("Bearer ", "")
 			: authorization;
 		try {
-			const jwtPayload = await authClient.verifyAccessToken(accessToken, {
+			const jwtPayload = await authClient.verifyBearerToken(accessToken, {
 				verifyOptions: {
 					issuer: authServerUrl,
 					audience: resource,

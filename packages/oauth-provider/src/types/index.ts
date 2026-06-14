@@ -1237,6 +1237,27 @@ export interface OAuthOptions<
 		clientId: string;
 		ctx: GenericEndpointContext;
 	}) => Promise<Record<string, string> | null>;
+	/**
+	 * DPoP proof validation settings.
+	 *
+	 * DPoP is enabled by default when a client or resource asks for DPoP-bound
+	 * access tokens. These values tune proof validation without changing that
+	 * contract.
+	 */
+	dpop?: {
+		/**
+		 * Accepted age of a DPoP proof JWT in seconds.
+		 *
+		 * @default 300
+		 */
+		proofMaxAgeSeconds?: number;
+		/**
+		 * Supported JWS algorithms for DPoP proof JWTs.
+		 *
+		 * @default ["EdDSA", "ES256", "ES512", "PS256", "RS256"]
+		 */
+		signingAlgorithms?: JWSAlgorithms[];
+	};
 }
 
 export interface OAuthAuthorizationQuery {
@@ -1355,6 +1376,12 @@ export interface OAuthAuthorizationQuery {
 	 */
 	nonce?: string;
 	/**
+	 * RFC 9449 authorization request parameter. When present, the authorization
+	 * code is bound to this JWK thumbprint and the token request must present a
+	 * matching DPoP proof.
+	 */
+	dpop_jkt?: string;
+	/**
 	 * Resource parameter as specified by [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)
 	 */
 	resource?: string | string[];
@@ -1395,6 +1422,10 @@ export interface OAuthResource {
 	 */
 	customClaims?: Record<string, unknown> | null;
 	/**
+	 * Require newly issued access tokens for this resource to be DPoP-bound.
+	 */
+	dpopBoundAccessTokensRequired?: boolean;
+	/**
 	 * Disabled → no new issuance for this resource; existing tokens still verify
 	 * until natural expiry. Compare to delete, which hard-rejects existing tokens.
 	 */
@@ -1425,6 +1456,7 @@ export interface OAuthResourceInput {
 	signingKeyId?: string;
 	allowedScopes?: string[];
 	customClaims?: Record<string, unknown>;
+	dpopBoundAccessTokensRequired?: boolean;
 	disabled?: boolean;
 	metadata?: Record<string, unknown>;
 }
@@ -1585,6 +1617,11 @@ export interface SchemaClient<
 	 * requesting offline_access scope, regardless of this setting.
 	 */
 	requirePKCE?: boolean;
+	/**
+	 * RFC 9449 dynamic client metadata. When true, every token request from this
+	 * client must include a valid DPoP proof and receive DPoP-bound tokens.
+	 */
+	dpopBoundAccessTokens?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
@@ -1658,6 +1695,11 @@ export interface OAuthOpaqueAccessToken<
 	 * Resources allowed for this access token.
 	 */
 	resources?: string[];
+	/**
+	 * RFC 7800 `cnf` confirmation that sender-constrains this access token (for
+	 * example DPoP `{ jkt }`). Surfaced as the `cnf` claim at introspection.
+	 */
+	confirmation?: Confirmation;
 }
 
 /**
@@ -1692,6 +1734,11 @@ export interface OAuthRefreshToken<
 	 * Resources allowed for this refresh token
 	 */
 	resources?: string[];
+	/**
+	 * RFC 7800 `cnf` confirmation that sender-constrains this refresh-token
+	 * family (for example DPoP `{ jkt }`). Carried forward on rotation.
+	 */
+	confirmation?: Confirmation;
 }
 
 /**

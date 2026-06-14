@@ -106,8 +106,9 @@ describe("oauth-provider extensions", async () => {
 							accessTokenClaims: { opaque_per_issuance: "jwt-only" },
 						});
 					},
-					// Attempts a sender-constraint on an opaque token (no resource).
-					// The provider must fail closed rather than mint an unbound token.
+					// Sender-constrains an opaque access token (no resource). The
+					// confirmation is persisted on the opaque-token row (RFC 7800 `cnf`)
+					// and surfaced at introspection, not silently dropped.
 					[extensionOpaqueBoundGrant]: async ({ grantType, provider }) => {
 						if (!grantUser) {
 							throw new APIError("BAD_REQUEST", {
@@ -123,7 +124,7 @@ describe("oauth-provider extensions", async () => {
 							client,
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
-							confirmation: { jkt: "should-fail" },
+							confirmation: { jkt: "opaque-bound-jkt" },
 						});
 					},
 				},
@@ -153,8 +154,10 @@ describe("oauth-provider extensions", async () => {
 								clientId,
 								client,
 								// A sender-constraint the strategy proved (wallet
-								// attestation); the grant forwards it to issueTokens.
-								confirmation: { jkt: "wallet-attested-jkt" },
+								// attestation); the grant forwards it to issueTokens. An
+								// mTLS-style `x5t#S256` keeps the token bearer-presentable,
+								// unlike a DPoP `jkt` which would require a proof per request.
+								confirmation: { "x5t#S256": "wallet-attested-cert" },
 							};
 						},
 					},
@@ -491,8 +494,10 @@ describe("oauth-provider extensions", async () => {
 		// authenticateClient, and it is stamped as `cnf`, sender-constraining the
 		// token. `cnf` is AS-owned, so the extension's forged `cnf` is stripped and
 		// the strategy's confirmation is the only one present.
-		expect(accessTokenPayload.cnf).toEqual({ jkt: "wallet-attested-jkt" });
-		expect(tokenResponse.data?.token_type).toBe("DPoP");
+		expect(accessTokenPayload.cnf).toEqual({
+			"x5t#S256": "wallet-attested-cert",
+		});
+		expect(tokenResponse.data?.token_type).toBe("Bearer");
 
 		const idTokenPayload = decodeJwt(tokenResponse.data!.id_token);
 		expect(idTokenPayload.extension_id_claim).toBe("extension-id");
@@ -1041,7 +1046,7 @@ describe("oauth-provider extensions", async () => {
 		});
 	});
 
-	it("fails closed when confirmation is supplied for an opaque token", async () => {
+	it("binds an opaque access token to its confirmation and surfaces it at introspection", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -1051,19 +1056,43 @@ describe("oauth-provider extensions", async () => {
 				type: "web",
 			},
 		});
-		const response = await client.$fetch("/oauth2/token", {
+		const clientAuth = {
+			client_id: oauthClient!.client_id,
+			client_assertion_type: extensionAssertionType,
+			client_assertion: `assertion:${oauthClient!.client_id}`,
+		};
+		const response = await client.$fetch<{
+			access_token: string;
+			token_type: string;
+		}>("/oauth2/token", {
 			method: "POST",
 			body: new URLSearchParams({
 				grant_type: extensionOpaqueBoundGrant,
-				client_id: oauthClient!.client_id,
-				client_assertion_type: extensionAssertionType,
-				client_assertion: `assertion:${oauthClient!.client_id}`,
+				...clientAuth,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
 		});
-		// Must not silently mint an unbound (Bearer) token a caller believes is
-		// sender-constrained: an opaque token cannot carry the constraint yet.
-		expect(response.error?.status).toBe(500);
+		// The opaque token carries the RFC 7800 `cnf` confirmation (persisted on
+		// its row), so it is sender-constrained, not silently minted unbound.
+		expect(response.error).toBeNull();
+		expect(response.data?.token_type).toBe("DPoP");
+
+		const introspection = await client.$fetch<{
+			active: boolean;
+			token_type?: string;
+			cnf?: unknown;
+		}>("/oauth2/introspect", {
+			method: "POST",
+			body: new URLSearchParams({
+				token: response.data!.access_token,
+				token_type_hint: "access_token",
+				...clientAuth,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(introspection.data?.active).toBe(true);
+		expect(introspection.data?.token_type).toBe("DPoP");
+		expect(introspection.data?.cnf).toEqual({ jkt: "opaque-bound-jkt" });
 	});
 
 	it("authenticateClient binds the assertion audience to the served endpoint", async () => {

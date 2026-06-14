@@ -220,6 +220,15 @@ export async function checkOAuthClient(
 			error_description: `unsupported token_endpoint_auth_method ${tokenEndpointAuthMethod}`,
 		});
 	}
+	if (
+		clientWithDefaults.dpop_bound_access_tokens !== undefined &&
+		typeof clientWithDefaults.dpop_bound_access_tokens !== "boolean"
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: "dpop_bound_access_tokens must be a boolean",
+		});
+	}
 
 	// Check value of type, if sent, matches isPublic
 	if (clientWithDefaults.type) {
@@ -709,6 +718,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
 		require_pkce: requirePKCE,
+		dpop_bound_access_tokens: dpopBoundAccessTokens,
 		subject_type: subjectType,
 		reference_id: referenceId,
 		metadata: inputMetadata,
@@ -775,6 +785,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		dpopBoundAccessTokens,
 		subjectType,
 		referenceId,
 		metadata,
@@ -828,6 +839,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		dpopBoundAccessTokens,
 		subjectType,
 		referenceId,
 		metadata, // in JSON format
@@ -887,6 +899,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		require_pkce: requirePKCE ?? undefined,
+		dpop_bound_access_tokens: dpopBoundAccessTokens ?? undefined,
 		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
