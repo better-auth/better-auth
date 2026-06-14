@@ -3,7 +3,12 @@ import type {
 	Resolver,
 	ResolverHandlerContext,
 } from "../types";
-import { filterForeignKeys, getTypeFactory } from "../utils";
+import {
+	filterForeignKeys,
+	filterIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 type CustomResolverContext = ResolverHandlerContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -39,6 +44,9 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
+const formatIndex = (field: DBFieldAttribute, tableName: string) =>
+	`CREATE ${field.unique ? "UNIQUE " : ""}INDEX [${getIndexName(tableName, field)}] ON [${tableName}] ([${field.fieldName}]);`;
+
 export const mssqlResolver = {
 	handler: (ctx) => {
 		const getType = getTypeFactory((field) => ({
@@ -47,7 +55,9 @@ export const mssqlResolver = {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "varchar(8000)",
+						: field.index
+							? "varchar(255)"
+							: "varchar(8000)",
 			boolean: "smallint",
 			number: field.bigint ? "bigint" : "integer",
 			date: "datetime2(3)",
@@ -86,6 +96,9 @@ export const mssqlResolver = {
 			lines.push(`\t);`);
 		}
 		lines.push("END;");
+		for (const field of filterIndexes(ctx.schema)) {
+			lines.push(formatIndex(field, ctx.schema.modelName));
+		}
 		return lines.join("\n");
 	},
 } satisfies Resolver;

@@ -3,7 +3,12 @@ import type {
 	Resolver,
 	ResolverHandlerContext,
 } from "../types";
-import { filterForeignKeys, getTypeFactory } from "../utils";
+import {
+	filterForeignKeys,
+	filterIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 type CustomResolverContext = ResolverHandlerContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -42,6 +47,9 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
+const formatIndex = (field: DBFieldAttribute, tableName: string) =>
+	`CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${getIndexName(tableName, field)}\` ON \`${tableName}\` (\`${field.fieldName}\`);`;
+
 export const mysqlResolver = {
 	handler: (ctx) => {
 		const getType = getTypeFactory((field) => ({
@@ -49,7 +57,9 @@ export const mysqlResolver = {
 				? "varchar(255)"
 				: field.references
 					? "varchar(36)"
-					: "text",
+					: field.index
+						? "varchar(255)"
+						: "text",
 			boolean: "boolean",
 			number: field.bigint ? "bigint" : "integer",
 			date: "timestamp(3)",
@@ -86,6 +96,9 @@ export const mysqlResolver = {
 		}
 		if (ctx.mode === "create") {
 			lines.push(`);`);
+		}
+		for (const field of filterIndexes(ctx.schema)) {
+			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");
 	},

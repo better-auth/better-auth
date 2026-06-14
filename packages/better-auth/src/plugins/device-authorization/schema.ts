@@ -7,10 +7,12 @@ export const schema = {
 			deviceCode: {
 				type: "string",
 				required: true,
+				index: true,
 			},
 			userCode: {
 				type: "string",
 				required: true,
+				index: true,
 			},
 			userId: {
 				type: "string",

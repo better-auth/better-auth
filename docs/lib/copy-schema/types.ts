@@ -70,6 +70,10 @@ export type DBFieldAttribute = {
 	};
 	unique?: boolean;
 	/**
+	 * If the field should be indexed.
+	 */
+	index?: boolean;
+	/**
 	 * If the field should be a bigint on the database instead of integer.
 	 */
 	bigint?: boolean;
