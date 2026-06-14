@@ -83,7 +83,7 @@ export interface AccessTokenClaimsInput {
 	 */
 	grantType: GrantType | undefined;
 	/**
-	 * Per-issuance claims a grant handler supplied via `extra.accessTokenClaims`.
+	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.
 	 * Available only at issuance; `undefined` at introspection.
 	 */
 	perRequestClaims: Record<string, unknown> | undefined;
@@ -99,7 +99,7 @@ export interface AccessTokenClaimsInput {
  * forget to.
  *
  * Precedence, lowest to highest: extension contributors < per-issuance
- * `extra.accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
+ * `accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
  * `customClaims`. Reserved names are removed from the merged result.
  *
  * Returns only the enriched claims; the caller stamps the AS-owned claims

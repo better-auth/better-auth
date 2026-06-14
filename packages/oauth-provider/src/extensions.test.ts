@@ -172,11 +172,8 @@ describe("oauth-provider extensions", async () => {
 				scopes: ["openid", "profile", "email", "offline_access", "vc"],
 				customUserInfoClaims: () => ({
 					custom_userinfo_claim: "custom-userinfo",
-					// Re-pinned by the endpoint; proves first-party cannot move `sub`.
-					sub: "malicious-custom-sub",
-					// First-party config MAY override a provider base claim (unlike a
-					// third-party extension): the response must reflect this value.
-					email_verified: true,
+					sub: "malicious-custom-sub", // re-pinned by the endpoint
+					email_verified: true, // first-party override of a base claim
 				}),
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -407,9 +404,7 @@ describe("oauth-provider extensions", async () => {
 			},
 		} satisfies OAuthProviderExtension;
 		extendOAuthProvider(ctx, extension);
-		// A re-run of the plugin's init() (for example when one factory result is
-		// shared across two betterAuth() instances) must not append the extension
-		// again, which would otherwise reject as a duplicate grant type.
+		// Re-running init() with the same extension object must not double-register.
 		extendOAuthProvider(ctx, extension);
 		expect(
 			(provider.options as { extensions?: unknown[] }).extensions,
@@ -986,9 +981,7 @@ describe("oauth-provider extensions", async () => {
 	it("consumeClientAssertion rejects an already-expired assertion", async () => {
 		const now = Math.floor(Date.now() / 1000);
 		const audience = `${authServerBaseUrl}/oauth2/token`;
-		// The expiry check fires before any adapter access, so a minimal ctx is
-		// enough. An extension strategy that verifies the signature itself relies
-		// on this; the built-in path has jose reject expiry first.
+		// The expiry check runs before any adapter access, so a minimal ctx is enough.
 		await expect(
 			consumeClientAssertion(
 				{

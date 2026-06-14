@@ -180,9 +180,8 @@ async function refetchClientJwks(
  * method must check, independent of how the signature is verified or where the
  * verification keys come from:
  * - `aud` MUST include `expectedAudience` (RFC 7523 §3 rule 3),
- * - `exp` MUST be present and at most `assertionMaxLifetime` seconds away
- *   (RFC 7523 §3 rule 4); jose validates `exp` only when present, so its
- *   absence is rejected here,
+ * - `exp` MUST be present, unexpired, and at most `assertionMaxLifetime`
+ *   seconds away (RFC 7523 §3 rule 4),
  * - `iat`, when present, MUST be within `assertionMaxLifetime`,
  * - `jti` MUST be present and single-use; this consumes a replay tombstone keyed
  *   by `` `${namespace}:${jti}` ``, inserted under the adapter's primary key so a
@@ -222,31 +221,27 @@ export async function consumeClientAssertion(
 
 	const maxLifetime = opts.assertionMaxLifetime ?? 300;
 	const now = Math.floor(Date.now() / 1000);
-	// exp is REQUIRED per RFC 7523 Section 3 rule 4.
 	if (typeof payload.exp !== "number") {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "client assertion must include exp claim",
 			error: "invalid_client",
 		});
 	}
-	// RFC 7523 Section 3 rule 4: reject an assertion whose expiry has passed.
-	// jose enforces this for the built-in private_key_jwt path before this helper
-	// runs; an extension strategy that verifies the signature itself has no such
-	// backstop and relies on this check.
+	// An extension strategy relies on this; the built-in path has jose reject
+	// expiry before this runs.
 	if (payload.exp <= now) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "client assertion has expired",
 			error: "invalid_client",
 		});
 	}
-	// Cap the validity window so exp cannot outlive the jti tombstone.
+	// Cap the window so exp cannot outlive the jti tombstone.
 	if (payload.exp - now > maxLifetime) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `client assertion exp is too far in the future (max ${maxLifetime}s)`,
 			error: "invalid_client",
 		});
 	}
-	// iat is optional per RFC 7523 §3; enforce only when present.
 	if (typeof payload.iat === "number" && now - payload.iat > maxLifetime) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `client assertion iat is too far in the past (max ${maxLifetime}s)`,
@@ -254,8 +249,6 @@ export async function consumeClientAssertion(
 		});
 	}
 
-	// jti is REQUIRED for single-use replay protection (OIDC Core §9 for
-	// private_key_jwt; the same discipline applies to extension methods).
 	if (typeof payload.jti !== "string" || payload.jti.length === 0) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "client assertion must include jti claim",

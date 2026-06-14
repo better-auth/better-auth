@@ -309,14 +309,10 @@ export function getExtensionClientAuthenticationStrategy(
 }
 
 /**
- * Merges the discovery-document fields contributed by every registered
- * extension into `document`. The provider owns every key it already wrote, and
- * the first extension to contribute a given key wins, so an extension can add
- * fields but never override authorization-server core.
- *
- * Every contributor sees the same provider-assembled `document`, not the
- * running accumulation, so a contribution depends only on provider state and
- * not on extension registration order.
+ * Merges each registered extension's `metadata()` contribution into `document`,
+ * first-wins: the provider owns every key it already wrote, so an extension can
+ * add fields but never override core. Each contributor sees the base `document`,
+ * not the running accumulation, so contributions stay order-independent.
  */
 export function applyOAuthProviderMetadataExtensions<
 	T extends AuthServerMetadata | OIDCMetadata,
