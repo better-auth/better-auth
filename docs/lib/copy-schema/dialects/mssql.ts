@@ -44,8 +44,24 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
-const formatIndex = (field: DBFieldAttribute, tableName: string) =>
-	`CREATE ${field.unique ? "UNIQUE " : ""}INDEX [${getIndexName(tableName, field)}] ON [${tableName}] ([${field.fieldName}]);`;
+const escapeSqlString = (value: string) => value.replace(/'/g, "''");
+
+const formatIndex = (field: DBFieldAttribute, tableName: string) => {
+	const indexName = getIndexName(tableName, field);
+	const tableObject = escapeSqlString(tableName);
+	return [
+		`IF OBJECT_ID(N'${tableObject}') IS NOT NULL`,
+		"\tAND NOT EXISTS (",
+		"\t\tSELECT 1",
+		"\t\tFROM sys.indexes",
+		`\t\tWHERE name = N'${escapeSqlString(indexName)}'`,
+		`\t\t\tAND object_id = OBJECT_ID(N'${tableObject}')`,
+		"\t)",
+		"BEGIN",
+		`\tCREATE ${field.unique ? "UNIQUE " : ""}INDEX [${indexName}] ON [${tableName}] ([${field.fieldName}]);`,
+		"END;",
+	].join("\n");
+};
 
 export const mssqlResolver = {
 	handler: (ctx) => {
