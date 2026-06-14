@@ -127,8 +127,13 @@ export function getOAuthProviderApi(
 				opts,
 				`${ctx.context.baseURL}/oauth2/token`,
 			);
-			const { clientId, clientSecret, preVerifiedClient, authMethod } =
-				destructureCredentials(credentials);
+			const {
+				clientId,
+				clientSecret,
+				preVerifiedClient,
+				authMethod,
+				confirmation,
+			} = destructureCredentials(credentials);
 			if (!clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client_id",
@@ -159,6 +164,7 @@ export function getOAuthProviderApi(
 				clientId,
 				client,
 				method: authMethod,
+				confirmation,
 			};
 		},
 		issueTokens: (params: OAuthTokenIssueParams) => {
@@ -811,10 +817,18 @@ async function createUserTokens(
 			})
 		: undefined;
 
-	// Sender-constraint stamped onto JWT access tokens now. Opaque-token binding
-	// persistence (a stored confirmation column) ships with the DPoP mechanism,
-	// which also derives the confirmation from a request proof.
-	const confirmation = isJwtAccessToken ? params.confirmation : undefined;
+	// A sender-constraint is stamped onto JWT access tokens. Opaque-token binding
+	// persistence (a stored confirmation column) ships with the binding
+	// mechanism, so fail closed rather than silently mint an unbound opaque token
+	// a caller believes is sender-constrained.
+	if (params.confirmation && !isJwtAccessToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error_description:
+				"Cannot sender-constrain an opaque access token; confirmation is supported only for JWT access tokens.",
+			error: "server_error",
+		});
+	}
+	const confirmation = params.confirmation;
 
 	// Create access token and refresh token in parallel
 	const [accessToken, refreshToken] = await Promise.all([

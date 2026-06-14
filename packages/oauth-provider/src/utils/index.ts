@@ -20,6 +20,7 @@ import type { oauthProvider } from "../oauth";
 import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
 	ClientDiscovery,
+	Confirmation,
 	GrantType,
 	OAuthOptions,
 	Prompt,
@@ -633,6 +634,8 @@ export type ExtractedCredentials =
 			method: TokenEndpointAuthMethod;
 			clientId: string;
 			client: SchemaClient<Scope[]>;
+			/** Sender-constraint the auth strategy proved, forwarded to issuance. */
+			confirmation?: Confirmation;
 	  }
 	| {
 			kind: "public";
@@ -653,6 +656,10 @@ export function destructureCredentials(
 		preVerifiedClient:
 			credentials?.kind === "pre_verified" ? credentials.client : undefined,
 		authMethod: credentials?.method,
+		confirmation:
+			credentials?.kind === "pre_verified"
+				? credentials.confirmation
+				: undefined,
 	};
 }
 
@@ -707,6 +714,7 @@ export async function extractClientCredentials(
 				method: extensionStrategy.method,
 				clientId: result.clientId,
 				client: result.client,
+				confirmation: result.confirmation,
 			};
 		}
 		const { verifyClientAssertion: verify } = await import(

@@ -25,6 +25,7 @@ describe("oauth-provider extensions", async () => {
 	const redirectUri = "https://client.example.com/callback";
 	const extensionGrant = "urn:better-auth:test:grant";
 	const extensionOpaqueGrant = "urn:better-auth:test:opaque-grant";
+	const extensionOpaqueBoundGrant = "urn:better-auth:test:opaque-bound-grant";
 	const extensionAuthMethod = "test_attestation_jwt";
 	const extensionAssertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
@@ -55,7 +56,7 @@ describe("oauth-provider extensions", async () => {
 								error_description: "test user is not ready",
 							});
 						}
-						const { client } = await provider.authenticateClient({
+						const { client, confirmation } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
 							grantType,
 						});
@@ -64,7 +65,8 @@ describe("oauth-provider extensions", async () => {
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
 							resources: [resource],
-							confirmation: { jkt: "test-jkt-thumbprint" },
+							// Forward the confirmation the auth strategy proved.
+							confirmation,
 							accessTokenClaims: {
 								grant_claim: "grant-access",
 								client_id: "malicious-client",
@@ -104,6 +106,26 @@ describe("oauth-provider extensions", async () => {
 							accessTokenClaims: { opaque_per_issuance: "jwt-only" },
 						});
 					},
+					// Attempts a sender-constraint on an opaque token (no resource).
+					// The provider must fail closed rather than mint an unbound token.
+					[extensionOpaqueBoundGrant]: async ({ grantType, provider }) => {
+						if (!grantUser) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "test user is not ready",
+							});
+						}
+						const { client } = await provider.authenticateClient({
+							scopes: ["openid", "email", "vc"],
+							grantType,
+						});
+						return provider.issueTokens({
+							client,
+							scopes: ["openid", "email", "vc"],
+							user: grantUser,
+							confirmation: { jkt: "should-fail" },
+						});
+					},
 				},
 				clientAuthentication: {
 					[extensionAuthMethod]: {
@@ -127,7 +149,13 @@ describe("oauth-provider extensions", async () => {
 									error_description: "missing client",
 								});
 							}
-							return { clientId, client };
+							return {
+								clientId,
+								client,
+								// A sender-constraint the strategy proved (wallet
+								// attestation); the grant forwards it to issueTokens.
+								confirmation: { jkt: "wallet-attested-jkt" },
+							};
 						},
 					},
 				},
@@ -459,10 +487,11 @@ describe("oauth-provider extensions", async () => {
 		expect(accessTokenPayload.grant_claim).toBe("grant-access");
 		expect(accessTokenPayload.client_id).toBe(oauthClient!.client_id);
 		expect(accessTokenPayload.aud).toContain(resource);
-		// The grant supplied a confirmation: it is stamped as `cnf` and the token
-		// becomes sender-constrained. `cnf` is AS-owned, so the extension's forged
-		// `cnf` is stripped and the grant's confirmation is the only one present.
-		expect(accessTokenPayload.cnf).toEqual({ jkt: "test-jkt-thumbprint" });
+		// The auth strategy proved a confirmation, the grant forwarded it through
+		// authenticateClient, and it is stamped as `cnf`, sender-constraining the
+		// token. `cnf` is AS-owned, so the extension's forged `cnf` is stripped and
+		// the strategy's confirmation is the only one present.
+		expect(accessTokenPayload.cnf).toEqual({ jkt: "wallet-attested-jkt" });
 		expect(tokenResponse.data?.token_type).toBe("DPoP");
 
 		const idTokenPayload = decodeJwt(tokenResponse.data!.id_token);
@@ -1010,6 +1039,31 @@ describe("oauth-provider extensions", async () => {
 				error_description: "client assertion has expired",
 			},
 		});
+	});
+
+	it("fails closed when confirmation is supplied for an opaque token", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionOpaqueBoundGrant],
+				scope: "openid email vc",
+				type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionOpaqueBoundGrant,
+				client_id: oauthClient!.client_id,
+				client_assertion_type: extensionAssertionType,
+				client_assertion: `assertion:${oauthClient!.client_id}`,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		// Must not silently mint an unbound (Bearer) token a caller believes is
+		// sender-constrained: an opaque token cannot carry the constraint yet.
+		expect(response.error?.status).toBe(500);
 	});
 
 	it("getOAuthProviderApi.issueTokens requires a bound grant type", () => {

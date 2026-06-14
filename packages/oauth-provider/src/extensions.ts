@@ -200,7 +200,7 @@ export function getClientDiscoveries(
  * ```ts
  * init(ctx) {
  *   extendOAuthProvider(ctx, {
- *     grants: { "urn:example:grant": async ({ tools }) => tools.issueTokens(...) },
+ *     grants: { "urn:example:grant": async ({ provider }) => provider.issueTokens(...) },
  *   });
  * }
  * ```
