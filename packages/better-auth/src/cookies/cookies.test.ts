@@ -1,4 +1,8 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -21,6 +25,7 @@ import {
 	getCookies,
 	getSessionCookie,
 	parseCookies,
+	setCookieCache,
 } from "../cookies";
 import { signJWT, symmetricDecodeJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -814,6 +819,76 @@ describe("getSessionCookie", async () => {
 
 		// Verify that chunking happened (instead of logging an error and not caching)
 		expect(hasCookieChunks).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk session cache cookies before attributes push them over the browser limit", async () => {
+		const setCookie = vi.fn();
+		const sessionDataCookieName = "better-auth.session_data";
+		const cookieAttributes = {
+			httpOnly: true,
+			path: "/",
+			sameSite: "lax" as const,
+			maxAge: 60 * 5,
+		};
+
+		await setCookieCache(
+			{
+				headers: new Headers(),
+				setCookie,
+				context: {
+					logger: {
+						debug: vi.fn(),
+					},
+					secret: "better-auth.secret",
+					options: {
+						session: {
+							additionalFields: {
+								largeField: {
+									type: "string",
+								},
+							},
+							cookieCache: {
+								enabled: true,
+							},
+						},
+					},
+					authCookies: {
+						sessionData: {
+							name: sessionDataCookieName,
+							attributes: cookieAttributes,
+						},
+					},
+				},
+			} as unknown as GenericEndpointContext,
+			{
+				session: {
+					id: "session-id",
+					token: "session-token",
+					userId: "user-id",
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					largeField: "x".repeat(2500),
+				} as unknown as Session & Record<string, unknown>,
+				user: {
+					id: "user-id",
+					email: "cookie-cache@example.com",
+					emailVerified: true,
+					name: "Cookie Cache",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				} satisfies User,
+			},
+			false,
+		);
+
+		const cookieNames = setCookie.mock.calls.map(([name]) => name);
+		expect(cookieNames).toContain(`${sessionDataCookieName}.0`);
+		expect(cookieNames).toContain(`${sessionDataCookieName}.1`);
+		expect(cookieNames).not.toContain(sessionDataCookieName);
 	});
 });
 
