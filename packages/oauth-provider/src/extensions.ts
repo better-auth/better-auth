@@ -313,6 +313,10 @@ export function getExtensionClientAuthenticationStrategy(
  * extension into `document`. The provider owns every key it already wrote, and
  * the first extension to contribute a given key wins, so an extension can add
  * fields but never override authorization-server core.
+ *
+ * Every contributor sees the same provider-assembled `document`, not the
+ * running accumulation, so a contribution depends only on provider state and
+ * not on extension registration order.
  */
 export function applyOAuthProviderMetadataExtensions<
 	T extends AuthServerMetadata | OIDCMetadata,

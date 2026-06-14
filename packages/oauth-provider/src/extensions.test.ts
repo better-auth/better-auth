@@ -16,6 +16,7 @@ import type {
 	Scope,
 } from "./types";
 import { validateClientCredentials } from "./utils";
+import { consumeClientAssertion } from "./utils/client-assertion";
 
 describe("oauth-provider extensions", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -980,5 +981,32 @@ describe("oauth-provider extensions", async () => {
 		// The revoked token is gone: introspection reports it inactive or unknown,
 		// never active.
 		expect(introspection.data?.active).not.toBe(true);
+	});
+
+	it("consumeClientAssertion rejects an already-expired assertion", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const audience = `${authServerBaseUrl}/oauth2/token`;
+		// The expiry check fires before any adapter access, so a minimal ctx is
+		// enough. An extension strategy that verifies the signature itself relies
+		// on this; the built-in path has jose reject expiry first.
+		await expect(
+			consumeClientAssertion(
+				{
+					context: { baseURL: authServerBaseUrl },
+				} as Parameters<typeof consumeClientAssertion>[0],
+				{} as Parameters<typeof consumeClientAssertion>[1],
+				{
+					namespace: "test:expired",
+					payload: { aud: audience, exp: now - 10, jti: "expired-jti" },
+					expectedAudience: audience,
+				},
+			),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion has expired",
+			},
+		});
 	});
 });

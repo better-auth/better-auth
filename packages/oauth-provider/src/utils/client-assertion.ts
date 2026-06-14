@@ -229,6 +229,16 @@ export async function consumeClientAssertion(
 			error: "invalid_client",
 		});
 	}
+	// RFC 7523 Section 3 rule 4: reject an assertion whose expiry has passed.
+	// jose enforces this for the built-in private_key_jwt path before this helper
+	// runs; an extension strategy that verifies the signature itself has no such
+	// backstop and relies on this check.
+	if (payload.exp <= now) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client assertion has expired",
+			error: "invalid_client",
+		});
+	}
 	// Cap the validity window so exp cannot outlive the jti tombstone.
 	if (payload.exp - now > maxLifetime) {
 		throw new APIError("BAD_REQUEST", {

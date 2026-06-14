@@ -243,7 +243,13 @@ export interface OAuthMetadataExtensionInput {
 	ctx: GenericEndpointContext;
 	opts: OAuthOptions<Scope[]>;
 	type: "oauth-authorization-server" | "openid-configuration";
-	/** The discovery document built so far. The contributor returns fields to add to it. */
+	/**
+	 * The discovery document the provider assembled (core authorization-server
+	 * fields plus any client-discovery metadata). Contributions from other
+	 * extensions are merged afterwards and are not reflected here, so a
+	 * contributor decides what to add from provider state alone, independent of
+	 * extension registration order. The contributor returns the fields to add.
+	 */
 	document: AuthServerMetadata | OIDCMetadata;
 }
 
