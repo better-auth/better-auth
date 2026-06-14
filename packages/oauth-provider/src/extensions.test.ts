@@ -62,7 +62,6 @@ describe("oauth-provider extensions", async () => {
 						return tools.issueTokens({
 							client,
 							scopes: ["openid", "email", "vc"],
-							grantType,
 							user: grantUser,
 							resources: [resource],
 							extra: {

@@ -135,7 +135,6 @@ export interface OAuthTokenIssueParams<
 > {
 	client: SchemaClient<Scopes>;
 	scopes: string[];
-	grantType: GrantType;
 	user?: User;
 	referenceId?: string;
 	sessionId?: string;
@@ -166,6 +165,11 @@ export interface OAuthExtensionGrantTools<
 	authenticateClient: (
 		request?: OAuthClientAuthenticationRequest,
 	) => Awaitable<OAuthAuthenticatedClient<Scopes>>;
+	/**
+	 * Issues tokens for the grant. The grant type is taken from the request the
+	 * handler is dispatched for, not from the caller, so contributed claims and
+	 * hooks are always labeled with the real grant type.
+	 */
 	issueTokens: (
 		params: OAuthTokenIssueParams<Scopes>,
 	) => Awaitable<OAuthTokenResponse>;

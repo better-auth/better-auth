@@ -1358,7 +1358,6 @@ export const customOAuthExtension = () =>
             const { client } = await tools.authenticateClient({ grantType });
             return tools.issueTokens({
               client,
-              grantType,
               scopes: ["openid"],
               extra: {
                 tokenResponse: {

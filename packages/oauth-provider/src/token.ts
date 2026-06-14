@@ -140,7 +140,7 @@ function createExtensionGrantTools(
 			};
 		},
 		issueTokens: (params: OAuthTokenIssueParams<Scope[]>) =>
-			createUserTokens(ctx, opts, params),
+			createUserTokens(ctx, opts, { ...params, grantType }),
 		hashTokenIdentifier: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -582,7 +582,9 @@ async function createRefreshToken(
 	};
 }
 
-type CreateUserTokensParams = OAuthTokenIssueParams<Scope[]>;
+type CreateUserTokensParams = OAuthTokenIssueParams<Scope[]> & {
+	grantType: GrantType;
+};
 
 interface ResourceGrantIssuance {
 	audienceClaim: ResolvedResourcePolicy["audienceClaim"];
