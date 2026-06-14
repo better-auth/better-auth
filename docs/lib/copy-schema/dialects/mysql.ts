@@ -47,8 +47,20 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
-const formatIndex = (field: DBFieldAttribute, tableName: string) =>
-	`CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${getIndexName(tableName, field)}\` ON \`${tableName}\` (\`${field.fieldName}\`);`;
+const escapeSqlString = (value: string) => value.replace(/'/g, "''");
+
+const formatIndex = (field: DBFieldAttribute, tableName: string) => {
+	const indexName = getIndexName(tableName, field);
+	const createIndex = `CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${indexName}\` ON \`${tableName}\` (\`${field.fieldName}\`)`;
+	return [
+		`SET @table_exists = (SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}');`,
+		`SET @index_exists = (SELECT COUNT(1) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}' AND index_name = '${escapeSqlString(indexName)}');`,
+		`SET @create_index_sql = IF(@table_exists > 0 AND @index_exists = 0, '${escapeSqlString(createIndex)}', 'SELECT 1');`,
+		"PREPARE create_index_stmt FROM @create_index_sql;",
+		"EXECUTE create_index_stmt;",
+		"DEALLOCATE PREPARE create_index_stmt;",
+	].join("\n");
+};
 
 export const mysqlResolver = {
 	handler: (ctx) => {
