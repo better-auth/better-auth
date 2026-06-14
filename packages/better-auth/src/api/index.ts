@@ -406,6 +406,7 @@ export {
 	createAuthEndpoint,
 	createAuthMiddleware,
 	optionsMiddleware,
+	setNoStore,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";

@@ -10,6 +10,7 @@ import {
 	dispatchAuthEndpoint,
 	getOAuthState,
 	sessionMiddleware,
+	setNoStore,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
@@ -1021,6 +1022,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					setNoStore(ctx);
 					return introspectEndpoint(ctx, opts);
 				},
 			),
@@ -1221,6 +1223,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					setNoStore(ctx);
 					return userInfoEndpoint(ctx, opts);
 				},
 			),

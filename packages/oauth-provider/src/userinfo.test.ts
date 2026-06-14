@@ -198,6 +198,26 @@ describe("oauth userinfo", async () => {
 		});
 	});
 
+	// Userinfo returns PII, so the response should not be cached by intermediaries.
+	it("should send Cache-Control: no-store on the userinfo response", async () => {
+		const tokens = await getTokens();
+		let response: Response | undefined;
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: tokens.data?.access_token ?? "",
+				},
+				onResponse(context) {
+					response = context.response;
+				},
+			},
+		);
+		expect(userinfo.data?.sub).toBeDefined();
+		expect(response?.headers.get("Cache-Control")).toBe("no-store");
+		expect(response?.headers.get("Pragma")).toBe("no-cache");
+	});
+
 	it("should accept POST with the bearer token in the Authorization header", async () => {
 		const tokens = await getTokens();
 		expect(tokens.data?.access_token).toBeDefined();

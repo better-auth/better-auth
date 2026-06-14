@@ -1,4 +1,4 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
+import { createAuthEndpoint, setNoStore } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
@@ -168,21 +168,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					userCode,
 				);
 
-			return ctx.json(
-				{
-					device_code: deviceCode,
-					user_code: userCode,
-					verification_uri: verificationUri,
-					verification_uri_complete: verificationUriComplete,
-					expires_in: Math.floor(expiresIn / 1000),
-					interval: Math.floor(ms(opts.interval) / 1000),
-				},
-				{
-					headers: {
-						"Cache-Control": "no-store",
-					},
-				},
-			);
+			setNoStore(ctx);
+			return ctx.json({
+				device_code: deviceCode,
+				user_code: userCode,
+				verification_uri: verificationUri,
+				verification_uri_complete: verificationUriComplete,
+				expires_in: Math.floor(expiresIn / 1000),
+				interval: Math.floor(ms(opts.interval) / 1000),
+			});
 		},
 	);
 };
@@ -473,22 +467,15 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 
 				// Return OAuth 2.0 compliant token response
-				return ctx.json(
-					{
-						access_token: session.token,
-						token_type: "Bearer",
-						expires_in: Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-						scope: claimedDeviceCode.scope || "",
-					},
-					{
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					},
-				);
+				setNoStore(ctx);
+				return ctx.json({
+					access_token: session.token,
+					token_type: "Bearer",
+					expires_in: Math.floor(
+						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+					),
+					scope: claimedDeviceCode.scope || "",
+				});
 			}
 
 			throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -163,6 +163,16 @@ describe("device authorization flow", async () => {
 			expect(response.user_code).toMatch(/^[A-Z0-9]{8}$/);
 		});
 
+		// RFC 8628 §3.2: the device authorization response must not be cached.
+		it("should send Cache-Control: no-store on the device code response", async () => {
+			const response = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
 		it("should support custom client ID and scope", async () => {
 			const response = await auth.api.deviceCode({
 				body: {
@@ -325,6 +335,27 @@ describe("device authorization flow", async () => {
 				expect(tokenResponse.expires_in).toBeGreaterThan(0);
 				expect(tokenResponse.scope).toBeDefined();
 			}
+		});
+
+		// The device token response carries live credentials and must not be cached.
+		// @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+		it("should send Cache-Control: no-store on the device token response", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+			const response = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
 		});
 
 		it("should deny device authorization", async () => {

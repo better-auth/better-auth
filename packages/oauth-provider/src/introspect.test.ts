@@ -205,6 +205,34 @@ describe("oauth introspect", async () => {
 		});
 	});
 
+	// Introspection exposes token metadata; per RFC 7662 §4 it should not be
+	// cached.
+	// @see https://datatracker.ietf.org/doc/html/rfc7662#section-4
+	it("should send Cache-Control: no-store on the introspection response", async () => {
+		const tokens = await getTokens();
+		let response: Response | undefined;
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onResponse(context) {
+					response = context.response;
+				},
+			},
+		);
+		expect(introspection.data).toMatchObject({ active: true });
+		expect(response?.headers.get("Cache-Control")).toBe("no-store");
+		expect(response?.headers.get("Pragma")).toBe("no-cache");
+	});
+
 	it("should pass with token_type_hint access_token and sent opaque access_token", async () => {
 		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(

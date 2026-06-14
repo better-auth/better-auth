@@ -1397,6 +1397,38 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
+	// Token responses carry live credentials and must not be cached by any
+	// intermediary.
+	// @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+	it("should send Cache-Control: no-store on the token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = createClientCredentialsTokenRequest({
+			scope: "read:posts",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		let response: Response | undefined;
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body,
+				headers,
+				onResponse(context) {
+					response = context.response;
+				},
+			},
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(response?.headers.get("Cache-Control")).toBe("no-store");
+		expect(response?.headers.get("Pragma")).toBe("no-cache");
+	});
+
 	it("should match created client scopes", async ({ expect }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");

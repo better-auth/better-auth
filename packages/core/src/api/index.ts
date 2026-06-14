@@ -183,3 +183,24 @@ export type AuthEndpoint<
 	R,
 > = ReturnType<typeof createAuthEndpoint<Path, Opts, R>>;
 export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+
+/**
+ * Stop intermediaries (proxies, CDNs, browsers) from caching the current
+ * response, which carries credential-bearing bodies: access/refresh tokens, ID
+ * tokens, client secrets, device codes, or token metadata.
+ *
+ * Endpoint handlers run with `asResponse: false`, which makes the second
+ * argument to `ctx.json(body, { headers })` silently discarded. Response headers
+ * reach the wire only through `ctx.setHeader`, so this is the single supported
+ * way to apply the no-store header set, and it keeps the exact pair in one place
+ * instead of hand-copied at every credential endpoint.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1 token responses
+ * @see https://datatracker.ietf.org/doc/html/rfc7662#section-4 introspection
+ */
+export function setNoStore(ctx: {
+	setHeader: (key: string, value: string) => void;
+}): void {
+	ctx.setHeader("Cache-Control", "no-store");
+	ctx.setHeader("Pragma", "no-cache");
+}

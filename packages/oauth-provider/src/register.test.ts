@@ -83,6 +83,24 @@ describe("oauth register", async () => {
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
+	// A successful registration returns 201 Created and must not be cached, since
+	// the body carries the client secret.
+	// @see https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1
+	it("should respond 201 with Cache-Control: no-store on registration", async () => {
+		let response: Response | undefined;
+		const result = await serverClient.$fetch<OAuthClient>("/oauth2/register", {
+			method: "POST",
+			body: { redirect_uris: [redirectUri] },
+			onResponse(context) {
+				response = context.response;
+			},
+		});
+		expect(result.data?.client_id).toBeDefined();
+		expect(response?.status).toBe(201);
+		expect(response?.headers.get("Cache-Control")).toBe("no-store");
+		expect(response?.headers.get("Pragma")).toBe("no-cache");
+	});
+
 	it("should fail authorization_code without response type code", async () => {
 		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported

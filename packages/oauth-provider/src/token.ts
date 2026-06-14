@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-auth/api";
+import { APIError, setNoStore } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
 import { signJWT, toExpJWT } from "better-auth/plugins";
@@ -613,24 +613,17 @@ async function createUserTokens(
 			: undefined,
 	]);
 
-	return ctx.json(
-		{
-			...customFields,
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: "Bearer" as const,
-			refresh_token: refreshToken?.token,
-			scope: scopes.join(" "),
-			id_token: idToken,
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	setNoStore(ctx);
+	return ctx.json({
+		...customFields,
+		access_token: accessToken,
+		expires_in: exp - iat,
+		expires_at: exp,
+		token_type: "Bearer" as const,
+		refresh_token: refreshToken?.token,
+		scope: scopes.join(" "),
+		id_token: idToken,
+	});
 }
 
 /** Checks verification value */

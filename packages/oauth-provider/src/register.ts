@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, getSessionFromCtx } from "better-auth/api";
+import { APIError, getSessionFromCtx, setNoStore } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertClientPrivileges } from "./oauthClient/privileges";
@@ -275,7 +275,10 @@ export async function createOAuthClientEndpoint(
 			updatedAt: new Date(iat * 1000),
 		},
 	});
-	// Format the response according to RFC7591
+	// Format the response according to RFC7591. RFC 7591 Section 3.2.1 mandates
+	// 201 Created on a successful registration.
+	ctx.setStatus(201);
+	setNoStore(ctx);
 	return ctx.json(
 		schemaToOAuth({
 			...client,
@@ -283,13 +286,6 @@ export async function createOAuthClientEndpoint(
 				? (opts.prefix?.clientSecret ?? "") + clientSecret
 				: undefined,
 		}),
-		{
-			status: 201,
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
 	);
 }
 
