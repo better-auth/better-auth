@@ -235,27 +235,12 @@ export async function setCookieCache(
 		);
 	}
 
-	// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
-	if (data.length > 4093) {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		const cookies = sessionStore.chunk(data, options);
-		sessionStore.setCookies(cookies);
-	} else {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		if (sessionStore.hasChunks()) {
-			const cleanCookies = sessionStore.clean();
-			sessionStore.setCookies(cleanCookies);
-		}
-		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
-	}
+	const sessionStore = createSessionStore(
+		ctx.context.authCookies.sessionData.name,
+		options,
+		ctx,
+	);
+	sessionStore.setCookies(sessionStore.chunk(data, options));
 
 	// Keep the account cookie in sync, unless this response already set a
 	// fresh one that the stale request copy would downgrade or expire.
