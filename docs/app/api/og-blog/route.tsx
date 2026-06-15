@@ -46,17 +46,18 @@ function titleFontSize(title: string) {
 
 export async function GET(req: Request) {
 	try {
-		const geist = await fetch(
-			new URL("../../../assets/Geist.ttf", import.meta.url),
-		).then((res) => res.arrayBuffer());
-
 		const url = new URL(req.url);
 		const { title, date, theme } = ogSchema.parse(
 			Object.fromEntries(url.searchParams),
 		);
+
+		const geist = await fetch(
+			new URL("../../../assets/Geist.ttf", import.meta.url),
+		).then((res) => res.arrayBuffer());
+
 		const colors = themes[theme];
 		const trimmedTitle =
-			title.length > 140 ? `${title.substring(0, 140)}...` : title;
+			title.length > 140 ? `${title.substring(0, 137)}...` : title;
 
 		return new ImageResponse(
 			<div

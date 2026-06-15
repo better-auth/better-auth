@@ -55,7 +55,7 @@ function BlogCover({
 				src={image}
 				alt={title}
 				width={320}
-				height={192}
+				height={168}
 				className="w-full h-full object-cover"
 			/>
 		);
