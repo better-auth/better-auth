@@ -117,7 +117,8 @@ export async function tokenEndpoint(
  * extension grant handler; a companion plugin's own endpoint calls this directly
  * with its grant type. `grantType` is bound here, not per issuance, so a handler
  * cannot mislabel the grant; omit it for capabilities that do not issue tokens
- * (`getClient`, `validateAccessToken`), and `issueTokens` then throws.
+ * (`getClient`, `validateAccessToken`, `requireActiveAccessToken`), and
+ * `issueTokens` then throws.
  */
 export function getOAuthProviderApi(
 	ctx: GenericEndpointContext,
@@ -189,6 +190,10 @@ export function getOAuthProviderApi(
 		validateAccessToken: async (token: string, clientId?: string) => {
 			const { validateAccessToken } = await import("./introspect");
 			return validateAccessToken(ctx, opts, token, clientId);
+		},
+		requireActiveAccessToken: async (token: string, clientId?: string) => {
+			const { requireActiveAccessToken } = await import("./introspect");
+			return requireActiveAccessToken(ctx, opts, token, clientId);
 		},
 	};
 }

@@ -16,6 +16,7 @@ import {
 } from "./resources";
 import { confirmationTokenType, decodeRefreshToken } from "./token";
 import type {
+	ActiveAccessTokenPayload,
 	Confirmation,
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -34,6 +35,9 @@ import {
 	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
+
+const INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION = "Invalid access token";
+const INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE = `Bearer error="invalid_token", error_description="${INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION}"`;
 
 /**
  * IMPORTANT NOTES:
@@ -492,6 +496,25 @@ async function validateRefreshToken(
 	} as JWTPayload;
 }
 
+function createInvalidAccessTokenError() {
+	return new APIError(
+		"UNAUTHORIZED",
+		{
+			error_description: INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION,
+			error: "invalid_token",
+		},
+		{
+			"WWW-Authenticate": INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE,
+		},
+	);
+}
+
+function isInactiveTokenError(error: APIError) {
+	return (
+		error.status === "BAD_REQUEST" || error.body?.error === "invalid_token"
+	);
+}
+
 /**
  * We don't know the access token format so we try to validate it
  * as a JWT first, then as an opaque token.
@@ -528,10 +551,18 @@ export async function validateAccessToken(
 			throw new Error("Unknown error validating access token");
 		}
 	}
-	throw new APIError("BAD_REQUEST", {
-		error_description: "Invalid access token",
-		error: "invalid_request",
-	});
+	throw createInvalidAccessTokenError();
+}
+
+export async function requireActiveAccessToken(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+	clientId?: string,
+): Promise<ActiveAccessTokenPayload> {
+	const payload = await validateAccessToken(ctx, opts, token, clientId);
+	if (payload.active) return payload as ActiveAccessTokenPayload;
+	throw createInvalidAccessTokenError();
 }
 
 /**
@@ -681,7 +712,7 @@ export async function introspectEndpoint(
 		});
 	} catch (error) {
 		if (error instanceof APIError) {
-			if (error.name === "BAD_REQUEST") {
+			if (isInactiveTokenError(error)) {
 				return {
 					active: false,
 				};

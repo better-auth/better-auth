@@ -13,7 +13,7 @@ import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
 } from "./extensions";
-import { validateAccessToken } from "./introspect";
+import { requireActiveAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
 
@@ -88,21 +88,11 @@ export async function userInfoEndpoint(
 			error: "invalid_request",
 		});
 	}
-	const jwt = await validateAccessToken(
+	const jwt = await requireActiveAccessToken(
 		ctx,
 		opts,
 		accessTokenAuthorization.token,
 	);
-
-	// A token that is expired, revoked, or bound to an ended session resolves to
-	// `{ active: false }`. RFC 6750 §3.1 wants `invalid_token` (401) for that,
-	// not the `invalid_scope` (400) the scope check below would otherwise raise.
-	if (!jwt.active) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "the access token is invalid or has been revoked",
-			error: "invalid_token",
-		});
-	}
 
 	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
 	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
