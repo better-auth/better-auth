@@ -12,10 +12,12 @@ import { parseCookies } from "./cookie-utils";
 /**
  * Per-cookie byte ceiling.
  * Safari's ~4093 floor is the lowest among browsers.
+ * Kept a little under it for attributes added after sizing.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc6265#section-6.1
+ * @see https://github.com/dotnet/aspnetcore/blob/aa5493528640932601bb82ef3295e4d8ca7e11c5/src/Shared/ChunkingCookieManager/ChunkingCookieManager.cs#L40
  */
-const MAX_COOKIE_SIZE = 4093;
+const MAX_COOKIE_SIZE = 4050;
 
 /**
  * Max chunks per cookie.
