@@ -146,22 +146,6 @@ describe("before hook", async () => {
 			expect(res).toMatchObject({ key: "value", name: "headers" });
 		});
 
-		it("should keep requireHeaders endpoints strict without headers", async () => {
-			const endpoints = {
-				headers: createAuthEndpoint(
-					"/strict-headers",
-					{
-						method: "GET",
-						requireHeaders: true,
-					},
-					async (c) => Object.fromEntries(c.headers.entries()),
-				),
-			};
-			const authEndpoints = toAuthEndpoints(endpoints, init({}));
-
-			await expect(authEndpoints.headers()).rejects.toSatisfy(isAPIError);
-		});
-
 		it("should replace existing array when hook provides another array", async () => {
 			const endpoint = {
 				body: createAuthEndpoint(

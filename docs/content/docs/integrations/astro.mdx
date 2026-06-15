@@ -118,8 +118,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 ```
 
-For server islands, prefer reading the session from `Astro.locals` after middleware has populated it, or pass `Astro.request.headers` when calling `auth.api.getSession` directly. A direct `auth.api.getSession` call without a request source returns `null`.
-
 ### Getting session on the server inside `.astro` file
 
 You can use `Astro.locals` to check if the user has session and get the user data from the server side. Here is an example of how you can get the session inside an `.astro` file:
