@@ -1,11 +1,15 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import type { BetterAuthOptions } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
+type StoredAdapter = DBTransactionAdapter<BetterAuthOptions>;
+
 type HookContext = {
-	adapter: DBTransactionAdapter;
+	adapter: StoredAdapter;
 	pendingHooks: Array<() => Promise<void>>;
+	isTransactionActive: boolean;
 };
 
 const ensureAsyncStorage = async () => {
@@ -27,21 +31,29 @@ export const getCurrentDBAdapterAsyncLocalStorage = async () => {
 	return ensureAsyncStorage();
 };
 
-export const getCurrentAdapter = async (
-	fallback: DBTransactionAdapter,
-): Promise<DBTransactionAdapter> => {
+export const getCurrentAdapter = async <
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	fallback: DBTransactionAdapter<Options>,
+): Promise<DBTransactionAdapter<Options>> => {
 	return ensureAsyncStorage()
 		.then((als) => {
 			const store = als.getStore();
-			return store?.adapter || fallback;
+			return (
+				(store?.adapter as DBTransactionAdapter<Options> | undefined) ||
+				fallback
+			);
 		})
 		.catch(() => {
 			return fallback;
 		});
 };
 
-export const runWithAdapter = async <R>(
-	adapter: DBAdapter,
+export const runWithAdapter = async <
+	R,
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: DBAdapter<Options>,
 	fn: () => R,
 ): Promise<R> => {
 	let called = false;
@@ -53,7 +65,14 @@ export const runWithAdapter = async <R>(
 			let error: unknown;
 			let hasError = false;
 			try {
-				result = await als.run({ adapter, pendingHooks }, fn);
+				result = await als.run(
+					{
+						adapter: adapter as unknown as StoredAdapter,
+						pendingHooks,
+						isTransactionActive: false,
+					},
+					fn,
+				);
 			} catch (err) {
 				error = err;
 				hasError = true;
@@ -75,21 +94,35 @@ export const runWithAdapter = async <R>(
 		});
 };
 
-export const runWithTransaction = async <R>(
-	adapter: DBAdapter,
+export const runWithTransaction = async <
+	R,
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: DBAdapter<Options>,
 	fn: () => R,
 ): Promise<R> => {
-	let called = true;
+	let called = false;
 	return ensureAsyncStorage()
 		.then(async (als) => {
 			called = true;
+			const store = als.getStore();
+			if (store?.isTransactionActive) {
+				return fn();
+			}
 			const pendingHooks: Array<() => Promise<void>> = [];
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
 			try {
 				result = await adapter.transaction(async (trx) => {
-					return als.run({ adapter: trx, pendingHooks }, fn);
+					return als.run(
+						{
+							adapter: trx as unknown as StoredAdapter,
+							pendingHooks,
+							isTransactionActive: true,
+						},
+						fn,
+					);
 				});
 			} catch (e) {
 				hasError = true;

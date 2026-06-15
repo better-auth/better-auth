@@ -3,6 +3,10 @@ import {
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
 } from "@better-auth/core/instrumentation";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "../../context/transaction";
 import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
@@ -1364,11 +1368,9 @@ export const createAdapterFactory =
 					// engines with real transaction isolation; race window narrows
 					// (does not close) on adapters that fall through to sequential
 					// execution. Remove this branch when consumeOne becomes required.
-					// FIXME(consume-one-nested-transaction): custom adapters without a
-					// native consumeOne have no portable signal for "already inside a
-					// transaction". First-party adapters mark transaction-scoped
-					// adapters as as-is; make that capability explicit in the next
-					// breaking adapter contract.
+					// Use Better Auth's transaction context here, not a direct adapter
+					// transaction, so callers already inside a transaction keep using
+					// the active transaction adapter.
 					res = await withSpan(
 						`db consumeOne ${model}`,
 						{
@@ -1376,7 +1378,8 @@ export const createAdapterFactory =
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						() =>
-							adapter.transaction(async (trx) => {
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
 								const rows = await trx.findMany<Record<string, any>>({
 									model: unsafeModel,
 									where: unsafeWhere,
@@ -1508,7 +1511,8 @@ export const createAdapterFactory =
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						() =>
-							adapter.transaction(async (trx) => {
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
 								const rows = await trx.findMany<Record<string, any>>({
 									model: unsafeModel,
 									where: unsafeWhere,
