@@ -1455,7 +1455,10 @@ async function handleOIDCCallback(
 		if (e instanceof DiscoveryError) {
 			redirectOIDCError("invalid_provider", e.message);
 		}
-		return null;
+		redirectOIDCError(
+			"invalid_provider",
+			getOIDCErrorDescription(e, "token_response_error"),
+		);
 	});
 	if (!tokenResponse) {
 		throw ctx.redirect(
