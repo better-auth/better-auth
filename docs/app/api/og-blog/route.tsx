@@ -4,8 +4,8 @@ import * as z from "zod";
 export const runtime = "edge";
 
 const ogSchema = z.object({
-	title: z.string(),
-	date: z.string().optional(),
+	title: z.string().trim().min(1).max(200),
+	date: z.string().trim().max(40).optional(),
 	theme: z.enum(["light", "dark"]).default("dark"),
 });
 
