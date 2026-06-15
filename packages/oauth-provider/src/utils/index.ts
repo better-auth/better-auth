@@ -534,8 +534,11 @@ export function clientAllowsGrant(
 }
 
 /**
- * Validates client credentials failing on mismatches
- * and incorrectly provided information
+ * Resolves the registered client by id and authorizes it: existence, disabled
+ * state, registered auth method, requested scopes, and grant type. The record is
+ * always resolved here via `getClient`, so a client-auth strategy proves the
+ * caller controls `clientId` but never supplies the record. `preVerified` marks
+ * that an assertion already proved control, so the client-secret check is skipped.
  *
  * @internal
  */
@@ -545,11 +548,11 @@ export async function validateClientCredentials(
 	clientId: string,
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes
-	preVerifiedClient?: SchemaClient<Scope[]>,
+	preVerified?: boolean, // an assertion already proved control of clientId; skip the secret check
 	grantType?: GrantType, // if set, enforces the client is registered for this grant type
 	authMethod?: TokenEndpointAuthMethod,
 ) {
-	const client = preVerifiedClient ?? (await getClient(ctx, options, clientId));
+	const client = await getClient(ctx, options, clientId);
 	if (!client) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing client",
@@ -564,7 +567,7 @@ export async function validateClientCredentials(
 	}
 
 	// Enforce registered auth method for assertion/pre-verified methods.
-	if (preVerifiedClient && authMethod) {
+	if (preVerified && authMethod) {
 		const registeredAuthMethod =
 			client.tokenEndpointAuthMethod ?? "client_secret_basic";
 		if (registeredAuthMethod !== authMethod) {
@@ -580,7 +583,7 @@ export async function validateClientCredentials(
 				options,
 				client.tokenEndpointAuthMethod,
 			)) &&
-		!preVerifiedClient
+		!preVerified
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `client registered for ${client.tokenEndpointAuthMethod} must use client_assertion`,
@@ -589,7 +592,7 @@ export async function validateClientCredentials(
 	}
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
-	if (!preVerifiedClient) {
+	if (!preVerified) {
 		// Require secret for confidential clients
 		if (!client.public && !clientSecret) {
 			throw new APIError("BAD_REQUEST", {
@@ -674,7 +677,6 @@ export type ExtractedCredentials =
 			kind: "pre_verified";
 			method: TokenEndpointAuthMethod;
 			clientId: string;
-			client: SchemaClient<Scope[]>;
 			/** Sender-constraint the auth strategy proved, forwarded to issuance. */
 			confirmation?: Confirmation;
 	  }
@@ -694,8 +696,7 @@ export function destructureCredentials(
 			credentials?.kind === "client_secret"
 				? credentials.clientSecret
 				: undefined,
-		preVerifiedClient:
-			credentials?.kind === "pre_verified" ? credentials.client : undefined,
+		preVerified: credentials?.kind === "pre_verified",
 		authMethod: credentials?.method,
 		confirmation:
 			credentials?.kind === "pre_verified"
@@ -754,7 +755,6 @@ export async function extractClientCredentials(
 				kind: "pre_verified",
 				method: extensionStrategy.method,
 				clientId: result.clientId,
-				client: result.client,
 				confirmation: result.confirmation,
 			};
 		}
@@ -773,7 +773,6 @@ export async function extractClientCredentials(
 			kind: "pre_verified",
 			method: "private_key_jwt",
 			clientId: result.clientId,
-			client: result.client,
 		};
 	}
 

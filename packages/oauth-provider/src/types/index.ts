@@ -111,10 +111,6 @@ export interface OAuthClientAuthenticationRequest {
 	 */
 	scopes?: string[];
 	/**
-	 * Grant type to enforce for the registered client.
-	 */
-	grantType?: GrantType;
-	/**
 	 * Set to `false` for public extension grants that only require client_id.
 	 *
 	 * @default true
@@ -252,6 +248,18 @@ export interface OAuthClientAuthenticationInput {
 	expectedAudience?: string;
 }
 
+export interface OAuthClientAuthenticationResult {
+	/** The client id the assertion proved the caller controls. */
+	clientId: string;
+	/**
+	 * A sender-constraint the strategy proved (for example a wallet-instance key
+	 * thumbprint). The provider stamps it as the issued token's RFC 7800 `cnf`.
+	 * Set it only after proving possession; the authorization server writes it as
+	 * token material and does not verify it again.
+	 */
+	confirmation?: Confirmation;
+}
+
 export interface OAuthClientAuthenticationStrategy {
 	/**
 	 * Assertion type URIs this strategy consumes from `client_assertion_type`.
@@ -261,7 +269,11 @@ export interface OAuthClientAuthenticationStrategy {
 	 */
 	assertionTypes?: string[];
 	/**
-	 * Verifies the presented assertion and returns the authenticated client.
+	 * Verifies the presented assertion and returns the proven client id (plus any
+	 * sender-constraint it established). The strategy proves the caller controls
+	 * `clientId`; it does not supply the authorization record. The provider
+	 * resolves and authorizes the client itself, so a strategy cannot influence
+	 * the client's grants, scopes, or enabled state.
 	 *
 	 * The strategy owns the full RFC 7521/7523 verification. After verifying the
 	 * signature against its own key source, it MUST enforce the assertion-hygiene
@@ -278,7 +290,7 @@ export interface OAuthClientAuthenticationStrategy {
 	 */
 	authenticate: (
 		input: OAuthClientAuthenticationInput,
-	) => Awaitable<OAuthAuthenticatedClient>;
+	) => Awaitable<OAuthClientAuthenticationResult>;
 }
 
 export interface OAuthMetadataExtensionInput {

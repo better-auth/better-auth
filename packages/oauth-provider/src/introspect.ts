@@ -595,11 +595,11 @@ export async function introspectEndpoint(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
 		authMethod,
 	} = destructureCredentials(credentials);
 
-	if (!client_id || (!client_secret && !preVerifiedClient)) {
+	if (!client_id || (!client_secret && !preVerified)) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -624,7 +624,7 @@ export async function introspectEndpoint(
 		client_id,
 		client_secret,
 		undefined,
-		preVerifiedClient,
+		preVerified,
 		undefined,
 		authMethod,
 	);

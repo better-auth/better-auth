@@ -139,13 +139,8 @@ export function getOAuthProviderApi(
 				// reject a valid assertion minted for the real endpoint.
 				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
 			);
-			const {
-				clientId,
-				clientSecret,
-				preVerifiedClient,
-				authMethod,
-				confirmation,
-			} = destructureCredentials(credentials);
+			const { clientId, clientSecret, preVerified, authMethod, confirmation } =
+				destructureCredentials(credentials);
 			if (!clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client_id",
@@ -155,7 +150,7 @@ export function getOAuthProviderApi(
 			if (
 				request?.requireCredentials !== false &&
 				!clientSecret &&
-				!preVerifiedClient
+				!preVerified
 			) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client credentials",
@@ -168,8 +163,8 @@ export function getOAuthProviderApi(
 				clientId,
 				clientSecret,
 				request?.scopes,
-				preVerifiedClient,
-				request?.grantType ?? grantType,
+				preVerified,
+				grantType,
 				authMethod,
 			);
 			return {
@@ -1109,7 +1104,7 @@ async function handleAuthorizationCodeGrant(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
 		authMethod,
 	} = destructureCredentials(credentials);
 
@@ -1148,7 +1143,7 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerifiedClient) {
+	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerified) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Either code_verifier or client_secret is required",
 			error: "invalid_request",
@@ -1180,7 +1175,7 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		client_secret,
 		scopes,
-		preVerifiedClient,
+		preVerified,
 		"authorization_code",
 		authMethod,
 	);
@@ -1203,7 +1198,7 @@ async function handleAuthorizationCodeGrant(
 		}
 	} else {
 		// PKCE is optional - must have either PKCE, client_secret, or client_assertion
-		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerifiedClient)) {
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerified)) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"Either PKCE (code_verifier) or client authentication (client_secret or client_assertion) is required",
@@ -1323,7 +1318,7 @@ async function handleClientCredentialsGrant(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
 		authMethod,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
@@ -1336,7 +1331,7 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!client_secret && !preVerifiedClient) {
+	if (!client_secret && !preVerified) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing a required client_secret",
 			error: "invalid_grant",
@@ -1350,7 +1345,7 @@ async function handleClientCredentialsGrant(
 		client_id,
 		client_secret,
 		undefined,
-		preVerifiedClient,
+		preVerified,
 		"client_credentials",
 		authMethod,
 	);
@@ -1410,7 +1405,7 @@ async function handleRefreshTokenGrant(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
 		authMethod,
 	} = destructureCredentials(credentials);
 
@@ -1518,7 +1513,7 @@ async function handleRefreshTokenGrant(
 		client_id,
 		client_secret, // Optional for refresh_grant but required on confidential clients
 		requestedScopes ?? scopes,
-		preVerifiedClient,
+		preVerified,
 		"refresh_token",
 		authMethod,
 	);
