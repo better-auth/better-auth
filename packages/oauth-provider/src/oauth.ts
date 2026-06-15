@@ -861,6 +861,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
+							parameters: [
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT for issuing DPoP-bound tokens",
+								},
+							],
 							requestBody: {
 								required: true,
 								content: {
@@ -943,7 +953,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													token_type: {
 														type: "string",
 														description: "The type of the token issued",
-														enum: ["Bearer"],
+														enum: ["Bearer", "DPoP"],
 													},
 													expires_in: {
 														type: "number",
@@ -1249,7 +1259,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									in: "header",
 									required: false,
 									schema: { type: "string" },
-									description: "Bearer access token",
+									description: "Bearer or DPoP access token",
+								},
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT when using a DPoP-bound access token",
 								},
 							],
 							responses: {

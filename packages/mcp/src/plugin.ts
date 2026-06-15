@@ -11,6 +11,7 @@ import {
 	oauthProvider,
 	ResourceUriSchema,
 } from "@better-auth/oauth-provider";
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 
 const PROTECTED_RESOURCE_METADATA_PATH =
 	"/.well-known/oauth-protected-resource";
@@ -74,11 +75,23 @@ const buildResourceServerMetadata = (
 	const resourceScopes = scopes.filter(
 		(scope) => !AUTHORIZATION_SERVER_ONLY_SCOPES.has(scope),
 	);
+	const configuredResource = providerOptions.resources?.find(
+		(configuredResource) => resourceIdentifier(configuredResource) === resource,
+	);
+	const dpopBoundAccessTokensRequired =
+		typeof configuredResource === "object" &&
+		configuredResource.dpopBoundAccessTokensRequired === true;
 	const metadata: ResourceServerMetadata = {
 		resource,
 		authorization_servers: [getIssuer(ctx, providerOptions)],
 		bearer_methods_supported: ["header"],
+		dpop_signing_alg_values_supported: [
+			...(providerOptions.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS),
+		],
 	};
+	if (dpopBoundAccessTokensRequired) {
+		metadata.dpop_bound_access_tokens_required = true;
+	}
 	if (resourceScopes.length) {
 		metadata.scopes_supported = [...resourceScopes];
 	}

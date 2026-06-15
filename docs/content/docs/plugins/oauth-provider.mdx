@@ -502,6 +502,35 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
+#### DPoP sender-constrained tokens
+
+Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449). A client can ask for DPoP-bound tokens by registering with `dpop_bound_access_tokens: true`, by sending `dpop_jkt` on the authorization request, or by requesting a resource configured with `dpopBoundAccessTokensRequired: true`.
+
+When a token is DPoP-bound:
+
+* The token endpoint requires a valid `DPoP` proof JWT.
+* The token response returns `token_type: "DPoP"`.
+* JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
+* Refresh token rotation requires a DPoP proof from the same key.
+* Resource requests must use `Authorization: DPoP <access_token>` and a `DPoP` proof containing the access-token hash (`ath`).
+
+```ts title="auth.ts"
+oauthProvider({
+  dpop: {
+    proofMaxAgeSeconds: 300,
+    signingAlgorithms: ["ES256", "EdDSA"],
+  },
+  resources: [
+    {
+      identifier: "https://api.example.com",
+      dpopBoundAccessTokensRequired: true,
+    },
+  ],
+})
+```
+
+The authorization-server metadata advertises `dpop_signing_alg_values_supported`. Resource metadata advertises the same proof algorithms and, when required, `dpop_bound_access_tokens_required`.
+
 #### Private Key JWT Authentication
 
 With `private_key_jwt`, clients authenticate by signing a JWT with their private key instead of using a shared secret. The server verifies the signature using the client's registered public key (JWKS).
@@ -802,30 +831,29 @@ This section shows how your API should verify tokens received from your clients.
 
 ### Verification
 
-Verification can be performed using `verifyAccessToken` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package.
+Verification can be performed using `verifyAccessTokenRequest` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package. This is the recommended resource-server API because it verifies the access token and, when the token is DPoP-bound, also verifies the request method, URL, `Authorization: DPoP` scheme, proof key, replay `jti`, and `ath` claim.
 
 With `better-auth` package:
 
 ```ts title="api/[endpoint].ts"
-import { verifyAccessToken } from "better-auth/oauth2";
+import {
+  requestToResourceInput,
+  verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 
 export const GET = async (req: Request) => {
-  const authorization = req.headers?.get("authorization") ?? undefined;
-  const accessToken = authorization?.startsWith("Bearer ")
-    ? authorization.replace("Bearer ", "")
-    : authorization;
-  const payload = await verifyAccessToken(
-    accessToken, {
-      verifyOptions: {
-        issuer: "https://auth.example.com",
-        audience: "https://api.example.com",
-      },
-      scopes: ["read:post"], // optional
-    }
-  );
+  const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+    verifyOptions: {
+      issuer: "https://auth.example.com",
+      audience: "https://api.example.com",
+    },
+    scopes: ["read:post"], // optional
+  });
   // ...continue
 }
 ```
+
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers and the method and URL from a standard `Request`. Pass a plain object with those fields if your framework does not expose a `Request`.
 
 With `oauthProviderResourceClient` plugin:
 
@@ -833,12 +861,9 @@ With `oauthProviderResourceClient` plugin:
 import { serverClient } from "@/lib/server-client";
 
 export const POST = async (req: Request) => {
-  const authorization = req.headers?.get("authorization") ?? undefined;
-  const accessToken = authorization?.startsWith("Bearer ")
-    ? authorization.replace("Bearer ", "")
-    : authorization;
-  const payload = await serverClient.verifyAccessToken(
-    accessToken, {
+  const payload = await serverClient.verifyAccessTokenRequest(
+    req,
+    {
       verifyOptions: {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
@@ -849,6 +874,15 @@ export const POST = async (req: Request) => {
   // ...continue
 }
 ```
+
+`verifyBearerToken` is still available when you already extracted a raw bearer token and intentionally do not accept DPoP-bound tokens on that path. It rejects DPoP-bound tokens, so prefer `verifyAccessTokenRequest` for any endpoint that may receive them.
+
+<Callout type="warn">
+  DPoP verification compares the proof's `htu` against the request URL, and rejects replayed proofs through a `jti` store. Two deployment details matter:
+
+  * **Behind a proxy:** the proof is checked against `request.url`, so a TLS-terminating or path-rewriting proxy must forward the externally visible scheme, host, and path, or legitimate proofs are rejected.
+  * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` such as `createDpopReplayStore(ctx.context.internalAdapter)`, which records proofs in the database-backed verification store (the provider's own endpoints and `requireMcpAuth` use it by default). It requires database-backed verification storage; a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+</Callout>
 
 #### JWT Verification
 
@@ -1790,23 +1824,20 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
 
     Set `verifyOptions.audience` to your protected resource identifier. If omitted, the resource client falls back to the authorization server base URL as the expected audience.
 
-    * Using the client `verifyAccessToken` function
+    * Using the client `verifyAccessTokenRequest` function
 
     See [Verification](#verification) for verification examples.
 
-    * With auth available, use the client `verifyAccessToken` function to automatically determine endpoints
+    * With auth available, use the client `verifyAccessTokenRequest` function to automatically determine endpoints
 
     ```ts title="api/[endpoint].ts"
     import { auth } from "@/lib/auth";
     import { serverClient } from "@/lib/server-client";
 
     export const GET = async (req: Request) => {
-      const authorization = req.headers?.get("authorization") ?? undefined;
-      const accessToken = authorization?.startsWith("Bearer ")
-        ? authorization.replace("Bearer ", "")
-        : authorization;
-      const payload = await serverClient.verifyAccessToken(
-        accessToken, {
+      const payload = await serverClient.verifyAccessTokenRequest(
+        req,
+        {
           verifyOptions: {
             audience: "https://api.example.com",
           }
@@ -2082,6 +2113,13 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
+    name: "dpopBoundAccessTokens",
+    type: "boolean",
+    description:
+      "Whether this client must receive and use DPoP-bound access tokens",
+    isOptional: true,
+  },
+  {
     name: "metadata",
     type: "json",
     description: "Additional metadata for the OAuth client",
@@ -2164,6 +2202,13 @@ export const oauthRefreshTokenTableFields = [
     type: "Date",
     description: "Timestamp when the token will expire",
   },
+  {
+    name: "confirmation",
+    type: "json",
+    description:
+      "RFC 7800 cnf confirmation that sender-constrains this refresh-token family (e.g. DPoP { jkt }), carried forward on rotation",
+    isOptional: true,
+  },
 ];
 
 <DatabaseTable name="oauthRefreshToken" fields={oauthRefreshTokenTableFields} />
@@ -2237,6 +2282,13 @@ export const oauthAccessTokenTableFields = [
     name: "expiresAt",
     type: "Date",
     description: "Timestamp when the token will expire",
+  },
+  {
+    name: "confirmation",
+    type: "json",
+    description:
+      "RFC 7800 cnf confirmation that sender-constrains this access token (e.g. DPoP { jkt }), surfaced as cnf at introspection",
+    isOptional: true,
   },
   {
     name: "revoked",
