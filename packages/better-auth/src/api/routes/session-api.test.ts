@@ -72,6 +72,13 @@ describe("session", async () => {
 		expect(response.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10044
+	 */
+	it("should return null for direct session checks without a request source", async () => {
+		await expect(auth.api.getSession()).resolves.toBeNull();
+	});
+
 	it("should require a fresh session based on session creation time", async () => {
 		vi.useFakeTimers();
 		const now = new Date("2026-01-01T00:00:00.000Z");
