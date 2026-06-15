@@ -858,6 +858,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
@@ -1032,6 +1033,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Introspect an OAuth2 access or refresh token",
@@ -1246,6 +1248,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: ["GET", "POST"],
 					metadata: {
+						noStore: true,
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
@@ -1425,6 +1428,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 					defaultError: "invalid_client_metadata",
 					metadata: {
+						noStore: true,
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {

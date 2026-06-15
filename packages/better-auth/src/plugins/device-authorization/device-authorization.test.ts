@@ -284,6 +284,36 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device approval flow", () => {
+		// RFC 8628 §3.2: the device authorization response must not be cached.
+		it("sends no-store on the device code response", async () => {
+			const response = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
+		// The device token response carries live credentials.
+		it("sends no-store on the device token response", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+			const response = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
 		it("should approve device and create session", async () => {
 			// First, sign in as a user
 			const { headers } = await signInWithTestUser();

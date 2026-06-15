@@ -989,25 +989,17 @@ async function createUserTokens(
 			)
 		: undefined;
 
-	return ctx.json(
-		{
-			...customFields,
-			...(params.tokenResponse ?? {}),
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: confirmationTokenType(confirmation),
-			refresh_token: refreshToken?.token,
-			scope: effectiveScopes.join(" "),
-			id_token: idToken,
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	return ctx.json({
+		...customFields,
+		...(params.tokenResponse ?? {}),
+		access_token: accessToken,
+		expires_in: exp - iat,
+		expires_at: exp,
+		token_type: confirmationTokenType(confirmation),
+		refresh_token: refreshToken?.token,
+		scope: effectiveScopes.join(" "),
+		id_token: idToken,
+	});
 }
 
 /** Checks verification value */
