@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { defineRequestState } from "@better-auth/core/context";
+import {
+	defineRequestState,
+	type RequestState,
+} from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DispatchContext } from "better-auth/api";
@@ -54,11 +57,26 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const oAuthState = defineRequestState<{
+type OAuthProviderState = {
 	query?: string;
 	signedQueryIssuedAt?: Date;
 	postLoginClearedForSession?: string;
-} | null>(() => null);
+} | null;
+
+let state: RequestState<OAuthProviderState> | undefined;
+
+function getOAuthProviderRequestState() {
+	state ??= defineRequestState<OAuthProviderState>(() => null);
+	return state;
+}
+
+export const oAuthState: RequestState<OAuthProviderState> = {
+	get ref() {
+		return getOAuthProviderRequestState().ref;
+	},
+	get: () => getOAuthProviderRequestState().get(),
+	set: (value) => getOAuthProviderRequestState().set(value),
+};
 export const getOAuthProviderState = oAuthState.get;
 
 /**
