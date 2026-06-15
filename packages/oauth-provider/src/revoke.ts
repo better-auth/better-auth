@@ -176,7 +176,7 @@ async function revokeRefreshToken(
 	// Atomic compare-and-swap. If a concurrent rotation already revoked
 	// (and re-minted) this row, fail closed and tear down the whole family
 	// so the rotation's offspring cannot be used either.
-	const won = await ctx.context.adapter.update<{ id: string }>({
+	const won = await ctx.context.adapter.incrementOne<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
 			{
@@ -189,7 +189,8 @@ async function revokeRefreshToken(
 				value: null,
 			},
 		],
-		update: {
+		increment: {},
+		set: {
 			revoked: new Date(iat * 1000),
 		},
 	});

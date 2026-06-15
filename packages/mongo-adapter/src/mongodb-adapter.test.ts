@@ -104,6 +104,35 @@ describe("mongodb-adapter", () => {
 		expect(updateArg).not.toHaveProperty("$set");
 	});
 
+	it("incrementOne omits $inc for a set-only guarded transition", async () => {
+		const findOneAndUpdate = vi.fn(async () => ({
+			value: { _id: "counter-id", lastRequest: 1700000000000 },
+		}));
+		const db = {
+			collection: vi.fn(() => ({
+				findOneAndUpdate,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })(
+			rateLimitOptions,
+		);
+
+		await adapter.incrementOne({
+			model: "rateLimit",
+			where: [{ field: "key", value: "a" }],
+			increment: {},
+			set: { lastRequest: 1700000000000 },
+		});
+
+		expect(findOneAndUpdate).toHaveBeenCalledWith(
+			{ key: "a" },
+			{ $set: { lastRequest: 1700000000000 } },
+			expect.anything(),
+		);
+		const updateArg = (findOneAndUpdate.mock.calls[0] as any[])[1];
+		expect(updateArg).not.toHaveProperty("$inc");
+	});
+
 	it("incrementOne returns null when the guard matches no document", async () => {
 		const findOneAndUpdate = vi.fn(async () => ({ value: null }));
 		const db = {

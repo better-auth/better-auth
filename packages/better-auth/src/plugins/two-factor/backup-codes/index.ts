@@ -355,11 +355,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						opts,
 					);
 
-					const updated = await ctx.context.adapter.update({
+					const updated = await ctx.context.adapter.incrementOne({
 						model: twoFactorTable,
-						update: {
-							backupCodes: updatedBackupCodes,
-						},
 						where: [
 							{
 								field: "id",
@@ -370,6 +367,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								value: twoFactor.backupCodes,
 							},
 						],
+						increment: {},
+						set: {
+							backupCodes: updatedBackupCodes,
+						},
 					});
 					if (!updated) {
 						throw APIError.fromStatus("CONFLICT", {
