@@ -3,6 +3,7 @@ import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeCookie } from "better-call";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -1515,6 +1516,70 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk session cache when attributes push the line over the limit", async () => {
+		// Long prefix shrinks the per-cookie value budget; the value alone
+		// lands under 4093 (so the old value-only gate skipped chunking) yet
+		// the serialized line overflows once name + attributes are added.
+		const longPrefix = "better-auth-" + "x".repeat(80);
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			user: {
+				additionalFields: {
+					entraProfile: { type: "string", defaultValue: "" },
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		const headers = new Headers();
+		let hasChunks = false;
+		await client.signUp.email(
+			{
+				name: "Entra User",
+				email: "entra-chunk@example.com",
+				password: "password123",
+				entraProfile: "x".repeat(2400),
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+					const parsed = parseSetCookieHeader(setCookie!);
+					parsed.forEach((attr, name) => {
+						if (!name.includes("session_data")) return;
+						if (/session_data\.\d+$/.test(name)) hasChunks = true;
+						const line = serializeCookie(
+							name,
+							attr.value,
+							toCookieOptions(attr),
+						);
+						expect(
+							line.length,
+							`session_data cookie "${name}" serialized to ${line.length} bytes`,
+						).toBeLessThanOrEqual(4093);
+						headers.append("cookie", `${name}=${attr.value}`);
+					});
+				},
+			},
+		);
+
+		expect(hasChunks).toBe(true);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookiePrefix: longPrefix,
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("entra-chunk@example.com");
 	});
 });
 
