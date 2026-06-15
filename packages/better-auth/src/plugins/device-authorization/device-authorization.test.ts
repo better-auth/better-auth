@@ -678,9 +678,6 @@ describe("device authorization flow", async () => {
 describe("device authorization ownership gate", () => {
 	const ATTACKER_EMAIL = "attacker@example.test";
 	const ATTACKER_PASSWORD = "attacker-password-123";
-	type AdapterUpdateData = Parameters<
-		DBAdapter<BetterAuthOptions>["update"]
-	>[0];
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
@@ -1053,12 +1050,14 @@ describe("device authorization ownership gate", () => {
 			const baseAdapter = memoryAdapter(memoryDB)(options);
 			adapter = {
 				...baseAdapter,
-				update: async <T>(data: AdapterUpdateData) => {
+				incrementOne: async <T>(
+					data: Parameters<DBAdapter<BetterAuthOptions>["incrementOne"]>[0],
+				) => {
 					if (
 						simulateConcurrentClaim &&
 						concurrentOwnerId &&
 						data.model === "deviceCode" &&
-						data.update.userId
+						(data.set as { userId?: string } | undefined)?.userId
 					) {
 						simulateConcurrentClaim = false;
 						const deviceCodeId = data.where.find(
@@ -1072,7 +1071,7 @@ describe("device authorization ownership gate", () => {
 							});
 						}
 					}
-					return baseAdapter.update<T>(data);
+					return baseAdapter.incrementOne<T>(data);
 				},
 			};
 			return adapter;

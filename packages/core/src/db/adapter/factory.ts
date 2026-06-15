@@ -1450,6 +1450,16 @@ export const createAdapterFactory =
 				increment: Record<string, number>;
 				set?: Record<string, unknown> | undefined;
 			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
