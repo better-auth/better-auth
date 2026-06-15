@@ -1,6 +1,14 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
+import {
+	createDpopReplayStore,
+	enforceDpopBinding,
+	getDpopJktFromPayload,
+	isDpopBindingError,
+	parseAccessTokenAuthorization,
+} from "better-auth/oauth2";
 import type { User } from "better-auth/types";
+import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
@@ -73,17 +81,18 @@ export async function userInfoEndpoint(
 	// should keep accepting a non-Bearer Authorization value as a bare token; the
 	// shared parser is strict and would reject that fallback.
 	const authorization = ctx.headers?.get("authorization");
-	const token =
-		typeof authorization === "string" && authorization?.startsWith("Bearer ")
-			? authorization?.replace("Bearer ", "")
-			: authorization;
-	if (!token?.length) {
+	const accessTokenAuthorization = parseAccessTokenAuthorization(authorization);
+	if (!accessTokenAuthorization?.token) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "authorization header not found",
 			error: "invalid_request",
 		});
 	}
-	const jwt = await validateAccessToken(ctx, opts, token);
+	const jwt = await validateAccessToken(
+		ctx,
+		opts,
+		accessTokenAuthorization.token,
+	);
 
 	// A token that is expired, revoked, or bound to an ended session resolves to
 	// `{ active: false }`. RFC 6750 §3.1 wants `invalid_token` (401) for that,
@@ -93,6 +102,38 @@ export async function userInfoEndpoint(
 			error_description: "the access token is invalid or has been revoked",
 			error: "invalid_token",
 		});
+	}
+
+	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
+	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
+	// be verified, so fail closed for a DPoP-bound token rather than assume "GET".
+	if (getDpopJktFromPayload(jwt) && !ctx.request) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description:
+				"DPoP-bound access token requires an HTTP request context",
+			error: "invalid_token",
+		});
+	}
+
+	try {
+		await enforceDpopBinding({
+			payload: jwt,
+			authorization: accessTokenAuthorization,
+			proofJwt: getDpopProofJwt(ctx),
+			method: ctx.request?.method ?? "GET",
+			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+		});
+	} catch (error) {
+		if (isDpopBindingError(error)) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: error.message,
+				error: error.code,
+			});
+		}
+		throw error;
 	}
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");

@@ -3359,7 +3359,7 @@ describe("oauth - config", () => {
 		expect(tokens.data?.accessToken).toBeDefined();
 		if (publicClient && !(resource && !disableJwtPlugin)) {
 			await expect(
-				client.verifyAccessToken(tokens.data?.accessToken!, {
+				client.verifyBearerToken(tokens.data?.accessToken!, {
 					verifyOptions: {
 						audience: validResource,
 						issuer: authServerUrl,
@@ -3368,7 +3368,7 @@ describe("oauth - config", () => {
 				}),
 			).rejects.toThrowError();
 		} else {
-			const payload = await client.verifyAccessToken(
+			const payload = await client.verifyBearerToken(
 				tokens.data?.accessToken!,
 				{
 					verifyOptions: {

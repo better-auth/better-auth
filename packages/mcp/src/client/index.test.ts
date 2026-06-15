@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { deriveDpopJkt } from "better-auth/oauth2";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mcpAuthHono } from "./adapters";
 import { createMcpResourceClient } from "./index";
 
@@ -130,5 +132,56 @@ describe("mcpAuthHono", () => {
 
 		expect(routes).toContain("/.well-known/oauth-protected-resource");
 		expect(routes).toContain("/.well-known/oauth-protected-resource/api/auth");
+	});
+});
+
+describe("createMcpResourceClient DPoP challenge", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	/**
+	 * A DPoP-bound access token presented with the `Bearer` scheme must be
+	 * answered with an RFC 9449 `DPoP` challenge, not a bearer one, so the client
+	 * knows to retry with a proof.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10039
+	 */
+	it("answers a DPoP-bound token sent with the bearer scheme with a DPoP challenge", async () => {
+		const authURL = "https://auth.example.com";
+		const issuerKeys = await generateKeyPair("ES256", { extractable: true });
+		const issuerPublicJwk = await exportJWK(issuerKeys.publicKey);
+		issuerPublicJwk.kid = "test-key";
+		const dpopKeys = await generateKeyPair("ES256", { extractable: true });
+		const jkt = await deriveDpopJkt(await exportJWK(dpopKeys.publicKey));
+
+		const accessToken = await new SignJWT({ sub: "user-1", cnf: { jkt } })
+			.setProtectedHeader({ alg: "ES256", kid: "test-key" })
+			.setIssuer(authURL)
+			.setAudience(authURL)
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.sign(issuerKeys.privateKey);
+
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			if (url.endsWith("/.well-known/oauth-authorization-server")) {
+				return Response.json({ issuer: authURL, jwks_uri: `${authURL}/jwks` });
+			}
+			if (url === `${authURL}/jwks`) {
+				return Response.json({ keys: [issuerPublicJwk] });
+			}
+			throw new Error(`unexpected fetch ${url}`);
+		});
+
+		const client = createMcpResourceClient({ authURL });
+		const response = await client.handler(() => new Response("unreachable"))(
+			new Request(`${authURL}/mcp`, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toMatch(/^DPoP /);
 	});
 });

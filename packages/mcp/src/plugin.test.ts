@@ -4,6 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	DPOP_SIGNING_ALGORITHMS,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -140,12 +141,14 @@ describe("mcp plugin", async () => {
 				authorization_servers: string[];
 				scopes_supported?: string[];
 				bearer_methods_supported: string[];
+				dpop_signing_alg_values_supported?: string[];
 			};
 
 			expect(metadata).toMatchObject({
 				resource: baseURL,
 				authorization_servers: [baseURL],
 				bearer_methods_supported: ["header"],
+				dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			});
 			expect(metadata.scopes_supported).toBeUndefined();
 		});
@@ -183,6 +186,7 @@ describe("mcp plugin", async () => {
 				authorization_servers: string[];
 				scopes_supported?: string[];
 				bearer_methods_supported: string[];
+				dpop_signing_alg_values_supported?: string[];
 			};
 
 			expect(metadata).toMatchObject({
@@ -190,6 +194,7 @@ describe("mcp plugin", async () => {
 				authorization_servers: [resourceBaseURL],
 				scopes_supported: ["mcp:read"],
 				bearer_methods_supported: ["header"],
+				dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			});
 		});
 

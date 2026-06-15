@@ -94,6 +94,13 @@ const maxAgeSchema = z
 		return maxAge;
 	});
 
+const dpopJktSchema = z
+	.string()
+	.regex(
+		/^[A-Za-z0-9_-]{43}$/,
+		"dpop_jkt must be a base64url-encoded SHA-256 JWK thumbprint",
+	);
+
 /**
  * Runtime schema for OAuthAuthorizationQuery.
  * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
@@ -122,6 +129,7 @@ export const authorizationQuerySchema = z
 			.pipe(z.enum(["S256"]))
 			.optional(),
 		nonce: z.string().optional(),
+		dpop_jkt: dpopJktSchema.optional(),
 		resource: z
 			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 			.optional(),
@@ -191,6 +199,8 @@ export const clientRegistrationRequestSchema = z.object({
 	response_types: z.array(z.enum(["code"])).optional(),
 	type: z.enum(["web", "native", "user-agent-based"]).optional(),
 	subject_type: z.enum(["public", "pairwise"]).optional(),
+	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+	dpop_bound_access_tokens: z.boolean().optional(),
 	// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
 	// will request. Each must be a valid resource URI matching an existing
 	// oauthResource row; the registration handler links them on success.

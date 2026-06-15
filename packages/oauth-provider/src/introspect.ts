@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { getJwks } from "better-auth/oauth2";
+import {
+	getJwks,
+	stripAccessTokenAuthorizationScheme,
+} from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
@@ -11,8 +14,9 @@ import {
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
 } from "./resources";
-import { decodeRefreshToken } from "./token";
+import { confirmationTokenType, decodeRefreshToken } from "./token";
 import type {
+	Confirmation,
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -217,6 +221,9 @@ async function validateJwtAccessToken(
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	jwtPayload.client_id = jwtPayload.azp;
 	jwtPayload.active = true;
+	jwtPayload.token_type = confirmationTokenType(
+		jwtPayload.cnf as Confirmation | undefined,
+	);
 	return jwtPayload;
 }
 
@@ -391,6 +398,8 @@ async function validateOpaqueAccessToken(
 		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
 		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
+		token_type: confirmationTokenType(accessToken.confirmation),
+		...(accessToken.confirmation ? { cnf: accessToken.confirmation } : {}),
 	} as JWTPayload;
 }
 
@@ -478,6 +487,8 @@ async function validateRefreshToken(
 		exp: Math.floor(new Date(refreshToken.expiresAt).getTime() / 1000),
 		iat: Math.floor(new Date(refreshToken.createdAt).getTime() / 1000),
 		scope: refreshToken.scopes?.join(" "),
+		token_type: confirmationTokenType(refreshToken.confirmation),
+		...(refreshToken.confirmation ? { cnf: refreshToken.confirmation } : {}),
 	} as JWTPayload;
 }
 
@@ -596,8 +607,8 @@ export async function introspectEndpoint(
 	}
 
 	// Check token
-	if (token && typeof token === "string" && token.startsWith("Bearer ")) {
-		token = token.replace("Bearer ", "");
+	if (token && typeof token === "string") {
+		token = stripAccessTokenAuthorizationScheme(token);
 	}
 	if (!token?.length) {
 		throw new APIError("BAD_REQUEST", {

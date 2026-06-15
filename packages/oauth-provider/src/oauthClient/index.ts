@@ -57,6 +57,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
 				require_pkce: z.boolean().optional(),
+				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+				dpop_bound_access_tokens: z.boolean().optional(),
 				subject_type: z.enum(["public", "pairwise"]).optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
@@ -248,6 +250,8 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
+				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+				dpop_bound_access_tokens: z.boolean().optional(),
 			}),
 			metadata: {
 				openapi: {
@@ -510,6 +514,8 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 						.optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
+					// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+					dpop_bound_access_tokens: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			}),

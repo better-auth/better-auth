@@ -36,4 +36,26 @@ describe("resource server challenge", () => {
 			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/calendar", Bearer resource_metadata="https://files.example.com/.well-known/oauth-protected-resource"',
 		);
 	});
+
+	it("emits RFC 9449 DPoP challenges for invalid DPoP proofs", () => {
+		try {
+			raiseResourceServerChallenge(
+				new APIError("UNAUTHORIZED", {
+					message: "DPoP proof header is required",
+					error: "invalid_dpop_proof",
+					error_description: "DPoP proof header is required",
+				}),
+				"https://api.example.com/mcp/tools",
+				{ dpopSigningAlgorithms: ["ES256"] },
+			);
+		} catch (error) {
+			const apiError = error as APIError;
+			const headers = new Headers(apiError.headers);
+			expect(headers.get("WWW-Authenticate")).toBe(
+				'DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", algs="ES256"',
+			);
+			return;
+		}
+		throw new Error("expected challenge");
+	});
 });

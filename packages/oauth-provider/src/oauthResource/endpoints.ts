@@ -113,6 +113,7 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		signingKeyId: input.signingKeyId ?? null,
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
+		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
 		policyVersion: 1,
 		metadata: input.metadata ?? null,
@@ -232,6 +233,7 @@ export async function updateResourceEndpoint(
 		"signingKeyId",
 		"allowedScopes",
 		"customClaims",
+		"dpopBoundAccessTokensRequired",
 		"disabled",
 		"metadata",
 	];

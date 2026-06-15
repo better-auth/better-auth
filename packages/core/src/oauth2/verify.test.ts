@@ -10,7 +10,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { verifyAccessToken } from "./verify";
+import { verifyBearerToken } from "./verify";
 
 const issuer = "https://auth.example.com";
 const audience = "https://api.example.com/v1";
@@ -21,7 +21,7 @@ const mockedFetch = vi.fn() as unknown as typeof fetch &
 
 let keyCounter = 0;
 
-describe("verifyAccessToken", () => {
+describe("verifyBearerToken", () => {
 	const originalFetch = globalThis.fetch;
 
 	beforeAll(() => {
@@ -123,7 +123,7 @@ describe("verifyAccessToken", () => {
 		mockJWKSResponse(publicJWK);
 
 		await expectUnauthorized(
-			verifyAccessToken(token, {
+			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
@@ -147,7 +147,7 @@ describe("verifyAccessToken", () => {
 		mockJWKSResponse(publicJWKWithMatchingKid);
 
 		await expectUnauthorized(
-			verifyAccessToken(token, {
+			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
@@ -167,7 +167,7 @@ describe("verifyAccessToken", () => {
 		mockJWKSResponse(unrelatedKey.publicJWK);
 
 		await expectUnauthorized(
-			verifyAccessToken(token, {
+			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
@@ -183,7 +183,7 @@ describe("verifyAccessToken", () => {
 		mockJWKSResponse(publicJWK);
 
 		await expect(
-			verifyAccessToken(token, {
+			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
@@ -205,7 +205,7 @@ describe("verifyAccessToken", () => {
 		mockJWKSResponse(publicJWK);
 
 		await expectUnauthorized(
-			verifyAccessToken(token, {
+			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			}),
@@ -215,7 +215,7 @@ describe("verifyAccessToken", () => {
 
 	it("should not verify a token against a JWKS cached for a different issuer with a colliding kid", async () => {
 		vi.resetModules();
-		const { verifyAccessToken: verify } = await import("./verify");
+		const { verifyBearerToken: verify } = await import("./verify");
 
 		const sharedKid = "shared-kid";
 		const keyA = await createTestJWKS(sharedKid);
@@ -272,7 +272,7 @@ describe("verifyAccessToken", () => {
 
 	it("should refetch a rotated key set once the cache TTL has elapsed", async () => {
 		vi.resetModules();
-		const { verifyAccessToken: verify } = await import("./verify");
+		const { verifyBearerToken: verify } = await import("./verify");
 
 		const rotatingKid = "rotating-kid";
 		const oldKey = await createTestJWKS(rotatingKid);
@@ -564,7 +564,7 @@ describe("verifyAccessToken", () => {
 	it("should leave JWKS infrastructure failures as jose errors", async () => {
 		vi.resetModules();
 		const { errors: isolatedJoseErrors } = await import("jose");
-		const { verifyAccessToken: verifyAccessTokenWithIsolatedJwksCache } =
+		const { verifyBearerToken: verifyAccessTokenWithIsolatedJwksCache } =
 			await import("./verify");
 		const { privateKey, kid } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, kid);
@@ -598,7 +598,7 @@ describe("verifyAccessToken", () => {
 			mockIntrospection({ scope: "read" });
 
 			await expect(
-				verifyAccessToken("opaque-token-for-another-resource", {
+				verifyBearerToken("opaque-token-for-another-resource", {
 					verifyOptions: { issuer, audience },
 					remoteVerify,
 				}),
@@ -612,7 +612,7 @@ describe("verifyAccessToken", () => {
 			});
 
 			await expect(
-				verifyAccessToken("token-minted-for-other-api", {
+				verifyBearerToken("token-minted-for-other-api", {
 					verifyOptions: { issuer, audience },
 					remoteVerify,
 				}),
@@ -623,7 +623,7 @@ describe("verifyAccessToken", () => {
 			mockIntrospection({ aud: audience, scope: "read" });
 
 			await expect(
-				verifyAccessToken("valid-token", {
+				verifyBearerToken("valid-token", {
 					verifyOptions: { issuer, audience },
 					remoteVerify,
 				}),
@@ -634,7 +634,7 @@ describe("verifyAccessToken", () => {
 			mockIntrospection({ scope: "read" });
 
 			await expect(
-				verifyAccessToken("opaque-token", {
+				verifyBearerToken("opaque-token", {
 					verifyOptions: { issuer, audience },
 					remoteVerify: { ...remoteVerify, allowMissingAudience: true },
 				}),
@@ -648,7 +648,7 @@ describe("verifyAccessToken", () => {
 			});
 
 			await expect(
-				verifyAccessToken("token-minted-for-other-api", {
+				verifyBearerToken("token-minted-for-other-api", {
 					verifyOptions: { issuer, audience },
 					remoteVerify: { ...remoteVerify, allowMissingAudience: true },
 				}),
