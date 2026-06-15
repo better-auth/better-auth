@@ -220,6 +220,38 @@ describe("oauth popup server flow", async () => {
 		expect(body).toContain("provider_not_found");
 	});
 
+	it("keeps internal state keys out of additionalData when storing state", async () => {
+		const additionalData = encodeURIComponent(
+			JSON.stringify({
+				link: { email: "popup@test.com", userId: "some-user-id" },
+				tenant: "acme",
+			}),
+		);
+		const startRes = await customFetchImpl(
+			`${startUrl}&additionalData=${additionalData}`,
+			{ method: "GET", redirect: "manual" },
+		);
+		expect(startRes.headers.get("location")).toBeTruthy();
+
+		const ctx = await auth.$context;
+		const records = await ctx.adapter.findMany<{ value: string }>({
+			model: "verification",
+		});
+		const stored = records
+			.map((record) => {
+				try {
+					return JSON.parse(record.value) as Record<string, unknown>;
+				} catch {
+					return undefined;
+				}
+			})
+			.find((value) => value?.tenant === "acme");
+
+		expect(stored).toBeTruthy();
+		expect(stored?.tenant).toBe("acme");
+		expect(stored?.link).toBeUndefined();
+	});
+
 	it("rejects an untrusted callbackURL at start", async () => {
 		const res = await customFetchImpl(
 			`${popupOrigin}/api/auth/oauth-popup/start?provider=${providerId}&popupOrigin=${encodeURIComponent(popupOrigin)}&popupNonce=n1&callbackURL=${encodeURIComponent("https://evil.example.com")}`,
