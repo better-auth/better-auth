@@ -1,5 +1,6 @@
 import type { OnlineListener, OnlineManager } from "better-auth/client";
 import { kOnlineManager } from "better-auth/client";
+// @better-auth/expo/client requires expo-network even though the root server entry keeps Expo native peers optional.
 import * as Network from "expo-network";
 
 class ExpoOnlineManager implements OnlineManager {
