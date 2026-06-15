@@ -52,18 +52,13 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     better-auth @better-auth/expo
     ```
 
-    * And you need to install `expo-network` for network state detection.
+    * Install the Expo modules used by the client plugin.
 
     ```package-install
-    expo-network
+    expo-network expo-linking expo-web-browser expo-constants
     ```
 
-    * <small className="text-xs">(Optional)</small> If you're using the default Expo template, these dependencies are already included, so you can skip this step. Otherwise, if you plan to use our social providers (e.g. Google, Apple), your Expo app requires a few additional dependencies.
-
-    ```package-install
-    expo-linking expo-web-browser expo-constants
-
-    ```
+    If you're using the default Expo template, some of these dependencies may already be included.
   </Step>
 
   <Step>

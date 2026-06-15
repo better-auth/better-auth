@@ -1,5 +1,6 @@
 import type { OnlineListener, OnlineManager } from "better-auth/client";
 import { kOnlineManager } from "better-auth/client";
+import * as Network from "expo-network";
 
 class ExpoOnlineManager implements OnlineManager {
 	listeners = new Set<OnlineListener>();
@@ -20,17 +21,15 @@ class ExpoOnlineManager implements OnlineManager {
 	}
 
 	setup() {
-		import("expo-network")
-			.then(({ addNetworkStateListener }) => {
-				const subscription = addNetworkStateListener((state) => {
-					this.setOnline(!!state.isInternetReachable);
-				});
-				this.unsubscribe = () => subscription.remove();
-			})
-			.catch(() => {
-				// fallback to always online
-				this.setOnline(true);
+		try {
+			const subscription = Network.addNetworkStateListener((state) => {
+				this.setOnline(!!state.isInternetReachable);
 			});
+			this.unsubscribe = () => subscription.remove();
+		} catch {
+			// fallback to always online
+			this.setOnline(true);
+		}
 
 		return () => {
 			this.unsubscribe?.();

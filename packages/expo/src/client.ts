@@ -12,6 +12,7 @@ import {
 } from "better-auth/cookies";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
+import * as Browser from "expo-web-browser";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
@@ -63,7 +64,7 @@ interface ExpoClientOptions {
 	 * });
 	 * ```
 	 */
-	webBrowserOptions?: import("expo-web-browser").AuthSessionOpenOptions;
+	webBrowserOptions?: Browser.AuthSessionOpenOptions;
 }
 
 interface StoredCookie {
@@ -462,26 +463,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
 							const to = callbackURL;
 							const signInURL = context.data?.url;
-							let Browser: typeof import("expo-web-browser") | undefined =
-								undefined;
-							try {
-								Browser = await import("expo-web-browser");
-							} catch {
-								try {
-									Browser = require("expo-web-browser");
-								} catch (error) {
-									throw new Error(
-										'"expo-web-browser" is not installed as a dependency!',
-										{
-											cause: error,
-										},
-									);
-								}
-							}
 
 							if (Platform.OS === "android") {
 								try {
-									Browser!.dismissAuthSession();
+									Browser.dismissAuthSession();
 								} catch {}
 							}
 
@@ -497,7 +482,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								params.append("oauthState", oauthStateValue);
 							}
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
-							const result = await Browser!.openAuthSessionAsync(
+							const result = await Browser.openAuthSessionAsync(
 								proxyURL,
 								to,
 								opts?.webBrowserOptions,

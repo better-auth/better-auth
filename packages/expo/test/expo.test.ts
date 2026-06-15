@@ -18,6 +18,14 @@ vi.mock("expo-web-browser", async () => {
 	};
 });
 
+vi.mock("expo-network", async () => {
+	return {
+		addNetworkStateListener: vi.fn(() => ({
+			remove: vi.fn(),
+		})),
+	};
+});
+
 vi.mock("react-native", async () => {
 	return {
 		AppState: {
@@ -1466,6 +1474,21 @@ describe("ExpoFocusManager duplicate notification prevention", () => {
 });
 
 describe("ExpoOnlineManager duplicate notification prevention", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10028
+	 */
+	it("should subscribe to expo-network without async module loading", async () => {
+		const expoNetwork = await import("expo-network");
+		const { setupExpoOnlineManager } = await import("../src/online-manager");
+		const onlineManager = setupExpoOnlineManager();
+
+		vi.mocked(expoNetwork.addNetworkStateListener).mockClear();
+		const cleanup = onlineManager.setup();
+
+		expect(expoNetwork.addNetworkStateListener).toHaveBeenCalledTimes(1);
+		cleanup();
+	});
+
 	it("should not notify listeners when setOnline is called with the same value", async () => {
 		const { setupExpoOnlineManager } = await import("../src/online-manager");
 		const onlineManager = setupExpoOnlineManager();
