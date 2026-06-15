@@ -5,6 +5,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { clientAllowsGrant } from "./client-authentication";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { resolveResourcePolicy } from "./resources";
@@ -22,9 +23,7 @@ import type {
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema } from "./types/zod";
-
 import {
-	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,

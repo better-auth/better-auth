@@ -7,6 +7,11 @@ import {
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
+import {
+	destructureCredentials,
+	extractClientCredentials,
+	validateClientCredentials,
+} from "./client-authentication";
 import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
 import type {
@@ -15,13 +20,7 @@ import type {
 	OAuthRefreshToken,
 	Scope,
 } from "./types";
-import {
-	destructureCredentials,
-	extractClientCredentials,
-	getJwtPlugin,
-	getStoredToken,
-	validateClientCredentials,
-} from "./utils";
+import { getJwtPlugin, getStoredToken } from "./utils";
 
 /**
  * IMPORTANT NOTES:
