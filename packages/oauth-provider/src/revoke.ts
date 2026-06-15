@@ -314,7 +314,7 @@ export async function revokeEndpoint(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
 		authMethod,
 	} = destructureCredentials(credentials);
 
@@ -343,7 +343,7 @@ export async function revokeEndpoint(
 		client_id,
 		client_secret,
 		undefined,
-		preVerifiedClient,
+		preVerified,
 		undefined,
 		authMethod,
 	);
