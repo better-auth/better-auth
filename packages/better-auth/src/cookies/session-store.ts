@@ -92,9 +92,11 @@ function chunkCookie(
 	}
 
 	if (chunkCount > MAX_COOKIE_CHUNKS) {
-		throw new BetterAuthError(
-			`${storeName} cookie requires ${chunkCount} chunks, exceeding the ${MAX_COOKIE_CHUNKS} chunk limit. Reduce the cached payload or use a database session.`,
+		// Skip the cache and fall back to the DB. The caller still expires stale chunks.
+		logger.warn(
+			`${storeName} cookie is too large to store even after chunking, so the cache was skipped. Reduce the cached data or use a database session.`,
 		);
+		return [];
 	}
 
 	const cookies: Cookie[] = [];
