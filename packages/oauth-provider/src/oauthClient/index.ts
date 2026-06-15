@@ -583,6 +583,7 @@ export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 				client_id: z.string(),
 			}),
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Rotates a confidential client's secret",
 				},

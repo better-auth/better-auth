@@ -17,10 +17,12 @@ import { isAPIError } from "../utils/is-api-error";
  * caching a response body. Credential-bearing responses (access/refresh tokens,
  * ID tokens, client secrets, device codes) must carry them.
  *
- * Set `metadata: { noStore: true }` on an endpoint to apply these to every
- * response it produces, success and thrown error alike (see
- * {@link createAuthEndpoint}). Spread them into a hand-built `Response` or
- * `APIError`'s headers for the rare endpoint that constructs its own response.
+ * Set `metadata: { noStore: true }` on an endpoint and {@link createAuthEndpoint}
+ * applies these to the responses its handler produces: the success body and any
+ * error the handler throws. A request rejected by schema or media-type
+ * validation before the handler runs is not covered, and carries no credentials
+ * to protect. Spread them into a hand-built `Response` or `APIError`'s headers
+ * for the rare endpoint that constructs its own response.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
  */
@@ -120,8 +122,10 @@ export function createAuthEndpoint<
 
 	// Endpoints that return credentials declare `metadata: { noStore: true }`.
 	// Emit the no-store headers at the boundary, before the handler runs, so they
-	// land on every response: a success harvests `responseHeaders`, and a thrown
-	// error carries the same headers through `attachResponseHeadersToAPIError`.
+	// land on every response the handler produces: a success harvests
+	// `responseHeaders`, and a thrown error carries the same headers through
+	// `attachResponseHeadersToAPIError`. Validation that rejects the request
+	// before the handler runs is not covered (and returns no credentials).
 	const noStore =
 		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
 		true;
