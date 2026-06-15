@@ -382,7 +382,7 @@ async function createRefreshToken(
 	// with the winner's still-in-flight inserts. Tracked for a follow-up
 	// minor once the adapter contract exposes opt-in transactional
 	// rotation.
-	const won = await ctx.context.adapter.update<{ id: string }>({
+	const updated = await ctx.context.adapter.updateMany({
 		model: "oauthRefreshToken",
 		where: [
 			{ field: "id", value: originalRefresh.id },
@@ -393,7 +393,7 @@ async function createRefreshToken(
 		},
 	});
 
-	if (!won) {
+	if (updated !== 1) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",

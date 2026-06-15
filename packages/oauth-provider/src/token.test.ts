@@ -11,7 +11,7 @@ import {
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope, VerificationValue } from "./types";
@@ -661,6 +661,57 @@ describe("oauth token - refresh_token", async () => {
 
 		// Always expect a new refresh token
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
+	});
+
+	it("rotates refresh tokens without compound adapter.update", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const updateSpy = vi
+			.spyOn(context.adapter, "update")
+			.mockImplementation((async (data: Parameters<typeof originalUpdate>[0]) => {
+				if (data.model === "oauthRefreshToken" && data.where.length > 1) {
+					throw new Error("compound oauthRefreshToken update is not portable");
+				}
+				return originalUpdate(data);
+			}) as typeof context.adapter.update);
+
+		try {
+			const { body, headers } = createRefreshAccessTokenRequest({
+				refreshToken: tokens!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+			const newTokens = await client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+
+			expect(newTokens.error).toBeNull();
+			expect(newTokens.data?.access_token).toBeDefined();
+			expect(newTokens.data?.refresh_token).toBeDefined();
+			expect(
+				updateSpy.mock.calls.some(
+					([data]) => data.model === "oauthRefreshToken",
+				),
+			).toBe(false);
+		} finally {
+			updateSpy.mockRestore();
+		}
 	});
 
 	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({

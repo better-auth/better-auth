@@ -176,7 +176,7 @@ async function revokeRefreshToken(
 	// Atomic compare-and-swap. If a concurrent rotation already revoked
 	// (and re-minted) this row, fail closed and tear down the whole family
 	// so the rotation's offspring cannot be used either.
-	const won = await ctx.context.adapter.update<{ id: string }>({
+	const updated = await ctx.context.adapter.updateMany({
 		model: "oauthRefreshToken",
 		where: [
 			{
@@ -193,7 +193,7 @@ async function revokeRefreshToken(
 			revoked: new Date(iat * 1000),
 		},
 	});
-	if (!won) {
+	if (updated !== 1) {
 		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
