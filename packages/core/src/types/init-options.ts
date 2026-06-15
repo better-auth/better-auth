@@ -182,9 +182,7 @@ export type DynamicBaseURLConfig = {
 /**
  * Resolves the base URL for the current request.
  */
-export type BaseURLResolver = (
-	request: Request,
-) => Awaitable<string | URL>;
+export type BaseURLResolver = (request: Request) => Awaitable<string | URL>;
 
 /**
  * Base URL configuration.

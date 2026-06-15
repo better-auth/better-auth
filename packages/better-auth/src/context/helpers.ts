@@ -223,7 +223,11 @@ function createBaseURLResolverRequest(
 			"Could not determine host from request headers. Pass a Request or headers with a host header.",
 		);
 	}
-	const protocol = getProtocolFromSource(source, undefined, trustedProxyHeaders);
+	const protocol = getProtocolFromSource(
+		source,
+		undefined,
+		trustedProxyHeaders,
+	);
 	return new Request(`${protocol}://${host}`, { headers: source });
 }
 

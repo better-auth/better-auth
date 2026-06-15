@@ -668,6 +668,47 @@ describe("auth with function baseURL", () => {
 		});
 		expect(cookieDomain).toBe("auth.example2.com");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8478
+	 */
+	test("should expose resolved baseURL inside database hook context", async () => {
+		let hookBaseURL: string | undefined;
+		const { client } = await getTestInstance(
+			{
+				baseURL: (request: Request) => {
+					const host = request.headers.get("x-forwarded-host") || "default.com";
+					return `https://${host}`;
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							after: async (_user, ctx) => {
+								hookBaseURL = ctx?.context.baseURL;
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		await client.signUp.email(
+			{
+				email: "hook-context@example.com",
+				password: "password123",
+				name: "Hook Context",
+			},
+			{
+				headers: {
+					"x-forwarded-host": "tenant-hook.example.com",
+					"x-forwarded-proto": "https",
+				},
+			},
+		);
+
+		expect(hookBaseURL).toBe("https://tenant-hook.example.com/api/auth");
+	});
 });
 
 /**
@@ -716,11 +757,16 @@ describe("auth with function baseURL (behavioral)", () => {
 	});
 
 	test("handler should throw when function throws", async () => {
-		const { auth } = await getTestInstance({
-			baseURL: () => {
-				throw new Error("DB connection failed");
+		const { auth } = await getTestInstance(
+			{
+				baseURL: () => {
+					throw new Error("DB connection failed");
+				},
 			},
-		});
+			{
+				disableTestUser: true,
+			},
+		);
 
 		await expect(
 			auth.handler(
@@ -732,9 +778,14 @@ describe("auth with function baseURL (behavioral)", () => {
 	});
 
 	test("handler should throw when function returns empty", async () => {
-		const { auth } = await getTestInstance({
-			baseURL: () => "",
-		});
+		const { auth } = await getTestInstance(
+			{
+				baseURL: () => "",
+			},
+			{
+				disableTestUser: true,
+			},
+		);
 
 		await expect(
 			auth.handler(
