@@ -30,6 +30,10 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
+	Object.keys(stateDataSchema.shape),
+);
+
 export type StateErrorCode =
 	| "state_generation_error"
 	| "state_not_found"
