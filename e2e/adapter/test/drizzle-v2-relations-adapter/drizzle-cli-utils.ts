@@ -5,7 +5,7 @@ let cachedDrizzleVersion: { kit?: string; orm?: string } | null = null;
 export const getDrizzleVersion = async (beta: boolean = false) => {
 	if (cachedDrizzleVersion) return cachedDrizzleVersion;
 	const version = execSync(
-		`npx drizzle-kit${beta ? "@1.0.0-beta.8-734e789" : ""} --version`,
+		`npx drizzle-kit${beta ? "@1.0.0-beta.11-05230d9" : ""} --version`,
 		{
 			cwd: import.meta.dirname,
 			stdio: ["ignore", "pipe", "pipe"],

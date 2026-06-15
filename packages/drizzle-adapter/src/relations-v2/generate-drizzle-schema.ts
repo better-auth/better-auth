@@ -403,10 +403,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						field: fkFieldName,
 					});
 
-					// Apply pluralization logic
 					let relationKey = otherModelName;
 					if (!adapterConfig?.usePlural) {
-						relationKey = `${otherModelName}s`;
+						relationKey = otherModelName.endsWith("s")
+							? otherModelName
+							: `${otherModelName}s`;
 					}
 
 					modelRelations.push({
@@ -493,8 +494,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	let formattedCode = code;
 	try {
-		// Dynamically import prettier to avoid bringing CJS shims into globals by default.
-		// Use a runtime import helper so TypeScript doesn't require `prettier` types at compile time.
+		// Dynamically import prettier to avoid bringing CJS shims into globals.
+		// TypeScript's static import() would require prettier types at compile time,
+		// so we use a runtime wrapper. This won't work under strict CSP environments,
+		// but prettier formatting is best-effort (failures fall back to unformatted).
 		const dynamicImport = new Function(
 			"moduleName",
 			"return import(moduleName);",
@@ -597,13 +600,6 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const _hasFkToId = Object.values(tables).some((table) =>
-			Object.values(table.fields).some(
-				(field) => field.references?.field === "id",
-			),
-		);
-		// handles the references field with useNumberId
-		// handles the references field and the primary key with useNumberId
 		const needsInteger =
 			hasNonBigintNumber || options.advanced?.database?.generateId === "serial";
 		if (needsInteger) {

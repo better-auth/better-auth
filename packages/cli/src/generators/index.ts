@@ -17,7 +17,10 @@ export const generateSchema = async (opts: {
 }) => {
 	const adapter = opts.adapter;
 
-	// use the custom adapter's createSchema method if it exists
+	// Adapter-provided createSchema takes priority over built-in generators.
+	// This allows adapters that share an id (e.g. the relations-v2 drizzle
+	// adapter uses id "drizzle") to override the built-in schema generator
+	// with their own version.
 	if (adapter.createSchema) {
 		return adapter
 			.createSchema(opts.options, opts.file)
@@ -30,7 +33,6 @@ export const generateSchema = async (opts: {
 
 	const generator = adapters[adapter.id as keyof typeof adapters] ?? null;
 	if (generator) {
-		// generator from the built-in list above
 		return await generator(opts);
 	}
 

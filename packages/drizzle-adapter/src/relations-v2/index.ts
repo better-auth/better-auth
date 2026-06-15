@@ -35,6 +35,72 @@ export interface DB {
 	[key: string]: any;
 }
 
+function escapeLikePattern(
+	value: string | number | boolean | string[] | number[] | Date | null,
+): string {
+	if (value == null) return "";
+	return String(value).replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/**
+ * Maps a single Where entry to a drizzle SQL expression.
+ * Shared by convertWhereClause across single / AND / OR branches.
+ */
+function applyWhereOperator(
+	column: any,
+	w: Where,
+	fieldLabel: string,
+): SQL<unknown> {
+	if (w.operator === "in") {
+		if (!Array.isArray(w.value)) {
+			throw new BetterAuthError(
+				`The value for the field "${fieldLabel}" must be an array when using the "in" operator.`,
+			);
+		}
+		return inArray(column, w.value);
+	}
+	if (w.operator === "not_in") {
+		if (!Array.isArray(w.value)) {
+			throw new BetterAuthError(
+				`The value for the field "${fieldLabel}" must be an array when using the "not_in" operator.`,
+			);
+		}
+		return notInArray(column, w.value);
+	}
+	if (w.operator === "contains") {
+		return like(column, `%${escapeLikePattern(w.value)}%`);
+	}
+	if (w.operator === "starts_with") {
+		return like(column, `${escapeLikePattern(w.value)}%`);
+	}
+	if (w.operator === "ends_with") {
+		return like(column, `%${escapeLikePattern(w.value)}`);
+	}
+	if (w.operator === "lt") {
+		return lt(column, w.value);
+	}
+	if (w.operator === "lte") {
+		return lte(column, w.value);
+	}
+	if (w.operator === "ne") {
+		if (w.value === null) {
+			return isNotNull(column);
+		}
+		return ne(column, w.value);
+	}
+	if (w.operator === "gt") {
+		return gt(column, w.value);
+	}
+	if (w.operator === "gte") {
+		return gte(column, w.value);
+	}
+	// eq operator (default)
+	if (w.value === null) {
+		return isNull(column);
+	}
+	return eq(column, w.value);
+}
+
 export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
@@ -165,78 +231,26 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return res[0];
 				}
 			};
-			function convertWhereClause(where: Where[], model: string) {
+			function resolveColumn(model: string, w: Where) {
 				const schemaModel = getSchema(model);
+				const field = getFieldName({ model, field: w.field });
+				if (!schemaModel[field]) {
+					throw new BetterAuthError(
+						`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+					);
+				}
+				return { column: schemaModel[field], field };
+			}
+
+			function convertWhereClause(where: Where[], model: string) {
 				if (!where) return [];
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return [];
 					}
-					const field = getFieldName({ model, field: w.field });
-					if (!schemaModel[field]) {
-						throw new BetterAuthError(
-							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-						);
-					}
-					if (w.operator === "in") {
-						if (!Array.isArray(w.value)) {
-							throw new BetterAuthError(
-								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-							);
-						}
-						return [inArray(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "not_in") {
-						if (!Array.isArray(w.value)) {
-							throw new BetterAuthError(
-								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
-							);
-						}
-						return [notInArray(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "contains") {
-						return [like(schemaModel[field], `%${w.value}%`)];
-					}
-
-					if (w.operator === "starts_with") {
-						return [like(schemaModel[field], `${w.value}%`)];
-					}
-
-					if (w.operator === "ends_with") {
-						return [like(schemaModel[field], `%${w.value}`)];
-					}
-
-					if (w.operator === "lt") {
-						return [lt(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "lte") {
-						return [lte(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "ne") {
-						if (w.value === null) {
-							return [isNotNull(schemaModel[field])];
-						}
-						return [ne(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "gt") {
-						return [gt(schemaModel[field], w.value)];
-					}
-
-					if (w.operator === "gte") {
-						return [gte(schemaModel[field], w.value)];
-					}
-
-					// eq operator
-					if (w.value === null) {
-						return [isNull(schemaModel[field])];
-					}
-					return [eq(schemaModel[field], w.value)];
+					const { column } = resolveColumn(model, w);
+					return [applyWhereOperator(column, w, w.field)];
 				}
 				const andGroup = where.filter(
 					(w) => w.connector === "AND" || !w.connector,
@@ -245,106 +259,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						if (w.operator === "in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-								);
-							}
-							return inArray(schemaModel[field], w.value);
-						}
-						if (w.operator === "not_in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
-								);
-							}
-							return notInArray(schemaModel[field], w.value);
-						}
-						if (w.operator === "contains") {
-							return like(schemaModel[field], `%${w.value}%`);
-						}
-						if (w.operator === "starts_with") {
-							return like(schemaModel[field], `${w.value}%`);
-						}
-						if (w.operator === "ends_with") {
-							return like(schemaModel[field], `%${w.value}`);
-						}
-						if (w.operator === "lt") {
-							return lt(schemaModel[field], w.value);
-						}
-						if (w.operator === "lte") {
-							return lte(schemaModel[field], w.value);
-						}
-						if (w.operator === "gt") {
-							return gt(schemaModel[field], w.value);
-						}
-						if (w.operator === "gte") {
-							return gte(schemaModel[field], w.value);
-						}
-						if (w.operator === "ne") {
-							if (w.value === null) {
-								return isNotNull(schemaModel[field]);
-							}
-							return ne(schemaModel[field], w.value);
-						}
-						if (w.value === null) {
-							return isNull(schemaModel[field]);
-						}
-						return eq(schemaModel[field], w.value);
+						const { column } = resolveColumn(model, w);
+						return applyWhereOperator(column, w, w.field);
 					}),
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						if (w.operator === "in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
-								);
-							}
-							return inArray(schemaModel[field], w.value);
-						}
-						if (w.operator === "not_in") {
-							if (!Array.isArray(w.value)) {
-								throw new BetterAuthError(
-									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
-								);
-							}
-							return notInArray(schemaModel[field], w.value);
-						}
-						if (w.operator === "contains") {
-							return like(schemaModel[field], `%${w.value}%`);
-						}
-						if (w.operator === "starts_with") {
-							return like(schemaModel[field], `${w.value}%`);
-						}
-						if (w.operator === "ends_with") {
-							return like(schemaModel[field], `%${w.value}`);
-						}
-						if (w.operator === "lt") {
-							return lt(schemaModel[field], w.value);
-						}
-						if (w.operator === "lte") {
-							return lte(schemaModel[field], w.value);
-						}
-						if (w.operator === "gt") {
-							return gt(schemaModel[field], w.value);
-						}
-						if (w.operator === "gte") {
-							return gte(schemaModel[field], w.value);
-						}
-						if (w.operator === "ne") {
-							if (w.value === null) {
-								return isNotNull(schemaModel[field]);
-							}
-							return ne(schemaModel[field], w.value);
-						}
-						if (w.value === null) {
-							return isNull(schemaModel[field]);
-						}
-						return eq(schemaModel[field], w.value);
+						const { column } = resolveColumn(model, w);
+						return applyWhereOperator(column, w, w.field);
 					}),
 				);
 
@@ -386,11 +308,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						columnObj.notIn = w.value;
 					} else if (w.operator === "contains") {
-						columnObj.like = `%${w.value}%`;
+						columnObj.like = `%${escapeLikePattern(w.value)}%`;
 					} else if (w.operator === "starts_with") {
-						columnObj.like = `${w.value}%`;
+						columnObj.like = `${escapeLikePattern(w.value)}%`;
 					} else if (w.operator === "ends_with") {
-						columnObj.like = `%${w.value}`;
+						columnObj.like = `%${escapeLikePattern(w.value)}`;
 					} else if (w.operator === "lt") {
 						columnObj.lt = w.value;
 					} else if (w.operator === "lte") {
