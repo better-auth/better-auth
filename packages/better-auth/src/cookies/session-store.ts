@@ -4,14 +4,41 @@ import type { InternalLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
+import { serializeCookie } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
-import {
-	getMaxCookieValueSize,
-	MAX_COOKIE_CHUNKS,
-	MAX_COOKIE_SIZE,
-	parseCookies,
-} from "./cookie-utils";
+import { parseCookies } from "./cookie-utils";
+
+/**
+ * Per-cookie byte ceiling.
+ * Safari's ~4093 floor is the lowest among browsers.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-6.1
+ */
+const MAX_COOKIE_SIZE = 4093;
+
+/**
+ * Max chunks per cookie.
+ * A larger value does not belong in a cookie.
+ */
+const MAX_COOKIE_CHUNKS = 100;
+
+/**
+ * Largest value that keeps the serialized cookie within {@link MAX_COOKIE_SIZE}.
+ * Overhead is measured with the real `serializeCookie` writer so it cannot
+ * drift from the wire. Assumes a wire-safe (e.g. base64url) value.
+ */
+function getMaxCookieValueSize(name: string, options: CookieOptions): number {
+	// serializeCookie mutates options (e.g. forces `secure`), so copy them.
+	const overhead = serializeCookie(name, "", { ...options }).length;
+	const size = MAX_COOKIE_SIZE - overhead;
+	if (size <= 0) {
+		throw new BetterAuthError(
+			`Cookie "${name}" attributes leave no room for a value.`,
+		);
+	}
+	return size;
+}
 
 interface Cookie {
 	name: string;
