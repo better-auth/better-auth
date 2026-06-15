@@ -63,6 +63,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
+				noStore: true,
 				SERVER_ONLY: true,
 				openapi: {
 					description: "Register an OAuth2 application",
@@ -254,6 +255,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				dpop_bound_access_tokens: z.boolean().optional(),
 			}),
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Register an OAuth2 application",
 					responses: {

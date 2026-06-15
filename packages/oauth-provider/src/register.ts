@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
-import { APIError, getSessionFromCtx } from "better-auth/api";
+import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import {
@@ -22,11 +22,7 @@ import type {
 	OAuthClient,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import {
-	OAUTH_NO_STORE_HEADERS,
-	parseClientMetadata,
-	storeClientSecret,
-} from "./utils";
+import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -131,7 +127,7 @@ export async function registerEndpoint(
 			},
 			{
 				"WWW-Authenticate": "Bearer",
-				...OAUTH_NO_STORE_HEADERS,
+				...NO_STORE_HEADERS,
 			},
 		);
 	}
@@ -661,14 +657,10 @@ export async function createOAuthClientEndpoint(
 			resources;
 	}
 	// A newly created client is a 201 on every path (DCR and admin alike). The
-	// response carries a client_secret, so it must not be cached (RFC 7591
-	// §3.2.1). setStatus/setHeader are the reliable way to set these here: the
-	// json `status`/`headers` options are dropped on the dispatched (asResponse:
-	// false) path that serves HTTP requests.
+	// response carries a client_secret; every endpoint that reaches here declares
+	// `metadata: { noStore: true }`, so the no-store headers are applied at the
+	// boundary (RFC 7591 §3.2.1). Only the created status is set here.
 	ctx.setStatus(201);
-	for (const [name, value] of Object.entries(OAUTH_NO_STORE_HEADERS)) {
-		ctx.setHeader(name, value);
-	}
 	return ctx.json(responseBody);
 }
 
