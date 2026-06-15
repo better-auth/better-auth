@@ -3,6 +3,7 @@ import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeCookie } from "better-call";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -1515,6 +1516,175 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk session cache when attributes push the line over the limit", async () => {
+		// Long prefix shrinks the per-cookie value budget; the value alone
+		// lands under 4093 (so the old value-only gate skipped chunking) yet
+		// the serialized line overflows once name + attributes are added.
+		const longPrefix = "better-auth-" + "x".repeat(80);
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			user: {
+				additionalFields: {
+					entraProfile: { type: "string", defaultValue: "" },
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		let rawSetCookie = "";
+		await client.signUp.email(
+			{
+				name: "Entra User",
+				email: "entra-chunk@example.com",
+				password: "password123",
+				entraProfile: "x".repeat(2400),
+			} as any,
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+				},
+			},
+		);
+
+		const sessionDataCookies = [...parseSetCookieHeader(rawSetCookie)].filter(
+			([name]) => name.includes("session_data"),
+		);
+
+		// Every emitted session_data cookie must fit the per-cookie limit.
+		for (const [name, attr] of sessionDataCookies) {
+			const line = serializeCookie(name, attr.value, toCookieOptions(attr));
+			expect(
+				line.length,
+				`session_data cookie "${name}" serialized to ${line.length} bytes`,
+			).toBeLessThanOrEqual(4093);
+		}
+
+		// The value was split rather than emitted as one oversized cookie.
+		const isChunked = sessionDataCookies.some(([name]) =>
+			/session_data\.\d+$/.test(name),
+		);
+		expect(isChunked).toBe(true);
+
+		// The chunks reassemble back into a readable cache.
+		const headers = new Headers();
+		for (const [name, attr] of sessionDataCookies) {
+			headers.append("cookie", `${name}=${attr.value}`);
+		}
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookiePrefix: longPrefix,
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("entra-chunk@example.com");
+	});
+
+	it("skips the session cache and warns when it is too large to chunk", async () => {
+		const warn = vi.fn();
+		const { client, auth, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warn(message);
+				},
+			},
+			user: {
+				additionalFields: { blob: { type: "string", defaultValue: "" } },
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		// Far beyond the chunk-count cap, so chunking cannot make it fit.
+		const headers = new Headers();
+		let rawSetCookie = "";
+		const res = await client.signUp.email(
+			{
+				name: "Big",
+				email: "too-big@example.com",
+				password: "password123",
+				blob: "x".repeat(420_000),
+			} as any,
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		// Sign-up still succeeds: the optional cache failing does not break auth.
+		expect(res.data).not.toBeNull();
+
+		const names = [...parseSetCookieHeader(rawSetCookie)].map(([name]) => name);
+		// The oversized cache cookie is skipped entirely, ...
+		expect(names.some((name) => name.includes("session_data"))).toBe(false);
+		// ... but the session token cookie is still set.
+		expect(names.some((name) => name.includes("session_token"))).toBe(true);
+
+		// The user is told why the cache was skipped.
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("too large to store even after chunking"),
+		);
+
+		// With no cache cookie, the session still resolves from the token via the
+		// database, so auth keeps working.
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("too-big@example.com");
+	});
+
+	it("skips the session cache and warns when the prefix alone overflows", async () => {
+		const warn = vi.fn();
+		// A prefix this long leaves no room for any value, even a single chunk.
+		// The store must skip the cache instead of throwing on the request.
+		const longPrefix = "better-auth-" + "x".repeat(4100);
+		const { client, auth, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warn(message);
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		const headers = new Headers();
+		let rawSetCookie = "";
+		const res = await client.signUp.email(
+			{
+				name: "No Room",
+				email: "no-room@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		// Sign-up still succeeds: the optional cache failing does not break auth.
+		expect(res.data).not.toBeNull();
+
+		const names = [...parseSetCookieHeader(rawSetCookie)].map(([name]) => name);
+		expect(names.some((name) => name.includes("session_data"))).toBe(false);
+		expect(names.some((name) => name.includes("session_token"))).toBe(true);
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("too large to store even after chunking"),
+		);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("no-room@example.com");
 	});
 });
 
