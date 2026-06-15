@@ -270,6 +270,77 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
+	describe("consumeOne affected-row count", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const verificationTable = {
+			id: { name: "id" },
+			identifier: { name: "identifier" },
+			value: { name: "value" },
+			expiresAt: { name: "expiresAt" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+		const verificationRow = {
+			id: "verification-1",
+			identifier: "reset-password:token",
+			value: "user-1",
+			expiresAt: new Date(Date.now() + 60_000),
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		function createMysqlConsumeDb(driverResult: unknown) {
+			const selectLimit = vi.fn().mockResolvedValue([verificationRow]);
+			const selectFor = vi.fn().mockReturnValue({ limit: selectLimit });
+			const selectWhere = vi.fn().mockReturnValue({ for: selectFor });
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const execute = vi.fn().mockResolvedValue(driverResult);
+			const deleteWhere = vi.fn().mockReturnValue({ execute });
+			const tx = {
+				select: vi.fn().mockReturnValue({ from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+			};
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as Parameters<typeof drizzleAdapter>[0];
+			return { db };
+		}
+
+		it("returns the consumed row for MySQL result-header arrays", async () => {
+			const { db } = createMysqlConsumeDb([{ affectedRows: 1 }]);
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toEqual(verificationRow);
+			expect(db.transaction).toHaveBeenCalledOnce();
+		});
+
+		it("returns null when the MySQL delete does not affect a row", async () => {
+			const { db } = createMysqlConsumeDb([{ affectedRows: 0 }]);
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toBeNull();
+		});
+	});
+
 	describe("incrementOne", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
 		// `attempts` is a plain numeric column the increment targets; the rest

@@ -255,15 +255,14 @@ export const createTestSuite = <
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (
-				overrideOptions?: BetterAuthOptions | undefined,
+				resolvedOptions?: BetterAuthOptions | undefined,
 			) => {
-				const options = deepmerge(
+				const options =
+					resolvedOptions ??
 					deepmerge(
-						helpers.getBetterAuthOptions(),
 						config?.defaultBetterAuthOptions || {},
-					),
-					overrideOptions || {},
-				);
+						helpers.getBetterAuthOptions(),
+					);
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
 					...(adapter.options?.adapterConfig || {}),
@@ -317,6 +316,22 @@ export const createTestSuite = <
 									adapter = await helpers.adapter();
 									const res = await adapter.updateMany(args);
 									return res as any;
+								},
+								consumeOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["consumeOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.consumeOne<T>(args);
+								},
+								incrementOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["incrementOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.incrementOne<T>(args);
 								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
@@ -625,9 +640,12 @@ export const createTestSuite = <
 					}),
 					getAuth: async () => {
 						adapter = await helpers.adapter();
+						const options = deepmerge(
+							config?.defaultBetterAuthOptions || {},
+							helpers.getBetterAuthOptions(),
+						);
 						const auth = betterAuth({
-							...helpers.getBetterAuthOptions(),
-							...(config?.defaultBetterAuthOptions || {}),
+							...options,
 							database: (options: BetterAuthOptions) => {
 								const adapter = wrapperAdapter(options);
 								return adapter;
