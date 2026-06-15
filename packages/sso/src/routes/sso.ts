@@ -1,18 +1,17 @@
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
-import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
 } from "better-auth";
 import {
+	authorizationCodeRequest,
 	createAuthorizationURL,
 	createPrivateKeyJwtClientAssertionGetter,
 	generateState,
+	getOAuth2Tokens,
 	HIDE_METADATA,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 	parseState,
-	validateAuthorizationCode,
-	validateToken,
 } from "better-auth";
 import {
 	APIError,
@@ -38,8 +37,10 @@ import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
+	fetchOIDCEndpoint,
 	mapDiscoveryErrorToAPIError,
-	validateSkipDiscoveryEndpoints,
+	validateOIDCEndpointUrls,
+	validateOIDCIdToken,
 } from "../oidc";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
@@ -485,7 +486,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			if (body.oidcConfig) {
 				try {
-					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+					validateOIDCEndpointUrls(body.oidcConfig, (url) =>
 						ctx.context.isTrustedOrigin(url),
 					);
 				} catch (error) {
@@ -1212,6 +1213,36 @@ const callbackSSOQuerySchema = z.object({
 	error_description: z.string().optional(),
 });
 
+function getStringErrorField(value: unknown, field: string) {
+	if (!value || typeof value !== "object") return;
+	const fieldValue = (value as Record<string, unknown>)[field];
+	return typeof fieldValue === "string" && fieldValue.length > 0
+		? fieldValue
+		: undefined;
+}
+
+function getOIDCErrorDescription(error: unknown, fallback: string): string {
+	const nestedError =
+		error && typeof error === "object"
+			? (error as Record<string, unknown>).error
+			: undefined;
+	const description =
+		getStringErrorField(nestedError, "error_description") ||
+		getStringErrorField(error, "error_description") ||
+		getStringErrorField(nestedError, "message") ||
+		getStringErrorField(error, "message") ||
+		getStringErrorField(error, "statusText") ||
+		getStringErrorField(nestedError, "error") ||
+		getStringErrorField(error, "error");
+	if (description) return description;
+	if (error && typeof error === "object") {
+		const status = (error as Record<string, unknown>).status;
+		if (typeof status === "number") return `HTTP ${status}`;
+		if (typeof status === "string" && status.length > 0) return status;
+	}
+	return fallback;
+}
+
 /**
  * Core OIDC callback handler logic, shared between the per-provider and
  * shared callback endpoints. Resolves the provider, exchanges the
@@ -1238,11 +1269,19 @@ async function handleOIDCCallback(
 	}
 	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
 		stateData;
+	const redirectOIDCError = (error: string, description: string): never => {
+		const baseURL = errorURL || callbackURL;
+		const params = new URLSearchParams({
+			error,
+			error_description: description,
+		});
+		const separator = baseURL.includes("?") ? "&" : "?";
+		throw ctx.redirect(`${baseURL}${separator}${params.toString()}`);
+	};
 	if (!code || error) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=${error}&error_description=${error_description}`,
+		redirectOIDCError(
+			error || "invalid_request",
+			error_description || (error ? error : "authorization_code_not_found"),
 		);
 	}
 	const provider = await resolveOIDCProvider(ctx, options, providerId);
@@ -1306,6 +1345,7 @@ async function handleOIDCCallback(
 		);
 	}
 
+	const tokenEndpoint = config.tokenEndpoint;
 	let tokenEndpointAuth: TokenEndpointAuth =
 		config.tokenEndpointAuthentication === "client_secret_post"
 			? { method: "client_secret_post" }
@@ -1374,27 +1414,51 @@ async function handleOIDCCallback(
 		tokenRequestOptions.clientSecret = config.clientSecret;
 	}
 
-	const tokenResponse = await validateAuthorizationCode({
-		code,
-		codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
-		redirectURI: getOIDCRedirectURI(
-			ctx.context.baseURL,
-			provider.providerId,
-			options,
-		),
-		options: tokenRequestOptions,
-		tokenEndpoint: config.tokenEndpoint,
-		tokenEndpointAuth,
-	}).catch((e) => {
-		ctx.context.logger.error("Error validating authorization code", e);
-		if (e instanceof BetterFetchError) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=${e.message}`,
+	const tokenResponse = await (async () => {
+		const { body, headers } = await authorizationCodeRequest({
+			code,
+			codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
+			redirectURI: getOIDCRedirectURI(
+				ctx.context.baseURL,
+				provider.providerId,
+				options,
+			),
+			options: tokenRequestOptions,
+			tokenEndpoint,
+			tokenEndpointAuth,
+		});
+		const { data, error } = await fetchOIDCEndpoint<object>(
+			"tokenEndpoint",
+			tokenEndpoint,
+			{
+				method: "POST",
+				body,
+				headers,
+			},
+			(url) => ctx.context.isTrustedOrigin(url),
+		);
+		if (error) {
+			redirectOIDCError(
+				"invalid_provider",
+				getOIDCErrorDescription(error, "token_response_error"),
 			);
 		}
-		return null;
+		if (!data) {
+			throw new Error("Token endpoint returned an empty response");
+		}
+		return getOAuth2Tokens(data);
+	})().catch((e) => {
+		if (isAPIError(e)) {
+			throw e;
+		}
+		ctx.context.logger.error("Error validating authorization code", e);
+		if (e instanceof DiscoveryError) {
+			redirectOIDCError("invalid_provider", e.message);
+		}
+		redirectOIDCError(
+			"invalid_provider",
+			getOIDCErrorDescription(e, "token_response_error"),
+		);
 	});
 	if (!tokenResponse) {
 		throw ctx.redirect(
@@ -1417,23 +1481,32 @@ async function handleOIDCCallback(
 	let rawProfile: Record<string, unknown> | undefined;
 
 	if (config.userInfoEndpoint) {
-		const userInfoResponse = await betterFetch<Record<string, unknown>>(
+		const userInfoResponse = await fetchOIDCEndpoint<Record<string, unknown>>(
+			"userInfoEndpoint",
 			config.userInfoEndpoint,
 			{
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
-				redirect: "error",
 			},
-		);
+			(url) => ctx.context.isTrustedOrigin(url),
+		).catch((e) => {
+			if (e instanceof DiscoveryError) {
+				redirectOIDCError("invalid_provider", e.message);
+			}
+			throw e;
+		});
 		if (userInfoResponse.error) {
-			throw ctx.redirect(
-				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
-					userInfoResponse.error.message
-				}`,
+			redirectOIDCError(
+				"invalid_provider",
+				userInfoResponse.error.message ||
+					userInfoResponse.error.statusText ||
+					"userinfo_response_error",
 			);
 		}
-		const rawUserInfo = userInfoResponse.data;
+		const rawUserInfo =
+			userInfoResponse.data ??
+			redirectOIDCError("invalid_provider", "userinfo_response_not_found");
 		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
@@ -1462,14 +1535,18 @@ async function handleOIDCCallback(
 				}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
 			);
 		}
-		const verified = await validateToken(
+		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
 			config.jwksEndpoint,
 			{
 				audience: config.clientId,
 				issuer: provider.issuer,
 			},
+			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((e) => {
+			if (e instanceof DiscoveryError) {
+				redirectOIDCError("invalid_provider", e.message);
+			}
 			ctx.context.logger.error(e);
 			return null;
 		});

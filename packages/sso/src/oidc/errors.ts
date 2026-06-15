@@ -16,6 +16,7 @@ import type { DiscoveryError } from "./types";
  * - discovery_not_found          → 400 BAD_REQUEST
  * - discovery_untrusted_origin   → 400 BAD_REQUEST
  * - discovery_private_host       → 400 BAD_REQUEST
+ * - oidc_endpoint_redirect       → 400 BAD_REQUEST
  * - discovery_invalid_json       → 400 BAD_REQUEST
  * - discovery_incomplete         → 400 BAD_REQUEST
  * - issuer_mismatch              → 400 BAD_REQUEST
@@ -59,6 +60,12 @@ export function mapDiscoveryErrorToAPIError(error: DiscoveryError): APIError {
 			});
 
 		case "discovery_private_host":
+			return new APIError("BAD_REQUEST", {
+				message: error.message,
+				code: error.code,
+			});
+
+		case "oidc_endpoint_redirect":
 			return new APIError("BAD_REQUEST", {
 				message: error.message,
 				code: error.code,

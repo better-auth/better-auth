@@ -256,6 +256,118 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should redirect with the token endpoint error description when code exchange fails", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "token-error.com",
+				providerId: "token-error-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const tokenErrorHandler = (tokenEndpointResponse: {
+			body: Record<string, unknown>;
+			statusCode: number;
+		}) => {
+			tokenEndpointResponse.body = {
+				error: "invalid_client",
+				error_description: "client rejected by issuer",
+			};
+			tokenEndpointResponse.statusCode = 401;
+		};
+		server.service.once("beforeResponse", tokenErrorHandler);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "token-error-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		try {
+			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
+			expect(redirectURL.searchParams.get("error_description")).toBe(
+				"client rejected by issuer",
+			);
+		} finally {
+			server.service.removeListener("beforeResponse", tokenErrorHandler);
+		}
+	});
+
+	it("should redirect with an encoded invalid request when callback has no code", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "missing-code.com",
+				providerId: "missing-code-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "missing-code-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		let callbackLocation: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		if (!callbackLocation) throw new Error("No callback location found");
+
+		const callbackWithoutCode = new URL(callbackLocation);
+		callbackWithoutCode.searchParams.delete("code");
+
+		let redirectLocation = "";
+		await betterFetch(callbackWithoutCode.toString(), {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		const redirectURL = new URL(redirectLocation, "http://localhost:3000");
+		expect(redirectURL.searchParams.get("error")).toBe("invalid_request");
+		expect(redirectURL.searchParams.get("error_description")).toBe(
+			"authorization_code_not_found",
+		);
+	});
+
 	it("should forward additionalParams to the SSO authorization URL", async () => {
 		const res = await authClient.signIn.sso({
 			providerId: "test",
