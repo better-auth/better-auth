@@ -84,33 +84,68 @@ function blankNonCode(src: string): string {
 	return out;
 }
 
-/** Count top-level `{ ... }` elements inside the array literal that begins at
- * `src[open]` (which must be `[`). Returns `null` if `where` is not an inline
- * array literal (e.g. a variable), where arity cannot be determined statically. */
-function arrayObjectArity(src: string, open: number): number {
+/** Count top-level elements in the array literal that begins at `src[open]`
+ * (which must be `[`), splitting on commas at the array's own nesting depth.
+ * `[{...}, condition]` reads as two clauses even when an element is an
+ * identifier or spread rather than an object literal. */
+function whereClauseCount(src: string, open: number): number {
 	let depth = 0;
-	let objects = 0;
+	let clauses = 0;
+	let segmentHasContent = false;
 	for (let i = open; i < src.length; i++) {
-		const c = src[i];
-		if (c === "[") depth++;
-		else if (c === "]") {
+		const c = src[i]!;
+		if (c === "[" || c === "(" || c === "{") {
+			depth++;
+			if (!(depth === 1 && c === "[")) segmentHasContent = true;
+		} else if (c === "]" || c === ")" || c === "}") {
 			depth--;
-			if (depth === 0) break;
-		} else if (c === "{" && depth === 1) {
-			objects++;
+			if (depth === 0) {
+				if (segmentHasContent) clauses++;
+				break;
+			}
+		} else if (c === "," && depth === 1) {
+			if (segmentHasContent) clauses++;
+			segmentHasContent = false;
+		} else if (!/\s/.test(c)) {
+			segmentHasContent = true;
 		}
 	}
-	return objects;
+	return clauses;
 }
 
-const callRe = /\b\w*[Aa]dapter\.update\s*(?:<[^>]*>)?\s*\(/g;
+// Matches any receiver ending in `adapter`/`Adapter` then `.update`, but not
+// `.updateMany` (the `\b` after `update` fails before `Many`). The optional
+// type-argument list and the opening paren are resolved separately so nested
+// generics like `update<Foo<Bar>>(` are handled.
+const callRe = /\b\w*[Aa]dapter\.update\b/g;
+
+/** From just past `.update`, skip whitespace and an optional balanced `<...>`
+ * type-argument list, and return the index of the call's `(`, or -1 if this
+ * `.update` is not a call. */
+function callParenIndex(src: string, afterUpdate: number): number {
+	let i = afterUpdate;
+	while (i < src.length && /\s/.test(src[i]!)) i++;
+	if (src[i] === "<") {
+		let angle = 0;
+		for (; i < src.length; i++) {
+			if (src[i] === "<") angle++;
+			else if (src[i] === ">" && --angle === 0) {
+				i++;
+				break;
+			}
+		}
+		while (i < src.length && /\s/.test(src[i]!)) i++;
+	}
+	return src[i] === "(" ? i : -1;
+}
 
 function findViolations(file: string): { line: number; arity: number }[] {
 	const raw = readFileSync(file, "utf8");
 	const code = blankNonCode(raw);
 	const violations: { line: number; arity: number }[] = [];
 	for (const match of code.matchAll(callRe)) {
-		const callStart = match.index! + match[0].length - 1; // at the `(`
+		const callStart = callParenIndex(code, match.index! + match[0].length);
+		if (callStart === -1) continue; // a `.update` reference, not a call
 		// Find the `where:` key directly inside the single argument object.
 		let depth = 0;
 		let whereArrayOpen = -1;
@@ -131,7 +166,7 @@ function findViolations(file: string): { line: number; arity: number }[] {
 			}
 		}
 		if (whereArrayOpen === -1) continue; // no inline `where` array literal
-		const arity = arrayObjectArity(code, whereArrayOpen);
+		const arity = whereClauseCount(code, whereArrayOpen);
 		if (arity >= 2) {
 			const line = raw.slice(0, match.index).split("\n").length;
 			violations.push({ line, arity });

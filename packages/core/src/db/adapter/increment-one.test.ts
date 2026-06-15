@@ -377,4 +377,35 @@ describe("createAdapterFactory incrementOne native path", () => {
 		expect(nativeCalls).toBe(1);
 		expect(result?.count).toBe(15);
 	});
+
+	it("throws when `set` resolves to empty after input transform", async () => {
+		const { adapter } = createMemoryAdapter(seed([{ key: "a", count: 0 }]));
+		let nativeCalls = 0;
+		const nativeAdapter: CustomAdapter = {
+			...adapter,
+			incrementOne: async <T>(_args: {
+				model: string;
+				where: CleanedWhere[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}) => {
+				nativeCalls += 1;
+				return null as T | null;
+			},
+		};
+		const factory = createTestAdapter(nativeAdapter);
+
+		// `bogus` is not a field of the model, so transformInput drops it: the set
+		// resolves to empty alongside the empty increment. The guard must fire
+		// before the adapter runs an empty UPDATE.
+		await expect(
+			factory.incrementOne({
+				model: counterModel,
+				where: [{ field: "key", value: "a" }],
+				increment: {},
+				set: { bogus: 1 },
+			}),
+		).rejects.toThrow();
+		expect(nativeCalls).toBe(0);
+	});
 });

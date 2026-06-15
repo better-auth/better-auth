@@ -1496,6 +1496,17 @@ export const createAdapterFactory =
 					} else {
 						set = unsafeSet;
 					}
+					// `transformInput` drops unknown-to-schema and `undefined` fields, so
+					// a `set` that was non-empty on input can resolve to nothing. Re-check
+					// after mapping so this never reaches the adapter as an empty UPDATE.
+					if (
+						Object.keys(increment).length === 0 &&
+						(!set || Object.keys(set).length === 0)
+					) {
+						throw new BetterAuthError(
+							"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+						);
+					}
 					res = await withSpan(
 						`db incrementOne ${model}`,
 						{
