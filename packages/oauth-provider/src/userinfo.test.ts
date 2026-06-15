@@ -18,6 +18,9 @@ import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
+const INVALID_ACCESS_TOKEN_CHALLENGE =
+	'Bearer error="invalid_token", error_description="Invalid access token"';
+
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -208,6 +211,31 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.error?.status).toBe(401);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 */
+	it("should return an invalid_token challenge for an unknown bearer token", async () => {
+		let wwwAuthenticate = "";
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: "Bearer this-is-not-a-valid-access-token",
+				},
+				onError(context) {
+					wwwAuthenticate =
+						context.response.headers.get("WWW-Authenticate") ?? "";
+				},
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(401);
+		expect(
+			(userinfo.error as { error?: string; error_description?: string }).error,
+		).toBe("invalid_token");
+		expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
+	});
+
 	it("should fail without the openid scope", async () => {
 		const tokens = await getTokens({
 			scopes: ["profile"],
@@ -245,8 +273,12 @@ describe("oauth userinfo", async () => {
 			expect.unreachable();
 		} catch (error) {
 			const err = error as APIError;
+			const headers = new Headers(err.headers);
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({ error: "invalid_token" });
+			expect(headers.get("WWW-Authenticate")).toBe(
+				INVALID_ACCESS_TOKEN_CHALLENGE,
+			);
 		}
 	});
 
