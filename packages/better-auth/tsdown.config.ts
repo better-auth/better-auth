@@ -1,6 +1,8 @@
 import { defineConfig } from "tsdown";
+import zodCompiler from "zod-compiler/rolldown";
 
 export default defineConfig({
+	plugins: [zodCompiler()],
 	dts: { build: true, incremental: true },
 	format: ["esm"],
 	entry: [

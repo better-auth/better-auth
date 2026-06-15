@@ -1,6 +1,8 @@
 import { defineProject } from "vitest/config";
+import zodCompiler from "zod-compiler/vite";
 
 export default defineProject({
+	plugins: [zodCompiler()],
 	test: {
 		testTimeout: 10_000,
 		execArgv: ["--expose-gc"],
