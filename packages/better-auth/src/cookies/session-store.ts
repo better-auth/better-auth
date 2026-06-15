@@ -1,7 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import { serializeCookie } from "better-call";
@@ -26,20 +25,14 @@ const MAX_COOKIE_SIZE = 4050;
 const MAX_COOKIE_CHUNKS = 100;
 
 /**
- * Largest value that keeps the serialized cookie within {@link MAX_COOKIE_SIZE}.
- * Overhead is measured with the real `serializeCookie` writer so it cannot
- * drift from the wire. Assumes a wire-safe (e.g. base64url) value.
+ * Largest value that keeps the serialized cookie within {@link MAX_COOKIE_SIZE},
+ * measured with the real `serializeCookie` writer so it stays in sync with the
+ * wire. Non-positive when the name and attributes alone overflow.
  */
 function getMaxCookieValueSize(name: string, options: CookieOptions): number {
 	// serializeCookie mutates options (e.g. forces `secure`), so copy them.
 	const overhead = serializeCookie(name, "", { ...options }).length;
-	const size = MAX_COOKIE_SIZE - overhead;
-	if (size <= 0) {
-		throw new BetterAuthError(
-			`Cookie "${name}" attributes leave no room for a value.`,
-		);
-	}
-	return size;
+	return MAX_COOKIE_SIZE - overhead;
 }
 
 interface Cookie {
@@ -84,7 +77,10 @@ function chunkCookie(
 		`${cookie.name}.${MAX_COOKIE_CHUNKS - 1}`,
 		cookie.attributes,
 	);
-	const chunkCount = Math.ceil(cookie.value.length / chunkSize);
+
+	// No room for a value at all: fall into the skip branch below.
+	const chunkCount =
+		chunkSize > 0 ? Math.ceil(cookie.value.length / chunkSize) : Infinity;
 
 	if (chunkCount <= 1) {
 		chunks[cookie.name] = cookie.value;

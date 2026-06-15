@@ -1639,6 +1639,53 @@ describe("Cookie Chunking", () => {
 		const session = await auth.api.getSession({ headers });
 		expect(session?.user.email).toBe("too-big@example.com");
 	});
+
+	it("skips the session cache and warns when the prefix alone overflows", async () => {
+		const warn = vi.fn();
+		// A prefix this long leaves no room for any value, even a single chunk.
+		// The store must skip the cache instead of throwing on the request.
+		const longPrefix = "better-auth-" + "x".repeat(4100);
+		const { client, auth, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warn(message);
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		const headers = new Headers();
+		let rawSetCookie = "";
+		const res = await client.signUp.email(
+			{
+				name: "No Room",
+				email: "no-room@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		// Sign-up still succeeds: the optional cache failing does not break auth.
+		expect(res.data).not.toBeNull();
+
+		const names = [...parseSetCookieHeader(rawSetCookie)].map(([name]) => name);
+		expect(names.some((name) => name.includes("session_data"))).toBe(false);
+		expect(names.some((name) => name.includes("session_token"))).toBe(true);
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("too large to store even after chunking"),
+		);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("no-room@example.com");
+	});
 });
 
 describe("parse cookies", () => {
