@@ -1213,6 +1213,36 @@ const callbackSSOQuerySchema = z.object({
 	error_description: z.string().optional(),
 });
 
+function getStringErrorField(value: unknown, field: string) {
+	if (!value || typeof value !== "object") return;
+	const fieldValue = (value as Record<string, unknown>)[field];
+	return typeof fieldValue === "string" && fieldValue.length > 0
+		? fieldValue
+		: undefined;
+}
+
+function getOIDCErrorDescription(error: unknown, fallback: string): string {
+	const nestedError =
+		error && typeof error === "object"
+			? (error as Record<string, unknown>).error
+			: undefined;
+	const description =
+		getStringErrorField(nestedError, "error_description") ||
+		getStringErrorField(error, "error_description") ||
+		getStringErrorField(nestedError, "message") ||
+		getStringErrorField(error, "message") ||
+		getStringErrorField(error, "statusText") ||
+		getStringErrorField(nestedError, "error") ||
+		getStringErrorField(error, "error");
+	if (description) return description;
+	if (error && typeof error === "object") {
+		const status = (error as Record<string, unknown>).status;
+		if (typeof status === "number") return `HTTP ${status}`;
+		if (typeof status === "string" && status.length > 0) return status;
+	}
+	return fallback;
+}
+
 /**
  * Core OIDC callback handler logic, shared between the per-provider and
  * shared callback endpoints. Resolves the provider, exchanges the
@@ -1249,10 +1279,9 @@ async function handleOIDCCallback(
 		throw ctx.redirect(`${baseURL}${separator}${params.toString()}`);
 	};
 	if (!code || error) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=${error}&error_description=${error_description}`,
+		redirectOIDCError(
+			error || "invalid_request",
+			error_description || (error ? error : "authorization_code_not_found"),
 		);
 	}
 	const provider = await resolveOIDCProvider(ctx, options, providerId);
@@ -1409,13 +1438,19 @@ async function handleOIDCCallback(
 			(url) => ctx.context.isTrustedOrigin(url),
 		);
 		if (error) {
-			throw error;
+			redirectOIDCError(
+				"invalid_provider",
+				getOIDCErrorDescription(error, "token_response_error"),
+			);
 		}
 		if (!data) {
 			throw new Error("Token endpoint returned an empty response");
 		}
 		return getOAuth2Tokens(data);
 	})().catch((e) => {
+		if (isAPIError(e)) {
+			throw e;
+		}
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof DiscoveryError) {
 			redirectOIDCError("invalid_provider", e.message);
