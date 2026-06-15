@@ -393,8 +393,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					([_, field]) => !field.unique,
 				);
 				if (fkField) {
-					const [fkFieldName] = fkField;
-					const fromField = "id"; // Primary key of source table
+					const [fkFieldName, fkFieldAttr] = fkField;
+					const fromField = getFieldName({
+						model: tableKey,
+						field: fkFieldAttr.references?.field || "id",
+					});
 					const toField = getFieldName({
 						model: otherTableKey,
 						field: fkFieldName,

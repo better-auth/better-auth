@@ -712,6 +712,129 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					return count;
 				},
+				async consumeOne({ model, where }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					if (config.provider === "mysql") {
+						const claimFromTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							const delRes = await tx
+								.delete(schemaModel)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const delCount =
+								(delRes &&
+									(delRes.rowsAffected ??
+										delRes.affectedRows ??
+										delRes.changes)) ??
+								0;
+							return delCount > 0 ? (target as any) : null;
+						};
+						return db.transaction(claimFromTransaction);
+					}
+
+					if (!idColumn) {
+						return null;
+					}
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const deleted = await db
+						.delete(schemaModel)
+						.where(inArray(idColumn, targetIds))
+						.returning();
+					return (deleted[0] as any) ?? null;
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model, field });
+						const column = schemaModel[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model, field });
+							if (!schemaModel[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+
+					if (config.provider === "mysql") {
+						const mutateInTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							await tx
+								.update(schemaModel)
+								.set(assignments)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const updated = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(idColumn, targetId))
+								.limit(1)
+								.execute();
+							return (updated[0] as any) ?? null;
+						};
+						return db.transaction(mutateInTransaction);
+					}
+
+					if (!idColumn) {
+						return null;
+					}
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const updated = await db
+						.update(schemaModel)
+						.set(assignments)
+						.where(inArray(idColumn, targetIds))
+						.returning();
+					return (updated[0] as any) ?? null;
+				},
 				async createSchema(props) {
 					return await generateDrizzleSchema({
 						adapterConfig: config,

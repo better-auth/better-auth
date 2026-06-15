@@ -38,12 +38,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
-      "dev-source": "./src/index.d.mts",
+      "dev-source": "./src/index.ts",
       "default": "./dist/index.mjs"
     },
     "./relations-v2": {
       "types": "./dist/relations-v2/index.d.mts",
-      "dev-source": "./src/relations-v2/index.d.mts",
+      "dev-source": "./src/relations-v2/index.ts",
       "default": "./dist/relations-v2/index.mjs"
     }
   },
