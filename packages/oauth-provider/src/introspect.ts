@@ -10,6 +10,11 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
+	destructureCredentials,
+	extractClientCredentials,
+	validateClientCredentials,
+} from "./client-authentication";
+import {
 	getResourceCustomClaims,
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
@@ -24,15 +29,12 @@ import type {
 	Scope,
 } from "./types";
 import {
-	destructureCredentials,
-	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
-	validateClientCredentials,
 } from "./utils";
 
 /**

@@ -13,6 +13,12 @@ import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import {
+	clientAllowsGrant,
+	destructureCredentials,
+	extractClientCredentials,
+	validateClientCredentials,
+} from "./client-authentication";
 import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
@@ -40,10 +46,7 @@ import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { pickClaims, userNormalClaims } from "./userinfo";
 import {
-	clientAllowsGrant,
 	decryptStoredClientSecret,
-	destructureCredentials,
-	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -55,7 +58,6 @@ import {
 	storeToken,
 	toAudienceClaim,
 	toResourceList,
-	validateClientCredentials,
 } from "./utils";
 
 /**
