@@ -582,14 +582,15 @@ export const deviceVerify = createAuthEndpoint(
 			deviceCodeRecord.status === "pending"
 		) {
 			const claimedDeviceCodeRecord =
-				await ctx.context.adapter.update<DeviceCode>({
+				await ctx.context.adapter.incrementOne<DeviceCode>({
 					model: "deviceCode",
 					where: [
 						{ field: "id", value: deviceCodeRecord.id },
 						{ field: "status", value: "pending" },
 						{ field: "userId", operator: "eq", value: null },
 					],
-					update: { userId: session.user.id },
+					increment: {},
+					set: { userId: session.user.id },
 				});
 			if (claimedDeviceCodeRecord) {
 				deviceCodeRecord.userId = session.user.id;
