@@ -287,6 +287,12 @@ trustedOrigins: async (request) => {
 
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
+#### Redirecting OIDC endpoints
+
+Better Auth does not follow redirects for server-side OIDC requests. Configure the final canonical URL for the discovery, token, userinfo, and JWKS endpoints.
+
+If one of those endpoints returns a `3xx` response, registration or sign-in fails with `oidc_endpoint_redirect`. This keeps endpoint validation tied to the exact URL that Better Auth fetches.
+
 #### Why Discovery Can Fail
 
 Better Auth validates that the IdP's metadata is correct and complete **before** allowing registration. This prevents subtle runtime failures during sign-in or token validation.
@@ -309,6 +315,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                                      |
 | `discovery_untrusted_origin`    | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
 | `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                                   |
+| `oidc_endpoint_redirect`        | The discovery, token, userinfo, or JWKS endpoint returned a redirect; configure the final endpoint URL instead                      |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support                                                           |
 
 **Supported token auth methods:**
