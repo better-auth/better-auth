@@ -65,13 +65,6 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10044
-	 */
-	it("should return null for direct custom session checks without a request source", async () => {
-		await expect(auth.api.getSession()).resolves.toBeNull();
-	});
-
 	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.getSession({

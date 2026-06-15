@@ -95,6 +95,7 @@ export const customSession = <
 							},
 						},
 					},
+					requireHeaders: true,
 				},
 				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
