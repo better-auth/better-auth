@@ -985,12 +985,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const count =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							// drizzle-orm/mysql2 returns `MySqlRawQueryResult`, a
+							// `[ResultSetHeader, FieldPacket[]]` tuple. Reading
+							// `.affectedRows` directly off the array yields
+							// undefined, so `count` was 0 even when the DELETE
+							// removed the row — and the password-reset flow saw
+							// INVALID_TOKEN despite the verification row being
+							// gone from the table (#10054). Unwrap the header
+							// before reading the affected-row counter, mirroring
+							// `getAffectedRowCount`'s shape.
+							const header = Array.isArray(delRes) ? delRes[0] : delRes;
+							const rawCount = hasDriverRowCount(header)
+								? readDriverRowCount(header)
+								: 0;
+							const count = Number(rawCount) || 0;
 							return count > 0 ? (target as any) : null;
 						};
 						return inTransaction
