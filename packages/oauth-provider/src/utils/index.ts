@@ -37,18 +37,6 @@ export {
 } from "../signed-query";
 
 /**
- * Headers required on OAuth token and registration responses so credentials are
- * never cached by intermediaries.
- *
- * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
- * @see https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1
- */
-export const OAUTH_NO_STORE_HEADERS = {
-	"Cache-Control": "no-store",
-	Pragma: "no-cache",
-} as const;
-
-/**
  * Extracts the credentials from an `Authorization: Bearer <token>` header.
  *
  * Returns `undefined` when the header is absent or carries a non-Bearer scheme,

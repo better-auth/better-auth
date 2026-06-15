@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { NO_STORE_HEADERS } from "better-auth/api";
 import { APIError } from "better-call";
 import type {
 	ClientRegistrationRequest,
@@ -6,7 +7,7 @@ import type {
 	OAuthOptions,
 	Scope,
 } from "../types";
-import { OAUTH_NO_STORE_HEADERS, parseBearerToken } from "./index";
+import { parseBearerToken } from "./index";
 
 /**
  * Builds an RFC 6750 §3 Bearer challenge for the registration endpoint. The
@@ -26,7 +27,7 @@ function registrationBearerError(
 		{ error, error_description: errorDescription },
 		{
 			"WWW-Authenticate": `Bearer error="${error}"`,
-			...OAUTH_NO_STORE_HEADERS,
+			...NO_STORE_HEADERS,
 		},
 	);
 }
