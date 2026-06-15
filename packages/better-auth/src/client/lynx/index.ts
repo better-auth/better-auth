@@ -43,9 +43,44 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 		>
 	: {};
 
+type ClientConfig = ReturnType<typeof getClientConfig>;
+type ClientSession<Option extends BetterAuthClientOptions> =
+	InferClientAPI<Option> extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
+
+/**
+ * Lynx client returned by `createAuthClient`.
+ */
+export type LynxAuthClient<Option extends BetterAuthClientOptions> =
+	UnionToIntersection<InferResolvedHooks<Option>> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: () => {
+				data: ClientSession<Option>;
+				isPending: boolean;
+				error: BetterFetchError | null;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
+			};
+			$Infer: {
+				Session: NonNullable<ClientSession<Option>>;
+			};
+			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
+		};
+
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option | undefined,
-) {
+): LynxAuthClient<Option> {
 	const {
 		pluginPathMethods,
 		pluginsActions,
@@ -73,34 +108,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		atomListeners,
 	);
 
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res
-		: never;
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		ClientAPI &
-		InferActions<Option> & {
-			useSession: () => {
-				data: Session;
-				isPending: boolean;
-				error: BetterFetchError | null;
-				refetch: (
-					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => Promise<void>;
-			};
-			$Infer: {
-				Session: NonNullable<Session>;
-			};
-			$fetch: typeof $fetch;
-			$store: typeof $store;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
-		};
+	return proxy as LynxAuthClient<Option>;
 }
 
 export { useStore };

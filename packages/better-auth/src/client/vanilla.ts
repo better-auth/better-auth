@@ -39,9 +39,47 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 		>
 	: {};
 
+type ClientConfig = ReturnType<typeof getClientConfig>;
+type ClientSession<Option extends BetterAuthClientOptions> =
+	InferClientAPI<Option> extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res extends Record<string, any>
+				? Res
+				: never
+		: never;
+
+/**
+ * Client returned by `createAuthClient`.
+ */
+export type AuthClient<Option extends BetterAuthClientOptions> =
+	UnionToIntersection<InferResolvedHooks<Option>> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: Atom<{
+				data: ClientSession<Option>;
+				error: BetterFetchError | null;
+				isPending: boolean;
+				isRefetching: boolean;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
+			}>;
+			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
+			$Infer: {
+				Session: NonNullable<ClientSession<Option>>;
+			};
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
+		};
+
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option | undefined,
-) {
+): AuthClient<Option> {
 	const {
 		pluginPathMethods,
 		pluginsActions,
@@ -67,39 +105,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
-		: never;
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		ClientAPI &
-		InferActions<Option> & {
-			useSession: Atom<{
-				data: Session;
-				error: BetterFetchError | null;
-				isPending: boolean;
-				isRefetching: boolean;
-				refetch: (
-					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => Promise<void>;
-			}>;
-			$fetch: typeof $fetch;
-			$store: typeof $store;
-			$Infer: {
-				Session: NonNullable<Session>;
-			};
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
-		};
+	return proxy as AuthClient<Option>;
 }
-
-export type AuthClient<Option extends BetterAuthClientOptions> = ReturnType<
-	typeof createAuthClient<Option>
->;

@@ -44,9 +44,46 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 		>
 	: {};
 
+type ClientConfig = ReturnType<typeof getClientConfig>;
+type ClientSession<Option extends BetterAuthClientOptions> =
+	InferClientAPI<Option> extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res extends Record<string, any>
+				? Res
+				: never
+		: never;
+
+/**
+ * Solid client returned by `createAuthClient`.
+ */
+export type SolidAuthClient<Option extends BetterAuthClientOptions> =
+	UnionToIntersection<InferResolvedHooks<Option>> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: () => Accessor<{
+				data: ClientSession<Option>;
+				isPending: boolean;
+				isRefetching: boolean;
+				error: BetterFetchError | null;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
+			}>;
+			$Infer: {
+				Session: NonNullable<ClientSession<Option>>;
+			};
+			$fetch: ClientConfig["$fetch"];
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
+		};
+
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option | undefined,
-) {
+): SolidAuthClient<Option> {
 	const {
 		pluginPathMethods,
 		pluginsActions,
@@ -69,36 +106,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginsAtoms,
 		atomListeners,
 	);
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
-		: never;
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		InferClientAPI<Option> &
-		InferActions<Option> & {
-			useSession: () => Accessor<{
-				data: Session;
-				isPending: boolean;
-				isRefetching: boolean;
-				error: BetterFetchError | null;
-				refetch: (
-					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => Promise<void>;
-			}>;
-			$Infer: {
-				Session: NonNullable<Session>;
-			};
-			$fetch: typeof $fetch;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
-		};
+	return proxy as SolidAuthClient<Option>;
 }
 
 export type * from "@better-fetch/fetch";
