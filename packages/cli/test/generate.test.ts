@@ -7,11 +7,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { generate } from "../src/commands/generate";
 import { generateSchema } from "../src/generators";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
+import * as config from "../src/utils/get-config";
 import { getPrismaVersion } from "../src/utils/get-package-info";
 
 describe("generate", async () => {
@@ -927,6 +929,63 @@ describe("Enum field support in Drizzle schemas", () => {
 	});
 });
 
+describe("Drizzle array defaultValue serialization", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10046
+	 */
+	it("emits a JS array literal for string[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						roles: {
+							type: "string[]",
+							required: true,
+							defaultValue: ["customer"],
+							input: false,
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'roles: text("roles").array().default(["customer"]).notNull()',
+		);
+		expect(schema.code).not.toContain(".default(customer)");
+	});
+
+	it("emits a JS array literal for number[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						scores: {
+							type: "number[]",
+							required: true,
+							defaultValue: [1, 2, 3],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'scores: integer("scores").array().default([1, 2, 3]).notNull()',
+		);
+	});
+});
+
 describe("usePlural schema generation", () => {
 	it("should generate drizzle schema with usePlural option", async () => {
 		const schema = await generateDrizzleSchema({
@@ -1332,6 +1391,52 @@ describe("--adapter flag support (mock adapter)", () => {
 		expect(schema.code).toBeDefined();
 		expect(schema.code).toContain("create table");
 		expect(schema.fileName).toBe("test.sql");
+	});
+
+	it("should resolve directory output against cwd before appending the default filename", async () => {
+		const projectDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "generate-output-cwd-"),
+		);
+		const outputDir = path.join(projectDir, "schemas");
+		fs.mkdirSync(outputDir);
+		const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+			return code as never;
+		});
+		const getConfig = vi.spyOn(config, "getConfig").mockResolvedValue({
+			database: {},
+		} as BetterAuthOptions);
+
+		try {
+			await generate.parseAsync(
+				[
+					"--cwd",
+					projectDir,
+					"--output",
+					"schemas",
+					"--adapter",
+					"drizzle",
+					"--dialect",
+					"sqlite",
+					"--yes",
+				],
+				{ from: "user" },
+			);
+
+			const generatedSchemaPath = path.join(outputDir, "auth-schema.ts");
+			expect(fs.existsSync(generatedSchemaPath)).toBe(true);
+			expect(fs.readFileSync(generatedSchemaPath, "utf-8")).toContain(
+				"export const user",
+			);
+			expect(exit).toHaveBeenCalledWith(0);
+			expect(getConfig).toHaveBeenCalledWith({
+				cwd: projectDir,
+				configPath: undefined,
+			});
+		} finally {
+			exit.mockRestore();
+			getConfig.mockRestore();
+			fs.rmSync(projectDir, { recursive: true });
+		}
 	});
 
 	it("should throw error for unsupported adapter id", async () => {

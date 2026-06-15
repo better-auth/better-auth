@@ -79,6 +79,22 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	};
 }
 
+async function resolveOutputFilePath(cwd: string, output?: string) {
+	if (!output) {
+		return output;
+	}
+	const resolvedOutput = path.resolve(cwd, output);
+	try {
+		const stat = await fs.stat(resolvedOutput);
+		if (stat.isDirectory()) {
+			return path.join(resolvedOutput, "auth-schema.ts");
+		}
+	} catch {
+		// path doesn't exist yet; treat it as a file path, which is fine
+	}
+	return output;
+}
+
 async function generateAction(opts: any) {
 	const options = z
 		.object({
@@ -97,6 +113,9 @@ async function generateAction(opts: any) {
 		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
+	options.output = await resolveOutputFilePath(cwd, options.output);
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
