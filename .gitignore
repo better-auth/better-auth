@@ -213,3 +213,7 @@ state.txt
 .claude/worktrees
 
 .deepsec
+
+# Generated UI runtime bundle (built by packages/better-auth/scripts/build-runtime.mjs)
+packages/better-auth/src/ui/runtime.generated.ts
+packages/better-auth/dist-runtime/

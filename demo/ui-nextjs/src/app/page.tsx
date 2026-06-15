@@ -120,7 +120,7 @@ function SessionBlock() {
 	}, [json]);
 
 	return (
-		<section className="session-block">
+		<section className="session-block bg-[#0a0a0a]">
 			<div className="session-header">
 				<code className="session-label">useSession()</code>
 			</div>
@@ -142,20 +142,22 @@ function SessionBlock() {
 
 export default function Home() {
 	return (
-		<main className="home">
-			<img
-				className="home-logo"
-				src="/better-auth-logo-dark.svg"
-				alt="Better Auth"
-				width={48}
-				height={48}
-			/>
+		<main className="home relative h-screen bg-black">
+			<div className="flex items-center justify-center gap-2 text-center">
+				<img
+					src="/better-auth-logo-dark.svg"
+					alt="Better Auth"
+					width={48}
+					height={48}
+				/>
 
-			<h1 className="home-title">Better Auth UI</h1>
+				<h1 className="home-title">Better Auth UI</h1>
+			</div>
 			<p className="home-subtitle">Welcome to the Better Auth UI demo!</p>
 
 			<UserCard />
 
+			<SessionBlock />
 			<nav className="home-nav">
 				{pages.map((p) => (
 					<Link key={p.href} href={p.href} className="home-link">
@@ -163,8 +165,6 @@ export default function Home() {
 					</Link>
 				))}
 			</nav>
-
-			<SessionBlock />
 		</main>
 	);
 }

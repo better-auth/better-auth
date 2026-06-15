@@ -92,30 +92,41 @@ describe("jsx runtime", () => {
 			tag: "modal",
 			props: {
 				id: "two-factor-dialog",
-				"aria-labelledby": "two-factor-dialog-title",
-				"aria-describedby": "two-factor-dialog-description",
+				hidden: true,
 			},
 			children: [
 				{
-					tag: "button",
+					tag: "div",
 					props: {
-						"data-ba-dialog-close": "two-factor-dialog",
+						class: "ba-modal-panel",
+						role: "dialog",
+						"aria-modal": "true",
+						"aria-labelledby": "two-factor-dialog-title",
+						"aria-describedby": "two-factor-dialog-description",
 					},
-				},
-				{
-					tag: "h2",
-					props: {
-						id: "two-factor-dialog-title",
-					},
-				},
-				{
-					tag: "p",
-					props: {
-						id: "two-factor-dialog-description",
-					},
-				},
-				{
-					tag: "form",
+					children: [
+						{
+							tag: "button",
+							props: {
+								"data-ba-dialog-close": "two-factor-dialog",
+							},
+						},
+						{
+							tag: "h2",
+							props: {
+								id: "two-factor-dialog-title",
+							},
+						},
+						{
+							tag: "p",
+							props: {
+								id: "two-factor-dialog-description",
+							},
+						},
+						{
+							tag: "form",
+						},
+					],
 				},
 			],
 		});

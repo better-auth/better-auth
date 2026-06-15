@@ -98,42 +98,59 @@ export function Dialog(
 		"modal",
 		{
 			...rest,
-			"aria-labelledby": title ? `${props.id}-title` : undefined,
-			"aria-describedby": description ? `${props.id}-description` : undefined,
+			// Rendered as a plain z-index overlay (not a native <dialog>) so that
+			// browser extension UIs — e.g. 1Password's passkey account picker —
+			// can layer above it. Native dialogs render in the top layer, which
+			// covers extension overlays. Hidden until opened via the runtime.
+			hidden: true,
 		},
 		[
-			{
-				tag: "button",
-				props: {
-					type: "button",
-					class: "ba-dialog-close",
-					"data-ba-unstyled": true,
-					"data-ba-dialog-close": props.id,
-					"aria-label": closeLabel ?? "Close dialog",
+			component(
+				"div",
+				{
+					class: "ba-modal-panel",
+					role: "dialog",
+					"aria-modal": "true",
+					"aria-labelledby": title ? `${props.id}-title` : undefined,
+					"aria-describedby": description
+						? `${props.id}-description`
+						: undefined,
 				},
-				children: ["x"],
-			},
-			title
-				? {
-						tag: "h2",
+				[
+					{
+						tag: "button",
 						props: {
-							id: `${props.id}-title`,
-							class: "ba-dialog-title",
+							type: "button",
+							class: "ba-dialog-close",
+							"data-ba-unstyled": true,
+							"data-ba-dialog-close": props.id,
+							"aria-label": closeLabel ?? "Close dialog",
 						},
-						children: [title],
-					}
-				: null,
-			description
-				? {
-						tag: "p",
-						props: {
-							id: `${props.id}-description`,
-							class: "ba-dialog-description",
-						},
-						children: [description],
-					}
-				: null,
-			children,
+						children: ["x"],
+					},
+					title
+						? {
+								tag: "h2",
+								props: {
+									id: `${props.id}-title`,
+									class: "ba-dialog-title",
+								},
+								children: [title],
+							}
+						: null,
+					description
+						? {
+								tag: "p",
+								props: {
+									id: `${props.id}-description`,
+									class: "ba-dialog-description",
+								},
+								children: [description],
+							}
+						: null,
+					children,
+				],
+			),
 		],
 	);
 }

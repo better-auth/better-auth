@@ -971,6 +971,9 @@ importers:
       '@opentelemetry/sdk-trace-node':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@simplewebauthn/browser':
+        specifier: ^13.2.2
+        version: 13.2.2
       '@sveltejs/kit':
         specifier: ^2.60.1
         version: 2.61.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.56.0)(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)))(svelte@5.56.0)(typescript@5.9.3)(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
@@ -1024,7 +1027,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
       vue:
         specifier: ^3.5.29
         version: 3.5.29(typescript@5.9.3)
@@ -28729,7 +28732,7 @@ snapshots:
     optionalDependencies:
       vite: 6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
 
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
+  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       '@vitest/expect': 4.0.18
       '@vitest/mocker': 4.0.18(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))

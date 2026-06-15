@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
 		"better-auth",
 		"@better-auth/core",
 		"@better-auth/memory-adapter",
+		"@better-auth/passkey",
 		"@better-auth/ui",
 	],
 	turbopack: {

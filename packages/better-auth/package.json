@@ -25,13 +25,15 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build:ui-runtime": "node scripts/build-runtime.mjs",
+    "build": "node scripts/build-runtime.mjs && tsdown",
+    "dev": "node scripts/build-runtime.mjs && tsdown --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
+    "pretypecheck": "node scripts/build-runtime.mjs",
     "typecheck": "tsc --project tsconfig.json"
   },
   "files": [
@@ -496,6 +498,7 @@
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-trace-base": "^1.30.0",
     "@opentelemetry/sdk-trace-node": "^1.30.0",
+    "@simplewebauthn/browser": "^13.2.2",
     "happy-dom": "^20.8.9",
     "msw": "^2.12.10",
     "next": "^16.2.6",

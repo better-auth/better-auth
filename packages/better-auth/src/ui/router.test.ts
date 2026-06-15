@@ -602,7 +602,7 @@ describe("ui router", async () => {
 		);
 		const html = await res.text();
 		expect(html).toContain("Last used sign-in method: passkey.");
-		expect(html).toContain('<dialog id="passkey-registration"');
+		expect(html).toContain('<div id="passkey-registration"');
 		expect(html).toContain('data-ba-dialog-close="passkey-registration"');
 		expect(html).toContain("Add passkey");
 		expect(html).toContain("&quot;type&quot;:&quot;openDialog&quot;");
@@ -611,8 +611,9 @@ describe("ui router", async () => {
 		);
 		expect(html).toContain('class="ba-button ba-button-secondary"');
 		expect(html).toContain("Skip for now");
-		expect(html).toContain('<dialog id="two-factor-enrollment"');
+		expect(html).toContain('<div id="two-factor-enrollment"');
 		expect(html).toContain('class="ba-modal"');
+		expect(html).toContain('class="ba-modal-panel"');
 		expect(html).toContain('data-ba-dialog-close="two-factor-enrollment"');
 		expect(html).toContain("Set up two-factor");
 	});
@@ -637,7 +638,7 @@ describe("ui router", async () => {
 		);
 		const html = await res.text();
 
-		expect(html).toContain('<dialog id="two-factor-enrollment"');
+		expect(html).toContain('<div id="two-factor-enrollment"');
 		expect(html).toContain("&quot;type&quot;:&quot;openDialog&quot;");
 		expect(html).toContain(
 			"&quot;target&quot;:&quot;two-factor-enrollment&quot;",
@@ -749,12 +750,25 @@ describe("ui router", async () => {
 		expect(js).toContain('effect.type === "hide"');
 		expect(js).toContain('effect.type === "openDialog"');
 		expect(js).toContain('effect.type === "closeDialog"');
-		expect(js).toContain("dialog.showModal");
-		expect(js).toContain("dialog.close");
+		// Dialogs are plain z-index overlays (not native <dialog>/showModal), so
+		// extension UIs like 1Password's passkey picker can layer above them.
+		expect(js).not.toContain("showModal");
+		expect(js).toContain("function openDialog(target)");
+		expect(js).toContain("dialog.hidden = false");
+		expect(js).toContain("dialog.hidden = true");
+		expect(js).toContain('event.key !== "Escape"');
+		// Toasts must live in the top layer (above modal dialogs), so the
+		// region is rendered as a popover and re-promoted on each toast.
+		expect(js).toContain('toastRegion.setAttribute("popover", "manual")');
+		expect(js).toContain("function promoteToastRegion(region)");
+		expect(js).toContain("region.showPopover()");
 		expect(js).toContain("[data-ba-dialog-close]");
 		expect(js).toContain("better-auth:two-factor-required");
 		expect(js).toContain('if (!contentType.includes("json")) return null;');
 		expect(js).toContain('if (typeof payload === "string") return fallback;');
 		expect(js).not.toContain('setFormStatus(form, "success"');
+		// Passkey ceremony is bundled in via @simplewebauthn/browser.
+		expect(js).toContain("data-ba-passkey-register");
+		expect(js).toContain("data-ba-passkey-auth");
 	});
 });

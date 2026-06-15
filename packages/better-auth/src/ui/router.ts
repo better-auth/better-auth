@@ -13,7 +13,7 @@ import type { Endpoint } from "better-call";
 import { createRouter } from "better-call";
 import { isAPIError } from "../utils/is-api-error";
 import { renderDocument } from "./render";
-import { uiRuntime } from "./runtime";
+import { uiRuntime } from "./runtime.generated";
 import { getTheme, getUIBasePath, getUIRuntimePath } from "./utils";
 
 type UIPageEntry = {

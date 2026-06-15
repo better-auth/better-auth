@@ -36,6 +36,8 @@
       "@better-auth/memory-adapter": [
         "../../packages/memory-adapter/src/index.ts"
       ],
+      "@better-auth/passkey": ["../../packages/passkey/src/index.ts"],
+      "@better-auth/passkey/client": ["../../packages/passkey/src/client.ts"],
       "@better-auth/telemetry": ["../../packages/telemetry/src/index.ts"],
       "@better-auth/ui": ["../../packages/ui/src/index.ts"],
       "@better-auth/ui/*": ["../../packages/ui/src/*"]

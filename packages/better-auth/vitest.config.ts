@@ -18,6 +18,9 @@ export default defineProject({
 	test: {
 		testTimeout: 10_000,
 		execArgv: ["--expose-gc"],
+		// Build the browser UI runtime (src/ui/runtime/** -> runtime.generated.ts)
+		// once before tests, since the auth UI router imports that generated string.
+		globalSetup: ["./test/runtime-global-setup.ts"],
 		// Exclude adapter tests by default - they are run separately via test:adapters
 		exclude: [
 			"**/node_modules/**",

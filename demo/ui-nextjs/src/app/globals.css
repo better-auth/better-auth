@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 *,
 *::before,
 *::after {
@@ -33,7 +35,7 @@ a {
 	justify-content: center;
 	min-height: 100dvh;
 	padding: 3rem 1.5rem;
-	gap: 1rem;
+	gap: 1.5rem;
 }
 
 .home-logo {
@@ -62,7 +64,6 @@ a {
 	flex-wrap: wrap;
 	justify-content: center;
 	gap: 0.5rem;
-	margin-top: 1rem;
 }
 
 .home-link {
@@ -94,7 +95,6 @@ a {
 	gap: 1rem;
 	width: 100%;
 	max-width: 24rem;
-	margin-top: 0.5rem;
 	padding: 0.875rem 1rem;
 	border: 1px solid #2a2a2a;
 	border-radius: 0.25rem;
@@ -224,7 +224,6 @@ a {
 .session-block {
 	width: 100%;
 	max-width: 44rem;
-	margin-top: 1.5rem;
 	border: 1px solid #2a2a2a;
 	border-radius: 0.25rem;
 	overflow: hidden;

@@ -412,6 +412,11 @@ function PasskeyRegistrationPanel(props: {
 	redirectTo: string;
 }) {
 	const registerRoute = props.capability.routes?.generateRegisterOptions;
+	const verifyRegistration = props.capability.routes?.verifyRegistration;
+	const verifyRegistrationPath =
+		verifyRegistration?.type === "auth-route"
+			? verifyRegistration.path
+			: undefined;
 	return (
 		<Dialog
 			id="passkey-registration"
@@ -422,19 +427,21 @@ function PasskeyRegistrationPanel(props: {
 				{registerRoute ? (
 					<Form
 						action={registerRoute}
-						pending="Preparing passkey registration..."
+						pending="Starting passkey registration..."
 						success={[
 							effects.toast({
 								level: "success",
-								message: "Passkey registration started.",
+								message: "Passkey registered.",
 							}),
 							effects.navigate(props.redirectTo),
 						]}
 						error={[
 							effects.toastFromError({
-								fallback: "Could not start passkey registration.",
+								fallback: "Could not register passkey.",
 							}),
 						]}
+						data-ba-passkey-register
+						data-ba-passkey-verify={verifyRegistrationPath}
 					>
 						<Button type="submit" class="ba-button-full">
 							Add passkey
