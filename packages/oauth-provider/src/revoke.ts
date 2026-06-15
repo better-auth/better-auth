@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { getJwks } from "better-auth/oauth2";
+import {
+	getJwks,
+	stripAccessTokenAuthorizationScheme,
+} from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -311,7 +314,8 @@ export async function revokeEndpoint(
 	const {
 		clientId: client_id,
 		clientSecret: client_secret,
-		preVerifiedClient,
+		preVerified,
+		authMethod,
 	} = destructureCredentials(credentials);
 
 	if (!client_id) {
@@ -322,8 +326,8 @@ export async function revokeEndpoint(
 	}
 
 	// Check token
-	if (typeof token === "string" && token.startsWith("Bearer ")) {
-		token = token.replace("Bearer ", "");
+	if (typeof token === "string") {
+		token = stripAccessTokenAuthorizationScheme(token);
 	}
 	if (!token?.length) {
 		throw new APIError("BAD_REQUEST", {
@@ -339,7 +343,9 @@ export async function revokeEndpoint(
 		client_id,
 		client_secret,
 		undefined,
-		preVerifiedClient,
+		preVerified,
+		undefined,
+		authMethod,
 	);
 
 	try {

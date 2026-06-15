@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -53,6 +59,7 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: `Request a device and user code
 
@@ -146,7 +153,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
-					userId: null,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -162,21 +169,14 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					userCode,
 				);
 
-			return ctx.json(
-				{
-					device_code: deviceCode,
-					user_code: userCode,
-					verification_uri: verificationUri,
-					verification_uri_complete: verificationUriComplete,
-					expires_in: Math.floor(expiresIn / 1000),
-					interval: Math.floor(ms(opts.interval) / 1000),
-				},
-				{
-					headers: {
-						"Cache-Control": "no-store",
-					},
-				},
-			);
+			return ctx.json({
+				device_code: deviceCode,
+				user_code: userCode,
+				verification_uri: verificationUri,
+				verification_uri_complete: verificationUriComplete,
+				expires_in: Math.floor(expiresIn / 1000),
+				interval: Math.floor(ms(opts.interval) / 1000),
+			});
 		},
 	);
 };
@@ -219,6 +219,7 @@ export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 			body: deviceTokenBodySchema,
 			error: deviceTokenErrorSchema,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: `Exchange device code for access token
 
@@ -468,22 +469,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 
 				// Return OAuth 2.0 compliant token response
-				return ctx.json(
-					{
-						access_token: session.token,
-						token_type: "Bearer",
-						expires_in: Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-						scope: claimedDeviceCode.scope || "",
-					},
-					{
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					},
-				);
+				return ctx.json({
+					access_token: session.token,
+					token_type: "Bearer",
+					expires_in: Math.floor(
+						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+					),
+					scope: claimedDeviceCode.scope || "",
+				});
 			}
 
 			throw new APIError("INTERNAL_SERVER_ERROR", {

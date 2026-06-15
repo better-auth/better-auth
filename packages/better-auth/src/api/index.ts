@@ -405,6 +405,7 @@ export {
 	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	NO_STORE_HEADERS,
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";

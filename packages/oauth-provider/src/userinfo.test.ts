@@ -3,16 +3,23 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	deriveDpopAth,
+	deriveDpopJkt,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+const INVALID_ACCESS_TOKEN_CHALLENGE =
+	'Bearer error="invalid_token", error_description="Invalid access token"';
 
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -87,6 +94,7 @@ describe("oauth userinfo", async () => {
 			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
+		extraHeaders?: HeadersInit,
 	) {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -102,6 +110,13 @@ describe("oauth userinfo", async () => {
 			},
 		});
 
+		const tokenHeaders = new Headers(headers);
+		if (extraHeaders) {
+			for (const [key, value] of new Headers(extraHeaders)) {
+				tokenHeaders.set(key, value);
+			}
+		}
+
 		const tokens = await client.$fetch<{
 			access_token?: string;
 			id_token?: string;
@@ -114,10 +129,44 @@ describe("oauth userinfo", async () => {
 		}>("/oauth2/token", {
 			method: "POST",
 			body: body,
-			headers: headers,
+			headers: tokenHeaders,
 		});
 
 		return tokens;
+	}
+
+	async function createDpopKey() {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		return { privateKey, publicJwk, jkt };
+	}
+
+	async function createDpopProof(params: {
+		privateKey: CryptoKey;
+		publicJwk: JWK;
+		method: string;
+		url: string;
+		jti: string;
+		accessToken?: string;
+	}) {
+		return new SignJWT({
+			jti: params.jti,
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.accessToken
+				? { ath: await deriveDpopAth(params.accessToken) }
+				: {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: params.publicJwk,
+			})
+			.sign(params.privateKey);
 	}
 
 	async function getTokens(
@@ -162,6 +211,31 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.error?.status).toBe(401);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 */
+	it("should return an invalid_token challenge for an unknown bearer token", async () => {
+		let wwwAuthenticate = "";
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: "Bearer this-is-not-a-valid-access-token",
+				},
+				onError(context) {
+					wwwAuthenticate =
+						context.response.headers.get("WWW-Authenticate") ?? "";
+				},
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(401);
+		expect(
+			(userinfo.error as { error?: string; error_description?: string }).error,
+		).toBe("invalid_token");
+		expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
+	});
+
 	it("should fail without the openid scope", async () => {
 		const tokens = await getTokens({
 			scopes: ["profile"],
@@ -199,8 +273,12 @@ describe("oauth userinfo", async () => {
 			expect.unreachable();
 		} catch (error) {
 			const err = error as APIError;
+			const headers = new Headers(err.headers);
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({ error: "invalid_token" });
+			expect(headers.get("WWW-Authenticate")).toBe(
+				INVALID_ACCESS_TOKEN_CHALLENGE,
+			);
 		}
 	});
 
@@ -296,6 +374,71 @@ describe("oauth userinfo", async () => {
 			family_name: expect.any(String),
 			email: user.email,
 			email_verified: user.emailVerified,
+		});
+	});
+
+	it("enforces DPoP proof for DPoP-bound userinfo access", async () => {
+		const dpopKey = await createDpopKey();
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			additionalParams: { dpop_jkt: dpopKey.jkt },
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const tokenDpopProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: `${authServerBaseUrl}/api/auth/oauth2/token`,
+			jti: "token-proof",
+		});
+		const tokens = await validateAuthCode(
+			{
+				code: callbackUrl.searchParams.get("code")!,
+				codeVerifier,
+				resource: validResource,
+			},
+			{ DPoP: tokenDpopProof },
+		);
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const bearerUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+			},
+		);
+		expect(bearerUserinfo.error?.status).toBe(401);
+
+		const userinfoDpopProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "GET",
+			url: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+			jti: "userinfo-proof",
+			accessToken: tokens.data?.access_token,
+		});
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: `DPoP ${tokens.data?.access_token ?? ""}`,
+					DPoP: userinfoDpopProof,
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			email: user.email,
 		});
 	});
 

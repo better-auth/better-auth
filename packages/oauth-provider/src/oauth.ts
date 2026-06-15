@@ -20,6 +20,7 @@ import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
+import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import {
 	deliverBackchannelLogoutTokens,
@@ -27,8 +28,8 @@ import {
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
-	authServerMetadata,
 	metadataResponse,
+	oauthAuthorizationServerMetadata,
 	oidcServerMetadata,
 } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
@@ -47,6 +48,7 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	authorizationQuerySchema,
+	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
 } from "./types/zod";
@@ -55,13 +57,11 @@ import {
 	getJwtPlugin,
 	getSignedQueryIssuedAt,
 	isSessionFreshForSignedQuery,
-	mergeDiscoveryMetadata,
 	postLoginClearedParam,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
-	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -179,6 +179,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
 	};
+	validateOAuthProviderExtensions(opts.extensions);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -281,25 +282,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					),
 				};
 			}
-			const jwtPluginOptions = opts.disableJwtPlugin
-				? undefined
-				: getJwtPlugin(ctx)?.options;
-			const authMetadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
-				scopes_supported:
-					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-				dynamic_client_registration_supported:
-					opts.allowDynamicClientRegistration,
-				public_client_supported:
-					opts.allowUnauthenticatedClientRegistration ||
-					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-				grant_types_supported: opts.grantTypes,
-				jwt_disabled: opts.disableJwtPlugin,
-			});
 			return {
-				response: createMetadataResponse({
-					...authMetadata,
-					...mergeDiscoveryMetadata(opts.clientDiscovery),
-				}),
+				response: createMetadataResponse(
+					oauthAuthorizationServerMetadata(endpointCtx, opts),
+				),
 			};
 		}
 
@@ -708,24 +694,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return metadata;
 					} else {
-						const jwtPluginOptions = opts.disableJwtPlugin
-							? undefined
-							: getJwtPlugin(ctx.context)?.options;
-						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-							scopes_supported:
-								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-							dynamic_client_registration_supported:
-								opts.allowDynamicClientRegistration,
-							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration ||
-								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-							grant_types_supported: opts.grantTypes,
-							jwt_disabled: opts.disableJwtPlugin,
-						});
-						return {
-							...authMetadata,
-							...mergeDiscoveryMetadata(opts.clientDiscovery),
-						};
+						return oauthAuthorizationServerMetadata(ctx, opts);
 					}
 				},
 			),
@@ -864,29 +833,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					// second time, which only works when better-call clones
 					// the request before its own parse.
 					cloneRequest: true,
-					body: z.object({
-						grant_type: z
-							.string()
-							.pipe(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							),
-						client_id: z.string().optional(),
-						client_secret: z.string().optional(),
-						client_assertion: z.string().optional(),
-						client_assertion_type: z.string().optional(),
-						code: z.string().optional(),
-						code_verifier: z.string().optional(),
-						redirect_uri: SafeUrlSchema.optional(),
-						refresh_token: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						scope: z.string().optional(),
-					}),
+					body: z
+						.object({
+							grant_type: z.string().trim().min(1),
+							client_id: z.string().optional(),
+							client_secret: z.string().optional(),
+							client_assertion: z.string().optional(),
+							client_assertion_type: z.string().optional(),
+							code: z.string().optional(),
+							code_verifier: z.string().optional(),
+							redirect_uri: SafeUrlSchema.optional(),
+							refresh_token: z.string().optional(),
+							resource: z
+								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+								.optional(),
+							scope: z.string().optional(),
+						})
+						.passthrough(),
 					errorCodesByField: {
 						grant_type: {
 							missing: "invalid_request",
@@ -895,9 +858,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
+							parameters: [
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT for issuing DPoP-bound tokens",
+								},
+							],
 							requestBody: {
 								required: true,
 								content: {
@@ -907,11 +881,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											properties: {
 												grant_type: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 													description: "OAuth2 grant type",
 												},
 												client_id: {
@@ -985,7 +954,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													token_type: {
 														type: "string",
 														description: "The type of the token issued",
-														enum: ["Bearer"],
+														enum: ["Bearer", "DPoP"],
 													},
 													expires_in: {
 														type: "number",
@@ -1064,6 +1033,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Introspect an OAuth2 access or refresh token",
@@ -1278,6 +1248,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: ["GET", "POST"],
 					metadata: {
+						noStore: true,
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
@@ -1291,7 +1262,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									in: "header",
 									required: false,
 									schema: { type: "string" },
-									description: "Bearer access token",
+									description: "Bearer or DPoP access token",
+								},
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT when using a DPoP-bound access token",
 								},
 							],
 							responses: {
@@ -1438,77 +1417,22 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
-						scope: z.string().optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						contacts: z.array(z.string().min(1)).min(1).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						backchannel_logout_uri: SafeUrlSchema.optional(),
-						backchannel_logout_session_required: z.boolean().optional(),
-						token_endpoint_auth_method: z
-							.enum([
-								"none",
-								"client_secret_basic",
-								"client_secret_post",
-								"private_key_jwt",
-							])
-							.default("client_secret_basic")
-							.optional(),
-						jwks: z
-							.union([
-								z.array(z.record(z.string(), z.unknown())).min(1),
-								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())).min(1),
-								}),
-							])
-							.optional(),
-						jwks_uri: z.string().optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code"]))
-							.default(["code"])
-							.optional(),
-						type: z.enum(["web", "native", "user-agent-based"]).optional(),
-						subject_type: z.enum(["public", "pairwise"]).optional(),
-						// RFC 7591 §2 extension: declare the resources this client
-						// will request. Each must reference an existing oauthResource
-						// row; the registration handler links them on success.
-						resources: z.array(z.string().min(1)).optional(),
-						skip_consent: z
-							.never({
-								error:
-									"skip_consent cannot be set during dynamic client registration",
-							})
-							.optional(),
-					}),
+					body: clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
 						software_statement: "invalid_software_statement",
+						// RFC 8707 §2: a malformed resource indicator is invalid_target,
+						// matching the existence check in registerEndpoint.
+						resources: "invalid_target",
 					},
 					defaultError: "invalid_client_metadata",
 					metadata: {
+						noStore: true,
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
-								"200": {
+								"201": {
 									description: "OAuth2 application registered successfully",
 									content: {
 										"application/json": {
@@ -1617,25 +1541,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "string",
 														description:
 															"Requested authentication method for the token endpoint",
-														enum: [
-															"none",
-															"client_secret_basic",
-															"client_secret_post",
-															"private_key_jwt",
-														],
 													},
 													grant_types: {
 														type: "array",
 														items: {
 															type: "string",
-															enum: [
-																"authorization_code",
-																"client_credentials",
-																"refresh_token",
-															],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Grant types the client may use at the token endpoint",
 													},
 													response_types: {
 														type: "array",
@@ -1644,7 +1557,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															enum: ["code"],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Response types the client may use at the authorization endpoint",
 													},
 													public: {
 														type: "boolean",

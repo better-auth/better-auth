@@ -17,7 +17,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "createdAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -68,7 +67,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "Session": {
         "properties": {
           "createdAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -110,7 +108,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "User": {
         "properties": {
           "createdAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -140,7 +137,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "updatedAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -159,7 +155,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "Verification": {
         "properties": {
           "createdAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -175,7 +170,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "updatedAt": {
-            "default": "Generated at runtime",
             "format": "date-time",
             "type": "string",
           },
@@ -378,7 +372,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": undefined,
         "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "responses": {
           "400": {
             "content": {
@@ -489,7 +492,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": undefined,
         "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {

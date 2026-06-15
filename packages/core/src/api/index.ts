@@ -13,6 +13,25 @@ import type { AuthContext } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 
 /**
+ * Response headers that forbid any intermediary (proxy, CDN, browser) from
+ * caching a response body. Credential-bearing responses (access/refresh tokens,
+ * ID tokens, client secrets, device codes) must carry them.
+ *
+ * Set `metadata: { noStore: true }` on an endpoint and {@link createAuthEndpoint}
+ * applies these to the responses its handler produces: the success body and any
+ * error the handler throws. A request rejected by schema or media-type
+ * validation before the handler runs is not covered, and carries no credentials
+ * to protect. Spread them into a hand-built `Response` or `APIError`'s headers
+ * for the rare endpoint that constructs its own response.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+ */
+export const NO_STORE_HEADERS = {
+	"Cache-Control": "no-store",
+	Pragma: "no-cache",
+} as const;
+
+/**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
  * accumulated on ctx.responseHeaders (e.g. Set-Cookie from deleteSessionCookie
  * before throw). Attach them to the error via kAPIErrorHeaderSymbol — matching
@@ -101,8 +120,23 @@ export function createAuthEndpoint<
 	const handler: EndpointHandler<Path, Opts, R> =
 		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
 
+	// Endpoints that return credentials declare `metadata: { noStore: true }`.
+	// Emit the no-store headers at the boundary, before the handler runs, so they
+	// land on every response the handler produces: a success harvests
+	// `responseHeaders`, and a thrown error carries the same headers through
+	// `attachResponseHeadersToAPIError`. Validation that rejects the request
+	// before the handler runs is not covered (and returns no credentials).
+	const noStore =
+		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
+		true;
+
 	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
 	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
+		if (noStore) {
+			for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
+				ctx.setHeader(name, value);
+			}
+		}
 		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
 		try {
 			return await runWithEndpointContext(ctx as any, () => handler(ctx));

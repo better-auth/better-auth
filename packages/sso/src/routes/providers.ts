@@ -11,7 +11,7 @@ import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import {
 	DiscoveryError,
 	mapDiscoveryErrorToAPIError,
-	validateSkipDiscoveryEndpoints,
+	validateOIDCEndpointUrls,
 } from "../oidc";
 import {
 	resolveSigningCerts,
@@ -567,7 +567,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 			if (body.oidcConfig) {
 				try {
-					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
+					validateOIDCEndpointUrls(body.oidcConfig, (url) =>
 						ctx.context.isTrustedOrigin(url),
 					);
 				} catch (error) {

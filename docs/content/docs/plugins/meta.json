@@ -26,7 +26,6 @@
     "oauth-proxy",
     "oauth-provider",
     "cimd",
-    "oidc-provider",
     "mcp",
     "device-authorization",
     "stripe",
