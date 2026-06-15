@@ -174,6 +174,8 @@ export interface OAuthTokenResponse {
 	[key: string]: unknown;
 }
 
+export type ActiveAccessTokenPayload = JWTPayload & { active: true };
+
 /**
  * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
  * A grant handler receives one as `provider`; a companion plugin's own endpoint
@@ -217,10 +219,23 @@ export interface OAuthProviderApi {
 	 * opaque token by its value.
 	 */
 	hashToken: (token: string, type: StoreTokenType) => Awaitable<string>;
+	/**
+	 * Validates an access token for introspection-style callers. The returned
+	 * payload can be inactive; protected-resource endpoints should use
+	 * `requireActiveAccessToken`.
+	 */
 	validateAccessToken: (
 		token: string,
 		clientId?: string,
 	) => Awaitable<JWTPayload>;
+	/**
+	 * Validates an access token for a protected resource and throws the OAuth
+	 * bearer challenge when the token is inactive or unknown.
+	 */
+	requireActiveAccessToken: (
+		token: string,
+		clientId?: string,
+	) => Awaitable<ActiveAccessTokenPayload>;
 }
 
 export interface OAuthExtensionGrantHandlerInput {
