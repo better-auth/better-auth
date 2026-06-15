@@ -311,7 +311,7 @@ export async function verifyClientAssertion(
 	clientAssertionType: string,
 	clientIdHint?: string,
 	expectedAudience?: string,
-): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
+): Promise<{ clientId: string }> {
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
@@ -453,5 +453,5 @@ export async function verifyClientAssertion(
 		expectedAudience: audience,
 	});
 
-	return { clientId, client };
+	return { clientId };
 }

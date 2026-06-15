@@ -16,7 +16,6 @@ import type {
 	SchemaClient,
 	Scope,
 } from "./types";
-import { validateClientCredentials } from "./utils";
 import { consumeClientAssertion } from "./utils/client-assertion";
 
 describe("oauth-provider extensions", async () => {
@@ -26,6 +25,7 @@ describe("oauth-provider extensions", async () => {
 	const extensionGrant = "urn:better-auth:test:grant";
 	const extensionOpaqueGrant = "urn:better-auth:test:opaque-grant";
 	const extensionOpaqueBoundGrant = "urn:better-auth:test:opaque-bound-grant";
+	const extensionDriftGrant = "urn:better-auth:test:drift-grant";
 	const extensionAuthMethod = "test_attestation_jwt";
 	const extensionAssertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
@@ -47,7 +47,7 @@ describe("oauth-provider extensions", async () => {
 		init(ctx) {
 			extendOAuthProvider(ctx, {
 				grants: {
-					[extensionGrant]: async ({ ctx, grantType, provider }) => {
+					[extensionGrant]: async ({ ctx, provider }) => {
 						observedCustomParam = (ctx.body as { custom_param?: string })
 							.custom_param;
 						if (!grantUser) {
@@ -58,7 +58,6 @@ describe("oauth-provider extensions", async () => {
 						}
 						const { client, confirmation } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
-							grantType,
 						});
 						return provider.issueTokens({
 							client,
@@ -86,7 +85,7 @@ describe("oauth-provider extensions", async () => {
 					// Issues an opaque access token (no resource -> no audience), so
 					// introspection re-derives extension claims through the resolver
 					// instead of returning a signed JWT payload verbatim.
-					[extensionOpaqueGrant]: async ({ grantType, provider }) => {
+					[extensionOpaqueGrant]: async ({ provider }) => {
 						if (!grantUser) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_request",
@@ -95,7 +94,6 @@ describe("oauth-provider extensions", async () => {
 						}
 						const { client } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
-							grantType,
 						});
 						return provider.issueTokens({
 							client,
@@ -109,7 +107,7 @@ describe("oauth-provider extensions", async () => {
 					// Sender-constrains an opaque access token (no resource). The
 					// confirmation is persisted on the opaque-token row (RFC 7800 `cnf`)
 					// and surfaced at introspection, not silently dropped.
-					[extensionOpaqueBoundGrant]: async ({ grantType, provider }) => {
+					[extensionOpaqueBoundGrant]: async ({ provider }) => {
 						if (!grantUser) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_request",
@@ -118,7 +116,6 @@ describe("oauth-provider extensions", async () => {
 						}
 						const { client } = await provider.authenticateClient({
 							scopes: ["openid", "email", "vc"],
-							grantType,
 						});
 						return provider.issueTokens({
 							client,
@@ -127,32 +124,42 @@ describe("oauth-provider extensions", async () => {
 							confirmation: { jkt: "opaque-bound-jkt" },
 						});
 					},
+					// A stale/buggy handler that still passes a permissive grantType the
+					// type no longer allows. The provider must ignore it and authorize
+					// against the dispatched grant.
+					[extensionDriftGrant]: async ({ provider }) => {
+						if (!grantUser) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "test user is not ready",
+							});
+						}
+						const staleRequest = {
+							scopes: ["openid", "email", "vc"],
+							grantType: extensionOpaqueGrant,
+						} as Parameters<typeof provider.authenticateClient>[0];
+						const { client } = await provider.authenticateClient(staleRequest);
+						return provider.issueTokens({
+							client,
+							scopes: ["openid", "email", "vc"],
+							user: grantUser,
+						});
+					},
 				},
 				clientAuthentication: {
 					[extensionAuthMethod]: {
 						assertionTypes: [extensionAssertionType],
-						authenticate: async ({ ctx, assertion, clientId }) => {
+						authenticate: async ({ assertion, clientId }) => {
 							if (!clientId || assertion !== `assertion:${clientId}`) {
 								throw new APIError("UNAUTHORIZED", {
 									error: "invalid_client",
 									error_description: "invalid test assertion",
 								});
 							}
-							const client = await ctx.context.adapter.findOne<
-								SchemaClient<Scope[]>
-							>({
-								model: "oauthClient",
-								where: [{ field: "clientId", value: clientId }],
-							});
-							if (!client) {
-								throw new APIError("BAD_REQUEST", {
-									error: "invalid_client",
-									error_description: "missing client",
-								});
-							}
+							// Prove the caller controls clientId; the provider resolves and
+							// authorizes the client record itself.
 							return {
 								clientId,
-								client,
 								// A sender-constraint the strategy proved (wallet
 								// attestation); the grant forwards it to issueTokens. An
 								// mTLS-style `x5t#S256` keeps the token bearer-presentable,
@@ -373,29 +380,56 @@ describe("oauth-provider extensions", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("rejects assertion auth for legacy clients with omitted auth method", async () => {
-		const legacyClient = {
-			clientId: "legacy-default-client",
-			public: false,
-		} as SchemaClient<Scope[]>;
-		await expect(
-			validateClientCredentials(
-				{} as Parameters<typeof validateClientCredentials>[0],
-				{} as Parameters<typeof validateClientCredentials>[1],
-				legacyClient.clientId,
-				undefined,
-				undefined,
-				legacyClient,
-				undefined,
-				extensionAuthMethod,
-			),
-		).rejects.toMatchObject({
-			statusCode: 400,
+	it("rejects assertion auth for clients with omitted (default) auth method", async () => {
+		// A client with no explicit auth method defaults to client_secret_basic, so
+		// it cannot authenticate through an extension assertion method.
+		const legacyClient = await auth.api.adminCreateOAuthClient({
+			headers,
 			body: {
-				error: "invalid_client",
-				error_description: `client registered for client_secret_basic cannot use ${extensionAuthMethod}`,
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				type: "web",
 			},
 		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: legacyClient!.client_id,
+				client_assertion_type: extensionAssertionType,
+				client_assertion: `assertion:${legacyClient!.client_id}`,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+		expect(response.error?.status).toBe(400);
+		expect(
+			(response.error as { error_description?: string } | undefined)
+				?.error_description,
+		).toContain("client registered for client_secret_basic cannot use");
+	});
+
+	it("authorizes against the resolved record, not the strategy", async () => {
+		// The strategy proves a client id; the provider resolves the record. A proven
+		// id with no registered client is rejected, since a strategy cannot conjure a
+		// client the authorization server never registered.
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: "unregistered-but-proven",
+				client_assertion_type: extensionAssertionType,
+				client_assertion: "assertion:unregistered-but-proven",
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
 	});
 
 	it("rejects invalid direct extension options during provider setup", () => {
@@ -546,6 +580,38 @@ describe("oauth-provider extensions", async () => {
 		expect(introspection.error).toBeNull();
 		expect(introspection.data?.active).toBe(true);
 		expect(introspection.data?.extension_access_claim).toBe("extension-access");
+	});
+
+	it("ignores a runtime grantType argument and gates on the dispatched grant", async () => {
+		// The drift handler smuggles grantType: extensionOpaqueGrant into
+		// authenticateClient. This client is registered for the opaque grant but not
+		// the dispatched drift grant. Honoring the smuggled grant would authorize it;
+		// the bound grant must gate instead.
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionOpaqueGrant],
+				scope: "openid email vc",
+				type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionDriftGrant,
+				client_id: oauthClient!.client_id,
+				client_assertion_type: extensionAssertionType,
+				client_assertion: `assertion:${oauthClient!.client_id}`,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"unauthorized_client",
+		);
 	});
 
 	it("rejects unsupported extension grant types before credential handling", async () => {

@@ -1417,10 +1417,9 @@ export const customOAuthExtension = () =>
       extendOAuthProvider(ctx, {
         grants: {
           "urn:example:params:oauth:grant-type:custom": async ({
-            grantType,
             provider,
           }) => {
-            const { client } = await provider.authenticateClient({ grantType });
+            const { client } = await provider.authenticateClient();
             return provider.issueTokens({
               client,
               scopes: ["openid"],
@@ -1450,11 +1449,11 @@ A claims contributor can add new claim names but never replaces an identity, aut
 
 A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
 
-To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or set it on the authenticated client a `clientAuthentication` strategy returns. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
+To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or return it from a `clientAuthentication` strategy. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
 
 #### Client authentication obligations
 
-A `clientAuthentication` strategy verifies the assertion against its own key source and returns the registered client. After verifying the signature it must enforce the same assertion hygiene the built-in `private_key_jwt` method enforces, or the provider will accept a forged or replayed assertion. Use the exported `consumeClientAssertion` helper to bind the assertion to the endpoint audience, require a bounded lifetime, and reject `jti` replays:
+A `clientAuthentication` strategy verifies the assertion against its own key source and returns the client id it proved; the provider resolves and authorizes the client record itself, so a strategy proves identity but never supplies the record. After verifying the signature it must enforce the same assertion hygiene the built-in `private_key_jwt` method enforces, or the provider will accept a forged or replayed assertion. Use the exported `consumeClientAssertion` helper to bind the assertion to the endpoint audience, require a bounded lifetime, and reject `jti` replays:
 
 ```ts
 import { consumeClientAssertion } from "@better-auth/oauth-provider";
@@ -1468,10 +1467,9 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
     payload,
     expectedAudience: expectedAudience!,
   });
-  return {
-    clientId: payload.sub as string,
-    client: await loadRegisteredClient(ctx, opts, payload.sub),
-  };
+  // Return only the proven client id (and an optional `confirmation`). The
+  // provider resolves and authorizes the client record itself.
+  return { clientId: payload.sub as string };
 };
 ```
 
