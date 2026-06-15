@@ -1537,8 +1537,7 @@ describe("Cookie Chunking", () => {
 			session: { cookieCache: { enabled: true } },
 		});
 
-		const headers = new Headers();
-		let hasChunks = false;
+		let rawSetCookie = "";
 		await client.signUp.email(
 			{
 				name: "Entra User",
@@ -1548,29 +1547,35 @@ describe("Cookie Chunking", () => {
 			} as any,
 			{
 				onSuccess(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toBeDefined();
-					const parsed = parseSetCookieHeader(setCookie!);
-					parsed.forEach((attr, name) => {
-						if (!name.includes("session_data")) return;
-						if (/session_data\.\d+$/.test(name)) hasChunks = true;
-						const line = serializeCookie(
-							name,
-							attr.value,
-							toCookieOptions(attr),
-						);
-						expect(
-							line.length,
-							`session_data cookie "${name}" serialized to ${line.length} bytes`,
-						).toBeLessThanOrEqual(4093);
-						headers.append("cookie", `${name}=${attr.value}`);
-					});
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
 				},
 			},
 		);
 
-		expect(hasChunks).toBe(true);
+		const sessionDataCookies = [...parseSetCookieHeader(rawSetCookie)].filter(
+			([name]) => name.includes("session_data"),
+		);
 
+		// Every emitted session_data cookie must fit the per-cookie limit.
+		for (const [name, attr] of sessionDataCookies) {
+			const line = serializeCookie(name, attr.value, toCookieOptions(attr));
+			expect(
+				line.length,
+				`session_data cookie "${name}" serialized to ${line.length} bytes`,
+			).toBeLessThanOrEqual(4093);
+		}
+
+		// The value was split rather than emitted as one oversized cookie.
+		const isChunked = sessionDataCookies.some(([name]) =>
+			/session_data\.\d+$/.test(name),
+		);
+		expect(isChunked).toBe(true);
+
+		// The chunks reassemble back into a readable cache.
+		const headers = new Headers();
+		for (const [name, attr] of sessionDataCookies) {
+			headers.append("cookie", `${name}=${attr.value}`);
+		}
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
