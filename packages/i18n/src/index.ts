@@ -74,7 +74,7 @@ export const i18n = <Locales extends string[]>(
 		availableLocales.includes(options.defaultLocale)
 	) {
 		defaultLocale = options.defaultLocale;
-	} else if (availableLocales.includes("en") || availableLocales.length > 0) {
+	} else if (availableLocales.length > 0) {
 		defaultLocale = "en" as Locales[number];
 	} else {
 		throw new Error(
