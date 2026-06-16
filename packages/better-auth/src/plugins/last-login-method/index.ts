@@ -68,6 +68,19 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		if (path.startsWith("/callback/") || path.startsWith("/oauth2/callback/")) {
 			return ctx.params?.id || ctx.params?.providerId || path.split("/").pop();
 		}
+		// OAuth proxy flow (oAuthProxy plugin) finishes the session at
+		// /oauth-proxy-callback and carries the provider id as a query param.
+		// The proxy callback verifies it against the decrypted profile before
+		// creating the user/session, so by the time this runs it is trusted.
+		// Still sanitize the read side: only accept a provider-id-shaped token,
+		// so an unexpected value can never become the stored method label.
+		if (path === "/oauth-proxy-callback") {
+			const provider = ctx.query?.provider;
+			return typeof provider === "string" &&
+				/^[a-zA-Z0-9._-]{1,64}$/.test(provider)
+				? provider
+				: null;
+		}
 		// Check for email sign-in/sign-up
 		if (path === "/sign-in/email" || path === "/sign-up/email") {
 			return "email";
