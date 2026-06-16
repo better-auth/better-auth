@@ -143,6 +143,8 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [22.x, 24.x]
+    env:
+      COMPOSE_SERVICES: postgres postgres-kysely mongodb
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -175,8 +177,6 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        env:
-          COMPOSE_SERVICES: postgres postgres-kysely mongodb
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
@@ -186,8 +186,6 @@ jobs:
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
-        env:
-          COMPOSE_SERVICES: postgres postgres-kysely mongodb
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true

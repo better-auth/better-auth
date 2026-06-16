@@ -27,6 +27,8 @@ jobs:
         node-version: [22.x, 24.x]
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: redis
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -62,8 +64,6 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        env:
-          COMPOSE_SERVICES: redis
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
@@ -79,8 +79,6 @@ jobs:
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
-        env:
-          COMPOSE_SERVICES: redis
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
@@ -95,6 +93,8 @@ jobs:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: postgres
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -127,8 +127,6 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        env:
-          COMPOSE_SERVICES: postgres
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
@@ -138,8 +136,6 @@ jobs:
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
-        env:
-          COMPOSE_SERVICES: postgres
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
@@ -169,6 +165,8 @@ jobs:
             compose_services: "mongodb"
           - packages: "@better-auth-test/prisma-adapter"
             compose_services: "postgres-prisma mysql-prisma"
+    env:
+      COMPOSE_SERVICES: ${{ matrix.compose_services }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -199,8 +197,6 @@ jobs:
 
       - name: Start Docker Containers
         if: matrix.compose_services != ''
-        env:
-          COMPOSE_SERVICES: ${{ matrix.compose_services }}
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
@@ -212,8 +208,6 @@ jobs:
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != '' && matrix.compose_services != ''
-        env:
-          COMPOSE_SERVICES: ${{ matrix.compose_services }}
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
