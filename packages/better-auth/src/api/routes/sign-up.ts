@@ -5,6 +5,7 @@ import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
+import { getRequestBaseURL } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
@@ -401,7 +402,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					const callbackURL = body.callbackURL
 						? encodeURIComponent(body.callbackURL)
 						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+					const url = `${getRequestBaseURL(ctx)}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(

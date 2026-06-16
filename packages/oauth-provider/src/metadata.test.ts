@@ -430,20 +430,19 @@ describe("oauth metadata", async () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/9105
+ * Identity (the OIDC/OAuth issuer) stays anchored to the canonical `baseURL`
+ * even when discovery is fetched on another trusted host, so tokens and
+ * discovery agree across multi-domain deployments.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/4151
  */
-describe("dynamic baseURL metadata wrappers", async () => {
-	const host = "tenant.example.com";
-	const expectedBaseURL = `https://${host}/api/auth`;
+describe("metadata wrappers use the canonical baseURL", async () => {
+	const canonical = "https://auth.example.com";
+	const expectedIssuer = `${canonical}/api/auth`;
 
-	// Fallback is required because `getTestInstance` internally invokes
-	// `signUpEmail` with no Request during setup.
 	const { auth } = await getTestInstance({
-		baseURL: {
-			allowedHosts: [host],
-			protocol: "https",
-			fallback: "https://fallback.example.com",
-		},
+		baseURL: canonical,
+		trustedOrigins: ["https://tenant.example.com"],
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
@@ -457,24 +456,24 @@ describe("dynamic baseURL metadata wrappers", async () => {
 		],
 	});
 
-	it("oauthProviderAuthServerMetadata resolves baseURL from the incoming request", async () => {
+	it("oauthProviderAuthServerMetadata serves the canonical issuer regardless of request host", async () => {
 		const request = new Request(
-			`https://${host}/.well-known/oauth-authorization-server`,
+			"https://tenant.example.com/.well-known/oauth-authorization-server",
 		);
 		const response = await oauthProviderAuthServerMetadata(auth)(request);
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as { issuer: string };
-		expect(body.issuer).toBe(expectedBaseURL);
+		expect(body.issuer).toBe(expectedIssuer);
 	});
 
-	it("oauthProviderOpenIdConfigMetadata resolves baseURL from the incoming request", async () => {
+	it("oauthProviderOpenIdConfigMetadata serves the canonical issuer regardless of request host", async () => {
 		const request = new Request(
-			`https://${host}/.well-known/openid-configuration`,
+			"https://tenant.example.com/.well-known/openid-configuration",
 		);
 		const response = await oauthProviderOpenIdConfigMetadata(auth)(request);
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as { issuer: string };
-		expect(body.issuer).toBe(expectedBaseURL);
+		expect(body.issuer).toBe(expectedIssuer);
 	});
 });
 

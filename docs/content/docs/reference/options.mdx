@@ -20,12 +20,9 @@ export const auth = betterAuth({
 
 ## `baseURL`
 
-Base URL for Better Auth. This is typically the root URL where your application server is hosted. You can configure it as either:
+The canonical, stable URL where this Better Auth server is hosted, as a string. It anchors identity-bearing values that must not change between requests: the OAuth/OIDC issuer, JWT `iss`/`aud`, the social-login `redirect_uri`, and the Passkey relying-party id.
 
-* a static string for single-domain deployments
-* an object for dynamic per-request resolution across multiple allowed hosts
-
-If you include a path in the baseURL string, it will take precedence over the default path.
+If you include a path in the baseURL string, it takes precedence over the default path.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -34,43 +31,27 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
+If not explicitly set, the system checks the environment variable `BETTER_AUTH_URL`. If that's also not set, the origin is inferred from the incoming request.
 
 <Callout type="warn">
   Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
 </Callout>
 
-### Dynamic Base URL
+### Multiple domains, previews, and white-label
 
-Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the incoming request, validates it against `allowedHosts`, and constructs the request-specific base URL from that match.
+Keep `baseURL` fixed and list the additional hosts in [`trustedOrigins`](#trustedorigins) (a static array or a per-request function). Cookies and self-referential links (email verification, magic links, password reset) then follow the host the request arrived on, while identity stays anchored to `baseURL`.
 
 ```ts
-import { betterAuth } from "better-auth";
-
 export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"myapp.com",
-			"www.myapp.com",
-			"*.vercel.app",
-		],
-		protocol: "https",
-		fallback: "https://myapp.com",
-	},
+	baseURL: "https://myapp.com",
+	trustedOrigins: [
+		"https://www.myapp.com",
+		"https://*.vercel.app",
+	],
 })
 ```
 
-* `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
-* `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trustedOrigins`
-
-<Callout type="warn">
-  Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
-</Callout>
-
-When `crossSubDomainCookies` is enabled, the cookie domain is derived from the resolved request host unless you set `domain` explicitly.
-
-For deployment patterns and end-to-end examples, see the [Dynamic Base URL guide](/docs/guides/dynamic-base-url).
+For deployment patterns and end-to-end examples, see the [Multiple Domains guide](/docs/guides/dynamic-base-url).
 
 ## `basePath`
 
@@ -107,7 +88,9 @@ You can provide a function that returns origins dynamically:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: async (request) => {
-		// request is undefined during initialization and auth.api calls
+		// request is undefined during initialization and during auth.api calls
+		// that pass no headers; it is present (synthesized from the headers) when
+		// you pass `headers`/`request` to the call
 		if (!request) {
 			return ["https://my-frontend.com"];
 		}
@@ -118,7 +101,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+  The `request` parameter is `undefined` during initialization and during direct `auth.api` calls that pass no headers. When you pass `headers` or `request` to an `auth.api` call, the callback receives a `Request` carrying them. Handle the `undefined` case by returning default trusted origins.
 </Callout>
 
 ### Wildcard Support

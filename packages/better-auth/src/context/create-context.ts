@@ -25,7 +25,7 @@ import type { JwtOptions } from "../plugins/jwt/types";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import { getBaseURL } from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
@@ -130,28 +130,11 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 
-	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
+	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	if (isDynamicBaseURLConfig(options.baseURL)) {
-		const { allowedHosts } = options.baseURL;
-		if (!allowedHosts || allowedHosts.length === 0) {
-			throw new BetterAuthError(
-				"baseURL.allowedHosts cannot be empty. Provide at least one allowed host pattern " +
-					'(e.g., ["myapp.com", "*.vercel.app"]).',
-			);
-		}
-	}
-
-	const baseURL = isDynamicConfig
-		? undefined
-		: getBaseURL(
-				typeof options.baseURL === "string" ? options.baseURL : undefined,
-				options.basePath,
-			);
-
-	if (!baseURL && !isDynamicConfig) {
+	if (!baseURL) {
 		logger.warn(
-			`[better-auth] Base URL is not set. Set the baseURL option or BETTER_AUTH_URL env, or use a dynamic baseURL with allowedHosts for multi-host setups. Without it the origin is derived from the incoming request, and callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL is not set. Set the baseURL option or BETTER_AUTH_URL env. For multi-domain or preview setups, keep baseURL fixed and add the extra hosts to trustedOrigins. Without a baseURL the canonical origin is derived from the incoming request, and identity-bearing values (issuer, redirect_uri) may be unstable.`,
 		);
 	}
 
@@ -189,11 +172,7 @@ Most of the features of Better Auth will not work correctly.`,
 	options = {
 		...options,
 		secret,
-		baseURL: isDynamicConfig
-			? options.baseURL
-			: baseURL
-				? new URL(baseURL).origin
-				: "",
+		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};

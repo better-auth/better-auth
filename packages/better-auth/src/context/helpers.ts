@@ -3,10 +3,9 @@ import type {
 	AwaitableFunction,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	GenericEndpointContext,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
-import { isLoopbackHost } from "@better-auth/core/utils/host";
 import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
 import { createCookieGetter, getCookies } from "../cookies";
@@ -14,11 +13,16 @@ import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
 import {
 	getBaseURL,
-	getOrigin,
-	isDynamicBaseURLConfig,
+	getRequestOrigin,
 	isRequestLike,
-	resolveBaseURL,
+	withPath,
 } from "../utils/url";
+
+/** Marks an `AuthContext` clone as already resolved for the current request, so
+ * the HTTP handler and the router's endpoint dispatch don't resolve it twice. */
+const PER_REQUEST_RESOLVED: unique symbol = Symbol(
+	"better-auth.perRequestResolved",
+);
 
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
@@ -111,36 +115,9 @@ export async function getTrustedOrigins(
 ): Promise<string[]> {
 	const trustedOrigins: (string | undefined | null)[] = [];
 
-	if (isDynamicBaseURLConfig(options.baseURL)) {
-		const allowedHosts = options.baseURL.allowedHosts;
-		const proto = options.baseURL.protocol;
-		for (const host of allowedHosts) {
-			if (!host.includes("://")) {
-				if (!proto || proto === "https" || proto === "auto") {
-					trustedOrigins.push(`https://${host}`);
-				}
-				if (proto === "http" || proto === "auto" || isLoopbackHost(host)) {
-					trustedOrigins.push(`http://${host}`);
-				}
-			} else {
-				trustedOrigins.push(host);
-			}
-		}
-
-		if (options.baseURL.fallback) {
-			try {
-				trustedOrigins.push(new URL(options.baseURL.fallback).origin);
-			} catch {}
-		}
-	} else {
-		const baseURL = getBaseURL(
-			typeof options.baseURL === "string" ? options.baseURL : undefined,
-			options.basePath,
-			request,
-		);
-		if (baseURL) {
-			trustedOrigins.push(new URL(baseURL).origin);
-		}
+	const baseURL = getBaseURL(options.baseURL, options.basePath, request);
+	if (baseURL) {
+		trustedOrigins.push(new URL(baseURL).origin);
 	}
 
 	if (options.trustedOrigins) {
@@ -189,87 +166,149 @@ export function pickSource(
 }
 
 /**
- * Returns the effective `trustedProxyHeaders` value for dynamic `baseURL`
- * resolution. Proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are
- * ignored unless the user opts in with `advanced.trustedProxyHeaders: true`,
- * matching the static-config path. Deployments behind a reverse proxy that
- * only exposes the public host via `x-forwarded-host` must set the flag.
+ * Whether `x-forwarded-host` / `x-forwarded-proto` may be used to determine the
+ * origin a request arrived on. Defaults to `false` so a spoofed `Host` cannot
+ * be honored unless the deployment opts in with `advanced.trustedProxyHeaders`,
+ * which a reverse proxy that exposes the public host via `x-forwarded-host`
+ * must set.
  */
-export function resolveDynamicTrustedProxyHeaders(
-	options: BetterAuthOptions,
-): boolean {
+function shouldTrustProxyHeaders(options: BetterAuthOptions): boolean {
 	return options.advanced?.trustedProxyHeaders ?? false;
 }
 
 /**
- * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
- * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
- * when the URL cannot be resolved; callers on the direct-API path convert
- * this to `APIError`.
+ * The base URL for self-referential links and cookies on this request:
+ * the origin the request arrived on when it is a trusted origin, otherwise the
+ * canonical {@link AuthContext.baseURL}. Identity-bearing values
+ * (issuer, `redirect_uri`, Passkey rp id) deliberately do NOT use this; they
+ * read the canonical `baseURL` so they stay stable across hosts.
  */
-export async function resolveRequestContext(
-	ctx: AuthContext,
-	source?: Request | Headers,
-	trustedProxyHeaders?: boolean,
-): Promise<AuthContext> {
-	const dynamicBaseURLConfig = ctx.options.baseURL;
-	const basePath = ctx.options.basePath || "/api/auth";
-	const baseURL = resolveBaseURL(
-		dynamicBaseURLConfig,
-		basePath,
+function resolveServingBaseURL(
+	context: AuthContext,
+	source: Request | Headers | undefined,
+): string {
+	if (!source) {
+		return context.baseURL;
+	}
+	const origin = getRequestOrigin(
 		source,
 		undefined,
-		trustedProxyHeaders,
+		shouldTrustProxyHeaders(context.options),
 	);
-	if (!baseURL) {
-		throw new BetterAuthError(
-			"Could not resolve base URL from request. Check your allowedHosts config.",
-		);
+	if (origin && context.isTrustedOrigin(origin)) {
+		return withPath(origin, context.options.basePath || "/api/auth");
 	}
+	return context.baseURL;
+}
 
+/**
+ * Serving base URL for the current endpoint request. See
+ * {@link resolveServingBaseURL}. Use this when building links and redirects
+ * that should return to the host the user is actually on (email verification,
+ * magic links, password reset, OAuth callback relay).
+ *
+ * Returns the canonical {@link AuthContext.baseURL} (possibly empty when no
+ * `baseURL`/env is configured and the request carries no origin), mirroring the
+ * long-standing no-baseURL behavior rather than throwing, so a hook that reads
+ * it on a request that does not build a URL is never broken.
+ */
+export function getRequestBaseURL(ctx: GenericEndpointContext): string {
+	// Only trust a genuine `Request` for the URL fallback; a Node
+	// IncomingMessage-shaped object would crash `headers.get`.
+	const source = isRequestLike(ctx.request) ? ctx.request : ctx.headers;
+	return resolveServingBaseURL(ctx.context, source);
+}
+
+/**
+ * True when any request-derived context value can change between requests and
+ * therefore must be resolved per request rather than reused from init:
+ * a request-derived canonical origin (no `baseURL`/env set), or a function
+ * `trustedOrigins`/`trustedProviders`.
+ */
+function needsRequestResolution(options: BetterAuthOptions): boolean {
+	return (
+		!options.baseURL ||
+		typeof options.trustedOrigins === "function" ||
+		typeof options.account?.accountLinking?.trustedProviders === "function"
+	);
+}
+
+/**
+ * Returns a per-request `AuthContext` clone with request-derived state resolved
+ * for this request: the canonical `baseURL` when none is configured, the
+ * `trustedOrigins`/`trustedProviders` sets, and the cross-subdomain cookie
+ * domain. The clone always happens so a request-flow plugin that writes to
+ * `ctx.context` (e.g. OAuth Proxy retargeting `baseURL`) can never leak onto the
+ * shared context under concurrent requests. The async re-resolution is skipped
+ * when nothing varies between requests, and entirely when there is no request
+ * to resolve against (a direct `auth.api` call without `headers`/`request`):
+ * a request-less call cannot change a request-derived value, so the init-time
+ * values carried on the clone are already correct.
+ */
+export async function resolvePerRequestContext(
+	ctx: AuthContext,
+	source: Request | Headers | undefined,
+): Promise<AuthContext> {
+	// The HTTP handler resolves once, then dispatches through the router, which
+	// re-binds the endpoints to this same context; without this guard the
+	// endpoint pass would resolve (and re-invoke function `trustedOrigins`/
+	// `trustedProviders`) a second time for the one request.
+	if ((ctx as Record<symbol, unknown>)[PER_REQUEST_RESOLVED]) {
+		return ctx;
+	}
+	const options = ctx.options;
 	const resolved = Object.create(
 		Object.getPrototypeOf(ctx),
 		Object.getOwnPropertyDescriptors(ctx),
 	) as AuthContext;
-	resolved.baseURL = baseURL;
-	resolved.options = {
-		...ctx.options,
-		baseURL: getOrigin(baseURL) || undefined,
-	};
+	Object.defineProperty(resolved, PER_REQUEST_RESOLVED, { value: true });
 
-	// Pass the dynamic config so getTrustedOrigins can expand `allowedHosts`.
-	const trustedOriginOptions: BetterAuthOptions = {
-		...resolved.options,
-		baseURL: dynamicBaseURLConfig,
-	};
-	// Only synthesize a Request for the user-facing callbacks that need one.
-	const needsRequest =
-		typeof ctx.options.trustedOrigins === "function" ||
-		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
-	let callbackRequest: Request | undefined;
-	if (needsRequest) {
-		if (isRequestLike(source)) {
-			callbackRequest = source;
-		} else if (source) {
-			callbackRequest = new Request(baseURL, { headers: source });
-		} else {
-			callbackRequest = undefined;
-		}
-	} else {
-		callbackRequest = undefined;
+	if (!source) {
+		return resolved;
 	}
-	resolved.trustedOrigins = await getTrustedOrigins(
-		trustedOriginOptions,
-		callbackRequest,
-	);
-	resolved.trustedProviders = await getTrustedProviders(
-		resolved.options,
-		callbackRequest,
-	);
 
-	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {
-		resolved.authCookies = getCookies(resolved.options);
-		resolved.createAuthCookie = createCookieGetter(resolved.options);
+	if (needsRequestResolution(options)) {
+		// No baseURL/env configured: anchor the canonical origin to this request
+		// so the first request's host isn't memoized onto the shared context.
+		if (!options.baseURL) {
+			const origin = getRequestOrigin(
+				source,
+				undefined,
+				shouldTrustProxyHeaders(options),
+			);
+			if (origin) {
+				resolved.baseURL = withPath(origin, options.basePath || "/api/auth");
+				resolved.options = { ...options, baseURL: origin };
+			}
+		}
+
+		// Function `trustedOrigins`/`trustedProviders` read the live request.
+		const callbackRequest = isRequestLike(source)
+			? source
+			: new Request(resolved.baseURL || "http://localhost", {
+					headers: source,
+				});
+		resolved.trustedOrigins = await getTrustedOrigins(
+			resolved.options,
+			callbackRequest,
+		);
+		resolved.trustedProviders = await getTrustedProviders(
+			resolved.options,
+			callbackRequest,
+		);
+	}
+
+	// Cross-subdomain cookie domain follows the serving host when not pinned.
+	if (
+		options.advanced?.crossSubDomainCookies?.enabled &&
+		!options.advanced.crossSubDomainCookies.domain
+	) {
+		const servingBaseURL = resolveServingBaseURL(resolved, source);
+		resolved.authCookies = getCookies(resolved.options, servingBaseURL);
+		resolved.createAuthCookie = createCookieGetter(
+			resolved.options,
+			servingBaseURL,
+		);
 	}
 
 	return resolved;

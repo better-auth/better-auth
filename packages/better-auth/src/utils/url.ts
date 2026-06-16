@@ -1,7 +1,5 @@
-import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { wildcardMatch } from "./wildcard";
 
 const SLASH_CHAR_CODE = "/".charCodeAt(0);
 
@@ -70,7 +68,7 @@ function assertHasProtocol(url: string): void {
 	}
 }
 
-function withPath(url: string, path = "/api/auth") {
+export function withPath(url: string, path = "/api/auth") {
 	assertHasProtocol(url);
 
 	const hasPath = checkHasPath(url);
@@ -223,20 +221,6 @@ export function getHost(url: string) {
 }
 
 /**
- * Checks if the baseURL config is a dynamic config object
- */
-export function isDynamicBaseURLConfig(
-	config: BaseURLConfig | undefined,
-): config is DynamicBaseURLConfig {
-	return (
-		typeof config === "object" &&
-		config !== null &&
-		"allowedHosts" in config &&
-		Array.isArray(config.allowedHosts)
-	);
-}
-
-/**
  * Check if a value is a `Request`
  * - `instanceof`: works for native Request instances
  * - `toString`: handles where instanceof check fails but the object is still a
@@ -343,144 +327,22 @@ export function getProtocolFromSource(
 }
 
 /**
- * Matches a hostname against a host pattern.
- * Supports wildcard patterns like `*.vercel.app` or `preview-*.myapp.com`.
- *
- * @param host The hostname to test (e.g., "myapp.com", "preview-123.vercel.app")
- * @param pattern The host pattern (e.g., "myapp.com", "*.vercel.app")
- * @returns {boolean} true if the host matches the pattern, false otherwise.
- *
- * @example
- * ```ts
- * matchesHostPattern("myapp.com", "myapp.com") // true
- * matchesHostPattern("preview-123.vercel.app", "*.vercel.app") // true
- * matchesHostPattern("preview-123.myapp.com", "preview-*.myapp.com") // true
- * matchesHostPattern("evil.com", "myapp.com") // false
- * ```
+ * Builds the origin (`scheme://host`) for the host the request arrived on,
+ * honoring `x-forwarded-*` only when proxy headers are trusted.
  */
-export const matchesHostPattern = (host: string, pattern: string): boolean => {
-	if (!host || !pattern) {
-		return false;
-	}
-
-	// Normalize: remove protocol if accidentally included, lowercase for case-insensitive matching
-	const normalizedHost = host
-		.replace(/^https?:\/\//, "")
-		.split("/")[0]!
-		.toLowerCase();
-	const normalizedPattern = pattern
-		.replace(/^https?:\/\//, "")
-		.split("/")[0]!
-		.toLowerCase();
-
-	// Check if pattern contains wildcard characters
-	const hasWildcard =
-		normalizedPattern.includes("*") || normalizedPattern.includes("?");
-
-	if (hasWildcard) {
-		return wildcardMatch(normalizedPattern)(normalizedHost);
-	}
-
-	// Exact match (case-insensitive for hostnames)
-	return normalizedHost.toLowerCase() === normalizedPattern.toLowerCase();
-};
-
-/**
- * Resolves the base URL from a dynamic config based on the incoming request.
- * Validates the derived host against the allowedHosts allowlist.
- *
- * @param config The dynamic base URL config
- * @param request The incoming request
- * @param basePath The base path to append
- * @returns The resolved base URL with path
- * @throws BetterAuthError if host is not in allowedHosts and no fallback is set
- */
-export function resolveDynamicBaseURL(
-	config: DynamicBaseURLConfig,
+export function getRequestOrigin(
 	source: Request | Headers,
-	basePath: string,
+	configProtocol?: "http" | "https" | "auto" | undefined,
 	trustedProxyHeaders?: boolean,
-): string {
+): string | null {
 	const host = getHostFromSource(source, trustedProxyHeaders);
-
 	if (!host) {
-		if (config.fallback) {
-			return withPath(config.fallback, basePath);
-		}
-		throw new BetterAuthError(
-			"Could not determine host from request headers. " +
-				"Please provide a fallback URL in your baseURL config.",
-		);
+		return null;
 	}
-
-	const isAllowed = config.allowedHosts.some((pattern) =>
-		matchesHostPattern(host, pattern),
+	const protocol = getProtocolFromSource(
+		source,
+		configProtocol,
+		trustedProxyHeaders,
 	);
-
-	if (isAllowed) {
-		const protocol = getProtocolFromSource(
-			source,
-			config.protocol,
-			trustedProxyHeaders,
-		);
-		return withPath(`${protocol}://${host}`, basePath);
-	}
-
-	if (config.fallback) {
-		return withPath(config.fallback, basePath);
-	}
-
-	throw new BetterAuthError(
-		`Host "${host}" is not in the allowed hosts list. ` +
-			`Allowed hosts: ${config.allowedHosts.join(", ")}. ` +
-			`Add this host to your allowedHosts config or provide a fallback URL.`,
-	);
-}
-
-/**
- * Resolves the base URL from any config type (static string or dynamic object).
- * This is the main entry point for base URL resolution.
- *
- * @param config The base URL config (string or object)
- * @param basePath The base path to append
- * @param request Optional request for dynamic resolution
- * @param loadEnv Whether to load from environment variables
- * @param trustedProxyHeaders Whether to trust proxy headers (for legacy behavior)
- * @returns The resolved base URL with path
- */
-export function resolveBaseURL(
-	config: BaseURLConfig | undefined,
-	basePath: string,
-	source?: Request | Headers,
-	loadEnv?: boolean,
-	trustedProxyHeaders?: boolean,
-): string | undefined {
-	if (isDynamicBaseURLConfig(config)) {
-		if (source) {
-			return resolveDynamicBaseURL(
-				config,
-				source,
-				basePath,
-				trustedProxyHeaders,
-			);
-		}
-		if (config.fallback) {
-			return withPath(config.fallback, basePath);
-		}
-		return getBaseURL(
-			undefined,
-			basePath,
-			undefined,
-			loadEnv,
-			trustedProxyHeaders,
-		);
-	}
-
-	// Static config path -> getBaseURL needs a full Request for URL parsing.
-	const request = isRequestLike(source) ? source : undefined;
-	if (typeof config === "string") {
-		return getBaseURL(config, basePath, request, loadEnv, trustedProxyHeaders);
-	}
-
-	return getBaseURL(undefined, basePath, request, loadEnv, trustedProxyHeaders);
+	return `${protocol}://${host}`;
 }

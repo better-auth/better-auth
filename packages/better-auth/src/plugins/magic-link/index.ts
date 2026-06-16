@@ -6,6 +6,7 @@ import type {
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { originCheck } from "../../api";
+import { getRequestBaseURL } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
@@ -242,7 +243,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						value: JSON.stringify({ email, name: ctx.body.name }),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
-					const realBaseURL = new URL(ctx.context.baseURL);
+					const realBaseURL = new URL(getRequestBaseURL(ctx));
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
 					const basePath = pathname ? "" : ctx.context.options.basePath || "";
@@ -349,13 +350,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.query.callbackURL
 							? decodeURIComponent(ctx.query.callbackURL)
 							: "/",
-						ctx.context.baseURL,
+						getRequestBaseURL(ctx),
 					).toString();
 					const errorCallbackURL = new URL(
 						ctx.query.errorCallbackURL
 							? decodeURIComponent(ctx.query.errorCallbackURL)
 							: callbackURL,
-						ctx.context.baseURL,
+						getRequestBaseURL(ctx),
 					);
 
 					function redirectWithError(
@@ -376,7 +377,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.query.newUserCallbackURL
 							? decodeURIComponent(ctx.query.newUserCallbackURL)
 							: callbackURL,
-						ctx.context.baseURL,
+						getRequestBaseURL(ctx),
 					).toString();
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =

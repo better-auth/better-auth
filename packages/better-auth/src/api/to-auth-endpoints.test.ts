@@ -6,6 +6,7 @@ import { APIError } from "@better-auth/core/error";
 import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
+import { getRequestBaseURL } from "../context/helpers";
 import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
 import { isAPIError } from "../utils/is-api-error";
@@ -938,263 +939,141 @@ describe("debug mode stack trace", () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/9105
+ * Per-request serving origin on the direct `auth.api.*` path. `baseURL` stays
+ * canonical; `getRequestBaseURL` follows the host the call arrives on when it
+ * is a trusted origin.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ * @see https://github.com/better-auth/better-auth/issues/8478
  */
-describe("dynamic baseURL resolution", () => {
+describe("per-request serving origin (direct auth.api)", () => {
 	const endpoints = {
-		readBaseURL: createAuthEndpoint(
-			"/read-base-url",
-			{
-				method: "GET",
-			},
+		readOrigins: createAuthEndpoint(
+			"/read-origins",
+			{ method: "GET" },
 			async (c) => {
-				return { baseURL: c.context.baseURL };
+				return {
+					canonical: c.context.baseURL,
+					serving: getRequestBaseURL(c),
+				};
 			},
 		),
 	};
 
-	it("should resolve dynamic baseURL from headers for direct auth.api calls", async () => {
+	it("serves links from a trusted host while keeping baseURL canonical", async () => {
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
+			baseURL: "https://app.example.com",
+			trustedOrigins: ["https://tenant.example.com"],
+			advanced: { trustedProxyHeaders: true },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({ host: "example.com" }),
+		const res = await authEndpoints.readOrigins({
+			headers: new Headers({ host: "tenant.example.com" }),
 		});
-		expect(res.baseURL).toBe("https://example.com/api/auth");
+		expect(res.canonical).toBe("https://app.example.com/api/auth");
+		expect(res.serving).toBe("https://tenant.example.com/api/auth");
 	});
 
-	it("should leave baseURL untouched for static string config", async () => {
+	it("falls back to the canonical baseURL for an untrusted host", async () => {
 		const authContext = init({
-			baseURL: "https://static.example.com",
+			baseURL: "https://app.example.com",
+			advanced: { trustedProxyHeaders: true },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({ host: "other.example.com" }),
+		const res = await authEndpoints.readOrigins({
+			headers: new Headers({ host: "not-allowed.com" }),
 		});
-		expect(res.baseURL).toBe("https://static.example.com/api/auth");
+		expect(res.serving).toBe("https://app.example.com/api/auth");
 	});
 
-	it("should reject Node IncomingMessage-shaped objects when duck typing", async () => {
-		// A Node http.IncomingMessage has url/method/headers but also socket,
-		// and its headers are a plain object (not Web Headers). Accepting it
-		// as a Fetch Request would crash inside getHostFromSource.
+	it("ignores x-forwarded-host by default (opt-in via trustedProxyHeaders)", async () => {
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
+			baseURL: "https://app.example.com",
+			trustedOrigins: ["https://tenant.example.com"],
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		const fakeIncomingMessage = {
-			url: "/read-base-url",
-			method: "GET",
-			headers: { host: "example.com" },
-			socket: {},
-		};
-		const res = await authEndpoints.readBaseURL({
-			request: fakeIncomingMessage as unknown as Request,
-			headers: new Headers({ host: "example.com" }),
+		const res = await authEndpoints.readOrigins({
+			headers: new Headers({
+				host: "app.example.com",
+				"x-forwarded-host": "tenant.example.com",
+			}),
 		});
-		expect(res.baseURL).toBe("https://example.com/api/auth");
+		expect(res.serving).toBe("https://app.example.com/api/auth");
 	});
 
-	it("should not mutate the shared authContext across calls", async () => {
+	it("does not mutate the shared authContext across calls", async () => {
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
-				protocol: "https",
-			},
+			baseURL: "https://app.example.com",
+			trustedOrigins: [
+				"https://tenant-a.example.com",
+				"https://tenant-b.example.com",
+			],
+			advanced: { trustedProxyHeaders: true },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
 		const [resA, resB] = await Promise.all([
-			authEndpoints.readBaseURL({
+			authEndpoints.readOrigins({
 				headers: new Headers({ host: "tenant-a.example.com" }),
 			}),
-			authEndpoints.readBaseURL({
+			authEndpoints.readOrigins({
 				headers: new Headers({ host: "tenant-b.example.com" }),
 			}),
 		]);
-		expect(resA.baseURL).toBe("https://tenant-a.example.com/api/auth");
-		expect(resB.baseURL).toBe("https://tenant-b.example.com/api/auth");
+		expect(resA.serving).toBe("https://tenant-a.example.com/api/auth");
+		expect(resB.serving).toBe("https://tenant-b.example.com/api/auth");
 
 		const sharedCtx = await authContext;
-		expect(sharedCtx.baseURL).toBe("");
+		expect(sharedCtx.baseURL).toBe("https://app.example.com/api/auth");
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/9134
-	 */
-	it("should ignore x-forwarded headers when trustedProxyHeaders is not configured", async () => {
+	it("rejects Node IncomingMessage-shaped objects when duck typing", async () => {
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com", "proxy.example.com"],
-			},
+			baseURL: "https://app.example.com",
+			trustedOrigins: ["https://app.example.com"],
+			advanced: { trustedProxyHeaders: true },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({
-				host: "example.com",
-				"x-forwarded-host": "proxy.example.com",
-				"x-forwarded-proto": "http",
-			}),
+		const fakeIncomingMessage = {
+			url: "/read-origins",
+			method: "GET",
+			headers: { host: "app.example.com" },
+			socket: {},
+		};
+		const res = await authEndpoints.readOrigins({
+			request: fakeIncomingMessage as unknown as Request,
+			headers: new Headers({ host: "app.example.com" }),
 		});
-		expect(res.baseURL).toBe("https://example.com/api/auth");
+		expect(res.serving).toBe("https://app.example.com/api/auth");
 	});
 
-	it("should ignore x-forwarded-host when trustedProxyHeaders is explicitly disabled", async () => {
+	it("exposes a Request-like to a per-request trustedOrigins callback", async () => {
+		let seenHost: string | null | undefined;
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com", "evil.com"],
-				protocol: "https",
-			},
-			advanced: { trustedProxyHeaders: false },
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({
-				host: "example.com",
-				"x-forwarded-host": "evil.com",
-			}),
-		});
-		expect(res.baseURL).toBe("https://example.com/api/auth");
-	});
-
-	it("should honor x-forwarded-host when trustedProxyHeaders is enabled", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com", "proxy.example.com"],
-				protocol: "https",
+			baseURL: "https://app.example.com",
+			trustedOrigins: async (req) => {
+				seenHost = req?.headers.get("host");
+				return ["https://tenant.example.com"];
 			},
 			advanced: { trustedProxyHeaders: true },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({
-				host: "example.com",
-				"x-forwarded-host": "proxy.example.com",
-			}),
+		const res = await authEndpoints.readOrigins({
+			headers: new Headers({ host: "tenant.example.com" }),
 		});
-		expect(res.baseURL).toBe("https://proxy.example.com/api/auth");
+		expect(seenHost).toBe("tenant.example.com");
+		expect(res.serving).toBe("https://tenant.example.com/api/auth");
 	});
 
-	it("should throw APIError when the host is not in allowedHosts", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		await expect(
-			authEndpoints.readBaseURL({
-				headers: new Headers({ host: "not-allowed.com" }),
-			}),
-		).rejects.toSatisfy(isAPIError);
-	});
-
-	it("should throw APIError when called with no source and no fallback", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		await expect(authEndpoints.readBaseURL()).rejects.toSatisfy(isAPIError);
-	});
-
-	it("should use fallback when source is missing", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-				fallback: "https://default.example.com",
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		const res = await authEndpoints.readBaseURL();
-		expect(res.baseURL).toBe("https://default.example.com/api/auth");
-	});
-
-	it("should expose a Request-like to a user-defined trustedOrigins callback", async () => {
-		let seenHost: string | null | undefined;
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
-			trustedOrigins: async (req) => {
-				seenHost = req?.headers.get("host");
-				return [];
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		await authEndpoints.readBaseURL({
-			headers: new Headers({ host: "example.com" }),
-		});
-		expect(seenHost).toBe("example.com");
-	});
-
-	it("should return a Response for cross-realm Request inputs", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		// Simulate a cross-realm Request: passes the `[object Request]`
-		// toString check but fails `instanceof Request`.
-		const realRequest = new Request(
-			"https://example.com/api/auth/read-base-url",
-		);
-		const crossRealm = Object.create(Object.prototype);
-		crossRealm.url = realRequest.url;
-		crossRealm.method = realRequest.method;
-		crossRealm.headers = realRequest.headers;
-		Object.defineProperty(crossRealm, Symbol.toStringTag, { value: "Request" });
-
-		const res = await authEndpoints.readBaseURL({ request: crossRealm });
-		expect(res).toBeInstanceOf(Response);
-	});
-
-	it("should infer http for loopback hosts on the headers-only path", async () => {
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["localhost:3000"],
-			},
-		});
-		const authEndpoints = toAuthEndpoints(endpoints, authContext);
-
-		const res = await authEndpoints.readBaseURL({
-			headers: new Headers({ host: "localhost:3000" }),
-		});
-		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
-	});
-
-	it("should rehydrate trustedProviders per call when configured as a function", async () => {
+	it("rehydrates trustedProviders per call when configured as a function", async () => {
 		const hosts: string[] = [];
 		const authContext = init({
-			baseURL: {
-				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
-				protocol: "https",
-			},
+			baseURL: "https://app.example.com",
 			account: {
 				accountLinking: {
 					trustedProviders: async (req) => {
@@ -1207,16 +1086,19 @@ describe("dynamic baseURL resolution", () => {
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 
-		await authEndpoints.readBaseURL({
+		await authEndpoints.readOrigins({
 			headers: new Headers({ host: "tenant-a.example.com" }),
 		});
-		await authEndpoints.readBaseURL({
+		await authEndpoints.readOrigins({
 			headers: new Headers({ host: "tenant-b.example.com" }),
 		});
 		expect(hosts).toEqual(["tenant-a.example.com", "tenant-b.example.com"]);
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9105
+ */
 describe("custom response code", () => {
 	const endpoints = {
 		responseWithStatus: createAuthEndpoint(

@@ -2,6 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
+import { getRequestBaseURL } from "../../context/helpers";
 import { generateRandomString } from "../../crypto";
 import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
@@ -165,7 +166,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			const { verificationUri, verificationUriComplete } =
 				buildVerificationUris(
 					opts.verificationUri,
-					ctx.context.baseURL,
+					getRequestBaseURL(ctx),
 					userCode,
 				);
 
