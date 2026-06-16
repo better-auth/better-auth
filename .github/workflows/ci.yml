@@ -27,7 +27,7 @@ jobs:
       group: ${{ github.workflow }}-lint-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -98,7 +98,7 @@ jobs:
       group: ${{ github.workflow }}-typecheck-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -143,8 +143,10 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [22.x, 24.x]
+    env:
+      COMPOSE_SERVICES: postgres postgres-kysely mongodb
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -175,7 +177,9 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Test
         run: pnpm coverage
@@ -183,8 +187,9 @@ jobs:
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
-          docker compose logs --no-color mssql || true
+          docker compose logs --no-color "${compose_services[@]}" || true
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''

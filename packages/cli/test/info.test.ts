@@ -1,13 +1,19 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cliPath } from "./utils";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 let tmpDir = ".";
+
+const runInfoCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args, "--json"], {
+		cwd: tmpDir,
+	});
+};
 
 describe("info command", () => {
 	beforeEach(async () => {
@@ -43,9 +49,7 @@ describe("info command", () => {
 				},
 			}),
 		);
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -107,9 +111,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -166,9 +168,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -198,9 +198,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -242,9 +240,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -298,10 +294,10 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(
-			`node ${cliPath} info --config config/auth.config.ts --json`,
-			{ cwd: tmpDir },
-		);
+		const { stdout } = await runInfoCommand([
+			"--config",
+			"config/auth.config.ts",
+		]);
 
 		const output = JSON.parse(stdout);
 
@@ -348,9 +344,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -371,9 +365,7 @@ describe("info command", () => {
 
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
