@@ -901,8 +901,6 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 
 			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
-			ctx.context.logger.info("Querying result with filters: ", apiFilters);
-
 			const providerId = ctx.context.scimProvider.providerId;
 			const accounts = await ctx.context.adapter.findMany<Account>({
 				model: "account",

@@ -382,13 +382,14 @@ async function createRefreshToken(
 	// with the winner's still-in-flight inserts. Tracked for a follow-up
 	// minor once the adapter contract exposes opt-in transactional
 	// rotation.
-	const won = await ctx.context.adapter.update<{ id: string }>({
+	const won = await ctx.context.adapter.incrementOne<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
 			{ field: "id", value: originalRefresh.id },
 			{ field: "revoked", operator: "eq", value: null },
 		],
-		update: {
+		increment: {},
+		set: {
 			revoked: new Date(iat * 1000),
 		},
 	});

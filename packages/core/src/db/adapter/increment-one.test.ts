@@ -275,6 +275,55 @@ describe("createAdapterFactory incrementOne fallback", () => {
 		expect(winners).toHaveLength(1);
 		expect(firstRow(store).count).toBe(0);
 	});
+
+	it("throws when both `increment` and `set` are empty", async () => {
+		const { adapter } = createMemoryAdapter(seed([{ key: "a", count: 0 }]));
+		const factory = createTestAdapter(adapter);
+
+		await expect(
+			factory.incrementOne({
+				model: counterModel,
+				where: [{ field: "key", value: "a" }],
+				increment: {},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("applies a guarded transition via `set` with an empty increment", async () => {
+		const { adapter, store } = createMemoryAdapter(
+			seed([{ key: "a", count: 0, lastRequest: 100 }]),
+		);
+		const factory = createTestAdapter(adapter);
+
+		const won = await factory.incrementOne<{
+			key: string;
+			lastRequest: number;
+		}>({
+			model: counterModel,
+			where: [
+				{ field: "key", value: "a" },
+				{ field: "lastRequest", value: 100 },
+			],
+			increment: {},
+			set: { lastRequest: 200 },
+		});
+		expect(won?.lastRequest).toBe(200);
+		expect(firstRow(store).lastRequest).toBe(200);
+
+		// The guard now misses (lastRequest already moved), so the loser must get
+		// null and the row must not change again.
+		const lost = await factory.incrementOne({
+			model: counterModel,
+			where: [
+				{ field: "key", value: "a" },
+				{ field: "lastRequest", value: 100 },
+			],
+			increment: {},
+			set: { lastRequest: 300 },
+		});
+		expect(lost).toBeNull();
+		expect(firstRow(store).lastRequest).toBe(200);
+	});
 });
 
 describe("createAdapterFactory incrementOne native path", () => {
@@ -327,5 +376,36 @@ describe("createAdapterFactory incrementOne native path", () => {
 
 		expect(nativeCalls).toBe(1);
 		expect(result?.count).toBe(15);
+	});
+
+	it("throws when `set` resolves to empty after input transform", async () => {
+		const { adapter } = createMemoryAdapter(seed([{ key: "a", count: 0 }]));
+		let nativeCalls = 0;
+		const nativeAdapter: CustomAdapter = {
+			...adapter,
+			incrementOne: async <T>(_args: {
+				model: string;
+				where: CleanedWhere[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}) => {
+				nativeCalls += 1;
+				return null as T | null;
+			},
+		};
+		const factory = createTestAdapter(nativeAdapter);
+
+		// `bogus` is not a field of the model, so transformInput drops it: the set
+		// resolves to empty alongside the empty increment. The guard must fire
+		// before the adapter runs an empty UPDATE.
+		await expect(
+			factory.incrementOne({
+				model: counterModel,
+				where: [{ field: "key", value: "a" }],
+				increment: {},
+				set: { bogus: 1 },
+			}),
+		).rejects.toThrow();
+		expect(nativeCalls).toBe(0);
 	});
 });
