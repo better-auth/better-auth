@@ -127,6 +127,14 @@ const signInMagicLinkBodySchema = z.object({
 			description: "Additional metadata to pass to sendMagicLink.",
 		})
 		.optional(),
+	expiresIn: z
+		.number()
+		.meta({
+			description:
+				"Time in seconds until the magic link expires. " +
+				"Only honored on server-side `auth.api` calls; ignored from HTTP clients.",
+		})
+		.optional(),
 });
 const magicLinkVerifyQuerySchema = z.object({
 	token: z.string().meta({
@@ -236,10 +244,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
+					const perRequestExpiresIn = !ctx.request
+						? ctx.body.expiresIn
+						: undefined;
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: storedToken,
 						value: JSON.stringify({ email, name: ctx.body.name }),
-						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+						expiresAt: new Date(
+							Date.now() +
+								(perRequestExpiresIn || opts.expiresIn || 60 * 5) * 1000,
+						),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
 					const pathname =
