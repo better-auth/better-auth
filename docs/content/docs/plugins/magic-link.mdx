@@ -82,6 +82,12 @@ To sign in with a magic link, you need to call `signIn.magicLink` with the user'
        * Additional metadata forwarded to the sendMagicLink callback.
        */
       metadata?: Record<string, any> = { inviteId: "123" }
+      /**
+       * Time in seconds until the magic link expires.
+       * Only honored on server-side `auth.api` calls; ignored from HTTP clients.
+       * @serverOnly
+       */
+      expiresIn?: number = 604800
   }
   ```
 </APIMethod>
@@ -126,7 +132,7 @@ If you want to handle the verification manually, (e.g, if you send the user a di
 
 and a `ctx` context object as the second parameter.
 
-**expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
+**expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes). You can also override this on a per-request basis from server-side `auth.api` calls (see [Per-request expiration](#per-request-expiration) below).
 
 **allowedAttempts** (deprecated): Each verification call now consumes the token atomically on the first attempt, so retries always fail with `?error=INVALID_TOKEN` regardless of this setting (see [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx)). The option is kept for source compatibility but ignored; multi-attempt redemption is no longer supported. Setting it to any value other than `1` emits a `console.warn` at startup (including `0`, which previously rejected immediately and now has no effect).
 
@@ -154,4 +160,25 @@ The storage backend itself is controlled by the global [`verification`](/docs/re
 
 <Callout type="warn">
   When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee from [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx) requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). If the implementation only exposes `get` and `delete`, the consume falls back to an in-process JavaScript lock that does not coordinate across multiple application instances. Multi-instance deployments using secondary-storage verification MUST configure a backend that implements `getAndDelete`.
+</Callout>
+
+## Per-request Expiration
+
+When calling `signInMagicLink` from server-side code via `auth.api`, you can override the token expiration on a per-request basis by passing `expiresIn` in the body. This is useful for use cases like team invitations where you want a longer-lived link (e.g. 7 days) while keeping the default short for normal sign-in flows.
+
+```ts title="server.ts"
+// Send an invitation link that expires in 7 days
+await auth.api.signInMagicLink({
+    body: {
+        email: "invited@example.com",
+        expiresIn: 60 * 60 * 24 * 7, // 7 days in seconds
+        callbackURL: "/accept-invite",
+        metadata: { inviteId: "abc123" },
+    },
+    headers: request.headers,
+});
+```
+
+<Callout type="info">
+  For security, the per-request `expiresIn` is **only honored on server-side `auth.api` calls**. If a client sends `expiresIn` via HTTP, it is silently ignored and the global plugin-level `expiresIn` is used instead. This prevents untrusted clients from requesting arbitrarily long-lived tokens.
 </Callout>
