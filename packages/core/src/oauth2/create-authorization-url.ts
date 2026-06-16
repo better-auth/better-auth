@@ -15,6 +15,7 @@ export const RESERVED_AUTHORIZATION_PARAMS = [
 	"response_type",
 	"code_challenge",
 	"code_challenge_method",
+	"nonce",
 	"scope",
 ] as const;
 
@@ -37,6 +38,7 @@ export async function createAuthorizationURL({
 	responseType,
 	display,
 	loginHint,
+	nonce,
 	hd,
 	responseMode,
 	additionalParams,
@@ -56,6 +58,7 @@ export async function createAuthorizationURL({
 	responseType?: string | undefined;
 	display?: string | undefined;
 	loginHint?: string | undefined;
+	nonce?: string | undefined;
 	hd?: string | undefined;
 	responseMode?: string | undefined;
 	additionalParams?: Record<string, string> | undefined;
@@ -77,6 +80,7 @@ export async function createAuthorizationURL({
 	duration && url.searchParams.set("duration", duration);
 	display && url.searchParams.set("display", display);
 	loginHint && url.searchParams.set("login_hint", loginHint);
+	nonce && url.searchParams.set("nonce", nonce);
 	prompt && url.searchParams.set("prompt", prompt);
 	hd && url.searchParams.set("hd", hd);
 	accessType && url.searchParams.set("access_type", accessType);

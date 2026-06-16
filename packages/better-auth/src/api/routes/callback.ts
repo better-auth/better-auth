@@ -99,13 +99,22 @@ export const callbackOAuth = createAuthEndpoint(
 				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
 				const state = generateRandomString(32);
 				const codeVerifier = generateRandomString(128);
+				const idTokenNonce = provider.requiresIdTokenNonce
+					? generateRandomString(32)
+					: undefined;
 				const { url: authUrl, requestedScopes } =
 					await provider.createAuthorizationURL({
 						state,
 						codeVerifier,
+						idTokenNonce,
 						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 					});
-				await generateState(c, { requestedScopes, state, codeVerifier });
+				await generateState(c, {
+					requestedScopes,
+					state,
+					codeVerifier,
+					idTokenNonce,
+				});
 				throw c.redirect(authUrl.toString());
 			}
 		}
@@ -125,6 +134,7 @@ export const callbackOAuth = createAuthEndpoint(
 			newUserURL,
 			requestSignUp,
 			requestedScopes,
+			idTokenNonce,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string | undefined) {
@@ -197,6 +207,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const providerResult = await provider.getUserInfo({
 			...tokens,
+			...(idTokenNonce ? { expectedIdTokenNonce: idTokenNonce } : {}),
 			/**
 			 * The user object from the provider
 			 * This is only available for some providers like Apple

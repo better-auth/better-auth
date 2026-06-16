@@ -29,6 +29,8 @@ export interface GenerateStateOptions {
 	state?: string | undefined;
 	/** The PKCE `codeVerifier` already used to build the authorization URL. Minted when omitted. */
 	codeVerifier?: string | undefined;
+	/** The OIDC nonce already sent as the authorization URL `nonce` parameter. */
+	idTokenNonce?: string | undefined;
 }
 
 export async function generateState(
@@ -61,6 +63,7 @@ export async function generateState(
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
 		requestedScopes: options?.requestedScopes,
+		idTokenNonce: options?.idTokenNonce,
 	};
 
 	await setOAuthState(stateData);

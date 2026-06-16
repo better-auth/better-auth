@@ -627,6 +627,35 @@ describe("account", async () => {
 		});
 	});
 
+	it("should pass idTokenNonce to providers that require redirect nonce binding", async () => {
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const previousRequiresIdTokenNonce = googleProvider.requiresIdTokenNonce;
+		googleProvider.requiresIdTokenNonce = true;
+		const createAuthorizationURLSpy = vi.spyOn(
+			googleProvider,
+			"createAuthorizationURL",
+		);
+
+		try {
+			const { runWithUser: runWithClient2 } = await signInWithTestUser();
+			await runWithClient2(async () => {
+				const linkAccountRes = await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+				});
+				expect(linkAccountRes.error).toBeNull();
+				expect(createAuthorizationURLSpy).toHaveBeenCalledWith(
+					expect.objectContaining({
+						idTokenNonce: expect.any(String),
+					}),
+				);
+			});
+		} finally {
+			googleProvider.requiresIdTokenNonce = previousRequiresIdTokenNonce;
+			createAuthorizationURLSpy.mockRestore();
+		}
+	});
+
 	it("should link second account from the same provider", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {

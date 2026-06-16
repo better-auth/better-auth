@@ -3744,6 +3744,132 @@ describe("oauth2", async () => {
 			}
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7571
+		 */
+		it("should bind a discovery id_token to the authorization request nonce", async () => {
+			let authorizationNonce = "";
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-match",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								authorizationUrlParams: { nonce: "configured-nonce" },
+								getToken: async () => ({
+									accessToken: "nonce-match-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-match-user",
+												email: "nonce-match@test.com",
+												email_verified: true,
+												name: "Nonce Match",
+												nonce: authorizationNonce,
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-match",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			authorizationNonce =
+				new URL(res.data?.url || "").searchParams.get("nonce") || "";
+			expect(authorizationNonce).toBeTruthy();
+			expect(authorizationNonce).not.toBe("configured-nonce");
+
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("nonce-match@test.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7571
+		 */
+		it("should reject a discovery id_token with a mismatched nonce", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-mismatch",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "nonce-mismatch-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-mismatch-user",
+												email: "nonce-mismatch@test.com",
+												email_verified: true,
+												name: "Nonce Mismatch",
+												nonce: "different-nonce",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-mismatch",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			expect(
+				new URL(res.data?.url || "").searchParams.get("nonce"),
+			).toBeTruthy();
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
 		it("should sign in with a client-submitted id_token for a discovery provider", async () => {
 			const token = await server.issuer.buildToken({
 				scopesOrTransform: (_header, payload) => {
