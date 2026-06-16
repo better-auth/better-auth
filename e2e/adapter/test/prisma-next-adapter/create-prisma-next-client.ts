@@ -29,10 +29,7 @@ function q(name: string): string {
 	return `"${name}"`;
 }
 
-function buildWhereSQL(
-	where: WhereFilter,
-	params: unknown[],
-): string {
+function buildWhereSQL(where: WhereFilter, params: unknown[]): string {
 	const conditions: string[] = [];
 
 	for (const [key, value] of Object.entries(where)) {
