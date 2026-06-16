@@ -6,9 +6,11 @@ import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
+	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
+	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -16,22 +18,20 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
-import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
+	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-} from "./kysely-migration-tables";
+	DefaultQueryCompiler,
+	sql,
+} from "kysely";
 
-class BunSqliteAdapter implements DialectAdapter {
+class BunSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
-		return false;
-	}
-
-	get supportsMultipleConnections(): boolean {
 		return false;
 	}
 
@@ -221,6 +221,14 @@ class BunSqliteIntrospector implements DatabaseIntrospector {
 		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
 	}
 
+	async getMetadata(
+		options?: DatabaseMetadataOptions | undefined,
+	): Promise<DatabaseMetadata> {
+		return {
+			tables: await this.getTables(options),
+		};
+	}
+
 	async #getTableMetadata(table: string): Promise<TableMetadata> {
 		const db = this.#db;
 
@@ -263,7 +271,6 @@ class BunSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: false,
-			isForeign: false,
 		};
 	}
 }

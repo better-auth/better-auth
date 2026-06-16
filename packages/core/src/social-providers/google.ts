@@ -1,12 +1,13 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
+	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -56,12 +57,25 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * can be used to restrict sign-in to a Workspace domain.
 	 */
 	hd?: string | undefined;
+	/**
+	 * Enable incremental authorization via Google's `include_granted_scopes`
+	 * parameter. When enabled, Google reports the user's full granted scope set
+	 * in the token response.
+	 *
+	 * @default true
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
+
+const GOOGLE_DEFAULT_SCOPES = ["email", "profile", "openid"];
 
 export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
+		callbackPath: "/callback/google",
+		grantAuthority:
+			options.includeGrantedScopes !== false ? "full-grant" : "projection",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -69,6 +83,7 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			additionalParams,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -79,16 +94,16 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["email", "profile", "openid"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			const url = await createAuthorizationURL({
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				GOOGLE_DEFAULT_SCOPES,
+				scopes,
+			);
+			return createAuthorizationURL({
 				id: "google",
 				options,
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-				scopes: _scopes,
+				scopes: requestedScopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -97,11 +112,17 @@ export const google = (options: GoogleOptions) => {
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,
-				additionalParams: {
-					include_granted_scopes: "true",
-				},
+				additionalParams:
+					options.includeGrantedScopes === false
+						? { ...(additionalParams ?? {}) }
+						: {
+								...(additionalParams ?? {}),
+								// Not caller-overridable: the emitted param must stay in
+								// lockstep with `grantAuthority` (driven by the option), or
+								// the callback would treat a non-authoritative grant as full.
+								include_granted_scopes: "true",
+							},
 			});
-			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -125,46 +146,20 @@ export const google = (options: GoogleOptions) => {
 						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			// Verify JWT integrity
-			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
-
-			try {
-				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getGooglePublicKey(kid);
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				});
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-
-				// Google's `hd` authorization parameter is only a UI hint and can
-				// be removed or changed by the user. When a hosted domain is
-				// configured, the `hd` claim in the verified id token is the
-				// authoritative value and must match, otherwise accounts outside
-				// the workspace domain would be accepted.
-				if (options.hd && jwtClaims.hd !== options.hd) {
-					return false;
-				}
-
-				return true;
-			} catch {
-				return false;
-			}
+		idToken: {
+			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+			jwks: (header) => getGooglePublicKey(header.kid!),
+			issuer: ["https://accounts.google.com", "accounts.google.com"],
+			audience: options.clientId,
+			maxTokenAge: "1h",
+			// Google's `hd` authorization parameter is only a UI hint and can be
+			// removed or changed by the user. When a hosted domain is configured,
+			// the `hd` claim in the verified id token is the authoritative value
+			// and must match, otherwise accounts outside the workspace domain would
+			// be accepted on the id_token sign-in path.
+			verifyClaims: options.hd
+				? (claims) => claims.hd === options.hd
+				: undefined,
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -200,7 +195,7 @@ export const google = (options: GoogleOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<GoogleProfile>;
+	} satisfies UpstreamProvider<GoogleProfile>;
 };
 
 export const getGooglePublicKey = async (kid: string) => {

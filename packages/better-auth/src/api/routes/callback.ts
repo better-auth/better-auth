@@ -4,15 +4,18 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
+import { generateRandomString } from "../../crypto";
 import {
-	applyUpdateUserInfoOnLink,
-	handleOAuthUserInfo,
-} from "../../oauth2/link-account";
-import { parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
+import { persistOAuthAccount } from "../../oauth2/persist-account";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
+import { generateState, parseState } from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
+import { assertValidUserInfo } from "../../utils/validate-user-info";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -21,6 +24,7 @@ const schema = z.object({
 	error_description: z.string().optional(),
 	state: z.string().optional(),
 	user: z.string().optional(),
+	iss: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -71,16 +75,47 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			redirectOnError(c, defaultErrorURL, "invalid_callback_request");
+			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
 		const {
 			code,
 			error,
+			state,
 			error_description,
 			device_id,
 			user: userData,
+			iss,
 		} = queryOrBody;
+
+		if (state === undefined && code) {
+			const provider = await getAwaitableValue(c.context.socialProviders, {
+				value: c.params.id,
+			});
+			if (provider?.allowIdpInitiated) {
+				// Build the URL first so the effective requested scopes can be
+				// persisted into state, then write state once with the same nonces
+				// (same ordering as the normal sign-in flow). Without this the
+				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
+				const state = generateRandomString(32);
+				const codeVerifier = generateRandomString(128);
+				const { url: authUrl, requestedScopes } =
+					await provider.createAuthorizationURL({
+						state,
+						codeVerifier,
+						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+					});
+				await generateState(c, { requestedScopes, state, codeVerifier });
+				throw c.redirect(authUrl.toString());
+			}
+		}
+
+		if (!state) {
+			c.context.logger.error("State not found", error);
+			const sep = defaultErrorURL.includes("?") ? "&" : "?";
+			const url = `${defaultErrorURL}${sep}error=state_not_found`;
+			throw c.redirect(url);
+		}
 
 		const {
 			codeVerifier,
@@ -89,17 +124,28 @@ export const callbackOAuth = createAuthEndpoint(
 			errorURL,
 			newUserURL,
 			requestSignUp,
+			requestedScopes,
 		} = await parseState(c);
 
-		const resolvedErrorURL = errorURL ?? defaultErrorURL;
+		function redirectOnError(error: string, description?: string | undefined) {
+			const baseURL = errorURL ?? defaultErrorURL;
+
+			const params = new URLSearchParams({ error });
+			if (description) params.set("error_description", description);
+
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const url = `${baseURL}${sep}${params.toString()}`;
+
+			throw c.redirect(url);
+		}
 
 		if (error) {
-			redirectOnError(c, resolvedErrorURL, error, error_description);
+			redirectOnError(error, error_description);
 		}
 
 		if (!code) {
 			c.context.logger.warn("Code not found");
-			redirectOnError(c, resolvedErrorURL, "no_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CODE);
 		}
 
 		const provider = await getAwaitableValue(c.context.socialProviders, {
@@ -110,7 +156,18 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.warn("OAuth provider not found", {
 				providerId: c.params.id,
 			});
-			redirectOnError(c, resolvedErrorURL, "oauth_provider_not_found");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.PROVIDER_NOT_FOUND);
+		}
+
+		// RFC 9207: validate authorization server issuer identifier.
+		// Only validated when the provider sends the iss parameter;
+		// older OAuth servers that don't support RFC 9207 omit it.
+		if (iss && provider.issuer && iss !== provider.issuer) {
+			c.context.logger.error("OAuth issuer mismatch", {
+				expected: provider.issuer,
+				received: iss,
+			});
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
 		}
 
 		let tokens: OAuth2Tokens | null;
@@ -119,14 +176,14 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
-			redirectOnError(c, resolvedErrorURL, "invalid_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
 		}
 		if (!tokens) {
-			redirectOnError(c, resolvedErrorURL, "invalid_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
 		}
 		const parsedUserData = userData
 			? safeJSONParse<{
@@ -138,34 +195,58 @@ export const callbackOAuth = createAuthEndpoint(
 				}>(userData)
 			: null;
 
-		const userInfo = await provider
-			.getUserInfo({
-				...tokens,
-				/**
-				 * The user object from the provider
-				 * This is only available for some providers like Apple
-				 */
-				user: parsedUserData ?? undefined,
-			})
-			.then((res) => res?.user);
-
+		const providerResult = await provider.getUserInfo({
+			...tokens,
+			/**
+			 * The user object from the provider
+			 * This is only available for some providers like Apple
+			 */
+			user: parsedUserData ?? undefined,
+		});
 		if (
-			!userInfo ||
-			userInfo.id === undefined ||
-			userInfo.id === null ||
-			userInfo.id === ""
+			!providerResult?.user ||
+			providerResult.user.id === undefined ||
+			providerResult.user.id === null ||
+			providerResult.user.id === ""
 		) {
 			c.context.logger.error("Unable to get user info");
-			redirectOnError(c, resolvedErrorURL, "unable_to_get_user_info");
+			return redirectOnError(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
+			);
 		}
+		const userInfo = providerResult.user;
 		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
-			redirectOnError(c, resolvedErrorURL, "no_callback_url");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
 		}
 
 		if (link) {
+			// Link-account creates no user row, so the gate runs here rather than
+			// inside createUser.
+			try {
+				await assertValidUserInfo(c, {
+					user: {
+						...userInfo,
+						id: providerAccountId,
+						email: userInfo.email ?? undefined,
+					},
+					source: {
+						action: "link-account",
+						method: "oauth",
+						oauth: {
+							providerId: provider.id,
+							profile: providerResult.data,
+						},
+					},
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					throw redirectOnError(e.body.code, e.body.message);
+				}
+				throw e;
+			}
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
@@ -174,14 +255,16 @@ export const callbackOAuth = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				c.context.logger.error("Unable to link account - untrusted provider");
-				redirectOnError(c, resolvedErrorURL, "unable_to_link_account");
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
 			}
 
 			if (
 				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				redirectOnError(c, resolvedErrorURL, "email_doesn't_match");
+				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH);
 			}
 
 			const existingAccount =
@@ -190,45 +273,31 @@ export const callbackOAuth = createAuthEndpoint(
 					provider.id,
 				);
 
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					redirectOnError(
-						c,
-						resolvedErrorURL,
-						"account_already_linked_to_different_user",
-					);
-				}
-				const updateData = Object.fromEntries(
-					Object.entries({
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: tokens.scopes?.join(","),
-					}).filter(([_, value]) => value !== undefined),
+			if (
+				existingAccount &&
+				existingAccount.userId.toString() !== link.userId.toString()
+			) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
+			}
+
+			const linkedAccount = await persistOAuthAccount(c, {
+				userId: link.userId,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
+				mode: "link",
+				grantAuthority: provider.grantAuthority,
+			});
+			if (!linkedAccount) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
 				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					providerId: provider.id,
-					accountId: providerAccountId,
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					redirectOnError(c, resolvedErrorURL, "unable_to_link_account");
-				}
 			}
 
 			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
-
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -241,39 +310,43 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!userInfo.email) {
 			c.context.logger.error(missingEmailLogMessage(provider.id));
-			redirectOnError(c, resolvedErrorURL, "email_not_found");
+			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		const accountData = {
-			providerId: provider.id,
-			accountId: providerAccountId,
-			...tokens,
-			scope: tokens.scopes?.join(","),
-		};
-		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+		let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
 		try {
-			result = await handleOAuthUserInfo(c, {
+			result = await signInWithOAuthIdentity(c, {
 				userInfo: {
 					...userInfo,
 					id: providerAccountId,
 					email: userInfo.email,
 					name: userInfo.name || "",
 				},
-				account: accountData,
+				providerId: provider.id,
+				accountId: providerAccountId,
+				tokens,
+				requestedScopes,
 				callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
+				source: {
+					method: "oauth",
+					oauth: { providerId: provider.id, profile: providerResult.data },
+				},
+				grantAuthority: provider.grantAuthority,
 			});
 		} catch (e) {
+			// App-defined rejection codes are forwarded verbatim rather than mapped
+			// onto OAUTH_CALLBACK_ERROR_CODES.
 			if (isAPIError(e) && e.body?.code) {
-				redirectOnError(c, resolvedErrorURL, e.body.code, e.body.message);
+				redirectOnError(e.body.code, e.body.message);
 			}
 			throw e;
 		}
 		if (result.error) {
 			c.context.logger.error(result.error.split(" ").join("_"));
-			redirectOnError(c, resolvedErrorURL, result.error.split(" ").join("_"));
+			return redirectOnError(result.error.split(" ").join("_"));
 		}
 		const { session, user } = result.data!;
 		await setSessionCookie(c, {

@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -99,17 +100,23 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
@@ -269,18 +276,34 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 		});
+	});
+
+	it("advertises back-channel logout as unsupported when the jwt plugin is disabled", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.backchannel_logout_supported).toBe(false);
+		expect(metadata.backchannel_logout_session_supported).toBe(false);
 	});
 
 	it("should not provide dynamic client registration endpoint when disabled", async () => {
@@ -457,7 +480,7 @@ describe("dynamic baseURL metadata wrappers", async () => {
 
 describe("oauth resource metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const supportedScopes = [
 		"openid",
 		"profile",
@@ -476,7 +499,8 @@ describe("oauth resource metadata", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -496,11 +520,12 @@ describe("oauth resource metadata", async () => {
 
 	it("should provide resource discovery configuration", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			resource: validResource,
+			authorization_servers: [authServerBaseUrl],
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 		});
 	});
 
@@ -520,7 +545,7 @@ describe("oauth resource metadata", async () => {
 	it("should not support 'openid' scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["openid"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -528,11 +553,11 @@ describe("oauth resource metadata", async () => {
 
 	it("should pass with supported scopes", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 			scopes_supported: ["read:posts"],
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl],
 			scopes_supported: ["read:posts"],
 		});
@@ -541,7 +566,7 @@ describe("oauth resource metadata", async () => {
 	it("should fail unsupported scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["write:posts"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -551,7 +576,7 @@ describe("oauth resource metadata", async () => {
 		const anotherAuthorizationServer = "https://auth.example.com";
 		const metadata = await authClient.getProtectedResourceMetadata(
 			{
-				resource: validAudience,
+				resource: validResource,
 				authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 				scopes_supported: ["read:posts", "write:posts"],
 			},
@@ -560,7 +585,7 @@ describe("oauth resource metadata", async () => {
 			},
 		);
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 			scopes_supported: ["read:posts", "write:posts"],
 		});

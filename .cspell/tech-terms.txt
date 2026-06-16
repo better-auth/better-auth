@@ -66,6 +66,11 @@ Oligo
 febf
 fdff
 fffe
+resync
+resynced
+resyncs
+unioned
+bpchar
 apng
 jfif
 pcss

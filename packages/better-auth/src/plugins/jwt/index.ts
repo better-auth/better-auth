@@ -16,7 +16,7 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
-export { signJWT } from "./sign";
+export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
@@ -50,7 +50,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
-			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when options.jwks.remoteUrl is used for OpenID metadata",
 		);
 	}
 

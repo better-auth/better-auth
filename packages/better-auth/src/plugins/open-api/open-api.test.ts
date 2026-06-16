@@ -260,6 +260,7 @@ const wrapperSemanticsPlugin = {
 					prefaulted: z.string().prefault("prefaulted-value"),
 					nonOptional: z.string().optional().nonoptional(),
 					unionOptional: z.union([z.string(), z.undefined()]),
+					unknownPayload: z.unknown(),
 				}),
 			},
 			async () => ({ success: true }),
@@ -342,6 +343,20 @@ describe("open-api", async () => {
 			type: "string",
 		});
 		expect(schemas["Session"]!.required).toContain("id");
+	});
+
+	it("emits a valid OpenAPI array schema for string[] fields (grantedScopes)", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+		// Must be a JSON Schema array, never the invalid literal type "string[]".
+		expect(schemas["Account"]!.properties.grantedScopes).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["Account"]!.required ?? []).not.toContain("grantedScopes");
 	});
 
 	it("should include additionalFields in the User schema", async () => {
@@ -875,5 +890,7 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+		expect(getSchemaProperty(requestBodySchema, "unknownPayload")).toEqual({});
+		expect(requestBodySchema.required).not.toContain("unknownPayload");
 	});
 });

@@ -294,11 +294,14 @@ export const siwe = (options: SIWEPluginOptions) => {
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
 
-							user = await ctx.context.internalAdapter.createUser({
-								name: name ?? walletAddress,
-								email: userEmail,
-								image: avatar ?? "",
-							});
+							user = await ctx.context.internalAdapter.createUser(
+								{
+									name: name ?? walletAddress,
+									email: userEmail,
+									image: avatar ?? "",
+								},
+								{ method: "siwe" },
+							);
 
 							// Create wallet address record
 							await ctx.context.adapter.create({

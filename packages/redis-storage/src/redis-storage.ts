@@ -84,6 +84,11 @@ return value
 		},
 
 		async increment(key: string, ttl: number) {
+			if (!Number.isInteger(ttl) || ttl <= 0) {
+				throw new TypeError(
+					"Redis storage increment ttl must be a positive integer",
+				);
+			}
 			const value = await client.eval(incrementScript, 1, prefixKey(key), ttl);
 			return Number(value);
 		},

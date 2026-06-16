@@ -23,6 +23,10 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};
@@ -331,7 +335,7 @@ describe("SCIM", () => {
 
 			const users = await auth.api.listSCIMUsers({
 				query: {
-					filter: 'userName eq "user-A"',
+					filter: 'UserName Eq "USER-A"',
 				},
 				headers: {
 					authorization: `Bearer ${scimToken}`,
@@ -679,6 +683,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 			};
@@ -697,6 +705,16 @@ describe("SCIM", () => {
 					},
 					get(key) {
 						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
 					},
 					delete(key) {
 						store.delete(key);
@@ -829,6 +847,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 				invitation: [],

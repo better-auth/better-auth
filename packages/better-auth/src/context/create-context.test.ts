@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
+import { jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -362,6 +363,8 @@ describe("base context creation", () => {
 				} as any,
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -413,6 +416,89 @@ describe("base context creation", () => {
 			});
 		});
 
+		it("should require the jwt plugin for cookie-cache JWKS mode", async () => {
+			await expect(
+				initBase({
+					session: {
+						cookieCache: {
+							enabled: true,
+							strategy: "jwt",
+							jwt: {
+								signingKey: "jwt-plugin",
+							},
+						} as any,
+					},
+				}),
+			).rejects.toThrow(
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
+			);
+		});
+
+		it("should reject remote signing for cookie-cache JWKS mode", async () => {
+			await expect(
+				initBase({
+					session: {
+						cookieCache: {
+							enabled: true,
+							strategy: "jwt",
+							jwt: {
+								signingKey: "jwt-plugin",
+							},
+						} as any,
+					},
+					plugins: [
+						jwt({
+							jwks: {
+								remoteUrl: "https://example.com/jwks",
+								keyPairConfig: {
+									alg: "RS256",
+								},
+							},
+							jwt: {
+								sign: async () => "signed-remotely",
+							},
+						}),
+					],
+				}),
+			).rejects.toThrow(
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
+			);
+		});
+
+		it("should warn when cookie-cache maxAge exceeds the JWKS grace period", async () => {
+			const log = vi.fn();
+			await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				session: {
+					cookieCache: {
+						enabled: true,
+						strategy: "jwt",
+						maxAge: 301,
+						jwt: {
+							signingKey: "jwt-plugin",
+						},
+					} as any,
+				},
+				plugins: [
+					jwt({
+						jwks: {
+							gracePeriod: 300,
+						},
+					}),
+				],
+			});
+
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.maxAge` (301s) exceeds the JWT plugin JWKS grace period (300s)",
+				),
+			);
+		});
+
 		it("should allow custom session timeouts", async () => {
 			const res = await initBase({
 				session: {
@@ -437,6 +523,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -861,6 +949,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -880,6 +970,8 @@ describe("base context creation", () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
+					getAndDelete: vi.fn(),
+					increment: vi.fn(),
 					set: vi.fn(),
 					delete: vi.fn(),
 				},
@@ -1730,7 +1822,6 @@ describe("base context creation", () => {
 			const ctx = await initBase({});
 
 			expect(ctx.internalAdapter).toBeDefined();
-			expect(ctx.internalAdapter.createOAuthUser).toBeDefined();
 			expect(ctx.internalAdapter.createUser).toBeDefined();
 			expect(ctx.internalAdapter.findUserByEmail).toBeDefined();
 		});
@@ -1840,6 +1931,8 @@ describe("base context creation", () => {
 		it("should handle secondaryStorage configuration", async () => {
 			const mockStorage = {
 				get: vi.fn(),
+				getAndDelete: vi.fn(),
+				increment: vi.fn(),
 				set: vi.fn(),
 				delete: vi.fn(),
 			};

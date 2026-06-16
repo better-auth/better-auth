@@ -19,6 +19,10 @@ describe("passkey open-api", async () => {
 					name: "authenticatorAttachment",
 					in: "query",
 					required: false,
+					schema: expect.objectContaining({
+						type: "string",
+						enum: ["platform", "cross-platform"],
+					}),
 				}),
 				expect.objectContaining({
 					name: "name",

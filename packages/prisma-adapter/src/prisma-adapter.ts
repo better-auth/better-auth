@@ -602,9 +602,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
-						// Deletes are idempotent: a missing row (P2025) is a no-op.
-						// Any other failure (constraint, connection, permission) is a
-						// real error and must propagate rather than report success.
+						// Deletes are idempotent: a missing row is a no-op. Any other
+						// failure must propagate instead of reporting success.
 						if (isPrismaNotFoundError(e)) return;
 						throw e;
 					}

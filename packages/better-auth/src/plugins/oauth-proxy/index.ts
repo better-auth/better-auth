@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { unionGrantedScopes } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -16,7 +17,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -100,6 +101,8 @@ type OAuthProxyStatePackage = {
 type PassthroughPayload = {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
+	profile?: Record<string, unknown> | undefined;
 	state: string;
 	callbackURL: string;
 	newUserURL?: string;
@@ -246,13 +249,47 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.warn("Failed to clean up OAuth state", e);
 					}
 
-					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+					// The granted-scope set was already accumulated on the production
+					// side (RFC 6749 §5.1 fallback applied there); pass it as both the
+					// echoed and requested set so the seam re-resolves to the same value.
+					const grantedScopes = payload.account.grantedScopes ?? undefined;
+					const tokens: OAuth2Tokens = {
+						accessToken: payload.account.accessToken ?? undefined,
+						refreshToken: payload.account.refreshToken ?? undefined,
+						idToken: payload.account.idToken ?? undefined,
+						accessTokenExpiresAt:
+							payload.account.accessTokenExpiresAt ?? undefined,
+						refreshTokenExpiresAt:
+							payload.account.refreshTokenExpiresAt ?? undefined,
+						scopes: grantedScopes,
+					};
+
+					// Match the direct callback: when the provider declares full-grant
+					// authority, the relayed set is authoritative, so it lets a scope
+					// revoked at the provider shrink the stored grant on a proxied
+					// sign-in too.
+					const provider = ctx.context.socialProviders.find(
+						(p) => p.id === payload.account.providerId,
+					);
+
+					let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
 					try {
-						result = await handleOAuthUserInfo(ctx, {
+						result = await signInWithOAuthIdentity(ctx, {
 							userInfo: payload.userInfo,
-							account: payload.account,
+							providerId: payload.account.providerId,
+							accountId: payload.account.accountId,
+							tokens,
+							requestedScopes: grantedScopes,
+							grantAuthority: provider?.grantAuthority,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							source: {
+								method: "oauth",
+								oauth: {
+									providerId: payload.account.providerId,
+									profile: payload.profile,
+								},
+							},
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -293,10 +330,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			before: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -482,6 +516,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
+							profile: userInfoResult?.data,
 							account: {
 								providerId: provider.id,
 								accountId: String(userInfo.id),
@@ -490,7 +525,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								idToken: tokens.idToken,
 								accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-								scope: tokens.scopes?.join(","),
+								grantedScopes: unionGrantedScopes(
+									undefined,
+									tokens.scopes,
+									stateData.requestedScopes,
+								),
 							},
 							state: statePackage.state,
 							callbackURL: finalCallbackURL,
@@ -518,10 +557,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);

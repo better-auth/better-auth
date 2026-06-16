@@ -58,18 +58,6 @@ export const tempPluginsConfig = {
 					},
 				},
 				{
-					flag: "skip-verification-on-enable",
-					question: "Skip verification on enable two factor authentication?",
-					description: "Skip verification on enable two factor authentication.",
-					defaultValue: false,
-					skip: "prompt",
-					argument: {
-						index: 0,
-						isProperty: "skipVerificationOnEnable",
-						schema: z.coerce.boolean().optional(),
-					},
-				},
-				{
 					flag: "totp",
 					description: "The number of digits for the TOTP code.",
 					defaultValue: "My App",
@@ -577,16 +565,7 @@ export const tempPluginsConfig = {
 				},
 			],
 		},
-		authClient: {
-			function: "genericOAuthClient",
-			imports: [
-				{
-					path: "better-auth/client/plugins",
-					imports: [createImport({ name: "genericOAuthClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
+		authClient: null,
 	},
 	anonymous: {
 		displayName: "Anonymous",
@@ -652,29 +631,6 @@ export const tempPluginsConfig = {
 				{
 					path: "better-auth/client/plugins",
 					imports: [createImport({ name: "passkeyClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
-	oidc: {
-		displayName: "OIDC",
-		auth: {
-			function: "oidc",
-			imports: [
-				{
-					path: "better-auth/plugins",
-					imports: [createImport({ name: "oidc" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "oidcClient",
-			imports: [
-				{
-					path: "better-auth/client/plugins",
-					imports: [createImport({ name: "oidcClient" })],
 					isNamedImport: false,
 				},
 			],

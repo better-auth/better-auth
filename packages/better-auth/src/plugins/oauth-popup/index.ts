@@ -246,12 +246,12 @@ const oauthPopupStart = createAuthEndpoint(
 				marker.attributes,
 			);
 
-			url = await provider.createAuthorizationURL({
+			({ url } = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
-			});
+			}));
 		} catch (error) {
 			c.context.logger.error("OAuth popup failed to start", error);
 			return fail("popup_sign_in_failed", "Failed to start the OAuth flow.");

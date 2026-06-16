@@ -159,7 +159,7 @@ The `storeToken` function can be one of the following:
 The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
 
 <Callout type="warn">
-  When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee from [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx) requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). If the implementation only exposes `get` and `delete`, the consume falls back to an in-process JavaScript lock that does not coordinate across multiple application instances. Multi-instance deployments using secondary-storage verification MUST configure a backend that implements `getAndDelete`.
+  When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee from [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx) requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). Better Auth no longer falls back to separate `get` and `delete` operations for verification consumes.
 </Callout>
 
 ## Per-request Expiration

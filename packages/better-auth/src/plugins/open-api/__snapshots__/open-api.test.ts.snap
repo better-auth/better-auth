@@ -20,6 +20,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
+          "grantedScopes": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
           "id": {
             "readOnly": true,
             "type": "string",
@@ -38,9 +44,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
           "refreshTokenExpiresAt": {
             "format": "date-time",
-            "type": "string",
-          },
-          "scope": {
             "type": "string",
           },
           "updatedAt": {
@@ -514,6 +517,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "type": "string",
                   },
                   "error_description": {
+                    "type": "string",
+                  },
+                  "iss": {
                     "type": "string",
                   },
                   "state": {
@@ -1908,6 +1914,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     },
                     "type": "object",
                   },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
                   "callbackURL": {
                     "description": "The URL to redirect to after the user has signed in",
                     "type": "string",
@@ -1945,6 +1961,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "token",
                     ],
                     "type": "object",
+                  },
+                  "loginHint": {
+                    "description": "The login hint to use for the authorization code request",
+                    "type": "string",
                   },
                   "provider": {
                     "anyOf": [
@@ -2166,17 +2186,17 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "format": "date-time",
                         "type": "string",
                       },
+                      "grantedScopes": {
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
+                      },
                       "id": {
                         "type": "string",
                       },
                       "providerId": {
                         "type": "string",
-                      },
-                      "scopes": {
-                        "items": {
-                          "type": "string",
-                        },
-                        "type": "array",
                       },
                       "updatedAt": {
                         "format": "date-time",
@@ -2193,7 +2213,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "updatedAt",
                       "accountId",
                       "userId",
-                      "scopes",
+                      "grantedScopes",
                     ],
                     "type": "object",
                   },
@@ -2612,6 +2632,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "accessTokenExpiresAt": {
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "grantedScopes": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
                     },
                     "idToken": {
                       "type": "string",
@@ -3963,6 +3989,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     },
                     "type": "object",
                   },
+                  "additionalParams": {
+                    "additionalProperties": {
+                      "type": "string",
+                    },
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
                   "callbackURL": {
                     "description": "Callback URL to redirect to after the user has signed in",
                     "type": "string",
@@ -3992,6 +4028,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "refreshToken": {
                         "description": "Refresh token from the provider",
                         "type": "string",
+                      },
+                      "scopes": {
+                        "description": "The scopes granted alongside the id token",
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
                       },
                       "token": {
                         "description": "ID token from the provider",

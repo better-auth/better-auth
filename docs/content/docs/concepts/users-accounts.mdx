@@ -301,6 +301,45 @@ await authClient.deleteUser({
 
 ### Callbacks
 
+**validateUserInfo**: A gate that decides which identities Better Auth admits. It fires just before a user is created (`create-user`) or a new provider account is linked (`link-account`), for every authentication method (OAuth, OIDC SSO, SAML SSO, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database, so policy lives in one place instead of per provider.
+
+It also fires when an existing **OAuth or SSO** user signs in again (`sign-in`), and there it receives the *fresh* provider email and profile rather than the stored row. That lets a domain or org policy reject a user whose provider identity moved out of bounds (for example, an email that left the allowed domain). Non-provider returning sign-ins are not re-validated, because their stored row has not changed since `create-user` gated it; use the admin plugin's ban controls or a `databaseHooks.session.create.before` hook to block those.
+
+`source.action` is `"create-user"`, `"link-account"`, or `"sign-in"`, and `source.method` is the authentication method. For OAuth, `source.oauth` carries the provider id and raw provider profile. For OIDC and SAML SSO, `source.sso` carries the SSO provider id and raw provider claims or assertion attributes.
+
+Return nothing to allow provisioning. Return an object with `error` to reject it: browser/redirect flows send the rejection to the configured error URL, while programmatic flows return a `403` API error. Avoid putting sensitive details in `errorDescription` because it is returned to the client.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        validateUserInfo: ({ user, source }) => {
+            if (!user.email?.endsWith("@example.com")) {
+                return {
+                    error: "email_not_allowed",
+                    errorDescription: "Use your example.com email to sign in",
+                };
+            }
+
+            if (
+                source.oauth?.providerId === "company-oauth" &&
+                source.oauth?.profile?.hd !== "example.com"
+            ) {
+                return {
+                    error: "invalid_organization",
+                    errorDescription: "Use your company OAuth account",
+                };
+            }
+        },
+    },
+});
+```
+
+<Callout type="info">
+  `validateUserInfo` is the high-level policy gate. The lower-level `databaseHooks.user.create.before` still runs afterward for data shaping and can also abort a write; reach for it when you need to mutate the record rather than accept or reject the identity.
+</Callout>
+
 **beforeDelete**: This callback is called before the user is deleted. You can use this callback to perform any cleanup or additional checks before deleting the user.
 
 ```ts title="auth.ts"
@@ -373,6 +412,22 @@ To list user accounts you can use `client.user.listAccounts` method. Which will 
 import { authClient } from "@/lib/auth-client"
 
 const accounts = await authClient.listAccounts();
+```
+
+#### Granted Scopes
+
+Each account exposes a `grantedScopes` field: a `string[]` of the OAuth scopes the user has **accumulated** for that provider over time. It is not the latest token's `scope` claim. Every API that surfaces scopes returns this same array shape, including `listAccounts`, `getAccessToken`, and `refreshToken`.
+
+To check whether an account holds a particular scope, use the `includesGrantedScope` helper instead of inspecting the array yourself:
+
+```ts
+import { includesGrantedScope } from "better-auth/oauth2";
+
+const google = accounts.find((account) => account.providerId === "google");
+const canReadDrive = includesGrantedScope(
+    google?.grantedScopes,
+    "https://www.googleapis.com/auth/drive.readonly",
+);
 ```
 
 ### Token Encryption
@@ -458,7 +513,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  You can also request specific scopes when linking a social account, which can be different from the scopes used during the initial authentication:
+  You can also request specific scopes when linking a social account. The `scopes` you pass are **added** to the provider's default scopes; they don't replace them. This is how you perform incremental authorization: each `linkSocial` call asks for more access, and the newly granted scopes **accumulate** into the account's stored `grantedScopes` rather than overwriting it.
 
   ```ts
   import { authClient } from "@/lib/auth-client"
@@ -466,9 +521,13 @@ Users already signed in can manually link their account to additional social pro
   await authClient.linkSocial({
       provider: "google",
       callbackURL: "/callback",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Request additional scopes
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Added on top of the provider defaults
   });
   ```
+
+  <Callout type="info">
+    `signIn.social({ scopes })` works the same way: the scopes are additive to the provider defaults. Token refresh never changes the stored grant, and for most providers a narrower sign-in never shrinks it either. Google with the default `includeGrantedScopes: true` is the exception: it resyncs `grantedScopes` to Google's authoritative combined grant on each sign-in, so a scope revoked at Google drops on the next sign-in (see [OAuth scopes](/docs/concepts/oauth#how-granted-scopes-accumulate)).
+  </Callout>
 
   You can also link accounts using ID tokens directly, without redirecting to the provider's OAuth flow:
 

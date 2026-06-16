@@ -1,6 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
+import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import {
+	RESERVED_AUTHORIZATION_PARAMS_SET,
+	refreshAccessToken,
+	resolveRequestedScopes,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -126,22 +131,36 @@ export interface TiktokOptions extends ProviderOptions {
 	clientKey: string;
 }
 
+const TIKTOK_DEFAULT_SCOPES = ["user.info.profile"];
+
 export const tiktok = (options: TiktokOptions) => {
 	const tokenEndpoint = "https://open.tiktokapis.com/v2/oauth/token/";
 	return {
 		id: "tiktok",
 		name: "TikTok",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
-			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
-			return new URL(
-				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
-					",",
-				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}`,
+		callbackPath: "/callback/tiktok",
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const requestedScopes = resolveRequestedScopes(
+				options,
+				TIKTOK_DEFAULT_SCOPES,
+				scopes,
 			);
+			// TikTok uses `client_key` instead of the standard `client_id`, so the
+			// shared createAuthorizationURL helper cannot be used directly.
+			const url = new URL("https://www.tiktok.com/v2/auth/authorize");
+			url.searchParams.set("scope", requestedScopes.join(","));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("client_key", options.clientKey);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			if (additionalParams) {
+				for (const [key, value] of Object.entries(additionalParams)) {
+					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
+					if (key === "client_key") continue;
+					url.searchParams.set(key, value);
+				}
+			}
+			return { url, requestedScopes };
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -207,5 +226,5 @@ export const tiktok = (options: TiktokOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<TiktokProfile, TiktokOptions>;
+	} satisfies UpstreamProvider<TiktokProfile, TiktokOptions>;
 };

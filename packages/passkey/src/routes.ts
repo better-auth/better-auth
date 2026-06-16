@@ -21,6 +21,7 @@ import {
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
+import type { OpenAPIParameter } from "better-call";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type {
@@ -120,6 +121,41 @@ const generatePasskeyQuerySchema = z
 	})
 	.optional();
 
+const generatePasskeyRegistrationOptionsOpenAPIParameters: OpenAPIParameter[] =
+	[
+		{
+			name: "authenticatorAttachment",
+			in: "query",
+			required: false,
+			description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
+                          "cross-platform" for authenticators that can be used across devices.`,
+			schema: {
+				type: "string",
+				enum: ["platform", "cross-platform"],
+			},
+		},
+		{
+			name: "name",
+			in: "query",
+			required: false,
+			description: `Optional custom name for the passkey.
+                          This can help identify the passkey when managing multiple credentials.`,
+			schema: {
+				type: "string",
+			},
+		},
+		{
+			name: "context",
+			in: "query",
+			required: false,
+			description: "Optional context for passkey-first registration flows.",
+			schema: {
+				type: "string",
+			},
+		},
+	];
+
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
 	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
@@ -135,39 +171,7 @@ export const generatePasskeyRegistrationOptions = (
 				openapi: {
 					operationId: "generatePasskeyRegistrationOptions",
 					description: "Generate registration options for a new passkey",
-					parameters: [
-						{
-							name: "authenticatorAttachment",
-							in: "query",
-							required: false,
-							description: `Type of authenticator to use for registration.
-                          "platform" for device-specific authenticators,
-                          "cross-platform" for authenticators that can be used across devices.`,
-							schema: {
-								type: "string",
-							},
-						},
-						{
-							name: "name",
-							in: "query",
-							required: false,
-							description: `Optional custom name for the passkey.
-                          This can help identify the passkey when managing multiple credentials.`,
-							schema: {
-								type: "string",
-							},
-						},
-						{
-							name: "context",
-							in: "query",
-							required: false,
-							description:
-								"Optional context for passkey-first registration flows.",
-							schema: {
-								type: "string",
-							},
-						},
-					],
+					parameters: generatePasskeyRegistrationOptionsOpenAPIParameters,
 					responses: {
 						200: {
 							description: "Success",
@@ -602,10 +606,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				userData,
 				context,
 			} = JSON.parse(data.value) as StoredChallengeValue;
-			// A challenge minted before this marker existed has no `type`; accept it
-			// so in-flight verifications survive an upgrade. Only reject a challenge
-			// explicitly tagged for the other ceremony.
-			if (ceremony !== undefined && ceremony !== "registration") {
+			if (ceremony !== "registration") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -795,10 +796,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			const { type: ceremony, expectedChallenge } = JSON.parse(
 				data.value,
 			) as StoredChallengeValue;
-			// A challenge minted before this marker existed has no `type`; accept it
-			// so in-flight verifications survive an upgrade. Only reject a challenge
-			// explicitly tagged for the other ceremony.
-			if (ceremony !== undefined && ceremony !== "authentication") {
+			if (ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,

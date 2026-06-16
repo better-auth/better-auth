@@ -541,9 +541,6 @@ export const memoryAdapter = (
 						return target as any;
 					},
 					incrementOne: async ({ model, where, increment, set }) => {
-						// `where` is both selector and guard: a comparison operator that
-						// excludes the row (e.g. `remaining > 0` on a depleted counter)
-						// yields no match, so nothing is mutated and null is returned.
 						const target = convertWhereClause(where, model)[0];
 						if (!target) return null;
 						for (const [field, delta] of Object.entries(increment)) {

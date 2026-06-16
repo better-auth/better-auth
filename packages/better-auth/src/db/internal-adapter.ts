@@ -1,7 +1,10 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InternalAdapter,
+	UserProvisioningSource,
+	ValidateUserInfoSource,
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
@@ -10,6 +13,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -17,6 +21,10 @@ import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
+import {
+	assertValidUserInfo,
+	assertValidUserInfoSource,
+} from "../utils/validate-user-info";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -48,9 +56,6 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
-	// Warn at most once when a single-use value is consumed through the
-	// non-atomic secondary-storage fallback (see consumeVerificationValue).
-	let warnedNonAtomicConsume = false;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -60,6 +65,38 @@ export const createInternalAdapter = (
 		deleteManyWithHooks,
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
+
+	/**
+	 * Ends the live session rows matched by `where` without physically deleting
+	 * them.
+	 *
+	 * Used for `secondaryStorage` + `preserveSessionInDatabase`, where the row is
+	 * kept for audit. The session-delete hooks still run (so OAuth token
+	 * revocation and back-channel logout fire on session end), and the preserved
+	 * row's `expiresAt` is set to now so every liveness check that keys off the
+	 * session row (introspection, `/userinfo`) treats it as ended.
+	 *
+	 * Matching is restricted to still-live rows. The preserved row outlives the
+	 * session, so without this a later delete call (a repeated `deleteSession`,
+	 * or `deleteUserSessions` sweeping a user's accumulated preserved rows) would
+	 * re-match it and re-fire the hooks, re-dispatching back-channel logout.
+	 */
+	const endPreservedSessions = (where: Where[]) => {
+		const liveSessions: Where[] = [
+			...where,
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		return deleteManyWithHooks(liveSessions, "session", {
+			fn: async () => {
+				await (await getCurrentAdapter(adapter)).updateMany({
+					model: "session",
+					where: liveSessions,
+					update: { expiresAt: new Date() },
+				});
+			},
+			executeMainFn: false,
+		});
+	};
 
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
@@ -116,56 +153,47 @@ export const createInternalAdapter = (
 	}
 
 	return {
-		createOAuthUser: async (
-			user: Omit<User, "id" | "createdAt" | "updatedAt">,
-			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-				Partial<Account>,
-		) => {
-			return runWithTransaction(adapter, async () => {
-				const createdUser = await createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...user,
-						email: user.email?.toLowerCase(),
-					},
-					"user",
-					undefined,
-				);
-				const createdAccount = await createWithHooks(
-					{
-						...account,
-						userId: createdUser!.id,
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-					"account",
-					undefined,
-				);
-				return {
-					user: createdUser,
-					account: createdAccount,
-				};
-			});
-		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
+			source: UserProvisioningSource,
 		) => {
-			const createdUser = await createWithHooks(
-				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...user,
-					email: user.email?.toLowerCase(),
-				},
-				"user",
-				undefined,
-			);
+			const data = {
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				...user,
+				email: user.email?.toLowerCase(),
+			};
+
+			if (options.user?.validateUserInfo) {
+				const validationSource: ValidateUserInfoSource = {
+					...source,
+					action: "create-user",
+				};
+				assertValidUserInfoSource(validationSource);
+				let endpointContext: GenericEndpointContext;
+				try {
+					endpointContext =
+						(await getCurrentAuthContext()) as GenericEndpointContext;
+				} catch (error) {
+					logger.error(
+						"Unable to run validateUserInfo: missing endpoint context",
+						error,
+					);
+					throw new APIError("FORBIDDEN", {
+						code: "validation_context_missing",
+						message: "User validation requires an endpoint context",
+					});
+				}
+				await assertValidUserInfo(endpointContext, {
+					user: data,
+					source: validationSource,
+				});
+			}
+
+			const createdUser = await createWithHooks(data, "user", undefined);
 
 			return createdUser as T & User;
 		},
@@ -738,10 +766,11 @@ export const createInternalAdapter = (
 
 				await secondaryStorage.delete(token);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "token", value: token }]);
 					return;
 				}
 			}
@@ -795,10 +824,11 @@ export const createInternalAdapter = (
 				}
 				await secondaryStorage.delete(`active-sessions-${userId}`);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "userId", value: userId }]);
 					return;
 				}
 			}
@@ -822,10 +852,13 @@ export const createInternalAdapter = (
 					}
 				}
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([
+						{ field: "token", value: sessionTokens, operator: "in" },
+					]);
 					return;
 				}
 			}
@@ -1241,15 +1274,9 @@ export const createInternalAdapter = (
 		 * is still deleted (so it cannot be replayed later) but `null` is
 		 * returned. Callers do not need their own `expiresAt` gate.
 		 *
-		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
-		 * only when the configured storage implements `getAndDelete`; otherwise
-		 * it falls back to an in-process lock around `get` then `delete` and
-		 * warns once, since that fallback cannot coordinate across processes.
-		 *
-		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
-		 * in the next breaking release, or require database-backed verification
-		 * storage for security-sensitive consume paths, so the non-atomic
-		 * fallback can be removed entirely.
+		 * The secondary-storage-only path (`storeInDatabase: false`) consumes
+		 * through `getAndDelete`, which is required on `SecondaryStorage` so
+		 * single-use values are not read and deleted as separate operations.
 		 */
 		consumeVerificationValue: async (
 			identifier: string,
@@ -1287,24 +1314,9 @@ export const createInternalAdapter = (
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
 				const consumeCacheKey = async (key: string) => {
-					if (secondaryStorage.getAndDelete) {
-						return hydrateCachedVerification(
-							await secondaryStorage.getAndDelete(key),
-						);
-					}
-					if (!warnedNonAtomicConsume) {
-						warnedNonAtomicConsume = true;
-						logger.warn(
-							"Secondary storage does not implement `getAndDelete`, so single-use verification values cannot be consumed atomically across processes. Implement `getAndDelete` or use database-backed verification storage to guarantee single use.",
-						);
-					}
-					return withVerificationConsumeLock(key, async () => {
-						const raw = await secondaryStorage.get(key);
-						const parsed = hydrateCachedVerification(raw);
-						if (!parsed) return null;
-						await secondaryStorage.delete(key);
-						return parsed;
-					});
+					return hydrateCachedVerification(
+						await secondaryStorage.getAndDelete(key),
+					);
 				};
 
 				for (const stored of identifiersToTry) {
@@ -1396,9 +1408,10 @@ export const createInternalAdapter = (
 		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
-		 * re-reading the row rather than matching adapter-specific errors. The
-		 * secondary-storage-only path has no primary key to enforce uniqueness, so
-		 * it is best-effort under concurrency.
+		 * re-reading the row rather than matching adapter-specific errors.
+		 * Secondary-storage-only verification cannot enforce the deterministic
+		 * primary-key gate, so this operation fails closed unless verification is
+		 * backed by the database.
 		 *
 		 * The atomic guarantee requires the configured adapter to reject a
 		 * duplicate primary key on insert, which every real database enforces. The
@@ -1428,28 +1441,9 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
-				// Best-effort under concurrency: without a database primary key there
-				// is no first-writer-wins gate, so two callers racing a get-then-set
-				// can both observe an empty key and both win (mirrors the non-atomic
-				// secondary fallback in consumeVerificationValue).
-				// FIXME(reserve-secondary-atomic): require an atomic conditional set
-				// (set-if-absent) on SecondaryStorage, or require database-backed
-				// verification storage for reservations, so this path can guarantee
-				// first-writer-wins across processes.
-				const cacheKey = `verification:${storedIdentifier}`;
-				const existing = await secondaryStorage.get(cacheKey);
-				if (existing) return false;
-				await secondaryStorage.set(
-					cacheKey,
-					JSON.stringify({
-						id: reservationId,
-						identifier: storedIdentifier,
-						value: data.value,
-						expiresAt: data.expiresAt,
-					}),
-					getTTLSeconds(data.expiresAt),
+				throw new BetterAuthError(
+					"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
 				);
-				return true;
 			}
 
 			try {

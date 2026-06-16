@@ -643,12 +643,18 @@ export const mongodbAdapter = (
 					// Only include operators that carry fields. An empty `$inc: {}`
 					// errors on MongoDB server < 5.0, and a set-only guarded
 					// transition passes an empty `increment`.
-					const update: { $inc?: Record<string, number>; $set?: any } = {};
+					const update: {
+						$inc?: Record<string, number>;
+						$set?: Record<string, unknown>;
+					} = {};
 					if (Object.keys(increment).length > 0) {
 						update.$inc = increment;
 					}
 					if (set && Object.keys(set).length > 0) {
 						update.$set = set;
+					}
+					if (!update.$inc && !update.$set) {
+						return db.collection(model).findOne(clause, { session });
 					}
 					const res = await db
 						.collection(model)
