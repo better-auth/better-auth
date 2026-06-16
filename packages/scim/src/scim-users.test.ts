@@ -688,7 +688,9 @@ describe("SCIM", () => {
 				database: memory,
 				baseURL: "http://localhost:3000",
 				emailAndPassword: { enabled: true },
-				plugins: [scim(), organization()],
+				// This regression test links a pre-existing user by email, which
+				// is now opt-in via `linkExistingUsers`.
+				plugins: [scim({ linkExistingUsers: true }), organization()],
 				secondaryStorage: {
 					set(key, value) {
 						store.set(key, value);
@@ -749,6 +751,183 @@ describe("SCIM", () => {
 			});
 
 			expect(store.has(victimToken)).toBe(false);
+		});
+
+		it("should deprovision (not delete the global user) for an org-scoped DELETE", async () => {
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
+			const organization = await registerOrganization("org:deprovision");
+			const scimToken = await getSCIMToken(
+				"provider-deprovision",
+				organization?.id,
+			);
+
+			const created = await auth.api.createSCIMUser({
+				body: {
+					userName: "scim-user",
+					emails: [{ value: "scim-user@email.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const ctx = await auth.$context;
+
+			// SCIM provisioning created an org membership for the new user.
+			const memberBefore = await ctx.adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: organization!.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(memberBefore).not.toBeNull();
+
+			await auth.api.deleteSCIMUser({
+				params: { userId: created.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			// The global Better Auth user must NOT be deleted by an org-scoped token.
+			const userAfter = await ctx.adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: created.id }],
+			});
+			expect(userAfter).not.toBeNull();
+
+			// The org membership is removed (deprovisioned).
+			const memberAfter = await ctx.adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: organization!.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(memberAfter).toBeNull();
+
+			// The SCIM account link is removed, so the user is no longer
+			// reachable through this provider.
+			await expect(
+				auth.api.getSCIMUser({
+					params: { userId: created.id },
+					headers: { authorization: `Bearer ${scimToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ message: "User not found" }),
+			);
+		});
+
+		it("removes team memberships when an org-scoped SCIM delete removes the member", async () => {
+			const adminUser = {
+				email: "scim-team-admin@test.com",
+				password: "password",
+				name: "SCIM Team Admin",
+			};
+
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+				scimProvider: [],
+				organization: [],
+				member: [],
+				invitation: [],
+				team: [],
+				teamMember: [],
+			};
+			const memory = memoryAdapter(data);
+
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [sso(), scim(), organization({ teams: { enabled: true } })],
+			});
+
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), scimClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+
+			await authClient.signUp.email(adminUser);
+			const adminHeaders = new Headers();
+			await authClient.signIn.email(adminUser, {
+				throw: true,
+				onSuccess: setCookieToHeader(adminHeaders),
+			});
+
+			const org = await auth.api.createOrganization({
+				body: { slug: "the-team-org", name: "the team org" },
+				headers: adminHeaders,
+			});
+
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: {
+					providerId: "provider-team-cleanup",
+					organizationId: org!.id,
+				},
+				headers: adminHeaders,
+			});
+
+			const created = await auth.api.createSCIMUser({
+				body: {
+					userName: "scim-team-user",
+					emails: [{ value: "scim-team-user@email.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const team = await auth.api.createTeam({
+				body: { name: "the-team", organizationId: org!.id },
+				headers: adminHeaders,
+			});
+
+			await auth.api.addTeamMember({
+				body: {
+					teamId: team.id,
+					userId: created.id,
+					organizationId: org!.id,
+				},
+				headers: adminHeaders,
+			});
+
+			const ctx = await auth.$context;
+
+			const teamMemberBefore = await ctx.adapter.findOne({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: team.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(teamMemberBefore).not.toBeNull();
+
+			await auth.api.deleteSCIMUser({
+				params: { userId: created.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const memberAfter = await ctx.adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: org!.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(memberAfter).toBeNull();
+
+			const teamMemberAfter = await ctx.adapter.findOne({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: team.id },
+					{ field: "userId", value: created.id },
+				],
+			});
+			expect(teamMemberAfter).toBeNull();
 		});
 	});
 

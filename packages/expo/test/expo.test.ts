@@ -578,6 +578,65 @@ describe("expo", async () => {
 		expect(originHeader).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9900
+	 */
+	it("should send cookie for link-social ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await client.linkSocial({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toContain("better-auth.session_token=existing-token");
+		expect(expoOriginHeader).toBeNull();
+	});
+
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
 			email: testUser.email,
@@ -1425,5 +1484,61 @@ describe("ExpoOnlineManager duplicate notification prevention", () => {
 
 		onlineManager.setOnline(true);
 		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("expo authorization proxy", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "https://app.example",
+		socialProviders: {
+			google: { clientId: "test", clientSecret: "test" },
+		},
+		plugins: [expo()],
+	});
+
+	const proxy = (authorizationURL: string) =>
+		auth.handler(
+			new Request(
+				`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					authorizationURL,
+				)}`,
+			),
+		);
+
+	it("rejects a same-origin authorizationURL (login-CSRF bounce)", async () => {
+		const res = await proxy(
+			"https://app.example/api/auth/callback/google?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a non-https authorizationURL", async () => {
+		const res = await proxy(
+			"http://accounts.google.com/o/oauth2/v2/auth?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a malformed authorizationURL", async () => {
+		const res = await proxy("not-a-url");
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects an authorizationURL with a fragment", async () => {
+		const withFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment",
+		);
+		expect(withFragment.status).toBe(400);
+		const bareFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#",
+		);
+		expect(bareFragment.status).toBe(400);
+	});
+
+	it("redirects to an external https provider authorization endpoint", async () => {
+		const target =
+			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
+		const res = await proxy(target);
+		expect(res.headers.get("location")).toBe(target);
 	});
 });
