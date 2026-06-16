@@ -53,7 +53,7 @@ jobs:
           echo "ref=$BASE_REF" >> "$GITHUB_OUTPUT"
 
       # Checkout the PR's base branch — never execute PR or fork code with secrets
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ steps.pr-base.outputs.ref }}
           fetch-depth: 0
@@ -93,7 +93,7 @@ jobs:
         id: describe
         if: steps.analyze.outputs.skip != 'true'
         continue-on-error: true
-        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
