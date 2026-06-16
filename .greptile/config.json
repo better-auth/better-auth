@@ -1,0 +1,20 @@
+{
+  "strictness": 2,
+  "triggerOnUpdates": false,
+  "triggerOnDrafts": false,
+  "commentTypes": ["logic", "syntax", "style"],
+  "includeBranches": ["main", "next"],
+  "excludeAuthors": [
+    "dependabot[bot]",
+    "better-release[bot]",
+    "github-actions[bot]"
+  ],
+  "ignorePatterns": "**/pnpm-lock.yaml\n**/__snapshots__/**\n.changeset/*.md\n**/drizzle/meta/**",
+  "context": {
+    "repos": [
+      "better-auth/better-call",
+      "better-auth/better-fetch",
+      "better-auth/utils"
+    ]
+  }
+}

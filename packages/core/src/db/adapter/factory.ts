@@ -1403,6 +1403,16 @@ export const createAdapterFactory =
 				increment: Record<string, number>;
 				set?: Record<string, unknown> | undefined;
 			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -1436,6 +1446,14 @@ export const createAdapterFactory =
 					set = await transformInput(unsafeSet, unsafeModel, "update");
 				} else {
 					set = unsafeSet;
+				}
+				if (
+					Object.keys(increment).length === 0 &&
+					(!set || Object.keys(set).length === 0)
+				) {
+					throw new BetterAuthError(
+						"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+					);
 				}
 				const res = await withSpan(
 					`db incrementOne ${model}`,

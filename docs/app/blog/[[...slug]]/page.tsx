@@ -20,6 +20,69 @@ function formatDate(date: Date) {
 	});
 }
 
+function generatedCoverUrl(
+	title: string,
+	date: Date | undefined,
+	theme: "light" | "dark",
+) {
+	const params = new URLSearchParams();
+	params.set("title", title);
+	if (date) {
+		params.set(
+			"date",
+			new Date(date).toLocaleDateString("en-US", {
+				month: "long",
+				year: "numeric",
+			}),
+		);
+	}
+	params.set("theme", theme);
+	return `/api/og-blog?${params.toString()}`;
+}
+
+function BlogCover({
+	title,
+	date,
+	image,
+}: {
+	title: string;
+	date: Date;
+	image?: string;
+}) {
+	if (image) {
+		return (
+			<Image
+				src={image}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover"
+			/>
+		);
+	}
+	return (
+		<>
+			{/* Generated cover, one per theme */}
+			<img
+				src={generatedCoverUrl(title, date, "light")}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover dark:hidden"
+				loading="lazy"
+			/>
+			<img
+				src={generatedCoverUrl(title, date, "dark")}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover hidden dark:block"
+				loading="lazy"
+			/>
+		</>
+	);
+}
+
 function BlogList() {
 	const posts = blogs
 		.getPages()
@@ -49,17 +112,13 @@ function BlogList() {
 							className="group block border-b border-dashed border-foreground/[0.06] px-5 sm:px-6 lg:px-8 py-5 transition-colors hover:bg-foreground/[0.02]"
 						>
 							<div className="flex gap-5 items-center">
-								{post.data?.image && (
-									<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
-										<Image
-											src={post.data.image}
-											alt={post.data.title}
-											width={320}
-											height={192}
-											className="w-full h-full object-cover"
-										/>
-									</div>
-								)}
+								<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
+									<BlogCover
+										title={post.data.title}
+										date={post.data.date}
+										image={post.data.image}
+									/>
+								</div>
 								<div className="flex-1 min-w-0">
 									<h2 className="text-lg font-medium tracking-tight text-neutral-800 dark:text-neutral-200 group-hover:text-neutral-950 dark:group-hover:text-white transition-colors">
 										{post.data.title}
@@ -253,22 +312,8 @@ export async function generateMetadata({
 	if (!page || page.data.draft) return notFound();
 	const { title, description, image, date } = page.data;
 
-	const ogSearchParams = new URLSearchParams();
-	ogSearchParams.set("heading", title);
-	if (description) ogSearchParams.set("description", description);
-	if (date) {
-		ogSearchParams.set(
-			"date",
-			new Date(date).toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			}),
-		);
-	}
-	const ogUrl = `/api/og-release?${ogSearchParams.toString()}`;
-
-	const ogImage = image || ogUrl;
+	// Social cards have no theme preference; always use the dark variant.
+	const ogImage = image || generatedCoverUrl(title, date, "dark");
 
 	return createMetadata({
 		title,

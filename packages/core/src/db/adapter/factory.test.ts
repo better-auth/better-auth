@@ -167,6 +167,48 @@ describe("createAdapterFactory atomic primitives", () => {
 		});
 	});
 
+	it("throws before native incrementOne when every update field is transformed away", async () => {
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				usePlural: true,
+				customTransformInput({ action, data }) {
+					if (action === "update") {
+						return undefined;
+					}
+					return data;
+				},
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementOne: async () => {
+						throw new Error("incrementOne should not be called");
+					},
+				}),
+		})({
+			verification: {
+				modelName: "verificationRecord",
+				additionalFields: {
+					attempts: {
+						type: "number",
+						required: false,
+						fieldName: "attempt_count",
+					},
+				},
+			},
+		});
+
+		await expect(
+			adapter.incrementOne({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+				increment: {},
+				set: { attempts: 1 },
+			}),
+		).rejects.toThrow(/resolved to an empty update/);
+	});
+
 	it("throws a clear error when consumeOne is missing at runtime", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({

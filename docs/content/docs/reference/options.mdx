@@ -351,7 +351,7 @@ export const auth = betterAuth({
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
-* `refreshAccessToken`: Custom function to refresh a token (optional)
+* `refreshAccessToken`: Custom function to refresh a token. Receives the stored refresh token and returns new OAuth tokens. (optional)
 * `verifyIdToken`: Custom function to verify the ID token (optional)
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
@@ -482,7 +482,7 @@ export const auth = betterAuth({
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		storeStateStrategy: "database", // Store OAuth state payload in verification storage
-		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+		storeAccountCookie: true, // Store provider account data after OAuth flow in an encrypted cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"], // or async (request) => ["google", "github"]
@@ -515,10 +515,14 @@ Defaults to `"database"` when a database or `secondaryStorage` is configured, an
 
 ### `storeAccountCookie`
 
-Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
 
 * Default: `false`
 * Automatically set to `true` if no database is provided
+
+The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
+
+Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
 

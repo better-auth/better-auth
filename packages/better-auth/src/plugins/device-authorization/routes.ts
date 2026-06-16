@@ -169,6 +169,8 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					userCode,
 				);
 
+			ctx.setHeader("Cache-Control", "no-store");
+			ctx.setHeader("Pragma", "no-cache");
 			return ctx.json({
 				device_code: deviceCode,
 				user_code: userCode,
@@ -469,6 +471,8 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 
 				// Return OAuth 2.0 compliant token response
+				ctx.setHeader("Cache-Control", "no-store");
+				ctx.setHeader("Pragma", "no-cache");
 				return ctx.json({
 					access_token: session.token,
 					token_type: "Bearer",
@@ -570,14 +574,15 @@ export const deviceVerify = createAuthEndpoint(
 			deviceCodeRecord.status === "pending"
 		) {
 			const claimedDeviceCodeRecord =
-				await ctx.context.adapter.update<DeviceCode>({
+				await ctx.context.adapter.incrementOne<DeviceCode>({
 					model: "deviceCode",
 					where: [
 						{ field: "id", value: deviceCodeRecord.id },
 						{ field: "status", value: "pending" },
 						{ field: "userId", operator: "eq", value: null },
 					],
-					update: { userId: session.user.id },
+					increment: {},
+					set: { userId: session.user.id },
 				});
 			if (claimedDeviceCodeRecord) {
 				deviceCodeRecord.userId = session.user.id;
