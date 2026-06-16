@@ -98,9 +98,8 @@ export interface PrismaNextClient {
  * Convert better-auth Where[] clauses into a flat filter object
  * suitable for Prisma Next's `.where()` shorthand.
  *
- * Prisma Next's shorthand object filter supports equality checks
- * directly: `{ field: value }`. For operators, we build nested
- * objects matching Prisma Next's filter shape.
+ * Field names are already resolved by the adapter factory before reaching
+ * the custom adapter, so `w.field` is used directly here.
  */
 function convertWhere(where: Where[] | undefined): Record<string, unknown> {
 	if (!where || where.length === 0) return {};
@@ -227,7 +226,10 @@ function buildCondition(w: Where): Record<string, unknown> {
  * });
  * ```
  */
-export const prismaNextAdapter = (db: PrismaNextClient, config: PrismaNextConfig) => {
+export const prismaNextAdapter = (
+	db: PrismaNextClient,
+	config: PrismaNextConfig,
+) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 
 	const createCustomAdapter =
@@ -356,8 +358,10 @@ export const prismaNextAdapter = (db: PrismaNextClient, config: PrismaNextConfig
 
 			return {
 				async create({ model, data, select }) {
-					let collection = getCollection(model);
-					const result = await collection.create(data as Record<string, unknown>);
+					const collection = getCollection(model);
+					const result = await collection.create(
+						data as Record<string, unknown>,
+					);
 					if (select && select.length > 0) {
 						const filtered: Record<string, unknown> = {};
 						for (const field of select) {
@@ -509,7 +513,7 @@ export const prismaNextAdapter = (db: PrismaNextClient, config: PrismaNextConfig
 						data[field] = { increment: delta };
 					}
 
-					let query = applyWhere(collection, where);
+					const query = applyWhere(collection, where);
 					try {
 						const result = await query.update(data);
 						return (result as any) ?? null;

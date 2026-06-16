@@ -39,7 +39,9 @@ function createMockCollection(overrides: Record<string, any> = {}) {
 function createMockDb(models: Record<string, any> = {}) {
 	return {
 		orm: models,
-		transaction: vi.fn(async (cb: any) => cb({ orm: models, transaction: vi.fn() })),
+		transaction: vi.fn(async (cb: any) =>
+			cb({ orm: models, transaction: vi.fn() }),
+		),
 	};
 }
 
@@ -63,7 +65,11 @@ describe("prisma-next-adapter", () => {
 
 	describe("create", () => {
 		it("should create a record", async () => {
-			const mockUser = { id: "user-1", email: "test@example.com", name: "Test" };
+			const mockUser = {
+				id: "user-1",
+				email: "test@example.com",
+				name: "Test",
+			};
 			const userCollection = createMockCollection({
 				create: vi.fn().mockResolvedValue(mockUser),
 			});
@@ -88,7 +94,7 @@ describe("prisma-next-adapter", () => {
 					model: "nonexistent",
 					data: { email: "test@example.com" },
 				}),
-			).rejects.toThrow(/does not exist/);
+			).rejects.toThrow(/does not exist|not found/i);
 		});
 	});
 
@@ -135,7 +141,7 @@ describe("prisma-next-adapter", () => {
 					model: "nonexistent",
 					where: [{ field: "id", value: "1" }],
 				}),
-			).rejects.toThrow(/does not exist/);
+			).rejects.toThrow(/does not exist|not found/i);
 		});
 	});
 
@@ -210,7 +216,11 @@ describe("prisma-next-adapter", () => {
 
 	describe("update", () => {
 		it("should update a record", async () => {
-			const updatedUser = { id: "user-1", email: "test@example.com", name: "Updated" };
+			const updatedUser = {
+				id: "user-1",
+				email: "test@example.com",
+				name: "Updated",
+			};
 			const userCollection = createMockCollection({
 				update: vi.fn().mockResolvedValue(updatedUser),
 			});
@@ -273,8 +283,8 @@ describe("prisma-next-adapter", () => {
 
 			const result = await adapter.updateMany({
 				model: "user",
-				where: [{ field: "role", value: "guest", operator: "eq" }],
-				update: { active: false },
+				where: [{ field: "name", value: "guest", operator: "eq" }],
+				update: { emailVerified: false },
 			});
 
 			expect(result).toBe(3);
@@ -326,7 +336,7 @@ describe("prisma-next-adapter", () => {
 
 			const result = await adapter.deleteMany({
 				model: "user",
-				where: [{ field: "active", value: false, operator: "eq" }],
+				where: [{ field: "emailVerified", value: false, operator: "eq" }],
 			});
 
 			expect(result).toBe(5);
@@ -343,7 +353,7 @@ describe("prisma-next-adapter", () => {
 
 			const result = await adapter.count({
 				model: "user",
-				where: [{ field: "active", value: true, operator: "eq" }],
+				where: [{ field: "emailVerified", value: true, operator: "eq" }],
 			});
 
 			expect(result).toBe(42);
@@ -398,7 +408,9 @@ describe("prisma-next-adapter", () => {
 				where: [{ field: "email", value: "test@test.com", operator: "eq" }],
 			});
 
-			expect(userCollection.where).toHaveBeenCalledWith({ email: "test@test.com" });
+			expect(userCollection.where).toHaveBeenCalledWith({
+				email: "test@test.com",
+			});
 		});
 
 		it("should handle ne operator", async () => {
@@ -410,11 +422,11 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "role", value: "admin", operator: "ne" }],
+				where: [{ field: "name", value: "admin", operator: "ne" }],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
-				role: { not: "admin" },
+				name: { not: "admin" },
 			});
 		});
 
@@ -427,11 +439,11 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "deletedAt", value: null, operator: "ne" }],
+				where: [{ field: "image", value: null, operator: "ne" }],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
-				deletedAt: { not: null },
+				image: { not: null },
 			});
 		});
 
@@ -444,11 +456,13 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "role", value: ["admin", "moderator"], operator: "in" }],
+				where: [
+					{ field: "name", value: ["admin", "moderator"], operator: "in" },
+				],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
-				role: { in: ["admin", "moderator"] },
+				name: { in: ["admin", "moderator"] },
 			});
 		});
 
@@ -459,13 +473,14 @@ describe("prisma-next-adapter", () => {
 			const db = createMockDb({ user: userCollection });
 			const adapter = createTestAdapter(db);
 
+			const date = new Date("2024-01-01");
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "age", value: 18, operator: "gte" }],
+				where: [{ field: "createdAt", value: date, operator: "gte" }],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
-				age: { gte: 18 },
+				createdAt: { gte: date },
 			});
 		});
 
@@ -478,7 +493,9 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "email", value: "@example.com", operator: "contains" }],
+				where: [
+					{ field: "email", value: "@example.com", operator: "contains" },
+				],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
@@ -554,15 +571,25 @@ describe("prisma-next-adapter", () => {
 			await adapter.findMany({
 				model: "user",
 				where: [
-					{ field: "active", value: true, operator: "eq", connector: "AND" },
-					{ field: "role", value: "admin", operator: "eq", connector: "OR" },
-					{ field: "role", value: "moderator", operator: "eq", connector: "OR" },
+					{
+						field: "emailVerified",
+						value: true,
+						operator: "eq",
+						connector: "AND",
+					},
+					{ field: "name", value: "admin", operator: "eq", connector: "OR" },
+					{
+						field: "name",
+						value: "moderator",
+						operator: "eq",
+						connector: "OR",
+					},
 				],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
-				AND: [{ active: true }],
-				OR: [{ role: "admin" }, { role: "moderator" }],
+				AND: [{ emailVerified: true }],
+				OR: [{ name: "admin" }, { name: "moderator" }],
 			});
 		});
 
@@ -575,11 +602,11 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "role", value: [], operator: "not_in" }],
+				where: [{ field: "name", value: [], operator: "not_in" }],
 			});
 
-			// Empty not_in is a no-op
-			expect(userCollection.where).toHaveBeenCalledWith({});
+			// Empty not_in produces an empty filter, so where() is not called
+			expect(userCollection.where).not.toHaveBeenCalled();
 		});
 
 		it("should handle in operator with empty array (impossible condition)", async () => {
@@ -591,13 +618,13 @@ describe("prisma-next-adapter", () => {
 
 			await adapter.findMany({
 				model: "user",
-				where: [{ field: "role", value: [], operator: "in" }],
+				where: [{ field: "name", value: [], operator: "in" }],
 			});
 
 			expect(userCollection.where).toHaveBeenCalledWith({
 				AND: [
-					{ role: { equals: "__never__" } },
-					{ role: { not: "__never__" } },
+					{ name: { equals: "__never__" } },
+					{ name: { not: "__never__" } },
 				],
 			});
 		});

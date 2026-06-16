@@ -890,6 +890,9 @@ importers:
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../prisma-adapter
+      '@better-auth/prisma-next-adapter':
+        specifier: workspace:*
+        version: link:../prisma-next-adapter
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1451,6 +1454,21 @@ importers:
       prisma:
         specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.4.1
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/prisma-next-adapter:
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
