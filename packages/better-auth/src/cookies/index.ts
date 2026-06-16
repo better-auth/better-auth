@@ -12,6 +12,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -234,27 +235,12 @@ export async function setCookieCache(
 		);
 	}
 
-	// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
-	if (data.length > 4093) {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		const cookies = sessionStore.chunk(data, options);
-		sessionStore.setCookies(cookies);
-	} else {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		if (sessionStore.hasChunks()) {
-			const cleanCookies = sessionStore.clean();
-			sessionStore.setCookies(cleanCookies);
-		}
-		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
-	}
+	const sessionStore = createSessionStore(
+		ctx.context.authCookies.sessionData.name,
+		options,
+		ctx,
+	);
+	sessionStore.setCookies(sessionStore.chunk(data, options));
 
 	// Keep the account cookie in sync, unless this response already set a
 	// fresh one that the stale request copy would downgrade or expire.
@@ -264,7 +250,10 @@ export async function setCookieCache(
 	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			if (accountData.userId === session.user.id) {
+			if (
+				!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+				accountData.userId === session.user.id
+			) {
 				await setAccountCookie(ctx, accountData);
 			} else {
 				expireCookie(ctx, ctx.context.authCookies.accountData);

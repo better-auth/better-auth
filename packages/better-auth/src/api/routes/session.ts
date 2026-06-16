@@ -13,6 +13,7 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
+import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -136,8 +137,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Decryption failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
@@ -160,8 +163,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Verification failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else {
 						// Decode compact format (or legacy base64-hmac)
@@ -191,8 +196,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (isValid) {
 								sessionDataPayload = parsed;
 							} else {
+								// HMAC verification failed, expire the invalid cookie and fall through
+								// to session_token DB validation. This handles scenarios like
+								// cross-subdomain cookie migrations where stale cookies may be present.
 								expireCookie(ctx, ctx.context.authCookies.sessionData);
-								return ctx.json(null);
 							}
 						}
 					}
@@ -463,8 +470,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 						);
 					}
-					const maxAge =
-						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+					const maxAge = ctx.context.sessionConfig.expiresIn;
 					await setSessionCookie(
 						ctx,
 						{
@@ -529,7 +535,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
  * revoked-but-cached session cannot authorize a sensitive action.
  */
 export const isStateful = (ctx: GenericEndpointContext): boolean =>
-	!!ctx.context.options.database || !!ctx.context.options.secondaryStorage;
+	hasServerSessionStore(ctx.context.options);
 
 export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,

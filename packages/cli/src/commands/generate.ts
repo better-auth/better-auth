@@ -97,6 +97,22 @@ async function generateAction(opts: any) {
 		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
+	// If --output points to an existing directory, treat it as the output
+	// directory and append the default filename instead of writing to the
+	// directory path itself (which causes EISDIR).
+	if (options.output) {
+		const resolvedOutput = path.resolve(cwd, options.output);
+		try {
+			const stat = await fs.stat(resolvedOutput);
+			if (stat.isDirectory()) {
+				options.output = path.join(options.output, "auth-schema.ts");
+			}
+		} catch {
+			// path doesn't exist yet — treat as a file path, which is fine
+		}
+	}
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,

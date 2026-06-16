@@ -511,7 +511,7 @@ export function verifyApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
-	return createAuthEndpoint(
+	return createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,

@@ -32,6 +32,16 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - JSDoc comments for public APIs
 - Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
 
+## Issue Triage and Architecture
+
+- A reproducible error is not automatically a bug. First prove the behavior violates Better Auth's documented contract, TypeScript contract, or established runtime semantics.
+- Before changing public API behavior, check existing docs, generated/inferred types, endpoint metadata, release history, and git history for the relevant code path. Treat long-standing metadata such as `requireHeaders`, `requireRequest`, endpoint method, schema, and middleware as part of the API contract.
+- For regression claims, compare the exact reported versions or tags. If the behavior existed before the claimed version, classify it as expected behavior, documentation gap, or integration misuse unless another contract proves otherwise.
+- Distinguish invalid usage from valid empty state. Example: a server session check without request headers is invalid usage; a server session check with headers but no session cookie is a valid request that returns `null`.
+- Do not weaken TypeScript guidance to make runtime behavior more permissive unless that is the explicit architectural decision. Optional input types can hide integration bugs from users and agents.
+- Prefer docs or clearer error messages over API-contract changes when the current behavior is intentional but confusing.
+- When reviewing or patching external issue PRs, validate both the issue and the proposed fix against the surrounding contract before improving the PR. If the PR changes a long-standing contract, call that out before pushing changes.
+
 ## Testing
 
 - Most tests use Vitest; some under `e2e/` use Playwright
@@ -53,7 +63,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 ## Important Development Notes
 
 - Bug fixes and new features MUST include tests
-- For bug fixes: if the issue is reproducible in a test, write a failing test first, then implement the fix
+  - For bug fixes: after confirming the reproducible behavior violates the intended contract, write a failing test first, then implement the fix
 - Update docs (`docs/content/docs/`) when changing public API
 - Ensure `pnpm typecheck` passes before finishing
 - DO NOT COMMIT unless the user explicitly asks

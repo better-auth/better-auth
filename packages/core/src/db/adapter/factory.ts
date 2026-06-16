@@ -3,6 +3,10 @@ import {
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
 } from "@better-auth/core/instrumentation";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "../../context/transaction";
 import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
@@ -1364,11 +1368,9 @@ export const createAdapterFactory =
 					// engines with real transaction isolation; race window narrows
 					// (does not close) on adapters that fall through to sequential
 					// execution. Remove this branch when consumeOne becomes required.
-					// FIXME(consume-one-nested-transaction): custom adapters without a
-					// native consumeOne have no portable signal for "already inside a
-					// transaction". First-party adapters mark transaction-scoped
-					// adapters as as-is; make that capability explicit in the next
-					// breaking adapter contract.
+					// Use Better Auth's transaction context here, not a direct adapter
+					// transaction, so callers already inside a transaction keep using
+					// the active transaction adapter.
 					res = await withSpan(
 						`db consumeOne ${model}`,
 						{
@@ -1376,7 +1378,8 @@ export const createAdapterFactory =
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						() =>
-							adapter.transaction(async (trx) => {
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
 								const rows = await trx.findMany<Record<string, any>>({
 									model: unsafeModel,
 									where: unsafeWhere,
@@ -1447,6 +1450,16 @@ export const createAdapterFactory =
 				increment: Record<string, number>;
 				set?: Record<string, unknown> | undefined;
 			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -1483,6 +1496,17 @@ export const createAdapterFactory =
 					} else {
 						set = unsafeSet;
 					}
+					// `transformInput` drops unknown-to-schema and `undefined` fields, so
+					// a `set` that was non-empty on input can resolve to nothing. Re-check
+					// after mapping so this never reaches the adapter as an empty UPDATE.
+					if (
+						Object.keys(increment).length === 0 &&
+						(!set || Object.keys(set).length === 0)
+					) {
+						throw new BetterAuthError(
+							"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+						);
+					}
 					res = await withSpan(
 						`db incrementOne ${model}`,
 						{
@@ -1508,7 +1532,8 @@ export const createAdapterFactory =
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						() =>
-							adapter.transaction(async (trx) => {
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
 								const rows = await trx.findMany<Record<string, any>>({
 									model: unsafeModel,
 									where: unsafeWhere,

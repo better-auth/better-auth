@@ -103,6 +103,83 @@ describe("sign-in", async () => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	it("logs expected auth validation failures below error level", async () => {
+		const log = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+			},
+			logger: {
+				level: "info",
+				log,
+			},
+		});
+		const expectWarnWithoutError = (message: string) => {
+			expect(
+				log.mock.calls.some(
+					([level, loggedMessage]) =>
+						level === "warn" &&
+						typeof loggedMessage === "string" &&
+						loggedMessage.includes(message),
+				),
+			).toBe(true);
+			expect(log.mock.calls.some(([level]) => level === "error")).toBe(false);
+		};
+
+		log.mockClear();
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: "wrong-password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD),
+		);
+
+		expectWarnWithoutError("Invalid password");
+
+		log.mockClear();
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: "missing-sign-in@test.com",
+					password: "password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD),
+		);
+
+		expectWarnWithoutError("User not found");
+
+		log.mockClear();
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "short-password@test.com",
+					password: "short",
+					name: "Short Password",
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT),
+		);
+		expectWarnWithoutError("Password is too short");
+
+		log.mockClear();
+		const resetRes = await auth.api.requestPasswordReset({
+			body: {
+				email: "reset-missing@test.com",
+			},
+		});
+		expect(resetRes.status).toBe(true);
+		expectWarnWithoutError("Reset Password: User not found");
+	});
 });
 
 describe("url checks", async () => {

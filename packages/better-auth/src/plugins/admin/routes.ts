@@ -1709,12 +1709,12 @@ export const setUserPassword = (opts: AdminOptions) =>
 			const { newPassword, userId } = ctx.body;
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.error("Password is too short");
+				ctx.context.logger.warn("Password is too short");
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 			}
 			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.error("Password is too long");
+				ctx.context.logger.warn("Password is too long");
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const user = await ctx.context.internalAdapter.findUserById(userId);
