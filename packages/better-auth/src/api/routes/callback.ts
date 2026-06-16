@@ -12,7 +12,11 @@ import {
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
-import { generateState, parseState } from "../../oauth2/state";
+import {
+	generateIdTokenNonce,
+	generateState,
+	parseState,
+} from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -99,13 +103,20 @@ export const callbackOAuth = createAuthEndpoint(
 				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
 				const state = generateRandomString(32);
 				const codeVerifier = generateRandomString(128);
+				const idTokenNonce = generateIdTokenNonce(provider);
 				const { url: authUrl, requestedScopes } =
 					await provider.createAuthorizationURL({
 						state,
 						codeVerifier,
+						idTokenNonce,
 						redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 					});
-				await generateState(c, { requestedScopes, state, codeVerifier });
+				await generateState(c, {
+					requestedScopes,
+					state,
+					codeVerifier,
+					idTokenNonce,
+				});
 				throw c.redirect(authUrl.toString());
 			}
 		}
@@ -125,6 +136,7 @@ export const callbackOAuth = createAuthEndpoint(
 			newUserURL,
 			requestSignUp,
 			requestedScopes,
+			idTokenNonce,
 		} = await parseState(c);
 
 		function redirectOnError(error: string, description?: string | undefined) {
@@ -170,6 +182,19 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
 		}
 
+		// Fail closed: a provider that requires id_token nonce binding must carry
+		// an expected nonce recovered from state. If it is absent (a flow minted
+		// before binding was enabled, or a dropped state field), the redirect
+		// cannot enforce the binding, so refuse rather than trust an unbound
+		// id_token.
+		if (provider.requiresIdTokenNonce && !idTokenNonce) {
+			c.context.logger.error(
+				"OAuth id_token nonce binding required but no expected nonce was found in state",
+				{ providerId: provider.id },
+			);
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NONCE_BINDING_MISSING);
+		}
+
 		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
@@ -197,6 +222,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const providerResult = await provider.getUserInfo({
 			...tokens,
+			...(idTokenNonce ? { expectedIdTokenNonce: idTokenNonce } : {}),
 			/**
 			 * The user object from the provider
 			 * This is only available for some providers like Apple
