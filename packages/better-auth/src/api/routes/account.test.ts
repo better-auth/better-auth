@@ -1,5 +1,8 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	CognitoProfile,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type { MockInstance } from "vitest";
@@ -1293,7 +1296,7 @@ describe("account", async () => {
 
 	it("should persist refreshed idToken in account cookie during getAccessToken auto-refresh in stateless mode", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
-			database: undefined as any,
+			database: undefined,
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -1450,6 +1453,172 @@ describe("account", async () => {
 		expect(secondAccessToken.error).toBeFalsy();
 		expect(secondAccessToken.data?.idToken).toBe(newIdToken);
 		expect(refreshTokenCalls).toBeGreaterThan(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8562
+	 */
+	it("should preserve the Cognito refresh token when getAccessToken auto-refresh receives no replacement", async () => {
+		const cognitoDomain = "test.auth.us-east-1.amazoncognito.com";
+		const cognitoIssuer =
+			"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_testpool";
+		const signCognitoIdToken = (jti: string) => {
+			const now = Math.floor(Date.now() / 1000);
+			return signJWT(
+				{
+					email: "cognito-refresh@test.com",
+					email_verified: true,
+					name: "Cognito User",
+					exp: now + 3600,
+					sub: "cognito-user-sub",
+					iat: now,
+					aud: "cognito-client",
+					iss: cognitoIssuer,
+					jti,
+				} satisfies CognitoProfile,
+				DEFAULT_SECRET,
+			);
+		};
+
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined,
+			socialProviders: {
+				cognito: {
+					clientId: "cognito-client",
+					clientSecret: "cognito-secret",
+					domain: cognitoDomain,
+					region: "us-east-1",
+					userPoolId: "us-east-1_testpool",
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const authContext = await auth.$context;
+		const accountDataCookieName = authContext.authCookies.accountData.name;
+		const refreshGrantRefreshTokens: string[] = [];
+		const initialIdToken = await signCognitoIdToken("initial-cognito-id-token");
+		const refreshedIdToken = await signCognitoIdToken(
+			"refreshed-cognito-id-token",
+		);
+
+		server.use(
+			http.post(
+				`https://${cognitoDomain}/oauth2/token`,
+				async ({ request }) => {
+					const params = new URLSearchParams(await request.text());
+					const grantType = params.get("grant_type");
+
+					if (grantType === "refresh_token") {
+						const refreshToken = params.get("refresh_token");
+						refreshGrantRefreshTokens.push(refreshToken || "");
+						return HttpResponse.json({
+							access_token: "refreshed-cognito-access-token",
+							expires_in: 3600,
+							id_token: refreshedIdToken,
+							token_type: "Bearer",
+						});
+					}
+
+					return HttpResponse.json({
+						access_token: "initial-cognito-access-token",
+						expires_in: 1,
+						id_token: initialIdToken,
+						refresh_token: "cognito-refresh-token",
+						token_type: "Bearer",
+					});
+				},
+			),
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "cognito",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining(cognitoDomain),
+			redirect: true,
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/cognito", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		let refreshedAccountCookie: string | undefined;
+		const accessTokenResponse = await client.getAccessToken(
+			{
+				providerId: "cognito",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie =
+						cookies.get(accountDataCookieName)?.value || undefined;
+				},
+			},
+		);
+
+		expect(accessTokenResponse.error).toBeFalsy();
+		expect(accessTokenResponse.data?.accessToken).toBe(
+			"refreshed-cognito-access-token",
+		);
+		expect(accessTokenResponse.data?.idToken).toBe(refreshedIdToken);
+		expect(refreshGrantRefreshTokens).toEqual(["cognito-refresh-token"]);
+		expect(refreshedAccountCookie).toBeDefined();
+		await expect(
+			symmetricDecodeJWT(
+				refreshedAccountCookie!,
+				authContext.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			accessToken: "refreshed-cognito-access-token",
+			idToken: refreshedIdToken,
+			refreshToken: "cognito-refresh-token",
+		});
+
+		const refreshTokenResponse = await client.$fetch<{ refreshToken?: string }>(
+			"/refresh-token",
+			{
+				body: {
+					providerId: "cognito",
+				},
+				headers,
+				method: "POST",
+			},
+		);
+
+		expect(refreshTokenResponse.error).toBeFalsy();
+		expect(refreshTokenResponse.data?.refreshToken).toBe(
+			"cognito-refresh-token",
+		);
+		expect(refreshGrantRefreshTokens).toEqual([
+			"cognito-refresh-token",
+			"cognito-refresh-token",
+		]);
 	});
 
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
@@ -1903,7 +2072,7 @@ describe("account", async () => {
 		const refreshUpdateAge = 60;
 
 		const { auth, client, cookieSetter } = await getTestInstance({
-			database: undefined as any,
+			database: undefined,
 			socialProviders: {
 				google: { clientId: "test", clientSecret: "test", enabled: true },
 			},
