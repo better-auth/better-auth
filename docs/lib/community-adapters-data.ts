@@ -179,7 +179,7 @@ export const communityAdapters: CommunityAdapter[] = [
 	{
 		name: "@ilbertt/better-auth-bun-sql",
 		url: "https://github.com/ilbertt/better-auth-bun-sql",
-		database: "Bun SQL (bun:sql)",
+		database: "Postgres and SQLite (Bun)",
 		databaseUrl: "https://bun.com/docs/api/sql",
 		author: {
 			name: "ilbertt",
