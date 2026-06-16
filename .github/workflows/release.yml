@@ -55,7 +55,7 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -100,7 +100,7 @@ jobs:
       - name: Create Release Pull Request or Publish
         id: changesets
         if: steps.guard.outputs.skip != 'true'
-        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
@@ -155,7 +155,7 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
@@ -315,7 +315,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -372,7 +372,7 @@ jobs:
       # Always check out main for trusted scripts — the preview_branch
       # input controls which ref changeset files are read from (via --branch),
       # not which code is executed.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
           fetch-depth: 0
@@ -432,7 +432,7 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
