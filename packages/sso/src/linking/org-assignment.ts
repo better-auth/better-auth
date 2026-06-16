@@ -57,6 +57,7 @@ export async function assignOrganizationFromProvider(
 			provisioningOptions,
 			user,
 			userInfo: profile.rawAttributes || {},
+			getRoleUserInfo: getLegacyRoleUserInfo(profile),
 			claims: profile.claims || profile.rawAttributes || {},
 			token,
 			provider,
@@ -85,6 +86,7 @@ export async function assignOrganizationFromProvider(
 		provisioningOptions,
 		user,
 		userInfo: profile.rawAttributes || {},
+		getRoleUserInfo: getLegacyRoleUserInfo(profile),
 		claims: profile.claims || profile.rawAttributes || {},
 		token,
 		provider,
@@ -205,16 +207,35 @@ async function resolveOrganizationRole(
 	data: OrganizationRoleResolverData & {
 		provisioningOptions?: OrganizationProvisioningOptions;
 		useClaimsMapper?: boolean;
+		getRoleUserInfo?: Record<string, any>;
 	},
 ) {
-	const { provisioningOptions, useClaimsMapper = true, ...resolverData } = data;
+	const {
+		provisioningOptions,
+		useClaimsMapper = true,
+		getRoleUserInfo,
+		...resolverData
+	} = data;
 	if (useClaimsMapper && provisioningOptions?.mapClaimsToRoles) {
 		return provisioningOptions.mapClaimsToRoles(resolverData);
 	}
 	if (provisioningOptions?.getRole) {
-		return provisioningOptions.getRole(resolverData);
+		return provisioningOptions.getRole({
+			...resolverData,
+			userInfo: getRoleUserInfo ?? resolverData.userInfo,
+		});
 	}
 	return provisioningOptions?.defaultRole || "member";
+}
+
+function getLegacyRoleUserInfo(profile: NormalizedSSOProfile) {
+	if (profile.providerType === "saml") {
+		return (profile.claims || profile.rawAttributes || {}) as Record<
+			string,
+			any
+		>;
+	}
+	return (profile.rawAttributes || {}) as Record<string, any>;
 }
 
 function shouldSyncRoleOnLogin(
@@ -254,10 +275,7 @@ async function wouldRemoveOnlyCreatorRole(
 		role: string;
 	}>({
 		model: "member",
-		where: [
-			{ field: "organizationId", value: data.organizationId },
-			{ field: "role", value: creatorRole, operator: "contains" },
-		],
+		where: [{ field: "organizationId", value: data.organizationId }],
 	});
 	return !members.some(
 		(member) =>
