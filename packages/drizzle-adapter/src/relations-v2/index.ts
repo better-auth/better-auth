@@ -29,6 +29,13 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import {
+	insensitiveEq,
+	insensitiveIlike,
+	insensitiveInArray,
+	insensitiveNe,
+	insensitiveNotInArray,
+} from "../query-builders";
 import { generateDrizzleSchema } from "./generate-drizzle-schema";
 
 export interface DB {
@@ -43,6 +50,62 @@ function escapeLikePattern(
 }
 
 /**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle's drivers report affected rows under different shapes: postgres-js
+ * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
+ * the first element of a result-header array), and better-sqlite3 uses
+ * `changes`. The adapter contract requires `updateMany`/`deleteMany` to return a
+ * finite number; the factory throws otherwise.
+ */
+function getAffectedRowCount(
+	result: unknown,
+	operation: "updateMany" | "deleteMany",
+	context: { model: string; where: Where[] },
+): number {
+	let count: unknown = 0;
+	if (result && typeof result === "object" && "rowCount" in result) {
+		count = (result as { rowCount: unknown }).rowCount;
+	} else if (Array.isArray(result)) {
+		count =
+			result.length > 0 && hasDriverRowCount(result[0])
+				? readDriverRowCount(result[0])
+				: result.length;
+	} else if (hasDriverRowCount(result)) {
+		count = readDriverRowCount(result);
+	}
+	if (typeof count !== "number" || !Number.isFinite(count)) {
+		logger.error(
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			{ result, ...context },
+		);
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
+	}
+	return count;
+}
+
+function hasDriverRowCount(result: unknown): boolean {
+	return (
+		!!result &&
+		typeof result === "object" &&
+		("affectedRows" in result ||
+			"rowsAffected" in result ||
+			"changes" in result)
+	);
+}
+
+function readDriverRowCount(result: unknown): unknown {
+	const r = result as {
+		affectedRows?: unknown;
+		rowsAffected?: unknown;
+		changes?: unknown;
+	};
+	return r.affectedRows ?? r.rowsAffected ?? r.changes;
+}
+
+/**
  * Maps a single Where entry to a drizzle SQL expression.
  * Shared by convertWhereClause across single / AND / OR branches.
  */
@@ -50,12 +113,22 @@ function applyWhereOperator(
 	column: any,
 	w: Where,
 	fieldLabel: string,
+	provider: "pg" | "mysql" | "sqlite",
 ): SQL<unknown> {
+	const mode = w.mode ?? "sensitive";
+	const isInsensitive =
+		mode === "insensitive" &&
+		(typeof w.value === "string" ||
+			(Array.isArray(w.value) && w.value.every((v) => typeof v === "string")));
+
 	if (w.operator === "in") {
 		if (!Array.isArray(w.value)) {
 			throw new BetterAuthError(
 				`The value for the field "${fieldLabel}" must be an array when using the "in" operator.`,
 			);
+		}
+		if (isInsensitive) {
+			return insensitiveInArray(column, w.value as string[]);
 		}
 		return inArray(column, w.value);
 	}
@@ -65,15 +138,39 @@ function applyWhereOperator(
 				`The value for the field "${fieldLabel}" must be an array when using the "not_in" operator.`,
 			);
 		}
+		if (isInsensitive) {
+			return insensitiveNotInArray(column, w.value as string[]);
+		}
 		return notInArray(column, w.value);
 	}
 	if (w.operator === "contains") {
+		if (isInsensitive && typeof w.value === "string") {
+			return insensitiveIlike(
+				column,
+				`%${escapeLikePattern(w.value)}%`,
+				provider,
+			);
+		}
 		return like(column, `%${escapeLikePattern(w.value)}%`);
 	}
 	if (w.operator === "starts_with") {
+		if (isInsensitive && typeof w.value === "string") {
+			return insensitiveIlike(
+				column,
+				`${escapeLikePattern(w.value)}%`,
+				provider,
+			);
+		}
 		return like(column, `${escapeLikePattern(w.value)}%`);
 	}
 	if (w.operator === "ends_with") {
+		if (isInsensitive && typeof w.value === "string") {
+			return insensitiveIlike(
+				column,
+				`%${escapeLikePattern(w.value)}`,
+				provider,
+			);
+		}
 		return like(column, `%${escapeLikePattern(w.value)}`);
 	}
 	if (w.operator === "lt") {
@@ -86,6 +183,9 @@ function applyWhereOperator(
 		if (w.value === null) {
 			return isNotNull(column);
 		}
+		if (isInsensitive && typeof w.value === "string") {
+			return insensitiveNe(column, w.value);
+		}
 		return ne(column, w.value);
 	}
 	if (w.operator === "gt") {
@@ -97,6 +197,9 @@ function applyWhereOperator(
 	// eq operator (default)
 	if (w.value === null) {
 		return isNull(column);
+	}
+	if (isInsensitive && typeof w.value === "string") {
+		return insensitiveEq(column, w.value);
 	}
 	return eq(column, w.value);
 }
@@ -141,9 +244,24 @@ export interface DrizzleAdapterConfig {
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let mysqlNoIdWarned = false;
 	const createCustomAdapter =
-		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, options }) => {
+		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
+		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
+			if (
+				config.provider === "mysql" &&
+				options.advanced?.database?.generateId === false &&
+				!mysqlNoIdWarned
+			) {
+				mysqlNoIdWarned = true;
+				logger.warn(
+					"[Drizzle Adapter] MySQL does not support INSERT...RETURNING. " +
+						"With generateId set to false, the adapter uses best-effort fallback " +
+						"strategies (unique columns, full-field match) to retrieve inserted rows. " +
+						'For reliable behavior, use Better Auth\'s default ID generation, a custom generateId function, or generateId: "serial" for auto-increment.',
+				);
+			}
+
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -188,48 +306,106 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.from(schemaModel)
 						.where(...clause);
 					return res[0];
-				} else if (builderVal && builderVal[0]?.id?.value) {
-					let tId = builderVal[0]?.id?.value;
-					if (!tId) {
-						//get last inserted id
-						const lastInsertId = await db
+				}
+
+				const fetchInserted = async (tx: DB) => {
+					// 1. Known id from the Drizzle builder internals
+					const builderId = builderVal?.[0]?.id?.value;
+					if (builderId) {
+						const res = await tx
+							.select()
+							.from(schemaModel)
+							.where(eq(schemaModel.id, builderId))
+							.limit(1)
+							.execute();
+						return res[0] ?? null;
+					}
+
+					// 2. Known id from the data object
+					if (data.id) {
+						const res = await tx
+							.select()
+							.from(schemaModel)
+							.where(eq(schemaModel.id, data.id))
+							.limit(1)
+							.execute();
+						return res[0] ?? null;
+					}
+
+					// 3. Serial auto-increment: LAST_INSERT_ID() is connection-scoped
+					if (
+						options.advanced?.database?.generateId === "serial" &&
+						schemaModel.id
+					) {
+						const lastInsertId = await tx
 							.select({ id: sql`LAST_INSERT_ID()` })
 							.from(schemaModel)
-							.orderBy(desc(schemaModel.id))
-							.limit(1);
-						tId = lastInsertId[0].id;
+							.limit(1)
+							.execute();
+						const lastId = lastInsertId[0]?.id;
+						if (lastId) {
+							const res = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(schemaModel.id, lastId))
+								.limit(1)
+								.execute();
+							return res[0] ?? null;
+						}
 					}
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(eq(schemaModel.id, tId))
-						.limit(1)
-						.execute();
-					return res[0];
-				} else if (data.id) {
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.where(eq(schemaModel.id, data.id))
-						.limit(1)
-						.execute();
-					return res[0];
-				} else {
-					// If the user doesn't have `id` as a field, then this will fail.
-					// We expect that they defined `id` in all of their models.
-					if (!("id" in schemaModel)) {
-						throw new BetterAuthError(
-							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
+
+					// 4. Unique column lookup via Better Auth schema
+					const modelSchema = baSchema[getDefaultModelName(model)]?.fields;
+					if (modelSchema) {
+						for (const [fieldKey, fieldAttr] of Object.entries(modelSchema)) {
+							if (!fieldAttr.unique) continue;
+							const dbFieldName = getFieldName({ model, field: fieldKey });
+							const val = data[dbFieldName];
+							if (val === undefined || val === null) continue;
+							if (!schemaModel[dbFieldName]) continue;
+							const res = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(schemaModel[dbFieldName], val))
+								.limit(1)
+								.execute();
+							if (res[0]) return res[0];
+						}
+					}
+
+					// 5. Full-field match (last resort) — LIMIT 2 to detect ambiguity
+					const conditions: SQL<unknown>[] = [];
+					for (const [key, val] of Object.entries(data)) {
+						if (val === undefined || !schemaModel[key]) continue;
+						conditions.push(
+							val === null
+								? isNull(schemaModel[key])
+								: eq(schemaModel[key], val),
 						);
 					}
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.orderBy(desc(schemaModel.id))
-						.limit(1)
-						.execute();
-					return res[0];
-				}
+					if (conditions.length > 0) {
+						const combined = and(...conditions);
+						if (combined) {
+							const res = await tx
+								.select()
+								.from(schemaModel)
+								.where(combined)
+								.limit(2)
+								.execute();
+							if (res.length === 1) return res[0];
+						}
+					}
+
+					logger.warn(
+						`[Drizzle Adapter] Unable to safely identify the inserted "${model}" row on MySQL. ` +
+							'Enable Better Auth ID generation or use generateId: "serial" for reliable behavior.',
+					);
+					return null;
+				};
+
+				return inTransaction
+					? fetchInserted(db)
+					: db.transaction(fetchInserted);
 			};
 			function resolveColumn(model: string, w: Where) {
 				const schemaModel = getSchema(model);
@@ -250,7 +426,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return [];
 					}
 					const { column } = resolveColumn(model, w);
-					return [applyWhereOperator(column, w, w.field)];
+					return [applyWhereOperator(column, w, w.field, config.provider)];
 				}
 				const andGroup = where.filter(
 					(w) => w.connector === "AND" || !w.connector,
@@ -260,13 +436,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const andClause = and(
 					...andGroup.map((w) => {
 						const { column } = resolveColumn(model, w);
-						return applyWhereOperator(column, w, w.field);
+						return applyWhereOperator(column, w, w.field, config.provider);
 					}),
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
 						const { column } = resolveColumn(model, w);
-						return applyWhereOperator(column, w, w.field);
+						return applyWhereOperator(column, w, w.field, config.provider);
 					}),
 				);
 
@@ -423,7 +599,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where, join }) {
+				async findOne({ model, where, select, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
@@ -460,6 +636,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const clause = convertNewWhereClause(where, model);
 							const query = db.query[model].findFirst({
 								where: clause,
+								columns:
+									select?.length && select.length > 0
+										? select.reduce(
+												(acc, field) => {
+													acc[getFieldName({ model, field })] = true;
+													return acc;
+												},
+												{} as Record<string, boolean>,
+											)
+										: undefined,
 								with: includes,
 							});
 							const res = await query;
@@ -480,7 +666,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const query = db
-						.select()
+						.select(
+							select?.length && select.length > 0
+								? select.reduce((acc, field) => {
+										const fieldName = getFieldName({ model, field });
+										return {
+											...acc,
+											[fieldName]: schemaModel[fieldName],
+										};
+									}, {})
+								: undefined,
+						)
 						.from(schemaModel)
 						.where(...clause);
 
@@ -489,7 +685,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset, join }) {
+				async findMany({ model, where, sortBy, limit, select, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
@@ -535,6 +731,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const query = db.query[model].findMany({
 								where: where ? convertNewWhereClause(where, model) : undefined,
 								with: includes,
+								columns:
+									select?.length && select.length > 0
+										? select.reduce(
+												(acc, field) => {
+													acc[getFieldName({ model, field })] = true;
+													return acc;
+												},
+												{} as Record<string, boolean>,
+											)
+										: undefined,
 								limit: limit ?? 100,
 								offset: offset ?? 0,
 								orderBy,
@@ -556,7 +762,19 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					let builder = db.select().from(schemaModel);
+					let builder = db
+						.select(
+							select?.length && select.length > 0
+								? select.reduce((acc, field) => {
+										const fieldName = getFieldName({ model, field });
+										return {
+											...acc,
+											[fieldName]: schemaModel[fieldName],
+										};
+									}, {})
+								: undefined,
+						)
+						.from(schemaModel);
 
 					const effectiveLimit = limit;
 					const effectiveOffset = offset;
@@ -605,7 +823,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
-					return await builder;
+					const res = await builder;
+					return getAffectedRowCount(res, "updateMany", { model, where });
 				},
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -618,22 +837,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
 					const res = await builder;
-					let count = 0;
-					if (res && "rowCount" in res) count = res.rowCount;
-					else if (res && "count" in res) count = res.count;
-					else if (
-						res &&
-						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
-					else if (Array.isArray(res)) count = res.length;
-					if (typeof count !== "number") {
-						logger.error(
-							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
-							{ res, model, where },
-						);
-					}
-					return count;
+					return getAffectedRowCount(res, "deleteMany", { model, where });
 				},
 				async consumeOne({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -667,7 +871,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								0;
 							return delCount > 0 ? (target as any) : null;
 						};
-						return db.transaction(claimFromTransaction);
+						return inTransaction
+							? claimFromTransaction(db)
+							: db.transaction(claimFromTransaction);
 					}
 
 					if (!idColumn) {
@@ -740,7 +946,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.execute();
 							return (updated[0] as any) ?? null;
 						};
-						return db.transaction(mutateInTransaction);
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
 					}
 
 					if (!idColumn) {
@@ -794,8 +1002,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? (cb) =>
 							db.transaction((tx: DB) => {
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(tx),
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
+									adapter: createCustomAdapter(tx, true),
 								})(lazyOptions!);
 								return cb(adapter);
 							})

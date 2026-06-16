@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -69,11 +70,12 @@ const { execute } = await testAdapter({
 	prefixTests: "sqlite",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite(),
 	],
 	async onFinish() {
 		clearSchemaCache();
