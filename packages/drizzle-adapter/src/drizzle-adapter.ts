@@ -41,9 +41,18 @@ export interface DB {
 	[key: string]: any;
 }
 
+/**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle's drivers report affected rows under different shapes: postgres-js
+ * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
+ * the first element of a result-header array), and better-sqlite3 uses
+ * `changes`. This normalizes those so write methods that depend on affected
+ * rows honor the adapter contract instead of leaking the raw driver result.
+ */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany",
+	operation: "updateMany" | "deleteMany" | "consumeOne",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
@@ -978,12 +987,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const count =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							const count = getAffectedRowCount(delRes, "consumeOne", {
+								model,
+								where,
+							});
 							return count > 0 ? (target as any) : null;
 						};
 						return inTransaction
