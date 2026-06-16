@@ -20,6 +20,7 @@ export * from "./one-tap";
 export * from "./one-time-token";
 export * from "./open-api";
 export * from "./organization";
+export * from "./password-history";
 export * from "./phone-number";
 export * from "./siwe";
 export * from "./test-utils";
