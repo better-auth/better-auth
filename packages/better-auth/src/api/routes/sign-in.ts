@@ -18,7 +18,7 @@ import {
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
-import { generateState } from "../../utils";
+import { generateIdTokenNonce, generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -376,9 +376,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 
 			const state = generateRandomString(32);
 			const codeVerifier = generateRandomString(128);
-			const idTokenNonce = provider.requiresIdTokenNonce
-				? generateRandomString(32)
-				: undefined;
+			const idTokenNonce = generateIdTokenNonce(provider);
 			const { url, requestedScopes } = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,

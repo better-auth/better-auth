@@ -7,6 +7,19 @@ import { generateGenericState, parseGenericState, StateError } from "../state";
 import { redirectOnError } from "./errors";
 
 /**
+ * Mint the OIDC `nonce` for the redirect flow, or `undefined` when the provider
+ * does not require ID-token nonce binding. Every redirect entrypoint (social
+ * sign-in, account linking, IDP-initiated bounce, and the OAuth popup) mints
+ * through this helper, so the value sent on the authorization URL and the value
+ * persisted in state are produced one way and cannot drift apart.
+ */
+export function generateIdTokenNonce(provider: {
+	requiresIdTokenNonce?: boolean | undefined;
+}): string | undefined {
+	return provider.requiresIdTokenNonce ? generateRandomString(32) : undefined;
+}
+
+/**
  * Inputs for {@link generateState}. Grouped into one object so call sites read
  * by name instead of by position.
  *

@@ -12,7 +12,11 @@ import {
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
-import { generateState, parseState } from "../../oauth2/state";
+import {
+	generateIdTokenNonce,
+	generateState,
+	parseState,
+} from "../../oauth2/state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -99,9 +103,7 @@ export const callbackOAuth = createAuthEndpoint(
 				// bounce-back callback has no scope fallback (RFC 6749 §5.1).
 				const state = generateRandomString(32);
 				const codeVerifier = generateRandomString(128);
-				const idTokenNonce = provider.requiresIdTokenNonce
-					? generateRandomString(32)
-					: undefined;
+				const idTokenNonce = generateIdTokenNonce(provider);
 				const { url: authUrl, requestedScopes } =
 					await provider.createAuthorizationURL({
 						state,

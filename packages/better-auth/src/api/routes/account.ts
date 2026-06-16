@@ -20,7 +20,7 @@ import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
-import { generateState } from "../../oauth2/state";
+import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import { decryptOAuthToken } from "../../oauth2/token-encryption";
 import {
 	freshSessionMiddleware,
@@ -383,9 +383,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		// Handle OAuth flow
 		const stateNonce = generateRandomString(32);
 		const codeVerifier = generateRandomString(128);
-		const idTokenNonce = provider.requiresIdTokenNonce
-			? generateRandomString(32)
-			: undefined;
+		const idTokenNonce = generateIdTokenNonce(provider);
 		const { url, requestedScopes } = await provider.createAuthorizationURL({
 			state: stateNonce,
 			codeVerifier,
