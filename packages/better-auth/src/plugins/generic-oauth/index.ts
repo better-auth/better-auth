@@ -299,7 +299,9 @@ export const genericOAuth = <const ID extends string>(
 					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
-					requiresIdTokenNonce: idTokenConfig !== undefined,
+					requiresIdTokenNonce:
+						idTokenConfig !== undefined &&
+						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
