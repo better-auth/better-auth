@@ -2148,6 +2148,45 @@ export const getNormalTestSuiteTests = (
 					updatedAt: result!.updatedAt,
 				});
 			},
+		// A guarded single-row transition: set a field only while a non-unique
+		// guard field still holds. This is the portable, race-safe replacement
+		// for a multi-clause `update` whose return was read as a winner/loser
+		// signal (issue #10082); the guard miss must return null without mutating,
+		// on every adapter.
+		"incrementOne - guarded set transition returns the row on a matching guard and null on a guard miss":
+			async () => {
+				const [transitionUser] = await insertRandom("user");
+				const image = "https://example.com/avatar.png";
+
+				const won = await adapter.incrementOne<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: transitionUser.id },
+						{ field: "name", value: transitionUser.name },
+					],
+					increment: {},
+					set: { image },
+				});
+				expect(won).not.toBeNull();
+				expect(won!.image).toBe(image);
+
+				const lost = await adapter.incrementOne<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: transitionUser.id },
+						{ field: "name", value: "name-that-does-not-match" },
+					],
+					increment: {},
+					set: { image: "https://example.com/should-not-apply.png" },
+				});
+				expect(lost).toBeNull();
+
+				const after = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: transitionUser.id }],
+				});
+				expect(after!.image).toBe(image);
+			},
 		"delete - should delete a model": async () => {
 			const [user] = await insertRandom("user");
 			await adapter.delete({
