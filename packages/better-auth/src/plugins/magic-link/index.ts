@@ -130,6 +130,7 @@ const signInMagicLinkBodySchema = z.object({
 		.optional(),
 	expiresIn: z
 		.number()
+		.positive()
 		.meta({
 			description:
 				"Time in seconds until the magic link expires. " +
@@ -253,7 +254,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						value: JSON.stringify({ email, name: ctx.body.name }),
 						expiresAt: new Date(
 							Date.now() +
-								(perRequestExpiresIn || opts.expiresIn || 60 * 5) * 1000,
+								(perRequestExpiresIn ?? opts.expiresIn ?? 60 * 5) * 1000,
 						),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
