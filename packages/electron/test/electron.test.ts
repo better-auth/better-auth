@@ -198,7 +198,7 @@ describe("Electron", () => {
 				provider: "google",
 				state: "x",
 				code_challenge: "y",
-				code_challenge_method: "plain",
+				code_challenge_method: "S256",
 			},
 			asResponse: true,
 		})) as Response;
