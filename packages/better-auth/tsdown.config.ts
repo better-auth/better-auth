@@ -13,7 +13,6 @@ export default defineConfig({
 		"./src/crypto/index.ts",
 		"./src/cookies/index.ts",
 		"./src/adapters/prisma-adapter/index.ts",
-		"./src/adapters/prisma-next-adapter/index.ts",
 		"./src/adapters/drizzle-adapter/index.ts",
 		"./src/adapters/mongodb-adapter/index.ts",
 		"./src/adapters/kysely-adapter/index.ts",

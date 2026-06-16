@@ -630,6 +630,27 @@ importers:
         specifier: ^7.4.1
         version: 7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
+  e2e/adapter/test/prisma-next-adapter:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+      '@better-auth/prisma-next-adapter':
+        specifier: workspace:*
+        version: link:../../../../packages/prisma-next-adapter
+      '@better-auth/test-utils':
+        specifier: workspace:*
+        version: link:../../../../packages/test-utils
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../packages/better-auth
+      pg:
+        specifier: ^8.19.0
+        version: 8.19.0
+
   e2e/integration:
     dependencies:
       '@better-auth/oauth-provider':
@@ -892,9 +913,6 @@ importers:
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../prisma-adapter
-      '@better-auth/prisma-next-adapter':
-        specifier: workspace:*
-        version: link:../prisma-next-adapter
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
