@@ -19,6 +19,7 @@ export class APIError extends BaseAPIError {
 	declare headers: BaseAPIErrorInstance["headers"];
 	declare statusCode: BaseAPIErrorInstance["statusCode"];
 	declare message: string;
+	declare errorStack: BaseAPIErrorInstance["errorStack"];
 
 	constructor(...args: ConstructorParameters<typeof BaseAPIError>) {
 		super(...args);
