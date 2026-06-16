@@ -1240,10 +1240,10 @@ export const signInSSO = (options: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
-				let config = await decryptOIDCConfig(provider.oidcConfig, {
-					authSecret: ctx.context.secret,
-					ssoOptions: options,
-				});
+				// `provider.oidcConfig` is already decrypted at this point: DB-sourced
+				// providers pass through `parseProvider` (which decrypts) and
+				// `defaultSSO` providers are in-memory plaintext configs.
+				let config = provider.oidcConfig;
 				try {
 					config = await ensureRuntimeDiscovery(
 						config,

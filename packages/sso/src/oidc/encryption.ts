@@ -24,7 +24,7 @@ async function defaultDecryptClientSecret(
 	} catch {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message:
-				"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption.",
+				"Failed to decrypt client secret. Ensure BETTER_AUTH_SECRET matches the key used during encryption. If this secret was stored with a custom `storeSecretAs` encryptor, that same encryptor must remain configured to decrypt it.",
 		});
 	}
 }
