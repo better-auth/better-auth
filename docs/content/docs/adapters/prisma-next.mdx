@@ -1,0 +1,116 @@
+---
+title: Prisma Next (Experimental)
+description: Integrate Better Auth with Prisma Next.
+---
+
+<Callout type="warning">
+  Prisma Next is in **Early Access** and its APIs may change. This adapter is experimental and should not be used in production until Prisma Next reaches general availability. Only **PostgreSQL** is supported.
+</Callout>
+
+[Prisma Next](https://www.prisma.io/) is the next generation of Prisma ORM, featuring a contract-based approach with a fluent chainable query API. It uses `@prisma-next/postgres/runtime` for database access and requires a compiled contract JSON instead of the traditional Prisma schema generation step.
+
+## Prerequisites
+
+- **Node.js 24+** is required
+- **PostgreSQL** database (the only database currently supported by Prisma Next)
+- A Prisma Next contract generated for your database
+
+## Installation
+
+Install the standalone adapter package:
+
+```package-install
+@better-auth/prisma-next-adapter
+```
+
+## Example Usage
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { prismaNextAdapter } from "@better-auth/prisma-next-adapter";
+import postgres from "@prisma-next/postgres/runtime";
+import contractJson from "./contract.json";
+
+const db = postgres({
+  contractJson,
+  url: process.env.DATABASE_URL,
+});
+
+export const auth = betterAuth({
+  database: prismaNextAdapter(db, {}),
+});
+```
+
+## Configuration
+
+The `prismaNextAdapter` function accepts a configuration object as its second argument:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { prismaNextAdapter } from "@better-auth/prisma-next-adapter";
+
+export const auth = betterAuth({
+  database: prismaNextAdapter(db, {
+    debugLogs: true,
+    usePlural: false,
+    transaction: true,
+  }),
+});
+```
+
+### Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `debugLogs` | `boolean` | `false` | Enable debug logs for the adapter. Useful for troubleshooting queries. |
+| `usePlural` | `boolean` | `false` | Use plural model names (e.g. `"users"` instead of `"user"`) to match your contract. |
+| `transaction` | `boolean` | `false` | Wrap multi-step operations in a database transaction for atomicity. |
+
+## Differences from the Classic Prisma Adapter
+
+The Prisma Next adapter differs from the [classic Prisma adapter](/docs/adapters/prisma) in several ways:
+
+- **No `provider` option** — Prisma Next currently only supports PostgreSQL, so no database provider needs to be specified.
+- **Contract-based** — Instead of generating a Prisma Client from a `schema.prisma` file, Prisma Next uses a compiled contract JSON that defines your models and relations.
+- **Fluent API** — Prisma Next uses a chainable query builder (e.g. `db.orm.user.where({ id }).find()`) rather than the classic method-based API (e.g. `prisma.user.findUnique({ where: { id } })`).
+- **Standalone package** — Import from `@better-auth/prisma-next-adapter` directly, not from `better-auth/adapters/prisma-next`.
+
+## Schema Generation & Migration
+
+<table>
+  <thead>
+    <tr className="border-b">
+      <th>
+        <p className="font-bold text-[16px] mb-1">Schema Generation</p>
+      </th>
+
+      <th>
+        <p className="font-bold text-[16px] mb-1">Schema Migration</p>
+      </th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr className="h-10">
+      <td>❌ Not Supported</td>
+      <td>❌ Not Supported</td>
+    </tr>
+  </tbody>
+</table>
+
+Since Prisma Next uses a contract-based approach, the Better Auth CLI does not currently support generating or migrating Prisma Next contracts. You will need to manually define the required Better Auth models in your contract.
+
+## Joins (Experimental)
+
+The Prisma Next adapter supports database joins for improved performance when fetching related data. To enable joins:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: prismaNextAdapter(db, {}),
+  experimental: { joins: true },
+});
+```
+
+Make sure your Prisma Next contract includes the necessary relations between models for joins to work correctly.

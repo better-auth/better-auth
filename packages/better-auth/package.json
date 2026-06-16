@@ -181,11 +181,6 @@
       "types": "./dist/adapters/prisma-adapter/index.d.mts",
       "default": "./dist/adapters/prisma-adapter/index.mjs"
     },
-    "./adapters/prisma-next": {
-      "dev-source": "./src/adapters/prisma-next-adapter/index.ts",
-      "types": "./dist/adapters/prisma-next-adapter/index.d.mts",
-      "default": "./dist/adapters/prisma-next-adapter/index.mjs"
-    },
     "./adapters/drizzle": {
       "dev-source": "./src/adapters/drizzle-adapter/index.ts",
       "types": "./dist/adapters/drizzle-adapter/index.d.mts",
@@ -395,9 +390,6 @@
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.mts"
       ],
-      "adapters/prisma-next": [
-        "./dist/adapters/prisma-next-adapter/index.d.mts"
-      ],
       "adapters/drizzle": [
         "./dist/adapters/drizzle-adapter/index.d.mts"
       ],
@@ -479,7 +471,6 @@
     "@better-auth/memory-adapter": "workspace:*",
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
-    "@better-auth/prisma-next-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
