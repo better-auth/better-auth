@@ -4022,6 +4022,68 @@ describe("oauth2", async () => {
 			expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeNull();
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10095#discussion_r3417330694
+		 */
+		it("should reject a discovery id_token when state carries no expected nonce", async () => {
+			const { customFetchImpl, cookieSetter, auth } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-skew",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "nonce-skew-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-skew-user",
+												email: "nonce-skew@test.com",
+												email_verified: true,
+												name: "Nonce Skew",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const ctx = await auth.$context;
+			const provider = ctx.socialProviders.find((p) => p.id === "nonce-skew")!;
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			// Mint state before binding is required, so it carries no expected nonce.
+			provider.requiresIdTokenNonce = false;
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-skew",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeNull();
+
+			// The provider now requires binding, but the in-flight state has none.
+			provider.requiresIdTokenNonce = true;
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("error=nonce_binding_missing");
+		});
+
 		it("should sign in with a client-submitted id_token for a discovery provider", async () => {
 			const token = await server.issuer.buildToken({
 				scopesOrTransform: (_header, payload) => {

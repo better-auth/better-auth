@@ -180,6 +180,19 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
 		}
 
+		// Fail closed: a provider that requires id_token nonce binding must carry
+		// an expected nonce recovered from state. If it is absent (a flow minted
+		// before binding was enabled, or a dropped state field), the redirect
+		// cannot enforce the binding, so refuse rather than trust an unbound
+		// id_token.
+		if (provider.requiresIdTokenNonce && !idTokenNonce) {
+			c.context.logger.error(
+				"OAuth id_token nonce binding required but no expected nonce was found in state",
+				{ providerId: provider.id },
+			);
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NONCE_BINDING_MISSING);
+		}
+
 		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
