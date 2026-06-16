@@ -20,6 +20,8 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
+import { getCookieCacheJwtSigningKey } from "../plugins/jwt/cookie-cache";
+import type { JwtOptions } from "../plugins/jwt/types";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -35,6 +37,7 @@ import {
 	parseSecretsEnv,
 	validateSecretsArray,
 } from "./secret-utils";
+import { hasServerSessionStore } from "./store-capabilities";
 
 /**
  * Estimates the entropy of a string in bits.
@@ -94,8 +97,9 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	options: Options,
 	getDatabaseType: (database: Options["database"]) => string,
 ): Promise<AuthContext<Options>> {
-	// secondaryStorage is a durable server-side store, so treat it like a database.
-	const isStateful = !!options.database || !!options.secondaryStorage;
+	// secondaryStorage is a durable server-side session store, so treat it like
+	// a database for session cache defaults.
+	const isStateful = hasServerSessionStore(options);
 
 	// Cookie-cached sessions stand in for a durable store; only default them on
 	// when there is no durable store at all.
@@ -147,7 +151,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 
 	if (!baseURL && !isDynamicConfig) {
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL is not set. Set the baseURL option or BETTER_AUTH_URL env, or use a dynamic baseURL with allowedHosts for multi-host setups. Without it the origin is derived from the incoming request, and callbacks and redirects may not work correctly.`,
 		);
 	}
 
@@ -254,6 +258,37 @@ Most of the features of Better Auth will not work correctly.`,
 				? "adapter"
 				: getDatabaseType(options.database),
 	});
+
+	const cookieCacheJwtSigningKey = getCookieCacheJwtSigningKey(options);
+	if (cookieCacheJwtSigningKey === "jwt-plugin") {
+		if (options.session?.cookieCache?.strategy !== "jwt") {
+			throw new BetterAuthError(
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires `session.cookieCache.strategy = "jwt"`.',
+			);
+		}
+
+		const jwtPlugin = options.plugins?.find((plugin) => plugin.id === "jwt");
+		if (!jwtPlugin) {
+			throw new BetterAuthError(
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
+			);
+		}
+
+		const jwtPluginOptions = (jwtPlugin.options ?? {}) as JwtOptions;
+		if (jwtPluginOptions.jwt?.sign) {
+			throw new BetterAuthError(
+				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
+			);
+		}
+
+		const gracePeriod = jwtPluginOptions.jwks?.gracePeriod;
+		const cookieMaxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+		if (gracePeriod !== undefined && cookieMaxAge > gracePeriod) {
+			logger.warn(
+				`[better-auth] \`session.cookieCache.maxAge\` (${cookieMaxAge}s) exceeds the JWT plugin JWKS grace period (${gracePeriod}s). Rotated keys may stop verifying cookie-cache JWTs before the cookie expires.`,
+			);
+		}
+	}
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 

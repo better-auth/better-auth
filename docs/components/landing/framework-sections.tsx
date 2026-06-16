@@ -612,7 +612,6 @@ export const plugins = [
 	{ name: "Multi Session", category: "org" },
 	{ name: "API Key", category: "org" },
 	{ name: "SSO", category: "enterprise" },
-	{ name: "OIDC Provider", category: "enterprise" },
 	{ name: "SCIM", category: "enterprise" },
 	{ name: "OAuth Proxy", category: "enterprise" },
 	{ name: "JWT", category: "security" },
@@ -917,7 +916,7 @@ export function DatabaseSection() {
 							allowCopy={false}
 							codeblock={{
 								className:
-									"border-0 rounded-none my-0 shadow-none bg-transparent [&_div]:bg-transparent [&_div]:text-[11px] [&_pre]:!p-0 [&_pre]:!overflow-hidden [&_div]:!overflow-hidden [&_code]:!overflow-hidden",
+									"border-0 rounded-none my-0 shadow-none bg-transparent [&_div]:bg-transparent [&_div]:text-[11px] [&_pre]:!p-0 [&_div]:overflow-x-auto",
 							}}
 						/>
 						<div className="absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-background to-transparent pointer-events-none" />

@@ -14,7 +14,6 @@ import type {
 	Account,
 	DBFieldAttribute,
 	ModelNames,
-	RateLimit,
 	SecondaryStorage,
 	Session,
 	User,
@@ -187,12 +186,27 @@ export type DynamicBaseURLConfig = {
 export type BaseURLConfig = string | DynamicBaseURLConfig;
 
 export interface BetterAuthRateLimitStorage {
-	get: (key: string) => Promise<RateLimit | null | undefined>;
-	set: (
+	/**
+	 * Atomically records one request against `key` within the rolling `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the count was incremented within the active window,
+	 * or the window had elapsed and was reset to start at 1. When `allowed` is
+	 * false the limit was already reached and `retryAfter` is the number of
+	 * seconds until the window frees up.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Custom storages must implement this operation directly. Better Auth no
+	 * longer accepts separate `get`/`set` rate-limit storage because that shape
+	 * cannot enforce a distributed limit under concurrent requests.
+	 */
+	consume: (
 		key: string,
-		value: RateLimit,
-		update?: boolean | undefined,
-	) => Promise<void>;
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -1046,6 +1060,20 @@ export type BetterAuthOptions = {
 					 */
 					strategy?: "compact" | "jwt" | "jwe";
 					/**
+					 * JWT-specific configuration for `strategy: "jwt"`.
+					 */
+					jwt?: {
+						/**
+						 * Which signing key is used for cookie-cache JWTs.
+						 *
+						 * - `"secret"`: uses the Better Auth secret with HS256.
+						 * - `"jwt-plugin"`: uses the installed `jwt()` plugin's asymmetric signing keys.
+						 *
+						 * @default "secret"
+						 */
+						signingKey?: "secret" | "jwt-plugin";
+					};
+					/**
 					 * Controls stateless cookie cache refresh behavior.
 					 *
 					 * When enabled, the cookie cache will be automatically refreshed before expiry
@@ -1253,9 +1281,13 @@ export type BetterAuthOptions = {
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *

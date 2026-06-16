@@ -2,11 +2,13 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { DispatchContext } from "better-auth/api";
 import {
 	APIError,
 	addOAuthServerContext,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	dispatchAuthEndpoint,
 	getOAuthState,
 	sessionMiddleware,
 } from "better-auth/api";
@@ -14,9 +16,11 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
+import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
+import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import {
 	deliverBackchannelLogoutTokens,
@@ -24,32 +28,55 @@ import {
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
-	authServerMetadata,
 	metadataResponse,
+	oauthAuthorizationServerMetadata,
 	oidcServerMetadata,
 } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
+import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
+import {
+	extractRepeatedResourceFromForm,
+	logEnforcePerClientResourcesResolution,
+	seedResources,
+} from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { ResourceUriSchema, SafeUrlSchema } from "./types/zod";
+import {
+	authorizationQuerySchema,
+	clientRegistrationRequestSchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
 	getSignedQueryIssuedAt,
-	mergeDiscoveryMetadata,
+	isSessionFreshForSignedQuery,
 	postLoginClearedParam,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
-	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
+
+/**
+ * Default scopes advertised and accepted when a configuration sets none. Shared
+ * with the MCP preset so the resource metadata it serves matches what the
+ * authorization-server metadata advertises.
+ */
+export const DEFAULT_OAUTH_SCOPES = [
+	"openid",
+	"profile",
+	"email",
+	"offline_access",
+] as const;
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -65,6 +92,20 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
+
+function getServerContextSignedQueryIssuedAt(value: unknown) {
+	const issuedAtMs =
+		typeof value === "number"
+			? value
+			: typeof value === "string"
+				? Number(value)
+				: undefined;
+	if (!issuedAtMs || !Number.isFinite(issuedAtMs) || issuedAtMs <= 0) {
+		return undefined;
+	}
+	return new Date(issuedAtMs);
+}
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -87,9 +128,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 	// Validate scopes
 	const scopes = new Set(
-		(options.scopes ?? ["openid", "profile", "email", "offline_access"]).filter(
-			(val) => val.length,
-		),
+		(options.scopes ?? DEFAULT_OAUTH_SCOPES).filter((val) => val.length),
 	);
 	if (clientRegistrationAllowedScopes) {
 		for (const sc of clientRegistrationAllowedScopes) {
@@ -140,6 +179,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
 	};
+	validateOAuthProviderExtensions(opts.extensions);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -242,25 +282,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					),
 				};
 			}
-			const jwtPluginOptions = opts.disableJwtPlugin
-				? undefined
-				: getJwtPlugin(ctx)?.options;
-			const authMetadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
-				scopes_supported:
-					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-				dynamic_client_registration_supported:
-					opts.allowDynamicClientRegistration,
-				public_client_supported:
-					opts.allowUnauthenticatedClientRegistration ||
-					toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-				grant_types_supported: opts.grantTypes,
-				jwt_disabled: opts.disableJwtPlugin,
-			});
 			return {
-				response: createMetadataResponse({
-					...authMetadata,
-					...mergeDiscoveryMetadata(opts.clientDiscovery),
-				}),
+				response: createMetadataResponse(
+					oauthAuthorizationServerMetadata(endpointCtx, opts),
+				),
 			};
 		}
 
@@ -270,12 +295,170 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			};
 		}
 	};
+	type OAuth2AuthorizeContext = GenericEndpointContext & {
+		authorizeSettings?: AuthorizeEndpointSettings | undefined;
+	};
+	type OAuth2AuthorizeResult = Awaited<ReturnType<typeof authorizeEndpoint>>;
+
+	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
+		"/oauth2/authorize",
+		{
+			method: "GET",
+			query: authorizationQuerySchema,
+			redirectOnError: authorizeRedirectOnError(opts),
+			errorCodesByField: {
+				response_type: { invalid: "unsupported_response_type" },
+				resource: { invalid: "invalid_target" },
+			},
+			metadata: {
+				openapi: {
+					description: "Authorize an OAuth2 request",
+					parameters: [
+						{
+							name: "response_type",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 response type (e.g., 'code')",
+						},
+						{
+							name: "client_id",
+							in: "query",
+							required: true,
+							schema: { type: "string" },
+							description: "OAuth2 client ID",
+						},
+						{
+							name: "redirect_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string", format: "uri" },
+							description: "OAuth2 redirect URI",
+						},
+						{
+							name: "scope",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 scopes (space-separated)",
+						},
+						{
+							name: "state",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 state parameter",
+						},
+						{
+							name: "request_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Pushed Authorization Request URI referencing stored parameters",
+						},
+						{
+							name: "code_challenge",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge",
+						},
+						{
+							name: "code_challenge_method",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge method",
+						},
+						{
+							name: "nonce",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OpenID Connect nonce",
+						},
+						{
+							name: "max_age",
+							in: "query",
+							required: false,
+							schema: { type: "integer", minimum: 0 },
+							description:
+								"Maximum authentication age in seconds; forces re-authentication when exceeded",
+						},
+						{
+							name: "resource",
+							in: "query",
+							required: false,
+							schema: { type: "array", items: { type: "string" } },
+							description:
+								"Requested protected resource(s) for the access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
+						},
+						{
+							name: "prompt",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 prompt parameter",
+						},
+					],
+					responses: {
+						"302": {
+							description: "Redirect to client with code or error",
+							headers: {
+								Location: {
+									description: "Redirect URI with code or error",
+									schema: { type: "string", format: "uri" },
+								},
+							},
+						},
+						"400": {
+							description: "Invalid request",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: { type: "string" },
+											error_description: { type: "string" },
+											state: { type: "string" },
+										},
+										required: ["error"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx): Promise<OAuth2AuthorizeResult> => {
+			const settings = (ctx as OAuth2AuthorizeContext).authorizeSettings ?? {
+				isAuthorize: true,
+			};
+			return authorizeEndpoint(ctx, opts, settings);
+		},
+	);
+
+	const runOAuth2Authorize = (
+		ctx: GenericEndpointContext,
+		settings?: AuthorizeEndpointSettings,
+	): Promise<OAuth2AuthorizeResult> =>
+		dispatchAuthEndpoint(oauth2AuthorizeEndpoint, {
+			...ctx,
+			asResponse: false,
+			returnHeaders: false,
+			returnStatus: false,
+			authorizeSettings: settings ?? {},
+		} as DispatchContext &
+			OAuth2AuthorizeContext) as Promise<OAuth2AuthorizeResult>;
+
 	return {
 		id: "oauth-provider",
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
-		init: (ctx) => {
+		init: async (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
 			if (
@@ -287,22 +470,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// With secondaryStorage + preserveSessionInDatabase, deleteSession
-			// keeps the DB row and returns before the session-delete hook runs, so
-			// OAuth token revocation and back-channel logout never fire on session
-			// end. Surface it so operators don't assume sign-out invalidates tokens.
-			// TODO: warning-only is a stopgap. A complete fix needs core to fire
-			// the session-delete hook (or expose a dedicated session-end seam) even
-			// when the row is preserved, so revocation and back-channel dispatch run
-			// for this config. Re-evaluate moving off the delete hook then.
-			if (
-				ctx.options.secondaryStorage &&
-				ctx.options.session?.preserveSessionInDatabase
-			) {
-				logger.warn(
-					"OAuth Provider: `session.preserveSessionInDatabase: true` with secondaryStorage skips the session-delete hook, so OAuth access/refresh tokens are not revoked and back-channel logout is not dispatched on session end.",
-				);
-			}
+			// Seed `oauthResource` rows from plugin config. Idempotent and
+			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
+			// is empty. Tolerates
+			// "table not yet created" errors and defers to lazy-seed.
+			await seedResources(ctx, opts);
+
+			// Record which default applied to `enforcePerClientResources` so
+			// admins can see it in startup logs. Pure resolution lives in
+			// `resolveEnforcePerClientResources` so validation flow stays cheap.
+			logEnforcePerClientResourcesResolution(opts);
 
 			// Well-known warnings are best-effort and only make sense with the
 			// JWT plugin. A dynamic baseURL resolves per-request, so there is
@@ -421,6 +598,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (ctx.path === "/sign-in/social") {
 							await addOAuthServerContext({
 								query: queryParams.toString(),
+								...(signedQueryIssuedAt
+									? {
+											[signedQueryIssuedAtMsKey]: signedQueryIssuedAt.getTime(),
+										}
+									: {}),
 							});
 						}
 					}),
@@ -444,11 +626,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!sessionToken) return;
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
+						const oauthRequest = await oAuthState.get();
+						const oauthState = await getOAuthState();
+						const serverContext = oauthState?.serverContext;
 						const _query =
-							(await oAuthState.get())?.query ??
-							((await getOAuthState())?.serverContext?.query as
-								| string
-								| undefined);
+							oauthRequest?.query ??
+							(serverContext?.query as string | undefined);
 						if (!_query) return;
 						const query = new URLSearchParams(_query);
 
@@ -470,10 +653,22 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
-						ctx.query = searchParamsToQuery(
-							removePromptFromQuery(query, "login"),
-						);
-						return await authorizeEndpoint(ctx, opts);
+						const signedQueryIssuedAt =
+							oauthRequest?.signedQueryIssuedAt ??
+							getServerContextSignedQueryIssuedAt(
+								serverContext?.[signedQueryIssuedAtMsKey],
+							);
+						let authorizationQuery = removePromptFromQuery(query, "login");
+						if (
+							isSessionFreshForSignedQuery(
+								session.session.createdAt,
+								signedQueryIssuedAt,
+							)
+						) {
+							authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
+						}
+						ctx.query = searchParamsToQuery(authorizationQuery);
+						return await runOAuth2Authorize(ctx);
 					}),
 				},
 			],
@@ -499,24 +694,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return metadata;
 					} else {
-						const jwtPluginOptions = opts.disableJwtPlugin
-							? undefined
-							: getJwtPlugin(ctx.context)?.options;
-						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-							scopes_supported:
-								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-							dynamic_client_registration_supported:
-								opts.allowDynamicClientRegistration,
-							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration ||
-								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
-							grant_types_supported: opts.grantTypes,
-							jwt_disabled: opts.disableJwtPlugin,
-						});
-						return {
-							...authMetadata,
-							...mergeDiscoveryMetadata(opts.clientDiscovery),
-						};
+						return oauthAuthorizationServerMetadata(ctx, opts);
 					}
 				},
 			),
@@ -543,169 +721,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return metadata;
 				},
 			),
-			oauth2Authorize: createOAuthEndpoint(
-				"/oauth2/authorize",
-				{
-					method: "GET",
-					query: z.object({
-						response_type: z
-							.string()
-							.pipe(z.enum(["code"]))
-							.optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z
-							.string()
-							.pipe(z.enum(["S256"]))
-							.optional(),
-						nonce: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						prompt: z
-							.string()
-							.pipe(
-								z.enum([
-									"none",
-									"consent",
-									"login",
-									"create",
-									"select_account",
-									"login consent",
-									"select_account consent",
-								]),
-							)
-							.optional(),
-					}),
-					redirectOnError: authorizeRedirectOnError(opts),
-					errorCodesByField: {
-						response_type: { invalid: "unsupported_response_type" },
-						resource: { invalid: "invalid_target" },
-					},
-					metadata: {
-						openapi: {
-							description: "Authorize an OAuth2 request",
-							parameters: [
-								{
-									name: "response_type",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 response type (e.g., 'code')",
-								},
-								{
-									name: "client_id",
-									in: "query",
-									required: true,
-									schema: { type: "string" },
-									description: "OAuth2 client ID",
-								},
-								{
-									name: "redirect_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string", format: "uri" },
-									description: "OAuth2 redirect URI",
-								},
-								{
-									name: "scope",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 scopes (space-separated)",
-								},
-								{
-									name: "state",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 state parameter",
-								},
-								{
-									name: "request_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description:
-										"Pushed Authorization Request URI referencing stored parameters",
-								},
-								{
-									name: "code_challenge",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge",
-								},
-								{
-									name: "code_challenge_method",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge method",
-								},
-								{
-									name: "nonce",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OpenID Connect nonce",
-								},
-								{
-									name: "resource",
-									in: "query",
-									required: false,
-									schema: { type: "array", items: { type: "string" } },
-									description:
-										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
-								},
-								{
-									name: "prompt",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 prompt parameter",
-								},
-							],
-							responses: {
-								"302": {
-									description: "Redirect to client with code or error",
-									headers: {
-										Location: {
-											description: "Redirect URI with code or error",
-											schema: { type: "string", format: "uri" },
-										},
-									},
-								},
-								"400": {
-									description: "Invalid request",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: { type: "string" },
-													error_description: { type: "string" },
-													state: { type: "string" },
-												},
-												required: ["error"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					return authorizeEndpoint(ctx, opts, {
-						isAuthorize: true,
-					});
-				},
-			),
+			oauth2Authorize: oauth2AuthorizeEndpoint,
 			oauth2Consent: createAuthEndpoint(
 				"/oauth2/consent",
 				{
@@ -751,7 +767,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return consentEndpoint(ctx, opts);
+					return consentEndpoint(ctx, opts, runOAuth2Authorize);
 				},
 			),
 			oauth2Continue: createAuthEndpoint(
@@ -802,36 +818,38 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return continueEndpoint(ctx, opts);
+					return continueEndpoint(ctx, runOAuth2Authorize);
 				},
 			),
 			oauth2Token: createOAuthEndpoint(
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.object({
-						grant_type: z
-							.string()
-							.pipe(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							),
-						client_id: z.string().optional(),
-						client_secret: z.string().optional(),
-						client_assertion: z.string().optional(),
-						client_assertion_type: z.string().optional(),
-						code: z.string().optional(),
-						code_verifier: z.string().optional(),
-						redirect_uri: SafeUrlSchema.optional(),
-						refresh_token: z.string().optional(),
-						resource: z
-							.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-							.optional(),
-						scope: z.string().optional(),
-					}),
+					// RFC 8707 §2 allows the client to repeat the `resource`
+					// parameter. better-call's form-body parser collapses
+					// repeated keys (last-write-wins) so we re-parse the raw
+					// body in the handler to recover the full list. That
+					// requires the underlying request body to be readable a
+					// second time, which only works when better-call clones
+					// the request before its own parse.
+					cloneRequest: true,
+					body: z
+						.object({
+							grant_type: z.string().trim().min(1),
+							client_id: z.string().optional(),
+							client_secret: z.string().optional(),
+							client_assertion: z.string().optional(),
+							client_assertion_type: z.string().optional(),
+							code: z.string().optional(),
+							code_verifier: z.string().optional(),
+							redirect_uri: SafeUrlSchema.optional(),
+							refresh_token: z.string().optional(),
+							resource: z
+								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+								.optional(),
+							scope: z.string().optional(),
+						})
+						.passthrough(),
 					errorCodesByField: {
 						grant_type: {
 							missing: "invalid_request",
@@ -840,9 +858,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
+							parameters: [
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT for issuing DPoP-bound tokens",
+								},
+							],
 							requestBody: {
 								required: true,
 								content: {
@@ -852,11 +881,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											properties: {
 												grant_type: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 													description: "OAuth2 grant type",
 												},
 												client_id: {
@@ -901,7 +925,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														},
 													],
 													description:
-														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
+														"Requested protected resource(s) for the access token",
 												},
 												scope: {
 													type: "string",
@@ -930,7 +954,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													token_type: {
 														type: "string",
 														description: "The type of the token issued",
-														enum: ["Bearer"],
+														enum: ["Bearer", "DPoP"],
 													},
 													expires_in: {
 														type: "number",
@@ -976,6 +1000,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					// RFC 8707 §2 conformance — recover repeated `resource`
+					// values from the raw body before delegating to the token
+					// pipeline. Only patches `ctx.body.resource` when the raw
+					// form actually carried multiple entries; the
+					// single-value path (and the in-process auth.api.* call
+					// path where there is no Request body to re-read) is left
+					// untouched. See `extractRepeatedResourceFromForm` in
+					// resources.ts for rationale.
+					if (ctx.request) {
+						const repeated = await extractRepeatedResourceFromForm(ctx.request);
+						if (repeated && repeated.length > 1) {
+							ctx.body.resource = repeated;
+						}
+					}
 					return tokenEndpoint(ctx, opts);
 				},
 			),
@@ -995,6 +1033,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
+						noStore: true,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Introspect an OAuth2 access or refresh token",
@@ -1207,8 +1246,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			oauth2UserInfo: createAuthEndpoint(
 				"/oauth2/userinfo",
 				{
-					method: "GET",
+					method: ["GET", "POST"],
 					metadata: {
+						noStore: true,
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
@@ -1222,7 +1262,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									in: "header",
 									required: false,
 									schema: { type: "string" },
-									description: "Bearer access token",
+									description: "Bearer or DPoP access token",
+								},
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT when using a DPoP-bound access token",
 								},
 							],
 							responses: {
@@ -1369,73 +1417,22 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
-						scope: z.string().optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						contacts: z.array(z.string().min(1)).min(1).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						backchannel_logout_uri: SafeUrlSchema.optional(),
-						backchannel_logout_session_required: z.boolean().optional(),
-						token_endpoint_auth_method: z
-							.enum([
-								"none",
-								"client_secret_basic",
-								"client_secret_post",
-								"private_key_jwt",
-							])
-							.default("client_secret_basic")
-							.optional(),
-						jwks: z
-							.union([
-								z.array(z.record(z.string(), z.unknown())).min(1),
-								z.object({
-									keys: z.array(z.record(z.string(), z.unknown())).min(1),
-								}),
-							])
-							.optional(),
-						jwks_uri: z.string().optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code"]))
-							.default(["code"])
-							.optional(),
-						type: z.enum(["web", "native", "user-agent-based"]).optional(),
-						subject_type: z.enum(["public", "pairwise"]).optional(),
-						skip_consent: z
-							.never({
-								error:
-									"skip_consent cannot be set during dynamic client registration",
-							})
-							.optional(),
-					}),
+					body: clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
 						software_statement: "invalid_software_statement",
+						// RFC 8707 §2: a malformed resource indicator is invalid_target,
+						// matching the existence check in registerEndpoint.
+						resources: "invalid_target",
 					},
 					defaultError: "invalid_client_metadata",
 					metadata: {
+						noStore: true,
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
-								"200": {
+								"201": {
 									description: "OAuth2 application registered successfully",
 									content: {
 										"application/json": {
@@ -1544,25 +1541,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "string",
 														description:
 															"Requested authentication method for the token endpoint",
-														enum: [
-															"none",
-															"client_secret_basic",
-															"client_secret_post",
-															"private_key_jwt",
-														],
 													},
 													grant_types: {
 														type: "array",
 														items: {
 															type: "string",
-															enum: [
-																"authorization_code",
-																"client_credentials",
-																"refresh_token",
-															],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Grant types the client may use at the token endpoint",
 													},
 													response_types: {
 														type: "array",
@@ -1571,7 +1557,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															enum: ["code"],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Response types the client may use at the authorization endpoint",
 													},
 													public: {
 														type: "boolean",
@@ -1616,6 +1602,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
 			updateOAuthConsent: oauthConsentEndpoints.updateOAuthConsent(opts),
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
+			adminCreateOAuthResource:
+				oauthResourceEndpoints.adminCreateOAuthResource(opts),
+			adminListOAuthResources:
+				oauthResourceEndpoints.adminListOAuthResources(opts),
+			adminGetOAuthResource: oauthResourceEndpoints.adminGetOAuthResource(opts),
+			adminUpdateOAuthResource:
+				oauthResourceEndpoints.adminUpdateOAuthResource(opts),
+			adminDeleteOAuthResource:
+				oauthResourceEndpoints.adminDeleteOAuthResource(opts),
+			adminLinkClientResource:
+				oauthResourceEndpoints.adminLinkClientResource(opts),
+			adminUnlinkClientResource:
+				oauthResourceEndpoints.adminUnlinkClientResource(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
 		rateLimit: [

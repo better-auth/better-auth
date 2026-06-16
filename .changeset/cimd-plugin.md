@@ -30,20 +30,22 @@ The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host r
 
 Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes so admin decisions survive document updates.
 
-### `@better-auth/oauth-provider`: new `clientDiscovery` option
+### `@better-auth/oauth-provider`: `clientDiscovery` extension field
 
 ```ts
 import type { ClientDiscovery } from "@better-auth/oauth-provider";
 
 oauthProvider({
-  clientDiscovery: [
+  extensions: [
     {
-      id: "my-resolver",
-      matches: (clientId) => clientId.startsWith("custom://"),
-      resolve: async (ctx, clientId, existing) => {
-        // create, refresh, or return null to pass through
+      clientDiscovery: {
+        id: "my-resolver",
+        matches: (clientId) => clientId.startsWith("custom://"),
+        resolve: async (ctx, clientId, existing) => {
+          // create, refresh, or return null to pass through
+        },
+        discoveryMetadata: { custom_flow_supported: true },
       },
-      discoveryMetadata: { custom_flow_supported: true },
     },
   ],
 });
@@ -51,7 +53,7 @@ oauthProvider({
 
 `clientDiscovery` accepts a single `ClientDiscovery` or an array. `getClient()` walks the entries in order after the database lookup; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` fields that are merged into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
 
-Plugins like `@better-auth/cimd` append an entry here at init time, so multiple discoveries can coexist.
+Plugins like `@better-auth/cimd` contribute an entry through the extension surface at init time, so multiple discoveries can coexist.
 
 The `checkOAuthClient` and `oauthToSchema` helpers are now exported for plugins that create client records directly.
 

@@ -9,7 +9,7 @@ description: Unauthenticated dynamic client discovery for Better Auth's OAuth pr
 
 This is the mechanism [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) uses so authorization servers can discover clients on the fly.
 
-The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) by appending a `ClientDiscovery` entry to its `clientDiscovery` option, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
+The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) by contributing a `ClientDiscovery` entry through its extension surface, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
 
 ## Installation
 
@@ -179,7 +179,7 @@ The plugin ships defense in depth against common abuses of unauthenticated clien
 
 ## Composition with `clientDiscovery`
 
-Under the hood, `cimd()` appends a `ClientDiscovery` entry to `oauthProvider`'s `clientDiscovery` option. If you prefer to wire it explicitly, or want to compose CIMD with other discovery implementations, use the `cimdClientDiscovery` factory:
+Under the hood, `cimd()` contributes a `ClientDiscovery` entry through `oauthProvider`'s extension surface. If you prefer to wire it explicitly, or want to compose CIMD with other discovery implementations, use the `cimdClientDiscovery` factory:
 
 ```ts title="auth.ts"
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -189,16 +189,20 @@ export const auth = betterAuth({
   plugins: [
     jwt(),
     oauthProvider({
-      clientDiscovery: [
-        cimdClientDiscovery({ refreshRate: "60m" }),
-        // other discovery implementations can go here
+      extensions: [
+        {
+          clientDiscovery: [
+            cimdClientDiscovery({ refreshRate: "60m" }),
+            // other discovery implementations can go here
+          ],
+        },
       ],
     }),
   ],
 });
 ```
 
-The `clientDiscovery` option accepts a single `ClientDiscovery` or an array. Entries are consulted in order after the database lookup in `getClient()`; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` that the server merges into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
+The `clientDiscovery` extension field accepts a single `ClientDiscovery` or an array. Entries are consulted in order after the database lookup in `getClient()`; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` that the server merges into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
 
 ## Related
 

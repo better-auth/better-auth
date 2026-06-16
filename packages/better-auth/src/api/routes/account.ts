@@ -13,6 +13,7 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
+import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
 import { getAccountCookie } from "../../cookies/session-store";
 import { generateRandomString } from "../../crypto";
 import { parseAccountOutput } from "../../db/schema";
@@ -24,6 +25,7 @@ import { decryptOAuthToken } from "../../oauth2/token-encryption";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	isStateful,
 	sessionMiddleware,
 } from "./session";
 
@@ -271,7 +273,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			const { token, nonce } = c.body.idToken;
 			const valid = await verifyProviderIdToken(provider, token, nonce);
 			if (!valid) {
-				c.context.logger.error("Invalid id token", {
+				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,
 				});
 				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -480,12 +482,20 @@ export const unlinkAccount = createAuthEndpoint(
  * `userId` directly. Throws `UNAUTHORIZED` when an HTTP caller is
  * unauthenticated, and `USER_ID_OR_SESSION_REQUIRED` when neither a session
  * nor a `userId` is available.
+ *
+ * When a durable store is authoritative, bypasses the cookie cache: these
+ * routes mint or refresh provider access tokens, so a server-side session
+ * revocation must take effect immediately rather than waiting for the cached
+ * cookie to expire. DB-less deployments keep the session in the cookie itself,
+ * so the cache is left in place for them.
  */
 async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const session = await getSessionFromCtx(ctx);
+	const session = await getSessionFromCtx(ctx, {
+		disableCookieCache: isStateful(ctx),
+	});
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");
 	}
@@ -497,6 +507,29 @@ async function resolveUserId(
 		});
 	}
 	return resolvedUserId;
+}
+
+function matchesAccountSelection(
+	ctx: GenericEndpointContext,
+	account: Account,
+	{
+		resolvedUserId,
+		providerId,
+		accountId,
+	}: {
+		resolvedUserId: string;
+		providerId?: string;
+		accountId?: string;
+	},
+) {
+	const matchesSessionUser =
+		!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+		account.userId === resolvedUserId;
+	return (
+		matchesSessionUser &&
+		(!providerId || providerId === account.providerId) &&
+		(!accountId || account.accountId === accountId)
+	);
 }
 
 /**
@@ -538,9 +571,11 @@ async function getValidAccessToken(
 		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
-			accountData.userId === resolvedUserId &&
-			providerId === accountData.providerId &&
-			(!accountId || accountData.accountId === accountId)
+			matchesAccountSelection(ctx, accountData, {
+				resolvedUserId,
+				providerId,
+				accountId,
+			})
 		) {
 			account = accountData;
 		} else {
@@ -783,11 +818,14 @@ export const refreshToken = createAuthEndpoint(
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
 		const accountData = await getAccountCookie(ctx);
-		if (
-			accountData &&
-			accountData.userId === resolvedUserId &&
-			(!providerId || providerId === accountData?.providerId)
-		) {
+		const usedAccountCookie =
+			!!accountData &&
+			matchesAccountSelection(ctx, accountData, {
+				resolvedUserId,
+				providerId,
+				accountId,
+			});
+		if (usedAccountCookie) {
 			account = accountData;
 		} else {
 			const accounts =
@@ -802,13 +840,7 @@ export const refreshToken = createAuthEndpoint(
 		if (!account) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
-
-		let refreshToken: string | null | undefined = undefined;
-		if (accountData && providerId === accountData.providerId) {
-			refreshToken = accountData.refreshToken ?? undefined;
-		} else {
-			refreshToken = account.refreshToken ?? undefined;
-		}
+		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
 			throw APIError.from(
@@ -951,7 +983,13 @@ export const accountInfo = createAuthEndpoint(
 		if (!providedAccountId) {
 			if (ctx.context.options.account?.storeAccountCookie) {
 				const accountData = await getAccountCookie(ctx);
-				if (accountData) {
+				if (
+					accountData &&
+					matchesAccountSelection(ctx, accountData, {
+						resolvedUserId,
+						providerId: providedProviderId,
+					})
+				) {
 					account = accountData;
 				}
 			}
@@ -973,7 +1011,12 @@ export const accountInfo = createAuthEndpoint(
 			account = matchingAccounts[0];
 		}
 
-		if (!account || account.userId !== resolvedUserId) {
+		if (
+			!account ||
+			!matchesAccountSelection(ctx, account, {
+				resolvedUserId,
+			})
+		) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
 

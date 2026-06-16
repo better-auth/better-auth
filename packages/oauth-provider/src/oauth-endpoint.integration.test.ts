@@ -90,6 +90,14 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		return { status, location };
 	}
 
+	function expectRedirectLocation(location: string | null): string {
+		expect(location).toBeTruthy();
+		if (!location) {
+			throw new Error("missing redirect location");
+		}
+		return location;
+	}
+
 	function postForm(path: string, body: Record<string, string>) {
 		return captureJsonResponse(path, {
 			method: "POST",
@@ -144,19 +152,19 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("registerOAuthClient (JSON delivery)", () => {
-		it("missing redirect_uris → invalid_redirect_uri", async () => {
+		it("disabled registration rejects before metadata validation", async () => {
 			const { status, body } = await postJson("/oauth2/register", {});
-			expect(status).toBe(400);
-			expect(body?.error).toBe("invalid_redirect_uri");
+			expect(status).toBe(403);
+			expect(body?.error).toBe("access_denied");
 		});
 
-		it("unsupported token_endpoint_auth_method → invalid_client_metadata default", async () => {
+		it("disabled registration does not leak supported auth methods", async () => {
 			const { status, body } = await postJson("/oauth2/register", {
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "not_a_real_method",
 			});
-			expect(status).toBe(400);
-			expect(body?.error).toBe("invalid_client_metadata");
+			expect(status).toBe(403);
+			expect(body?.error).toBe("access_denied");
 		});
 	});
 
@@ -175,10 +183,10 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 			expect(status).toBeGreaterThanOrEqual(300);
 			expect(status).toBeLessThan(400);
-			expect(location).toBeTruthy();
-			const errorUrl = new URL(location!);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
 			// Implicit flow: errors MUST be in the fragment, not query.
-			expect(location!.startsWith(redirectUri)).toBe(true);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
 			expect(errorUrl.hash).toBeTruthy();
 			const params = new URLSearchParams(errorUrl.hash.slice(1));
 			expect(params.get("error")).toBe("unsupported_response_type");
@@ -197,8 +205,8 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 				state: "s",
 			}).toString();
 			const { location } = await captureRedirect(`/oauth2/authorize?${qs}`);
-			expect(location).toBeTruthy();
-			const errorUrl = new URL(location!);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
 			// Explicit response_mode wins over the response_type-derived default.
 			expect(errorUrl.hash).toBe("");
 			expect(errorUrl.searchParams.get("error")).toBe(
@@ -220,8 +228,8 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 			expect(status).toBeGreaterThanOrEqual(300);
 			expect(status).toBeLessThan(400);
-			expect(location).toBeTruthy();
-			const errorUrl = new URL(location!);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
 			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
 			expect(errorUrl.searchParams.get("error_description")).toMatch(
 				/response_type/,
@@ -239,11 +247,11 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 			expect(status).toBeGreaterThanOrEqual(300);
 			expect(status).toBeLessThan(400);
-			expect(location).toBeTruthy();
+			const redirectLocation = expectRedirectLocation(location);
 			// Without a trusted client_id we cannot redirect to the RP: fall back
 			// to the server error page.
-			expect(location!.startsWith(redirectUri)).toBe(false);
-			const errorUrl = new URL(location!);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(false);
+			const errorUrl = new URL(redirectLocation);
 			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
 			expect(errorUrl.searchParams.get("error_description")).toBeTruthy();
 		});
@@ -261,10 +269,12 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 			expect(status).toBeGreaterThanOrEqual(300);
 			expect(status).toBeLessThan(400);
-			expect(location).toBeTruthy();
+			const redirectLocation = expectRedirectLocation(location);
 			// Open-redirect guard: unregistered redirect_uri means we cannot trust
 			// the RP, regardless of other validation failures.
-			expect(location!.startsWith("http://evil.example.com")).toBe(false);
+			expect(redirectLocation.startsWith("http://evil.example.com")).toBe(
+				false,
+			);
 		});
 	});
 

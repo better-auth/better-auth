@@ -74,9 +74,9 @@ export interface OAuthEndpointRedirectContext<Ctx = unknown> {
 	ctx: Ctx;
 }
 
-export type OAuthRedirectOnError<Ctx = any> = (
+export type OAuthRedirectOnError<Ctx = unknown, Result = unknown> = (
 	result: OAuthEndpointRedirectContext<Ctx>,
-) => unknown;
+) => Result | Promise<Result>;
 
 type ValidationErrorHookArgs = {
 	message: string;
@@ -85,14 +85,16 @@ type ValidationErrorHookArgs = {
 
 type ValidationErrorHook = (args: ValidationErrorHookArgs) => unknown;
 
-export interface OAuthEndpointExtras {
+export interface OAuthEndpointExtras<
+	Ctx = EndpointContext<string, EndpointOptions, AuthContext>,
+> {
 	/**
 	 * Invoked when validation fails. Presence switches delivery from a JSON
 	 * `APIError` envelope to this callback, which receives the request
 	 * context so it can compute an RP redirect URL from already-parsed query
 	 * params.
 	 */
-	redirectOnError?: OAuthRedirectOnError;
+	redirectOnError?: OAuthRedirectOnError<Ctx>;
 	/**
 	 * Forwarded to `better-call` and awaited before the RFC envelope is
 	 * synthesized, so callers can observe or transform issues.
@@ -134,7 +136,8 @@ export function createOAuthEndpoint<
 	R,
 >(
 	path: Path,
-	options: Options & OAuthEndpointExtras,
+	options: Options &
+		OAuthEndpointExtras<EndpointContext<Path, Options, AuthContext>>,
 	handler: (ctx: EndpointContext<Path, Options, AuthContext>) => Promise<R>,
 ): StrictEndpoint<Path, Options, R> {
 	const {

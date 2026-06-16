@@ -3,9 +3,10 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { organization } from "better-auth/plugins";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import type { SSOOptions } from "./types";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
@@ -14,6 +15,7 @@ describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
 
 	interface SSOProviderData {
+		[key: string]: unknown;
 		id: string;
 		providerId: string;
 		issuer: string;
@@ -28,6 +30,7 @@ describe("SSO provider read endpoints", () => {
 	const createTestAuth = (
 		includeOrgPlugin = true,
 		enableDomainVerification = false,
+		ssoOptions: SSOOptions = {},
 	) => {
 		const data: {
 			user: { id: string; email: string }[];
@@ -50,8 +53,8 @@ describe("SSO provider read endpoints", () => {
 		const memory = memoryAdapter(data);
 
 		const ssoPlugin = enableDomainVerification
-			? sso({ domainVerification: { enabled: true } })
-			: sso();
+			? sso({ ...ssoOptions, domainVerification: { enabled: true } })
+			: sso(ssoOptions);
 		const plugins = includeOrgPlugin
 			? [ssoPlugin, organization()]
 			: [ssoPlugin];
@@ -121,6 +124,7 @@ describe("SSO provider read endpoints", () => {
 			headers: Headers,
 			providerId: string,
 			organizationId?: string,
+			additionalFields?: Record<string, unknown>,
 		) {
 			return auth.api.registerSSOProvider({
 				body: {
@@ -135,7 +139,8 @@ describe("SSO provider read endpoints", () => {
 						spMetadata: {},
 					},
 					organizationId,
-				},
+					...additionalFields,
+				} as any,
 				headers,
 			});
 		}
@@ -1236,6 +1241,246 @@ kBGIJYs=
 		});
 	});
 
+	describe("ssoProvider additionalFields", () => {
+		const ssoOptions = {
+			schema: {
+				ssoProvider: {
+					additionalFields: {
+						displayName: {
+							type: "string",
+							required: true,
+						},
+						internalCode: {
+							type: "string",
+							required: false,
+							returned: false,
+						},
+						source: {
+							type: "string",
+							required: false,
+							input: false,
+							defaultValue: "system",
+						},
+					},
+				},
+			},
+		} satisfies SSOOptions;
+
+		it("should require configured additional fields on register", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false, false, ssoOptions);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "missing-display-name",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						spMetadata: {},
+					},
+				} as any,
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should store and return visible additional fields", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, ssoOptions);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const registered = (await registerSAMLProvider(
+				headers,
+				"okta",
+				undefined,
+				{
+					displayName: "Okta",
+					internalCode: "secret",
+				},
+			)) as any;
+
+			expect(registered.displayName).toBe("Okta");
+			expect(registered.source).toBe("system");
+			expect(registered.internalCode).toBeUndefined();
+			expect(data.ssoProvider[0]!.displayName).toBe("Okta");
+			expect(data.ssoProvider[0]!.internalCode).toBe("secret");
+			expect(data.ssoProvider[0]!.source).toBe("system");
+
+			const listed = (await auth.api.listSSOProviders({
+				headers,
+			})) as any;
+			expect(listed.providers[0].displayName).toBe("Okta");
+			expect(listed.providers[0].source).toBe("system");
+			expect(listed.providers[0].internalCode).toBeUndefined();
+
+			const fetched = (await auth.api.getSSOProvider({
+				query: { providerId: "okta" },
+				headers,
+			})) as any;
+			expect(fetched.displayName).toBe("Okta");
+			expect(fetched.source).toBe("system");
+			expect(fetched.internalCode).toBeUndefined();
+		});
+
+		it("should reject additional field keys that collide with built-in provider fields", () => {
+			expect(() =>
+				createTestAuth(false, false, {
+					schema: {
+						ssoProvider: {
+							additionalFields: {
+								providerId: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			).toThrow(
+				'ssoProvider additional field "providerId" conflicts with a built-in field',
+			);
+		});
+
+		it("should reject additional field keys that collide with returned provider fields", () => {
+			expect(() =>
+				createTestAuth(false, false, {
+					schema: {
+						ssoProvider: {
+							additionalFields: {
+								type: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			).toThrow(
+				'ssoProvider additional field "type" conflicts with a returned provider field',
+			);
+		});
+
+		it("should reject additional fields that map to built-in provider columns", () => {
+			expect(() =>
+				createTestAuth(false, false, {
+					schema: {
+						ssoProvider: {
+							additionalFields: {
+								displayName: {
+									type: "string",
+									required: false,
+									fieldName: "providerId",
+								},
+							},
+						},
+					},
+				}),
+			).toThrow(
+				'ssoProvider additional field "displayName" maps to built-in field "providerId"',
+			);
+		});
+
+		it("should reject input false additional fields on register", async () => {
+			const { getAuthHeaders, registerSAMLProvider, data } = createTestAuth(
+				false,
+				false,
+				ssoOptions,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await expect(
+				registerSAMLProvider(headers, "okta", undefined, {
+					displayName: "Okta",
+					source: "client",
+				}),
+			).rejects.toThrow("source is not allowed to be set");
+			expect(data.ssoProvider).toHaveLength(0);
+		});
+
+		it("should update additional fields", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				false,
+				ssoOptions,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "okta", undefined, {
+				displayName: "Okta",
+			});
+
+			const updated = (await auth.api.updateSSOProvider({
+				body: {
+					providerId: "okta",
+					displayName: "Okta Workforce",
+				} as any,
+				headers,
+			})) as any;
+
+			expect(updated.displayName).toBe("Okta Workforce");
+		});
+
+		it("should reject input false additional fields on update", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				false,
+				ssoOptions,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "okta", undefined, {
+				displayName: "Okta",
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "okta",
+						source: "client",
+					} as any,
+					headers,
+				}),
+			).rejects.toThrow("source is not allowed to be set");
+		});
+
+		it("should infer sso provider additional fields", () => {
+			const auth = betterAuth({
+				plugins: [sso(ssoOptions)],
+			});
+			ssoClient({ schema: ssoOptions.schema });
+
+			type Provider = typeof auth.$Infer.SSOProvider;
+			expectTypeOf<Provider>().toMatchTypeOf<{
+				providerId: string;
+				displayName: string;
+				source?: string | undefined;
+			}>();
+		});
+	});
+
 	describe("POST /sso/delete-provider", () => {
 		it("should return 401 when not authenticated", async () => {
 			const { auth } = createTestAuth();
@@ -1568,5 +1813,119 @@ kBGIJYs=
 
 			expect(response.status).toBe(400);
 		});
+	});
+});
+
+/**
+ * SSO provider ids share the account-linking provider namespace with
+ * social/OAuth providers. A user-registered SSO provider named after a
+ * configured social/trusted provider could otherwise inherit trust meant for
+ * the real provider and implicitly link to a verified local account.
+ * Registration must reject such colliding ids.
+ */
+describe("SSO providerId namespace collisions", () => {
+	const setup = () => {
+		const data: Record<string, any[]> = {
+			user: [],
+			session: [],
+			verification: [],
+			account: [],
+			ssoProvider: [],
+		};
+		const auth = betterAuth({
+			database: memoryAdapter(data),
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["github"],
+				},
+			},
+			plugins: [sso()],
+		});
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
+			},
+		});
+		const signIn = async () => {
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "user@example.com",
+				password: "password123",
+				name: "User",
+			});
+			await authClient.signIn.email(
+				{ email: "user@example.com", password: "password123" },
+				{ throw: true, onSuccess: setCookieToHeader(headers) },
+			);
+			return headers;
+		};
+		return { auth, signIn };
+	};
+
+	const registerBody = (providerId: string) => ({
+		providerId,
+		issuer: "https://idp.example.com",
+		domain: "example.com",
+		samlConfig: {
+			entryPoint: "https://idp.example.com/sso",
+			cert: TEST_CERT,
+			callbackUrl: "http://localhost:3000/api/sso/callback",
+			audience: "my-audience",
+			wantAssertionsSigned: true,
+			spMetadata: {},
+		},
+	});
+
+	it("rejects a providerId that collides with a configured social provider", async () => {
+		const { auth, signIn } = setup();
+		const headers = await signIn();
+		const response = await auth.api.registerSSOProvider({
+			body: registerBody("google"),
+			headers,
+			asResponse: true,
+		});
+		expect(response.status).toBe(422);
+	});
+
+	it("rejects a providerId that collides with a trustedProviders entry", async () => {
+		const { auth, signIn } = setup();
+		const headers = await signIn();
+		const response = await auth.api.registerSSOProvider({
+			body: registerBody("github"),
+			headers,
+			asResponse: true,
+		});
+		expect(response.status).toBe(422);
+	});
+
+	it("rejects the reserved 'credential' providerId", async () => {
+		const { auth, signIn } = setup();
+		const headers = await signIn();
+		const response = await auth.api.registerSSOProvider({
+			body: registerBody("credential"),
+			headers,
+			asResponse: true,
+		});
+		expect(response.status).toBe(422);
+	});
+
+	it("allows a non-colliding providerId", async () => {
+		const { auth, signIn } = setup();
+		const headers = await signIn();
+		const response = await auth.api.registerSSOProvider({
+			body: registerBody("okta-corp"),
+			headers,
+			asResponse: true,
+		});
+		expect(response.status).toBe(200);
 	});
 });

@@ -4,6 +4,8 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import {
@@ -30,7 +32,6 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 	}
 }
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
-const pendingAssertionIds = new Set<string>();
 
 /**
  * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
@@ -175,6 +176,129 @@ async function refetchClientJwks(
 }
 
 /**
+ * Enforces the assertion-hygiene claims every client-assertion authentication
+ * method must check, independent of how the signature is verified or where the
+ * verification keys come from:
+ * - `aud` MUST include `expectedAudience` (RFC 7523 §3 rule 3),
+ * - `exp` MUST be present, unexpired, and at most `assertionMaxLifetime`
+ *   seconds away (RFC 7523 §3 rule 4),
+ * - `iat`, when present, MUST be within `assertionMaxLifetime`,
+ * - `jti` MUST be present and single-use; this consumes a replay tombstone keyed
+ *   by `` `${namespace}:${jti}` ``, inserted under the adapter's primary key so a
+ *   replay across workers fails atomically.
+ *
+ * A custom {@link OAuthClientAuthenticationStrategy} should call this after
+ * verifying the assertion signature, so an extension method inherits the same
+ * replay, lifetime, and audience guarantees as the built-in `private_key_jwt`
+ * path, which calls it too.
+ *
+ * @param params.namespace Scopes the replay tombstone to the method and client,
+ *   e.g. `` `${method}:${clientId}` ``, so the same `jti` can recur across
+ *   distinct methods or clients but never within one.
+ */
+export async function consumeClientAssertion(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		namespace: string;
+		payload: { aud?: unknown; exp?: unknown; iat?: unknown; jti?: unknown };
+		expectedAudience: string;
+	},
+): Promise<void> {
+	const { namespace, payload, expectedAudience } = params;
+
+	const audiences = Array.isArray(payload.aud)
+		? payload.aud
+		: payload.aud != null
+			? [payload.aud]
+			: [];
+	if (!audiences.includes(expectedAudience)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client assertion aud does not match the endpoint",
+			error: "invalid_client",
+		});
+	}
+
+	const maxLifetime = opts.assertionMaxLifetime ?? 300;
+	const now = Math.floor(Date.now() / 1000);
+	if (typeof payload.exp !== "number") {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client assertion must include exp claim",
+			error: "invalid_client",
+		});
+	}
+	// An extension strategy relies on this; the built-in path has jose reject
+	// expiry before this runs.
+	if (payload.exp <= now) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client assertion has expired",
+			error: "invalid_client",
+		});
+	}
+	// Cap the window so exp cannot outlive the jti tombstone.
+	if (payload.exp - now > maxLifetime) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client assertion exp is too far in the future (max ${maxLifetime}s)`,
+			error: "invalid_client",
+		});
+	}
+	if (typeof payload.iat === "number" && now - payload.iat > maxLifetime) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client assertion iat is too far in the past (max ${maxLifetime}s)`,
+			error: "invalid_client",
+		});
+	}
+
+	if (typeof payload.jti !== "string" || payload.jti.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client assertion must include jti claim",
+			error: "invalid_client",
+		});
+	}
+
+	// Consume the jti with a single insert keyed by a digest of the namespaced
+	// identifier. The primary key is the atomic gate on every adapter (SQL
+	// primary key, MongoDB `_id`), so concurrent requests across workers cannot
+	// both pass. A duplicate-key failure means the jti was already used (replay);
+	// any other failure is surfaced unchanged.
+	const jtiDigest = await createHash("SHA-256").digest(
+		new TextEncoder().encode(`${namespace}:${payload.jti}`),
+	);
+	const jtiId = base64Url.encode(new Uint8Array(jtiDigest).slice(0, 24), {
+		padding: false,
+	});
+	try {
+		await ctx.context.adapter.create({
+			model: "oauthClientAssertion",
+			data: {
+				id: jtiId,
+				expiresAt: new Date(payload.exp * 1000),
+			},
+			forceAllowId: true,
+		});
+	} catch (createErr) {
+		let alreadyUsed = false;
+		try {
+			alreadyUsed = Boolean(
+				await ctx.context.adapter.findOne({
+					model: "oauthClientAssertion",
+					where: [{ field: "id", value: jtiId }],
+				}),
+			);
+		} catch {
+			// Lookup failed, so a replay cannot be confirmed; surface the insert error.
+		}
+		if (alreadyUsed) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "client assertion jti has already been used",
+				error: "invalid_client",
+			});
+		}
+		throw createErr;
+	}
+}
+
+/**
  * Verifies a client assertion JWT for `private_key_jwt` authentication.
  *
  * Validates: signature, iss=client_id, sub=client_id, aud=token_endpoint,
@@ -187,7 +311,7 @@ export async function verifyClientAssertion(
 	clientAssertionType: string,
 	clientIdHint?: string,
 	expectedAudience?: string,
-): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
+): Promise<{ clientId: string }> {
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
@@ -264,7 +388,6 @@ export async function verifyClientAssertion(
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, client);
 	const audience = expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
-	const maxLifetime = opts.assertionMaxLifetime ?? 300;
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
@@ -319,90 +442,16 @@ export async function verifyClientAssertion(
 		}
 	}
 
-	// exp is REQUIRED per RFC 7523 Section 3 rule 4.
-	// jose's jwtVerify only validates exp when present — it does NOT reject
-	// assertions that omit exp entirely. We must enforce this explicitly.
-	const now = Math.floor(Date.now() / 1000);
-	if (typeof payload.exp !== "number") {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion must include exp claim",
-			error: "invalid_client",
-		});
-	}
-	// Cap the assertion validity window: exp must not be more than
-	// assertionMaxLifetime seconds from now (default 5 minutes).
-	// This prevents long-lived assertions that could outlive JTI tombstones.
-	if (payload.exp - now > maxLifetime) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: `client assertion exp is too far in the future (max ${maxLifetime}s)`,
-			error: "invalid_client",
-		});
-	}
-	// Advisory iat check: when present, reject assertions older than maxLifetime.
-	// iat is optional per RFC 7523 S3, so we only enforce when the client provides it.
-	if (typeof payload.iat === "number" && now - payload.iat > maxLifetime) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: `client assertion iat is too far in the past (max ${maxLifetime}s)`,
-			error: "invalid_client",
-		});
-	}
+	// Audience, lifetime, and jti single-use replay protection, shared with
+	// extension client-auth methods through `consumeClientAssertion` so both
+	// paths enforce RFC 7523 §3 identically. jose already matched `aud` via
+	// `verifyOpts.audience`; the helper re-checks it so it is self-sufficient for
+	// callers that verify the signature without jose.
+	await consumeClientAssertion(ctx, opts, {
+		namespace: `private_key_jwt:${clientId}`,
+		payload,
+		expectedAudience: audience,
+	});
 
-	// jti is REQUIRED per OIDC Core Section 9 for private_key_jwt.
-	// RFC 7523 Section 3 makes jti MAY, but OIDC tightens this to REQUIRED
-	// with single-use enforcement.
-	if (!payload.jti) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion must include jti claim",
-			error: "invalid_client",
-		});
-	}
-
-	const jtiIdentifier = `private_key_jwt:${clientId}:${payload.jti}`;
-	if (pendingAssertionIds.has(jtiIdentifier)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion jti has already been used",
-			error: "invalid_client",
-		});
-	}
-
-	pendingAssertionIds.add(jtiIdentifier);
-	try {
-		const existingJti =
-			await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-		if (existingJti) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "client assertion jti has already been used",
-				error: "invalid_client",
-			});
-		}
-
-		// Store JTI tombstone until the assertion's actual expiry.
-		// If another instance created the tombstone between our find and create
-		// (race in multi-instance deployments), the create may succeed as a
-		// duplicate or throw; either way the assertion is consumed.
-		const jtiExpiry = new Date(payload.exp * 1000);
-		try {
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: jtiIdentifier,
-				value: clientId,
-				expiresAt: jtiExpiry,
-			});
-		} catch (createErr) {
-			// If the tombstone already exists (created by another instance in
-			// the race window), treat it as a replay.
-			const doubleCheck =
-				await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
-			if (doubleCheck) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "client assertion jti has already been used",
-					error: "invalid_client",
-				});
-			}
-			throw createErr;
-		}
-	} finally {
-		pendingAssertionIds.delete(jtiIdentifier);
-	}
-
-	return { clientId, client };
+	return { clientId };
 }

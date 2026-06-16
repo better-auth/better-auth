@@ -192,14 +192,23 @@ describe("oauthClient", async () => {
 	});
 
 	it("should rotate the client secret", async () => {
-		const client = await authClient.oauth2.client.rotateSecret({
-			client_id: oauthClient.client_id,
-		});
+		let response: Response | undefined;
+		const client = await authClient.oauth2.client.rotateSecret(
+			{ client_id: oauthClient.client_id },
+			{
+				onResponse(context) {
+					response = context.response;
+				},
+			},
+		);
 		const { client_secret, ...check } = client.data ?? {};
 		const { client_secret: clientSecret, ...expected } = oauthClient;
 		expect(client_secret).toBeDefined();
 		expect(client_secret).not.toBe(clientSecret);
 		expect(check).toMatchObject(expected);
+		// The rotated secret must not be cached.
+		expect(response?.headers.get("Cache-Control")).toBe("no-store");
+		expect(response?.headers.get("Pragma")).toBe("no-cache");
 		oauthClient = client.data!;
 	});
 

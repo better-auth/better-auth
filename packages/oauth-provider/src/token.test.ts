@@ -1,20 +1,36 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
-import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	deriveDpopAth,
+	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { base64url, createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
+import type { JWK } from "jose";
+import {
+	base64url,
+	createLocalJWKSet,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope, VerificationValue } from "./types";
+import { confirmationTokenType } from "./token";
+import type {
+	Confirmation,
+	OAuthOptions,
+	Scope,
+	VerificationValue,
+} from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 
@@ -23,7 +39,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl, testUser } =
 		await getTestInstance({
 			baseURL: authServerBaseUrl,
@@ -36,7 +52,8 @@ describe("oauth token - authorization_code", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					validAudiences: [validAudience],
+					resources: [validResource],
+					enforcePerClientResources: false,
 					silenceWarnings: {
 						oauthAuthServerConfig: true,
 						openidConfig: true,
@@ -47,7 +64,7 @@ describe("oauth token - authorization_code", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -67,6 +84,11 @@ describe("oauth token - authorization_code", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -78,7 +100,9 @@ describe("oauth token - authorization_code", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -365,7 +389,7 @@ describe("oauth token - authorization_code", async () => {
 		const tokens = await validateAuthCode({
 			code: url.searchParams.get("code")!,
 			codeVerifier,
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(tokens.data?.access_token).toBeDefined();
 		expect(tokens.data?.id_token).toBeDefined();
@@ -380,7 +404,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -441,7 +465,7 @@ describe("oauth token - authorization_code", async () => {
 describe("oauth token - refresh_token", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -457,7 +481,8 @@ describe("oauth token - refresh_token", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -468,7 +493,7 @@ describe("oauth token - refresh_token", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -488,6 +513,11 @@ describe("oauth token - refresh_token", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -499,7 +529,9 @@ describe("oauth token - refresh_token", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -718,7 +750,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: scopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -743,7 +775,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -823,7 +855,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: newScopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -848,7 +880,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -1280,7 +1312,7 @@ describe("oauth token - refresh_token", async () => {
 describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const allScopes = ["openid", "profile", "email", "read:posts", "write:posts"];
 	const clientScopes = ["openid", "profile", "email", "read:posts"];
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -1294,7 +1326,8 @@ describe("oauth token - client_credentials", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
 				silenceWarnings: {
@@ -1307,7 +1340,7 @@ describe("oauth token - client_credentials", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -1326,6 +1359,11 @@ describe("oauth token - client_credentials", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 				scope: clientScopes.join(" "),
@@ -1339,7 +1377,9 @@ describe("oauth token - client_credentials", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -1429,7 +1469,7 @@ describe("oauth token - client_credentials", async () => {
 				clientSecret: oauthClient.client_secret,
 				redirectURI: redirectUri,
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const tokens = await client.$fetch<{
 			access_token?: string;
@@ -1453,11 +1493,11 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
-		expect(accessToken.payload.sub).toBeUndefined(); // unset since not a user!
+		expect(accessToken.payload.sub).toBe(oauthClient.client_id);
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
@@ -1494,7 +1534,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -1512,6 +1552,11 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1521,7 +1566,9 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		expect(response?.redirect_uris).toBeDefined();
 		oauthClient = response;
 
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -1604,7 +1651,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 describe("oauth token - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
@@ -1632,7 +1679,8 @@ describe("oauth token - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -1665,6 +1713,11 @@ describe("oauth token - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1727,7 +1780,7 @@ describe("oauth token - config", async () => {
 		// Client credentials
 		const tokens = await client.oauth2.token(
 			{
-				resource: validAudience,
+				resource: validResource,
 				grant_type: "client_credentials",
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
@@ -1799,7 +1852,7 @@ describe("oauth token - config", async () => {
 				code: url.searchParams.get("code")!,
 				code_verifier: codeVerifier,
 				grant_type: "authorization_code",
-				resource: validAudience,
+				resource: validResource,
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
 				redirect_uri: redirectUri,
@@ -1819,7 +1872,7 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				resource: validAudience,
+				resource: validResource,
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1990,7 +2043,7 @@ describe("oauth token - config", async () => {
 describe("oauth token - client secret validation", async () => {
 	const authServerBaseUrl = "http://localhost:3010";
 	const rpBaseUrl = "http://localhost:5010";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
@@ -2014,7 +2067,8 @@ describe("oauth token - client secret validation", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -2045,6 +2099,11 @@ describe("oauth token - client secret validation", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2171,7 +2230,7 @@ describe("id token claim override security", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2188,6 +2247,11 @@ describe("id token claim override security", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2301,7 +2365,7 @@ describe("loopback redirect URI matching", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -2502,7 +2566,7 @@ describe("scope preservation through authorization code flow", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: { customFetchImpl, headers },
 	});
@@ -2567,7 +2631,7 @@ describe("scope preservation through authorization code flow", async () => {
 describe("at_hash in id tokens", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -2579,7 +2643,8 @@ describe("at_hash in id tokens", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -2590,7 +2655,7 @@ describe("at_hash in id tokens", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2711,7 +2776,7 @@ describe("at_hash in id tokens", async () => {
 	it("at_hash should not be present without openid scope", async ({
 		expect,
 	}) => {
-		const tokens = await getTokens(["offline_access"], validAudience);
+		const tokens = await getTokens(["offline_access"], validResource);
 		expect(tokens.id_token).toBeUndefined();
 	});
 
@@ -2744,7 +2809,7 @@ describe("at_hash in id tokens", async () => {
 
 		const { headers: testHeaders } = await signIn();
 		const testClient = createAuthClient({
-			plugins: [oauthProviderClient(), jwtClient()],
+			plugins: [oauthProviderClient()],
 			baseURL: authServerBaseUrl,
 			fetchOptions: { customFetchImpl: fetchImpl, headers: testHeaders },
 		});
@@ -2832,7 +2897,7 @@ describe("customTokenResponseFields", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -2849,6 +2914,11 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -2939,7 +3009,7 @@ describe("customTokenResponseFields", async () => {
 
 		const { headers: headers2 } = await signIn2();
 		const client2 = createAuthClient({
-			plugins: [oauthProviderClient(), jwtClient()],
+			plugins: [oauthProviderClient()],
 			baseURL: authServerBaseUrl2,
 			fetchOptions: { customFetchImpl: fetch2, headers: headers2 },
 		});
@@ -2947,6 +3017,11 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth2.api.adminCreateOAuthClient({
 			headers: headers2,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -3114,5 +3189,633 @@ describe("verificationValueSchema", () => {
 				"should-pass-through",
 			);
 		}
+	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject empty max_age values in stored authorization queries", () => {
+		for (const maxAge of ["", "   "]) {
+			const result = verificationValueSchema.safeParse({
+				type: "authorization_code",
+				query: {
+					client_id: "test",
+					redirect_uri: "https://example.com",
+					max_age: maxAge,
+				},
+				userId: "u1",
+				sessionId: "s1",
+			});
+
+			expect(result.success).toBe(false);
+		}
+	});
+
+	it("should accept valid prompt values in any order", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "consent login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject prompt=none combined with other prompt values", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "none login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("oauth token - per-client grant_type enforcement", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	// A confidential client registered for the authorization_code grant only.
+	let authCodeOnlyClient: OAuthClient | null = null;
+	beforeAll(async () => {
+		authCodeOnlyClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(authCodeOnlyClient?.client_secret).toBeDefined();
+	});
+
+	// The core fix: a user-delegated (authorization_code) client must not be
+	// able to mint machine-to-machine tokens.
+	it("rejects client_credentials for an authorization_code-only client", async () => {
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${authCodeOnlyClient!.client_id!}:${authCodeOnlyClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.data?.access_token).toBeUndefined();
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+	});
+
+	// Targeted policy: refresh tokens stay tied to the authorization_code flow +
+	// offline_access, so an authorization_code client keeps getting them without
+	// having to also register the refresh_token grant explicitly.
+	it("still issues refresh tokens to an authorization_code client with offline_access", async () => {
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "grant-enforcement",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: reqHeaders });
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+	});
+
+	// Guard against over-blocking: a client explicitly registered for
+	// client_credentials must still be able to use it.
+	it("allows client_credentials for a client registered for it", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${ccClient!.client_id!}:${ccClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.access_token).toBeDefined();
+	});
+
+	// The /authorize endpoint only serves authorization_code; a machine-to-machine
+	// (client_credentials-only) client must be rejected there too.
+	it("rejects /authorize for a client not registered for authorization_code", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const { url: authUrl } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: ccClient!.client_id!,
+				clientSecret: ccClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "authorize-grant-enforcement",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(location).toContain("error=unauthorized_client");
+	});
+});
+
+describe("oauth token - DPoP", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const jwtResource = "https://dpop-api.example.com";
+	const dpopRequiredResource = "https://dpop-required.example.com";
+	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				resources: [
+					jwtResource,
+					{
+						identifier: dpopRequiredResource,
+						dpopBoundAccessTokensRequired: true,
+					},
+				],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	async function createDpopKey() {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		return { privateKey, publicJwk, jkt };
+	}
+
+	async function createDpopProof(params: {
+		privateKey: CryptoKey;
+		publicJwk: JWK;
+		method: string;
+		url: string;
+		jti: string;
+		accessToken?: string;
+	}) {
+		return new SignJWT({
+			jti: params.jti,
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.accessToken
+				? { ath: await deriveDpopAth(params.accessToken) }
+				: {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: params.publicJwk,
+			})
+			.sign(params.privateKey);
+	}
+
+	async function createAuthUrl(
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+			...overrides,
+		});
+		return { url, codeVerifier };
+	}
+
+	async function exchangeCode(
+		code: string,
+		codeVerifier: string,
+		resource: string,
+		dpopProof?: string,
+	) {
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource,
+			options: {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokenHeaders = new Headers(reqHeaders);
+		if (dpopProof) tokenHeaders.set("DPoP", dpopProof);
+		return client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+			token_type?: string;
+			error?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+	}
+
+	async function authorizeForCode(jkt: string | undefined, resource: string) {
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			jkt ? { additionalParams: { dpop_jkt: jkt } } : undefined,
+		);
+		authUrl.searchParams.set("resource", resource);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		return { code: url.searchParams.get("code")!, codeVerifier };
+	}
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("issues a JWT access token bound to the proof key via cnf.jkt", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "issue-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		const payload = decodeJwt(tokens.data!.access_token!);
+		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("rejects a token request without a proof when the resource requires DPoP", async () => {
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+		const tokens = await exchangeCode(code, codeVerifier, dpopRequiredResource);
+
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+
+	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof?: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			if (dpopProof) refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<{
+				access_token?: string;
+				token_type?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const proofless = await refresh();
+		expect((proofless.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const refreshProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-refresh-proof",
+		});
+		const rotated = await refresh(refreshProof);
+		expect(rotated.error).toBeNull();
+		expect(rotated.data?.token_type).toBe("DPoP");
+		const rotatedPayload = decodeJwt(rotated.data!.access_token!);
+		expect(rotatedPayload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("rejects a replayed DPoP proof at the token endpoint", async () => {
+		const dpopKey = await createDpopKey();
+		// One proof (a single jti) reused across two authorization codes. The
+		// database-backed replay store must reject the second presentation.
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "replayed-proof",
+		});
+
+		const first = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const firstTokens = await exchangeCode(
+			first.code,
+			first.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(firstTokens.error).toBeNull();
+		expect(firstTokens.data?.token_type).toBe("DPoP");
+
+		const second = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const replayed = await exchangeCode(
+			second.code,
+			second.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(replayed.data?.access_token).toBeUndefined();
+		expect((replayed.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+
+	it("persists dpop_bound_access_tokens through dynamic client registration", async () => {
+		// RFC 9449 §5.2: a conformant client declares the flag top-level at
+		// registration. The strict zod body schema must not strip it before it
+		// reaches storage; the response echoes the persisted value.
+		const registration = await client.$fetch<OAuthClient>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				grant_types: ["authorization_code"],
+				token_endpoint_auth_method: "client_secret_basic",
+				dpop_bound_access_tokens: true,
+			},
+		});
+		expect(registration.error).toBeNull();
+		expect(registration.data?.dpop_bound_access_tokens).toBe(true);
+	});
+
+	it("enforces DPoP from the client dpop_bound_access_tokens flag alone", async () => {
+		// No resource and no dpop_jkt: the client flag is the only thing that can
+		// require DPoP, so this fails unless the flag actually reached storage.
+		const flagged = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				dpop_bound_access_tokens: true,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const { url } = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: flagged!.client_id,
+				clientSecret: flagged!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: flagged!.client_id,
+				clientSecret: flagged!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			error?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/10039
+ */
+describe("confirmationTokenType", () => {
+	it("falls back to Bearer for a malformed confirmation instead of throwing", () => {
+		// A corrupted `confirmation` JSON column can deserialize to a primitive or
+		// array; the token type must degrade to Bearer rather than 500.
+		for (const malformed of ["garbage", 42, ["jkt"], { jkt: "" }]) {
+			expect(confirmationTokenType(malformed as unknown as Confirmation)).toBe(
+				"Bearer",
+			);
+		}
+		expect(confirmationTokenType({ jkt: "thumbprint" })).toBe("DPoP");
+		expect(confirmationTokenType(undefined)).toBe("Bearer");
 	});
 });

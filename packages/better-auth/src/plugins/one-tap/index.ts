@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -40,6 +41,17 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	/**
+	 * Sent so the global origin-check middleware validates the post-login
+	 * redirect target against `trustedOrigins`. Without it the client performs
+	 * an unvalidated `window.location` redirect, which is an open redirect.
+	 */
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect to after a successful sign-in",
+		})
+		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
@@ -85,21 +97,33 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
-					let payload: any;
+					const googleProvider =
+						typeof ctx.context.options.socialProviders?.google === "function"
+							? await ctx.context.options.socialProviders?.google()
+							: ctx.context.options.socialProviders?.google;
+					// Fail closed on a missing audience: without an expected client ID,
+					// jose verifies Google's signature and issuer but not that the token
+					// was minted for this relying party, so a token issued to a different
+					// Google client would be accepted. Resolve and require it before
+					// verification.
+					const audience = options?.clientId || googleProvider?.clientId;
+					if (!audience || (Array.isArray(audience) && audience.length === 0)) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
+						});
+					}
+					let payload: JWTPayload;
 					try {
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
-						const googleProvider =
-							typeof ctx.context.options.socialProviders?.google === "function"
-								? await ctx.context.options.socialProviders?.google()
-								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience: options?.clientId || googleProvider?.clientId,
+								audience,
 							},
 						);
 						payload = verifiedPayload;
@@ -115,8 +139,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						picture,
 						sub,
 					} = payload;
-					if (!rawEmail) {
-						return ctx.json({ error: "Email not available in token" });
+					if (typeof rawEmail !== "string" || !rawEmail) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
+					}
+					if (typeof sub !== "string" || !sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
 					}
 					const email = rawEmail.toLowerCase();
 
@@ -135,8 +166,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							id: sub,
 							email,
 							emailVerified,
-							name: name ?? "",
-							image: picture,
+							name: typeof name === "string" ? name : "",
+							image: typeof picture === "string" ? picture : undefined,
 						},
 						providerId: "google",
 						accountId: sub,

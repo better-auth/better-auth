@@ -141,6 +141,7 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
+      "!**/.tsc",
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
       "!**/.output",
