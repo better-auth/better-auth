@@ -27,8 +27,10 @@ jobs:
         node-version: [22.x, 24.x]
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: redis
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -62,7 +64,9 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
@@ -76,8 +80,9 @@ jobs:
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
-          docker compose logs --no-color mssql || true
+          docker compose logs --no-color "${compose_services[@]}" || true
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''
@@ -88,8 +93,10 @@ jobs:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: postgres
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -120,7 +127,9 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Integration
         run: pnpm e2e:integration --filter=./e2e/integration
@@ -128,8 +137,9 @@ jobs:
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
-          docker compose logs --no-color mssql || true
+          docker compose logs --no-color "${compose_services[@]}" || true
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''
@@ -142,9 +152,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
+        include:
+          - packages: "@better-auth-test/adapter-factory"
+            compose_services: ""
+          - packages: "@better-auth-test/drizzle-adapter"
+            compose_services: "postgres mysql"
+          - packages: "@better-auth-test/kysely-prisma-adapter"
+            compose_services: "postgres-kysely mysql-kysely postgres-kysely2 mssql"
+          - packages: "@better-auth-test/memory-adapter"
+            compose_services: ""
+          - packages: "@better-auth-test/mongo-adapter"
+            compose_services: "mongodb"
+          - packages: "@better-auth-test/prisma-adapter"
+            compose_services: "postgres-prisma mysql-prisma"
+    env:
+      COMPOSE_SERVICES: ${{ matrix.compose_services }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -172,7 +196,10 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        if: matrix.compose_services != ''
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Adapter Integration
         env:
@@ -180,10 +207,11 @@ jobs:
         run: pnpm e2e:integration --filter="$FILTER"
 
       - name: Docker Compose Diagnostics
-        if: failure() && hashFiles('docker-compose.yml') != ''
+        if: failure() && hashFiles('docker-compose.yml') != '' && matrix.compose_services != ''
         run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
-          docker compose logs --no-color mssql || true
+          docker compose logs --no-color "${compose_services[@]}" || true
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''

@@ -1304,10 +1304,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (data.fromStatus) {
 				where.push({ field: "status", value: data.fromStatus });
 			}
-			const invitation = await adapter.update<InferInvitation<O, false>>({
+			const invitation = await adapter.incrementOne<InferInvitation<O, false>>({
 				model: "invitation",
 				where,
-				update: {
+				increment: {},
+				set: {
 					status: data.status,
 				},
 			});

@@ -79,6 +79,40 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	};
 }
 
+function getDefaultSchemaOutputFileName(adapterId: string, now = new Date()) {
+	if (adapterId === "prisma") {
+		return "schema.prisma";
+	}
+	if (adapterId === "kysely") {
+		return `${now.toISOString().replace(/:/g, "-")}.sql`;
+	}
+	return "auth-schema.ts";
+}
+
+async function resolveSchemaOutputPath({
+	cwd,
+	output,
+	adapterId,
+	now = new Date(),
+}: {
+	cwd: string;
+	output: string | undefined;
+	adapterId: string;
+	now?: Date | undefined;
+}) {
+	if (!output) return output;
+	const resolvedOutput = path.resolve(cwd, output);
+	try {
+		const stat = await fs.stat(resolvedOutput);
+		if (stat.isDirectory()) {
+			return path.join(output, getDefaultSchemaOutputFileName(adapterId, now));
+		}
+	} catch {
+		// path doesn't exist yet — treat as a file path, which is fine
+	}
+	return output;
+}
+
 async function generateAction(opts: any) {
 	const options = z
 		.object({
@@ -97,6 +131,7 @@ async function generateAction(opts: any) {
 		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
@@ -119,6 +154,12 @@ async function generateAction(opts: any) {
 			process.exit(1);
 		});
 	}
+
+	options.output = await resolveSchemaOutputPath({
+		cwd,
+		output: options.output,
+		adapterId: adapter.id,
+	});
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
