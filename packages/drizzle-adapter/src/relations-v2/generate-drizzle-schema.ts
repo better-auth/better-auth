@@ -20,6 +20,7 @@ interface SchemaGenerator {
 		provider: "sqlite" | "mysql" | "pg";
 		adapterConfig: DrizzleAdapterConfig;
 		camelCase?: boolean;
+		tables?: BetterAuthDBSchema;
 	}): Promise<DBAdapterSchemaCreation>;
 }
 
@@ -40,8 +41,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	provider,
 	adapterConfig,
 	camelCase,
+	tables: propsTables,
 }) => {
-	const tables = getAuthTables(options);
+	const tables = propsTables ?? getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined = provider;
 
@@ -388,11 +390,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			);
 
 			if (hasMany) {
-				// Find the foreign key field that points to this table
-				const fkField = foreignKeysPointingHere.find(
+				// Find all non-unique foreign key fields that point to this table
+				const nonUniqueFKs = foreignKeysPointingHere.filter(
 					([_, field]) => !field.unique,
 				);
-				if (fkField) {
+				for (let i = 0; i < nonUniqueFKs.length; i++) {
+					const fkField = nonUniqueFKs[i];
+					if (!fkField) continue;
 					const [fkFieldName, fkFieldAttr] = fkField;
 					const fromField = getFieldName({
 						model: tableKey,
@@ -408,6 +412,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						relationKey = otherModelName.endsWith("s")
 							? otherModelName
 							: `${otherModelName}s`;
+					}
+					// Disambiguate multiple FKs from the same table by appending field name
+					if (nonUniqueFKs.length > 1) {
+						const capitalizedField =
+							fkFieldName.charAt(0).toUpperCase() + fkFieldName.slice(1);
+						relationKey = `${relationKey}By${capitalizedField}`;
 					}
 
 					modelRelations.push({

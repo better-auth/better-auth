@@ -495,7 +495,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
 					if (options.experimental?.joins) {
-						if (!db.query[model]) {
+						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
 							);
@@ -620,12 +620,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const res = await builder;
 					let count = 0;
 					if (res && "rowCount" in res) count = res.rowCount;
-					else if (Array.isArray(res)) count = res.length;
+					else if (res && "count" in res) count = res.count;
 					else if (
 						res &&
 						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
 					)
 						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					else if (Array.isArray(res)) count = res.length;
 					if (typeof count !== "number") {
 						logger.error(
 							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
@@ -764,6 +765,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						provider: config.provider,
 						camelCase: config.camelCase,
 						file: props.file,
+						tables: props.tables,
 					});
 				},
 				options: config,
