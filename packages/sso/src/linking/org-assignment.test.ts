@@ -534,6 +534,97 @@ describe("organization assignment", () => {
 		expect(resolvedClaims).toEqual(rawClaims);
 	});
 
+	it("should keep SAML getRole userInfo backward-compatible with raw attributes", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		const provider = {
+			...createProvider({ organizationId: org.id }),
+			organizationId: org.id,
+		};
+		const user = createUser();
+		data.organization.push(org);
+		data.user.push(user);
+
+		const normalizedUserInfo = {
+			email: user.email,
+			name: user.name,
+		};
+		const rawClaims = {
+			groups: ["engineering-admins"],
+			"urn:example:email": user.email,
+		};
+		let resolvedUserInfo: Record<string, any> | undefined;
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationFromProvider(ctx, {
+			user,
+			provider,
+			profile: {
+				providerType: "saml",
+				providerId: provider.providerId,
+				accountId: "idp-user-1",
+				email: user.email,
+				emailVerified: true,
+				rawAttributes: normalizedUserInfo,
+				claims: rawClaims,
+			},
+			provisioningOptions: {
+				getRole: async ({ userInfo }) => {
+					resolvedUserInfo = userInfo;
+					return (userInfo.groups as string[] | undefined)?.includes(
+						"engineering-admins",
+					)
+						? "admin"
+						: "member";
+				},
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.role).toBe("admin");
+		expect(resolvedUserInfo).toEqual(rawClaims);
+	});
+
+	it("should fail organization assignment when mapClaimsToRoles throws", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		const provider = {
+			...createProvider({ organizationId: org.id }),
+			organizationId: org.id,
+		};
+		const user = createUser();
+		data.organization.push(org);
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await expect(
+			assignOrganizationFromProvider(ctx, {
+				user,
+				provider,
+				profile: {
+					providerType: "oidc",
+					providerId: provider.providerId,
+					accountId: "idp-user-1",
+					email: user.email,
+					emailVerified: true,
+					rawAttributes: { email: user.email },
+					claims: { groups: ["engineering-admins"] },
+				},
+				provisioningOptions: {
+					mapClaimsToRoles: async () => {
+						throw new Error("claims mapper failed");
+					},
+				},
+			}),
+		).rejects.toThrow("claims mapper failed");
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(0);
+	});
+
 	it("should not update an existing provider organization member role with getRole by default", async () => {
 		const { data, createContext } = createTestContext();
 
@@ -701,8 +792,8 @@ describe("organization assignment", () => {
 			provisioningOptions: {
 				defaultRole: "member",
 				syncRoleOnLogin: true,
-				getRole: async ({ claims }) =>
-					(claims?.groups as string[] | undefined)?.includes(
+				getRole: async ({ userInfo }) =>
+					(userInfo.groups as string[] | undefined)?.includes(
 						"engineering-admins",
 					)
 						? "admin"

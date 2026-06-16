@@ -71,6 +71,7 @@ export interface OrganizationProvisioningOptions {
 	/**
 	 * Map raw IdP claims or SAML attributes to an organization role.
 	 * Runs during SSO sign-in before the session cookie is finalized.
+	 * If this callback throws, the SSO callback fails and no session cookie is set.
 	 *
 	 * For existing organization members, this syncs the member role on
 	 * every SSO login unless `syncRoleOnLogin` is set to `false`.
