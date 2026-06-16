@@ -14,6 +14,7 @@ import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { lastLoginMethod } from "../last-login-method";
 import { oAuthProxy } from ".";
 
 let testIdToken: string;
@@ -673,6 +674,134 @@ describe("oauth-proxy", async () => {
 				previewUsersAfter[0]!.id,
 			);
 			expect(previewSessions.length).toBe(1);
+		});
+
+		it("records the provider as last login method on the proxy callback", async () => {
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+						}),
+						lastLoginMethod(),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [oAuthProxy(), lastLoginMethod()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			let proxyProvider: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+							proxyProvider = url.searchParams.get("provider");
+						}
+					},
+				},
+			);
+
+			// The proxy carries the (server-set) provider id alongside the profile.
+			expect(proxyProvider).toBe("google");
+
+			// Tampering with the provider param must not poison the cookie: it is
+			// verified against the decrypted profile, so a mismatch is rejected
+			// before the session (and therefore the cookie) is created.
+			let tamperedSession: string | undefined;
+			let tamperedCookie: string | undefined;
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(
+					callbackURL!,
+				)}&profile=${encodeURIComponent(
+					encryptedProfile!,
+				)}&provider=${encodeURIComponent("<img src=x onerror=alert(1)>")}`,
+				{
+					onError(context) {
+						const cookies = context.response.headers.getSetCookie();
+						tamperedSession = cookies.find((c) =>
+							c.startsWith("better-auth.session_token="),
+						);
+						tamperedCookie = cookies.find((c) =>
+							c.startsWith("better-auth.last_used_login_method="),
+						);
+						expect(context.response.headers.get("location")).toContain(
+							"provider_mismatch",
+						);
+					},
+				},
+			);
+			expect(tamperedSession).toBeUndefined();
+			expect(tamperedCookie).toBeUndefined();
+
+			// The mismatch is rejected before the user is created, so a tampered
+			// value cannot poison a freshly created account either.
+			const previewCtx = await preview.auth.$context;
+			expect((await previewCtx.internalAdapter.listUsers()).length).toBe(0);
+
+			// The legitimate, server-set provider value is recorded.
+			let lastLoginCookie: string | undefined;
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(
+					callbackURL!,
+				)}&profile=${encodeURIComponent(
+					encryptedProfile!,
+				)}&provider=${proxyProvider}`,
+				{
+					onError(context) {
+						lastLoginCookie = context.response.headers
+							.getSetCookie()
+							.find((c) => c.startsWith("better-auth.last_used_login_method="));
+					},
+				},
+			);
+
+			expect(lastLoginCookie).toBeDefined();
+			expect(lastLoginCookie).toContain(
+				"better-auth.last_used_login_method=google",
+			);
+			expect((await previewCtx.internalAdapter.listUsers()).length).toBe(1);
 		});
 
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {

@@ -115,6 +115,10 @@ const oauthProxyQuerySchema = z.object({
 	profile: z.string().optional().meta({
 		description: "Encrypted OAuth profile data",
 	}),
+	provider: z.string().optional().meta({
+		description:
+			"Provider id, verified against the decrypted profile and read by the last-login-method plugin",
+	}),
 });
 
 const oauthCallbackQuerySchema = z.object({
@@ -244,6 +248,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						});
 					} catch (e) {
 						ctx.context.logger.warn("Failed to clean up OAuth state", e);
+					}
+
+					// The `provider` query param is carried in the (user-reachable)
+					// redirect URL and is read by the last-login-method plugin to
+					// record the login method. Verify it against the authenticated
+					// provider id from the decrypted profile before creating the
+					// user or session, so a tampered value can never reach the
+					// last_used_login_method cookie or the lastLoginMethod column.
+					if (
+						ctx.query.provider &&
+						ctx.query.provider !== payload.account.providerId
+					) {
+						ctx.context.logger.error(
+							"OAuth proxy provider mismatch",
+							ctx.query.provider,
+						);
+						throw redirectOnError(ctx, errorURL, "provider_mismatch");
 					}
 
 					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
@@ -509,6 +530,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						// Add the profile parameter to proxy callback URL
 						proxyCallbackURL.searchParams.set("profile", encryptedPayload);
+						// Carry the provider id so the last-login-method plugin can
+						// record it on the callback. The callback verifies it against
+						// the decrypted profile before trusting it.
+						proxyCallbackURL.searchParams.set("provider", provider.id);
 
 						// Redirect to preview's oauth-proxy-callback with profile data
 						throw ctx.redirect(proxyCallbackURL.toString());
