@@ -640,9 +640,13 @@ export const mongodbAdapter = (
 				},
 				async incrementOne({ model, where, increment, set }) {
 					const clause = convertWhereClause({ where, model });
-					const update: { $inc: Record<string, number>; $set?: any } = {
-						$inc: increment,
-					};
+					// Only include operators that carry fields. An empty `$inc: {}`
+					// errors on MongoDB server < 5.0, and a set-only guarded
+					// transition passes an empty `increment`.
+					const update: { $inc?: Record<string, number>; $set?: any } = {};
+					if (Object.keys(increment).length > 0) {
+						update.$inc = increment;
+					}
 					if (set && Object.keys(set).length > 0) {
 						update.$set = set;
 					}

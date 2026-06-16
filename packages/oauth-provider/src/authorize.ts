@@ -6,6 +6,12 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import {
+	canonicalizeOAuthQueryParams,
+	postLoginClearedParam,
+	setSignedOAuthQueryParameterNames,
+	signedQueryIssuedAtParam,
+} from "./signed-query";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -20,8 +26,6 @@ import {
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
 	storeToken,
 } from "./utils";
 
@@ -655,13 +659,18 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	params.delete("sig");
 	// Reserved marker: only server-issued consent redirects may sign this.
 	params.delete(postLoginClearedParam);
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
+	setSignedOAuthQueryParameterNames(params);
 
-	const signature = await makeSignature(params.toString(), ctx.context.secret);
-	params.append("sig", signature);
+	const signature = await makeSignature(
+		canonicalizeOAuthQueryParams(params).toString(),
+		ctx.context.secret,
+	);
+	params.set("sig", signature);
 	return params.toString();
 }

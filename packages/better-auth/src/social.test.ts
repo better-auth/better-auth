@@ -454,7 +454,6 @@ describe("Social Providers", async (c) => {
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/callback",
-			newUserCallbackURL: "/welcome",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
 			},

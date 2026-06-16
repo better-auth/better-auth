@@ -1,5 +1,19 @@
 # @better-auth/prisma-adapter
 
+## 1.6.19
+
+### Patch Changes
+
+- Updated dependencies [[`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63), [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246)]:
+  - @better-auth/core@1.6.19
+
+## 1.6.18
+
+### Patch Changes
+
+- Updated dependencies [[`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c)]:
+  - @better-auth/core@1.6.18
+
 ## 1.6.17
 
 ### Patch Changes
