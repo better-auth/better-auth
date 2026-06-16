@@ -34,7 +34,7 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 	return hasPermissionFn(input, acRoles);
 };
 
-interface OrganizationClientOptions {
+export interface OrganizationClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {
@@ -248,7 +248,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization");
+					return path === "/sign-out" || path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
 			},
@@ -313,7 +313,9 @@ export const inferOrgAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T as T[K] extends { additionalFields: any } ? K : never]: T[K];
+		[K in keyof T as T[K] extends { additionalFields: unknown }
+			? K
+			: never]: T[K];
 	};
 
 	type Schema = O extends Object

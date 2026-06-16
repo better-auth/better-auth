@@ -1,3 +1,4 @@
+# cSpell:words amannn marocchino
 name: Semantic Pull Request
 
 on:
@@ -17,8 +18,18 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Scope the generated app token to pull requests only.
+          permission-pull-requests: write
+
       - name: Check PR title
-        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         id: lint_pr_title
         with:
           subjectPattern: ^(?![A-Z]).+$ # Ensure the subject doesn't start with an uppercase character
@@ -27,7 +38,7 @@ jobs:
             didn't match the configured pattern. Please ensure that the subject
             doesn't start with an uppercase character.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
       # Block breaking changes (feat!, fix!, etc.) on PRs targeting main
       - name: Block breaking changes on main
@@ -44,11 +55,12 @@ jobs:
           fi
 
       - name: Comment on invalid PR title
-        uses: marocchino/sticky-pull-request-comment@70d2764d1a7d5d9560b100cbea0077fc8f633987 # v3
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         # NOTE: null comparison is intentional per official README
         if: always() && (steps.lint_pr_title.outputs.error_message != null)
         with:
           header: pr-title-lint-error
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           message: |
             Thanks for your contribution!
 
@@ -61,9 +73,10 @@ jobs:
             ```
 
       - name: Remove comment on valid PR title
-        uses: marocchino/sticky-pull-request-comment@70d2764d1a7d5d9560b100cbea0077fc8f633987 # v3
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         # NOTE: null comparison is intentional per official README
         if: ${{ steps.lint_pr_title.outputs.error_message == null }}
         with:
           header: pr-title-lint-error
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           delete: true

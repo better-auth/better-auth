@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
+import { getTrustedOrigins } from "../context/helpers";
 import { getTestInstance } from "../test-utils";
 import type { BetterAuthOptions } from "../types";
 
@@ -323,6 +324,89 @@ describe("trusted origins", () => {
 			await expect(
 				isTrustedOrigin("http://localhost:5000/callback"),
 			).resolves.toBe(false);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9634
+	 */
+	describe("dynamic baseURL protocol option", () => {
+		it("should add http:// origins when protocol is 'http'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "dev.example.local"],
+					protocol: "http",
+					fallback: "https://app.example.com",
+				},
+			});
+			expect(origins).toContain("http://staging.example.com");
+			expect(origins).toContain("http://dev.example.local");
+			expect(origins).not.toContain("https://staging.example.com");
+			expect(origins).not.toContain("https://dev.example.local");
+			expect(origins).toContain("https://app.example.com");
+		});
+
+		it("should add only https:// origins when protocol is 'https'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "app.example.com"],
+					protocol: "https",
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).toContain("https://app.example.com");
+			expect(origins).not.toContain("http://staging.example.com");
+			expect(origins).not.toContain("http://app.example.com");
+		});
+
+		it("should add both http:// and https:// origins when protocol is 'auto'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com"],
+					protocol: "auto",
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).toContain("http://staging.example.com");
+		});
+
+		it("should default to https:// with http:// for loopback when protocol is undefined", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["staging.example.com", "localhost:3000"],
+				},
+			});
+			expect(origins).toContain("https://staging.example.com");
+			expect(origins).not.toContain("http://staging.example.com");
+			expect(origins).toContain("https://localhost:3000");
+			expect(origins).toContain("http://localhost:3000");
+		});
+
+		it("should still allow hosts with explicit protocol in the host string", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: [
+						"http://already-specified.example.com",
+						"staging.example.com",
+					],
+					protocol: "http",
+				},
+			});
+			expect(origins).toContain("http://already-specified.example.com");
+			expect(origins).toContain("http://staging.example.com");
+		});
+
+		it("should add http:// for loopback hosts even when protocol is 'https'", async () => {
+			const origins = await getTrustedOrigins({
+				baseURL: {
+					allowedHosts: ["localhost:3000", "127.0.0.1:8080"],
+					protocol: "https",
+				},
+			});
+			expect(origins).toContain("https://localhost:3000");
+			expect(origins).toContain("http://localhost:3000");
+			expect(origins).toContain("https://127.0.0.1:8080");
+			expect(origins).toContain("http://127.0.0.1:8080");
 		});
 	});
 

@@ -9,14 +9,16 @@ import {
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
+import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
 import { expireCookie, parseSetCookieHeader } from "../../cookies";
-import { generateRandomString } from "../../crypto";
+import { constantTimeEqual, generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
 import {
 	getBaseURL,
@@ -82,7 +84,7 @@ export const getMCPProviderMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256", "none"],
+		id_token_signing_alg_values_supported: ["RS256"],
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -123,12 +125,21 @@ export const getMCPProtectedResourceMetadata = (
 			"offline_access",
 		],
 		bearer_methods_supported: ["header"],
-		resource_signing_alg_values_supported: ["RS256", "none"],
+		resource_signing_alg_values_supported: ["RS256"],
 	};
 };
 
 const registerMcpClientBodySchema = z.object({
-	redirect_uris: z.array(z.string()),
+	// This plugin is migrating to @better-auth/oauth-provider (see the deprecation
+	// notice in docs/plugins/mcp). It gets only the non-breaking guard that rejects
+	// code-execution schemes here; full https-or-loopback parity comes from
+	// @better-auth/oauth-provider's SafeUrlSchema, not from tightening this plugin.
+	redirect_uris: z.array(
+		z.string().refine(isSafeUrlScheme, {
+			message:
+				"redirect_uri cannot use a javascript:, data:, or vbscript: scheme",
+		}),
+	),
 	token_endpoint_auth_method: z
 		.enum(["none", "client_secret_basic", "client_secret_post"])
 		.default("client_secret_basic")
@@ -174,7 +185,7 @@ export const mcp = (options: MCPOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
-		allowPlainCodeChallengeMethod: true,
+		allowPlainCodeChallengeMethod: false,
 		...options.oidcConfig,
 		loginPage: options.loginPage,
 		scopes: [
@@ -190,7 +201,7 @@ export const mcp = (options: MCPOptions) => {
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
-	const provider = oidcProvider(opts);
+	const provider = oidcProvider({ ...opts, __skipDeprecationWarning: true });
 	return {
 		id: "mcp",
 		version: PACKAGE_VERSION,
@@ -325,15 +336,6 @@ export const mcp = (options: MCPOptions) => {
 					},
 				},
 				async (ctx) => {
-					//cors
-					ctx.setHeader("Access-Control-Allow-Origin", "*");
-					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-					ctx.setHeader(
-						"Access-Control-Allow-Headers",
-						"Content-Type, Authorization",
-					);
-					ctx.setHeader("Access-Control-Max-Age", "86400");
-
 					let { body } = ctx;
 					if (!body) {
 						throw ctx.error("BAD_REQUEST", {
@@ -355,34 +357,56 @@ export const mcp = (options: MCPOptions) => {
 						ctx.request?.headers.get("authorization") || null;
 					if (
 						authorization &&
-						!client_id &&
 						!client_secret &&
 						authorization.startsWith("Basic ")
 					) {
+						let decoded: string;
 						try {
 							const encoded = authorization.replace("Basic ", "");
-							const decoded = new TextDecoder().decode(base64.decode(encoded));
-							if (!decoded.includes(":")) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							const [id, secret] = decoded.split(":");
-							if (!id || !secret) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							client_id = id;
-							client_secret = secret;
+							decoded = new TextDecoder().decode(base64.decode(encoded));
 						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
 							});
 						}
+						// RFC 6749 §2.3.1: split on the first `:` (the secret may contain
+						// further colons), then percent-decode each half before comparing
+						// against stored credentials (the client encodes reserved
+						// characters per RFC 3986 before base64).
+						const colonIndex = decoded.indexOf(":");
+						if (colonIndex === -1) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						let id: string;
+						let secret: string;
+						try {
+							id = decodeURIComponent(decoded.slice(0, colonIndex));
+							secret = decodeURIComponent(decoded.slice(colonIndex + 1));
+						} catch {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						if (!id || !secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						if (client_id && client_id.toString() !== id) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_id in body does not match Authorization header",
+								error: "invalid_client",
+							});
+						}
+						client_id = id;
+						client_secret = secret;
 					}
 					const {
 						grant_type,
@@ -424,6 +448,63 @@ export const mcp = (options: MCPOptions) => {
 								error_description: "refresh token expired",
 								error: "invalid_grant",
 							});
+						}
+						// A refresh token is only legitimate when the original grant
+						// included offline_access. Rejecting redemption otherwise makes a
+						// refresh token that was stored without offline_access (and may be
+						// exposed to its access-token holder) unusable for escalation.
+						if (!token.scopes?.split(" ").includes("offline_access")) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"refresh token was not issued for the offline_access scope",
+								error: "invalid_grant",
+							});
+						}
+						const refreshClient = await ctx.context.adapter
+							.findOne<Record<string, any>>({
+								model: modelName.oauthClient,
+								where: [{ field: "clientId", value: client_id.toString() }],
+							})
+							.then((res) => {
+								if (!res) {
+									return null;
+								}
+								return {
+									...res,
+									redirectUrls: res.redirectUrls.split(","),
+									metadata: res.metadata ? JSON.parse(res.metadata) : {},
+								} as Client;
+							});
+						if (!refreshClient) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_id",
+								error: "invalid_client",
+							});
+						}
+						if (refreshClient.disabled) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "client is disabled",
+								error: "invalid_client",
+							});
+						}
+						if (refreshClient.type !== "public") {
+							if (!refreshClient.clientSecret || !client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description:
+										"client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret = constantTimeEqual(
+								refreshClient.clientSecret,
+								client_secret.toString(),
+							);
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
@@ -470,12 +551,19 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 
-					/**
-					 * We need to check if the code is valid before we can proceed
-					 * with the rest of the request.
-					 */
+					// Atomic single-use redemption per RFC 6749 §4.1.2. The first
+					// caller receives the row; concurrent racers receive `null`
+					// and fall through to the `invalid_grant` error path.
+					//
+					// TODO(legacy-hardening-coordinate): in-flight follow-ups at
+					// https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+					// and https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
+					// touch this same surface. Whoever lands second must rebase
+					// to keep the atomic consume + `invalid_grant` semantics in
+					// place; do not regress to a `findVerificationValue` +
+					// delete pair.
 					const verificationValue =
-						await ctx.context.internalAdapter.findVerificationValue(
+						await ctx.context.internalAdapter.consumeVerificationValue(
 							code.toString(),
 						);
 					if (!verificationValue) {
@@ -484,16 +572,6 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
-							error: "invalid_grant",
-						});
-					}
-
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
-					);
 
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -561,15 +639,17 @@ export const mcp = (options: MCPOptions) => {
 						// PKCE validation happens later in the flow, so we skip client_secret validation
 					} else {
 						// For confidential clients, validate client_secret
-						if (!client_secret) {
+						if (!client.clientSecret || !client_secret) {
 							throw new APIError("UNAUTHORIZED", {
 								error_description:
 									"client_secret is required for confidential clients",
 								error: "invalid_client",
 							});
 						}
-						const isValidSecret =
-							client.clientSecret === client_secret.toString();
+						const isValidSecret = constantTimeEqual(
+							client.clientSecret,
+							client_secret.toString(),
+						);
 						if (!isValidSecret) {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid client_secret",
@@ -599,24 +679,23 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 
-					const challenge =
-						value.codeChallengeMethod === "plain"
-							? code_verifier
-							: await createHash("SHA-256", "base64urlnopad").digest(
-									code_verifier,
-								);
+					if (value.codeChallenge) {
+						const challenge =
+							value.codeChallengeMethod === "plain"
+								? code_verifier
+								: await createHash("SHA-256", "base64urlnopad").digest(
+										code_verifier,
+									);
 
-					if (challenge !== value.codeChallenge) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code verification failed",
-							error: "invalid_request",
-						});
+						if (challenge !== value.codeChallenge) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "code verification failed",
+								error: "invalid_request",
+							});
+						}
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
-					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
 					const accessTokenExpiresAt = new Date(
@@ -963,6 +1042,14 @@ export const mcp = (options: MCPOptions) => {
 					if (!accessTokenData) {
 						return c.json(null);
 					}
+					// An access token authorizes a protected resource only while it is
+					// unexpired. Without this gate an expired bearer token keeps
+					// authorizing handlers until its row is deleted (RFC 6750 §3.1
+					// treats an expired token as `invalid_token`).
+					if (accessTokenData.accessTokenExpiresAt < new Date()) {
+						c.headers?.set("WWW-Authenticate", "Bearer");
+						return c.json(null);
+					}
 					return c.json(accessTokenData);
 				},
 			),
@@ -988,8 +1075,15 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
+		const trustedProxyHeaders = resolveDynamicTrustedProxyHeaders(auth.options);
 		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			? resolveBaseURL(
+					auth.options.baseURL,
+					basePath,
+					req,
+					undefined,
+					trustedProxyHeaders,
+				)
 			: getBaseURL(
 					typeof auth.options.baseURL === "string"
 						? auth.options.baseURL
@@ -1000,9 +1094,15 @@ export const withMcpAuth = <
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
 		const session = await auth.api.getMcpSession({
+			request: req,
 			headers: req.headers,
+			asResponse: false,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
+		// Omit the `resource_metadata` URL when we can't build a valid one,
+		// so clients don't follow `Bearer resource_metadata="undefined/..."`.
+		const wwwAuthenticateValue = baseURL
+			? `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`
+			: "Bearer";
 		if (!session) {
 			return Response.json(
 				{
@@ -1038,7 +1138,10 @@ export const oAuthDiscoveryMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMcpOAuthConfig();
+		const res = await auth.api.getMcpOAuthConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -1062,7 +1165,10 @@ export const oAuthProtectedResourceMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMCPProtectedResource();
+		const res = await auth.api.getMCPProtectedResource({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

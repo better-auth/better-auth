@@ -3,10 +3,10 @@ title: Hooks
 description: Learn how to use before and after hooks to customize endpoint behavior, modify requests and responses, handle cookies, throw errors, access auth context, and run background tasks.
 ---
 
-Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin. 
+Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin.
 
 <Callout>
-We highly recommend using hooks if you need to make custom adjustments to an endpoint rather than making another endpoint outside of Better Auth.
+  We highly recommend using hooks if you need to make custom adjustments to an endpoint rather than making another endpoint outside of Better Auth.
 </Callout>
 
 ## Before Hooks
@@ -92,22 +92,51 @@ export const auth = betterAuth({
 });
 ```
 
+### Example: Handling Multiple Endpoints in a Single Hook
+
+Since `before` and `after` each accept a single `createAuthMiddleware` call, use conditional checks on `ctx.path` to handle multiple endpoints within the same hook:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auth = betterAuth({
+    hooks: {
+        after: createAuthMiddleware(async (ctx) => {
+            if (ctx.path === "/reset-password") {
+                // Auto-login user after password reset
+            }
+            if (ctx.path.startsWith("/sign-up")) {
+                // Send welcome notification after signup
+            }
+            if (ctx.path === "/sign-in/email") {
+                // Track login analytics
+            }
+        }),
+    },
+});
+```
+
+<Callout>
+Each hook (`before` / `after`) takes a single middleware function, not an array. To run logic for different endpoints, branch on `ctx.path` inside that single function.
+</Callout>
+
 ## Ctx
 
 When you call `createAuthMiddleware` a `ctx` object is passed that provides a lot of useful properties. Including:
 
-- **Path:** `ctx.path` to get the current endpoint path.
-- **Body:** `ctx.body` for parsed request body (available for POST requests).
-- **Headers:** `ctx.headers` to access request headers.
-- **Request:** `ctx.request` to access the request object (may not exist in server-only endpoints).
-- **Query Parameters:** `ctx.query` to access query parameters.
-- **Context**: `ctx.context` auth related context, useful for accessing new session, auth cookies configuration, password hashing, config...
+* **Path:** `ctx.path` to get the current endpoint path.
+* **Body:** `ctx.body` for parsed request body (available for POST requests).
+* **Headers:** `ctx.headers` to access request headers.
+* **Request:** `ctx.request` to access the request object (may not exist in server-only endpoints).
+* **Query Parameters:** `ctx.query` to access query parameters.
+* **Context**: `ctx.context` auth related context, useful for accessing new session, auth cookies configuration, password hashing, config...
 
 and more.
 
 ### Request Response
 
-This utilities allows you to get request information and to send response from a hook. 
+This utilities allows you to get request information and to send response from a hook.
 
 #### JSON Responses
 
@@ -137,8 +166,8 @@ const hook = createAuthMiddleware(async (ctx) => {
 
 #### Cookies
 
-- Set cookies: `ctx.setCookie` or `ctx.setSignedCookie`.
-- Get cookies: `ctx.getCookie` or `ctx.getSignedCookie`.
+* Set cookies: `ctx.setCookie` or `ctx.setSignedCookie`.
+* Get cookies: `ctx.getCookie` or `ctx.getSignedCookie`.
 
 Example:
 
@@ -152,7 +181,7 @@ const hook = createAuthMiddleware(async (ctx) => {
     });
 
     const cookie = ctx.getCookie("my-cookie");
-    const signedCookie = await ctx.getSignedCookie("my-signed-cookie");
+    const signedCookie = await ctx.getSignedCookie("my-signed-cookie", ctx.context.secret);
 });
 ```
 
@@ -170,11 +199,9 @@ const hook = createAuthMiddleware(async (ctx) => {
 });
 ```
 
-
-
 ### Context
 
-The `ctx` object contains another `context` object inside that's meant to hold contexts related to auth. Including a newly created session on after hook, cookies configuration, password hasher and so on. 
+The `ctx` object contains another `context` object inside that's meant to hold contexts related to auth. Including a newly created session on after hook, cookies configuration, password hasher and so on.
 
 #### New Session
 
@@ -232,13 +259,12 @@ You can access the `secret` for your auth instance on `ctx.context.secret`
 
 The password object provider `hash` and `verify`
 
-- `ctx.context.password.hash`: let's you hash a given password.
-- `ctx.context.password.verify`: let's you verify given `password` and a `hash`.
+* `ctx.context.password.hash`: let's you hash a given password.
+* `ctx.context.password.verify`: let's you verify given `password` and a `hash`.
 
 #### Adapter
 
 Adapter exposes the adapter methods used by Better Auth. Including `findOne`, `findMany`, `create`, `delete`, `update` and `updateMany`. You generally should use your actually `db` instance from your orm rather than this adapter.
-
 
 #### Internal Adapter
 

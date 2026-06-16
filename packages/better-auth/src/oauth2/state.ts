@@ -4,6 +4,7 @@ import { setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";
+import { redirectOnError } from "./errors";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -47,7 +48,7 @@ export async function generateState(
 }
 
 export async function parseState(c: GenericEndpointContext) {
-	const state = c.query.state || c.body.state;
+	const state = c.query.state || c.body?.state;
 	const errorURL =
 		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 
@@ -58,14 +59,16 @@ export async function parseState(c: GenericEndpointContext) {
 	} catch (error) {
 		c.context.logger.error("Failed to parse state", error);
 
-		if (
-			error instanceof StateError &&
-			error.code === "state_security_mismatch"
-		) {
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
+		let code = "internal_server_error";
+		let redirectErrorURL = errorURL;
+		if (error instanceof StateError) {
+			code =
+				error.code === "state_security_mismatch"
+					? "state_mismatch"
+					: error.code;
+			redirectErrorURL = error.errorURL ?? errorURL;
 		}
-
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		redirectOnError(c, redirectErrorURL, code);
 	}
 
 	if (!parsedData.errorURL) {

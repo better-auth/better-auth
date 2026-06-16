@@ -18,6 +18,7 @@ import {
 import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
+	CheckoutSessionLocale,
 	CustomerType,
 	StripeCtxSession,
 	StripeOptions,
@@ -36,6 +37,43 @@ import {
 } from "./utils";
 
 /**
+ * Resolves a Stripe price object, either from a lookup key or by retrieving
+ * by ID. Used to inspect `recurring.usage_type` for metered billing.
+ * @internal
+ */
+async function resolveStripePrice(
+	stripeClient: Stripe,
+	priceId: string | undefined,
+	lookupKey: string | undefined,
+): Promise<Stripe.Price | undefined> {
+	try {
+		if (lookupKey) {
+			const prices = await stripeClient.prices.list({
+				lookup_keys: [lookupKey],
+				active: true,
+				limit: 1,
+			});
+			const priceData = prices.data[0];
+			if (priceData) return priceData;
+		}
+		if (priceId) {
+			return await stripeClient.prices.retrieve(priceId);
+		}
+	} catch {
+		// If price retrieval fails, default to licensed behavior (include quantity)
+	}
+	return undefined;
+}
+
+/**
+ * Checks if a Stripe price uses metered (usage-based) billing.
+ * @internal
+ */
+function isMeteredPrice(price: Stripe.Price | undefined): boolean {
+	return price?.recurring?.usage_type === "metered";
+}
+
+/**
  * Converts a relative URL to an absolute URL using baseURL.
  * @internal
  */
@@ -46,23 +84,6 @@ function getUrl(ctx: GenericEndpointContext, url: string) {
 	return `${ctx.context.options.baseURL}${
 		url.startsWith("/") ? url : `/${url}`
 	}`;
-}
-
-/**
- * Resolves a Stripe price ID from a lookup key.
- * @internal
- */
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
 }
 
 /**
@@ -97,6 +118,32 @@ function getReferenceId(
 	}
 
 	return user.id;
+}
+
+/**
+ * Retrieve the subscription a row points to, or `null` if it no longer exists
+ * (`resource_missing`) so callers can treat the row as stale.
+ * @internal
+ */
+async function retrieveStripeSubscription(
+	client: Stripe,
+	ctx: GenericEndpointContext,
+	stripeSubscriptionId: string,
+): Promise<Stripe.Subscription | null> {
+	return await client.subscriptions
+		.retrieve(stripeSubscriptionId)
+		.catch((e) => {
+			/**
+			 * @see https://docs.stripe.com/error-codes
+			 */
+			if (e?.code === "resource_missing") {
+				return null;
+			}
+			throw ctx.error("BAD_REQUEST", {
+				code: e.code,
+				message: e.message,
+			});
+		});
 }
 
 const upgradeSubscriptionBodySchema = z.object({
@@ -167,7 +214,7 @@ const upgradeSubscriptionBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({
@@ -259,7 +306,11 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
 				originCheck((c) => {
-					return [c.body.successUrl as string, c.body.cancelUrl as string];
+					return [
+						c.body.successUrl as string,
+						c.body.cancelUrl as string,
+						c.body.returnUrl as string,
+					];
 				}),
 			],
 		},
@@ -471,6 +522,19 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 						}
 
+						// Reuse a customer matched by email only when the email is
+						// verified and it is not already associated with a different
+						// user. Otherwise create a new one.
+						if (stripeCustomer) {
+							const ownerId = customerMetadata.get(
+								stripeCustomer.metadata,
+							).userId;
+							const ownedByOther = !!ownerId && ownerId !== user.id;
+							if (ownedByOther || !user.emailVerified) {
+								stripeCustomer = undefined;
+							}
+						}
+
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({
 								email: user.email,
@@ -568,16 +632,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const lookupKey = ctx.body.annual
 				? plan.annualDiscountLookupKey
 				: plan.lookupKey;
-			const resolvedPriceId = lookupKey
-				? await resolvePriceIdFromLookupKey(client, lookupKey)
-				: undefined;
+			const resolvedPrice = await resolveStripePrice(
+				client,
+				priceId,
+				lookupKey,
+			);
 
-			const priceIdToUse = priceId || resolvedPriceId;
+			const priceIdToUse = resolvedPrice?.id ?? priceId;
 			if (!priceIdToUse) {
 				throw ctx.error("BAD_REQUEST", {
 					message: "Price ID not found for the selected plan",
 				});
 			}
+
+			const isMetered = isMeteredPrice(resolvedPrice);
 
 			// For org subscriptions with seat-based billing, seats are auto-managed.
 			// Quantity = memberCount; use Stripe graduated pricing for free tiers.
@@ -788,7 +856,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						if (itemPriceId === stripeSubscriptionPriceId) {
 							newPhaseItems.push({
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(isMetered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -892,7 +962,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							itemUpdates.push({
 								id: si.id,
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(isMetered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -952,7 +1024,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 										{
 											id: planItem.id,
 											price: priceIdToUse,
-											...(isAutoManagedSeats
+											...(isAutoManagedSeats || isMetered
 												? {}
 												: { quantity: ctx.body.seats || 1 }),
 										},
@@ -1045,21 +1117,38 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
+			// Strip plugin-owned fields
+			const {
+				mode: _mode,
+				customer: _customer,
+				customer_email: _customer_email,
+				success_url: _success_url,
+				cancel_url: _cancel_url,
+				line_items: _line_items,
+				client_reference_id: _client_reference_id,
+				...additionalParams
+			} = params?.params ?? {};
+
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
+						...additionalParams,
+						mode: "subscription",
 						...(customerId
 							? {
 									customer: customerId,
+									customer_email: undefined,
 									customer_update:
-										customerType !== "user"
+										additionalParams.customer_update ??
+										(customerType !== "user"
 											? ({ address: "auto" } as const)
-											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
+											: ({ name: "auto", address: "auto" } as const)), // The customer name is automatically set only for users
 								}
 							: {
+									customer: undefined,
 									customer_email: user.email,
 								}),
-						locale: ctx.body.locale,
+						locale: ctx.body.locale ?? additionalParams.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -1078,7 +1167,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								? [
 										{
 											price: priceIdToUse,
-											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+											...(isMetered
+												? {}
+												: {
+														quantity: isAutoManagedSeats
+															? 1
+															: ctx.body.seats || 1,
+													}),
 										},
 									]
 								: []),
@@ -1089,8 +1184,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							// Additional line items (metered prices, add-ons, etc.)
 							...(plan.lineItems ?? []),
 						],
+						client_reference_id: referenceId,
 						subscription_data: {
 							...freeTrial,
+							...additionalParams.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -1098,13 +1195,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								params?.params?.subscription_data?.metadata,
+								additionalParams.subscription_data?.metadata,
 							),
 						},
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params?.params,
-						// metadata should come after spread to protect internal fields
 						metadata: subscriptionMetadata.set(
 							{
 								userId: user.id,
@@ -1112,7 +1205,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							params?.params?.metadata,
+							additionalParams.metadata,
 						),
 					},
 					params?.options,
@@ -1123,10 +1216,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return ctx.json({
+
+			const response: Stripe.Response<Stripe.Checkout.Session> & {
+				redirect: boolean;
+			} = {
 				...checkoutSession,
 				redirect: !ctx.body.disableRedirect,
-			});
+			};
+			return ctx.json(response);
 		},
 	);
 };
@@ -1243,34 +1340,28 @@ export const cancelSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			const activeSubscriptions = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
-			if (!activeSubscriptions.length) {
-				/**
-				 * If the subscription is not found, we need to delete the subscription
-				 * from the database. This is a rare case and should not happen.
-				 */
-				await ctx.context.adapter.deleteMany({
-					model: "subscription",
-					where: [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					],
-				});
+			if (!subscription.stripeSubscriptionId) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			const activeSubscription = activeSubscriptions.find(
-				(sub) => sub.id === subscription.stripeSubscriptionId,
+			const activeSubscription = await retrieveStripeSubscription(
+				client,
+				ctx,
+				subscription.stripeSubscriptionId,
 			);
-			if (!activeSubscription) {
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
+				// Stale row: remove only this row, not others sharing the referenceId.
+				await ctx.context.adapter.delete({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+				});
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1480,13 +1571,19 @@ export const restoreSubscription = (options: StripeOptions) => {
 				return ctx.json(releasedSub);
 			}
 
-			// Handle pending cancellation
-			const activeSubscription = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub))[0]);
-			if (!activeSubscription) {
+			// Handle pending cancellation on the subscription this row points to.
+			if (!subscription.stripeSubscriptionId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
+			}
+			const activeSubscription = await retrieveStripeSubscription(
+				client,
+				ctx,
+				subscription.stripeSubscriptionId,
+			);
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1715,15 +1812,22 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			const customerId =
-				subscription.stripeCustomerId || session.user.stripeCustomerId;
-			if (!customerId) {
+			// Activate from the subscription this checkout session created, not from
+			// whichever active subscription the customer happens to have.
+			// `subscription` is an expandable field, so it can be an id or an object.
+			const stripeSubscriptionId =
+				typeof checkoutSession.subscription === "string"
+					? checkoutSession.subscription
+					: checkoutSession.subscription?.id;
+			if (
+				!stripeSubscriptionId ||
+				checkoutSession.payment_status === "unpaid"
+			) {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
 			const stripeSubscription = await client.subscriptions
-				.list({ customer: customerId, status: "active" })
-				.then((res) => res.data[0])
+				.retrieve(stripeSubscriptionId)
 				.catch((error) => {
 					ctx.context.logger.error(
 						"Error fetching subscription from Stripe",
@@ -1804,7 +1908,7 @@ const createBillingPortalBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({

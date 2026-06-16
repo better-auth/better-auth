@@ -29,6 +29,23 @@ let handlers: ReturnType<typeof http.post>[];
 
 const server = setupServer();
 
+const SIWE_WALLET = "0x000000000000000000000000000000000000dEaD";
+const SIWE_CHAIN_ID = 1;
+const SIWE_DOMAIN = "example.com";
+const SIWE_NONCE = "A1b2C3d4E5f6G7h8J";
+// The siwe plugin now parses and validates the ERC-4361 message body (binding it
+// to the server-issued nonce), so these tests must sign a real SIWE message
+// rather than an arbitrary placeholder string.
+const siweMessage = () =>
+	`${SIWE_DOMAIN} wants you to sign in with your Ethereum account:\n` +
+	`${SIWE_WALLET}\n\n` +
+	`Sign in.\n\n` +
+	`URI: https://${SIWE_DOMAIN}\n` +
+	`Version: 1\n` +
+	`Chain ID: ${SIWE_CHAIN_ID}\n` +
+	`Nonce: ${SIWE_NONCE}\n` +
+	`Issued At: 2024-01-01T00:00:00.000Z`;
+
 beforeAll(async () => {
 	const data: GoogleProfile = {
 		email: "github-issue-demo@example.com",
@@ -81,12 +98,10 @@ describe("lastLoginMethod", async () => {
 				siwe({
 					domain: "example.com",
 					async getNonce() {
-						return "A1b2C3d4E5f6G7h8J";
+						return SIWE_NONCE;
 					},
-					async verifyMessage({ message, signature }) {
-						return (
-							signature === "valid_signature" && message === "valid_message"
-						);
+					async verifyMessage({ signature }) {
+						return signature === "valid_signature";
 					},
 				}),
 			],
@@ -117,12 +132,12 @@ describe("lastLoginMethod", async () => {
 
 	it("should set the last login method cookie for siwe", async () => {
 		const headers = new Headers();
-		const walletAddress = "0x000000000000000000000000000000000000dEaD";
-		const chainId = 1;
+		const walletAddress = SIWE_WALLET;
+		const chainId = SIWE_CHAIN_ID;
 		await client.siwe.nonce({ walletAddress, chainId });
 		await client.siwe.verify(
 			{
-				message: "valid_message",
+				message: siweMessage(),
 				signature: "valid_signature",
 				walletAddress,
 				chainId,
@@ -260,21 +275,19 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("should set the last login method for siwe in the database", async () => {
-		const walletAddress = "0x000000000000000000000000000000000000dEaD";
-		const chainId = 1;
+		const walletAddress = SIWE_WALLET;
+		const chainId = SIWE_CHAIN_ID;
 		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					lastLoginMethod({ storeInDatabase: true }),
 					siwe({
-						domain: "example.com",
+						domain: SIWE_DOMAIN,
 						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
+							return SIWE_NONCE;
 						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
 						},
 					}),
 				],
@@ -287,7 +300,7 @@ describe("lastLoginMethod", async () => {
 		);
 		await client.siwe.nonce({ walletAddress, chainId });
 		const { data } = await client.siwe.verify({
-			message: "valid_message",
+			message: siweMessage(),
 			signature: "valid_signature",
 			walletAddress,
 			chainId,
@@ -521,6 +534,15 @@ describe("lastLoginMethod", async () => {
 					trustedProviders: ["google"],
 				},
 			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
 		});
 
 		await client.signUp.email(
@@ -679,6 +701,86 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe(
 			"my-provider-id",
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9276
+	 */
+	it("should clear cross-subdomain cookies by including the domain attribute", async () => {
+		const { client, testUser } = await getTestInstance(
+			{
+				baseURL: "https://auth.example.com",
+				advanced: {
+					crossSubDomainCookies: {
+						enabled: true,
+						domain: "example.com",
+					},
+				},
+				plugins: [lastLoginMethod()],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient({ domain: "example.com" })],
+				},
+			},
+		);
+
+		// Step 1: Sign in to get the cookie set with domain attribute
+		let setCookieHeader = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		// Verify the server sets the cookie with Domain=example.com
+		expect(setCookieHeader).toContain(
+			"better-auth.last_used_login_method=email",
+		);
+		expect(setCookieHeader).toContain("Domain=example.com");
+
+		// Step 2: Simulate clearing the cookie on the client side.
+		// Mock document.cookie to capture the string the client writes.
+		let writtenCookie = "";
+		const originalDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			"document",
+		);
+
+		Object.defineProperty(globalThis, "document", {
+			value: {},
+			writable: true,
+			configurable: true,
+		});
+
+		Object.defineProperty(globalThis.document, "cookie", {
+			get() {
+				return "better-auth.last_used_login_method=email";
+			},
+			set(val: string) {
+				writtenCookie = val;
+			},
+			configurable: true,
+		});
+
+		client.clearLastUsedLoginMethod();
+
+		// Restore
+		if (originalDescriptor) {
+			Object.defineProperty(globalThis, "document", originalDescriptor);
+		} else {
+			globalThis.document = undefined as any;
+		}
+
+		// The written cookie MUST include the domain to properly expire
+		// a cross-subdomain cookie.
+		expect(writtenCookie).toContain("domain=example.com");
 	});
 
 	it("should handle multiple set-cookie headers correctly", async () => {

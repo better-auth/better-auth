@@ -1,5 +1,25 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { getClientIP } from "@/lib/ai-chat/rate-limit";
+import { contactSchema, isFreeEmail } from "@/lib/enterprise-contact";
+
+let _ratelimit: Ratelimit | null = null;
+function getRatelimit(): Ratelimit {
+	if (!_ratelimit) {
+		const redis = new Redis({
+			url: process.env.UPSTASH_REDIS_REST_URL!,
+			token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+		});
+		_ratelimit = new Ratelimit({
+			redis,
+			limiter: Ratelimit.slidingWindow(5, "1 h"),
+			prefix: "enterprise-contact",
+		});
+	}
+	return _ratelimit;
+}
 
 function escapeHtml(text: string): string {
 	const map: Record<string, string> = {
@@ -12,83 +32,143 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, (m) => map[m] ?? m);
 }
 
-function str(v: unknown): string | undefined {
-	return typeof v === "string" ? v : undefined;
+function getFirstName(fullName: string): string {
+	const firstName = fullName.trim().split(/\s+/)[0];
+	return firstName || "there";
 }
 
 export async function POST(request: Request) {
+	let body: unknown;
 	try {
-		const body = await request.json();
-		const raw = body ?? {};
+		body = await request.json();
+	} catch {
+		return NextResponse.json({ message: "Invalid request" }, { status: 400 });
+	}
 
-		const name = str(raw.fullName) ?? str(raw.name) ?? "";
-		const email = str(raw.email) ?? "";
-		const company = str(raw.company);
-		const website = str(raw.website);
-		const userCount = str(raw.userCount) ?? str(raw.companySize);
-		const interest = str(raw.interest) ?? "enterprise";
-		const features = str(raw.features);
-		const additional = str(raw.additional) ?? str(raw.description);
-		const migrating = str(raw.migrating);
-		const currentPlatform = str(raw.currentPlatform);
+	try {
+		// honeypot - bots fill hidden fields
+		const raw =
+			typeof body === "object" && body !== null
+				? (body as Record<string, unknown>)
+				: {};
+		if (typeof raw._hp === "string" && raw._hp) {
+			return NextResponse.json({});
+		}
 
-		if (!name || !email) {
+		if (process.env.NODE_ENV === "production") {
+			const { success } = await getRatelimit().limit(getClientIP(request));
+			if (!success) {
+				return NextResponse.json(
+					{ message: "Too many requests. Please try again later." },
+					{ status: 429 },
+				);
+			}
+		}
+
+		const parsed = contactSchema.safeParse(body);
+
+		if (!parsed.success) {
+			const firstError = parsed.error.issues[0];
+			const field = firstError?.path[0];
+			if (field === "email") {
+				return NextResponse.json(
+					{ message: "Please enter a valid email address" },
+					{ status: 422 },
+				);
+			}
 			return NextResponse.json(
-				{ success: false, message: "Missing required fields" },
+				{ message: "Missing required fields" },
 				{ status: 400 },
+			);
+		}
+
+		const { fullName, email, company, companySize, description } = parsed.data;
+
+		if (isFreeEmail(email)) {
+			return NextResponse.json(
+				{ message: "Please use a company email address" },
+				{ status: 422 },
 			);
 		}
 
 		const toEmail = process.env.SUPPORT_EMAIL;
-		if (!toEmail) {
+		const resendApiKey = process.env.RESEND_API_KEY;
+		if (!toEmail || !resendApiKey) {
+			console.error("Missing SUPPORT_EMAIL or RESEND_API_KEY");
 			return NextResponse.json(
-				{ success: false, message: "Missing required fields" },
-				{ status: 400 },
+				{ message: "Server configuration error" },
+				{ status: 500 },
 			);
 		}
 
-		const resendApiKey = process.env.RESEND_API_KEY;
-		if (resendApiKey) {
-			try {
-				const resend = new Resend(resendApiKey);
-				await resend.emails.send({
-					from: "Enterprise Support <enterprise@better-auth.com>",
-					to: toEmail,
-					subject: `${interest === "enterprise" ? "Enterprise" : "Support"} Inquiry from ${name}`,
-					html: `
-						<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-							<h2 style="color: #18181b;">${interest === "enterprise" ? "Enterprise" : "Support"} Inquiry</h2>
-							<div style="background: #f4f4f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-								<p><strong>Name:</strong> ${escapeHtml(name)}</p>
-								<p><strong>Email:</strong> ${escapeHtml(email)}</p>
-								${company ? `<p><strong>Company:</strong> ${escapeHtml(company)}</p>` : ""}
-								${website ? `<p><strong>Website:</strong> ${escapeHtml(website)}</p>` : ""}
-								${userCount ? `<p><strong>User Count:</strong> ${escapeHtml(userCount)}</p>` : ""}
-								${migrating ? `<p><strong>Migrating:</strong> ${migrating === "yes" ? "Yes" : "No"}</p>` : ""}
-								${currentPlatform ? `<p><strong>Current Platform:</strong> ${escapeHtml(currentPlatform)}</p>` : ""}
-								${interest ? `<p><strong>Interest:</strong> ${escapeHtml(interest)}</p>` : ""}
-								${features ? `<p><strong>Features:</strong> ${escapeHtml(features)}</p>` : ""}
-								${additional ? `<p><strong>Message:</strong><br/>${escapeHtml(additional).replace(/\n/g, "<br/>")}</p>` : ""}
-							</div>
-							<p style="color: #71717a; font-size: 12px;">
-								Submitted: ${new Date().toLocaleString()}<br/>
-								User Agent: ${escapeHtml(request.headers.get("user-agent") || "N/A")}<br/>
-								Referer: ${escapeHtml(request.headers.get("referer") || "N/A")}
-							</p>
+		const resend = new Resend(resendApiKey);
+		const firstName = getFirstName(fullName);
+
+		const [internalResult, acknowledgementResult] = await Promise.all([
+			resend.emails.send({
+				from: "Enterprise Support <enterprise@better-auth.com>",
+				to: toEmail,
+				subject: `Enterprise Inquiry from ${fullName}`,
+				html: `
+					<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+						<h2 style="color: #18181b;">Enterprise Inquiry</h2>
+						<div style="background: #f4f4f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+							<p><strong>Name:</strong> ${escapeHtml(fullName)}</p>
+							<p><strong>Email:</strong> ${escapeHtml(email)}</p>
+							<p><strong>Company:</strong> ${escapeHtml(company)}</p>
+							${companySize ? `<p><strong>Company Size:</strong> ${escapeHtml(companySize)}</p>` : ""}
+							${description ? `<p><strong>Message:</strong><br/>${escapeHtml(description).replace(/\n/g, "<br/>")}</p>` : ""}
 						</div>
-					`,
-				});
-			} catch (e) {
-				console.error("Resend email failed", e);
-			}
+						<p style="color: #71717a; font-size: 12px;">
+							Submitted: ${new Date().toLocaleString()}<br/>
+							User Agent: ${escapeHtml(request.headers.get("user-agent") || "N/A")}<br/>
+							Referer: ${escapeHtml(request.headers.get("referer") || "N/A")}
+						</p>
+					</div>
+				`,
+			}),
+			resend.emails.send({
+				from: "Ravi <ravi@better-auth.com>",
+				to: email,
+				cc: toEmail,
+				subject: "Re: Enterprise Inquiry",
+				text: `Hi ${firstName},
+
+Thanks for reaching out. We've received your inquiry and someone from our team will follow up shortly.
+
+In the meantime, if there are any timelines, technical requirements, or procurement details we should be aware of, feel free to reply here.
+
+Best,
+Ravi`,
+			}),
+		]);
+
+		if (internalResult.error) {
+			console.error(
+				"Resend internal email failed (email=%s)",
+				email,
+				internalResult.error,
+			);
+			return NextResponse.json(
+				{ message: "Something went wrong. Please try again." },
+				{ status: 500 },
+			);
 		}
 
-		return NextResponse.json({ success: true });
+		if (acknowledgementResult.error) {
+			console.error(
+				"Resend acknowledgement email failed (email=%s)",
+				email,
+				acknowledgementResult.error,
+			);
+		}
+
+		return NextResponse.json({});
 	} catch (e) {
-		console.error(e);
+		console.error("Enterprise contact form error", e);
 		return NextResponse.json(
-			{ success: false, message: "Invalid request" },
-			{ status: 400 },
+			{ message: "Something went wrong. Please try again." },
+			{ status: 500 },
 		);
 	}
 }

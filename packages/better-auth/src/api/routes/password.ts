@@ -110,7 +110,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			await ctx.context.internalAdapter.findVerificationValue(
 				"dummy-verification-token",
 			);
-			ctx.context.logger.error("Reset Password: User not found", { email });
+			ctx.context.logger.warn("Reset Password: User not found");
 			return ctx.json({
 				status: true,
 				message:
@@ -153,7 +153,7 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
-		operationId: "forgetPasswordCallback",
+		operationId: "resetPasswordCallback",
 		query: z.object({
 			callbackURL: z.string().meta({
 				description: "The URL to redirect the user to reset their password",
@@ -290,9 +290,12 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
+		// Consume the single-use reset token before any password change so two
+		// concurrent requests with the same token cannot both proceed: the first
+		// caller wins, every racer (and any expired token) gets null.
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(id);
-		if (!verification || verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
@@ -309,7 +312,6 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);
@@ -323,7 +325,7 @@ export const resetPassword = createAuthEndpoint(
 			}
 		}
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-			await ctx.context.internalAdapter.deleteSessions(userId);
+			await ctx.context.internalAdapter.deleteUserSessions(userId);
 		}
 		return ctx.json({
 			status: true,

@@ -2,15 +2,36 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import { assertClientPrivileges } from "./oauthClient/privileges";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
-import type { OAuthClient } from "./types/oauth";
+import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
+
+/**
+ * Resolves the auth method and type for unauthenticated DCR.
+ * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
+ * When overriding, clears type "web" since it is only valid for confidential clients.
+ */
+function resolveUnauthenticatedAuth(body: OAuthClient): {
+	tokenEndpointAuthMethod: TokenEndpointAuthMethod;
+	type: OAuthClient["type"];
+} {
+	if (body.token_endpoint_auth_method === "none") {
+		return {
+			tokenEndpointAuthMethod: "none",
+			type: body.type,
+		};
+	}
+	return {
+		tokenEndpointAuthMethod: "none",
+		type: body.type === "web" ? undefined : body.type,
+	};
+}
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	// Check if registration endpoint is enabled
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
 			error: "access_denied",
@@ -21,7 +42,6 @@ export async function registerEndpoint(
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
-	// Check authorization
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_token",
@@ -29,24 +49,24 @@ export async function registerEndpoint(
 		});
 	}
 
-	// Determine whether registration request for public client
-	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
-	const isPublic = body.token_endpoint_auth_method === "none";
+	if (!session) {
+		if (body.grant_types?.includes("client_credentials")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"client_credentials grant requires authenticated registration",
+			});
+		}
 
-	// Check unauthenticated user is requesting a confidential client
-	if (!session && !isPublic) {
-		throw new APIError("UNAUTHORIZED", {
-			error: "invalid_request",
-			error_description:
-				"Authentication required for confidential client registration",
-		});
+		const resolved = resolveUnauthenticatedAuth(body);
+		body.token_endpoint_auth_method = resolved.tokenEndpointAuthMethod;
+		body.type = resolved.type;
 	}
 
-	// Ensure dynamically registered clients shall have a scope
-	if (!ctx.body.scope) {
-		ctx.body.scope = (
-			opts.clientRegistrationDefaultScopes ?? opts.scopes
-		)?.join(" ");
+	if (!body.scope) {
+		body.scope = (opts.clientRegistrationDefaultScopes ?? opts.scopes)?.join(
+			" ",
+		);
 	}
 
 	return createOAuthClientEndpoint(ctx, opts, {
@@ -185,6 +205,21 @@ export async function createOAuthClientEndpoint(
 ) {
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
+
+	// Single authorization chokepoint for OAuth client creation. Every creation
+	// route reaches this function, so the create gate lives here rather than in
+	// each caller. Dynamic registration may be anonymous when
+	// allowUnauthenticatedClientRegistration is enabled, and registerEndpoint
+	// constrains that path to public clients, so it is authorized only when a
+	// session is present. Every other creation route requires an authorized
+	// session; assertClientPrivileges throws when none is present.
+	if (settings.isRegister) {
+		if (session) {
+			await assertClientPrivileges(ctx, session, opts, "create");
+		}
+	} else {
+		await assertClientPrivileges(ctx, session, opts, "create");
+	}
 
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2

@@ -18,30 +18,39 @@ concurrency:
 
 jobs:
   smoke:
-    name: Smoke test
+    name: Smoke test (${{ matrix.node-version }})
     timeout-minutes: 30
-    runs-on: starsling-ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: redis
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: ${{ matrix.node-version }}
+          # Use the latest patch per major: the smoke specs run `node --test` on .ts,
+          # which needs native type-stripping (default-on at 22.18+/24), not the cached 22.13.0.
+          check-latest: true
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
@@ -51,43 +60,58 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
-      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: 2.6.4
 
       - name: Smoke
         run: pnpm e2e:smoke
 
+      - name: Docker Compose Diagnostics
+        if: failure() && hashFiles('docker-compose.yml') != ''
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose ps --all || true
+          docker compose logs --no-color "${compose_services[@]}" || true
+
       - name: Stop Docker Containers
-        run: docker compose down
+        if: always() && hashFiles('docker-compose.yml') != ''
+        run: docker compose down --volumes --remove-orphans
   integration:
     name: Integration test
     timeout-minutes: 60
-    runs-on: starsling-ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
+    env:
+      COMPOSE_SERVICES: postgres
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
@@ -99,40 +123,67 @@ jobs:
       - name: Install Playwright Browsers
         uses: ./.github/actions/setup-playwright
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Integration
         run: pnpm e2e:integration --filter=./e2e/integration
 
+      - name: Docker Compose Diagnostics
+        if: failure() && hashFiles('docker-compose.yml') != ''
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose ps --all || true
+          docker compose logs --no-color "${compose_services[@]}" || true
+
       - name: Stop Docker Containers
-        run: docker compose down
+        if: always() && hashFiles('docker-compose.yml') != ''
+        run: docker compose down --volumes --remove-orphans
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
-    runs-on: starsling-ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
+        include:
+          - packages: "@better-auth-test/adapter-factory"
+            compose_services: ""
+          - packages: "@better-auth-test/drizzle-adapter"
+            compose_services: "postgres mysql"
+          - packages: "@better-auth-test/kysely-prisma-adapter"
+            compose_services: "postgres-kysely mysql-kysely postgres-kysely2 mssql"
+          - packages: "@better-auth-test/memory-adapter"
+            compose_services: ""
+          - packages: "@better-auth-test/mongo-adapter"
+            compose_services: "mongodb"
+          - packages: "@better-auth-test/prisma-adapter"
+            compose_services: "postgres-prisma mysql-prisma"
+    env:
+      COMPOSE_SERVICES: ${{ matrix.compose_services }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
@@ -141,16 +192,30 @@ jobs:
       - name: Install
         run: pnpm install
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        if: matrix.compose_services != ''
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Adapter Integration
         env:
           FILTER: ${{ matrix.packages }}
         run: pnpm e2e:integration --filter="$FILTER"
 
+      - name: Docker Compose Diagnostics
+        if: failure() && hashFiles('docker-compose.yml') != '' && matrix.compose_services != ''
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose ps --all || true
+          docker compose logs --no-color "${compose_services[@]}" || true
+
       - name: Stop Docker Containers
-        run: docker compose down
+        if: always() && hashFiles('docker-compose.yml') != ''
+        run: docker compose down --volumes --remove-orphans
 
   e2e:
     runs-on: ubuntu-latest

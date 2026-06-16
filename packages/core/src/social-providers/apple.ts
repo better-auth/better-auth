@@ -1,10 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
 
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { APIError } from "../error";
+import { logger } from "../env";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -20,7 +22,7 @@ export interface AppleProfile {
 	 * The email address is either the user's real email address or the proxy
 	 * address, depending on their status private email relay service.
 	 */
-	email: string;
+	email?: string;
 	/**
 	 * A string or Boolean value that indicates whether the service verifies
 	 * the email. The value can either be a string ("true" or "false") or a
@@ -70,9 +72,27 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	appBundleIdentifier?: string | undefined;
 	audience?: (string | string[]) | undefined;
+}
+
+async function sha256Hex(value: string) {
+	const data = new TextEncoder().encode(value);
+	const digest = await crypto.subtle.digest("SHA-256", data);
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+async function nonceMatches(jwtNonce: unknown, nonce: string) {
+	if (typeof jwtNonce !== "string") {
+		return false;
+	}
+	if (jwtNonce === nonce) {
+		return true;
+	}
+	return jwtNonce === (await sha256Hex(nonce));
 }
 
 export const apple = (options: AppleOptions) => {
@@ -81,6 +101,12 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
+				logger.error(
+					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			if (options.scope) _scope.push(...options.scope);
 			if (scopes) _scope.push(...scopes);
@@ -133,7 +159,7 @@ export const apple = (options: AppleOptions) => {
 						jwtClaims[field] = Boolean(jwtClaims[field]);
 					}
 				});
-				if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && !(await nonceMatches(jwtClaims.nonce, nonce))) {
 					return false;
 				}
 				return !!jwtClaims;
