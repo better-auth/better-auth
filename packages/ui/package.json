@@ -1,0 +1,71 @@
+{
+  "name": "@better-auth/ui",
+  "version": "1.6.11",
+  "description": "JSX authoring primitives for Better Auth UI",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/ui"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./jsx-runtime": {
+      "dev-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.mts",
+      "default": "./dist/jsx-runtime.mjs"
+    },
+    "./jsx-dev-runtime": {
+      "dev-source": "./src/jsx-dev-runtime.ts",
+      "types": "./dist/jsx-dev-runtime.d.mts",
+      "default": "./dist/jsx-dev-runtime.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "jsx-runtime": [
+        "./dist/jsx-runtime.d.mts"
+      ],
+      "jsx-dev-runtime": [
+        "./dist/jsx-dev-runtime.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "vitest": "catalog:vitest"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^"
+  }
+}

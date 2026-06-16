@@ -114,6 +114,9 @@ importers:
       '@arethetypeswrong/cli':
         specifier: ^0.18.2
         version: 0.18.2
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@biomejs/biome':
         specifier: 2.4.4
         version: 2.4.4
@@ -895,6 +898,9 @@ importers:
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.2
@@ -965,6 +971,9 @@ importers:
       '@opentelemetry/sdk-trace-node':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@simplewebauthn/browser':
+        specifier: ^13.2.2
+        version: 13.2.2
       '@sveltejs/kit':
         specifier: ^2.60.1
         version: 2.61.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.56.0)(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)))(svelte@5.56.0)(typescript@5.9.3)(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
@@ -1018,7 +1027,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
       vue:
         specifier: ^3.5.29
         version: 3.5.29(typescript@5.9.3)
@@ -1540,6 +1549,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1623,6 +1635,19 @@ importers:
       vitest:
         specifier: catalog:vitest
         version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/ui:
+    dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
+      vitest:
+        specifier: catalog:vitest
+        version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.7.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.9.0))
 
   test:
     devDependencies:
@@ -28707,7 +28732,7 @@ snapshots:
     optionalDependencies:
       vite: 6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
 
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5(vitest@4.1.5))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
+  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       '@vitest/expect': 4.0.18
       '@vitest/mocker': 4.0.18(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@6.4.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))

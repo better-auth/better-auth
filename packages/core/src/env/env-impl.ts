@@ -117,7 +117,7 @@ export const ENV = Object.freeze({
 	get BETTER_AUTH_TELEMETRY_ENDPOINT(): string | undefined {
 		return getEnvVar(
 			"BETTER_AUTH_TELEMETRY_ENDPOINT",
-			import.meta.env.BETTER_AUTH_TELEMETRY_ENDPOINT,
+			import.meta.env?.BETTER_AUTH_TELEMETRY_ENDPOINT,
 		);
 	},
 });

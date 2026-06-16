@@ -5,6 +5,7 @@ import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";
 import { redirectOnError } from "./errors";
+import { getUIErrorURL } from "../ui";
 
 /**
  * Inputs for {@link generateState}. Grouped into one object so call sites read
@@ -80,8 +81,7 @@ export async function generateState(
 
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body?.state;
-	const errorURL =
-		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+	const errorURL = getUIErrorURL(c.context);
 
 	let parsedData: StateData;
 

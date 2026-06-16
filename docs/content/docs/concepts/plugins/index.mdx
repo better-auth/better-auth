@@ -1,0 +1,81 @@
+---
+title: Plugins
+description: Learn how to use Better Auth plugins and explore the concepts behind creating server and client plugins.
+---
+
+Plugins are a key part of Better Auth, they let you extend the base functionalities. You can use them to add new authentication methods, features, or customize behaviors.
+
+Better Auth comes with many built-in plugins ready to use. Check the plugins section for details. You can also create your own plugins.
+
+## Using a Plugin
+
+Plugins can be a server-side plugin, a client-side plugin, or both.
+
+To add a plugin on the server, include it in the `plugins` array in your auth configuration. The plugin will initialize with the provided options.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [
+        // Add your plugins here
+    ]
+});
+```
+
+Client plugins are added when creating the client. Most plugins require both server and client plugins to work correctly.
+The Better Auth auth client on the frontend uses the `createAuthClient` function provided by `better-auth/client`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+
+const authClient = createAuthClient({
+    plugins: [
+        // Add your client plugins here
+    ]
+});
+```
+
+We recommend keeping the auth-client and your normal auth instance in separate files.
+
+<Files>
+  <Folder name="auth" defaultOpen>
+    <File name="server.ts" />
+
+    <File name="auth-client.ts" />
+  </Folder>
+</Files>
+
+## Creating a Plugin
+
+To get started, you'll need a server plugin.
+Server plugins are the backbone of all plugins, and client plugins are there to provide an interface with frontend APIs to easily work with your server plugins.
+
+<Callout type="info">
+  If your server plugins have endpoints that need to be called from the client, you'll also need to create a client plugin.
+</Callout>
+
+### What can a plugin do?
+
+* Create custom `endpoint`s to perform any action you want.
+* Extend database tables with custom `schemas`.
+* Use a `middleware` to target a group of routes using its route matcher, and run only when those routes are called through a request.
+* Use `hooks` to target a specific route or request. And if you want to run the hook even if the endpoint is called directly.
+* Use `onRequest` or `onResponse` if you want to do something that affects all requests or responses.
+* Create a custom `rate-limit` rule.
+* Register UI pages that are served by `auth.ui.handler`.
+
+## Plugin Topics
+
+Each plugin capability is documented in a focused page:
+
+* [Server Plugin](/docs/concepts/plugins/server-plugin): define the base server plugin shape.
+* [Endpoints](/docs/concepts/plugins/endpoints): add API endpoints and understand the auth context.
+* [UI Pages](/docs/concepts/plugins/ui-pages): register framework-agnostic UI pages and capabilities.
+* [Schema](/docs/concepts/plugins/schema): extend database tables with plugin schema definitions.
+* [Hooks](/docs/concepts/plugins/hooks): run plugin logic before or after actions.
+* [Middleware](/docs/concepts/plugins/middleware): add middleware, `onRequest`, and `onResponse` behavior.
+* [Rate Limit](/docs/concepts/plugins/rate-limit): define plugin-specific rate limit rules.
+* [Trusted Origins](/docs/concepts/plugins/trusted-origins): validate URLs from custom plugin endpoints.
+* [Server Helpers](/docs/concepts/plugins/server-helpers): use helper middleware for sessions, ownership, and organization roles.
+* [Client Plugin](/docs/concepts/plugins/client-plugin): expose client endpoints, actions, atoms, and fetch behavior.

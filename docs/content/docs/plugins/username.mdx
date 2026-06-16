@@ -102,6 +102,16 @@ The `signUp` function should take a new `username` property in the object.
   If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
 
+### Auth UI
+
+When `username()` is enabled, Better Auth UI reads the username capability and updates the built-in auth pages:
+
+* `/auth/sign-up` adds a required `username` field and an optional `displayUsername` field labeled "Display name".
+* `/auth/sign-in` links to the username sign-in flow.
+* `/auth/sign-in/username` renders a dedicated username and password sign-in form backed by `POST /sign-in/username`.
+
+The username field respects `minUsernameLength` and `maxUsernameLength` from the username plugin options.
+
 ### Sign in
 
 To sign in a user with username, you can use the `signIn.username` function provided by the client.

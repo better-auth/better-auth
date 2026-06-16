@@ -1,0 +1,34 @@
+{
+  "name": "@better-auth/ui-nextjs-demo",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.1.1",
+  "scripts": {
+    "predev": "pnpm --filter better-auth build:ui-runtime",
+    "dev": "next dev --port 3011",
+    "prebuild": "pnpm --filter better-auth build:ui-runtime",
+    "build": "next build",
+    "start": "next start --port 3011",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "link:../../packages/passkey",
+    "@better-auth/ui": "link:../../packages/ui",
+    "better-auth": "link:../../packages/better-auth",
+    "next": "^16.2.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "shiki": "^4.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.9.3"
+  }
+}

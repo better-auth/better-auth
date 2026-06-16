@@ -4833,7 +4833,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 						},
 						body: new URLSearchParams({
 							SAMLResponse: samlResponse.samlResponse,
-							RelayState: "http://localhost:3000/dashboard",
 						}),
 					},
 				),

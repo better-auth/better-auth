@@ -1,0 +1,54 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "better-auth": ["../../packages/better-auth/src/index.ts"],
+      "better-auth/adapters/memory": [
+        "../../packages/better-auth/src/adapters/memory-adapter/index.ts"
+      ],
+      "better-auth/next-js": [
+        "../../packages/better-auth/src/integrations/next-js.ts"
+      ],
+      "better-auth/plugins": [
+        "../../packages/better-auth/src/plugins/index.ts"
+      ],
+      "better-auth/*": ["../../packages/better-auth/src/*"],
+      "@better-auth/core": ["../../packages/core/src/index.ts"],
+      "@better-auth/core/*": ["../../packages/core/src/*"],
+      "@better-auth/memory-adapter": [
+        "../../packages/memory-adapter/src/index.ts"
+      ],
+      "@better-auth/passkey": ["../../packages/passkey/src/index.ts"],
+      "@better-auth/passkey/client": ["../../packages/passkey/src/client.ts"],
+      "@better-auth/telemetry": ["../../packages/telemetry/src/index.ts"],
+      "@better-auth/ui": ["../../packages/ui/src/index.ts"],
+      "@better-auth/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

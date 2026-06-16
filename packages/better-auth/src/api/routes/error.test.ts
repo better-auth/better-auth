@@ -2,32 +2,57 @@ import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("error page security", async () => {
-	const { client } = await getTestInstance();
+	const { auth } = await getTestInstance();
 
-	it("should sanitize error description to prevent XSS", async () => {
+	it("should render sanitized error description from the UI handler", async () => {
 		const attack = "<script>alert(1)</script>";
-		const res = await client.$fetch(
-			`/error?error=TEST&error_description=${encodeURIComponent(attack)}`,
-			{
-				method: "GET",
-			},
+		const res = await auth.ui.handler(
+			new Request(
+				`http://localhost:3000/auth/error?error=TEST&error_description=${encodeURIComponent(attack)}`,
+			),
 		);
+		const text = await res.text();
 
-		const text = typeof res === "string" ? res : JSON.stringify(res);
 		expect(text).not.toContain("<script>");
 		expect(text).toContain("&lt;script&gt;");
 	});
 
-	it("should sanitize code parameter", async () => {
+	it("should sanitize code parameter from the UI handler", async () => {
 		const attack = "<script>";
-		const res = await client.$fetch(
-			`/error?error=${encodeURIComponent(attack)}`,
-			{
-				method: "GET",
-			},
+		const res = await auth.ui.handler(
+			new Request(
+				`http://localhost:3000/auth/error?error=${encodeURIComponent(attack)}`,
+			),
 		);
-		const text = typeof res === "string" ? res : JSON.stringify(res);
+		const text = await res.text();
 		// Invalid code defaults to UNKNOWN
 		expect(text).toContain("UNKNOWN");
+	});
+
+	it("should render recovery actions on the UI error page", async () => {
+		const res = await auth.ui.handler(
+			new Request(
+				"http://localhost:3000/auth/error?error=INVALID_CALLBACK_URL",
+			),
+		);
+		const text = await res.text();
+
+		expect(text).toContain("Something Went Wrong");
+		expect(text).toContain("INVALID_CALLBACK_URL");
+		expect(text).toContain("Try again");
+		expect(text).toContain('href="./sign-in"');
+		expect(text).toContain("Open Error Reference");
+	});
+
+	it("should redirect the API error route to the UI error route", async () => {
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/error?error=TEST", {
+				redirect: "manual",
+			}),
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(
+			"http://localhost:3000/auth/error?error=TEST",
+		);
 	});
 });

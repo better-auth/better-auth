@@ -430,7 +430,14 @@ describe("Custom Session Plugin Tests", async () => {
 		const client = createAuthClient({
 			plugins: [
 				customSessionClient<typeof auth>(),
-				inferAdditionalFields<typeof auth>(),
+				inferAdditionalFields({
+					user: {
+						role: {
+							type: "string",
+							required: false,
+						},
+					},
+				}),
 			],
 		});
 
