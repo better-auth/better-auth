@@ -79,6 +79,8 @@ export async function verifyProviderIdToken(
 		// Opaque (non-JWS) tokens carry no signature to check. They are accepted only when the
 		// provider opts in, in which case getUserInfo resolves identity from the access token via
 		// the provider's userinfo endpoint, which validates it (e.g. Facebook Graph access tokens).
+		// An expected `nonce` is not enforced here: an opaque token carries no `nonce` claim, and the
+		// access-token-backed userinfo exchange (not the token itself) is the identity source.
 		if (token.split(".").length !== 3) {
 			return config.allowOpaqueToken === true;
 		}

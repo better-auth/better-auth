@@ -20,7 +20,7 @@ import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { persistOAuthAccount } from "../../oauth2/persist-account";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
-import { generateState } from "../../oauth2/state";
+import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import { decryptOAuthToken } from "../../oauth2/token-encryption";
 import {
 	freshSessionMiddleware,
@@ -195,7 +195,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			/**
 			 * Extra query parameters to append to the provider authorization URL.
 			 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
-			 * code_challenge, code_challenge_method, scope) are rejected.
+			 * code_challenge, code_challenge_method, nonce, scope) are rejected.
 			 */
 			additionalParams: additionalAuthorizationParamsSchema,
 			/**
@@ -383,9 +383,11 @@ export const linkSocialAccount = createAuthEndpoint(
 		// Handle OAuth flow
 		const stateNonce = generateRandomString(32);
 		const codeVerifier = generateRandomString(128);
+		const idTokenNonce = generateIdTokenNonce(provider);
 		const { url, requestedScopes } = await provider.createAuthorizationURL({
 			state: stateNonce,
 			codeVerifier,
+			idTokenNonce,
 			redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
@@ -400,6 +402,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			requestedScopes,
 			state: stateNonce,
 			codeVerifier,
+			idTokenNonce,
 		});
 
 		if (!c.body.disableRedirect) {
