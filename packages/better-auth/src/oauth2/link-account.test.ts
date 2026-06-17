@@ -1766,3 +1766,114 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		expect(promoted?.emailVerified).toBe(true);
 	});
 });
+
+/**
+ * Account-linking diagnostics in `handleOAuthUserInfo` must be routed through
+ * the configured context logger (`c.context.logger`), not a static console
+ * logger, so a developer who supplies a custom `logger.log` can capture,
+ * filter, or silence them.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/9959
+ */
+describe("oauth2 - account-linking logs use the configured logger", async () => {
+	const logs: { level: string; message: string }[] = [];
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+		logger: {
+			log(level, message) {
+				logs.push({ level, message });
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("routes the failed-link error through the custom logger, not console", async () => {
+		const testEmail = "logger-link-fail@example.com";
+
+		const signUpRes = await client.signUp.email({
+			email: testEmail,
+			password: "password123",
+			name: "Logger Test User",
+		});
+		const userId = signUpRes.data!.user.id;
+
+		// Pre-verify the local user so the link is permitted and execution reaches
+		// the `linkAccount` call rather than being rejected as account_not_linked.
+		await ctx.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+			update: { emailVerified: true },
+		});
+
+		// Force the link to throw so `handleOAuthUserInfo` hits its catch branch,
+		// which logs "Unable to link account" via c.context.logger.error.
+		vi.spyOn(ctx.internalAdapter, "linkAccount").mockRejectedValueOnce(
+			new Error("boom"),
+		);
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Logger Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_logger_link_fail",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Logger",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+		});
+
+		// The custom logger — not just console — received the diagnostic.
+		const linkError = logs.find(
+			(entry) =>
+				entry.level === "error" &&
+				entry.message.includes("Unable to link account"),
+		);
+		expect(linkError).toBeDefined();
+	});
+});
