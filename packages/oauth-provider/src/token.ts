@@ -840,6 +840,7 @@ async function createUserTokens(
 						scopes: effectiveScopes,
 						grantType,
 						referenceId,
+						sessionId,
 						resources: params.resources,
 						metadata,
 					})),

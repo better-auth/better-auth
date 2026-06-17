@@ -330,6 +330,14 @@ export interface OAuthClaimExtensionInput {
 	scopes: string[];
 	grantType?: GrantType;
 	referenceId?: string;
+	/**
+	 * Identifier of the session the tokens are issued for. Present on the
+	 * authorization_code and refresh_token grants (absent for grants with no
+	 * user session, such as client_credentials). A contributor uses it to
+	 * resolve per-session authentication context for the ID token without
+	 * re-deriving it from the request.
+	 */
+	sessionId?: string;
 	resources?: string[];
 	/** Parsed client metadata, as returned by `parseClientMetadata`. */
 	metadata?: Record<string, unknown>;
