@@ -23,6 +23,16 @@ const schema = z.object({
 	user: z.string().optional(),
 });
 
+// The default `/error` endpoint validates the `error` query param against
+// `^[A-Za-z0-9_-]+$`; anything else (spaces, punctuation from human messages)
+// is rendered as `UNKNOWN`. Replace any disallowed characters with `_` and
+// collapse runs so the client sees the closest readable code.
+export function sanitizeErrorCode(value: string): string {
+	const cleaned = value.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/_+/g, "_");
+	const trimmed = cleaned.replace(/^_+|_+$/g, "");
+	return trimmed || "unknown";
+}
+
 export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
@@ -271,9 +281,12 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 			throw e;
 		}
-		if (result.error) {
-			c.context.logger.error(result.error.split(" ").join("_"));
-			redirectOnError(c, resolvedErrorURL, result.error.split(" ").join("_"));
+		if (result.error || !result.data) {
+			const errorMsg = sanitizeErrorCode(
+				result.error || "unable_to_create_user",
+			);
+			c.context.logger.error(errorMsg);
+			redirectOnError(c, resolvedErrorURL, errorMsg);
 		}
 		const { session, user } = result.data!;
 		await setSessionCookie(c, {
