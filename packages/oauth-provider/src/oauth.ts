@@ -488,16 +488,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
-				const isDynamicBaseURLInit =
-					jwtPluginOptions?.jwt?.issuer == null &&
-					typeof ctx.options.baseURL === "object" &&
-					ctx.options.baseURL !== null &&
-					"allowedHosts" in ctx.options.baseURL;
 				let issuerPath: string | undefined;
 				try {
 					issuerPath = new URL(issuer).pathname;
 				} catch (error) {
-					if (!isDynamicBaseURLInit || issuer !== "") throw error;
+					// No baseURL/issuer is resolvable at init (it will be derived
+					// from the request per call); skip the well-known path warning.
+					if (issuer !== "") throw error;
 				}
 				if (
 					issuerPath !== undefined &&

@@ -2,17 +2,14 @@
 "better-auth": minor
 ---
 
-The dynamic `baseURL` config now ignores `x-forwarded-host` and `x-forwarded-proto` unless you set `advanced.trustedProxyHeaders: true`.
+When serving multiple hosts through `trustedOrigins`, Better Auth derives the request origin from the `Host` header by default and ignores `x-forwarded-host` / `x-forwarded-proto` unless you set `advanced.trustedProxyHeaders: true`. Forwarded headers cannot select another trusted origin for cookies or links unless trusted proxy headers are enabled.
 
-Requests using `baseURL: { allowedHosts }` now resolve the auth origin from `Host` by default, so forwarded headers cannot select another allowed host unless trusted proxy headers are enabled.
-
-**Breaking change:** if your proxy exposes the public hostname only through `x-forwarded-host`, set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, and Netlify) are unaffected.
-
-**Migration:**
+If your proxy exposes the public hostname only through `x-forwarded-host`, set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, and Netlify) are unaffected.
 
 ```ts
 betterAuth({
-  baseURL: { allowedHosts: [...] },
+  baseURL: "https://myapp.com",
+  trustedOrigins: ["https://*.myapp.com"],
   advanced: {
     trustedProxyHeaders: true,
   },

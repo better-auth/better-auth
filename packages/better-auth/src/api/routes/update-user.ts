@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
+import { getRequestBaseURL } from "../../context/helpers";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
@@ -516,9 +517,9 @@ export const deleteUser = createAuthEndpoint(
 							1000,
 				),
 			});
-			const url = `${
-				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+			const url = `${getRequestBaseURL(
+				ctx,
+			)}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
 				ctx.body.callbackURL || "/",
 			)}`;
 			await ctx.context.runInBackgroundOrAwait(
@@ -803,9 +804,9 @@ export const changeEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				const url = `${getRequestBaseURL(
+					ctx,
+				)}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 					ctx.body.callbackURL || "/",
 				)}`;
 				await ctx.context.runInBackgroundOrAwait(
@@ -841,9 +842,9 @@ export const changeEmail = createAuthEndpoint(
 					requestType: "change-email-confirmation",
 				},
 			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			const url = `${getRequestBaseURL(
+				ctx,
+			)}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				ctx.body.callbackURL || "/",
 			)}`;
 			await ctx.context.runInBackgroundOrAwait(
@@ -878,9 +879,9 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+		const url = `${getRequestBaseURL(
+			ctx,
+		)}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 			ctx.body.callbackURL || "/",
 		)}`;
 		await ctx.context.runInBackgroundOrAwait(

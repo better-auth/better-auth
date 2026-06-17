@@ -269,7 +269,8 @@ trustedOrigins: [
 
 ```ts
 trustedOrigins: async (request) => {
-    // request is undefined during initialization and auth.api calls
+    // request is undefined during initialization and during auth.api calls
+    // that pass no headers; it is present when you pass headers/request
     if (!request) {
         return ["https://my-frontend.com"];
     }

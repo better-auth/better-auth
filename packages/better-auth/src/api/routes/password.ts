@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
+import { getRequestBaseURL } from "../../context/helpers";
 import { getDate } from "../../utils/date";
 import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
@@ -130,7 +131,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			expiresAt,
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
+		const url = `${getRequestBaseURL(ctx)}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.runInBackgroundOrAwait(
 			ctx.context.options.emailAndPassword.sendResetPassword(
 				{

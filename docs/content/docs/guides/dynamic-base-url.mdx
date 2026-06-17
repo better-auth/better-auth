@@ -1,133 +1,102 @@
 ---
-title: Dynamic Base URL
-description: Configure Better Auth for preview deployments, multiple domains, and per-request URL resolution.
+title: Multiple Domains & Preview Deployments
+description: Serve Better Auth from more than one hostname while keeping identity stable.
 ---
 
-Use dynamic base URL when your app is served from more than one hostname, such as:
+Some deployments answer on more than one hostname:
 
 * custom domains like `myapp.com` and `www.myapp.com`
 * preview deployments like `my-app-abc123.vercel.app`
 * branch environments like `feature-branch.myapp.com`
+* white-label tenants on their own domains, added at runtime
 
-The configuration itself lives on the [`baseURL` option](/docs/reference/options#baseurl). This guide focuses on when to use it and how to structure it safely.
+Better Auth handles this without running a separate instance per host. The key idea is a split between two things that used to be conflated:
+
+* **`baseURL` is the canonical origin.** It anchors identity: the OAuth/OIDC issuer, JWT `iss`/`aud`, the social-login `redirect_uri`, and the Passkey relying-party id. It does not change per request.
+* **`trustedOrigins` is the set of hosts you also serve.** When a request arrives on one of these hosts, cookies and self-referential links (email verification, magic links, password reset) follow that host. Identity still uses `baseURL`.
+
+This keeps preview deploys and tenant domains working for cookies and links, while tokens, discovery documents, and passkeys stay stable across hosts.
 
 ## Basic Setup
 
-Configure `baseURL` as an object with an `allowedHosts` allowlist:
+Set a fixed `baseURL` and list the extra hosts in `trustedOrigins`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"myapp.com",
-			"www.myapp.com",
-			"*.vercel.app",
-		],
-	},
+	baseURL: "https://myapp.com",
+	trustedOrigins: [
+		"https://www.myapp.com",
+		"https://*.vercel.app",
+	],
 })
 ```
 
-When a request comes in, Better Auth extracts the host from `x-forwarded-host`, `host` header, or the request URL (in that order), validates it against `allowedHosts`, and uses the matched value to build the request-specific base URL.
+When a request comes in, Better Auth derives the host from the `host` header or the request URL (and from `x-forwarded-host` when you set `advanced.trustedProxyHeaders: true`). If the resulting origin is in `trustedOrigins`, cookies and links use it; otherwise they fall back to `baseURL`.
 
 ## Common Deployment Patterns
 
-### Vercel Deployment
+### Vercel preview deployments
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"myapp.com",
-			"www.myapp.com",
-			"*.vercel.app",
-		],
+	baseURL: "https://myapp.com",
+	trustedOrigins: ["https://*.vercel.app"],
+})
+```
+
+### Multiple production domains
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: "https://myapp.com",
+	trustedOrigins: [
+		"https://myapp.co.uk",
+		"https://myapp.eu",
+	],
+})
+```
+
+### White-label tenants (domains from a database)
+
+When valid domains are not known at deploy time, pass a function. It runs per request and can read the request to decide which origins are valid.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: "https://app.myplatform.com",
+	trustedOrigins: async (request) => {
+		const host = request?.headers.get("host")
+		if (!host) return []
+		const tenant = await findTenantByDomain(host)
+		return tenant ? [`https://${host}`] : []
 	},
 })
 ```
 
-### Development + Production
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"localhost:3000",
-			"localhost:5173",
-			"myapp.com",
-			"*.vercel.app",
-		],
-		protocol: process.env.NODE_ENV === "development" ? "http" : "https",
-	},
-})
-```
-
-### Multiple Production Domains
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"myapp.com",
-			"myapp.co.uk",
-			"myapp.eu",
-		],
-		protocol: "https",
-	},
-})
-```
-
-## Choosing a Fallback
-
-By default, Better Auth throws if the incoming host does not match `allowedHosts`. That is usually the safer default because it exposes proxy or deployment mistakes immediately.
-
-If you need a fallback, set one explicitly:
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: ["myapp.com", "*.vercel.app"],
-		fallback: "https://myapp.com",
-	},
-})
-```
-
-Use this only when falling back to a canonical domain is clearly preferable to failing the request.
+<Callout type="warn">
+  With the function form you own the allowlist. Only return origins you control; an attacker-supplied host that you return becomes a valid cookie and link target. Cache the lookup if it hits a database on every request.
+</Callout>
 
 ## Cookies Across Subdomains
 
-If you need to share cookies across subdomains, you can enable `crossSubDomainCookies` while still using dynamic base URL. Better Auth will derive the cookie domain from the resolved host unless you set `domain` explicitly.
+With `crossSubDomainCookies` enabled and no explicit `domain`, the cookie domain follows the host the request arrived on. A request to `auth.example1.com` sets cookies for `auth.example1.com`; a request to `auth.example2.com` sets cookies for `auth.example2.com`.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
 export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: [
-			"auth.example1.com",
-			"auth.example2.com",
-		],
-		protocol: "https",
-	},
+	baseURL: "https://auth.example1.com",
+	trustedOrigins: ["https://auth.example2.com"],
 	advanced: {
-		crossSubDomainCookies: {
-			enabled: true,
-		},
+		crossSubDomainCookies: { enabled: true },
 	},
 })
 ```
 
-If you want to force a shared parent domain instead, set it directly:
+To pin one shared parent domain instead, set it directly:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
 export const auth = betterAuth({
-	baseURL: {
-		allowedHosts: ["auth.example1.com", "auth.example2.com"],
-		protocol: "https",
-	},
+	baseURL: "https://auth.example1.com",
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: true,
@@ -139,17 +108,49 @@ export const auth = betterAuth({
 
 See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for the full cookie behavior.
 
+## Identity Stays on the Canonical Origin
+
+Identity-bearing values deliberately do **not** follow the request host, because their specs bind them to a stable origin:
+
+* **OAuth/OIDC issuer and JWT `iss`/`aud`** stay on `baseURL`, so tokens and discovery documents agree regardless of which host served them.
+* **Social-login `redirect_uri`** stays on `baseURL`, because upstream providers (Google, etc.) reject unregistered redirect URIs. To send users back to the host they started on, use [OAuth Proxy](/docs/plugins/oauth-proxy).
+* **Passkey relying-party id** stays on `baseURL`, because credentials are bound to the rp id at registration and would break if it changed with an ephemeral preview host.
+
+Identity is fixed per Better Auth instance. If you genuinely need a separate identity per tenant (a distinct issuer or Passkey rp id per tenant domain), run one Better Auth instance per tenant, each with its own `baseURL`, and route requests to the right instance by host. `jwt.issuer`, the OAuth Provider issuer, the Passkey `rpID`, and `oAuthProxy.productionURL` are static per instance; they do not vary by request.
+
+## Inside database hooks
+
+Database hooks receive the endpoint context as their second argument. Read the canonical origin from `context.context.baseURL`, or the serving origin (the host this request arrived on) with `getRequestBaseURL`:
+
+```ts title="auth.ts"
+import { getRequestBaseURL } from "better-auth/api"
+
+export const auth = betterAuth({
+	baseURL: "https://myapp.com",
+	trustedOrigins: ["https://*.vercel.app"],
+	databaseHooks: {
+		user: {
+			create: {
+				after: async (user, context) => {
+					// canonical: "https://myapp.com/api/auth"
+					const canonical = context?.context.baseURL
+					// serving host for this request, e.g. "https://preview.vercel.app/api/auth"
+					const servingURL = context ? getRequestBaseURL(context) : undefined
+				},
+			},
+		},
+	},
+})
+```
+
+`context` is `null` when the hook runs outside a request (such as a CLI migration), so guard for it.
+
 ## Security Model
 
-Dynamic base URL uses an allowlist model:
-
-1. Only hosts listed in `allowedHosts` are accepted
-2. `x-forwarded-host` and `host` headers are sanitized and validated before use
-3. Unknown hosts throw unless you provide `fallback`
-4. `allowedHosts` are automatically added to [`trustedOrigins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
-
-This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
+1. The request host comes from the `Host` header or request URL. `x-forwarded-host` is honored only when you opt in with `advanced.trustedProxyHeaders: true`, which a reverse proxy that exposes the public host that way must set.
+2. The derived origin is honored for cookies and links only when it is in `trustedOrigins`; otherwise Better Auth falls back to the canonical `baseURL`.
+3. `trustedOrigins` is also the CSRF and redirect allowlist, so listing a host opts it into the same validation everywhere.
 
 ## Reference
 
-For the exact option shape and property-level behavior, see [`baseURL` in the options reference](/docs/reference/options#baseurl).
+For the exact option shapes, see [`baseURL`](/docs/reference/options#baseurl) and [`trustedOrigins`](/docs/reference/options#trustedorigins) in the options reference.

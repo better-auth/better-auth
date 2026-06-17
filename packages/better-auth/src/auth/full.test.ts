@@ -1,4 +1,3 @@
-import type { AuthContext } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -6,6 +5,7 @@ import {
 import type { router } from "better-auth/api";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { createAuthClient } from "../client";
+import { getRequestBaseURL } from "../context/helpers";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
 import { betterAuth } from "./full";
@@ -129,88 +129,51 @@ describe("auth with trusted proxy headers", () => {
 });
 
 /**
+ * Multi-domain / preview / white-label deployments. `baseURL` stays the
+ * canonical origin (identity); cookies and self-referential links follow the
+ * host the request arrived on, validated against `trustedOrigins`.
+ *
  * @see https://github.com/better-auth/better-auth/issues/4151
  */
-describe("auth with dynamic baseURL (allowedHosts)", () => {
-	test("should throw error for empty allowedHosts array", async () => {
-		await expect(
-			getTestInstance({
-				baseURL: {
-					allowedHosts: [],
-				},
-			}),
-		).rejects.toThrow("baseURL.allowedHosts cannot be empty");
-	});
+describe("auth with multi-host serving origin", () => {
+	const captureOrigins = (capture: { canonical?: string; serving?: string }) =>
+		createAuthMiddleware(async (ctx) => {
+			capture.canonical = ctx.context.baseURL;
+			capture.serving = getRequestBaseURL(ctx);
+		});
 
-	test("should resolve baseURL from allowed host", async () => {
-		let baseURL: string | undefined;
-		let optionsBaseURL: string | undefined;
+	test("keeps baseURL canonical for identity but serves links from a trusted host", async () => {
+		const capture: { canonical?: string; serving?: string } = {};
 		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
-			},
+			baseURL: "https://myapp.com",
+			trustedOrigins: ["https://tenant.example.com"],
 			advanced: { trustedProxyHeaders: true },
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					baseURL = ctx.context.baseURL;
-					optionsBaseURL = ctx.context.options.baseURL as string;
-				}),
-			},
+			hooks: { before: captureOrigins(capture) },
 		});
 		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
+			fetchOptions: { customFetchImpl },
 			baseURL: "http://localhost:3000",
 		});
 		await client.$fetch("/ok", {
 			headers: {
-				"x-forwarded-host": "preview-123.vercel.app",
+				"x-forwarded-host": "tenant.example.com",
 				"x-forwarded-proto": "https",
 			},
 		});
-		expect(baseURL).toBe("https://preview-123.vercel.app/api/auth");
-		expect(optionsBaseURL).toBe("https://preview-123.vercel.app");
+		expect(capture.canonical).toBe("https://myapp.com/api/auth");
+		expect(capture.serving).toBe("https://tenant.example.com/api/auth");
 	});
 
-	test("should reject disallowed host and throw error", async () => {
-		const { auth } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com"],
-			},
-			advanced: { trustedProxyHeaders: true },
-		});
-
-		await expect(
-			auth.handler(
-				new Request("http://localhost:3000/api/auth/ok", {
-					method: "GET",
-					headers: {
-						"x-forwarded-host": "evil.com",
-						"x-forwarded-proto": "https",
-					},
-				}),
-			),
-		).rejects.toThrow('Host "evil.com" is not in the allowed hosts list');
-	});
-
-	test("should use fallback for disallowed host", async () => {
-		let baseURL: string | undefined;
+	test("falls back to the canonical baseURL for an untrusted host", async () => {
+		const capture: { canonical?: string; serving?: string } = {};
 		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com"],
-				fallback: "https://myapp.com",
-			},
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					baseURL = ctx.context.baseURL;
-				}),
-			},
+			baseURL: "https://myapp.com",
+			trustedOrigins: ["https://tenant.example.com"],
+			advanced: { trustedProxyHeaders: true },
+			hooks: { before: captureOrigins(capture) },
 		});
 		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
+			fetchOptions: { customFetchImpl },
 			baseURL: "http://localhost:3000",
 		});
 		await client.$fetch("/ok", {
@@ -219,181 +182,43 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 				"x-forwarded-proto": "https",
 			},
 		});
-		expect(baseURL).toBe("https://myapp.com/api/auth");
+		expect(capture.serving).toBe("https://myapp.com/api/auth");
 	});
 
-	test("should respect protocol config", async () => {
-		let baseURL: string | undefined;
+	test("resolves the serving host from a per-request trustedOrigins function", async () => {
+		const capture: { canonical?: string; serving?: string } = {};
 		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com"],
-				protocol: "https",
+			baseURL: "https://myapp.com",
+			// White-label: valid tenant domains come from a (here, faked) lookup.
+			trustedOrigins: async (request) => {
+				const host = request?.headers.get("x-forwarded-host");
+				return host === "tenant-a.example.com"
+					? ["https://tenant-a.example.com"]
+					: [];
 			},
 			advanced: { trustedProxyHeaders: true },
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					baseURL = ctx.context.baseURL;
-				}),
-			},
+			hooks: { before: captureOrigins(capture) },
 		});
 		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
+			fetchOptions: { customFetchImpl },
 			baseURL: "http://localhost:3000",
 		});
 		await client.$fetch("/ok", {
 			headers: {
-				"x-forwarded-host": "myapp.com",
-				"x-forwarded-proto": "http",
-			},
-		});
-		expect(baseURL).toBe("https://myapp.com/api/auth");
-	});
-
-	test("should work with wildcard patterns for Vercel deployments", async () => {
-		let baseURL: string | undefined;
-		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: [
-					"myapp.com",
-					"www.myapp.com",
-					"*.vercel.app",
-					"preview-*.myapp.com",
-				],
-			},
-			advanced: { trustedProxyHeaders: true },
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					baseURL = ctx.context.baseURL;
-				}),
-			},
-		});
-		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
-			baseURL: "http://localhost:3000",
-		});
-
-		await client.$fetch("/ok", {
-			headers: {
-				"x-forwarded-host": "my-app-abc123-team.vercel.app",
+				"x-forwarded-host": "tenant-a.example.com",
 				"x-forwarded-proto": "https",
 			},
 		});
-		expect(baseURL).toBe("https://my-app-abc123-team.vercel.app/api/auth");
-
-		await client.$fetch("/ok", {
-			headers: {
-				"x-forwarded-host": "preview-feature-branch.myapp.com",
-				"x-forwarded-proto": "https",
-			},
-		});
-		expect(baseURL).toBe("https://preview-feature-branch.myapp.com/api/auth");
+		expect(capture.serving).toBe("https://tenant-a.example.com/api/auth");
 	});
 
-	test("should isolate per-request context for concurrent requests", async () => {
-		const resolvedBaseURLs: string[] = [];
-		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
-			},
-			advanced: { trustedProxyHeaders: true },
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					if (ctx.context.baseURL) {
-						resolvedBaseURLs.push(ctx.context.baseURL);
-					}
-				}),
-			},
-		});
-		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
-			baseURL: "http://localhost:3000",
-		});
-
-		// Clear any URLs captured during test setup
-		resolvedBaseURLs.length = 0;
-
-		// Fire two requests with different hosts concurrently
-		await Promise.all([
-			client.$fetch("/ok", {
-				headers: {
-					"x-forwarded-host": "tenant-a.example.com",
-					"x-forwarded-proto": "https",
-				},
-			}),
-			client.$fetch("/ok", {
-				headers: {
-					"x-forwarded-host": "tenant-b.example.com",
-					"x-forwarded-proto": "https",
-				},
-			}),
-		]);
-
-		// Both requests should have resolved to their respective hosts
-		expect(resolvedBaseURLs).toContain("https://tenant-a.example.com/api/auth");
-		expect(resolvedBaseURLs).toContain("https://tenant-b.example.com/api/auth");
-		// Verify no cross-contamination: each URL should appear exactly once
-		const tenantACount = resolvedBaseURLs.filter(
-			(u) => u === "https://tenant-a.example.com/api/auth",
-		).length;
-		const tenantBCount = resolvedBaseURLs.filter(
-			(u) => u === "https://tenant-b.example.com/api/auth",
-		).length;
-		expect(tenantACount).toBe(1);
-		expect(tenantBCount).toBe(1);
-	});
-
-	test("should include all allowedHosts in trustedOrigins", async () => {
-		let trustedOrigins: string[] = [];
-		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:3000"],
-				fallback: "https://fallback.example.com",
-			},
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					trustedOrigins = ctx.context.trustedOrigins;
-				}),
-			},
-		});
-		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
-			baseURL: "http://localhost:3000",
-		});
-
-		// Request resolves to myapp.com, but trustedOrigins should include ALL hosts
-		await client.$fetch("/ok", {
-			headers: {
-				"x-forwarded-host": "myapp.com",
-				"x-forwarded-proto": "https",
-			},
-		});
-
-		expect(trustedOrigins).toContain("https://myapp.com");
-		expect(trustedOrigins).toContain("https://*.vercel.app");
-		expect(trustedOrigins).toContain("https://localhost:3000");
-		expect(trustedOrigins).toContain("http://localhost:3000");
-		expect(trustedOrigins).toContain("https://fallback.example.com");
-	});
-
-	test("should set cookie domain dynamically with crossSubDomainCookies", async () => {
+	test("derives the cross-subdomain cookie domain from the serving host", async () => {
 		let cookieDomain: string | undefined;
 		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["auth.example1.com", "auth.example2.com"],
-				protocol: "https",
-			},
+			baseURL: "https://auth.example1.com",
+			trustedOrigins: ["https://auth.example2.com"],
 			advanced: {
-				crossSubDomainCookies: {
-					enabled: true,
-				},
+				crossSubDomainCookies: { enabled: true },
 				trustedProxyHeaders: true,
 			},
 			hooks: {
@@ -403,9 +228,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			},
 		});
 		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
+			fetchOptions: { customFetchImpl },
 			baseURL: "http://localhost:3000",
 		});
 
@@ -426,54 +249,67 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		expect(cookieDomain).toBe("auth.example2.com");
 	});
 
-	test("create a auth context per request which contains the internal adapter", async () => {
-		let baseURL: string | undefined;
-		let optionsBaseURL: string | undefined;
-		let internalAdapter: AuthContext["internalAdapter"] | undefined;
-		const endpoints = {
-			validateContext: createAuthEndpoint(
-				"/validate-context",
-				{ method: "GET" },
-				async (ctx) => {
-					internalAdapter = ctx.context.internalAdapter;
-					return ctx.json({
-						message: "Hello, World!",
-					});
-				},
-			),
-		};
+	test("isolates the serving host across concurrent requests", async () => {
+		const servingByCanonical: string[] = [];
 		const { customFetchImpl } = await getTestInstance({
-			baseURL: {
-				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
-			},
+			baseURL: "https://myapp.com",
+			trustedOrigins: [
+				"https://tenant-a.example.com",
+				"https://tenant-b.example.com",
+			],
 			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
-					baseURL = ctx.context.baseURL;
-					optionsBaseURL = ctx.context.options.baseURL as string;
+					servingByCanonical.push(getRequestBaseURL(ctx));
 				}),
 			},
-			plugins: [
-				{
-					id: "custom-plugin",
-					endpoints,
-				},
-			],
 		});
 		const client = createAuthClient({
-			fetchOptions: {
-				customFetchImpl,
-			},
+			fetchOptions: { customFetchImpl },
 			baseURL: "http://localhost:3000",
 		});
-		await client.$fetch("/validate-context", {
+		servingByCanonical.length = 0;
+
+		await Promise.all([
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-b.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		]);
+
+		expect(servingByCanonical).toContain(
+			"https://tenant-a.example.com/api/auth",
+		);
+		expect(servingByCanonical).toContain(
+			"https://tenant-b.example.com/api/auth",
+		);
+	});
+
+	test("derives the canonical origin from the request when no baseURL is set", async () => {
+		const capture: { canonical?: string; serving?: string } = {};
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: undefined,
+			advanced: { trustedProxyHeaders: true },
+			hooks: { before: captureOrigins(capture) },
+		});
+		const client = createAuthClient({
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
 			headers: {
-				"x-forwarded-host": "preview-123.vercel.app",
+				"x-forwarded-host": "derived.example.com",
 				"x-forwarded-proto": "https",
 			},
 		});
-		expect(baseURL).toBe("https://preview-123.vercel.app/api/auth");
-		expect(optionsBaseURL).toBe("https://preview-123.vercel.app");
-		expect(internalAdapter).toBeDefined();
+		expect(capture.canonical).toBe("https://derived.example.com/api/auth");
 	});
 });

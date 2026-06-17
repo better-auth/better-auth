@@ -124,21 +124,15 @@ export async function createAuthServer(
 			return;
 		}
 
-		// Server-side direct `auth.api` call. Forwards request headers on
-		// `/whoami`; deliberately omits them on `/whoami-no-source` so the
-		// error path can be tested end-to-end.
-		if (req.url === "/whoami" || req.url === "/whoami-no-source") {
+		// Server-side direct `auth.api` call forwarding the request headers, so
+		// the call is served on whichever trusted host the request arrived on.
+		if (req.url === "/whoami") {
 			const headers = new Headers();
-			if (req.url === "/whoami") {
-				for (const [k, v] of Object.entries(req.headers)) {
-					if (typeof v === "string") headers.set(k, v);
-				}
+			for (const [k, v] of Object.entries(req.headers)) {
+				if (typeof v === "string") headers.set(k, v);
 			}
 			try {
-				const session =
-					req.url === "/whoami"
-						? await auth.api.getSession({ headers })
-						: await auth.api.getSession();
+				const session = await auth.api.getSession({ headers });
 				res.statusCode = 200;
 				res.setHeader("Content-Type", "application/json");
 				res.end(JSON.stringify({ session }));

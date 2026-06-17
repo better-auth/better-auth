@@ -8,6 +8,7 @@ import type {
 	ProviderGrantAuthority,
 } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
+import { getRequestBaseURL } from "../context/helpers";
 import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
@@ -250,7 +251,7 @@ async function dispatchVerificationEmail(
 			undefined,
 			c.context.options.emailVerification?.expiresIn,
 		);
-		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+		const url = `${getRequestBaseURL(c)}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 			callbackURL || "/",
 		)}`;
 		await c.context.runInBackgroundOrAwait(

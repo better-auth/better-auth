@@ -409,6 +409,7 @@ export {
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
+export { getRequestBaseURL } from "../context/helpers";
 export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";

@@ -30,7 +30,6 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
-import { isDynamicBaseURLConfig } from "../utils/url";
 import {
 	parseCookies,
 	SECURE_COOKIE_PREFIX,
@@ -43,37 +42,33 @@ import {
 	setAccountCookie,
 } from "./session-store";
 
-export function createCookieGetter(options: BetterAuthOptions) {
+/**
+ * @param baseURLOverride The serving base URL for this request, used to derive
+ * the cross-subdomain cookie domain and `Secure` flag when they follow the host
+ * the request arrived on. Defaults to the canonical `options.baseURL`.
+ */
+export function createCookieGetter(
+	options: BetterAuthOptions,
+	baseURLOverride?: string,
+) {
 	const baseURLString =
-		typeof options.baseURL === "string" ? options.baseURL : undefined;
-	const dynamicProtocol =
-		typeof options.baseURL === "object" && options.baseURL !== null
-			? options.baseURL.protocol
-			: undefined;
+		baseURLOverride ??
+		(typeof options.baseURL === "string" ? options.baseURL : undefined);
 
 	/**
 	 * Determines whether cookies should use the `Secure` flag.
 	 *
 	 * Resolution order:
 	 * 1. `advanced.useSecureCookies` — explicit user override, always wins.
-	 * 2. Dynamic config `protocol: "https"` / `"http"` — honour the explicit setting.
-	 * 3. Static `baseURL` string — check if it starts with `https://`.
-	 * 4. Fallback — `isProduction` (i.e. `NODE_ENV === "production"`).
-	 *
-	 * For dynamic configs with `protocol: "auto"` or unset, the actual
-	 * protocol depends on each incoming request and is unknown at init time,
-	 * so we fall back to step 4.
+	 * 2. Serving `baseURL` — `https://` is secure, `http://` is not.
+	 * 3. Fallback — `isProduction` (i.e. `NODE_ENV === "production"`).
 	 */
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: dynamicProtocol === "https"
-				? true
-				: dynamicProtocol === "http"
-					? false
-					: baseURLString
-						? baseURLString.startsWith("https://")
-						: isProduction;
+			: baseURLString
+				? baseURLString.startsWith("https://")
+				: isProduction;
 	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
@@ -81,11 +76,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		? options.advanced?.crossSubDomainCookies?.domain ||
 			(baseURLString ? new URL(baseURLString).hostname : undefined)
 		: undefined;
-	if (
-		crossSubdomainEnabled &&
-		!domain &&
-		!isDynamicBaseURLConfig(options.baseURL)
-	) {
+	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled.",
 		);
@@ -118,8 +109,11 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	return createCookie;
 }
 
-export function getCookies(options: BetterAuthOptions) {
-	const createCookie = createCookieGetter(options);
+export function getCookies(
+	options: BetterAuthOptions,
+	baseURLOverride?: string,
+) {
+	const createCookie = createCookieGetter(options, baseURLOverride);
 	const sessionMaxAge = options.session?.expiresIn || sec("7d");
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,

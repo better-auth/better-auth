@@ -8,6 +8,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { getSessionFromCtx } from "../../api/routes/session";
+import { getRequestBaseURL } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -506,7 +507,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
 							);
-							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+							const url = `${getRequestBaseURL(ctx)}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 								ctx.body.callbackURL || "/",
 							)}`;
 							await ctx.context.runInBackgroundOrAwait(

@@ -191,13 +191,10 @@ describe("oauth - init", () => {
 		).resolves.not.toThrowError();
 	});
 
-	it("should pass with dynamic baseURL config when ctx.baseURL is unresolved during init", async () => {
+	it("should pass when no baseURL is set and the issuer is unresolved during init", async () => {
 		await expect(
 			getTestInstance({
-				baseURL: {
-					allowedHosts: ["localhost:3000"],
-					protocol: "http",
-				},
+				baseURL: undefined,
 				plugins: [
 					jwt(),
 					oauthProvider({

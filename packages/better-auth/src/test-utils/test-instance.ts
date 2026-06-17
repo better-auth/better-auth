@@ -15,7 +15,7 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import { getBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -159,26 +159,9 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
-		// Synthesize a host header from allowedHosts so setup resolves under
-		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
-		// so it's replaced, not split on.
-		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? auth.options.baseURL
-			: undefined;
-		const pattern =
-			dynamicBaseURL?.allowedHosts.find(
-				(h) => !h.includes("*") && !h.includes("?"),
-			) ?? dynamicBaseURL?.allowedHosts[0];
-		const host = pattern
-			?.replace(/^https?:\/\//, "")
-			.split(/[/#]/)[0]
-			?.replace(/\*/g, "test")
-			.replace(/\?/g, "x");
-		const headers = host ? new Headers({ host }) : undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
-			headers,
 		});
 	}
 
@@ -266,17 +249,12 @@ export async function getTestInstance<
 		);
 	};
 
-	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
-		? getBaseURL(
-				"http://localhost:" + (config?.port || 3000),
-				options?.basePath || "/api/auth",
-			)
-		: getBaseURL(
-				typeof options?.baseURL === "string"
-					? options.baseURL
-					: "http://localhost:" + (config?.port || 3000),
-				options?.basePath || "/api/auth",
-			);
+	const clientBaseURL = getBaseURL(
+		typeof options?.baseURL === "string"
+			? options.baseURL
+			: "http://localhost:" + (config?.port || 3000),
+		options?.basePath || "/api/auth",
+	);
 
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),

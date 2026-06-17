@@ -5,6 +5,7 @@ import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
+import { getRequestBaseURL } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
@@ -63,7 +64,7 @@ export async function sendVerificationEmailFn(
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+	const url = `${getRequestBaseURL(ctx)}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
 	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
 	await ctx.context.options.emailVerification.sendVerificationEmail(
@@ -345,7 +346,7 @@ export const verifyEmail = createAuthEndpoint(
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)
 						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+					const url = `${getRequestBaseURL(ctx)}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
@@ -450,7 +451,7 @@ export const verifyEmail = createAuthEndpoint(
 							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: updatedUser,
-									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+									url: `${getRequestBaseURL(ctx)}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
 								ctx.request?.clone(),

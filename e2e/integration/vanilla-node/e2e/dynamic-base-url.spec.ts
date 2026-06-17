@@ -43,22 +43,22 @@ function httpGet(
 	});
 }
 
-test.describe("dynamic baseURL (HTTP)", () => {
+test.describe("multiple domains (HTTP)", () => {
 	/**
+	 * Identity stays anchored to the canonical `baseURL`: the OAuth issuer in
+	 * discovery is the same no matter which trusted host fetches it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/4151
 	 * @see https://github.com/better-auth/better-auth/issues/8447
 	 */
-	test("oauthProviderAuthServerMetadata resolves issuer from request host", async () => {
+	test("oauth metadata issuer is canonical regardless of request host", async () => {
 		const { port, stop } = await setupServer(
 			{
-				baseURL: {
-					// Non-loopback hosts: `validateIssuerUrl` must upgrade the
-					// advertised issuer to https per RFC 9207, even though the
-					// configured protocol is http and the wire request is HTTP.
-					// `:*` makes the ephemeral test port match the pattern.
-					allowedHosts: ["tenant-a.example.com:*", "tenant-b.example.com:*"],
-					protocol: "http",
-					fallback: "http://fallback.example.com",
-				},
+				baseURL: "https://auth.example.com",
+				trustedOrigins: [
+					"http://tenant-a.example.com:*",
+					"http://tenant-b.example.com:*",
+				],
 			},
 			{ oauthProvider: true, disableTestUser: true },
 		);
@@ -73,8 +73,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 				);
 				expect(res.status).toBe(200);
 				const body = JSON.parse(res.body) as { issuer?: string };
-				// `validateIssuerUrl` forces https for non-loopback hostnames (RFC 9207).
-				expect(body.issuer).toBe(`https://${host}/api/auth`);
+				expect(body.issuer).toBe("https://auth.example.com/api/auth");
 			}
 		} finally {
 			await stop();
@@ -82,55 +81,32 @@ test.describe("dynamic baseURL (HTTP)", () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9105
+	 * A direct `auth.api` call is served when the request arrives on a trusted
+	 * non-canonical host (multi-domain serving).
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/4151
+	 * @see https://github.com/better-auth/better-auth/issues/8478
 	 */
-	test("direct auth.api calls resolve baseURL from forwarded headers", async () => {
+	test("direct auth.api calls are served on trusted non-canonical hosts", async () => {
 		const { port, stop } = await setupServer({
-			baseURL: {
-				// `:*` so the ephemeral test port matches the pattern; without it
-				// resolution falls through to `fallback` and the test would pass
-				// even if per-request resolution were broken.
-				allowedHosts: ["tenant-a.localhost:*", "tenant-b.localhost:*"],
-				protocol: "http",
-				fallback: "http://fallback.localhost",
-			},
+			baseURL: "https://app.example.com",
+			trustedOrigins: [
+				"http://tenant-a.localhost:*",
+				"http://tenant-b.localhost:*",
+			],
 		});
 
 		try {
-			const res = await httpGet(port, "/whoami", `tenant-a.localhost:${port}`);
-			expect(res.status).toBe(200);
-			const body = JSON.parse(res.body) as { session: unknown };
-			expect(body.session).toBeNull();
-		} finally {
-			await stop();
-		}
-	});
-
-	/**
-	 * Direct `auth.api` call with no forwarded source and no `fallback` must
-	 * surface a structured `APIError` message rather than silently leaving
-	 * `ctx.context.baseURL = ""` for downstream code to crash on.
-	 */
-	test("direct auth.api call without source or fallback returns a clear error", async () => {
-		const { port, stop } = await setupServer(
-			{
-				baseURL: {
-					allowedHosts: ["tenant-a.localhost:*"],
-					protocol: "http",
-				},
-			},
-			{ disableTestUser: true },
-		);
-
-		try {
-			const res = await httpGet(
-				port,
-				"/whoami-no-source",
-				`tenant-a.localhost:${port}`,
-			);
-			expect(res.status).toBe(500);
-			const body = JSON.parse(res.body) as { error?: string };
-			expect(body.error).toMatch(/baseURL|headers|fallback/i);
+			for (const subdomain of ["tenant-a", "tenant-b"]) {
+				const res = await httpGet(
+					port,
+					"/whoami",
+					`${subdomain}.localhost:${port}`,
+				);
+				expect(res.status).toBe(200);
+				const body = JSON.parse(res.body) as { session: unknown };
+				expect(body.session).toBeNull();
+			}
 		} finally {
 			await stop();
 		}
