@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -42,6 +43,7 @@ const { execute } = await testAdapter({
 				debugLogs: { isRunningAdapterTests: true },
 				schema: { ...schemas, relations },
 				provider: "pg",
+				transaction: true,
 			},
 		);
 	},
@@ -71,11 +73,12 @@ const { execute } = await testAdapter({
 	prefixTests: "pg",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite(),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);

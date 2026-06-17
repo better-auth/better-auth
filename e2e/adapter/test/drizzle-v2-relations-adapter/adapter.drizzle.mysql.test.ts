@@ -6,6 +6,7 @@ import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -72,11 +73,17 @@ const { execute } = await testAdapter({
 	prefixTests: "mysql",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite({
+			disableTests: {
+				"findOne - eq with mode sensitive (default) should not match different case":
+					true,
+			},
+		}),
 	],
 	async onFinish() {
 		await mysqlDB.end();
