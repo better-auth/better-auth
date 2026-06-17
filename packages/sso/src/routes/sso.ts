@@ -49,6 +49,7 @@ import type {
 import {
 	domainMatches,
 	normalizePem,
+	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
@@ -656,6 +657,27 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
+			}
+
+			// SSO provider ids share the account-linking provider namespace with
+			// social/OAuth providers. Reject ids that collide with a configured
+			// social provider, a trusted provider, or a reserved built-in id so a
+			// user-registered SSO provider can't be confused with one of them.
+			// Trust for SSO providers is established separately via
+			// verified domain ownership, never by this shared namespace.
+			const reservedProviderIds = new Set<string>([
+				"credential",
+				...ctx.context.socialProviders.map((p) => p.id),
+				...ctx.context.trustedProviders,
+			]);
+			if (reservedProviderIds.has(body.providerId)) {
+				ctx.context.logger.warn(
+					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+				);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message:
+						"This providerId is reserved and cannot be used for an SSO provider",
+				});
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -1566,6 +1588,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				redirect: "error",
 			},
 		);
 		if (userInfoResponse.error) {
@@ -1586,9 +1609,9 @@ async function handleOIDCCallback(
 			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
+				? parseProviderEmailVerified(
+						rawUserInfo[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: rawUserInfo[mapping.name || "name"] as string | undefined,
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
@@ -1631,7 +1654,9 @@ async function handleOIDCCallback(
 			id: idToken[mapping.id || "sub"],
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
-				? idToken[mapping.emailVerified || "email_verified"]
+				? parseProviderEmailVerified(
+						idToken[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
@@ -1688,6 +1713,11 @@ async function handleOIDCCallback(
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
 			isTrustedProvider,
+			// SSO provider ids are user-controlled and live in the same namespace
+			// as social providers. Never inherit trust from the global
+			// `trustedProviders` list by name — rely solely on the SSO-specific
+			// `isTrustedProvider` (verified domain ownership) computed above.
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

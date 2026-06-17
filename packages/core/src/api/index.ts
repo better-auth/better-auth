@@ -132,6 +132,51 @@ export function createAuthEndpoint<
 	);
 }
 
+/**
+ * Set `metadata.SERVER_ONLY` while preserving any existing metadata
+ * (`$Infer`, `openapi`, ...).
+ */
+function withServerOnly<Options extends EndpointOptions>(
+	options: Options,
+): Options {
+	return {
+		...options,
+		metadata: { ...options.metadata, SERVER_ONLY: true },
+	} as Options;
+}
+
+/**
+ * Declare a **server-only** endpoint.
+ *
+ * The endpoint is callable through `auth.api.*` from trusted server code but is
+ * never registered on the HTTP router and never emitted into the OpenAPI
+ * schema. It takes no path because it has no URL to be reached at.
+ *
+ * Prefer this over the path-less `createAuthEndpoint({ ... }, handler)` form.
+ * Setting `metadata.SERVER_ONLY` makes the intent explicit at the call site and
+ * keeps the endpoint off the HTTP surface even if a path is later added by
+ * mistake: better-call's router skips an endpoint when its path is missing *or*
+ * when `SERVER_ONLY` is set, so the two together are defense in depth. Relying
+ * on path omission alone is invisible and one keystroke away from exposure.
+ *
+ * @example
+ * ```ts
+ * viewBackupCodes: createAuthEndpoint.serverOnly(
+ * 	{ method: "POST", body: schema },
+ * 	async (ctx) => { ... },
+ * )
+ * ```
+ */
+createAuthEndpoint.serverOnly = <
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	options: Options,
+	handler: EndpointHandler<Path, Options, R>,
+): StrictEndpoint<Path, Options, R> =>
+	createAuthEndpoint(withServerOnly(options), handler);
+
 export type AuthEndpoint<
 	Path extends string,
 	Opts extends EndpointOptions,

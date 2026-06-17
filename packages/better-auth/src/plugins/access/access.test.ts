@@ -187,4 +187,41 @@ describe("access", () => {
 			expect(response.error).toContain("audit");
 		}
 	});
+
+	it("should preserve unauthorized error formats for unknown and denied resources", () => {
+		const unknownResource = looseRole.authorize({
+			audit: ["read"],
+		});
+		const deniedAction = looseRole.authorize({
+			project: ["delete-many"],
+		});
+
+		expect(unknownResource).toEqual({
+			success: false,
+			error: "You are not allowed to access resource: audit",
+		});
+		expect(deniedAction).toEqual({
+			success: false,
+			error: 'unauthorized to access resource "project"',
+		});
+	});
+
+	it("should preserve AND behavior for unknown action connectors", () => {
+		const response = role1.authorize({
+			project: { actions: ["create", "delete-many"], connector: "XOR" },
+		} as never);
+
+		expect(response.success).toBe(false);
+	});
+
+	it("should return an unauthorized response for non-string action values", () => {
+		const response = role1.authorize({
+			project: ["create", 1],
+		} as never);
+
+		expect(response).toEqual({
+			success: false,
+			error: 'unauthorized to access resource "project"',
+		});
+	});
 });

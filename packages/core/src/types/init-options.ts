@@ -101,6 +101,32 @@ export interface BetterAuthRateLimitStorage {
 		value: RateLimit,
 		update?: boolean | undefined,
 	) => Promise<void>;
+	/**
+	 * Atomically records one request against `key` within the `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the request was counted within the active window;
+	 * when `allowed` is false the limit was already reached and `retryAfter` is
+	 * the number of seconds until the window frees up. Whether the window slides
+	 * or is fixed depends on the backing storage: the database backend resets
+	 * once the window elapses, while secondary storage uses a fixed time-to-live
+	 * set when the window first opens.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Optional for backwards compatibility. A storage without it falls back to
+	 * the legacy non-atomic `get`/`set` path, which is best-effort under
+	 * concurrency.
+	 *
+	 * TODO(rate-limit-consume-required): make this the sole required member on
+	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 */
+	consume?: (
+		key: string,
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -1134,9 +1160,13 @@ export type BetterAuthOptions = {
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *

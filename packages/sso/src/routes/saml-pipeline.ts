@@ -20,7 +20,11 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	parseProviderEmailVerified,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
@@ -188,7 +192,9 @@ export async function processSAMLResponse(
 	}
 
 	// 7. SP/IdP construction via helpers
-	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
+	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+		clockSkew: options?.saml?.clockSkew,
+	});
 	const idp = createIdP(parsedSamlConfig);
 
 	const samlRedirectUrl = getSafeRedirectUrl(
@@ -251,18 +257,19 @@ export async function processSAMLResponse(
 		const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
 
 		if (inResponseTo) {
-			let storedRequest: AuthnRequestRecord | null = null;
-
-			const verification =
-				await ctx.context.internalAdapter.findVerificationValue(
+			// Consume the stored AuthnRequest atomically so two concurrent ACS
+			// submissions cannot both match one outstanding request. The consume
+			// returns null for missing or expired rows, so no separate expiry gate
+			// is needed.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 				);
-			if (verification) {
+
+			let storedRequest: AuthnRequestRecord | null = null;
+			if (consumed) {
 				try {
-					storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
-					if (storedRequest && storedRequest.expiresAt < Date.now()) {
-						storedRequest = null;
-					}
+					storedRequest = JSON.parse(consumed.value) as AuthnRequestRecord;
 				} catch {
 					storedRequest = null;
 				}
@@ -287,17 +294,10 @@ export async function processSAMLResponse(
 						actualProvider: providerId,
 					},
 				);
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-				);
 				throw ctx.redirect(
 					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 				);
 			}
-
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-			);
 		} else if (!allowIdpInitiated) {
 			ctx.context.logger.error(
 				"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
@@ -310,6 +310,10 @@ export async function processSAMLResponse(
 	}
 
 	// 13. Replay protection
+	// Reserve the assertion id atomically: the first caller writes the tombstone
+	// and proceeds, every later caller (including a concurrent submission) finds
+	// the row already present and is rejected. The deterministic primary key is
+	// the gate, so no separate find/expiry check is needed.
 	const samlContent = (parsedResponse as any).samlContent as string | undefined;
 	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
 
@@ -324,27 +328,21 @@ export async function processSAMLResponse(
 			? new Date(conditions.notOnOrAfter).getTime() + clockSkew
 			: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
 
-		const existingAssertion =
-			await ctx.context.internalAdapter.findVerificationValue(
-				`${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-			);
-
-		let isReplay = false;
-		if (existingAssertion) {
-			try {
-				const stored = JSON.parse(existingAssertion.value);
-				if (stored.expiresAt >= Date.now()) {
-					isReplay = true;
-				}
-			} catch (error) {
-				ctx.context.logger.warn("Failed to parse stored assertion record", {
+		const reserved = await ctx.context.internalAdapter.reserveVerificationValue(
+			{
+				identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+				value: JSON.stringify({
 					assertionId,
-					error,
-				});
-			}
-		}
+					issuer,
+					providerId,
+					usedAt: Date.now(),
+					expiresAt,
+				}),
+				expiresAt: new Date(expiresAt),
+			},
+		);
 
-		if (isReplay) {
+		if (!reserved) {
 			ctx.context.logger.error(
 				"SAML assertion replay detected: assertion ID already used",
 				{ assertionId, issuer, providerId },
@@ -353,18 +351,6 @@ export async function processSAMLResponse(
 				`${samlRedirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 			);
 		}
-
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-			value: JSON.stringify({
-				assertionId,
-				issuer,
-				providerId,
-				usedAt: Date.now(),
-				expiresAt,
-			}),
-			expiresAt: new Date(expiresAt),
-		});
 	} else {
 		ctx.context.logger.warn(
 			"Could not extract assertion ID for replay protection",
@@ -407,7 +393,7 @@ export async function processSAMLResponse(
 			extract.nameID,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? ((attr(mapping.emailVerified) || false) as boolean)
+				? parseProviderEmailVerified(attr(mapping.emailVerified))
 				: false,
 	};
 	if (!userInfo.id || !userInfo.email) {
@@ -423,11 +409,14 @@ export async function processSAMLResponse(
 	}
 
 	// 15. Session creation
+	// SSO provider ids are user-controlled and share the social-provider account
+	// namespace, so trust must come solely from verified domain ownership —
+	// never from a name match against the global `trustedProviders` list
+	// (enforced via `trustProviderByName: false` below).
 	const isTrustedProvider: boolean =
-		ctx.context.trustedProviders.includes(providerId) ||
-		("domainVerified" in provider &&
-			!!(provider as { domainVerified?: boolean }).domainVerified &&
-			validateEmailDomain(userInfo.email as string, provider.domain));
+		"domainVerified" in provider &&
+		!!(provider as { domainVerified?: boolean }).domainVerified &&
+		validateEmailDomain(userInfo.email as string, provider.domain);
 
 	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
 	// fields. Currently callbackUrl serves both purposes, which means
@@ -446,7 +435,7 @@ export async function processSAMLResponse(
 				email: userInfo.email as string,
 				name: (userInfo.name || userInfo.email) as string,
 				id: userInfo.id as string,
-				emailVerified: Boolean(userInfo.emailVerified),
+				emailVerified: userInfo.emailVerified,
 			},
 			account: {
 				providerId,
@@ -457,6 +446,7 @@ export async function processSAMLResponse(
 			callbackURL: callbackUrl,
 			disableSignUp: options?.disableImplicitSignUp,
 			isTrustedProvider,
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
@@ -496,7 +486,7 @@ export async function processSAMLResponse(
 			providerId,
 			accountId: userInfo.id as string,
 			email: userInfo.email as string,
-			emailVerified: Boolean(userInfo.emailVerified),
+			emailVerified: userInfo.emailVerified,
 			rawAttributes: attributes,
 		},
 		provider,

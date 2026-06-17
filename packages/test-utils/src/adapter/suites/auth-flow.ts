@@ -74,6 +74,73 @@ export const authFlowTestSuite = createTestSuite(
 			expect(result.user).toBeDefined();
 			expect(result.user.id).toBe(signUpResult.user.id);
 		},
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10054
+		 */
+		"should reset password with a single-use token": async () => {
+			let resetToken = "";
+			await modifyBetterAuthOptions(
+				{
+					emailAndPassword: {
+						enabled: true,
+						async sendResetPassword({ token }) {
+							resetToken = token;
+						},
+					},
+				},
+				false,
+			);
+			const auth = await getAuth();
+			const user = await generate("user");
+			const originalPassword = crypto.randomUUID();
+			const newPassword = `${crypto.randomUUID()}-new`;
+
+			const signUpResult = await auth.api.signUpEmail({
+				body: {
+					email: user.email,
+					password: originalPassword,
+					name: user.name,
+					image: user.image || "",
+				},
+			});
+
+			await auth.api.requestPasswordReset({
+				body: {
+					email: user.email,
+					redirectTo: "http://localhost:3000/reset-password",
+				},
+			});
+			expect(resetToken.length).toBeGreaterThan(10);
+
+			const resetResult = await auth.api.resetPassword({
+				body: { token: resetToken, newPassword },
+			});
+			expect(resetResult.status).toBe(true);
+
+			const oldPasswordResult = await tryCatch(
+				auth.api.signInEmail({
+					body: { email: user.email, password: originalPassword },
+				}),
+			);
+			expect(oldPasswordResult.data).toBeNull();
+			expect(oldPasswordResult.error).toBeDefined();
+
+			const newPasswordResult = await auth.api.signInEmail({
+				body: { email: user.email, password: newPassword },
+			});
+			expect(newPasswordResult.user.id).toBe(signUpResult.user.id);
+
+			const replayResult = await tryCatch(
+				auth.api.resetPassword({
+					body: {
+						token: resetToken,
+						newPassword: `${crypto.randomUUID()}-replay`,
+					},
+				}),
+			);
+			expect(replayResult.data).toBeNull();
+			expect(replayResult.error).toBeDefined();
+		},
 		"should successfully get session": async () => {
 			const auth = await getAuth();
 			const user = await generate("user");

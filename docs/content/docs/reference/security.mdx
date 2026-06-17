@@ -34,7 +34,9 @@ See the [session management](/docs/concepts/session-management) for more details
 Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (CSRF) attacks:
 
 1. **Avoid simple requests**
-   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
+   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. By default, Better Auth prefers non-simple requests for state-changing operations, typically by requiring a non-simple header or a `Content-Type` header of `application/json`.
+
+   Some routes intentionally accept `application/x-www-form-urlencoded` requests for progressive enhancement or protocol interoperability, including sign-in/sign-up email flows and some callback/token-style endpoints. Those routes rely on additional protections such as origin validation, Fetch Metadata checks where applicable, and protocol-specific state or nonce validation.
 
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
@@ -51,14 +53,14 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 
    * If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
 
-   * If the request is **same-origin** or **same-site**, Better Auth still validates the `Origin`/`Referer` against your `trustedOrigins` configuration, using the existing origin validation logic.
+   * Otherwise, if the request carries an `Origin` or `Referer` header, Better Auth validates it against your `trustedOrigins` configuration and rejects untrusted origins. This applies whether or not the client sends Fetch Metadata headers.
 
-   * If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), Better Auth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
+   * Only when the request carries **neither** Fetch Metadata headers **nor** an `Origin`/`Referer` header (typical of non-browser clients) does Better Auth fall back to permissive behavior, so server-to-server and native clients are not rejected.
 
    This mechanism allows modern browsers to receive stronger protection against first-login CSRF attacks **without requiring CSRF tokens or client-side JavaScript**, and works seamlessly with progressive enhancement patterns.
 
    <Callout type="info">
-     Non-browser HTTP clients (mobile apps, server-to-server) should set the `Origin` or `Referer` header appropriately when making requests that include cookies. This ensures proper CSRF validation regardless of Fetch Metadata support.
+     Non-browser HTTP clients (mobile apps, server-to-server) that send an `Origin` or `Referer` header must use a value listed in `trustedOrigins`, since Better Auth validates it whenever it is present. Clients that send no origin header and no Fetch Metadata (typical of non-browser tooling) are not affected.
    </Callout>
 
 5. **No Mutations on GET Requests (with additional safeguards)**
@@ -122,7 +124,9 @@ Disables **URL validation** against `trustedOrigins`, including:
 
 ## OAuth State and PKCE
 
-To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) using the configured state storage strategy. By default, the state payload is stored in verification storage and the state value is also persisted in a signed cookie for validation. When `storeStateStrategy` is set to `cookie`, the full state payload is encrypted into a short-lived cookie instead of creating a verification record.
+
+The state helps prevent CSRF attacks, while PKCE protects against code injection threats. After the OAuth callback is processed, Better Auth expires the relevant cookie and, when verification storage is used, deletes the stored verification record.
 
 ## Cookies
 
