@@ -85,12 +85,7 @@ export interface AccessTokenClaimsInput {
 	 * contributed access-token claims must be grant-type-stable.
 	 */
 	grantType: GrantType | undefined;
-	/**
-	 * Session the tokens are issued for, when one is available. Set at issuance
-	 * for the session-backed grants; `undefined` at introspection, since the
-	 * opaque-token row carries no live session. Best-effort, mirroring the field
-	 * on {@link OAuthClaimExtensionInput}.
-	 */
+	/** Session the tokens are issued for; `undefined` at introspection. See {@link OAuthClaimExtensionInput.sessionId}. */
 	sessionId: string | undefined;
 	/**
 	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.

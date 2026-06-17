@@ -331,16 +331,10 @@ export interface OAuthClaimExtensionInput {
 	grantType?: GrantType;
 	referenceId?: string;
 	/**
-	 * Identifier of the session the tokens are issued for. It is set when a
-	 * session is available: on the authorization_code grant, and on the
-	 * refresh_token grant when the refresh token is still linked to a live
-	 * session. Resolution is best-effort, so it MAY be undefined even on a
-	 * refresh flow if that session was deleted or unlinked (for example a row
-	 * cleared by `onDelete: "set null"`). It is always absent for grants with no
-	 * user session, such as client_credentials, and at opaque-token
-	 * introspection re-derivation. A contributor MUST treat it as possibly
-	 * undefined and uses it, when present, to resolve per-session authentication
-	 * context for the issued claims without re-deriving it from the request.
+	 * Session the tokens are issued for, when one is available. Best-effort:
+	 * set on the session-backed grants (authorization_code, refresh_token),
+	 * undefined otherwise (client_credentials, introspection, or a session that
+	 * was deleted or unlinked). Treat as possibly undefined.
 	 */
 	sessionId?: string;
 	resources?: string[];
