@@ -299,6 +299,9 @@ export const genericOAuth = <const ID extends string>(
 					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
+					requiresIdTokenNonce:
+						idTokenConfig !== undefined &&
+						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
@@ -329,6 +332,7 @@ export const genericOAuth = <const ID extends string>(
 							accessType: c.accessType,
 							responseType: c.responseType,
 							responseMode: c.responseMode,
+							nonce: data.idTokenNonce,
 							additionalParams: {
 								...(c.authorizationUrlParams ?? {}),
 								...(data.additionalParams ?? {}),
@@ -370,23 +374,25 @@ export const genericOAuth = <const ID extends string>(
 						);
 					},
 					async getUserInfo(tokens) {
+						const { expectedIdTokenNonce, ...oauthTokens } = tokens;
 						// Fail closed: when discovery published a JWKS, an id_token
 						// that cannot be verified must not become an identity source.
-						if (tokens.idToken && provider.idToken) {
+						if (oauthTokens.idToken && provider.idToken) {
 							const verified = await verifyProviderIdToken(
 								provider,
-								tokens.idToken,
+								oauthTokens.idToken,
+								expectedIdTokenNonce,
 							);
 							if (!verified) {
 								ctx.logger.error(
-									`Provider "${c.providerId}": id_token failed verification against the discovery JWKS`,
+									`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
 								);
 								return null;
 							}
 						}
 						const raw = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await fetchUserInfo(tokens, userInfoUrl);
+							? await c.getUserInfo(oauthTokens)
+							: await fetchUserInfo(oauthTokens, userInfoUrl);
 						if (!raw) {
 							return null;
 						}
