@@ -86,6 +86,13 @@ export interface AccessTokenClaimsInput {
 	 */
 	grantType: GrantType | undefined;
 	/**
+	 * Session the tokens are issued for, when one is available. Set at issuance
+	 * for the session-backed grants; `undefined` at introspection, since the
+	 * opaque-token row carries no live session. Best-effort, mirroring the field
+	 * on {@link OAuthClaimExtensionInput}.
+	 */
+	sessionId: string | undefined;
+	/**
 	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.
 	 * Available only at issuance; `undefined` at introspection.
 	 */
@@ -122,6 +129,7 @@ export async function resolveAccessTokenClaims(
 		referenceId,
 		metadata,
 		grantType,
+		sessionId,
 		perRequestClaims,
 		resourcePolicyClaims,
 	} = input;
@@ -133,6 +141,7 @@ export async function resolveAccessTokenClaims(
 		scopes,
 		grantType,
 		referenceId,
+		sessionId,
 		resources,
 		metadata,
 	});

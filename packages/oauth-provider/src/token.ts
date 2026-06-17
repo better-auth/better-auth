@@ -908,6 +908,7 @@ async function createUserTokens(
 				client,
 				scopes: effectiveScopes,
 				grantType,
+				sessionId,
 				resources: params.resources,
 				referenceId,
 				metadata,
