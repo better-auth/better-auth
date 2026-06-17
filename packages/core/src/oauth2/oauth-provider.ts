@@ -1,6 +1,5 @@
 import type { JWTVerifyGetKey } from "jose";
 import type { Awaitable, LiteralString } from "../types";
-import type { GenericEndpointContext } from "../types/context";
 
 /**
  * id_token verification config for a social provider.
@@ -77,6 +76,18 @@ export type OAuth2UserInfo = {
 	image?: string | undefined;
 	emailVerified: boolean;
 };
+
+/**
+ * Request metadata available to provider refresh hooks.
+ *
+ * The refresh flow may be triggered by endpoints such as `getAccessToken` or
+ * `refreshToken`; this context gives provider hooks access to the triggering
+ * request without exposing the full endpoint implementation surface.
+ */
+export interface OAuthRefreshContext {
+	headers?: Headers | undefined;
+	request?: Request | undefined;
+}
 
 /**
  * The result of building a provider authorization URL.
@@ -193,16 +204,14 @@ export interface UpstreamProvider<
 	/**
 	 * Custom function to refresh a token.
 	 *
-	 * Receives the optional `GenericEndpointContext` of the request that
-	 * triggered the refresh. Providers that don't need request-scoped data can
-	 * ignore the second argument; passing it through lets plugins read headers
-	 * or cookies (e.g. an active organization id) on refresh without
-	 * out-of-band state like AsyncLocalStorage.
+	 * Receives request metadata from the endpoint that triggered the refresh.
+	 * Providers that don't need request-scoped data can ignore the second
+	 * argument.
 	 */
 	refreshAccessToken?:
 		| ((
 				refreshToken: string,
-				ctx?: GenericEndpointContext,
+				ctx?: OAuthRefreshContext,
 		  ) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**

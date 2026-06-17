@@ -674,12 +674,12 @@ describe("oauth2", async () => {
 
 	/**
 	 * Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`,
-	 * AWS Cognito with per-tenant client overrides) require extra body params on
-	 * the refresh call. `refreshTokenParams` lets a generic-oauth plugin inject
+	 * and providers with tenant selectors) require extra body params on the
+	 * refresh call. `refreshTokenParams` lets a generic-oauth plugin inject
 	 * those params — both statically and via a function evaluated at refresh
-	 * time with the triggering request's `GenericEndpointContext` — without
-	 * forcing a full re-authorization redirect. `grant_type` and `refresh_token`
-	 * are protected from override.
+	 * time with request metadata from the triggering request — without forcing a
+	 * full re-authorization redirect. Refresh-flow and unsafe object keys are
+	 * protected from override.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/7554
 	 */
@@ -770,6 +770,9 @@ describe("oauth2", async () => {
 									refreshTokenParams: {
 										grant_type: "client_credentials",
 										refresh_token: "should-not-replace",
+										["__proto__"]: "polluted",
+										constructor: "polluted",
+										prototype: "polluted",
 										audience: "https://api.example.com",
 									},
 								},
@@ -902,10 +905,13 @@ describe("oauth2", async () => {
 			expect(noopBody.get("audience")).toBeNull();
 			expect(noopBody.get("scope")).toBeNull();
 
-			// `grant_type` and `refresh_token` are protected from override; other
-			// keys still pass through.
+			// Refresh-flow and unsafe object keys are protected from override;
+			// other keys still pass through.
 			expect(protectedBody.get("grant_type")).toBe("refresh_token");
 			expect(protectedBody.get("refresh_token")).not.toBe("should-not-replace");
+			expect(protectedBody.get("__proto__")).toBeNull();
+			expect(protectedBody.get("constructor")).toBeNull();
+			expect(protectedBody.get("prototype")).toBeNull();
 			expect(protectedBody.get("audience")).toBe("https://api.example.com");
 		} finally {
 			server.service.off("beforeResponse", captureRefresh);
