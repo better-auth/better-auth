@@ -78,6 +78,18 @@ export type OAuth2UserInfo = {
 };
 
 /**
+ * Request metadata available to provider refresh hooks.
+ *
+ * The refresh flow may be triggered by endpoints such as `getAccessToken` or
+ * `refreshToken`; this context gives provider hooks access to the triggering
+ * request without exposing the full endpoint implementation surface.
+ */
+export interface OAuthRefreshContext {
+	headers?: Headers | undefined;
+	request?: Request | undefined;
+}
+
+/**
  * The result of building a provider authorization URL.
  *
  * `requestedScopes` is the effective set of scopes encoded in the URL (the
@@ -190,10 +202,17 @@ export interface UpstreamProvider<
 		data: T;
 	} | null>;
 	/**
-	 * Custom function to refresh a token
+	 * Custom function to refresh a token.
+	 *
+	 * Receives request metadata from the endpoint that triggered the refresh.
+	 * Providers that don't need request-scoped data can ignore the second
+	 * argument.
 	 */
 	refreshAccessToken?:
-		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| ((
+				refreshToken: string,
+				ctx?: OAuthRefreshContext,
+		  ) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
 	 * Declarative id_token verification config consumed by the shared

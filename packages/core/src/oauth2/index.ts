@@ -68,6 +68,7 @@ export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthIdTokenConfig,
+	OAuthRefreshContext,
 	ProviderGrantAuthority,
 	ProviderOptions,
 	UpstreamProvider,
