@@ -166,14 +166,19 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * refreshing an access token. Useful for multi-tenant OIDC providers that
 	 * need to change `scope`, `audience`, `resource`, or a tenant identifier on
 	 * the refresh call — e.g. Zitadel's `urn:zitadel:iam:org:id:{orgId}` scope
-	 * on workspace switch, Auth0 `audience` rotation, or AWS Cognito per-tenant
-	 * `client_id` overrides — without forcing a new authorization redirect.
+	 * on workspace switch or Auth0 `audience` rotation — without forcing a new
+	 * authorization redirect.
 	 *
 	 * The function form is invoked at refresh time and receives the
 	 * `GenericEndpointContext` of the triggering request, so dynamic
 	 * per-request values like an active organization id read from cookies or
-	 * headers can be injected directly. Resolved values are merged into the
-	 * form body; `grant_type` and `refresh_token` are protected from override.
+	 * headers can be injected directly. Headers and cookies are
+	 * attacker-controlled: callers MUST validate any value derived from them
+	 * against the authenticated user's entitlements before forwarding it as a
+	 * `scope`, `audience`, or tenant claim. Resolved values are merged into the
+	 * form body; `grant_type` and `refresh_token` are protected from override,
+	 * and `client_id` is set by the configured token-endpoint authentication
+	 * after the merge so it cannot be overridden here.
 	 */
 	refreshTokenParams?:
 		| Record<string, string>
