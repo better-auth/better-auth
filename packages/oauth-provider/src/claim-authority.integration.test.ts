@@ -23,7 +23,7 @@ import {
 	resetSeedStateForTests,
 	seedResourcesOnce,
 } from "./resources";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthClaimExtensionInput, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
 const authServerBaseUrl = "http://localhost:3000";
@@ -496,4 +496,46 @@ describe("introspection — pairwise sub across clients", async () => {
 		expect(issuerView.data?.sub).not.toBe(harness.user.id);
 		expect(resourceServerView.data?.sub).toBe(issuerView.data?.sub);
 	});
+});
+
+describe("id_token claim input — sessionId", async () => {
+	// A `claims.idToken` contributor resolves per-session authentication context
+	// for the ID token. On a session-backed grant (authorization_code) it receives
+	// the issuing session's id, so it can look up that context without re-deriving
+	// it from the request.
+	let capturedInput: OAuthClaimExtensionInput | undefined;
+	const harness = await bootHarness({
+		extensions: [
+			{
+				claims: {
+					idToken: (input) => {
+						capturedInput = input;
+						return { session_probe: "captured" };
+					},
+				},
+			},
+		],
+	});
+	let oauthClient: OAuthClient;
+
+	beforeAll(async () => {
+		oauthClient = await harness.registerClient();
+	});
+
+	it("passes the issuing session id to a claims.idToken contributor on authorization_code", async () => {
+		capturedInput = undefined;
+		await harness.mintToken(oauthClient);
+
+		const input = capturedInput as OAuthClaimExtensionInput | undefined;
+		expect(input).toBeDefined();
+		expect(input?.grantType).toBe("authorization_code");
+		expect(typeof input?.sessionId).toBe("string");
+		expect(input?.sessionId).not.toBe("");
+	});
+
+	// No client_credentials assertion: that grant issues no ID token, so the
+	// idToken claim path never runs for it and the contributor is never invoked
+	// with a client_credentials input to inspect. The JSDoc on
+	// `OAuthClaimExtensionInput.sessionId` documents the absence for grants with
+	// no user session.
 });

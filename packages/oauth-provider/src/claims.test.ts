@@ -2,7 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { describe, expect, it, vi } from "vitest";
 import { resolveAccessTokenClaims } from "./claims";
-import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import type {
+	OAuthClaimExtensionInput,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 
 function optsWith(
 	customAccessTokenClaims?: OAuthOptions<Scope[]>["customAccessTokenClaims"],
@@ -22,6 +27,7 @@ const baseInput = {
 	referenceId: undefined,
 	metadata: undefined,
 	grantType: undefined,
+	sessionId: undefined,
 	perRequestClaims: undefined,
 };
 
@@ -99,5 +105,27 @@ describe("resolveAccessTokenClaims", () => {
 			referenceId: "ref-1",
 			metadata: { plan: "pro" },
 		});
+	});
+
+	it("passes sessionId to an access-token extension contributor", async () => {
+		let received: OAuthClaimExtensionInput | undefined;
+		await resolveAccessTokenClaims({
+			...baseInput,
+			opts: {
+				extensions: [
+					{
+						claims: {
+							accessToken: (input: OAuthClaimExtensionInput) => {
+								received = input;
+								return {};
+							},
+						},
+					},
+				],
+			} as unknown as OAuthOptions<Scope[]>,
+			sessionId: "sess-123",
+			resourcePolicyClaims: {},
+		});
+		expect(received?.sessionId).toBe("sess-123");
 	});
 });
