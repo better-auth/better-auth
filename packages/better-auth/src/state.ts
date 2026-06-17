@@ -27,6 +27,11 @@ const stateDataSchema = z.looseObject({
 		.optional(),
 	requestSignUp: z.boolean().optional(),
 	/**
+	 * OIDC nonce sent as the authorization request `nonce` parameter when the
+	 * provider requires an ID token to be bound to this redirect flow.
+	 */
+	idTokenNonce: z.string().optional(),
+	/**
 	 * The effective set of scopes requested in the authorization URL, captured
 	 * from `createAuthorizationURL`. Persisted so the callback can fall back to
 	 * the request when the provider omits `scope` from its token response
