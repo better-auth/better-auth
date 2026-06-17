@@ -144,7 +144,9 @@ export interface GenericOAuthConfig {
 	authorizationUrlParams?:
 		| (
 				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
+				| ((
+						ctx: GenericEndpointContext,
+				  ) => Record<string, string> | Promise<Record<string, string>>)
 		  )
 		| undefined;
 	/**

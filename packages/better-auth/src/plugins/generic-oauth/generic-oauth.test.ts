@@ -2869,6 +2869,94 @@ describe("oauth2", async () => {
 		expect(session.data?.user.image).toBe(customUserInfo.avatar_url);
 	});
 
+	it("should apply authorizationUrlParams provided as a sync function", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/8741
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "sync-params-provider",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							pkce: true,
+							authorizationUrlParams: () => ({
+								resource: "https://api.example.com",
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "sync-params-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(
+			new URL(res.data?.url || "").searchParams.get("resource"),
+		).toBe("https://api.example.com");
+	});
+
+	it("should apply authorizationUrlParams provided as an async function", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/8741
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "async-params-provider",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							pkce: true,
+							authorizationUrlParams: async () => ({
+								resource: "https://api.example.com",
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "async-params-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(
+			new URL(res.data?.url || "").searchParams.get("resource"),
+		).toBe("https://api.example.com");
+	});
+
 	describe("Duplicate Provider ID Detection", () => {
 		it("should warn when duplicate provider IDs are detected", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
