@@ -30,8 +30,10 @@ import {
 	escapeStripeSearchValue,
 	getPlanByName,
 	getPlans,
+	INVALID_SEAT_COUNT_MESSAGE,
 	isActiveOrTrialing,
 	isPendingCancel,
+	resolveOrganizationSeatCount,
 	resolvePlanItem,
 	resolveQuantity,
 } from "./utils";
@@ -654,9 +656,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			);
 			let memberCount = 0;
 			if (isAutoManagedSeats) {
-				memberCount = await ctx.context.adapter.count({
-					model: "member",
-					where: [{ field: "organizationId", value: referenceId }],
+				memberCount = await resolveOrganizationSeatCount({
+					adapter: ctx.context.adapter,
+					organizationId: referenceId,
+					countActiveMembers: options.organization?.countActiveMembers,
+					invalidCountError: () =>
+						ctx.error("BAD_REQUEST", {
+							message: INVALID_SEAT_COUNT_MESSAGE,
+						}),
 				});
 			}
 

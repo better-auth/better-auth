@@ -61,6 +61,11 @@ const buildSeatPlanOptions = (mock: StripeMock) =>
 		},
 	}) satisfies StripeOptions;
 
+const getCheckoutLineItemByPrice = <T extends { price?: string }>(
+	lineItems: T[] | undefined,
+	price: string,
+) => lineItems?.find((item) => item.price === price);
+
 describe("seat-based billing", () => {
 	describe("checkout with auto-managed seats", () => {
 		test("should create checkout with both base plan and seat line items", async ({
@@ -112,11 +117,15 @@ describe("seat-based billing", () => {
 
 			const createCall = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
-			expect(createCall.line_items[0]).toEqual({
+			expect(
+				getCheckoutLineItemByPrice(createCall?.line_items, "price_team_base"),
+			).toEqual({
 				price: "price_team_base",
 				quantity: 1,
 			});
-			expect(createCall.line_items[1]).toMatchObject({
+			expect(
+				getCheckoutLineItemByPrice(createCall?.line_items, "price_team_seat"),
+			).toMatchObject({
 				price: "price_team_seat",
 				quantity: expect.any(Number),
 			});
@@ -187,10 +196,237 @@ describe("seat-based billing", () => {
 
 			const createCall = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			// 1 owner + 2 members = 3
-			expect(createCall.line_items[1]).toMatchObject({
+			expect(
+				getCheckoutLineItemByPrice(createCall?.line_items, "price_team_seat"),
+			).toMatchObject({
 				price: "price_team_seat",
 				quantity: 3,
 			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10080
+		 */
+		test("should use filtered member count as checkout seat quantity", async ({
+			stripeMock,
+		}) => {
+			const countActiveMembers = vi.fn(
+				async ({
+					getDefaultCount,
+				}: {
+					organizationId: string;
+					getDefaultCount: () => Promise<number>;
+				}) => (await getDefaultCount()) - 1,
+			);
+			const seatOptions = {
+				...buildSeatPlanOptions(stripeMock),
+				organization: {
+					enabled: true as const,
+					countActiveMembers,
+				},
+			} satisfies StripeOptions;
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ plugins: [organization(), stripe(seatOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "checkout-filter@email.com",
+					password: "password",
+					name: "Checkout Filter User",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "checkout-filter@email.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Checkout Filter Org",
+				slug: "checkout-filter-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			for (const email of ["member2@checkout.com", "member3@checkout.com"]) {
+				const member = await ctx.adapter.create({
+					model: "user",
+					data: { email, name: email.split("@")[0] },
+				});
+				await ctx.adapter.create({
+					model: "member",
+					data: {
+						userId: member.id,
+						organizationId: orgId,
+						role: "member",
+						createdAt: new Date(),
+					},
+				});
+			}
+
+			await client.subscription.upgrade({
+				plan: "team",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(countActiveMembers).toHaveBeenCalledWith(
+				expect.objectContaining({
+					organizationId: orgId,
+					getDefaultCount: expect.any(Function),
+				}),
+			);
+			expect(countActiveMembers.mock.calls[0]?.[0]).not.toHaveProperty(
+				"defaultCount",
+			);
+			const createCall = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(
+				getCheckoutLineItemByPrice(createCall?.line_items, "price_team_seat"),
+			).toMatchObject({
+				price: "price_team_seat",
+				quantity: 2,
+			});
+		});
+
+		test("should not query the default member count when custom counter does not request it", async ({
+			stripeMock,
+		}) => {
+			const countActiveMembers = vi.fn(async () => 1);
+			const seatOptions = {
+				...buildSeatPlanOptions(stripeMock),
+				organization: {
+					enabled: true as const,
+					countActiveMembers,
+				},
+			} satisfies StripeOptions;
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{ plugins: [organization(), stripe(seatOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "checkout-lazy-filter@email.com",
+					password: "password",
+					name: "Checkout Lazy Filter User",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "checkout-lazy-filter@email.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Checkout Lazy Filter Org",
+				slug: "checkout-lazy-filter-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+			const countSpy = vi.spyOn(ctx.adapter, "count");
+
+			await client.subscription.upgrade({
+				plan: "team",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(countActiveMembers).toHaveBeenCalledWith(
+				expect.objectContaining({
+					organizationId: orgId,
+					getDefaultCount: expect.any(Function),
+				}),
+			);
+			expect(countSpy).not.toHaveBeenCalled();
+			countSpy.mockRestore();
+
+			const createCall = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(
+				getCheckoutLineItemByPrice(createCall?.line_items, "price_team_seat"),
+			).toMatchObject({
+				price: "price_team_seat",
+				quantity: 1,
+			});
+		});
+
+		test("should reject invalid filtered checkout seat counts", async ({
+			stripeMock,
+		}) => {
+			const seatOptions = {
+				...buildSeatPlanOptions(stripeMock),
+				organization: {
+					enabled: true as const,
+					countActiveMembers: async () => 0,
+				},
+			} satisfies StripeOptions;
+			const { client, sessionSetter } = await getTestInstance(
+				{ plugins: [organization(), stripe(seatOptions)] },
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+
+			await client.signUp.email(
+				{
+					email: "invalid-filter@email.com",
+					password: "password",
+					name: "Invalid Filter User",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "invalid-filter@email.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Invalid Filter Org",
+				slug: "invalid-filter-org",
+				fetchOptions: { headers },
+			});
+
+			const res = await client.subscription.upgrade({
+				plan: "team",
+				customerType: "organization",
+				referenceId: org.data?.id as string,
+				fetchOptions: { headers },
+			});
+
+			expect(res.error?.message).toBe(
+				"countActiveMembers must return a positive integer",
+			);
+			expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1461,6 +1697,388 @@ describe("seat-based billing", () => {
 			});
 
 			expect(updated?.seats).toBe(8);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10080
+	 */
+	describe("seat sync with countActiveMembers filter", () => {
+		test("should use filtered member count for seat sync when countActiveMembers is provided", async ({
+			stripeMock,
+		}) => {
+			const seatOptions = buildSeatPlanOptions(stripeMock);
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_filter_seat",
+				status: "active",
+				items: {
+					data: [
+						{
+							id: "si_base",
+							price: { id: "price_team_base" },
+							quantity: 1,
+						},
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 3,
+						},
+					],
+				},
+			});
+
+			const countActiveMembers = vi.fn(
+				async ({
+					getDefaultCount,
+				}: {
+					organizationId: string;
+					getDefaultCount: () => Promise<number>;
+				}) => (await getDefaultCount()) - 1,
+			);
+			const filterSeatOptions = {
+				...seatOptions,
+				organization: {
+					enabled: true as const,
+					countActiveMembers,
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(filterSeatOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "filter-owner@test.com",
+					password: "password",
+					name: "Filter Owner",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "filter-owner@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Filter Seat Org",
+				slug: "filter-seat-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_filter_seat" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_filter_seat",
+					stripeSubscriptionId: "sub_filter_seat",
+					status: "active",
+					plan: "team",
+					seats: 3,
+				},
+			});
+
+			const newMember = await ctx.adapter.create({
+				model: "user",
+				data: {
+					email: "filter-member@test.com",
+					name: "Filter Member",
+					emailVerified: true,
+				},
+			});
+			await ctx.adapter.create({
+				model: "account",
+				data: {
+					userId: newMember.id,
+					accountId: newMember.id,
+					providerId: "credential",
+					password: await ctx.password.hash("password"),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			await client.organization.inviteMember({
+				email: "filter-member@test.com",
+				role: "member",
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+
+			const newMemberHeaders = new Headers();
+			await client.signIn.email(
+				{ email: "filter-member@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(newMemberHeaders) },
+			);
+
+			const invitations = await client.organization.listInvitations({
+				fetchOptions: { headers },
+			});
+			const invitationId = invitations.data?.[0]?.id;
+			expect(invitationId).toBeDefined();
+
+			await client.organization.acceptInvitation({
+				invitationId: invitationId!,
+				fetchOptions: { headers: newMemberHeaders },
+			});
+
+			expect(countActiveMembers).toHaveBeenCalledWith(
+				expect.objectContaining({
+					organizationId: orgId,
+					getDefaultCount: expect.any(Function),
+				}),
+			);
+			expect(countActiveMembers.mock.calls[0]?.[0]).not.toHaveProperty(
+				"defaultCount",
+			);
+
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0];
+			expect(updateCall).toBeDefined();
+			const seatItems = updateCall?.[1]?.items;
+			expect(seatItems).toContainEqual(
+				expect.objectContaining({ id: "si_seat", quantity: 1 }),
+			);
+
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "stripeSubscriptionId", value: "sub_filter_seat" }],
+			});
+			expect(updatedSub?.seats).toBe(1);
+		});
+
+		test("should fall back to raw count when countActiveMembers is not provided", async ({
+			stripeMock,
+		}) => {
+			const seatOptions = buildSeatPlanOptions(stripeMock);
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_no_filter",
+				status: "active",
+				items: {
+					data: [
+						{
+							id: "si_base",
+							price: { id: "price_team_base" },
+							quantity: 1,
+						},
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 3,
+						},
+					],
+				},
+			});
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(seatOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "no-filter-owner@test.com",
+					password: "password",
+					name: "No Filter Owner",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "no-filter-owner@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "No Filter Org",
+				slug: "no-filter-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_no_filter" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_no_filter",
+					stripeSubscriptionId: "sub_no_filter",
+					status: "active",
+					plan: "team",
+					seats: 3,
+				},
+			});
+
+			const memberUser = await ctx.adapter.create({
+				model: "user",
+				data: { email: "no-filter-member@test.com", name: "Member" },
+			});
+			const member = await ctx.adapter.create({
+				model: "member",
+				data: {
+					userId: memberUser.id,
+					organizationId: orgId,
+					role: "member",
+					createdAt: new Date(),
+				},
+			});
+
+			await client.organization.removeMember({
+				memberIdOrEmail: member.id,
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0];
+			expect(updateCall).toBeDefined();
+			const seatItems = updateCall?.[1]?.items;
+			expect(seatItems).toContainEqual(
+				expect.objectContaining({ id: "si_seat", quantity: 1 }),
+			);
+		});
+
+		test("should skip seat sync when countActiveMembers returns an invalid count", async ({
+			stripeMock,
+		}) => {
+			const seatOptions = {
+				...buildSeatPlanOptions(stripeMock),
+				organization: {
+					enabled: true as const,
+					countActiveMembers: async () => 0,
+				},
+			} satisfies StripeOptions;
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_invalid_filter",
+				status: "active",
+				items: {
+					data: [
+						{
+							id: "si_base",
+							price: { id: "price_team_base" },
+							quantity: 1,
+						},
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 2,
+						},
+					],
+				},
+			});
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(seatOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "invalid-sync-owner@test.com",
+					password: "password",
+					name: "Invalid Sync Owner",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "invalid-sync-owner@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Invalid Sync Org",
+				slug: "invalid-sync-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_invalid_filter" },
+				where: [{ field: "id", value: orgId }],
+			});
+			const sub = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_invalid_filter",
+					stripeSubscriptionId: "sub_invalid_filter",
+					status: "active",
+					plan: "team",
+					seats: 2,
+				},
+			});
+
+			const memberUser = await ctx.adapter.create({
+				model: "user",
+				data: { email: "invalid-sync-member@test.com", name: "Member" },
+			});
+			const member = await ctx.adapter.create({
+				model: "member",
+				data: {
+					userId: memberUser.id,
+					organizationId: orgId,
+					role: "member",
+					createdAt: new Date(),
+				},
+			});
+
+			await client.organization.removeMember({
+				memberIdOrEmail: member.id,
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(stripeMock.subscriptions.update).not.toHaveBeenCalled();
+			const storedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: sub.id }],
+			});
+			expect(storedSub?.seats).toBe(2);
 		});
 	});
 });

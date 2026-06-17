@@ -891,11 +891,12 @@ stripe({
 
 ### Organization Options
 
-| Option                    | Type       | Description                                                                                                |
-| ------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| `enabled`                 | `boolean`  | Enable Organization Customer support. **Required.**                                                        |
-| `getCustomerCreateParams` | `function` | Customize Stripe customer creation parameters for organizations. Receives `organization` and context.      |
-| `onCustomerCreate`        | `function` | Called after an organization customer is created. Receives `{ stripeCustomer, organization }` and context. |
+| Option                    | Type       | Description                                                                                                              |
+| ------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `enabled`                 | `boolean`  | Enable Organization Customer support. **Required.**                                                                      |
+| `getCustomerCreateParams` | `function` | Customize Stripe customer creation parameters for organizations. Receives `organization` and context.                    |
+| `onCustomerCreate`        | `function` | Called after an organization customer is created. Receives `{ stripeCustomer, organization }` and context.               |
+| `countActiveMembers`      | `function` | Customize the billable member count for auto-managed organization seats. Receives `{ organizationId, getDefaultCount }`. |
 
 ## Advanced Usage
 
@@ -945,6 +946,55 @@ await authClient.subscription.upgrade({
     cancelUrl: "/org/billing"
 });
 ```
+
+#### Counting Billable Organization Seats
+
+When a plan has `seatPriceId`, organization subscriptions use auto-managed seats. By default, the Stripe plugin counts all rows in the `member` table for the organization. Use `organization.countActiveMembers` to customize the billable count, for example to exclude soft-deleted or suspended members:
+
+```ts title="auth.ts"
+plugins: [
+    organization({
+        schema: {
+            member: {
+                additionalFields: {
+                    deletedAt: {
+                        type: "date",
+                        required: false,
+                    },
+                },
+            },
+        },
+    }),
+    stripe({
+        // ... other options
+        subscription: {
+            enabled: true,
+            plans: [
+                {
+                    name: "team",
+                    priceId: "price_team_base",
+                    seatPriceId: "price_team_seat",
+                },
+            ],
+        },
+        organization: {
+            enabled: true,
+            countActiveMembers: async ({ organizationId }) => {
+                const active = await db.member.count({
+                    where: {
+                        organizationId,
+                        deletedAt: null,
+                    },
+                });
+
+                return active;
+            },
+        },
+    }),
+]
+```
+
+`countActiveMembers` must return a positive integer because Stripe subscription item quantities must be at least `1`. Call `getDefaultCount()` if you need to compare against Better Auth's default member count; the default count query runs lazily and is memoized. The callback runs whenever the Stripe plugin counts auto-managed seats during checkout or subscription upgrades, and when Better Auth organization member add, remove, or invitation acceptance hooks sync seats to Stripe. If you update custom member fields outside Better Auth's member lifecycle, trigger your own sync after that update.
 
 #### Authorization
 
