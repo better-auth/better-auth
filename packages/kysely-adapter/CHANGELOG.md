@@ -1,5 +1,12 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9)]:
+  - @better-auth/core@1.7.0-beta.6
+
 ## 1.7.0-beta.5
 
 ### Patch Changes
@@ -8,6 +15,13 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.19
+
+### Patch Changes
+
+- Updated dependencies [[`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63), [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246)]:
+  - @better-auth/core@1.6.19
 
 ## 1.6.18
 

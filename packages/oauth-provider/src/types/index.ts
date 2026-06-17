@@ -330,6 +330,13 @@ export interface OAuthClaimExtensionInput {
 	scopes: string[];
 	grantType?: GrantType;
 	referenceId?: string;
+	/**
+	 * Session the tokens are issued for, when one is available. Best-effort:
+	 * set on the session-backed grants (authorization_code, refresh_token),
+	 * undefined otherwise (client_credentials, introspection, or a session that
+	 * was deleted or unlinked). Treat as possibly undefined.
+	 */
+	sessionId?: string;
 	resources?: string[];
 	/** Parsed client metadata, as returned by `parseClientMetadata`. */
 	metadata?: Record<string, unknown>;

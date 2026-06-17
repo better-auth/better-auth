@@ -236,4 +236,17 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	allowIdpInitiated?: boolean | undefined;
+	/**
+	 * Disable OIDC `nonce` binding for this provider's `id_token`.
+	 *
+	 * Providers configured with `discoveryUrl` that publish a JWKS bind the
+	 * `id_token` to the authorization request by default: Better Auth sends a
+	 * server-generated `nonce` and rejects a callback whose `id_token` does not
+	 * echo it (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for OIDC
+	 * providers that do not return the `nonce` claim in the authorization-code
+	 * flow; doing so removes `id_token` replay protection for this provider.
+	 *
+	 * @default false
+	 */
+	disableIdTokenNonceBinding?: boolean | undefined;
 }

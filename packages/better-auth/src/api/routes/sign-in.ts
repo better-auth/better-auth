@@ -18,7 +18,7 @@ import {
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
 import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
-import { generateState } from "../../utils";
+import { generateIdTokenNonce, generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -186,7 +186,7 @@ const socialSignInBodySchema = z.object({
 	/**
 	 * Extra query parameters to append to the provider authorization URL.
 	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
-	 * code_challenge, code_challenge_method, scope) are rejected.
+	 * code_challenge, code_challenge_method, nonce, scope) are rejected.
 	 */
 	additionalParams: additionalAuthorizationParamsSchema,
 	/**
@@ -376,9 +376,11 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 
 			const state = generateRandomString(32);
 			const codeVerifier = generateRandomString(128);
+			const idTokenNonce = generateIdTokenNonce(provider);
 			const { url, requestedScopes } = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,
+				idTokenNonce,
 				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
@@ -389,6 +391,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				requestedScopes,
 				state,
 				codeVerifier,
+				idTokenNonce,
 			});
 
 			if (!c.body.disableRedirect) {

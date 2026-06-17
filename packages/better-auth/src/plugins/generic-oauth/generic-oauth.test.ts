@@ -3669,6 +3669,9 @@ describe("oauth2", async () => {
 				"http://localhost:3000/api/auth/callback/idp-initiated",
 			);
 			expect(url.searchParams.get("code")).toBeNull();
+			// Discovery providers bind the id_token to a nonce, including on the
+			// server-side bounce restart minted in callback.ts.
+			expect(url.searchParams.get("nonce")).toBeTruthy();
 		});
 
 		it("should redirect to the error page when a stateless callback arrives for a provider without the flag", async () => {
@@ -3982,6 +3985,343 @@ describe("oauth2", async () => {
 			} finally {
 				server.service.off("beforeTokenSigning", addClaims);
 			}
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7571
+		 */
+		it("should bind a discovery id_token to the authorization request nonce", async () => {
+			let authorizationNonce = "";
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-match",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								authorizationUrlParams: { nonce: "configured-nonce" },
+								getToken: async () => ({
+									accessToken: "nonce-match-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-match-user",
+												email: "nonce-match@test.com",
+												email_verified: true,
+												name: "Nonce Match",
+												nonce: authorizationNonce,
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-match",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			authorizationNonce =
+				new URL(res.data?.url || "").searchParams.get("nonce") || "";
+			expect(authorizationNonce).toBeTruthy();
+			expect(authorizationNonce).not.toBe("configured-nonce");
+
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("nonce-match@test.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7571
+		 */
+		it("should reject a discovery id_token with a mismatched nonce", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-mismatch",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "nonce-mismatch-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-mismatch-user",
+												email: "nonce-mismatch@test.com",
+												email_verified: true,
+												name: "Nonce Mismatch",
+												nonce: "different-nonce",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-mismatch",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			expect(
+				new URL(res.data?.url || "").searchParams.get("nonce"),
+			).toBeTruthy();
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7571
+		 */
+		it("should reject a discovery id_token that omits the nonce claim", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-missing",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "nonce-missing-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-missing-user",
+												email: "nonce-missing@test.com",
+												email_verified: true,
+												name: "Nonce Missing",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-missing",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			expect(
+				new URL(res.data?.url || "").searchParams.get("nonce"),
+			).toBeTruthy();
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
+		it("should not bind a nonce when id_token nonce binding is disabled", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-disabled",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								disableIdTokenNonceBinding: true,
+								getToken: async () => ({
+									accessToken: "nonce-disabled-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-disabled-user",
+												email: "nonce-disabled@test.com",
+												email_verified: true,
+												name: "Nonce Disabled",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-disabled",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeNull();
+
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("nonce-disabled@test.com");
+		});
+
+		it("should drop a configured nonce param for providers without nonce binding", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-static",
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								authorizationUrlParams: { nonce: "configured-nonce" },
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-static",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+
+			expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10095#discussion_r3417330694
+		 */
+		it("should reject a discovery id_token when state carries no expected nonce", async () => {
+			const { customFetchImpl, cookieSetter, auth } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "nonce-skew",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "nonce-skew-access-token",
+									idToken: await server.issuer.buildToken({
+										scopesOrTransform: (_header, payload) => {
+											Object.assign(payload, {
+												aud: clientId,
+												sub: "nonce-skew-user",
+												email: "nonce-skew@test.com",
+												email_verified: true,
+												name: "Nonce Skew",
+											});
+										},
+									}),
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const ctx = await auth.$context;
+			const provider = ctx.socialProviders.find((p) => p.id === "nonce-skew")!;
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			// Mint state before binding is required, so it carries no expected nonce.
+			provider.requiresIdTokenNonce = false;
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "nonce-skew",
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeNull();
+
+			// The provider now requires binding, but the in-flight state has none.
+			provider.requiresIdTokenNonce = true;
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("error=nonce_binding_missing");
 		});
 
 		it("should sign in with a client-submitted id_token for a discovery provider", async () => {

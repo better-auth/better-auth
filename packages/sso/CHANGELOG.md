@@ -1,5 +1,19 @@
 # @better-auth/sso
 
+## 1.7.0-beta.6
+
+### Minor Changes
+
+- [#9445](https://github.com/better-auth/better-auth/pull/9445) [`48070ad`](https://github.com/better-auth/better-auth/commit/48070ada8baf9f29dba4424099d34a98ea59b3d9) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add `schema.ssoProvider.additionalFields` support for storing and returning custom SSO provider fields.
+
+### Patch Changes
+
+- [#10072](https://github.com/better-auth/better-auth/pull/10072) [`4475f4a`](https://github.com/better-auth/better-auth/commit/4475f4a39b654f2ab7da90abd9222748ba51e3fe) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC SSO now works on Cloudflare Workers when discovery is enabled. Redirecting OIDC discovery, token, userinfo, and JWKS endpoints are rejected with a clear configuration error; configure the final endpoint URL instead.
+
+- Updated dependencies [[`b36c38f`](https://github.com/better-auth/better-auth/commit/b36c38f9842d3416689340552989449a32007819), [`73541c1`](https://github.com/better-auth/better-auth/commit/73541c119041113b1909fe244ff4b8210618b5b5), [`bf39cbf`](https://github.com/better-auth/better-auth/commit/bf39cbf13f3b934f728cde72b1e7ebdc4c85f641), [`e53582c`](https://github.com/better-auth/better-auth/commit/e53582ce55a0ddbca62f52efeb3459523816f222), [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9), [`d2a79ba`](https://github.com/better-auth/better-auth/commit/d2a79bae79b88e2b28cb678f5eefd9759239b627), [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734), [`652fa53`](https://github.com/better-auth/better-auth/commit/652fa53e4912837fe234651e7c7705fb35abe188), [`6fe9faa`](https://github.com/better-auth/better-auth/commit/6fe9faab65eb640dbe9bb762954a068586e8661c), [`ad35ead`](https://github.com/better-auth/better-auth/commit/ad35eadd130162565a1b93c27f3a66910dca0b0e)]:
+  - better-auth@1.7.0-beta.6
+  - @better-auth/core@1.7.0-beta.6
+
 ## 1.7.0-beta.5
 
 ### Patch Changes
@@ -79,6 +93,14 @@
   Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+## 1.6.19
+
+### Patch Changes
+
+- Updated dependencies [[`de4aa52`](https://github.com/better-auth/better-auth/commit/de4aa52e991f0a56786300af3e0d9ac8331f1996), [`b4b0266`](https://github.com/better-auth/better-auth/commit/b4b02660c760fe4c8889d1311a3dbf3165f88d0b), [`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63), [`581f827`](https://github.com/better-auth/better-auth/commit/581f8271fb911cea2ce74810e086709909457cd3), [`8407885`](https://github.com/better-auth/better-auth/commit/840788502a13d6fa4aa4540b930ddb4a99dc1ed6), [`c1a8a64`](https://github.com/better-auth/better-auth/commit/c1a8a64c146fab20c7ad0076ffdf12eff9adc17a), [`635f190`](https://github.com/better-auth/better-auth/commit/635f1908702d0c63cf66b4e5f054e9d527a3c8f7), [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246), [`c2f718f`](https://github.com/better-auth/better-auth/commit/c2f718fcdeec0c1767bb8acd5fefdd3810863b0a), [`7d18175`](https://github.com/better-auth/better-auth/commit/7d18175637a0b95a501fde0cf3db080879367a9d)]:
+  - better-auth@1.6.19
+  - @better-auth/core@1.6.19
 
 ## 1.6.18
 
