@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { runWithTransaction } from "../../context/transaction";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CleanedWhere, CustomAdapter } from "./index";
+import type {
+	CleanedWhere,
+	CustomAdapter,
+	DBAdapter,
+	DBTransactionAdapter,
+} from "./index";
 
 function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
 	return {
@@ -21,9 +27,13 @@ function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
 function createTestAdapter({
 	adapter,
 	options = {},
+	transaction,
 }: {
 	adapter: CustomAdapter;
 	options?: BetterAuthOptions;
+	transaction?: <R>(
+		callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
+	) => Promise<R>;
 }) {
 	return createAdapterFactory<BetterAuthOptions>({
 		config: {
@@ -42,6 +52,7 @@ function createTestAdapter({
 				}
 				return data;
 			},
+			transaction,
 		},
 		adapter: () => adapter,
 	})({
@@ -142,6 +153,57 @@ describe("createAdapterFactory consumeOne fallback", () => {
 		});
 
 		expect(result).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9869
+	 */
+	it("reuses the active transaction for the fallback", async () => {
+		let transactionCalls = 0;
+		let isTransactionActive = false;
+		let adapter: DBAdapter<BetterAuthOptions> | null = null;
+
+		const transaction = async <R>(
+			callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
+		): Promise<R> => {
+			transactionCalls += 1;
+			if (isTransactionActive) {
+				throw new Error("nested transaction");
+			}
+			if (!adapter) {
+				throw new Error("adapter has not been initialized");
+			}
+			isTransactionActive = true;
+			try {
+				return await callback(adapter);
+			} finally {
+				isTransactionActive = false;
+			}
+		};
+
+		adapter = createTestAdapter({
+			transaction,
+			adapter: createCustomAdapter({
+				findMany: async <T>() =>
+					[
+						{
+							id: "verification-id",
+							identifier_text: "stored-token",
+						},
+					] as T[],
+				deleteMany: async () => 1,
+			}),
+		});
+
+		const result = await runWithTransaction(adapter, async () =>
+			adapter!.consumeOne<{ id: string; identifier: string }>({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+			}),
+		);
+
+		expect(result?.id).toBe("verification-id");
+		expect(transactionCalls).toBe(1);
 	});
 
 	it("throws when deleteMany returns a non-numeric value", async () => {

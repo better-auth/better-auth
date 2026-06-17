@@ -306,27 +306,27 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		},
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
-			const toCheckOtp =
-				await ctx.context.internalAdapter.findVerificationValue(
+			// Consume the OTP row atomically as the race gate. The first concurrent
+			// submission wins the row; every other racer receives null and is
+			// rejected, so a burst of guesses cannot all read the same attempt
+			// counter before any write lands. Expiry is gated inside the consume,
+			// so a stale row returns null without minting a session.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					`2fa-otp-${key}`,
 				);
-			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
-				if (toCheckOtp) {
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`2fa-otp-${key}`,
-					);
-				}
+			if (!consumed) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				);
 			}
+			const [otp, counter] = consumed.value?.split(":") ?? [];
 			const allowedAttempts = options?.allowedAttempts || 5;
-			if (parseInt(counter!) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`2fa-otp-${key}`,
-				);
+			const attempts = parseInt(counter!, 10) || 0;
+			if (attempts >= allowedAttempts) {
+				// The budget is spent. The row stays consumed, so the next
+				// submission is rejected as expired/already-consumed.
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
@@ -342,6 +342,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				new TextEncoder().encode(inputValue),
 			);
 			if (isCodeValid) {
+				// Leave the row consumed: a valid OTP is single-use.
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw APIError.from(
@@ -373,15 +374,17 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					});
 				}
 				return valid(ctx);
-			} else {
-				await ctx.context.internalAdapter.updateVerificationByIdentifier(
-					`2fa-otp-${key}`,
-					{
-						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
-					},
-				);
-				return invalid("INVALID_CODE");
 			}
+			// Wrong code within budget: re-arm the row with the incremented counter
+			// and the original expiry. The recreated counter is the durable record
+			// of the attempt, so the next submission either keeps guessing or hits
+			// the lock-out guard above. The original expiry caps the whole burst.
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${otp}:${attempts + 1}`,
+				identifier: `2fa-otp-${key}`,
+				expiresAt: consumed.expiresAt,
+			});
+			return invalid("INVALID_CODE");
 		},
 	);
 

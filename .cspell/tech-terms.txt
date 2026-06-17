@@ -13,6 +13,7 @@ base64urlnopad
 remoteip
 noreferrer
 noopener
+Referer
 pcre
 llms
 svgjs
@@ -65,4 +66,10 @@ Oligo
 febf
 fdff
 fffe
+apng
+jfif
+pcss
+pjpeg
+styl
 vbscript
+unvalidated
