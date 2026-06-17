@@ -842,10 +842,14 @@ export const createInternalAdapter = (
 			);
 		},
 		findOAuthUser: async (
-			email: string,
+			// `email` is nullable: a provider may return a profile without one
+			// (see #9124). A missing email must never be used as a match key, so
+			// the fall-back user lookup below is skipped entirely in that case.
+			email: string | null | undefined,
 			accountId: string,
 			providerId: string,
 		) => {
+			const normalizedEmail = email ? email.toLowerCase() : null;
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
@@ -873,11 +877,14 @@ export const createInternalAdapter = (
 						accounts: [account],
 					};
 				} else {
+					if (!normalizedEmail) {
+						return null;
+					}
 					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 						model: "user",
 						where: [
 							{
-								value: email.toLowerCase(),
+								value: normalizedEmail,
 								field: "email",
 							},
 						],
@@ -892,11 +899,14 @@ export const createInternalAdapter = (
 					return null;
 				}
 			} else {
+				if (!normalizedEmail) {
+					return null;
+				}
 				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 					model: "user",
 					where: [
 						{
-							value: email.toLowerCase(),
+							value: normalizedEmail,
 							field: "email",
 						},
 					],

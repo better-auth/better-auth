@@ -288,7 +288,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 					);
 				}
-				if (!userInfo.user.email) {
+				if (!userInfo.user.email && !provider.options?.allowSignUpWithoutEmail) {
 					c.context.logger.error(
 						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
 						{ provider: c.body.provider },
