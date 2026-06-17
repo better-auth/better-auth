@@ -118,4 +118,38 @@ describe("refreshAccessToken", () => {
 			"https://api.example.com/resource-b",
 		]);
 	});
+
+	it("drops refresh params owned by the refresh flow or unsafe object keys", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "new-access-token",
+				token_type: "Bearer",
+			},
+			error: null,
+		});
+
+		const extraParams = Object.create(null) as Record<string, string>;
+		extraParams.grant_type = "client_credentials";
+		extraParams.refresh_token = "attacker-refresh-token";
+		extraParams["__proto__"] = "polluted";
+		extraParams["constructor"] = "polluted";
+		extraParams["prototype"] = "polluted";
+		extraParams.audience = "https://api.example.com";
+
+		await refreshAccessToken({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			tokenEndpoint: "https://example.com/token",
+			extraParams,
+		});
+
+		const [, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		const body = init?.body as URLSearchParams;
+		expect(body.get("grant_type")).toBe("refresh_token");
+		expect(body.get("refresh_token")).toBe("old-refresh-token");
+		expect(body.get("__proto__")).toBeNull();
+		expect(body.get("constructor")).toBeNull();
+		expect(body.get("prototype")).toBeNull();
+		expect(body.get("audience")).toBe("https://api.example.com");
+	});
 });

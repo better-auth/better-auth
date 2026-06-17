@@ -610,7 +610,7 @@ async function getValidAccessToken(
 				account.refreshToken,
 				ctx.context,
 			);
-			newTokens = await provider.refreshAccessToken(refreshToken);
+			newTokens = await provider.refreshAccessToken(refreshToken, ctx);
 			// The seam owns the token rotation: it re-encrypts, leaves
 			// `grantedScopes` untouched (RFC 6749 §6), persists against the stored
 			// row, and re-seeds the account cookie. Fields the provider omits stay
@@ -859,6 +859,7 @@ export const refreshToken = createAuthEndpoint(
 			);
 			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
 				decryptedRefreshToken,
+				ctx,
 			);
 
 			// The seam owns the token rotation: it re-encrypts, leaves

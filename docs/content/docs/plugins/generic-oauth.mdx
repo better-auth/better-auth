@@ -339,6 +339,25 @@ interface GenericOAuthConfig {
 
 **tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. Parameters already set by Better Auth are preserved. Configure token endpoint client authentication with `clientId`, `clientSecret`, and `tokenEndpointAuth`.
 
+**refreshTokenParams**: (Optional) Additional body parameters merged into the token endpoint request when refreshing an access token. Accepts a plain object or a (sync or async) function that runs at refresh time, which makes it possible to inject dynamic values such as a `scope`, `audience`, `resource`, or tenant identifier without forcing a new authorization redirect. Examples: Zitadel's `urn:zitadel:iam:org:id:{orgId}` scope on workspace switch or Auth0 `audience` rotation. The function form receives request metadata (headers and cookies) from the triggering request, so request-scoped data can be read directly — callers MUST validate any header- or cookie-derived value against the authenticated user's entitlements before using it as a scope, audience, or tenant claim. `grant_type` and `refresh_token` cannot be overridden, and `client_id` is set by the configured token-endpoint authentication after the merge so it cannot be overridden here either.
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "zitadel",
+      // ...
+      refreshTokenParams: (ctx) => {
+        const activeOrg = ctx?.headers?.get("x-active-org");
+        return activeOrg
+          ? { scope: `openid profile email urn:zitadel:iam:org:id:${activeOrg}` }
+          : undefined;
+      },
+    },
+  ],
+});
+```
+
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
 
 **disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.

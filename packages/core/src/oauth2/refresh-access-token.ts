@@ -29,6 +29,21 @@ interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
 	tokenEndpoint: string;
 }
 
+/**
+ * Body keys owned by the refresh-token flow or unsafe to copy from caller input.
+ */
+const BLOCKED_REFRESH_TOKEN_PARAMS = [
+	"grant_type",
+	"refresh_token",
+	"__proto__",
+	"constructor",
+	"prototype",
+] as const;
+
+const BLOCKED_REFRESH_TOKEN_PARAMS_SET: ReadonlySet<string> = new Set(
+	BLOCKED_REFRESH_TOKEN_PARAMS,
+);
+
 export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
@@ -59,6 +74,17 @@ export async function refreshAccessTokenRequest({
 	return request;
 }
 
+function applyRefreshExtraParams(
+	body: URLSearchParams,
+	extraParams: Record<string, string> | undefined,
+) {
+	if (!extraParams) return;
+	for (const [key, value] of Object.entries(extraParams)) {
+		if (BLOCKED_REFRESH_TOKEN_PARAMS_SET.has(key)) continue;
+		body.set(key, value);
+	}
+}
+
 function buildRefreshAccessTokenRequest({
 	refreshToken,
 	options,
@@ -83,9 +109,7 @@ function buildRefreshAccessTokenRequest({
 		}
 	}
 	if (extraParams) {
-		for (const [key, value] of Object.entries(extraParams)) {
-			body.set(key, value);
-		}
+		applyRefreshExtraParams(body, extraParams);
 	}
 
 	return {
