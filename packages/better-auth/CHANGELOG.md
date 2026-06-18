@@ -1,5 +1,30 @@
 # better-auth
 
+## 1.7.0-beta.8
+
+### Minor Changes
+
+- [#10127](https://github.com/better-auth/better-auth/pull/10127) [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth sign-in, account linking, callback, and proxy flows now build `redirect_uri` from the current request base URL when `baseURL.allowedHosts` is configured. Built-in social providers and generic OAuth providers now use the resolved request host for redirects in multi-host deployments.
+
+  Custom `OAuthProvider` implementations can omit `callbackPath` when using the shared `/callback/<provider-id>` route. Set `callbackPath` only for custom callback routes.
+
+### Patch Changes
+
+- [#10124](https://github.com/better-auth/better-auth/pull/10124) [`06daf70`](https://github.com/better-auth/better-auth/commit/06daf7011e548ef5a7d513c96e3a440331977a7d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve the resolved OAuth user when `overrideUserInfo` returns `null` during account linking.
+
+- [#10125](https://github.com/better-auth/better-auth/pull/10125) [`a83152e`](https://github.com/better-auth/better-auth/commit/a83152e2e884b1ac1724f95cea2056795d60e5cc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Create new OAuth accounts in the user creation transaction so failed account writes roll back the user row.
+
+- [#10128](https://github.com/better-auth/better-auth/pull/10128) [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve previously granted OAuth scopes across sign-in re-authentication and refresh-token requests. `account.scope` now accumulates monotonically: newly granted scopes are merged in only when added via `linkSocial`, and providers returning a narrower scope claim than the user has granted no longer shrink the stored value.
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - @better-auth/core@1.7.0-beta.8
+  - @better-auth/drizzle-adapter@1.7.0-beta.8
+  - @better-auth/kysely-adapter@1.7.0-beta.8
+  - @better-auth/memory-adapter@1.7.0-beta.8
+  - @better-auth/mongo-adapter@1.7.0-beta.8
+  - @better-auth/prisma-adapter@1.7.0-beta.8
+  - @better-auth/telemetry@1.7.0-beta.8
+
 ## 1.7.0-beta.7
 
 ### Minor Changes
