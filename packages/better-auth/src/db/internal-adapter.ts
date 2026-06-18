@@ -781,19 +781,36 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteUserSessions: async (userId: string) => {
+		deleteUserSessions: async (userId: string, exceptSessionToken?: string) => {
 			if (secondaryStorage) {
 				const activeSession = await secondaryStorage.get(
 					`active-sessions-${userId}`,
 				);
 				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
+					? safeJSONParse<{ token: string; expiresAt: number }[]>(activeSession)
 					: [];
 				if (!sessions) return;
 				for (const session of sessions) {
+					if (session.token === exceptSessionToken) continue;
 					await secondaryStorage.delete(session.token);
 				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
+				const kept = exceptSessionToken
+					? sessions.filter((session) => session.token === exceptSessionToken)
+					: [];
+				const now = Date.now();
+				const furthestSessionExp = kept
+					.map((session) => session.expiresAt)
+					.sort((a, b) => a - b)
+					.at(-1);
+				if (kept.length > 0 && furthestSessionExp && furthestSessionExp > now) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify(kept),
+						getTTLSeconds(furthestSessionExp, now),
+					);
+				} else {
+					await secondaryStorage.delete(`active-sessions-${userId}`);
+				}
 
 				if (
 					!options.session?.storeSessionInDatabase ||
@@ -808,6 +825,15 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
+					...(exceptSessionToken
+						? [
+								{
+									field: "token",
+									value: exceptSessionToken,
+									operator: "ne",
+								} satisfies Where,
+							]
+						: []),
 				],
 				"session",
 				undefined,
