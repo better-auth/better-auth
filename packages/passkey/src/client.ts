@@ -51,9 +51,8 @@ export const getPasskeyActions = (
 					 * the stored public key for whichever credential ID the authenticator
 					 * returns, and the challenge remains server-issued and session-bound.
 					 *
-					 * Pairs with `returnWebAuthnResponse: true` for "store the ID, then
-					 * narrow the next sign-in to it" flows. Pass `[]` to signal a
-					 * discoverable-credential / resident-key flow with no constraint.
+					 * narrow the next sign-in to it" flows. Omit `allowCredentials` to allow
+					 * discoverable credentials / resident-key flows without constraining the picker.
 					 */
 					allowCredentials?: PublicKeyCredentialRequestOptionsJSON["allowCredentials"];
 			  }
