@@ -132,7 +132,7 @@ describe("private_key_jwt authentication", async () => {
 		codeVerifier: string,
 		scopes = ["openid", "profile"],
 	) {
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: { clientId, redirectURI: redirectUri },
 			redirectURI: "",

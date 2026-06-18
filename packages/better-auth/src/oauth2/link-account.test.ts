@@ -1,7 +1,10 @@
+import { DatabaseSync } from "node:sqlite";
 import type {
 	DiscordProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import { Kysely } from "kysely";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -13,8 +16,11 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { parseSetCookieHeader } from "../cookies";
+import { betterAuth } from "../auth/full";
+import { createAuthClient } from "../client";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { signJWT } from "../crypto";
+import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
@@ -429,7 +435,7 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 			name: "Test User",
 			picture: "https://example.com/photo.jpg",
 			exp: 1234567890,
-			sub: "google_oauth_sub_casing_idtoken",
+			sub: "google_oauth_sub_casing",
 			iat: 1234567890,
 			aud: "test",
 			azp: "test",
@@ -1150,7 +1156,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 
 		const oAuthHeaders = await signInAndLink(testEmail, "google_implicit_name");
 
-		// The cookie cache is seeded from the value signInWithOAuthIdentity returns,
+		// The cookie cache is seeded from the value handleOAuthUserInfo returns,
 		// and getSession serves it without a database read, so a stale return
 		// would surface right here.
 		const session = await client.getSession({
@@ -1202,6 +1208,10 @@ describe("oauth2 - override user info on sign-in", async () => {
 	});
 
 	const ctx = await auth.$context;
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
 
 	it("should update user info when overrideUserInfo is enabled", async () => {
 		const testEmail = "override@example.com";
@@ -1269,6 +1279,165 @@ describe("oauth2 - override user info on sign-in", async () => {
 		});
 
 		expect(session.data?.user.name).toBe("Updated Name");
+	});
+
+	it("should preserve the resolved user when overrideUserInfo update returns null", async () => {
+		const testEmail = "override-null@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: testEmail,
+				name: "Initial Name",
+				emailVerified: true,
+			},
+		});
+
+		const originalUpdate = ctx.adapter.update.bind(ctx.adapter);
+		vi.spyOn(ctx.adapter, "update").mockImplementation(async (payload) => {
+			const result = await originalUpdate(payload);
+			return payload.model === "user" ? null : result;
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_null_update",
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: oAuthHeaders,
+			},
+		});
+
+		expect(session.data?.user.email).toBe(testEmail);
+	});
+});
+
+describe("oauth2 - sign-up account creation rollback", async () => {
+	const sqlite = new DatabaseSync(":memory:");
+	const database = new Kysely({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: {
+			db: database,
+			type: "sqlite",
+			transaction: true,
+		},
+		account: {
+			additionalFields: {
+				requiredAccountField: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: (url, init) => auth.handler(new Request(url, init)),
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	afterAll(async () => {
+		await database.destroy();
+	});
+
+	it("rolls back the user row when the first OAuth account cannot be created", async () => {
+		const testEmail = "oauth-rollback@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_rollback",
+					email: testEmail,
+					email_verified: true,
+					name: "Rollback User",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: setCookieToHeader(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+				setCookieToHeader(oAuthHeaders)(context);
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_create_user");
+
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user).toBeNull();
 	});
 });
 
@@ -1767,91 +1936,6 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		expect(promoted?.emailVerified).toBe(true);
 	});
 });
-
-describe("oauth2 - provider identity is not linkable across users", async () => {
-	const { auth, client, cookieSetter } = await getTestInstance({
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
-				enabled: true,
-				verifyIdToken: async () => true,
-			},
-		},
-		emailAndPassword: { enabled: true },
-		account: {
-			accountLinking: {
-				enabled: true,
-				trustedProviders: ["google"],
-				// Lets the second user reach the seam's takeover guard rather than
-				// being stopped earlier by the email-match check.
-				allowDifferentEmails: true,
-			},
-		},
-	});
-	const ctx = await auth.$context;
-
-	const sharedSubIdToken = await signJWT(
-		{
-			email: "shared-sub@example.com",
-			email_verified: true,
-			name: "Shared Sub",
-			picture: "https://example.com/p.jpg",
-			exp: 1234567890,
-			sub: "google_shared_takeover_sub",
-			iat: 1234567890,
-			aud: "test",
-			azp: "test",
-			nbf: 1234567890,
-			iss: "test",
-			locale: "en",
-			jti: "test",
-			given_name: "Shared",
-			family_name: "Sub",
-		} satisfies GoogleProfile,
-		DEFAULT_SECRET,
-	);
-
-	async function signUp(email: string) {
-		const headers = new Headers();
-		const res = await client.signUp.email(
-			{ email, password: "password123", name: "User" },
-			{ onSuccess: cookieSetter(headers) },
-		);
-		return { userId: res.data!.user.id, headers };
-	}
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/9382
-	 */
-	it("rejects linking a provider identity already owned by another user", async () => {
-		const userA = await signUp("owner-a@example.com");
-		const ownerLink = await client.linkSocial(
-			{ provider: "google", idToken: { token: sharedSubIdToken } },
-			{ headers: userA.headers },
-		);
-		expect(ownerLink.error).toBeNull();
-
-		const userB = await signUp("attacker-b@example.com");
-		const takeover = await client.linkSocial(
-			{ provider: "google", idToken: { token: sharedSubIdToken } },
-			{ headers: userB.headers },
-		);
-
-		// The seam's takeover guard rejects the cross-user link.
-		expect(takeover.error).not.toBeNull();
-
-		// User B gains no google account, and user A keeps sole ownership.
-		const bAccounts = await ctx.internalAdapter.findAccounts(userB.userId);
-		expect(bAccounts.find((a) => a.providerId === "google")).toBeUndefined();
-		const linked = await ctx.internalAdapter.findAccountByProviderId(
-			"google_shared_takeover_sub",
-			"google",
-		);
-		expect(linked?.userId).toBe(userA.userId);
-	});
-});
-
 /**
  * @see https://github.com/better-auth/better-auth/issues/9486
  */

@@ -376,6 +376,7 @@ async function validateOpaqueAccessToken(
 				client,
 				scopes: accessToken.scopes ?? [],
 				grantType: undefined,
+				sessionId: undefined,
 				resources,
 				referenceId: accessToken.referenceId,
 				metadata: parseClientMetadata(client.metadata),

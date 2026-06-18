@@ -15,6 +15,7 @@ import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
@@ -239,7 +240,7 @@ describe("oauth2", async () => {
 			refreshToken: expect.any(String),
 			accessTokenExpiresAt: expect.any(Date),
 			refreshTokenExpiresAt: null,
-			grantedScopes: expect.any(Array),
+			scope: expect.any(String),
 			idToken: expect.any(String),
 		});
 	});
@@ -669,6 +670,252 @@ describe("oauth2", async () => {
 			expect(refreshCount).toBe(1);
 		} finally {
 			server.service.off("beforeResponse", countRefresh);
+		}
+	});
+
+	/**
+	 * Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`,
+	 * and providers with tenant selectors) require extra body params on the
+	 * refresh call. `refreshTokenParams` lets a generic-oauth plugin inject
+	 * those params — both statically and via a function evaluated at refresh
+	 * time with request metadata from the triggering request — without forcing a
+	 * full re-authorization redirect. Refresh-flow and unsafe object keys are
+	 * protected from override.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7554
+	 */
+	it("forwards refreshTokenParams (incl. dynamic + ctx + protected keys) to the token endpoint on refresh", async () => {
+		const capturedBodies: URLSearchParams[] = [];
+		const captureRefresh = (
+			_response: MutableResponse,
+			req: TokenRequestIncomingMessage,
+		) => {
+			if (req.body?.grant_type === "refresh_token") {
+				capturedBodies.push(
+					new URLSearchParams(req.body as unknown as Record<string, string>),
+				);
+			}
+		};
+		server.service.on("beforeResponse", captureRefresh);
+
+		let dynamicScope = "urn:zitadel:iam:org:id:org-A";
+		const ctxSeenBy: {
+			providerId: string;
+			hasCtx: boolean;
+			header: string | null;
+		}[] = [];
+
+		try {
+			const { customFetchImpl, cookieSetter: localCookieSetter } =
+				await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "refresh-params-ctx",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: (ctx) => {
+										const header = ctx?.headers?.get("x-active-org") ?? null;
+										ctxSeenBy.push({
+											providerId: "refresh-params-ctx",
+											hasCtx: Boolean(ctx),
+											header,
+										});
+										return header
+											? { scope: `urn:zitadel:iam:org:id:${header}` }
+											: undefined;
+									},
+								},
+								{
+									providerId: "refresh-params-static",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: {
+										audience: "https://api.example.com",
+									},
+								},
+								{
+									providerId: "refresh-params-dynamic",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: async () => ({
+										scope: dynamicScope,
+									}),
+								},
+								{
+									providerId: "refresh-params-noop",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: () => undefined,
+								},
+								{
+									providerId: "refresh-params-protected",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									accessTokenExpiresIn: 3600,
+									refreshTokenParams: {
+										grant_type: "client_credentials",
+										refresh_token: "should-not-replace",
+										["__proto__"]: "polluted",
+										constructor: "polluted",
+										prototype: "polluted",
+										audience: "https://api.example.com",
+									},
+								},
+							],
+						}),
+					],
+				});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+
+			async function signIn(providerId: string) {
+				server.service.once("beforeUserinfo", (userInfoResponse) => {
+					userInfoResponse.body = {
+						email: `${providerId}@test.com`,
+						name: providerId,
+						sub: providerId,
+						email_verified: true,
+					};
+					userInfoResponse.statusCode = 200;
+				});
+				const headers = new Headers();
+				const signInRes = await client.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: localCookieSetter(headers) },
+				});
+				const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+					signInRes.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				return postCallbackHeaders;
+			}
+
+			const ctxHeaders = await signIn("refresh-params-ctx");
+			const staticHeaders = await signIn("refresh-params-static");
+			const dynamicHeaders = await signIn("refresh-params-dynamic");
+			const noopHeaders = await signIn("refresh-params-noop");
+			const protectedHeaders = await signIn("refresh-params-protected");
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+
+				const ctxHeadersWithOrg = new Headers(ctxHeaders);
+				ctxHeadersWithOrg.set("x-active-org", "org-from-header");
+				const ctxRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-ctx" },
+					{ headers: ctxHeadersWithOrg },
+				);
+				expect(ctxRefresh.data?.accessToken).toBeTruthy();
+
+				const staticRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-static" },
+					{ headers: staticHeaders },
+				);
+				expect(staticRefresh.data?.accessToken).toBeTruthy();
+
+				const firstDynamic = await client.getAccessToken(
+					{ providerId: "refresh-params-dynamic" },
+					{ headers: dynamicHeaders },
+				);
+				expect(firstDynamic.data?.accessToken).toBeTruthy();
+
+				dynamicScope = "urn:zitadel:iam:org:id:org-B";
+				vi.setSystemTime(new Date(Date.now() + 4 * 60 * 60 * 1000));
+				const secondDynamic = await client.getAccessToken(
+					{ providerId: "refresh-params-dynamic" },
+					{ headers: dynamicHeaders },
+				);
+				expect(secondDynamic.data?.accessToken).toBeTruthy();
+
+				const noopRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-noop" },
+					{ headers: noopHeaders },
+				);
+				expect(noopRefresh.data?.accessToken).toBeTruthy();
+
+				const protectedRefresh = await client.getAccessToken(
+					{ providerId: "refresh-params-protected" },
+					{ headers: protectedHeaders },
+				);
+				expect(protectedRefresh.data?.accessToken).toBeTruthy();
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(capturedBodies).toHaveLength(6);
+			const [
+				ctxBody,
+				staticBody,
+				dynamicBodyA,
+				dynamicBodyB,
+				noopBody,
+				protectedBody,
+			] = capturedBodies as [
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+				URLSearchParams,
+			];
+
+			// ctx is forwarded so headers/cookies on the triggering request
+			// are reachable from inside refreshTokenParams.
+			expect(ctxBody.get("scope")).toBe(
+				"urn:zitadel:iam:org:id:org-from-header",
+			);
+			expect(ctxSeenBy).toHaveLength(1);
+			expect(ctxSeenBy[0]).toEqual({
+				providerId: "refresh-params-ctx",
+				hasCtx: true,
+				header: "org-from-header",
+			});
+
+			expect(staticBody.get("audience")).toBe("https://api.example.com");
+			expect(staticBody.get("grant_type")).toBe("refresh_token");
+
+			expect(dynamicBodyA.get("scope")).toBe("urn:zitadel:iam:org:id:org-A");
+			expect(dynamicBodyB.get("scope")).toBe("urn:zitadel:iam:org:id:org-B");
+
+			// Function returning undefined is treated as no extra params; the
+			// refresh itself still happens.
+			expect(noopBody.get("grant_type")).toBe("refresh_token");
+			expect(noopBody.get("refresh_token")).toBeTruthy();
+			expect(noopBody.get("audience")).toBeNull();
+			expect(noopBody.get("scope")).toBeNull();
+
+			// Refresh-flow and unsafe object keys are protected from override;
+			// other keys still pass through.
+			expect(protectedBody.get("grant_type")).toBe("refresh_token");
+			expect(protectedBody.get("refresh_token")).not.toBe("should-not-replace");
+			expect(protectedBody.get("__proto__")).toBeNull();
+			expect(protectedBody.get("constructor")).toBeNull();
+			expect(protectedBody.get("prototype")).toBeNull();
+			expect(protectedBody.get("audience")).toBe("https://api.example.com");
+		} finally {
+			server.service.off("beforeResponse", captureRefresh);
 		}
 	});
 
@@ -4367,5 +4614,135 @@ describe("oauth2", async () => {
 			where: [{ field: "providerId", value: "empty-id-test" }],
 		});
 		expect(accounts).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ * @see https://github.com/better-auth/better-auth/issues/9593
+ */
+describe("redirect_uri composition under dynamic baseURL", async () => {
+	const dynamicServer = new OAuth2Server();
+	await dynamicServer.start();
+	const dynamicPort = Number(new URL(dynamicServer.issuer.url!).port);
+
+	afterAll(async () => {
+		await dynamicServer.stop();
+	});
+
+	beforeAll(async () => {
+		await dynamicServer.issuer.keys.generate("RS256");
+	});
+
+	async function getAuthorizeRedirectUri(
+		auth: { handler: (request: Request) => Promise<Response> },
+		signInPath: string,
+		host: string,
+		providerId: string,
+	) {
+		const response = await auth.handler(
+			new Request(`http://${host}${signInPath}`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					provider: providerId,
+					callbackURL: "/dashboard",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		const json = (await response.json()) as { url?: string };
+		expect(json.url).toBeDefined();
+		const authUrl = new URL(json.url!);
+		return authUrl.searchParams.get("redirect_uri");
+	}
+
+	it("composes an absolute redirect_uri for a generic-oauth provider at the default basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+
+		expect(redirectUri).toBe(
+			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("composes an absolute redirect_uri for a generic-oauth provider at a custom basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			basePath: "/auth",
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+
+		expect(redirectUri).toBe(
+			"http://localhost:3000/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("composes an absolute redirect_uri for a built-in social provider", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			socialProviders: {
+				google: {
+					clientId: "google-client-id",
+					clientSecret: "google-client-secret",
+				},
+			},
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"google",
+		);
+
+		expect(redirectUri).toBe("http://localhost:3000/api/auth/callback/google");
+	});
+
+	it("normalizes custom callbackPath values without a leading slash", () => {
+		expect(
+			getOAuthCallbackPath({
+				id: "custom-oauth-test",
+				callbackPath: "callback/custom-oauth-test",
+			}),
+		).toBe("/callback/custom-oauth-test");
 	});
 });

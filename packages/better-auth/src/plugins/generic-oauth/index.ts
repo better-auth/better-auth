@@ -3,7 +3,8 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuthIdTokenConfig,
-	UpstreamProvider,
+	OAuthProvider,
+	OAuthRefreshContext,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
@@ -210,7 +211,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: UpstreamProvider[] = [];
+			const genericProviders: OAuthProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -293,10 +294,9 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
-				const provider: UpstreamProvider = {
+				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
-					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:
@@ -427,6 +427,7 @@ export const genericOAuth = <const ID extends string>(
 					},
 					async refreshAccessToken(
 						refreshToken: string,
+						refreshCtx?: OAuthRefreshContext,
 					): Promise<OAuth2Tokens> {
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -434,6 +435,10 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const resolvedRefreshParams =
+							typeof c.refreshTokenParams === "function"
+								? await c.refreshTokenParams(refreshCtx)
+								: c.refreshTokenParams;
 						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
@@ -443,6 +448,7 @@ export const genericOAuth = <const ID extends string>(
 							authentication: c.authentication,
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
+							extraParams: resolvedRefreshParams,
 						});
 						return applyDefaultAccessTokenExpiry(
 							tokens,

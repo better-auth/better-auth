@@ -345,20 +345,6 @@ describe("open-api", async () => {
 		expect(schemas["Session"]!.required).toContain("id");
 	});
 
-	it("emits a valid OpenAPI array schema for string[] fields (grantedScopes)", async () => {
-		const schema = await auth.api.generateOpenAPISchema();
-		const schemas = schema.components.schemas as Record<
-			string,
-			Record<string, any>
-		>;
-		// Must be a JSON Schema array, never the invalid literal type "string[]".
-		expect(schemas["Account"]!.properties.grantedScopes).toEqual({
-			type: "array",
-			items: { type: "string" },
-		});
-		expect(schemas["Account"]!.required ?? []).not.toContain("grantedScopes");
-	});
-
 	it("should include additionalFields in the User schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
@@ -376,6 +362,43 @@ describe("open-api", async () => {
 		});
 		expect(schemas["User"]!.required).toContain("role");
 		expect(schemas["User"]!.required).not.toContain("preferences");
+	});
+
+	it("should map array additionalFields to OpenAPI array schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+							required: false,
+						},
+						scores: {
+							type: "number[]",
+							required: true,
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.tags).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["User"]!.properties.scores).toEqual({
+			type: "array",
+			items: { type: "number" },
+		});
+		expect(schemas["User"]!.required).not.toContain("tags");
+		expect(schemas["User"]!.required).toContain("scores");
 	});
 
 	it("should omit runtime-generated defaults from model schemas", async () => {

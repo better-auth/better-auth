@@ -78,63 +78,33 @@ export type OAuth2UserInfo = {
 };
 
 /**
- * The result of building a provider authorization URL.
+ * Request metadata available to provider refresh hooks.
  *
- * `requestedScopes` is the effective set of scopes encoded in the URL (the
- * provider's built-in defaults + configured `options.scope` + per-request
- * `scopes`, composed by `resolveRequestedScopes`). Callers persist it so the
- * callback can fall back to the request when the provider omits `scope` from
- * its token response (RFC 6749 §5.1).
+ * The refresh flow may be triggered by endpoints such as `getAccessToken` or
+ * `refreshToken`; this context gives provider hooks access to the triggering
+ * request without exposing the full endpoint implementation surface.
  */
-export interface AuthorizationURLResult {
-	url: URL;
-	requestedScopes: string[];
+export interface OAuthRefreshContext {
+	headers?: Headers | undefined;
+	request?: Request | undefined;
 }
 
-/**
- * How much an RP trusts a provider's echoed token-response `scope` when
- * persisting `account.grantedScopes`.
- *
- * - `"full-grant"`: the echo is the user's complete current grant, so the seam
- *   replaces the stored grant with it. This is the only path that may narrow
- *   the grant. Declare it only for providers whose token response reports the
- *   full combined grant, e.g. Google with `include_granted_scopes`.
- * - `"projection"`: the echo is this request's subset, so the seam unions it
- *   onto the stored grant. The safe default for every provider.
- * - `"absent-echo"`: the provider omitted `scope`, so the grant equals what was
- *   requested (RFC 6749 §5.1) and the seam unions the requested set. Resolved
- *   at runtime by the persistence seam, never declared by a provider.
- *
- * @see https://www.rfc-editor.org/rfc/rfc6749#section-5.1
- */
-export type GrantAuthority = "full-grant" | "projection" | "absent-echo";
-
-/**
- * The authority a provider may declare for its own echoed scope. `"absent-echo"`
- * is excluded because it is a runtime condition (an omitted echo), not a
- * provider trait.
- */
-export type ProviderGrantAuthority = Exclude<GrantAuthority, "absent-echo">;
-
-export interface UpstreamProvider<
+export interface OAuthProvider<
 	T extends Record<string, any> = Record<string, any>,
 	O extends Record<string, any> = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
 	/**
-	 * The path the provider redirects back to, relative to the app base URL,
-	 * e.g. `/callback/google`.
-	 */
-	callbackPath: string;
-	/**
-	 * How the persistence seam treats this provider's echoed token-response
-	 * `scope`. Declare `"full-grant"` only when the echo is the user's complete
-	 * current grant (e.g. Google with `include_granted_scopes`); otherwise the
-	 * echo is unioned onto the stored grant.
+	 * Optional path under the resolved per-request `baseURL` where this
+	 * provider's OAuth callback handler is mounted. Providers that use the
+	 * shared `/callback/<id>` route can omit this.
 	 *
-	 * @default "projection"
+	 * Custom paths must start with `/`.
+	 *
+	 * Endpoints compose `redirectURI = ctx.context.baseURL + callbackPath` per
+	 * request, so the provider must not hardcode an origin or `baseURL` here.
 	 */
-	grantAuthority?: ProviderGrantAuthority | undefined;
+	callbackPath?: string | undefined;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;
@@ -155,7 +125,7 @@ export interface UpstreamProvider<
 		 * before applying them.
 		 */
 		additionalParams?: Record<string, string> | undefined;
-	}) => Awaitable<AuthorizationURLResult>;
+	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {
 		code: string;
@@ -190,11 +160,19 @@ export interface UpstreamProvider<
 		data: T;
 	} | null>;
 	/**
-	 * Custom function to refresh a token
+	 * Custom function to refresh a token.
+	 *
+	 * Receives request metadata from the endpoint that triggered the refresh.
+	 * Providers that don't need request-scoped data can ignore the second
+	 * argument.
 	 */
 	refreshAccessToken?:
-		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| ((
+				refreshToken: string,
+				ctx?: OAuthRefreshContext,
+		  ) => Promise<OAuth2Tokens>)
 		| undefined;
+	revokeToken?: ((token: string) => Promise<void>) | undefined;
 	/**
 	 * Declarative id_token verification config consumed by the shared
 	 * `verifyProviderIdToken` verifier. Providers set this instead of implementing a boolean
@@ -302,10 +280,6 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 					emailVerified: boolean;
 					[key: string]: any;
 				};
-				// TODO: type as `Profile` once provider getUserInfo paths that return a
-				// narrower data shape than their declared profile are reconciled; today
-				// `any` is load-bearing for those (e.g. facebook) and tightening it ripples
-				// across ~10 providers, out of scope for the grant refactor.
 				data: any;
 		  } | null>)
 		| undefined;

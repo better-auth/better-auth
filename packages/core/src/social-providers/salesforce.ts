@@ -1,11 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -40,8 +39,6 @@ export interface SalesforceOptions extends ProviderOptions<SalesforceProfile> {
 	redirectURI?: string | undefined;
 }
 
-const SALESFORCE_DEFAULT_SCOPES = ["openid", "email", "profile"];
-
 export const salesforce = (options: SalesforceOptions) => {
 	const environment = options.environment ?? "production";
 	const isSandbox = environment === "sandbox";
@@ -66,7 +63,6 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
-		callbackPath: "/callback/salesforce",
 
 		async createAuthorizationURL({
 			state,
@@ -85,17 +81,17 @@ export const salesforce = (options: SalesforceOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Salesforce");
 			}
 
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				SALESFORCE_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "email", "profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "salesforce",
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
@@ -166,5 +162,5 @@ export const salesforce = (options: SalesforceOptions) => {
 		},
 
 		options,
-	} satisfies UpstreamProvider<SalesforceProfile>;
+	} satisfies OAuthProvider<SalesforceProfile>;
 };

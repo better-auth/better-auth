@@ -359,43 +359,6 @@ describe("one-tap implicit linking gate", async () => {
 		expect(res.data?.user?.id).not.toBe(userB.id);
 	});
 
-	it("records grantedScopes on the account created for a first-time One Tap user", async () => {
-		const { auth, client } = await getTestInstance({
-			socialProviders: {
-				google: {
-					clientId: "test-client",
-					clientSecret: "test-secret",
-					enabled: true,
-				},
-			},
-			plugins: [oneTap()],
-		});
-
-		const res = await client.$fetch<{
-			data: { user: { id: string } } | null;
-			error: unknown;
-		}>("/one-tap/callback", {
-			method: "POST",
-			body: { idToken: "stub-id-token" },
-		});
-
-		expect(res.error).toBeFalsy();
-		const ctx = await auth.$context;
-		const accounts = await ctx.adapter.findMany<{
-			providerId: string;
-			grantedScopes?: string[] | null;
-		}>({
-			model: "account",
-			where: [{ field: "providerId", value: "google" }],
-		});
-		expect(accounts).toHaveLength(1);
-		expect([...(accounts[0]!.grantedScopes ?? [])].sort()).toEqual([
-			"email",
-			"openid",
-			"profile",
-		]);
-	});
-
 	it("honors accountLinking.disableImplicitLinking even when the local user is verified", async () => {
 		const { auth, client } = await getTestInstance({
 			socialProviders: {

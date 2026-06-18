@@ -2,7 +2,7 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
 
 export interface PayPalProfile {
@@ -77,8 +77,7 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
-		callbackPath: "/callback/paypal",
-		createAuthorizationURL({
+		async createAuthorizationURL({
 			state,
 			codeVerifier,
 			redirectURI,
@@ -97,17 +96,20 @@ export const paypal = (options: PayPalOptions) => {
 			 * We don't pass any scopes to avoid "invalid scope" errors
 			 **/
 
-			return createAuthorizationURL({
+			const _scopes: string[] = [];
+
+			const url = await createAuthorizationURL({
 				id: "paypal",
 				options,
 				authorizationEndpoint,
-				scopes: [],
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
 				additionalParams,
 			});
+			return url;
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -246,5 +248,5 @@ export const paypal = (options: PayPalOptions) => {
 		},
 
 		options,
-	} satisfies UpstreamProvider<PayPalProfile>;
+	} satisfies OAuthProvider<PayPalProfile>;
 };
