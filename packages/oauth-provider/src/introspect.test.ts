@@ -1086,7 +1086,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 
 	async function getOAuthJwtAccessToken() {
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
