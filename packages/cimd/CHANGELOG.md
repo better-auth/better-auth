@@ -1,5 +1,14 @@
 # @better-auth/cimd
 
+## 1.7.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [[`4fe730a`](https://github.com/better-auth/better-auth/commit/4fe730a9c12f2ff68ca84523817b550adc7b2982), [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - @better-auth/oauth-provider@1.7.0-beta.7
+  - better-auth@1.7.0-beta.7
+  - @better-auth/core@1.7.0-beta.7
+
 ## 1.7.0-beta.6
 
 ### Patch Changes
