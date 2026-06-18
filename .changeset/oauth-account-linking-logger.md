@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-fix(oauth): route account-linking logs through the configured logger
+OAuth account-linking and create-user error logs now respect a custom `logger` configured in `betterAuth()`, instead of always being written to the default console logger.
