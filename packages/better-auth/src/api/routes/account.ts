@@ -21,7 +21,11 @@ import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import {
+	decryptOAuthToken,
+	getOAuthCallbackPath,
+	setTokenUtil,
+} from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -384,7 +388,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			idTokenNonce,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
 			additionalParams: c.body.additionalParams,
