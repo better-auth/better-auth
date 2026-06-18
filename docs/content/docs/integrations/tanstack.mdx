@@ -91,23 +91,31 @@ const signIn = async () => {
 
 To protect resources that require authentication, use `beforeLoad` with a server function. This ensures authentication is checked on every navigation, including client-side navigation via `<Link>` components.
 
-First, create server-side helpers to check the session:
+First, create server-side helpers to check the session. `auth.api.getSession` can throw if the auth backend is unavailable. Catch that error and re-throw a plain `Error` so TanStack Start can render a framework-safe 500 response.
 
 ```ts title="src/lib/auth.functions.ts"
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { auth } from "@/lib/auth";
 
-export const getSession = createServerFn({ method: "GET" }).handler(async () => {
+async function getSessionFromRequest() {
     const headers = getRequestHeaders();
-    const session = await auth.api.getSession({ headers });
 
-    return session;
+    try {
+        return await auth.api.getSession({ headers });
+    } catch (error) {
+        // auth.api.getSession can throw when the backend is unavailable.
+        // Re-throw a plain Error so TanStack Start handles it as a 500.
+        throw new Error("Session temporarily unavailable", { cause: error });
+    }
+}
+
+export const getSession = createServerFn({ method: "GET" }).handler(async () => {
+    return getSessionFromRequest();
 });
 
 export const ensureSession = createServerFn({ method: "GET" }).handler(async () => {
-    const headers = getRequestHeaders();
-    const session = await auth.api.getSession({ headers });
+    const session = await getSessionFromRequest();
 
     if (!session) {
         throw new Error("Unauthorized");
