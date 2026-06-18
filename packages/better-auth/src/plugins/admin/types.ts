@@ -84,13 +84,10 @@ export interface AdminOptions {
 		 * A callback when `admin.impersonateUser` is called.
 		 */
 		impersonateStart: (
-			/**
-			 * `null` if the request is made from the server
-			 */
 			adminSession: {
 				user: User & Record<string, unknown>;
 				session: Session & Record<string, unknown>;
-			} | null,
+			},
 			impersonatedUser: UserWithRole,
 		) => Promise<void>;
 		/**

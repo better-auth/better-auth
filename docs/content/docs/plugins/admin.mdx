@@ -858,7 +858,7 @@ admin({
       // Called when admin.impersonateUser is called
       await logAuditEvent({
         type: "impersonation_started",
-        adminId: adminSession?.user.id,
+        adminId: adminSession.user.id,
         impersonatedUserId: impersonatedUser.id,
       });
     },
@@ -866,7 +866,7 @@ admin({
       // Called when admin.stopImpersonating is called
       await logAuditEvent({
         type: "impersonation_ended",
-        adminId: adminSession?.user.id,
+        adminId: adminSession.user.id,
       });
     },
     ban: async (adminSession, bannedUser) => {
@@ -903,14 +903,14 @@ Triggered when `admin.impersonateUser` is called.
 
 **Parameters:**
 
-* `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+* `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null) — `impersonateUser` requires an active admin session.
 * `impersonatedUser`: The user object that is being impersonated.
 
 **Example:**
 
 ```ts
 impersonateStart: async (adminSession, impersonatedUser) => {
-  console.log(`Admin ${adminSession?.user.email} started impersonating ${impersonatedUser.email}`);
+  console.log(`Admin ${adminSession.user.email} started impersonating ${impersonatedUser.email}`);
 }
 ```
 
