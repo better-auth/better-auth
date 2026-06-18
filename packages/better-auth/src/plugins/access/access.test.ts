@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAccessControl, role } from "./access";
 import type { Role } from "./types";
+import { hasPermission } from "../admin/has-permission";
 
 describe("access", () => {
 	const statements = {
@@ -283,5 +284,42 @@ describe("access control across multiple roles", () => {
 
 		const failed = authorizeAcross([roleA], { ui: ["view"] });
 		expect(failed.success).toBe(false);
+	});
+
+	it("the real admin hasPermission merges comma-separated roles", () => {
+		// Exercise the actual exported admin `hasPermission` (not the local helper
+		// above), so a regression in the production merge path is caught rather than
+		// silently passing against a re-implementation. @see #3011
+		const options = { roles: { roleA, roleB } };
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { project: ["create"] },
+			}),
+		).toBe(true);
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { ui: ["view"] },
+			}),
+		).toBe(true);
+		// A permission neither role grants is denied.
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { project: ["delete"] },
+			}),
+		).toBe(false);
+		// A single role only authorizes its own statements.
+		expect(
+			hasPermission({
+				role: "roleA",
+				options,
+				permissions: { ui: ["view"] },
+			}),
+		).toBe(false);
 	});
 });
