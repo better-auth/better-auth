@@ -26,9 +26,10 @@ export function cimdClientDiscovery(
 	options: CimdOptions = {},
 ): ClientDiscovery {
 	const resolver = createCimdResolver(options);
+	const allowLoopback = options.allowLoopback ?? false;
 	return {
 		id: "cimd",
-		matches: isUrlClientId,
+		matches: (clientId) => isUrlClientId(clientId, { allowLoopback }),
 		resolve: resolver,
 		discoveryMetadata: { client_id_metadata_document_supported: true },
 	};
@@ -59,9 +60,11 @@ export const cimd = (options: CimdOptions = {}) => {
 
 export { createCimdResolver } from "./resolver";
 export type { CimdOptions } from "./types";
-export type { ClientIdMetadataDocumentResult } from "./validate-metadata-document";
+export type {
+	ClientIdMetadataDocumentResult,
+	ClientIdUrlOptions,
+} from "./validate-metadata-document";
 export {
-	isLocalhost,
 	isUrlClientId,
 	validateCimdMetadata,
 	validateClientIdUrl,

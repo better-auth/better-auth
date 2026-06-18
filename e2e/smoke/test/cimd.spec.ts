@@ -17,8 +17,9 @@ const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
 describe("CIMD end-to-end flow", () => {
 	it("runs the full authorize → consent → token → userinfo → refresh loop with a URL client_id", async (t) => {
-		// 1. Host the CIMD metadata document on a local HTTP server. CIMD
-		//    permits HTTP for localhost so no TLS scaffolding is required.
+		// 1. Host the CIMD metadata document on a local HTTP server. The
+		//    `allowLoopback` option permits loopback client_id URLs over plain
+		//    HTTP, so no TLS scaffolding is required.
 		const metadataHost = createServer();
 		metadataHost.listen(0);
 		t.after(() => metadataHost.close());
@@ -71,7 +72,7 @@ describe("CIMD end-to-end flow", () => {
 					scopes: ["openid", "profile", "email", "offline_access"],
 					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
-				cimd({ refreshRate: "60m" }),
+				cimd({ refreshRate: "60m", allowLoopback: true }),
 			],
 		});
 
@@ -263,6 +264,9 @@ describe("CIMD end-to-end flow", () => {
 					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
 				cimd({
+					// Loopback client_ids are used by this smoke test; the
+					// allowFetch gate then blocks the specific host below.
+					allowLoopback: true,
 					// Block any client_id whose host is `localhost:59999`.
 					allowFetch: (url) => new URL(url).host !== "localhost:59999",
 				}),

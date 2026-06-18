@@ -80,7 +80,9 @@ export function createCimdResolver(
 	const refreshRate = cimdOptions.refreshRate ?? "60m";
 
 	return async (ctx, clientId, existing) => {
-		if (!isUrlClientId(clientId)) {
+		if (
+			!isUrlClientId(clientId, { allowLoopback: cimdOptions.allowLoopback })
+		) {
 			return null;
 		}
 

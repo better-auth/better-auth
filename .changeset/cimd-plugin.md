@@ -24,7 +24,9 @@ betterAuth({
 });
 ```
 
-Ships with §3/§4.1 validation, SSRF protection for private/reserved IPs and cloud metadata endpoints, a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
+Ships with §3/§4.1 validation, SSRF protection that rejects private, reserved, link-local, unspecified, and cloud-metadata hosts (including IPv4-mapped IPv6 and 6to4/NAT64/Teredo tunnel forms), a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
+
+Loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are fetched only when the new `allowLoopback` option is enabled, so a production server never fetches its own loopback interface. Loopback `redirect_uris` stay allowed for native and desktop flows.
 
 The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host rate limits, or DNS-level defenses beyond the built-in IP-literal check.
 

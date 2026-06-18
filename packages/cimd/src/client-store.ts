@@ -272,7 +272,9 @@ async function fetchAndValidateMetadataDocument(
 	cimdOptions: CimdOptions,
 ): Promise<Record<string, unknown>> {
 	// §3: validate the URL structure before fetching
-	const urlError = validateClientIdUrl(clientIdUrl);
+	const urlError = validateClientIdUrl(clientIdUrl, {
+		allowLoopback: cimdOptions.allowLoopback,
+	});
 	if (urlError) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client",
