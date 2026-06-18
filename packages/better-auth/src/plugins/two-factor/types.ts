@@ -72,6 +72,7 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
+	version?: string | undefined;
 	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
 }
 
@@ -80,5 +81,5 @@ export interface TwoFactorTable {
 	userId: string;
 	secret: string;
 	backupCodes: string;
-	enabled: boolean;
+	verified: boolean;
 }

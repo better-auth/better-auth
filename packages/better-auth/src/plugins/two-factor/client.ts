@@ -1,4 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import type { twoFactor as twoFa } from ".";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 
@@ -17,13 +19,24 @@ export const twoFactorClient = (
 				/**
 				 * a redirect function to call if a user needs to verify
 				 * their two factor
+				 *
+				 * @param context.twoFactorMethods - The list of
+				 * enabled two factor providers (e.g. ["totp", "otp"]).
+				 * Use this to determine which 2FA UI to show.
 				 */
-				onTwoFactorRedirect?: () => void | Promise<void>;
+				onTwoFactorRedirect?: (context: {
+					/**
+					 * The list of enabled two factor providers
+					 * for the user (e.g. ["totp", "otp"]).
+					 */
+					twoFactorMethods?: string[];
+				}) => void | Promise<void>;
 		  }
 		| undefined,
 ) => {
 	return {
 		id: "two-factor",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
 		atomListeners: [
 			{
@@ -49,12 +62,18 @@ export const twoFactorClient = (
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
 							if (options?.onTwoFactorRedirect) {
-								await options.onTwoFactorRedirect();
+								await options.onTwoFactorRedirect({
+									twoFactorMethods: context.data.twoFactorMethods,
+								});
 								return;
 							}
 
 							// fallback for when `onTwoFactorRedirect` is not used and only `twoFactorPage` is provided
-							if (options?.twoFactorPage && typeof window !== "undefined") {
+							if (
+								options?.twoFactorPage &&
+								typeof window !== "undefined" &&
+								isSafeUrlScheme(options.twoFactorPage)
+							) {
 								window.location.href = options.twoFactorPage;
 							}
 						}

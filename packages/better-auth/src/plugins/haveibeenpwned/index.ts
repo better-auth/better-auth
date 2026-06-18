@@ -5,6 +5,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -73,7 +74,7 @@ export interface HaveIBeenPwnedOptions {
 	/**
 	 * Paths to check for password
 	 *
-	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
+	 * @default ["/sign-up/email", "/change-password", "/reset-password", "/email-otp/reset-password", "/phone-number/reset-password", "/admin/create-user", "/admin/set-user-password"]
 	 */
 	paths?: string[];
 	/**
@@ -89,10 +90,15 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		"/sign-up/email",
 		"/change-password",
 		"/reset-password",
+		"/email-otp/reset-password",
+		"/phone-number/reset-password",
+		"/admin/create-user",
+		"/admin/set-user-password",
 	];
 
 	return {
 		id: "have-i-been-pwned",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			const originalHash = ctx.password.hash;
 			return {

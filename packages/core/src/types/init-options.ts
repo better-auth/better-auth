@@ -101,6 +101,32 @@ export interface BetterAuthRateLimitStorage {
 		value: RateLimit,
 		update?: boolean | undefined,
 	) => Promise<void>;
+	/**
+	 * Atomically records one request against `key` within the `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the request was counted within the active window;
+	 * when `allowed` is false the limit was already reached and `retryAfter` is
+	 * the number of seconds until the window frees up. Whether the window slides
+	 * or is fixed depends on the backing storage: the database backend resets
+	 * once the window elapses, while secondary storage uses a fixed time-to-live
+	 * set when the window first opens.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Optional for backwards compatibility. A storage without it falls back to
+	 * the legacy non-atomic `get`/`set` path, which is best-effort under
+	 * concurrency.
+	 *
+	 * TODO(rate-limit-consume-required): make this the sole required member on
+	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 */
+	consume?: (
+		key: string,
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -207,16 +233,19 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				disableIpTracking?: boolean;
 				/**
-				 * IPv6 subnet prefix length for rate limiting.
-				 * IPv6 addresses will be normalized to this subnet.
+				 * IPv6 prefix length used to collapse addresses before rate-limit keying.
+				 * Any integer from 0 to 128 is accepted; common values are 32, 48, 56, 64, 128.
+				 * Out-of-range values fall back to safe behavior (negative -> mask all, > 128 -> no mask).
 				 *
 				 * @default 64
 				 */
-				ipv6Subnet?: 128 | 64 | 48 | 32;
+				ipv6Subnet?: number;
 		  }
 		| undefined;
 	/**
-	 * Use secure cookies
+	 * Force cookies to always use the `Secure` attribute. By default,
+	 * cookies are secure in production environments. Set this to `true`
+	 * to enforce secure cookies in all environments.
 	 *
 	 * @default false
 	 */
@@ -384,9 +413,11 @@ export type BetterAuthAdvancedOptions = {
 
 export type BetterAuthOptions = {
 	/**
-	 * The name of the application
+	 * The name of your application. Used as a display name in contexts
+	 * where your app needs to be identified — for example, as the default
+	 * issuer name in authenticator apps when users set up 2FA/TOTP.
 	 *
-	 * process.env.APP_NAME
+	 * Can also be set via the `APP_NAME` environment variable.
 	 *
 	 * @default "Better Auth"
 	 */
@@ -1017,6 +1048,25 @@ export type BetterAuthOptions = {
 					 */
 					disableImplicitLinking?: boolean;
 					/**
+					 * Require the existing local user row to have
+					 * `emailVerified: true` before implicit account linking
+					 * uses the IdP's `email_verified` claim as ownership
+					 * proof. Defaults to `true` so an attacker who
+					 * pre-registers an unverified account at a victim's
+					 * email cannot have the victim's OAuth identity linked
+					 * into the attacker-owned row on first sign-in. Set to
+					 * `false` for backward compatibility on apps whose
+					 * users sign up via OAuth without verifying their email
+					 * locally; understand the takeover risk before doing
+					 * so.
+					 *
+					 * @default true
+					 *
+					 * @deprecated The option will be removed on the next
+					 * minor; the gate will become unconditional.
+					 */
+					requireLocalEmailVerified?: boolean;
+					/**
 					 * List of trusted providers. Can be a static array or a function
 					 * that returns providers dynamically. The function is called
 					 * during context init (with `request` undefined) and again
@@ -1069,7 +1119,11 @@ export type BetterAuthOptions = {
 					 */
 					allowUnlinkingAll?: boolean;
 					/**
-					 * If enabled (true), this will update the user information based on the newly linked account
+					 * When enabled, linking an account copies the provider's profile onto
+					 * the local user, matching the fields persisted on sign-up (`name`,
+					 * `image`, and any `mapProfileToUser` fields). The local `email` and
+					 * `emailVerified` are never changed, so a link cannot rebind the
+					 * account's identity.
 					 *
 					 * @default false
 					 */
@@ -1102,13 +1156,17 @@ export type BetterAuthOptions = {
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *
@@ -1145,7 +1203,12 @@ export type BetterAuthOptions = {
 		  })
 		| undefined;
 	/**
-	 * List of trusted origins.
+	 * Additional trusted origins. By default, Better Auth trusts your
+	 * app's {@link baseURL}. Use this option to allow additional origins
+	 * (e.g. a separate frontend domain).
+	 *
+	 * Can be a static array, a function that returns origins dynamically,
+	 * or use wildcard patterns (e.g. `"https://*.example.com"`).
 	 *
 	 * @param request - The request object.
 	 * It'll be undefined if no request was

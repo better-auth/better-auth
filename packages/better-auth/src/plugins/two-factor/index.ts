@@ -7,7 +7,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -17,6 +17,7 @@ import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
+import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
@@ -28,7 +29,11 @@ import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
 import { totp2fa } from "./totp";
-import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+import type {
+	TwoFactorOptions,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 
 export * from "./error-code";
 
@@ -93,6 +98,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 
 	return {
 		id: "two-factor",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			...totp.endpoints,
 			...otp.endpoints,
@@ -211,15 +217,14 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.session.session.token,
 						);
 					}
-					//delete existing two factor
+					const existingTwoFactor =
+						await ctx.context.adapter.findOne<TwoFactorTable>({
+							model: opts.twoFactorTable,
+							where: [{ field: "userId", value: user.id }],
+						});
 					await ctx.context.adapter.deleteMany({
 						model: opts.twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-						],
+						where: [{ field: "userId", value: user.id }],
 					});
 
 					await ctx.context.adapter.create({
@@ -228,6 +233,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
+							verified:
+								(existingTwoFactor != null &&
+									existingTwoFactor.verified !== false) ||
+								!!options?.skipVerificationOnEnable,
 						},
 					});
 					const totpURI = createOTP(secret, {
@@ -257,7 +266,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: disableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					// Disabling 2FA is a sensitive operation; require a DB-backed
+					// session so a stale or replayed cookie-cache payload cannot
+					// authorize it (defense in depth against the duplicate
+					// Set-Cookie leak fixed in cookies/expireCookie).
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Disable two factor authentication",
@@ -456,10 +469,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						}
 
 						/**
-						 * remove the session cookie. It's set by the sign in credential
+						 * Remove the session cookie set by the credential sign-in.
+						 *
+						 * The credential handler already created a session and set
+						 * `ctx.context.newSession`. Since 2FA is still pending, that
+						 * session is deleted here and `newSession` is reset to `null`
+						 * so downstream hooks don't observe a session that no longer
+						 * exists. Hooks that read `ctx.context.newSession` after a
+						 * sign-in must therefore null-check it: it is `null` while a
+						 * 2FA challenge is in flight (no authenticated session yet).
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
+						ctx.context.setNewSession(null);
 						const maxAge = options?.twoFactorCookieMaxAge ?? 10 * 60; // 10 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
@@ -479,8 +501,39 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
+						const twoFactorMethods: string[] = [];
+
+						/**
+						 * totp requires per-user setup, so we check
+						 * that the user actually has a secret stored.
+						 */
+						if (!options?.totpOptions?.disable) {
+							const userTotpSecret =
+								await ctx.context.adapter.findOne<TwoFactorTable>({
+									model: opts.twoFactorTable,
+									where: [
+										{
+											field: "userId",
+											value: data.user.id,
+										},
+									],
+								});
+							if (userTotpSecret && userTotpSecret.verified !== false) {
+								twoFactorMethods.push("totp");
+							}
+						}
+
+						/**
+						 * otp is server-level — if sendOTP is configured,
+						 * any user with 2fa enabled can receive a code.
+						 */
+						if (options?.otpOptions?.sendOTP) {
+							twoFactorMethods.push("otp");
+						}
+
 						return ctx.json({
 							twoFactorRedirect: true,
+							twoFactorMethods,
 						});
 					}),
 				},

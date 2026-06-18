@@ -8,6 +8,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
 import { parseUserOutput } from "../../../db/schema";
 import { shouldRequirePassword } from "../../../utils/password";
+import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -62,6 +63,24 @@ function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
 		.map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 }
 
+export async function encodeBackupCodes(
+	codes: string[],
+	secret: string | SecretConfig,
+	options?: BackupCodeOptions | undefined,
+): Promise<string> {
+	const json = JSON.stringify(codes);
+	if (options?.storeBackupCodes === "encrypted") {
+		return symmetricEncrypt({ data: json, key: secret });
+	}
+	if (
+		typeof options?.storeBackupCodes === "object" &&
+		"encrypt" in options?.storeBackupCodes
+	) {
+		return options.storeBackupCodes.encrypt(json);
+	}
+	return json;
+}
+
 export async function generateBackupCodes(
 	secret: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
@@ -69,30 +88,9 @@ export async function generateBackupCodes(
 	const backupCodes = options?.customBackupCodesGenerate
 		? options.customBackupCodesGenerate()
 		: generateBackupCodesFn(options);
-	if (options?.storeBackupCodes === "encrypted") {
-		const encCodes = await symmetricEncrypt({
-			data: JSON.stringify(backupCodes),
-			key: secret,
-		});
-		return {
-			backupCodes,
-			encryptedBackupCodes: encCodes,
-		};
-	}
-	if (
-		typeof options?.storeBackupCodes === "object" &&
-		"encrypt" in options?.storeBackupCodes
-	) {
-		return {
-			backupCodes,
-			encryptedBackupCodes: await options?.storeBackupCodes.encrypt(
-				JSON.stringify(backupCodes),
-			),
-		};
-	}
 	return {
 		backupCodes,
-		encryptedBackupCodes: JSON.stringify(backupCodes),
+		encryptedBackupCodes: await encodeBackupCodes(backupCodes, secret, options),
 	};
 }
 
@@ -185,6 +183,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 
 	return {
 		id: "backup_code",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -344,22 +343,20 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						ctx.context.secretConfig,
 						opts,
 					);
-					if (!validate.status) {
+					if (!validate.status || !validate.updated) {
 						throw APIError.from(
 							"UNAUTHORIZED",
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await symmetricEncrypt({
-						key: ctx.context.secretConfig,
-						data: JSON.stringify(validate.updated),
-					});
+					const updatedBackupCodes = await encodeBackupCodes(
+						validate.updated,
+						ctx.context.secretConfig,
+						opts,
+					);
 
-					const updated = await ctx.context.adapter.update({
+					const updated = await ctx.context.adapter.incrementOne({
 						model: twoFactorTable,
-						update: {
-							backupCodes: updatedBackupCodes,
-						},
 						where: [
 							{
 								field: "id",
@@ -370,6 +367,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								value: twoFactor.backupCodes,
 							},
 						],
+						increment: {},
+						set: {
+							backupCodes: updatedBackupCodes,
+						},
 					});
 					if (!updated) {
 						throw APIError.fromStatus("CONFLICT", {
@@ -507,9 +508,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				},
 			),
 			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/view-backup-codes`
+			 * A server-only function that returns a user's decrypted two-factor
+			 * backup codes. It is not exposed over HTTP and has no client method;
+			 * call it from trusted server code with a `userId` taken from an
+			 * authenticated session.
 			 *
 			 * ### API Methods
 			 *
@@ -518,7 +520,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
-			viewBackupCodes: createAuthEndpoint(
+			viewBackupCodes: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					body: viewBackupCodesBodySchema,

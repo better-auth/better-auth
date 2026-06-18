@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import type {
 	Awaitable,
 	BetterAuthClientOptions,
@@ -46,16 +47,33 @@ export async function getTestInstance<
 		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
+	const postgresSchema =
+		testWith === "postgres"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
+	const quotePostgresIdentifier = (identifier: string) =>
+		`"${identifier.replaceAll('"', '""')}"`;
 
 	async function getPostgres() {
 		const { Kysely, PostgresDialect } = await import("kysely");
 		const { Pool } = await import("pg");
+		const pool = new Pool({
+			connectionString: "postgres://user:password@localhost:5432/better_auth",
+			options: postgresSchema
+				? `-c search_path=${postgresSchema},public`
+				: undefined,
+		});
+		if (postgresSchema) {
+			await pool.query(
+				`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(
+					postgresSchema,
+				)}`,
+			);
+		}
 		return new Kysely({
 			dialect: new PostgresDialect({
-				pool: new Pool({
-					connectionString:
-						"postgres://user:password@localhost:5432/better_auth",
-				}),
+				pool,
 			}),
 		});
 	}
@@ -141,9 +159,26 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		// Synthesize a host header from allowedHosts so setup resolves under
+		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
+		// so it's replaced, not split on.
+		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? auth.options.baseURL
+			: undefined;
+		const pattern =
+			dynamicBaseURL?.allowedHosts.find(
+				(h) => !h.includes("*") && !h.includes("?"),
+			) ?? dynamicBaseURL?.allowedHosts[0];
+		const host = pattern
+			?.replace(/^https?:\/\//, "")
+			.split(/[/#]/)[0]
+			?.replace(/\*/g, "test")
+			.replace(/\?/g, "x");
+		const headers = host ? new Headers({ host }) : undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
+			headers,
 		});
 	}
 
@@ -165,9 +200,19 @@ export async function getTestInstance<
 		}
 		if (testWith === "postgres") {
 			const postgres = await getPostgres();
-			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-				postgres,
-			);
+			if (postgresSchema) {
+				await sql
+					.raw(
+						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+							postgresSchema,
+						)} CASCADE`,
+					)
+					.execute(postgres);
+			} else {
+				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+					postgres,
+				);
+			}
 			await postgres.destroy();
 			return;
 		}

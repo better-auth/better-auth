@@ -23,6 +23,7 @@ export default defineConfig({
 		"!./src/utils/*.test.ts",
 		"./src/error/index.ts",
 		"./src/instrumentation/index.ts",
+		"./src/instrumentation/pure.index.ts",
 	],
 	deps: {
 		neverBundle: ["@better-auth/core/async_hooks"],
@@ -32,7 +33,7 @@ export default defineConfig({
 		BETTER_AUTH_TELEMETRY_ENDPOINT:
 			process.env.BETTER_AUTH_TELEMETRY_ENDPOINT ?? "",
 	},
-	sourcemap: true,
 	unbundle: true,
+	treeshake: true,
 	clean: true,
 });

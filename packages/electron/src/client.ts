@@ -22,6 +22,7 @@ import {
 	isProcessType,
 	parseProtocolScheme,
 } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 const { app, safeStorage, webContents } = electron;
 
@@ -78,6 +79,16 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		opts.storage,
 		new Set([cookieName, localCacheName]),
 	);
+	const clearSessionCache = () => {
+		setEncrypted(cookieName, "{}");
+		store?.atoms.session?.set({
+			...store.atoms.session.get(),
+			data: null,
+			error: null,
+			isPending: false,
+		});
+		setEncrypted(localCacheName, "{}");
+	};
 
 	if (
 		(isDevelopment() || isTest()) &&
@@ -91,6 +102,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 
 	return {
 		id: "electron",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "electron",
@@ -114,14 +126,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 					};
 
 					if (url.endsWith("/sign-out")) {
-						setEncrypted(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						setEncrypted(localCacheName, "{}");
+						clearSessionCache();
 					}
 
 					return {
@@ -156,6 +161,9 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 						) {
 							const data = context.data;
 							setEncrypted(localCacheName, JSON.stringify(data));
+						}
+						if (context.request.url.toString().includes("/sign-out")) {
+							clearSessionCache();
 						}
 					},
 					onError: async (context) => {

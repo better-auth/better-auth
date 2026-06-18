@@ -28,10 +28,10 @@ export const auth = betterAuth({
   [SqliteDialect](https://kysely-org.github.io/kysely-apidoc/classes/SqliteDialect.html).
 </Callout>
 
-### Node.js Built-in SQLite (Experimental)
+### Node.js Built-in SQLite (Release Candidate)
 
-<Callout type="warning">
-  The `node:sqlite` module is still experimental and may change at any time. It requires Node.js 22.5.0 or later.
+<Callout type="info">
+  The `node:sqlite` module is a **Release Candidate** as of Node.js 24.15.0. It requires Node.js 22.5.0 or later and no longer requires the `--experimental-sqlite` flag since Node.js 22.13.0 / 23.4.0.
 </Callout>
 
 Starting from Node.js 22.5.0, you can use the built-in [SQLite](https://nodejs.org/api/sqlite.html) module:
@@ -46,6 +46,7 @@ export const auth = betterAuth({
 ```
 
 To run your application with Node.js SQLite:
+
 ```bash
 node your-app.js
 ```
@@ -78,31 +79,34 @@ your database schema based on your Better Auth configuration and plugins.
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
     <tr className="h-10">
-      <td>&#9989; Supported</td>
-      <td>&#9989; Supported</td>
+      <td>✅ Supported</td>
+      <td>✅ Supported</td>
     </tr>
   </tbody>
 </table>
 
 <Tabs items={["migrate", "generate"]}>
-   <Tab value="migrate">
-   ```package-install
-   npx auth@latest migrate
-   ```
-   </Tab>
-   <Tab value="generate">
-   ```package-install
-   npx auth@latest generate
-   ```
-   </Tab>
- </Tabs>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
 
 ## Joins (Experimental)
 
@@ -118,6 +122,7 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 <Callout type="warn">
   It's possible that you may need to run migrations after enabling this feature.
 </Callout>

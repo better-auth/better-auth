@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -58,6 +59,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
@@ -217,6 +219,21 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					}
 
 					try {
+						await ctx.context.internalAdapter.deleteUserSessions(
+							session.user.id,
+						);
+					} catch (error) {
+						ctx.context.logger.error(
+							"Failed to delete anonymous user sessions",
+							error,
+						);
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS,
+						);
+					}
+
+					try {
 						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					} catch (error) {
 						ctx.context.logger.error("Failed to delete anonymous user", error);
@@ -244,6 +261,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/one-tap/callback") ||
 							ctx.path?.startsWith("/passkey/verify-authentication") ||
 							ctx.path?.startsWith("/phone-number/verify") ||
+							ctx.path?.startsWith("/verify-email") ||
 							false
 						);
 					},
@@ -320,7 +338,20 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						) {
 							return;
 						}
-						await ctx.context.internalAdapter.deleteUser(session.user.id);
+						try {
+							await ctx.context.internalAdapter.deleteUserSessions(
+								session.user.id,
+							);
+							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						} catch (error) {
+							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`
+							// to remove the partial-state window where sessions are deleted but
+							// the user row remains.
+							ctx.context.logger.error(
+								"Failed to clean up anonymous user during post-link cleanup",
+								{ anonymousUserId: session.user.id, error },
+							);
+						}
 					}),
 				},
 			],

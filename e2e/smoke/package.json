@@ -1,5 +1,6 @@
 {
   "name": "@better-auth-test/smoke",
+  "private": true,
   "type": "module",
   "dependencies": {
     "@better-auth/passkey": "workspace:*",

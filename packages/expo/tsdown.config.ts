@@ -5,17 +5,8 @@ export default defineConfig({
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/client.ts", "./src/plugins/index.ts"],
 	deps: {
-		neverBundle: [
-			"better-auth",
-			"better-call",
-			"@better-fetch/fetch",
-			"react-native",
-			"expo-web-browser",
-			"expo-linking",
-			"expo-constants",
-		],
+		neverBundle: ["better-call", "@better-fetch/fetch", "react-native"],
 	},
 	platform: "neutral",
-	sourcemap: true,
 	treeshake: true,
 });

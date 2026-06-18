@@ -12,6 +12,8 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
@@ -45,6 +47,10 @@ export const createInternalAdapter = (
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
+	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	// Warn at most once when a single-use value is consumed through the
+	// non-atomic secondary-storage fallback (see consumeVerificationValue).
+	let warnedNonAtomicConsume = false;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -52,6 +58,7 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -86,6 +93,28 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function withVerificationConsumeLock<T>(
+		key: string,
+		fn: () => Promise<T>,
+	): Promise<T> {
+		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
+		let release!: () => void;
+		const current = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const next = previous.catch(() => {}).then(() => current);
+		verificationConsumeLocks.set(key, next);
+		await previous.catch(() => {});
+		try {
+			return await fn();
+		} finally {
+			release();
+			if (verificationConsumeLocks.get(key) === next) {
+				verificationConsumeLocks.delete(key);
+			}
+		}
+	}
+
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -99,6 +128,7 @@ export const createInternalAdapter = (
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
+						email: user.email?.toLowerCase(),
 					},
 					"user",
 					undefined,
@@ -306,9 +336,18 @@ export const createInternalAdapter = (
 				...rest
 			} = override || {};
 
+			// When secondary storage is the only store, the database adapter
+			// won't run, so we need to generate an id ourselves.
+			let sessionId: string | undefined;
+			if (secondaryStorage && !storeInDb) {
+				const generatedId = ctx.generateId({ model: "session" });
+				sessionId = generatedId !== false ? generatedId : generateId();
+			}
+
 			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -725,35 +764,61 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteAccount: async (accountId: string) => {
+		/**
+		 * Delete an account by its primary key.
+		 *
+		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 */
+		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
-				[{ field: "id", value: accountId }],
+				[
+					{
+						field: "id",
+						value: id,
+					},
+				],
 				"account",
 				undefined,
 			);
 		},
-		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
+		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				if (typeof userIdOrSessionTokens === "string") {
-					const activeSession = await secondaryStorage.get(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-					const sessions = activeSession
-						? safeJSONParse<{ token: string }[]>(activeSession)
-						: [];
-					if (!sessions) return;
-					for (const session of sessions) {
-						await secondaryStorage.delete(session.token);
-					}
-					await secondaryStorage.delete(
-						`active-sessions-${userIdOrSessionTokens}`,
-					);
-				} else {
-					for (const sessionToken of userIdOrSessionTokens) {
-						const session = await secondaryStorage.get(sessionToken);
-						if (session) {
-							await secondaryStorage.delete(sessionToken);
-						}
+				const activeSession = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+				const sessions = activeSession
+					? safeJSONParse<{ token: string }[]>(activeSession)
+					: [];
+				if (!sessions) return;
+				for (const session of sessions) {
+					await secondaryStorage.delete(session.token);
+				}
+				await secondaryStorage.delete(`active-sessions-${userId}`);
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
+				}
+			}
+			await deleteManyWithHooks(
+				[
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+				"session",
+				undefined,
+			);
+		},
+		deleteSessions: async (sessionTokens: string[]) => {
+			if (secondaryStorage) {
+				for (const sessionToken of sessionTokens) {
+					const session = await secondaryStorage.get(sessionToken);
+					if (session) {
+						await secondaryStorage.delete(sessionToken);
 					}
 				}
 
@@ -767,9 +832,9 @@ export const createInternalAdapter = (
 			await deleteManyWithHooks(
 				[
 					{
-						field: Array.isArray(userIdOrSessionTokens) ? "token" : "userId",
-						value: userIdOrSessionTokens,
-						operator: Array.isArray(userIdOrSessionTokens) ? "in" : undefined,
+						field: "token",
+						value: sessionTokens,
+						operator: "in",
 					},
 				],
 				"session",
@@ -918,7 +983,10 @@ export const createInternalAdapter = (
 			data: Partial<User> & Record<string, any>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "id",
@@ -936,7 +1004,10 @@ export const createInternalAdapter = (
 			data: Partial<User & Record<string, any>>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "email",
@@ -981,20 +1052,6 @@ export const createInternalAdapter = (
 				],
 			});
 			return accounts;
-		},
-		findAccount: async (accountId: string) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
 		},
 		findAccountByProviderId: async (accountId: string, providerId: string) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
@@ -1169,6 +1226,275 @@ export const createInternalAdapter = (
 				);
 			}
 		},
+		/**
+		 * Atomically consume a single-use verification row by `identifier` and
+		 * return it. The first concurrent caller receives the latest row for the
+		 * identifier; every other caller racing against it receives `null`.
+		 *
+		 * Race-safe replacement for the `findVerificationValue` then
+		 * `deleteVerificationByIdentifier` pair. Callers MUST gate any state
+		 * change (issue session, mint token, change password) on a non-null
+		 * return value, because consuming one row invalidates the whole
+		 * identifier and stale rows cannot be replayed.
+		 *
+		 * Rows past their `expiresAt` are treated as already invalid: the row
+		 * is still deleted (so it cannot be replayed later) but `null` is
+		 * returned. Callers do not need their own `expiresAt` gate.
+		 *
+		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
+		 * only when the configured storage implements `getAndDelete`; otherwise
+		 * it falls back to an in-process lock around `get` then `delete` and
+		 * warns once, since that fallback cannot coordinate across processes.
+		 *
+		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
+		 * in the next breaking release, or require database-backed verification
+		 * storage for security-sensitive consume paths, so the non-atomic
+		 * fallback can be removed entirely.
+		 */
+		consumeVerificationValue: async (
+			identifier: string,
+		): Promise<Verification | null> => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+			const identifiersToTry =
+				storageOption && storageOption !== "plain"
+					? [storedIdentifier, identifier]
+					: [storedIdentifier];
+
+			// After a JSON round-trip `expiresAt` arrives as a string, so coerce
+			// it back to a valid `Date` to match what the DB adapter returns.
+			const hydrateCachedVerification = (raw: unknown): Verification | null => {
+				if (!raw) return null;
+				const candidate =
+					typeof raw === "string"
+						? safeJSONParse<Verification>(raw)
+						: typeof raw === "object"
+							? (raw as Verification)
+							: null;
+				if (!candidate) return null;
+				const expiresAt = new Date(candidate.expiresAt);
+				if (!Number.isFinite(expiresAt.getTime())) return null;
+				return { ...candidate, expiresAt };
+			};
+
+			let consumed: Verification | null = null;
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				const consumeCacheKey = async (key: string) => {
+					if (secondaryStorage.getAndDelete) {
+						return hydrateCachedVerification(
+							await secondaryStorage.getAndDelete(key),
+						);
+					}
+					if (!warnedNonAtomicConsume) {
+						warnedNonAtomicConsume = true;
+						logger.warn(
+							"Secondary storage does not implement `getAndDelete`, so single-use verification values cannot be consumed atomically across processes. Implement `getAndDelete` or use database-backed verification storage to guarantee single use.",
+						);
+					}
+					return withVerificationConsumeLock(key, async () => {
+						const raw = await secondaryStorage.get(key);
+						const parsed = hydrateCachedVerification(raw);
+						if (!parsed) return null;
+						await secondaryStorage.delete(key);
+						return parsed;
+					});
+				};
+
+				for (const stored of identifiersToTry) {
+					const cacheKey = `verification:${stored}`;
+					const cached = await consumeCacheKey(cacheKey);
+					if (!cached) continue;
+					await Promise.all(
+						identifiersToTry
+							.filter((candidate) => candidate !== stored)
+							.map((candidate) =>
+								secondaryStorage.delete(`verification:${candidate}`),
+							),
+					);
+					consumed = cached;
+					break;
+				}
+			} else {
+				const consumeByIdentifier = async (
+					id: string,
+				): Promise<Verification | null> =>
+					withVerificationConsumeLock(`verification:${id}`, () =>
+						runWithTransaction(adapter, async () => {
+							const txAdapter = await getCurrentAdapter(adapter);
+							const where = [{ field: "identifier", value: id }];
+							const rows = await txAdapter.findMany<Verification>({
+								model: "verification",
+								where,
+								sortBy: { field: "createdAt", direction: "desc" },
+								limit: 1,
+							});
+							const latest = rows[0] ?? null;
+							if (!latest) return null;
+
+							// FIXME(consume-identifier-atomic): add an adapter primitive that
+							// deletes all rows for an identifier and returns the latest row in
+							// one operation. Until then, consume the latest row as the race gate
+							// and invalidate stale rows inside the same transaction/local lock.
+							return consumeOneWithHooks<Verification>(
+								"verification",
+								[{ field: "id", value: latest.id }],
+								async () => {
+									const row = await txAdapter.consumeOne<Verification>({
+										model: "verification",
+										where: [{ field: "id", value: latest.id }],
+									});
+									if (!row) return null;
+									await txAdapter.deleteMany({
+										model: "verification",
+										where,
+									});
+									return row;
+								},
+								latest,
+							);
+						}),
+					);
+
+				for (const stored of identifiersToTry) {
+					consumed = await consumeByIdentifier(stored);
+					if (consumed) break;
+				}
+
+				if (consumed && secondaryStorage) {
+					await Promise.all(
+						identifiersToTry.map((stored) =>
+							secondaryStorage.delete(`verification:${stored}`),
+						),
+					);
+				}
+			}
+
+			// Single expiry gate. A row past its `expiresAt` is treated as already
+			// invalid, so callers can rely on a non-null return meaning "valid".
+			if (!consumed || consumed.expiresAt < new Date()) return null;
+			return consumed;
+		},
+		/**
+		 * First-writer-wins create keyed by a deterministic primary key derived
+		 * from `identifier`. Returns `true` when this caller created the row and
+		 * `false` when a row for the same identifier already existed.
+		 *
+		 * The dual of `consumeVerificationValue`: where consume races to delete a
+		 * marker exactly once, reserve races to create a marker exactly once. Use
+		 * it for replay tombstones (a SAML assertion id, a JWT `jti`) where the
+		 * first caller wins and every later caller must observe that the marker is
+		 * already taken.
+		 *
+		 * The `verification.identifier` column is non-unique, so uniqueness comes
+		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
+		 * The database path is atomic: the primary key turns the INSERT into the
+		 * first-writer-wins gate, and a duplicate is detected portably by
+		 * re-reading the row rather than matching adapter-specific errors. The
+		 * secondary-storage-only path has no primary key to enforce uniqueness, so
+		 * it is best-effort under concurrency.
+		 *
+		 * The atomic guarantee requires the configured adapter to reject a
+		 * duplicate primary key on insert, which every real database enforces. The
+		 * in-memory adapter does not enforce primary-key uniqueness, so reservation
+		 * is best-effort there (it is intended for development and tests).
+		 */
+		reserveVerificationValue: async (data: {
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}): Promise<boolean> => {
+			const reservationId = base64Url.encode(
+				new Uint8Array(
+					await createHash("SHA-256").digest(
+						new TextEncoder().encode("reserve:" + data.identifier),
+					),
+				),
+				{ padding: false },
+			);
+			const storageOption = getStorageOption(
+				data.identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				data.identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				// Best-effort under concurrency: without a database primary key there
+				// is no first-writer-wins gate, so two callers racing a get-then-set
+				// can both observe an empty key and both win (mirrors the non-atomic
+				// secondary fallback in consumeVerificationValue).
+				// FIXME(reserve-secondary-atomic): require an atomic conditional set
+				// (set-if-absent) on SecondaryStorage, or require database-backed
+				// verification storage for reservations, so this path can guarantee
+				// first-writer-wins across processes.
+				const cacheKey = `verification:${storedIdentifier}`;
+				const existing = await secondaryStorage.get(cacheKey);
+				if (existing) return false;
+				await secondaryStorage.set(
+					cacheKey,
+					JSON.stringify({
+						id: reservationId,
+						identifier: storedIdentifier,
+						value: data.value,
+						expiresAt: data.expiresAt,
+					}),
+					getTTLSeconds(data.expiresAt),
+				);
+				return true;
+			}
+
+			try {
+				await adapter.create({
+					model: "verification",
+					data: {
+						id: reservationId,
+						identifier: storedIdentifier,
+						value: data.value,
+						expiresAt: data.expiresAt,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+			} catch (error) {
+				// A create error is ambiguous across adapters: confirm it was a
+				// duplicate (the row exists) rather than a real failure before
+				// reporting "lost".
+				const existing = await adapter.findOne<Verification>({
+					model: "verification",
+					where: [{ field: "id", value: reservationId }],
+				});
+				if (existing) return false;
+				throw error;
+			}
+
+			if (secondaryStorage) {
+				const ttl = getTTLSeconds(data.expiresAt);
+				if (ttl > 0) {
+					await secondaryStorage.set(
+						`verification:${storedIdentifier}`,
+						JSON.stringify({
+							id: reservationId,
+							identifier: storedIdentifier,
+							value: data.value,
+							expiresAt: data.expiresAt,
+						}),
+						ttl,
+					);
+				}
+			}
+
+			return true;
+		},
 		updateVerificationByIdentifier: async (
 			identifier: string,
 			data: Partial<Verification>,
@@ -1219,5 +1545,6 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		refreshUserSessions,
 	};
 };

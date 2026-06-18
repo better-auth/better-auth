@@ -5,25 +5,15 @@ import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import type { OAuthClient } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
+import { assertClientPrivileges } from "./privileges";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "read");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "read",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const client = await getClient(ctx, opts, ctx.query.client_id);
 	if (!client) {
@@ -88,19 +78,8 @@ export async function getClientsEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "list");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "list",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const referenceId = await opts.clientReference?.(session);
 	if (referenceId) {
@@ -145,19 +124,8 @@ export async function deleteClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "delete");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "delete",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);
@@ -206,19 +174,8 @@ export async function updateClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "update");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "update",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);
@@ -293,19 +250,8 @@ export async function rotateClientSecretEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
+	await assertClientPrivileges(ctx, session, opts, "rotate");
 	if (!session) throw new APIError("UNAUTHORIZED");
-	if (!ctx.headers) throw new APIError("BAD_REQUEST");
-	if (
-		opts.clientPrivileges &&
-		!(await opts.clientPrivileges({
-			headers: ctx.headers,
-			action: "rotate",
-			session: session.session,
-			user: session.user,
-		}))
-	) {
-		throw new APIError("UNAUTHORIZED");
-	}
 
 	const clientId = ctx.body.client_id;
 	const trustedClient = opts.cachedTrustedClients?.has(clientId);

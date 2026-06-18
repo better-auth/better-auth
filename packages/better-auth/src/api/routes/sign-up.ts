@@ -7,7 +7,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
+import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -32,6 +32,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
+			cloneRequest: true,
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
@@ -216,7 +217,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
+					ctx.context.logger.warn("Password is too short");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
@@ -225,14 +226,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
+					ctx.context.logger.warn("Password is too long");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 					);
 				}
 				const shouldReturnGenericDuplicateResponse =
-					ctx.context.options.emailAndPassword.requireEmailVerification;
+					ctx.context.options.emailAndPassword.requireEmailVerification ||
+					ctx.context.options.emailAndPassword.autoSignIn === false;
 				const shouldSkipAutoSignIn =
 					ctx.context.options.emailAndPassword.autoSignIn === false ||
 					shouldReturnGenericDuplicateResponse;
@@ -258,7 +260,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
 									{ user: dbUser.user },
-									ctx.request,
+									ctx.request?.clone(),
 								),
 							);
 						}
@@ -269,7 +271,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							name,
 							email: normalizedEmail,
 							emailVerified: false,
-							image: image || null,
+							image: image ?? null,
 							createdAt: now,
 							updatedAt: now,
 						};
@@ -289,17 +291,22 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									additionalFields[key] = additionalUserFields[key];
 								}
 							}
-							syntheticUser = customSyntheticUser({
+							const customResult = customSyntheticUser({
 								coreFields,
 								additionalFields,
 								id: generatedId,
 							});
+							// Ensure custom synthetic users have consistent shape with real users
+							syntheticUser = buildSyntheticUserOutput(
+								ctx.context.options,
+								customResult,
+							);
 						} else {
-							syntheticUser = {
+							syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
 								...coreFields,
 								...additionalUserFields,
 								id: generatedId,
-							};
+							});
 						}
 
 						return ctx.json({
@@ -387,7 +394,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									url,
 									token,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}

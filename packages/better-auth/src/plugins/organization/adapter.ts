@@ -1,5 +1,8 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
@@ -21,6 +24,35 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+/**
+ * Resolves the configured per-team member cap to a concrete number for a given
+ * team-add. Returns `undefined` only when no cap is configured. Throws when the
+ * cap is a function but no session is available to evaluate it, so a sessionless
+ * server-side add fails closed instead of silently bypassing the limit.
+ */
+export async function resolveMaximumMembersPerTeam(
+	teams: OrganizationOptions["teams"],
+	context: {
+		teamId: string;
+		organizationId: string;
+		session: { user: User; session: Session } | null;
+	},
+): Promise<number | undefined> {
+	const maximumMembersPerTeam = teams?.maximumMembersPerTeam;
+	if (maximumMembersPerTeam === undefined) return undefined;
+	if (typeof maximumMembersPerTeam === "number") return maximumMembersPerTeam;
+	if (!context.session) {
+		throw new BetterAuthError(
+			"`teams.maximumMembersPerTeam` is configured as a function but no session is available to evaluate it. Provide a session-bearing request or configure a numeric limit.",
+		);
+	}
+	return await maximumMembersPerTeam({
+		teamId: context.teamId,
+		session: context.session,
+		organizationId: context.organizationId,
+	});
+}
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -328,48 +360,51 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 			userId?: string;
 		}) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			let userId: string;
-			if (!_userId) {
-				const member = await adapter.findOne<Member>({
-					model: "member",
-					where: [{ field: "id", value: memberId }],
-				});
-				if (!member) {
-					throw new BetterAuthError("Member not found");
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				let userId: string;
+				if (!_userId) {
+					const member = await adapter.findOne<Member>({
+						model: "member",
+						where: [{ field: "id", value: memberId }],
+					});
+					if (!member) {
+						throw new BetterAuthError("Member not found");
+					}
+					userId = member.userId;
+				} else {
+					userId = _userId;
 				}
-				userId = member.userId;
-			} else {
-				userId = _userId;
-			}
-			const member = await adapter.delete<InferMember<O, false>>({
-				model: "member",
-				where: [
-					{
-						field: "id",
-						value: memberId,
-					},
-				],
-			});
-			// remove member from all teams they're part of
-			if (options?.teams?.enabled) {
-				const teams = await adapter.findMany<Team>({
-					model: "team",
-					where: [{ field: "organizationId", value: organizationId }],
+				const member = await adapter.delete<InferMember<O, false>>({
+					model: "member",
+					where: [
+						{
+							field: "id",
+							value: memberId,
+						},
+					],
 				});
-				await Promise.all(
-					teams.map((team) =>
-						adapter.deleteMany({
+				if (options?.teams?.enabled) {
+					const teams = await adapter.findMany<Team>({
+						model: "team",
+						where: [{ field: "organizationId", value: organizationId }],
+					});
+					if (teams.length > 0) {
+						await adapter.deleteMany({
 							model: "teamMember",
 							where: [
-								{ field: "teamId", value: team.id },
 								{ field: "userId", value: userId },
+								{
+									field: "teamId",
+									value: teams.map((team) => team.id),
+									operator: "in",
+								},
 							],
-						}),
-					),
-				);
-			}
-			return member;
+						});
+					}
+				}
+				return member;
+			});
 		},
 		updateOrganization: async (
 			organizationId: string,
@@ -407,35 +442,37 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			) as InferOrganization<O>;
 		},
 		deleteOrganization: async (organizationId: string) => {
-			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.deleteMany({
-				model: "member",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				await adapter.deleteMany({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.deleteMany({
+					model: "invitation",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+						},
+					],
+				});
+				await adapter.delete<InferOrganization<O, false>>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				return organizationId;
 			});
-			await adapter.deleteMany({
-				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
-			});
-			await adapter.delete<InferOrganization<O, false>>({
-				model: "organization",
-				where: [
-					{
-						field: "id",
-						value: organizationId,
-					},
-				],
-			});
-			return organizationId;
 		},
 		setActiveOrganization: async (
 			sessionToken: string,
@@ -615,14 +652,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return organizations;
 		},
-		createTeam: async (data: Omit<TeamInput, "id">) => {
+		createTeam: async (data: TeamInput) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<
-				Omit<TeamInput, "id">,
-				InferTeam<O, false>
-			>({
+			const team = await adapter.create<TeamInput, InferTeam<O, false>>({
 				model: "team",
 				data,
+				forceAllowId: true,
 			});
 			return team;
 		},
@@ -886,6 +921,57 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 		},
+		/**
+		 * Adds a user to a team only when the team is below its member limit,
+		 * reading the count and creating the membership in one transaction.
+		 * Returns the existing membership unchanged (no capacity charge) when the
+		 * user already belongs to the team.
+		 *
+		 * FIXME(team-cap-race): the count-then-create is not atomic under READ
+		 * COMMITTED, so two concurrent adds can both pass the count check and
+		 * exceed maximumMembersPerTeam. A durable fix needs a unique constraint on
+		 * teamMember(teamId, userId) or serializable isolation. Affects every
+		 * caller (acceptInvitation, addMember, addTeamMember).
+		 */
+		addTeamMemberWithLimit: async (data: {
+			teamId: string;
+			userId: string;
+			maximumMembersPerTeam: number;
+		}): Promise<
+			{ status: "added"; member: TeamMember } | { status: "limitReached" }
+		> => {
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const existing = await adapter.findOne<TeamMember>({
+					model: "teamMember",
+					where: [
+						{ field: "teamId", value: data.teamId },
+						{ field: "userId", value: data.userId },
+					],
+				});
+				if (existing) {
+					return { status: "added", member: existing };
+				}
+				const count = await adapter.count({
+					model: "teamMember",
+					where: [{ field: "teamId", value: data.teamId }],
+				});
+				if (count >= data.maximumMembersPerTeam) {
+					return { status: "limitReached" };
+				}
+				const member = await adapter.create<Omit<TeamMember, "id">, TeamMember>(
+					{
+						model: "teamMember",
+						data: {
+							teamId: data.teamId,
+							userId: data.userId,
+							createdAt: new Date(),
+						},
+					},
+				);
+				return { status: "added", member };
+			});
+		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
@@ -953,12 +1039,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
+			const invitationId = context.generateId({ model: "invitation" });
 			const invite = await adapter.create<
-				Omit<InvitationInput, "id">,
+				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
 				data: {
+					...(invitationId !== false ? { id: invitationId } : {}),
 					status: "pending",
 					expiresAt,
 					createdAt: new Date(),
@@ -967,6 +1055,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					teamId:
 						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 				},
+				forceAllowId: true,
 			});
 
 			return invite;
@@ -1044,18 +1133,24 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "pending" | "accepted" | "canceled" | "rejected";
+			/**
+			 * Only transition when the invitation is currently in this status. The
+			 * guarded update is atomic, so a concurrent caller racing the same
+			 * transition gets `null` instead of both proceeding.
+			 */
+			fromStatus?: "pending";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitation = await adapter.update<InferInvitation<O, false>>({
+			const where = [{ field: "id", value: data.invitationId }];
+			if (data.fromStatus) {
+				where.push({ field: "status", value: data.fromStatus });
+			}
+			const invitation = await adapter.incrementOne<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "id",
-						value: data.invitationId,
-					},
-				],
-				update: {
+				where,
+				increment: {},
+				set: {
 					status: data.status,
 				},
 			});
