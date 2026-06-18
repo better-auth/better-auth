@@ -56,6 +56,17 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * can be used to restrict sign-in to a Workspace domain.
 	 */
 	hd?: string | undefined;
+	/**
+	 * Whether to send `include_granted_scopes=true` to Google's authorization
+	 * endpoint, which lets new access tokens cover scopes from prior grants
+	 * in addition to the ones requested for this flow. Set to `false` when
+	 * each OAuth flow should request only its own scopes.
+	 *
+	 * Defaults to `true`.
+	 *
+	 * @see https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -99,7 +110,9 @@ export const google = (options: GoogleOptions) => {
 				loginHint,
 				hd: options.hd,
 				additionalParams: {
-					include_granted_scopes: "true",
+					...(options.includeGrantedScopes === false
+						? {}
+						: { include_granted_scopes: "true" }),
 					...(additionalParams ?? {}),
 				},
 			});
