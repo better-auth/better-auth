@@ -4623,7 +4623,7 @@ describe("oauth2", async () => {
 describe("redirect_uri composition under dynamic baseURL", async () => {
 	const dynamicServer = new OAuth2Server();
 	await dynamicServer.start();
-	const dynamicPort = Number(dynamicServer.issuer.url?.split(":")[2]!);
+	const dynamicPort = Number(new URL(dynamicServer.issuer.url!).port);
 
 	afterAll(async () => {
 		await dynamicServer.stop();

@@ -100,9 +100,9 @@ export interface OAuthProvider<
 	 * `redirectURI = ctx.context.baseURL + callbackPath` per request, so the
 	 * provider must not hardcode an origin or `baseURL` here.
 	 *
-	 * Built-in social providers use `/callback/<id>`. Plugin-provided OAuth
-	 * providers (e.g. generic-oauth) use their plugin's own lane, such as
-	 * `/oauth2/callback/<id>`.
+	 * Built-in social providers and generic-OAuth providers use
+	 * `/callback/<id>` so they share the core callback route. Custom plugin
+	 * providers may choose a different lane.
 	 */
 	callbackPath: string;
 	createAuthorizationURL: (data: {
