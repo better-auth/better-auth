@@ -3510,6 +3510,31 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
 	});
 
+	it("does not let additionalParams disable `include_granted_scopes`", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				include_granted_scopes: "false",
+			},
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+
 	it("omits `include_granted_scopes` from the authorization URL when disabled", async () => {
 		const { client } = await getTestInstance(
 			{
@@ -3536,5 +3561,31 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		expect(authUrl.searchParams.get("scope")).toContain(
 			"https://www.googleapis.com/auth/drive.file",
 		);
+	});
+
+	it("does not let additionalParams re-enable `include_granted_scopes`", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						includeGrantedScopes: false,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				include_granted_scopes: "true",
+			},
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
 	});
 });
