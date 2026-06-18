@@ -164,7 +164,7 @@ describe("oauth register", async () => {
 			contacts: ["test@example.com"],
 			tos_uri: "https://example.com/terms",
 			policy_uri: "https://example.com/policy",
-			//---- Jwks (only one can be used) ----//
+			//---- Client key metadata (only one can be used) ----//
 			// jwks: [],
 			// jwks_uri: "https://example.com/.well-known/jwks.json",
 			//---- User Software Identifiers ----//
@@ -382,6 +382,17 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
+	it.for([
+		{ kty: "oct", k: "secret-key" },
+		{ kty: "RSA", n: "test", e: "test-exponent", d: "private-exponent" },
+	])("should reject private or symmetric jwks material", async (key) => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			jwks: { keys: [key] },
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
 	it("should reject admin registration with an empty jwks array", async () => {
 		await expect(
 			auth.api.adminCreateOAuthClient({
@@ -560,73 +571,83 @@ describe("oauth register - unauthenticated", async () => {
 
 	/**
 	 * RFC 7591 §2: when token_endpoint_auth_method is omitted, the default
-	 * is "client_secret_basic". Unauthenticated DCR overrides this to "none"
-	 * per RFC 7591 §3.2.1 ("the server MAY reject or replace any of the
-	 * client's requested metadata values").
+	 * is "client_secret_basic". Open registration may still create a
+	 * confidential client and return the generated client_secret.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should override omitted auth method (RFC 7591 default) to public", async () => {
+	it("should apply the client_secret_basic default without authentication", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.client_secret).toBeUndefined();
-		expect(response.data?.token_endpoint_auth_method).toBe("none");
-		expect(response.data?.public).toBe(true);
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.token_endpoint_auth_method).toBe(
+			"client_secret_basic",
+		);
+		expect(response.data?.public).toBe(false);
 	});
 
 	/**
-	 * Real-world MCP clients (Claude, Codex, Factory Droid) send
-	 * token_endpoint_auth_method: "client_secret_post" in their DCR payload.
-	 * The server overrides this to "none" and communicates the actual method
-	 * in the registration response so compliant clients can adjust.
+	 * Open registration preserves the requested confidential client auth method
+	 * and returns a secret for token endpoint authentication.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should override client_secret_post to public for unauthenticated DCR", async () => {
+	it("should preserve client_secret_post for unauthenticated DCR", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.client_secret).toBeUndefined();
-		expect(response.data?.token_endpoint_auth_method).toBe("none");
-		expect(response.data?.public).toBe(true);
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.token_endpoint_auth_method).toBe(
+			"client_secret_post",
+		);
+		expect(response.data?.public).toBe(false);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should override client_secret_basic to public for unauthenticated DCR", async () => {
+	it("should accept client_secret_basic with inline jwks for unauthenticated DCR", async () => {
+		const jwks = {
+			keys: [{ kty: "RSA", kid: "client-key", n: "test", e: "test-exponent" }],
+		};
 		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_basic",
 			redirect_uris: [redirectUri],
+			jwks,
 		});
 		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.client_secret).toBeUndefined();
-		expect(response.data?.token_endpoint_auth_method).toBe("none");
-		expect(response.data?.public).toBe(true);
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.token_endpoint_auth_method).toBe(
+			"client_secret_basic",
+		);
+		expect(response.data?.jwks).toEqual(jwks);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should clear type 'web' when overriding confidential to public", async () => {
+	it("should preserve type 'web' for unauthenticated confidential DCR", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
 			type: "web",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.client_secret).toBeUndefined();
-		expect(response.data?.token_endpoint_auth_method).toBe("none");
-		expect(response.data?.type).toBeUndefined();
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.token_endpoint_auth_method).toBe(
+			"client_secret_post",
+		);
+		expect(response.data?.type).toBe("web");
 	});
 
 	/**
-	 * client_credentials requires a secret, which public clients never get.
-	 * Reject the combination at registration rather than creating an unusable client.
+	 * client_credentials can mint tokens without an end-user authorization step.
+	 * Keep open registration on authorization-code clients unless the caller is
+	 * authenticated through a session or an initial access token.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
@@ -640,8 +661,8 @@ describe("oauth register - unauthenticated", async () => {
 });
 
 /**
- * Verifies the overridden public client is actually usable end-to-end:
- * DCR with client_secret_post (overridden to "none") -> authorize -> PKCE token exchange.
+ * Verifies the open-registration confidential client is actually usable end-to-end:
+ * DCR with client_secret_post -> authorize -> PKCE token exchange with client_secret.
  *
  * @see https://github.com/better-auth/better-auth/issues/8588
  */
@@ -681,17 +702,18 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const state = "e2e-test-state";
 
-	it("should complete authorize + PKCE token exchange after override from client_secret_post", async () => {
-		// 1. Register via unauthenticated DCR with client_secret_post (gets overridden to "none")
+	it("should complete authorize + PKCE token exchange for client_secret_post", async () => {
+		// 1. Register via unauthenticated DCR with client_secret_post.
 		const reg = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
 			redirect_uris: [redirectUri],
 		});
 		expect(reg.data?.client_id).toBeDefined();
-		expect(reg.data?.client_secret).toBeUndefined();
-		expect(reg.data?.token_endpoint_auth_method).toBe("none");
+		expect(reg.data?.client_secret).toBeDefined();
+		expect(reg.data?.token_endpoint_auth_method).toBe("client_secret_post");
 
 		const clientId = reg.data!.client_id;
+		const clientSecret = reg.data!.client_secret!;
 
 		// 2. Build authorization URL with PKCE (no client secret)
 		const codeVerifier = generateRandomString(64);
@@ -735,7 +757,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 
 		const code = new URL(consentRes.url).searchParams.get("code")!;
 
-		// 5. Exchange code at token endpoint with PKCE (no client_secret)
+		// 5. Exchange code at token endpoint with PKCE and client_secret_post.
 		const { body: tokenBody, headers: tokenHeaders } =
 			await authorizationCodeRequest({
 				code,
@@ -743,6 +765,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 				redirectURI: redirectUri,
 				options: {
 					clientId,
+					clientSecret,
 					redirectURI: redirectUri,
 				},
 			});

@@ -17,39 +17,24 @@ import type {
 	SchemaClient,
 	Scope,
 } from "./types";
-import type {
-	GrantType,
-	OAuthClient,
-	TokenEndpointAuthMethod,
-} from "./types/oauth";
+import type { GrantType, OAuthClient } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
-/**
- * Resolves the auth method and type for unauthenticated DCR.
- * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
- * When overriding, clears type "web" since it is only valid for confidential clients.
- */
-function resolveUnauthenticatedAuth(body: OAuthClient): {
-	tokenEndpointAuthMethod: TokenEndpointAuthMethod;
-	type: OAuthClient["type"];
-} {
-	if (body.token_endpoint_auth_method === "none") {
-		return {
-			tokenEndpointAuthMethod: "none",
-			type: body.type,
-		};
-	}
-	return {
-		tokenEndpointAuthMethod: "none",
-		type: body.type === "web" ? undefined : body.type,
-	};
-}
-
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
 	"authorization_code",
 ] as const satisfies GrantType[];
+
+const PRIVATE_JWK_MEMBER_NAMES = [
+	"d",
+	"p",
+	"q",
+	"dp",
+	"dq",
+	"qi",
+	"oth",
+] as const;
 
 function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
 	const grantTypes = client.grant_types ?? [
@@ -81,6 +66,29 @@ function applyOAuthClientRegistrationDefaults(
 		grant_types: grantTypes,
 		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
+}
+
+function validatePublicJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
+	const keys = Array.isArray(jwks) ? jwks : jwks.keys;
+	if (!Array.isArray(keys) || keys.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"jwks must be a non-empty array of JWK objects or a JWKS document {keys:[...]}",
+		});
+	}
+	for (const key of keys) {
+		if (
+			key.kty === "oct" ||
+			"k" in key ||
+			PRIVATE_JWK_MEMBER_NAMES.some((name) => name in key)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "jwks must contain only public asymmetric keys",
+			});
+		}
+	}
 }
 
 export async function registerEndpoint(
@@ -140,10 +148,6 @@ export async function registerEndpoint(
 					"client_credentials grant requires authenticated registration",
 			});
 		}
-
-		const resolved = resolveUnauthenticatedAuth(body);
-		body.token_endpoint_auth_method = resolved.tokenEndpointAuthMethod;
-		body.type = resolved.type;
 	}
 
 	if (!body.scope) {
@@ -364,22 +368,10 @@ export async function checkOAuthClient(
 		});
 	}
 
-	// Validate client key material (jwks / jwks_uri). These belong to
-	// assertion-based authentication: private_key_jwt and any extension method
-	// that consumes them. The validation (mutual exclusion, jwks_uri origin and
-	// SSRF guards, structure) is the same for all of them, so an extension cannot
-	// register an unvalidated jwks_uri or both jwks and jwks_uri.
-	const usesAssertionKeyMaterial =
-		tokenEndpointAuthMethod === "private_key_jwt" ||
-		isExtensionTokenEndpointAuthMethod(opts, tokenEndpointAuthMethod);
+	// Validate client key metadata (jwks / jwks_uri). OIDC Dynamic Client
+	// Registration treats these as general client metadata, not only
+	// private_key_jwt key material. private_key_jwt still requires one below.
 	if (clientWithDefaults.jwks || clientWithDefaults.jwks_uri) {
-		if (!usesAssertionKeyMaterial) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description:
-					"jwks and jwks_uri are only allowed with private_key_jwt or an assertion-based authentication method",
-			});
-		}
 		// OIDC Registration: jwks and jwks_uri must not both be present.
 		if (clientWithDefaults.jwks && clientWithDefaults.jwks_uri) {
 			throw new APIError("BAD_REQUEST", {
@@ -418,20 +410,11 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			// Accept both RFC 7517 JWKS object {"keys":[...]} and bare key array
-			const keys = Array.isArray(clientWithDefaults.jwks)
-				? clientWithDefaults.jwks
-				: (clientWithDefaults.jwks as { keys?: unknown[] }).keys;
-			if (!Array.isArray(keys) || keys.length === 0) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_client_metadata",
-					error_description:
-						"jwks must be a non-empty array of JWK objects or a JWKS document {keys:[...]}",
-				});
-			}
+			validatePublicJwks(clientWithDefaults.jwks);
 		}
 	}
-	// private_key_jwt requires key material; extension methods may carry their own.
+	// private_key_jwt requires key material; other methods may still register
+	// client keys for OIDC features such as request objects or encrypted responses.
 	if (
 		tokenEndpointAuthMethod === "private_key_jwt" &&
 		!clientWithDefaults.jwks &&
@@ -540,8 +523,7 @@ export async function createOAuthClientEndpoint(
 	// Single authorization chokepoint for OAuth client creation. Admin creation
 	// always requires create privileges. DCR re-checks them only for
 	// session-backed requests; non-session DCR was already authorized in
-	// registerEndpoint (a valid initial access token, or open registration
-	// constrained to public clients).
+	// registerEndpoint (a valid initial access token, or open registration).
 	if (!settings.isRegister || session) {
 		await assertClientPrivileges(ctx, session, opts, "create");
 	}
@@ -687,7 +669,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		contacts,
 		tos_uri: tos,
 		policy_uri: policy,
-		// Jwks (only one can be used)
+		// Client key metadata (only one can be used)
 		jwks: inputJwks,
 		jwks_uri: jwksUri,
 		// User Software Identifiers
@@ -761,7 +743,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
-		// Jwks for private_key_jwt
+		// Client key metadata
 		jwks: inputJwks
 			? JSON.stringify({
 					keys: Array.isArray(inputJwks)
@@ -865,9 +847,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		contacts: contacts ?? undefined,
 		tos_uri: tos ?? undefined,
 		policy_uri: policy ?? undefined,
-		// Jwks (only one can be used)
+		// Client key metadata (only one can be used)
 		jwks: jwks
-			? (JSON.parse(jwks) as { keys: Record<string, unknown>[] }).keys
+			? (JSON.parse(jwks) as { keys: Record<string, unknown>[] })
 			: undefined,
 		jwks_uri: jwksUri ?? undefined,
 		// User Software Identifiers

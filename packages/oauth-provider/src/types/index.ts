@@ -623,8 +623,9 @@ export interface OAuthOptions<
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * When enabled, the `/oauth2/register` endpoint accepts requests
-	 * without a session, but only for public clients
-	 * (`token_endpoint_auth_method: "none"`).
+	 * without a session. Public clients use
+	 * `token_endpoint_auth_method: "none"`; confidential clients receive a
+	 * one-time `client_secret` in the registration response.
 	 *
 	 * For verified client discovery (MCP), consider installing the
 	 * `@better-auth/cimd` plugin, which verifies client identity through
@@ -641,8 +642,8 @@ export interface OAuthOptions<
 	 * - session-backed: a logged-in user with client-create privileges.
 	 * - token-backed: a valid initial access token, when
 	 *   {@link OAuthOptions.validateInitialAccessToken} is defined.
-	 * - open public-only: unauthenticated registration constrained to public
-	 *   clients, when {@link OAuthOptions.allowUnauthenticatedClientRegistration}
+	 * - open: unauthenticated registration, when
+	 *   {@link OAuthOptions.allowUnauthenticatedClientRegistration}
 	 *   is enabled.
 	 *
 	 * @default false
@@ -1620,7 +1621,7 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
-	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	/** Client's JSON Web Key Set metadata. Mutually exclusive with `jwksUri`. */
 	jwks?: string;
 	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
 	jwksUri?: string;
