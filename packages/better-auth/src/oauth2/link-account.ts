@@ -187,14 +187,15 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
-			});
+			user =
+				(await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					...restUserInfo,
+					email: userInfo.email.toLowerCase(),
+					emailVerified:
+						userInfo.email.toLowerCase() === dbUser.user.email
+							? dbUser.user.emailVerified || userInfo.emailVerified
+							: userInfo.emailVerified,
+				})) ?? user;
 		}
 	} else {
 		if (disableSignUp) {
