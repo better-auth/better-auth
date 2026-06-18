@@ -40,7 +40,7 @@ export function stripReservedIdTokenClaims(
 ): Record<string, unknown> {
 	if (!claims) return {};
 	const stripped: string[] = [];
-	const safeClaims: Record<string, unknown> = {};
+	const safeClaims = Object.create(null) as Record<string, unknown>;
 	for (const [key, value] of Object.entries(claims)) {
 		if (RESERVED_ID_TOKEN_CLAIMS.has(key)) {
 			stripped.push(key);

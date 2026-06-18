@@ -260,14 +260,14 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	/**
 	 * Authentication Context Class Reference values supported.
 	 *
-	 * Better Auth reports `"0"` by default, meaning the provider does not claim a
-	 * specific authentication context class.
+	 * Better Auth does not advertise this field by default because it does not
+	 * currently evaluate requested Authentication Context Class References.
 	 *
 	 * @default
-	 * ["0"]
-	 * @see https://www.rfc-editor.org/rfc/rfc6711.html#section-3.1
+	 * undefined
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	 */
-	acr_values_supported: string[];
+	acr_values_supported?: string[];
 	/**
 	 * Supported subject types.
 	 *

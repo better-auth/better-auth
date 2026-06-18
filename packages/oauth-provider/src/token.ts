@@ -370,10 +370,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
-	// Extension and grant claims are additive: they only fill keys the provider
-	// does not already own, so a contributor cannot replace an identity claim
-	// (email/name/...), the authentication context, or an AS-owned claim.
-	Object.assign(payload, pickClaims(extraClaims, payload));
+	// Extension and grant claims are additive: reserved OIDC/JWT names are
+	// stripped, and the remaining claims only fill keys the provider does not
+	// already own.
+	const additiveClaims = stripReservedIdTokenClaims(extraClaims);
+	Object.assign(payload, pickClaims(additiveClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
