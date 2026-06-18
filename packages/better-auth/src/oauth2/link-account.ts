@@ -187,14 +187,23 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
-			});
+			const updatedUser = await c.context.internalAdapter.updateUser(
+				dbUser.user.id,
+				{
+					...restUserInfo,
+					email: userInfo.email.toLowerCase(),
+					emailVerified:
+						userInfo.email.toLowerCase() === dbUser.user.email
+							? dbUser.user.emailVerified || userInfo.emailVerified
+							: userInfo.emailVerified,
+				},
+			);
+			if (updatedUser == null) {
+				logger.warn(
+					"Could not update user info during OAuth sign in; preserving existing user for session.",
+				);
+			}
+			user = updatedUser ?? user;
 		}
 	} else {
 		if (disableSignUp) {

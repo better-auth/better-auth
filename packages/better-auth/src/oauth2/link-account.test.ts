@@ -1203,6 +1203,10 @@ describe("oauth2 - override user info on sign-in", async () => {
 
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("should update user info when overrideUserInfo is enabled", async () => {
 		const testEmail = "override@example.com";
 
@@ -1269,6 +1273,68 @@ describe("oauth2 - override user info on sign-in", async () => {
 		});
 
 		expect(session.data?.user.name).toBe("Updated Name");
+	});
+
+	it("should preserve the resolved user when overrideUserInfo update returns null", async () => {
+		const testEmail = "override-null@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: testEmail,
+				name: "Initial Name",
+				emailVerified: true,
+			},
+		});
+
+		const originalUpdate = ctx.adapter.update.bind(ctx.adapter);
+		vi.spyOn(ctx.adapter, "update").mockImplementation(async (payload) => {
+			const result = await originalUpdate(payload);
+			return payload.model === "user" ? null : result;
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_null_update",
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: oAuthHeaders,
+			},
+		});
+
+		expect(session.data?.user.email).toBe(testEmail);
 	});
 });
 
