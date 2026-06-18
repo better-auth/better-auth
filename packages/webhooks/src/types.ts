@@ -67,7 +67,7 @@ export type WebhooksPluginOptions = {
 	 */
 	timeoutMs?: number | undefined;
 	/**
-	 * Number of retry attempts after the first failed delivery (not counting network errors before response).
+	 * Number of retry attempts after the first failed delivery (including network errors).
 	 * @default 1
 	 */
 	retries?: number | undefined;

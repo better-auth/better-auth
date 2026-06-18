@@ -17,13 +17,6 @@ export async function deliverWebhook(options: {
 }): Promise<void> {
 	const { url, secret, payload, timeoutMs, retries, logger } = options;
 	const rawBody = JSON.stringify(payload);
-	const timestampSeconds = Math.floor(Date.now() / 1000);
-	const signatureHex = await signWebhookPayload(
-		secret,
-		timestampSeconds,
-		rawBody,
-	);
-	const signature = formatSignatureHeader(timestampSeconds, signatureHex);
 	const id = payload.id;
 
 	let attempt = 0;
@@ -31,6 +24,13 @@ export async function deliverWebhook(options: {
 
 	while (attempt < maxAttempts) {
 		attempt++;
+		const timestampSeconds = Math.floor(Date.now() / 1000);
+		const signatureHex = await signWebhookPayload(
+			secret,
+			timestampSeconds,
+			rawBody,
+		);
+		const signature = formatSignatureHeader(timestampSeconds, signatureHex);
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), timeoutMs);
 		try {
