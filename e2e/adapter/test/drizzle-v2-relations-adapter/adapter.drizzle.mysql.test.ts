@@ -80,8 +80,7 @@ const { execute } = await testAdapter({
 		uuidTestSuite(),
 		caseInsensitiveTestSuite({
 			disableTests: {
-				"findOne - eq with mode sensitive (default) should not match different case":
-					true,
+				"findOne - eq with mode sensitive (default) should not match different case": true,
 			},
 		}),
 	],

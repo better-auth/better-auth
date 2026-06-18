@@ -36,7 +36,6 @@ import {
 	insensitiveNe,
 	insensitiveNotInArray,
 } from "../query-builders";
-import { generateDrizzleSchema } from "./generate-drizzle-schema";
 
 export interface DB {
 	[key: string]: any;
@@ -973,6 +972,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return (updated[0] as any) ?? null;
 				},
 				async createSchema(props) {
+					const { generateDrizzleSchema } = await import(
+						"./generate-drizzle-schema"
+					);
 					return await generateDrizzleSchema({
 						adapterConfig: config,
 						options: options,

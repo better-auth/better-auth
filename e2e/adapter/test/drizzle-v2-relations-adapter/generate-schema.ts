@@ -32,9 +32,15 @@ export const generateDrizzleSchema = async (
 		// Clear the Node.js module cache for the generated schema file to ensure fresh import
 		try {
 			const resolvedPath =
-				require?.resolve?.(x) ||
-				(import.meta && new URL(x, import.meta.url).pathname);
-			if (resolvedPath && typeof resolvedPath === "string" && require?.cache) {
+				typeof require !== "undefined"
+					? require.resolve(x)
+					: new URL(x, import.meta.url).pathname;
+			if (
+				resolvedPath &&
+				typeof resolvedPath === "string" &&
+				typeof require !== "undefined" &&
+				require.cache
+			) {
 				delete require.cache[resolvedPath];
 			}
 		} catch {}
@@ -59,11 +65,11 @@ export const generateDrizzleSchema = async (
 	};
 
 	const exists = await fs
-		.access(join(import.meta.dirname, `/.tmp`))
+		.access(join(import.meta.dirname, ".tmp"))
 		.then(() => true)
 		.catch(() => false);
 	if (!exists) {
-		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
+		await fs.mkdir(join(import.meta.dirname, ".tmp"), { recursive: true });
 	}
 
 	const adapter = drizzleAdapter(db, { provider: dialect })(options);
