@@ -201,6 +201,59 @@ describe("account", async () => {
 		});
 	});
 
+	it("should not expose empty scope tokens from stored empty account scope", async () => {
+		const {
+			auth,
+			client: scopedClient,
+			testUser,
+			cookieSetter,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const headers = new Headers();
+		await scopedClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const session = await scopedClient.getSession({
+			fetchOptions: { headers },
+		});
+		const accountId = "empty-scope-google-account";
+		const testCtx = await auth.$context;
+		await testCtx.internalAdapter.createAccount({
+			userId: session.data!.user.id,
+			providerId: "google",
+			accountId,
+			accessToken: "access-token",
+			scope: "",
+		});
+
+		const accounts = await scopedClient.listAccounts({
+			fetchOptions: { headers },
+		});
+		const googleAccount = accounts.data?.find(
+			(account) => account.accountId === accountId,
+		);
+		expect(googleAccount?.scopes).toEqual([]);
+
+		const accessToken = await scopedClient.getAccessToken(
+			{
+				providerId: "google",
+				accountId,
+			},
+			{ headers },
+		);
+		expect(accessToken.data?.scopes).toEqual([]);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8345
 	 */

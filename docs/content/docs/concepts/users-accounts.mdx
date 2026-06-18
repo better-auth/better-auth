@@ -509,6 +509,10 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
+  <Callout type="info">
+    Newly granted scopes are merged into `account.scope`, so prior grants survive incremental authorization. Sign-in re-authentication and refresh-token responses do not modify `account.scope`.
+  </Callout>
+
   You can also link accounts using ID tokens directly, without redirecting to the provider's OAuth flow:
 
   ```ts
