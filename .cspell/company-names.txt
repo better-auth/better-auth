@@ -23,3 +23,11 @@ chonkie
 dsari
 paypalv
 sequenzy
+Razorpay
+razorpay
+payu
+PayU
+contoso
+Contoso
+Mikro
+anthropics

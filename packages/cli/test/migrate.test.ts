@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
@@ -21,10 +21,6 @@ describe("migrate base auth instance", () => {
 			return code as never;
 		});
 		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
-	});
-
-	afterEach(async () => {
-		vi.restoreAllMocks();
 	});
 
 	it("should migrate the database and sign-up a user", async () => {
@@ -74,10 +70,6 @@ describe("migrate auth instance with plugins", () => {
 			return code as never;
 		});
 		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
-	});
-
-	afterEach(async () => {
-		vi.restoreAllMocks();
 	});
 
 	it("should migrate the database and sign-up a user", async () => {

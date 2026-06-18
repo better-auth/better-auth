@@ -1,9 +1,10 @@
+import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import Database from "better-sqlite3";
-import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
 import type {
@@ -14,12 +15,41 @@ import type {
 } from "../types";
 import { getMigrations } from "./get-migration";
 
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+	ttlStore?: Map<string, number>,
+): SecondaryStorage {
+	return {
+		set(key, value, ttl) {
+			store.set(key, value);
+			if (ttl !== undefined) ttlStore?.set(key, ttl);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			ttlStore?.delete(key);
+			return value;
+		},
+		increment(key, ttl) {
+			const current = Number(store.get(key) ?? 0);
+			const count = Number.isFinite(current) ? current + 1 : 1;
+			store.set(key, String(count));
+			if (current === 0 && ttl !== undefined) ttlStore?.set(key, ttl);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+			ttlStore?.delete(key);
+		},
+	};
+}
+
 describe("internal adapter test", async () => {
-	const sqliteDialect = new SqliteDialect({
-		database: new Database(":memory:"),
-	});
-	const map = new Map();
-	const expirationMap = new Map();
+	const map = new Map<string, string>();
+	const expirationMap = new Map<string, number>();
 	let id = 1;
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
@@ -30,29 +60,17 @@ describe("internal adapter test", async () => {
 	const pluginHookUserCreateBefore = vi.fn();
 	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
-		database: {
-			dialect: sqliteDialect,
-			type: "sqlite",
-		},
+		database: new DatabaseSync(":memory:"),
 		user: {
 			fields: {
 				email: "email_address",
 				emailVerified: "email_verified",
 			},
 		},
-		secondaryStorage: {
-			set(key, value, ttl) {
-				map.set(key, value);
-				expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return map.get(key);
-			},
-			delete(key) {
-				map.delete(key);
-				expirationMap.delete(key);
-			},
+		verification: {
+			storeInDatabase: true,
 		},
+		secondaryStorage: createStringSecondaryStorage(map, expirationMap),
 		advanced: {
 			database: {
 				generateId() {
@@ -186,6 +204,152 @@ describe("internal adapter test", async () => {
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
 	});
+
+	it("should abort oauth account creation when user creation is vetoed", async () => {
+		const database = new DatabaseSync(":memory:");
+		const abortingOptions = {
+			...opts,
+			database,
+			databaseHooks: {
+				user: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(abortingOptions)).runMigrations();
+			const abortingContext = await init(abortingOptions);
+
+			await expect(
+				abortingContext.internalAdapter.createOAuthUser(
+					{
+						email: "blocked@email.com",
+						name: "Blocked",
+						emailVerified: false,
+					},
+					{
+						providerId: "provider",
+						accountId: "account",
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+					},
+				),
+			).rejects.toThrow("Failed to create user");
+		} finally {
+			database.close();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("rejects createUser outside an endpoint context when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+
+		await expect(
+			context.internalAdapter.createUser(
+				{
+					email: "missing-context@example.com",
+					name: "Missing Context",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			),
+		).rejects.toMatchObject({
+			body: { code: "validation_context_missing" },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("requires a provisioning source when validateUserInfo is configured", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo() {
+						return;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const missingSource = undefined as unknown as Parameters<
+			typeof context.internalAdapter.createUser
+		>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await expect(
+					context.internalAdapter.createUser(
+						{
+							email: "missing-source@example.com",
+							name: "Missing Source",
+							emailVerified: false,
+						},
+						missingSource,
+					),
+				).rejects.toMatchObject({
+					body: { code: "validation_source_missing" },
+				});
+			},
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9864
+	 */
+	it("forces create-user as the createUser validation action", async () => {
+		let capturedAction: string | undefined;
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedAction = source.action;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const spoofedSource = {
+			method: "test",
+			action: "sign-in",
+		} as unknown as Parameters<typeof context.internalAdapter.createUser>[1];
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUser(
+					{
+						email: "canonical-action@example.com",
+						name: "Canonical Action",
+						emailVerified: false,
+					},
+					spoofedSource,
+				);
+			},
+		);
+
+		expect(capturedAction).toBe("create-user");
+	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
 			session: {
@@ -220,7 +384,7 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value2).toBe(undefined);
+		expect(value2).toBeNull();
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
@@ -237,13 +401,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete verification by value with hooks", async () => {
-		const verification = await internalAdapter.createVerificationValue({
+		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
 			expiresAt: new Date(Date.now() + 1000),
 		});
 
-		await internalAdapter.deleteVerificationValue(verification.id);
+		await internalAdapter.deleteVerificationByIdentifier("test-id-1");
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
@@ -262,6 +426,142 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
+	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "missing-entity-test",
+			value: "test-value",
+			expiresAt: new Date(Date.now() + 60000),
+		});
+
+		// Remove the DB record so the entity no longer exists
+		await authContext.adapter.deleteMany({
+			model: "verification",
+			where: [{ field: "identifier", value: verification.identifier }],
+		});
+
+		const deleteSpy = vi.spyOn(authContext.adapter, "delete");
+
+		await internalAdapter.deleteVerificationByIdentifier("missing-entity-test");
+
+		// adapter.delete should NOT have been called because
+		// deleteWithHooks skips deletion when the entity is not found
+		const verificationDeleteCalls = deleteSpy.mock.calls.filter(
+			(call) => call[0].model === "verification",
+		);
+		expect(verificationDeleteCalls.length).toBe(0);
+		deleteSpy.mockRestore();
+	});
+
+	describe("verification token storage", () => {
+		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
+			const hashedOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(hashedOpts)).runMigrations();
+			const hashedCtx = await init(hashedOpts);
+			const hashedAdapter = hashedCtx.internalAdapter;
+
+			const verification = await hashedAdapter.createVerificationValue({
+				identifier: "reset-password:my-token-123",
+				value: "user-id-123",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Stored identifier should be hashed (not equal to original)
+			expect(verification.identifier).not.toBe("reset-password:my-token-123");
+
+			// Should be able to find by original identifier
+			const found = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("user-id-123");
+
+			// Should be able to delete by original identifier
+			await hashedAdapter.deleteVerificationByIdentifier(
+				"reset-password:my-token-123",
+			);
+			const deleted = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(deleted).toBeNull();
+		});
+
+		it("should use overrides for specific prefixes", async () => {
+			const overrideOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeIdentifier: {
+						default: "plain" as const,
+						overrides: {
+							"reset-password": "hashed" as const,
+						},
+					},
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(overrideOpts)).runMigrations();
+			const overrideCtx = await init(overrideOpts);
+			const overrideAdapter = overrideCtx.internalAdapter;
+
+			// reset-password should be hashed
+			const hashedVerification = await overrideAdapter.createVerificationValue({
+				identifier: "reset-password:token-abc",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(hashedVerification.identifier).not.toBe(
+				"reset-password:token-abc",
+			);
+
+			// other identifiers should be plain
+			const plainVerification = await overrideAdapter.createVerificationValue({
+				identifier: "magic-link:token-xyz",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
+		});
+
+		it("should fallback to plain lookup for old tokens", async () => {
+			const database = new DatabaseSync(":memory:");
+
+			// First create with plain storage
+			const plainOpts = {
+				database,
+				verification: { storeIdentifier: "plain" as const },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(plainOpts)).runMigrations();
+			const plainCtx = await init(plainOpts);
+			await plainCtx.internalAdapter.createVerificationValue({
+				identifier: "old-token:abc123",
+				value: "old-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Now switch to hashed storage (simulating config change)
+			const hashedOpts = {
+				database,
+				verification: { storeIdentifier: "hashed" as const },
+			} satisfies BetterAuthOptions;
+
+			const hashedCtx = await init(hashedOpts);
+
+			// Should still find old plain token via fallback
+			const found =
+				await hashedCtx.internalAdapter.findVerificationValue(
+					"old-token:abc123",
+				);
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("old-value");
+		});
+	});
+
 	it("runs the after hook after adding user to db", async () => {
 		const sampleUser = {
 			name: "sample",
@@ -270,30 +570,19 @@ describe("internal adapter test", async () => {
 		};
 		const hookUserCreateAfter = vi.fn();
 
-		const dialect = new SqliteDialect({
-			database: new Database(":memory:"),
-		});
+		const database = new DatabaseSync(":memory:");
 
-		const db = new Kysely<any>({
-			dialect,
-		});
-
-		const opts: BetterAuthOptions = {
-			database: {
-				dialect,
-				type: "sqlite",
-			},
+		const opts = {
+			database,
 			databaseHooks: {
 				user: {
 					create: {
 						async after(user, context) {
 							hookUserCreateAfter(user, context);
 
-							const userFromDb: any = await db
-								.selectFrom("user")
-								.selectAll()
-								.where("id", "=", user.id)
-								.executeTakeFirst();
+							const userFromDb = database
+								.prepare("SELECT * FROM user WHERE id = ?")
+								.get(user.id)!;
 
 							expect(user.id).toBe(userFromDb.id);
 							expect(user.name).toBe(userFromDb.name);
@@ -303,10 +592,10 @@ describe("internal adapter test", async () => {
 								Boolean(userFromDb.emailVerified),
 							);
 							expect(user.createdAt).toStrictEqual(
-								new Date(userFromDb.createdAt),
+								new Date(userFromDb.createdAt as string),
 							);
 							expect(user.updatedAt).toStrictEqual(
-								new Date(userFromDb.updatedAt),
+								new Date(userFromDb.updatedAt as string),
 							);
 						},
 					},
@@ -339,12 +628,7 @@ describe("internal adapter test", async () => {
 		const capturedTTLs: number[] = [];
 
 		const testOpts = {
-			database: {
-				dialect: new SqliteDialect({
-					database: new Database(":memory:"),
-				}),
-				type: "sqlite",
-			},
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number | undefined) {
 					if (ttl !== undefined) {
@@ -357,6 +641,17 @@ describe("internal adapter test", async () => {
 				get(key: string) {
 					const item = mockStorage.get(key);
 					return item?.value || null;
+				},
+				getAndDelete(key: string) {
+					const item = mockStorage.get(key);
+					mockStorage.delete(key);
+					return item?.value || null;
+				},
+				increment(key: string, ttl: number) {
+					const item = mockStorage.get(key);
+					const count = Number(item?.value ?? 0) + 1;
+					mockStorage.set(key, { value: String(count), ttl });
+					return count;
 				},
 				delete(key: string) {
 					mockStorage.delete(key);
@@ -384,14 +679,13 @@ describe("internal adapter test", async () => {
 		};
 
 		// Create a user in the database first
-		await ctx.context.internalAdapter.createUser(testUser);
+		await ctx.context.internalAdapter.createUser(testUser, { method: "test" });
 
 		// Test case 1: Session with fractional seconds in TTL
 		const expiresAt = new Date(Date.now() + 3599500); // 59 minutes and 59.5 seconds from now
 		const expectedTTL = Math.floor(3599500 / 1000); // Should be 3599 seconds (rounded down)
 
 		const session = {
-			id: "test-session-id",
 			userId: testUser.id,
 			token: "test-token",
 			expiresAt,
@@ -491,13 +785,24 @@ describe("internal adapter test", async () => {
 		// Create session
 		const now = Date.now();
 		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
-		const user = await internalAdapter.createUser({
-			name: "test-user",
-			email: "test@email.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "test-user",
+				email: "test@email.com",
+			},
+			{ method: "test" },
+		);
 		const session = await internalAdapter.createSession(user.id);
+
+		// Session should always have an id, even with secondary storage only
+		expect(session.id).toBeDefined();
+		expect(typeof session.id).toBe("string");
+		expect(session.id.length).toBeGreaterThan(0);
+
+		const storedSessionsRaw = map.get(`active-sessions-${user.id}`);
+		expect(storedSessionsRaw).toBeDefined();
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${user.id}`),
+			storedSessionsRaw!,
 		);
 		const token = session.token;
 		// Check stored sessions
@@ -508,12 +813,13 @@ describe("internal adapter test", async () => {
 			prev.expiresAt >= curr.expiresAt ? prev : curr,
 		);
 		const actualExp = expirationMap.get(`active-sessions-${user.id}`);
+		expect(actualExp).toBeDefined();
 		const expectedExp = Math.floor(
 			(lastExpiration.expiresAt - Date.now()) / 1000,
 		);
 		// max 1s clock drift between check and set
-		expect(actualExp - expectedExp).toBeLessThanOrEqual(1);
-		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0);
+		expect(actualExp! - expectedExp).toBeLessThanOrEqual(1);
+		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0);
 
 		const storedSession = safeJSONParse<{
 			session: Session;
@@ -525,12 +831,13 @@ describe("internal adapter test", async () => {
 			activeOrganizationId: "1",
 		});
 		const actualTokenExp = expirationMap.get(token);
+		expect(actualTokenExp).toBeDefined();
 		const expectedTokenExp = Math.floor(
 			(expiresAt.getTime() - Date.now()) / 1000,
 		);
 		// max 1s clock drift between check and set
-		expect(actualTokenExp - expectedTokenExp).toBeLessThanOrEqual(1);
-		expect(actualTokenExp - expectedTokenExp).toBeGreaterThanOrEqual(0);
+		expect(actualTokenExp! - expectedTokenExp).toBeLessThanOrEqual(1);
+		expect(actualTokenExp! - expectedTokenExp).toBeGreaterThanOrEqual(0);
 	});
 
 	it("should delete on secondary storage", async () => {
@@ -551,27 +858,32 @@ describe("internal adapter test", async () => {
 			);
 			if (i > 0) {
 				const actualExp = expirationMap.get(`active-sessions-${userId}`);
+				expect(actualExp).toBeDefined();
 				const expectedExp = Math.floor(
 					(expiresAt.getTime() - Date.now()) / 1000,
 				);
-				expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
-				expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+				expect(actualExp! - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
+				expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
 			} else {
 				expect(expirationMap.get(`active-sessions-${userId}`)).toBeUndefined();
 			}
 		}
+		const storedSessionsRaw = map.get(`active-sessions-${userId}`);
+		expect(storedSessionsRaw).toBeDefined();
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${userId}`),
+			storedSessionsRaw!,
 		);
 		expect(storedSessions.length).toBe(4);
-		const token = storedSessions.at(-1)?.token;
+		const token = storedSessions.at(-1)!.token;
 		const tokenStored = map.get(token);
 		expect(tokenStored).toBeDefined();
 
 		// Delete session should clean expiresAt and token
 		await internalAdapter.deleteSession(token!);
+		const afterDeletedRaw = map.get(`active-sessions-${userId}`);
+		expect(afterDeletedRaw).toBeDefined();
 		const afterDeleted: { token: string; expiresAt: number }[] = JSON.parse(
-			map.get(`active-sessions-${userId}`),
+			afterDeletedRaw!,
 		);
 		expect(afterDeleted.length).toBe(3);
 		const removedToken = map.get(token);
@@ -581,18 +893,22 @@ describe("internal adapter test", async () => {
 			prev.expiresAt >= curr.expiresAt ? prev : curr,
 		);
 		const actualExp = expirationMap.get(`active-sessions-${userId}`);
+		expect(actualExp).toBeDefined();
 		const expectedExp = Math.floor(
 			(lastExpiration.expiresAt - Date.now()) / 1000,
 		);
-		expect(actualExp - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
-		expect(actualExp - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+		expect(actualExp! - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
+		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
 	});
 
 	it("should delete a single account", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Account Delete User",
-			email: "account.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Account Delete User",
+				email: "account.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
@@ -600,20 +916,29 @@ describe("internal adapter test", async () => {
 			accountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccount(account.accountId);
+		let foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccount(account.accountId);
+		foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeNull();
 	});
 
 	it("should delete multiple accounts for a user", async () => {
-		const user = await internalAdapter.createUser({
-			name: "Accounts Delete User",
-			email: "accounts.delete@example.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Accounts Delete User",
+				email: "accounts.delete@example.com",
+			},
+			{ method: "test" },
+		);
 
 		await internalAdapter.createAccount({
 			userId: user.id,
@@ -636,35 +961,205 @@ describe("internal adapter test", async () => {
 		expect(accounts.length).toBe(0);
 	});
 
+	it("listSessions should skip missing sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-skip",
+				email: "test-skip@email.com",
+			},
+			{ method: "test" },
+		);
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Verify all 3 sessions exist
+		let sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(3);
+
+		// Delete session2 from storage (simulating missing/expired session)
+		testMap.delete(session2.token);
+
+		// listSessions should still return session1 and session3
+		sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-malformed",
+				email: "test-malformed@email.com",
+			},
+			{ method: "test" },
+		);
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Set session2 to valid JSON but malformed structure (session is null, will throw on property access)
+		testMap.set(session2.token, JSON.stringify({ session: null, user: null }));
+
+		// listSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should skip corrupt/unparsable sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-corrupt",
+				email: "test-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt session2 data
+		testMap.set(session2.token, "invalid-json{{{");
+
+		// listSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should return empty array when all sessions are missing/corrupt", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-all-corrupt",
+				email: "test-all-corrupt@email.com",
+			},
+			{ method: "test" },
+		);
+
+		// Create 2 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt both sessions
+		testMap.set(session1.token, "invalid-json");
+		testMap.set(session2.token, "also-invalid");
+
+		// listSessions should return empty array
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(0);
+	});
+
+	it("findSessions should skip corrupt sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-find",
+				email: "test-find@email.com",
+			},
+			{ method: "test" },
+		);
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt session2 data
+		testMap.set(session2.token, "invalid-json{{{");
+
+		// findSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.findSessions([
+			session1.token,
+			session2.token,
+			session3.token,
+		]);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.session.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-					if (ttl !== undefined) {
-						testExpirationMap.set(key, ttl);
-					}
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-					testExpirationMap.delete(key);
-				},
-			},
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(
+				testMap,
+				testExpirationMap,
+			),
 		} satisfies BetterAuthOptions;
 
 		// Run migrations for the new database
@@ -674,10 +1169,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testCtx.internalAdapter;
 
 		// Create a user first
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-update",
-			email: "test-update@email.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-update",
+				email: "test-update@email.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -747,38 +1245,18 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL).toBeDefined();
 		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
-
-		// Clean up DB
-		testDb.close();
 	});
 
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
-		const testDb = new Database(":memory:");
-		const testDialect = new SqliteDialect({ database: testDb });
-
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
 		const testOpts = {
-			database: {
-				dialect: testDialect,
-				type: "sqlite",
-			},
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-					if (ttl !== undefined) {
-						testExpirationMap.set(key, ttl);
-					}
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-					testExpirationMap.delete(key);
-				},
-			},
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(
+				testMap,
+				testExpirationMap,
+			),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
@@ -786,10 +1264,13 @@ describe("internal adapter test", async () => {
 		const testInternalAdapter = testAuthContext.internalAdapter;
 
 		// Create a user
-		const user = await testInternalAdapter.createUser({
-			name: "corrupt-sessions-test-user",
-			email: "corrupt-sessions-test@example.com",
-		});
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "corrupt-sessions-test-user",
+				email: "corrupt-sessions-test@example.com",
+			},
+			{ method: "test" },
+		);
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
@@ -818,8 +1299,817 @@ describe("internal adapter test", async () => {
 		// listSessions should deduplicate and return only unique sessions
 		const sessions = await testInternalAdapter.listSessions(user.id);
 		expect(sessions.length).toBe(1);
+	});
 
-		// Clean up DB
-		testDb.close();
+	describe("verification secondary storage", () => {
+		function createMockStorage() {
+			const dataMap = new Map<string, string>();
+			const ttlMap = new Map<string, number>();
+			return {
+				dataMap,
+				ttlMap,
+				storage: createStringSecondaryStorage(dataMap, ttlMap),
+			};
+		}
+
+		it("should store verification in secondary storage by default", async () => {
+			const { dataMap, ttlMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			const verification = await ctx.internalAdapter.createVerificationValue({
+				identifier: "test-verification",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has(`verification:${verification.identifier}`)).toBe(true);
+			expect(ttlMap.has(`verification:${verification.identifier}`)).toBe(true);
+		});
+
+		it("should find verification from secondary storage", async () => {
+			const { storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "find-test",
+				value: "find-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("find-test");
+			expect(found).not.toBeNull();
+			expect(found?.identifier).toBe("find-test");
+			expect(found?.value).toBe("find-value");
+		});
+
+		it("should NOT store in database when secondary-only mode", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "secondary-only-test",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:secondary-only-test")).toBe(true);
+
+			dataMap.clear();
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"secondary-only-test",
+			);
+			expect(found).toBeNull(); // Proves DB was NOT used
+		});
+
+		it("should delete verification from secondary storage", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "delete-test",
+				value: "delete-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:delete-test")).toBe(true);
+
+			await ctx.internalAdapter.deleteVerificationByIdentifier("delete-test");
+
+			expect(dataMap.has("verification:delete-test")).toBe(false);
+		});
+
+		it("should store in both when storeInDatabase is true", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "both-test",
+				value: "both-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:both-test")).toBe(true);
+
+			dataMap.clear();
+			const found =
+				await ctx.internalAdapter.findVerificationValue("both-test");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("both-value");
+		});
+
+		it("should fallback to database when not in secondary storage", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "fallback-test",
+				value: "fallback-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			dataMap.clear();
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("fallback-test");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("fallback-value");
+		});
+
+		it("should set correct TTL based on expiresAt", async () => {
+			const { ttlMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			const expiresIn = 300000; // 5 minutes in ms
+			const expiresAt = new Date(Date.now() + expiresIn);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "ttl-test",
+				value: "ttl-value",
+				expiresAt,
+			});
+
+			const ttl = ttlMap.get("verification:ttl-test");
+			expect(ttl).toBeDefined();
+			expect(ttl).toBeGreaterThanOrEqual(298);
+			expect(ttl).toBeLessThanOrEqual(300);
+		});
+	});
+
+	describe("safeJSONParse date revival in secondary storage", () => {
+		/**
+		 * Simulates a Redis client that auto-parses JSON (e.g. ioredis with
+		 * certain configurations). The `get` method returns a pre-parsed object
+		 * where date fields are still ISO 8601 strings, not Date instances.
+		 */
+		function createPreParsedStorage() {
+			const dataMap = new Map<string, unknown>();
+			const ttlMap = new Map<string, number>();
+			return {
+				dataMap,
+				ttlMap,
+				storage: {
+					set(key: string, value: string, ttl?: number) {
+						// Store as pre-parsed object (simulating Redis auto-parse)
+						dataMap.set(key, JSON.parse(value));
+						if (ttl) ttlMap.set(key, ttl);
+					},
+					get(key: string) {
+						return dataMap.get(key) ?? null;
+					},
+					getAndDelete(key: string) {
+						const value = dataMap.get(key) ?? null;
+						dataMap.delete(key);
+						ttlMap.delete(key);
+						return value;
+					},
+					increment(key: string, ttl: number) {
+						const current = Number(dataMap.get(key) ?? 0);
+						const count = Number.isFinite(current) ? current + 1 : 1;
+						dataMap.set(key, count);
+						if (current === 0) ttlMap.set(key, ttl);
+						return count;
+					},
+					delete(key: string) {
+						dataMap.delete(key);
+						ttlMap.delete(key);
+					},
+				},
+			};
+		}
+
+		it("should return Date objects from findVerificationValue when storage returns pre-parsed objects", async () => {
+			const { storage } = createPreParsedStorage();
+
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "date-test",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("date-test");
+			expect(found).not.toBeNull();
+			expect(found!.expiresAt).toBeInstanceOf(Date);
+			expect(found!.createdAt).toBeInstanceOf(Date);
+			expect(found!.updatedAt).toBeInstanceOf(Date);
+		});
+
+		it("should correctly detect expired verification when storage returns pre-parsed objects", async () => {
+			const { storage } = createPreParsedStorage();
+
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "expiry-check",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("expiry-check");
+			expect(found).not.toBeNull();
+			// This comparison would silently fail if expiresAt were a string
+			// because string < Date coerces to NaN, making it always false
+			expect(found!.expiresAt > new Date()).toBe(true);
+			expect(found!.expiresAt < new Date(Date.now() + 120000)).toBe(true);
+		});
+
+		it("should return Date objects for all date fields across multiple reads", async () => {
+			const { storage } = createPreParsedStorage();
+
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			const expiresAt = new Date(Date.now() + 60000);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "multi-read-test",
+				value: "test-value",
+				expiresAt,
+			});
+
+			// First read: safeJSONParse receives pre-parsed object from storage
+			const first =
+				await ctx.internalAdapter.findVerificationValue("multi-read-test");
+			expect(first).not.toBeNull();
+			expect(first!.expiresAt).toBeInstanceOf(Date);
+			expect(first!.createdAt).toBeInstanceOf(Date);
+			expect(first!.updatedAt).toBeInstanceOf(Date);
+
+			// Second read: verify consistency (the stored object wasn't mutated)
+			const second =
+				await ctx.internalAdapter.findVerificationValue("multi-read-test");
+			expect(second).not.toBeNull();
+			expect(second!.expiresAt).toBeInstanceOf(Date);
+			expect(second!.expiresAt.getTime()).toBe(first!.expiresAt.getTime());
+		});
+
+		it("should preserve non-date string fields when reviving dates", async () => {
+			const { storage } = createPreParsedStorage();
+
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "string-field-test",
+				value: "my-token-value-123",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("string-field-test");
+			expect(found).not.toBeNull();
+			// Non-date strings must NOT be converted
+			expect(found!.identifier).toBe("string-field-test");
+			expect(typeof found!.identifier).toBe("string");
+			expect(found!.value).toBe("my-token-value-123");
+			expect(typeof found!.value).toBe("string");
+			// Date strings MUST be converted
+			expect(found!.expiresAt).toBeInstanceOf(Date);
+		});
+	});
+
+	describe("consumeVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns the row to the first caller and null to subsequent reads", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:single",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const first = await adapter.consumeVerificationValue("consume:single");
+			expect(first).not.toBeNull();
+			expect(first!.value).toBe("user-1");
+
+			const second = await adapter.consumeVerificationValue("consume:single");
+			expect(second).toBeNull();
+		});
+
+		it("yields exactly one winner under concurrent consume", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:race",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+				adapter.consumeVerificationValue("consume:race"),
+			]);
+
+			const winners = results.filter((r) => r !== null);
+			expect(winners).toHaveLength(1);
+			expect(winners[0]!.value).toBe("user-2");
+		});
+
+		it("returns null for an unknown identifier", async () => {
+			const adapter = await makeAdapter();
+			const result = await adapter.consumeVerificationValue("consume:missing");
+			expect(result).toBeNull();
+		});
+
+		it("returns null when the row exists but has already expired", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:expired",
+				value: "user-expired",
+				expiresAt: new Date(Date.now() - 1_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:expired");
+			expect(result).toBeNull();
+
+			// The expired row must still be invalidated so a later replay cannot
+			// consume it after a cleanup pass.
+			const replay = await adapter.findVerificationValue("consume:expired");
+			expect(replay).toBeNull();
+		});
+
+		it("aborts the consume when a delete.before hook returns false", async () => {
+			const veto = vi.fn().mockReturnValue(false);
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							before: veto,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:veto",
+				value: "user-3",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:veto");
+			expect(result).toBeNull();
+			expect(veto).toHaveBeenCalledTimes(1);
+
+			const stillThere = await adapter.findVerificationValue("consume:veto");
+			expect(stillThere).not.toBeNull();
+		});
+
+		it("fires delete.after only for the winning racer", async () => {
+			const afterHook = vi.fn();
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						delete: {
+							after: afterHook,
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:after-once",
+				value: "user-4",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:after-once"),
+				adapter.consumeVerificationValue("consume:after-once"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(afterHook).toHaveBeenCalledTimes(1);
+		});
+
+		it("consumes via the original identifier when storeIdentifier is hashed", async () => {
+			const adapter = await makeAdapter({
+				verification: { storeIdentifier: "hashed" },
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:hashed",
+				value: "user-5",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue("consume:hashed");
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("user-5");
+
+			const replay = await adapter.consumeVerificationValue("consume:hashed");
+			expect(replay).toBeNull();
+		});
+
+		it("consumes the latest row and invalidates stale rows for the identifier", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			await adapter.createVerificationValue({
+				identifier: "consume:multi",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const consumed = await adapter.consumeVerificationValue("consume:multi");
+			expect(consumed).not.toBeNull();
+			expect(consumed!.value).toBe("newer");
+
+			const leftover = await adapter.findVerificationValue("consume:multi");
+			expect(leftover).toBeNull();
+		});
+
+		it("uses secondary storage getAndDelete when verification values are storage-only", async () => {
+			const store = new Map<string, string>();
+			const getAndDelete = vi.fn((key: string) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			});
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					getAndDelete,
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary",
+				value: "secondary-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const results = await Promise.all([
+				adapter.consumeVerificationValue("consume:secondary"),
+				adapter.consumeVerificationValue("consume:secondary"),
+			]);
+
+			expect(results.filter((r) => r !== null)).toHaveLength(1);
+			expect(results.find((r) => r !== null)?.value).toBe("secondary-user");
+			expect(getAndDelete).toHaveBeenCalledWith(
+				"verification:consume:secondary",
+			);
+			expect(store.has("verification:consume:secondary")).toBe(false);
+		});
+
+		it("returns null when the secondary storage row has already expired", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: createStringSecondaryStorage(store),
+			});
+
+			// Bypass `createVerificationValue`'s TTL gate by writing directly
+			// with an `expiresAt` already in the past. This mirrors a row that
+			// was valid when written but reached the consume call after expiry.
+			store.set(
+				"verification:consume:secondary-expired",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-expired",
+					value: "secondary-expired-user",
+					expiresAt: new Date(Date.now() - 1_000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-expired",
+			);
+			expect(result).toBeNull();
+			// The expired row is still consumed (deleted) so it cannot be
+			// replayed later.
+			expect(store.has("verification:consume:secondary-expired")).toBe(false);
+		});
+
+		it("rehydrates string `expiresAt` from secondary storage JSON", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: createStringSecondaryStorage(store),
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:secondary-hydrate",
+				value: "hydrate-user",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-hydrate",
+			);
+			expect(result).not.toBeNull();
+			expect(result!.value).toBe("hydrate-user");
+			expect(result!.expiresAt).toBeInstanceOf(Date);
+			expect(result!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+		});
+
+		it("returns null when secondary storage `expiresAt` cannot be parsed", async () => {
+			const store = new Map<string, string>();
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: createStringSecondaryStorage(store),
+			});
+
+			store.set(
+				"verification:consume:secondary-invalid-date",
+				JSON.stringify({
+					id: "row-id",
+					identifier: "consume:secondary-invalid-date",
+					value: "bad-row",
+					expiresAt: "not-a-date",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+			);
+
+			const result = await adapter.consumeVerificationValue(
+				"consume:secondary-invalid-date",
+			);
+			expect(result).toBeNull();
+		});
+	});
+
+	describe("reserveVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns true the first time and the row is findable", async () => {
+			const adapter = await makeAdapter();
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:fresh",
+				value: "jti-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(reserved).toBe(true);
+
+			const found = await adapter.findVerificationValue("reserve:fresh");
+			expect(found).not.toBeNull();
+			expect(found!.value).toBe("jti-1");
+		});
+
+		it("returns false the second time for the same identifier", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		it("yields exactly one winner under concurrent reserve", async () => {
+			const adapter = await makeAdapter();
+
+			const results = await Promise.all([
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			]);
+
+			expect(results.filter((r) => r === true)).toHaveLength(1);
+			expect(results.filter((r) => r === false)).toHaveLength(1);
+		});
+
+		it("reserves independently across different identifiers", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-a",
+				value: "jti-a",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-b",
+				value: "jti-b",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			expect(first).toBe(true);
+			expect(second).toBe(true);
+		});
+
+		it("fails closed when verification reservation is secondary-storage-only", async () => {
+			const adapter = await makeAdapter({
+				verification: { storeInDatabase: false },
+				secondaryStorage: createStringSecondaryStorage(new Map()),
+			});
+
+			await expect(
+				adapter.reserveVerificationValue({
+					identifier: "reserve:secondary-only",
+					value: "jti-secondary",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			).rejects.toThrow(/requires database-backed verification storage/);
+		});
+	});
+
+	describe("reserveVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns true the first time and the row is findable", async () => {
+			const adapter = await makeAdapter();
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:fresh",
+				value: "jti-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(reserved).toBe(true);
+
+			const found = await adapter.findVerificationValue("reserve:fresh");
+			expect(found).not.toBeNull();
+			expect(found!.value).toBe("jti-1");
+		});
+
+		it("returns false the second time for the same identifier", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		it("yields exactly one winner under concurrent reserve", async () => {
+			const adapter = await makeAdapter();
+
+			const results = await Promise.all([
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			]);
+
+			expect(results.filter((r) => r === true)).toHaveLength(1);
+			expect(results.filter((r) => r === false)).toHaveLength(1);
+		});
+
+		it("reserves independently across different identifiers", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-a",
+				value: "jti-a",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-b",
+				value: "jti-b",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			expect(first).toBe(true);
+			expect(second).toBe(true);
+		});
 	});
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
@@ -9,6 +9,7 @@ type VerificationEmail = {
 	email: string;
 	token: string;
 	url: string;
+	metadata?: Record<string, any>;
 };
 
 describe("magic link", async () => {
@@ -36,6 +37,10 @@ describe("magic link", async () => {
 		basePath: "/api/auth",
 	});
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should send magic link", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
@@ -45,6 +50,23 @@ describe("magic link", async () => {
 			url: expect.stringContaining(
 				"http://localhost:3000/api/auth/magic-link/verify",
 			),
+		});
+		expect(verificationEmail.metadata).toBeUndefined();
+	});
+
+	it("should forward metadata to sendMagicLink", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
+		});
+
+		expect(verificationEmail).toMatchObject({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
 		});
 	});
 	it("should verify magic link", async () => {
@@ -60,6 +82,69 @@ describe("magic link", async () => {
 		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+	});
+
+	it("should reject new-user magic link verify when validateUserInfo returns error", async () => {
+		let blockedEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.method).toBe("magic-link");
+						return {
+							error: "magic_link_blocked",
+							errorDescription: "Magic link sign-up is not allowed",
+						};
+					},
+				},
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							blockedEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+		const blockedClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await blockedClient.signIn.magicLink({
+			email: "new-magic-link@example.com",
+		});
+		await blockedClient.magicLink.verify(
+			{
+				query: {
+					token: new URL(blockedEmail.url).searchParams.get("token") || "",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("error=magic_link_blocked");
+					expect(location).toContain(
+						"error_description=Magic+link+sign-up+is+not+allowed",
+					);
+				},
+			},
+		);
 	});
 
 	it("shouldn't verify magic link with the same token", async () => {
@@ -97,7 +182,7 @@ describe("magic link", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=EXPIRED_TOKEN");
+					expect(location).toContain("?error=INVALID_TOKEN");
 				},
 			},
 		);
@@ -271,6 +356,77 @@ describe("magic link", async () => {
 
 		expect(customGenerateToken).toHaveBeenCalled();
 		expect(verificationEmail.token).toBe("custom_token");
+	});
+
+	it("should return additional fields", async () => {
+		const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					foo: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000/api/auth",
+		});
+
+		const email = "test-email@test.com";
+		await client.signIn.magicLink({
+			email,
+		});
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		expect(response.data?.user).toBeDefined();
+		// @ts-expect-error
+		expect(response.data?.user.foo).toBeNull();
+
+		await auth.api.updateUser({
+			body: {
+				foo: "bar",
+			},
+			headers,
+		});
+
+		await client.signIn.magicLink({
+			email,
+		});
+		{
+			const response = await client.magicLink.verify({
+				query: {
+					token: new URL(verificationEmail.url).searchParams.get("token")!,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+
+			// @ts-expect-error
+			expect(response.data?.user.foo).toBe("bar");
+		}
 	});
 });
 
@@ -455,5 +611,163 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		expect(response2.status).toBe(true);
+	});
+});
+
+/**
+ * Magic-link tokens are consumed atomically on the first verification call that
+ * finds the token: the row is deleted before any subsequent success checks
+ * (signup gates, session creation, etc.), so even a verify that ends in
+ * `INVALID_TOKEN`, `new_user_signup_disabled`, or `failed_to_create_session`
+ * still burns the token. `allowedAttempts` is retained on the options type for
+ * backward compatibility but does not multiply redemptions; a token mints at
+ * most one session regardless of the value.
+ *
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx
+ */
+describe("magic link single-use semantics", async () => {
+	async function setup(allowedAttempts?: number) {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					...(allowedAttempts !== undefined ? { allowedAttempts } : {}),
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+		return {
+			client,
+			testUser,
+			sessionSetter,
+			getToken: () =>
+				new URL(verificationEmail.url).searchParams.get("token") || "",
+			triggerSignIn: () => client.signIn.magicLink({ email: testUser.email }),
+		};
+	}
+
+	it("rejects the second verification with the default allowedAttempts (1)", async () => {
+		const { client, sessionSetter, getToken, triggerSignIn } = await setup();
+		await triggerSignIn();
+		const token = getToken();
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+		expect(response.data?.token).toBeDefined();
+		expect(headers.get("set-cookie")).toBeDefined();
+
+		await client.magicLink.verify(
+			{ query: { token } },
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("location")).toContain(
+						"?error=INVALID_TOKEN",
+					);
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("rejects the second verification even when allowedAttempts is set to 3", async () => {
+		const { client, sessionSetter, getToken, triggerSignIn } = await setup(3);
+		await triggerSignIn();
+		const token = getToken();
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+		expect(response.data?.token).toBeDefined();
+
+		await client.magicLink.verify(
+			{ query: { token } },
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("location")).toContain(
+						"?error=INVALID_TOKEN",
+					);
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("rejects the second verification even when allowedAttempts is Infinity", async () => {
+		const { client, sessionSetter, getToken, triggerSignIn } =
+			await setup(Infinity);
+		await triggerSignIn();
+		const token = getToken();
+
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		await client.magicLink.verify(
+			{ query: { token } },
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("location")).toContain(
+						"?error=INVALID_TOKEN",
+					);
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	/**
+	 * Two HTTP requests that race the same verification token must produce
+	 * exactly one session. Reproduces the original race described in the
+	 * advisory, where both requests passed the find-check-update sequence
+	 * before either consumed the row.
+	 *
+	 * The interleaving relies on the in-memory adapter yielding control at
+	 * each `await` boundary; reverting `signInMagicLink` to its pre-patch
+	 * find/update/delete sequence makes this test fail with two session
+	 * tokens (verified empirically), so a synthetic scheduling barrier is
+	 * unnecessary.
+	 */
+	it("mints at most one session under concurrent verification of the same token", async () => {
+		const { client, getToken, triggerSignIn } = await setup();
+		await triggerSignIn();
+		const token = getToken();
+
+		const responses = await Promise.all([
+			client.magicLink.verify({ query: { token } }),
+			client.magicLink.verify({ query: { token } }),
+		]);
+
+		const sessionTokens = responses
+			.map((r) => r.data?.token)
+			.filter((t): t is string => typeof t === "string" && t.length > 0);
+		expect(sessionTokens).toHaveLength(1);
 	});
 });

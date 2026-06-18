@@ -1,12 +1,17 @@
-import { BetterAuthError } from "@better-auth/core/error";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
+import {
+	oauthProviderAuthServerMetadata,
+	oauthProviderOpenIdConfigMetadata,
+} from "./metadata";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 
@@ -36,9 +41,11 @@ describe("oauth metadata", async () => {
 			"loginPage" | "consentPage"
 		>;
 		jwtConfig?: JwtOptions;
+		advanced?: BetterAuthOptions["advanced"];
 	}) {
 		const { auth, customFetchImpl } = await getTestInstance({
 			baseURL: authServerBaseUrl,
+			...(opts?.advanced ? { advanced: opts.advanced } : {}),
 			plugins: [
 				oauthProvider({
 					loginPage: "/login",
@@ -47,6 +54,7 @@ describe("oauth metadata", async () => {
 						oauthAuthServerConfig: true,
 						openidConfig: true,
 					},
+					allowDynamicClientRegistration: true,
 					...opts?.oauthProviderConfig,
 				}),
 				...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -66,6 +74,7 @@ describe("oauth metadata", async () => {
 		return {
 			auth,
 			client: unauthenticatedClient,
+			customFetchImpl,
 		};
 	}
 
@@ -91,26 +100,152 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
 			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
-			prompt_values_supported: ["login", "consent", "create", "select_account"],
+			prompt_values_supported: [
+				"login",
+				"consent",
+				"create",
+				"select_account",
+				"none",
+			],
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8343
+	 */
+	it("should serve authorization server metadata at the issuer-appended well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should serve authorization server metadata at the RFC 8414 path-insertion URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should advertise dynamic client registration from direct OAuth metadata when enabled", async () => {
+		const { customFetchImpl } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: ["create:test"],
+				allowDynamicClientRegistration: true,
+			},
+		});
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/oauth-authorization-server`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as {
+			registration_endpoint?: string;
+		};
+		expect(metadata.registration_endpoint).toBe(`${baseURL}/oauth2/register`);
+	});
+
+	it("should serve OIDC metadata at the direct issuer well-known URL", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(
+			`${baseURL}/.well-known/openid-configuration`,
+			{ method: "GET" },
+		);
+
+		expect(response.status).toBe(200);
+		const metadata = (await response.json()) as { issuer: string };
+		expect(metadata.issuer).toBe(baseURL);
+	});
+
+	it("should restrict direct metadata requests to GET and HEAD", async () => {
+		const { customFetchImpl } = await createTestInstance();
+		const issuerAppendedAuthServerMetadataURL = `${baseURL}/.well-known/oauth-authorization-server`;
+		const pathInsertionAuthServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth`;
+		const openIdConfigURL = `${baseURL}/.well-known/openid-configuration`;
+
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+		]) {
+			const headResponse = await customFetchImpl(url, {
+				method: "HEAD",
+			});
+			expect(headResponse.status).toBe(200);
+			expect(await headResponse.text()).toBe("");
+		}
+
+		for (const url of [
+			issuerAppendedAuthServerMetadataURL,
+			pathInsertionAuthServerMetadataURL,
+			openIdConfigURL,
+		]) {
+			const response = await customFetchImpl(url, { method: "POST" });
+			expect(response.status).toBe(405);
+			expect(response.headers.get("Allow")).toBe("GET, HEAD");
+		}
+	});
+
+	it("should only skip trailing slashes when configured", async () => {
+		const authServerMetadataURL = `${authServerBaseUrl}/.well-known/oauth-authorization-server/api/auth/`;
+		const { customFetchImpl } = await createTestInstance();
+		const response = await customFetchImpl(authServerMetadataURL, {
+			method: "GET",
+		});
+
+		expect(response.status).toBe(404);
+
+		const { customFetchImpl: customFetchImplWithSkipTrailingSlashes } =
+			await createTestInstance({
+				advanced: {
+					skipTrailingSlashes: true,
+				},
+			});
+		const skipTrailingSlashesResponse =
+			await customFetchImplWithSkipTrailingSlashes(authServerMetadataURL, {
+				method: "GET",
+			});
+
+		expect(skipTrailingSlashesResponse.status).toBe(200);
+		const metadata = (await skipTrailingSlashesResponse.json()) as {
+			issuer: string;
+		};
+		expect(metadata.issuer).toBe(baseURL);
 	});
 
 	it("should not have an openid-configuration, has auth server configuration", async () => {
@@ -141,17 +276,58 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 		});
+	});
+
+	it("advertises back-channel logout as unsupported when the jwt plugin is disabled", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.backchannel_logout_supported).toBe(false);
+		expect(metadata.backchannel_logout_session_supported).toBe(false);
+	});
+
+	it("should not provide dynamic client registration endpoint when disabled", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				allowDynamicClientRegistration: false,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.registration_endpoint).toBeUndefined();
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata.registration_endpoint).toBeUndefined();
+	});
+
+	it("should not provide dynamic client registration endpoint when undefined", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				allowDynamicClientRegistration: undefined,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.registration_endpoint).toBeUndefined();
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata.registration_endpoint).toBeUndefined();
 	});
 
 	it("should utilize advertised metadata fields", async () => {
@@ -253,9 +429,58 @@ describe("oauth metadata", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9105
+ */
+describe("dynamic baseURL metadata wrappers", async () => {
+	const host = "tenant.example.com";
+	const expectedBaseURL = `https://${host}/api/auth`;
+
+	// Fallback is required because `getTestInstance` internally invokes
+	// `signUpEmail` with no Request during setup.
+	const { auth } = await getTestInstance({
+		baseURL: {
+			allowedHosts: [host],
+			protocol: "https",
+			fallback: "https://fallback.example.com",
+		},
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+
+	it("oauthProviderAuthServerMetadata resolves baseURL from the incoming request", async () => {
+		const request = new Request(
+			`https://${host}/.well-known/oauth-authorization-server`,
+		);
+		const response = await oauthProviderAuthServerMetadata(auth)(request);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { issuer: string };
+		expect(body.issuer).toBe(expectedBaseURL);
+	});
+
+	it("oauthProviderOpenIdConfigMetadata resolves baseURL from the incoming request", async () => {
+		const request = new Request(
+			`https://${host}/.well-known/openid-configuration`,
+		);
+		const response = await oauthProviderOpenIdConfigMetadata(auth)(request);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { issuer: string };
+		expect(body.issuer).toBe(expectedBaseURL);
+	});
+});
+
 describe("oauth resource metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const supportedScopes = [
 		"openid",
 		"profile",
@@ -274,7 +499,8 @@ describe("oauth resource metadata", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				scopes: supportedScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -294,11 +520,12 @@ describe("oauth resource metadata", async () => {
 
 	it("should provide resource discovery configuration", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience, // aud
-			authorization_servers: [authServerBaseUrl], // iss
+			resource: validResource,
+			authorization_servers: [authServerBaseUrl],
+			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 		});
 	});
 
@@ -318,7 +545,7 @@ describe("oauth resource metadata", async () => {
 	it("should not support 'openid' scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["openid"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -326,11 +553,11 @@ describe("oauth resource metadata", async () => {
 
 	it("should pass with supported scopes", async () => {
 		const metadata = await authClient.getProtectedResourceMetadata({
-			resource: validAudience,
+			resource: validResource,
 			scopes_supported: ["read:posts"],
 		});
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl],
 			scopes_supported: ["read:posts"],
 		});
@@ -339,7 +566,7 @@ describe("oauth resource metadata", async () => {
 	it("should fail unsupported scope", async () => {
 		await expect(
 			authClient.getProtectedResourceMetadata({
-				resource: validAudience,
+				resource: validResource,
 				scopes_supported: ["write:posts"],
 			}),
 		).rejects.toThrowError(BetterAuthError);
@@ -349,7 +576,7 @@ describe("oauth resource metadata", async () => {
 		const anotherAuthorizationServer = "https://auth.example.com";
 		const metadata = await authClient.getProtectedResourceMetadata(
 			{
-				resource: validAudience,
+				resource: validResource,
 				authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 				scopes_supported: ["read:posts", "write:posts"],
 			},
@@ -358,7 +585,7 @@ describe("oauth resource metadata", async () => {
 			},
 		);
 		expect(metadata).toMatchObject({
-			resource: validAudience,
+			resource: validResource,
 			authorization_servers: [authServerBaseUrl, anotherAuthorizationServer],
 			scopes_supported: ["read:posts", "write:posts"],
 		});

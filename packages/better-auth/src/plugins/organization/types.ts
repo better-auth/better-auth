@@ -205,9 +205,26 @@ export interface OrganizationOptions {
 	 */
 	cancelPendingInvitationsOnReInvite?: boolean | undefined;
 	/**
-	 * Require email verification on accepting or rejecting an invitation
+	 * Require email verification before session-authenticated recipient
+	 * invitation calls that carry an invitation ID (accept, reject, get).
 	 *
-	 * @default false
+	 * When unset, Better Auth preserves the normal emailed-invitation flow for
+	 * built-in opaque invitation IDs, including the default generator and
+	 * `advanced.database.generateId: "uuid"`. It requires verification for
+	 * externally controlled or predictable invitation IDs, such as
+	 * `advanced.database.generateId: "serial"` / `false` or custom ID
+	 * generation.
+	 *
+	 * Set this option to `true` when invitation IDs may be visible outside the
+	 * invited user's mailbox, when organization invitation lists are exposed to
+	 * members, or when verified email should be the ownership proof for by-ID
+	 * invitation actions. Client-side `listUserInvitations` calls always require
+	 * a verified session email because they enumerate invitation IDs from
+	 * `session.user.email`. Server-side `listUserInvitations` calls without a
+	 * session (caller passes `ctx.query.email`) continue to bypass the gate
+	 * because the caller is trusted.
+	 *
+	 * @default undefined
 	 */
 	requireEmailVerificationOnInvitation?: boolean | undefined;
 	/**
@@ -311,7 +328,7 @@ export interface OrganizationOptions {
 				team?: {
 					modelName?: string;
 					fields?: {
-						[key in keyof Omit<Team, "id">]?: string;
+						[key in keyof Omit<Team, "id"> | "memberCount"]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;
@@ -320,7 +337,7 @@ export interface OrganizationOptions {
 				teamMember?: {
 					modelName?: string;
 					fields?: {
-						[key in keyof Omit<TeamMember, "id">]?: string;
+						[key in keyof Omit<TeamMember, "id"> | "membershipKey"]?: string;
 					};
 				};
 				organizationRole?: {
@@ -340,78 +357,6 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
-	/**
-	 * Configure how organization deletion is handled
-	 *
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationDeletion?:
-		| {
-				/**
-				 * disable deleting organization
-				 *
-				 * @deprecated Use `disableOrganizationDeletion` instead
-				 */
-				disabled?: boolean;
-				/**
-				 * A callback that runs before the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				beforeDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-				/**
-				 * A callback that runs after the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				afterDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
-	/**
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationCreation?:
-		| {
-				disabled?: boolean;
-				beforeCreate?: (
-					data: {
-						organization: Omit<Organization, "id"> & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void | {
-					data: Record<string, any>;
-				}>;
-				afterCreate?: (
-					data: {
-						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
 	/**
 	 * Hooks for organization
 	 */
@@ -447,7 +392,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -478,7 +423,7 @@ export interface OrganizationOptions {
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
@@ -488,7 +433,7 @@ export interface OrganizationOptions {
 					data: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};

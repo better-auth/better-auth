@@ -13,24 +13,31 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
+import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
 	deleteSessionCookie,
+	expireCookie,
 	getChunkedCookie,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
+import { symmetricDecodeJWT, verifyJWT as verifySecretJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import type { InferSession, InferUser, Session, User } from "../../types";
-import type { Prettify } from "../../types/helper";
+import {
+	getCookieCacheJwtSigningKey,
+	verifyCookieCacheJWT,
+} from "../../plugins/jwt/cookie-cache";
+import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
+import { isAPIError } from "../../utils/is-api-error";
+import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{
-			method: "GET",
+			method: ["GET", "POST"],
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
@@ -44,8 +51,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							content: {
 								"application/json": {
 									schema: {
-										type: "object",
-										nullable: true,
+										// better-call's OpenAPI schema type doesn't yet model OAS 3.1 union `type`.
+										type: ["object", "null"] as unknown as "object",
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -66,9 +73,20 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		async (
 			ctx,
 		): Promise<{
-			session: InferSession<Option>;
-			user: InferUser<Option>;
+			session: Session<Option["session"], Option["plugins"]>;
+			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
+			const deferSessionRefresh =
+				ctx.context.options.session?.deferSessionRefresh;
+			const isPostRequest = ctx.method === "POST";
+
+			if (isPostRequest && !deferSessionRefresh) {
+				throw APIError.from(
+					"METHOD_NOT_ALLOWED",
+					BASE_ERROR_CODES.METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED,
+				);
+			}
+
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
@@ -97,6 +115,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (sessionDataCookie) {
 					const strategy =
 						ctx.context.options.session?.cookieCache?.strategy || "compact";
+					const jwtSigningKey = getCookieCacheJwtSigningKey(
+						ctx.context.options,
+					);
 
 					if (strategy === "jwe") {
 						// Decode JWE (encrypted)
@@ -106,7 +127,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							updatedAt: number;
 							version?: string;
 							exp?: number;
-						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+						}>(
+							sessionDataCookie,
+							ctx.context.secretConfig,
+							"better-auth-session",
+						);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
@@ -119,21 +144,28 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
-							return ctx.json(null);
+							// Decryption failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 						}
 					} else if (strategy === "jwt") {
-						// Decode JWT (signed with HMAC, not encrypted)
-						const payload = await verifyJWT<{
-							session: Session;
-							user: User;
-							updatedAt: number;
-							version?: string;
-							exp?: number;
-						}>(sessionDataCookie, ctx.context.secret);
+						const payload =
+							jwtSigningKey === "jwt-plugin"
+								? await verifyCookieCacheJWT<{
+										session: Session;
+										user: User;
+										updatedAt: number;
+										version?: string;
+										exp?: number;
+									}>(ctx, sessionDataCookie)
+								: await verifySecretJWT<{
+										session: Session;
+										user: User;
+										updatedAt: number;
+										version?: string;
+										exp?: number;
+									}>(sessionDataCookie, ctx.context.secret);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
@@ -146,11 +178,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
-							return ctx.json(null);
+							// Verification failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 						}
 					} else {
 						// Decode compact format (or legacy base64-hmac)
@@ -180,12 +211,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (isValid) {
 								sessionDataPayload = parsed;
 							} else {
-								const dataCookie = ctx.context.authCookies.sessionData.name;
-								ctx.setCookie(dataCookie, "", {
-									maxAge: 0,
-								});
-								return ctx.json(null);
+								// HMAC verification failed, expire the invalid cookie and fall through
+								// to session_token DB validation. This handles scenarios like
+								// cross-subdomain cookie migrations where stale cookies may be present.
+								expireCookie(ctx, ctx.context.authCookies.sessionData);
 							}
+						} else {
+							// Parsing failed, expire the invalid cookie and fall through to
+							// session_token DB validation like the signed-token strategies.
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 						}
 					}
 				}
@@ -205,110 +239,50 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				) {
 					const session = sessionDataPayload.session;
 
-					const versionConfig =
-						ctx.context.options.session?.cookieCache?.version;
-					let expectedVersion = "1";
-					if (versionConfig) {
-						if (typeof versionConfig === "string") {
-							expectedVersion = versionConfig;
-						} else if (typeof versionConfig === "function") {
-							const result = versionConfig(session.session, session.user);
-							expectedVersion =
-								result instanceof Promise ? await result : result;
+					let shouldExpireCookieCache =
+						session.session.token !== sessionCookieToken;
+
+					if (!shouldExpireCookieCache) {
+						const versionConfig =
+							ctx.context.options.session?.cookieCache?.version;
+						let expectedVersion = "1";
+						if (versionConfig) {
+							if (typeof versionConfig === "string") {
+								expectedVersion = versionConfig;
+							} else if (typeof versionConfig === "function") {
+								const result = versionConfig(session.session, session.user);
+								expectedVersion =
+									result instanceof Promise ? await result : result;
+							}
 						}
+
+						const cookieVersion = session.version || "1";
+						shouldExpireCookieCache = cookieVersion !== expectedVersion;
 					}
 
-					const cookieVersion = session.version || "1";
-					if (cookieVersion !== expectedVersion) {
-						// Version mismatch - invalidate the cookie cache
-						const dataCookie = ctx.context.authCookies.sessionData.name;
-						ctx.setCookie(dataCookie, "", {
-							maxAge: 0,
-						});
-					} else {
+					if (!shouldExpireCookieCache) {
+						const now = Date.now();
 						const cachedSessionExpiresAt = new Date(
 							session.session.expiresAt as unknown as string | number | Date,
-						);
-						const hasExpired =
-							sessionDataPayload.expiresAt < Date.now() ||
-							cachedSessionExpiresAt < new Date();
+						).getTime();
+						shouldExpireCookieCache =
+							sessionDataPayload.expiresAt < now ||
+							!Number.isFinite(cachedSessionExpiresAt) ||
+							cachedSessionExpiresAt < now;
+					}
 
-						if (hasExpired) {
-							// When the session data cookie has expired, delete it;
-							//  then we try to fetch from DB
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
-						} else {
-							// Check if the cookie cache needs to be refreshed based on refreshCache
-							const cookieRefreshCache =
-								ctx.context.sessionConfig.cookieRefreshCache;
+					if (shouldExpireCookieCache) {
+						expireCookie(ctx, ctx.context.authCookies.sessionData);
+					} else {
+						// Check if the cookie cache needs to be refreshed based on refreshCache
+						const cookieRefreshCache =
+							ctx.context.sessionConfig.cookieRefreshCache;
 
-							if (cookieRefreshCache === false) {
-								// If refreshCache is disabled, return the session from cookie as-is
-								ctx.context.session = session;
-								return ctx.json({
-									session: session.session,
-									user: session.user,
-								} as {
-									session: InferSession<Option>;
-									user: InferUser<Option>;
-								});
-							}
-
-							const timeUntilExpiry = sessionDataPayload.expiresAt - Date.now();
-							const updateAge = cookieRefreshCache.updateAge * 1000; // Convert to milliseconds
-
-							if (timeUntilExpiry < updateAge) {
-								const cookieMaxAge =
-									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
-								const newExpiresAt = getDate(cookieMaxAge, "sec");
-								const refreshedSession = {
-									session: {
-										...session.session,
-										expiresAt: newExpiresAt,
-									},
-									user: session.user,
-									updatedAt: Date.now(),
-								};
-
-								// Set the refreshed cookie cache
-								await setCookieCache(ctx, refreshedSession, false);
-
-								// Parse session and user to ensure additionalFields are included
-								// Rehydrate date fields from JSON strings before parsing
-								const parsedRefreshedSession = parseSessionOutput(
-									ctx.context.options,
-									{
-										...refreshedSession.session,
-										expiresAt: new Date(refreshedSession.session.expiresAt),
-										createdAt: new Date(refreshedSession.session.createdAt),
-										updatedAt: new Date(refreshedSession.session.updatedAt),
-									},
-								);
-								const parsedRefreshedUser = parseUserOutput(
-									ctx.context.options,
-									{
-										...refreshedSession.user,
-										createdAt: new Date(refreshedSession.user.createdAt),
-										updatedAt: new Date(refreshedSession.user.updatedAt),
-									},
-								);
-								ctx.context.session = {
-									session: parsedRefreshedSession,
-									user: parsedRefreshedUser,
-								};
-								return ctx.json({
-									session: parsedRefreshedSession,
-									user: parsedRefreshedUser,
-								} as {
-									session: InferSession<Option>;
-									user: InferUser<Option>;
-								});
-							}
-
+						if (cookieRefreshCache === false) {
+							// If refreshCache is disabled, return the session from cookie as-is
+							ctx.context.session = session;
 							// Parse session and user to ensure additionalFields are included
+							// Rehydrate date fields from JSON strings before parsing
 							const parsedSession = parseSessionOutput(ctx.context.options, {
 								...session.session,
 								expiresAt: new Date(session.session.expiresAt),
@@ -320,18 +294,100 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								createdAt: new Date(session.user.createdAt),
 								updatedAt: new Date(session.user.updatedAt),
 							});
-							ctx.context.session = {
-								session: parsedSession,
-								user: parsedUser,
-							};
 							return ctx.json({
 								session: parsedSession,
 								user: parsedUser,
 							} as {
-								session: InferSession<Option>;
-								user: InferUser<Option>;
+								session: Session<Option["session"], Option["plugins"]>;
+								user: User<Option["user"], Option["plugins"]>;
 							});
 						}
+
+						const timeUntilExpiry = sessionDataPayload.expiresAt - Date.now();
+						const updateAge = cookieRefreshCache.updateAge * 1000; // Convert to milliseconds
+						const shouldSkipSessionRefresh =
+							await getShouldSkipSessionRefresh();
+
+						if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
+							const refreshedSession = {
+								session: {
+									...session.session,
+								},
+								user: session.user,
+								updatedAt: Date.now(),
+							};
+
+							// Set the refreshed cookie cache
+							await setCookieCache(ctx, refreshedSession, false);
+
+							// Also refresh the session_token cookie expiry
+							const sessionTokenOptions =
+								ctx.context.authCookies.sessionToken.attributes;
+							const sessionTokenMaxAge = dontRememberMe
+								? undefined
+								: ctx.context.sessionConfig.expiresIn;
+							await ctx.setSignedCookie(
+								ctx.context.authCookies.sessionToken.name,
+								session.session.token,
+								ctx.context.secret,
+								{
+									...sessionTokenOptions,
+									maxAge: sessionTokenMaxAge,
+								},
+							);
+
+							// Parse session and user to ensure additionalFields are included
+							// Rehydrate date fields from JSON strings before parsing
+							const parsedRefreshedSession = parseSessionOutput(
+								ctx.context.options,
+								{
+									...refreshedSession.session,
+									expiresAt: new Date(refreshedSession.session.expiresAt),
+									createdAt: new Date(refreshedSession.session.createdAt),
+									updatedAt: new Date(refreshedSession.session.updatedAt),
+								},
+							);
+							const parsedRefreshedUser = parseUserOutput(ctx.context.options, {
+								...refreshedSession.user,
+								createdAt: new Date(refreshedSession.user.createdAt),
+								updatedAt: new Date(refreshedSession.user.updatedAt),
+							});
+							ctx.context.session = {
+								session: parsedRefreshedSession,
+								user: parsedRefreshedUser,
+							};
+							return ctx.json({
+								session: parsedRefreshedSession,
+								user: parsedRefreshedUser,
+							} as {
+								session: Session<Option["session"], Option["plugins"]>;
+								user: User<Option["user"], Option["plugins"]>;
+							});
+						}
+
+						// Parse session and user to ensure additionalFields are included
+						const parsedSession = parseSessionOutput(ctx.context.options, {
+							...session.session,
+							expiresAt: new Date(session.session.expiresAt),
+							createdAt: new Date(session.session.createdAt),
+							updatedAt: new Date(session.session.updatedAt),
+						});
+						const parsedUser = parseUserOutput(ctx.context.options, {
+							...session.user,
+							createdAt: new Date(session.user.createdAt),
+							updatedAt: new Date(session.user.updatedAt),
+						});
+						ctx.context.session = {
+							session: parsedSession,
+							user: parsedUser,
+						};
+						return ctx.json({
+							session: parsedSession,
+							user: parsedUser,
+						} as {
+							session: Session<Option["session"], Option["plugins"]>;
+							user: User<Option["user"], Option["plugins"]>;
+						});
 					}
 				}
 
@@ -343,10 +399,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (session) {
 						/**
 						 * if session expired clean up the session
+						 * Only delete on POST when deferSessionRefresh is enabled
 						 */
-						await ctx.context.internalAdapter.deleteSession(
-							session.session.token,
-						);
+						if (!deferSessionRefresh || isPostRequest) {
+							await ctx.context.internalAdapter.deleteSession(
+								session.session.token,
+							);
+						}
 					}
 					return ctx.json(null);
 				}
@@ -365,8 +424,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						session: parsedSession,
 						user: parsedUser,
 					} as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
@@ -384,12 +443,35 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					expiresIn * 1000 +
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
+				const disableRefresh =
+					ctx.query?.disableRefresh ||
+					ctx.context.options.session?.disableSessionRefresh;
+				const shouldSkipSessionRefresh = await getShouldSkipSessionRefresh();
+				const needsRefresh =
+					shouldBeUpdated && !disableRefresh && !shouldSkipSessionRefresh;
 
-				if (
-					shouldBeUpdated &&
-					(!ctx.query?.disableRefresh ||
-						!ctx.context.options.session?.disableSessionRefresh)
-				) {
+				/**
+				 * When deferSessionRefresh is enabled and this is a GET request,
+				 * return the session without performing writes, but include needsRefresh flag
+				 */
+				if (deferSessionRefresh && !isPostRequest) {
+					await setCookieCache(ctx, session, !!dontRememberMe);
+					const parsedSession = parseSessionOutput(
+						ctx.context.options,
+						session.session,
+					);
+					const parsedUser = parseUserOutput(ctx.context.options, session.user);
+					return ctx.json({
+						session: parsedSession,
+						user: parsedUser,
+						needsRefresh,
+					} as unknown as {
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
+					});
+				}
+
+				if (needsRefresh) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
@@ -403,7 +485,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						 * Handle case where session update fails (e.g., concurrent deletion)
 						 */
 						deleteSessionCookie(ctx);
-						return ctx.json(null, { status: 401 });
+						throw APIError.from(
+							"UNAUTHORIZED",
+							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+						);
 					}
 					const maxAge =
 						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
@@ -429,18 +514,28 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						session: parsedUpdatedSession,
 						user: parsedUser,
 					} as unknown as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 				await setCookieCache(ctx, session, !!dontRememberMe);
-				return ctx.json(
-					session as unknown as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
-					},
+				// Parse session and user to ensure additionalFields are included
+				const parsedSession = parseSessionOutput(
+					ctx.context.options,
+					session.session,
 				);
+				const parsedUser = parseUserOutput(ctx.context.options, session.user);
+				return ctx.json({
+					session: parsedSession,
+					user: parsedUser,
+				} as {
+					session: Session<Option["session"], Option["plugins"]>;
+					user: User<Option["user"], Option["plugins"]>;
+				});
 			} catch (error) {
+				if (isAPIError(error)) {
+					throw error;
+				}
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -449,6 +544,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			}
 		},
 	);
+
+/**
+ * Whether the deployment keeps sessions in a durable server-side store
+ * (a database or secondary storage) rather than only in the signed cookie.
+ *
+ * Sensitive operations use this to decide whether the cookie cache is merely an
+ * optimization that must be bypassed for an authoritative read (`true`), or the
+ * only place the session lives and therefore the authority itself (`false`, for
+ * stateless / DB-less deployments). Pass the result as `disableCookieCache` so a
+ * revoked-but-cached session cannot authorize a sensitive action.
+ */
+export const isStateful = (ctx: GenericEndpointContext): boolean =>
+	hasServerSessionStore(ctx.context.options);
 
 export const getSessionFromCtx = async <
 	U extends Record<string, any> = Record<string, any>,
@@ -471,19 +579,43 @@ export const getSessionFromCtx = async <
 
 	const session = await getSession()({
 		...ctx,
+		method: "GET",
 		asResponse: false,
 		headers: ctx.headers!,
-		returnHeaders: false,
+		returnHeaders: true,
 		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
+			// `disableCookieCache`/`disableRefresh` only ever make validation
+			// stricter, so OR the caller's intent with the request. A caller that
+			// forces strict validation must not be weakened by a request query
+			// param (e.g. `?disableCookieCache=`), which the plain merge would let
+			// override the forced value back to false.
+			disableCookieCache:
+				config?.disableCookieCache || ctx.query?.disableCookieCache,
+			disableRefresh: config?.disableRefresh || ctx.query?.disableRefresh,
 		},
-	}).catch((e) => {
+	}).catch(() => {
 		return null;
 	});
-	ctx.context.session = session;
-	return session as {
+	if (!session) {
+		ctx.context.session = null;
+		return null;
+	}
+	if (session.headers) {
+		session.headers.forEach((value, key) => {
+			if (!ctx.context.responseHeaders) {
+				ctx.context.responseHeaders = new Headers({ [key]: value });
+			} else if (key.toLowerCase() === "set-cookie") {
+				ctx.context.responseHeaders.append(key, value);
+			} else {
+				ctx.context.responseHeaders.set(key, value);
+			}
+		});
+	}
+	ctx.context.session = session.response;
+	return session.response as {
 		session: S & Session;
 		user: U & User;
 	} | null;
@@ -555,19 +687,12 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 			code: "UNAUTHORIZED",
 		});
 	}
-	if (ctx.context.sessionConfig.freshAge === 0) {
-		return {
-			session,
-		};
-	}
-	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated = new Date(
-		session.session.updatedAt || session.session.createdAt,
-	).getTime();
-	const now = Date.now();
-	const isFresh = now - lastUpdated < freshAge * 1000;
-	if (!isFresh) {
-		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+	if (ctx.context.sessionConfig.freshAge !== 0) {
+		const createdAt = new Date(session.session.createdAt).getTime();
+		const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+		if (Date.now() - createdAt >= freshAge) {
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+		}
 	}
 	return {
 		session,
@@ -582,7 +707,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		{
 			method: "GET",
 			operationId: "listUserSessions",
-			use: [sessionMiddleware],
+			use: [freshSessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
@@ -610,12 +735,17 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			try {
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
+					{ onlyActiveSessions: true },
 				);
 				const activeSessions = sessions.filter((session) => {
 					return session.expiresAt > new Date();
 				});
 				return ctx.json(
-					activeSessions as unknown as Prettify<InferSession<Option>>[],
+					activeSessions.map((session) =>
+						parseSessionOutput(ctx.context.options, session),
+					) as unknown as Prettify<
+						Session<Option["session"], Option["plugins"]>
+					>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);
@@ -742,7 +872,7 @@ export const revokeSessions = createAuthEndpoint(
 	},
 	async (ctx) => {
 		try {
-			await ctx.context.internalAdapter.deleteSessions(
+			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
 		} catch (error) {

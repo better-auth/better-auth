@@ -15,6 +15,8 @@ export type DBAdapterDebugLogOption =
 			findMany?: boolean | undefined;
 			delete?: boolean | undefined;
 			deleteMany?: boolean | undefined;
+			consumeOne?: boolean | undefined;
+			incrementOne?: boolean | undefined;
 			count?: boolean | undefined;
 	  }
 	| {
@@ -211,6 +213,8 @@ export interface DBAdapterFactoryConfig<
 					| "updateMany"
 					| "delete"
 					| "deleteMany"
+					| "consumeOne"
+					| "incrementOne"
 					| "count";
 				/**
 				 * The model name.
@@ -301,31 +305,41 @@ export interface DBAdapterFactoryConfig<
 	disableTransformJoin?: boolean | undefined;
 }
 
+export const whereOperators = [
+	"eq",
+	"ne",
+	"lt",
+	"lte",
+	"gt",
+	"gte",
+	"in",
+	"not_in",
+	"contains",
+	"starts_with",
+	"ends_with",
+] as const;
+
+export type WhereOperator = (typeof whereOperators)[number];
+
 export type Where = {
 	/**
 	 * @default eq
 	 */
-	operator?:
-		| (
-				| "eq"
-				| "ne"
-				| "lt"
-				| "lte"
-				| "gt"
-				| "gte"
-				| "in"
-				| "not_in"
-				| "contains"
-				| "starts_with"
-				| "ends_with"
-		  )
-		| undefined;
+	operator?: WhereOperator | undefined;
 	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	/**
 	 * @default AND
 	 */
 	connector?: ("AND" | "OR") | undefined;
+	/**
+	 * Case sensitivity for string comparisons.
+	 * When "insensitive", string equality and pattern matching (contains, starts_with, ends_with)
+	 * will be case-insensitive. Only applies to string values.
+	 *
+	 * @default "sensitive"
+	 */
+	mode?: "sensitive" | "insensitive" | undefined;
 };
 
 /**
@@ -405,6 +419,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where?: Where[] | undefined;
 		limit?: number | undefined;
+		select?: string[] | undefined;
 		sortBy?:
 			| {
 					field: string;
@@ -434,6 +449,51 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	}) => Promise<number>;
 	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
+	/**
+	 * Atomically consume a single row matching the where clause: delete it and
+	 * return the deleted row, or return `null` if no row matched.
+	 * Implementations MUST NOT delete any additional rows that also match a
+	 * non-unique predicate.
+	 *
+	 * Under concurrent invocation against the same row, exactly one caller
+	 * receives the row; subsequent racers receive `null`. This is the
+	 * race-safe primitive for consuming single-use credentials
+	 * (verification tokens, authorization codes, one-time tokens).
+	 *
+	 * Always defined on the factory-wrapped adapter. The underlying
+	 * `CustomAdapter` must implement this natively; there is no portable
+	 * fallback that can guarantee cross-process single-use semantics.
+	 */
+	consumeOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
+	/**
+	 * Atomically apply signed numeric deltas to a single row matching the where
+	 * clause. For each entry in `increment`, the operation applies
+	 * `field = field + delta` in one atomic step; a negative delta decrements.
+	 *
+	 * The `where` clause is both the selector AND the guard: comparison
+	 * operators are honored, so passing `{ field: "remaining", operator: "gt",
+	 * value: 0 }` only mutates the row while `remaining` is still above zero.
+	 * When the guard matches no row, the operation makes no change and returns
+	 * `null`.
+	 *
+	 * The optional `set` map assigns absolute values to fields in the same
+	 * atomic operation, alongside the increments.
+	 *
+	 * Returns the updated row, or `null` when the guard matched no row. Under
+	 * concurrent invocation against the same row, this is the race-safe
+	 * primitive for guarded counter updates (e.g. decrementing a remaining-uses
+	 * counter only while it is still positive).
+	 *
+	 * Always defined on the factory-wrapped adapter. The underlying
+	 * `CustomAdapter` must implement this natively; there is no portable
+	 * fallback that can guarantee guarded counter semantics across runtimes.
+	 */
+	incrementOne: <T>(data: {
+		model: string;
+		where: Where[];
+		increment: Record<string, number>;
+		set?: Record<string, unknown> | undefined;
+	}) => Promise<T | null>;
 	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
@@ -493,6 +553,7 @@ export interface CustomAdapter {
 		model,
 		where,
 		limit,
+		select,
 		sortBy,
 		offset,
 		join,
@@ -500,6 +561,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[] | undefined;
 		limit: number;
+		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
 		join?: JoinConfig | undefined;
@@ -518,6 +580,34 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<number>;
+	/**
+	 * Native atomic single-row consume.
+	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
+	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
+	 * strongest race-safety guarantee. Implementations must delete at most
+	 * one matching row.
+	 */
+	consumeOne: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+	}) => Promise<T | null>;
+	/**
+	 * Native atomic guarded counter mutation. Applies
+	 * `field = field + delta` for each entry in `increment` (negative deltas
+	 * decrement), with `where` acting as both selector and guard and `set`
+	 * assigning absolute values in the same operation. Returns the updated row,
+	 * or `null` when the guard matched no row.
+	 *
+	 * Implementing this natively (e.g. `UPDATE ... SET n = n + $delta WHERE ...
+	 * RETURNING *`) gives one round trip and the strongest race-safety
+	 * guarantee.
+	 */
+	incrementOne: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+		increment: Record<string, number>;
+		set?: Record<string, unknown> | undefined;
+	}) => Promise<T | null>;
 	count: ({
 		model,
 		where,

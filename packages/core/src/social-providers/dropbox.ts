@@ -36,14 +36,11 @@ export const dropbox = (options: DropboxOptions) => {
 			scopes,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const additionalParams: Record<string, string> = {};
-			if (options.accessType) {
-				additionalParams.token_access_type = options.accessType;
-			}
 			return await createAuthorizationURL({
 				id: "dropbox",
 				options,
@@ -52,7 +49,12 @@ export const dropbox = (options: DropboxOptions) => {
 				state,
 				redirectURI,
 				codeVerifier,
-				additionalParams,
+				additionalParams: {
+					...(options.accessType
+						? { token_access_type: options.accessType }
+						: {}),
+					...(additionalParams ?? {}),
+				},
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -74,7 +76,7 @@ export const dropbox = (options: DropboxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://api.dropbox.com/oauth2/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

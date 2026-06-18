@@ -4,6 +4,14 @@ export type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	BetterAuthRateLimitOptions,
+	StoreIdentifierOption,
+	UserProvisioningSource,
+	ValidateUserInfoAction,
+	ValidateUserInfoMethod,
+	ValidateUserInfoOAuthInfo,
+	ValidateUserInfoResult,
+	ValidateUserInfoSource,
+	ValidateUserInfoSSOInfo,
 } from "@better-auth/core";
 export type * from "@better-auth/core/social-providers";
 export * from "../client/types";

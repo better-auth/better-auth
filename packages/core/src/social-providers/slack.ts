@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface SlackProfile extends Record<string, any> {
 	ok: boolean;
@@ -38,29 +42,32 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 }
 
 export const slack = (options: SlackOptions) => {
+	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
 	return {
 		id: "slack",
 		name: "Slack",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
-			const url = new URL("https://slack.com/openid/connect/authorize");
-			url.searchParams.set("scope", _scopes.join(" "));
-			url.searchParams.set("response_type", "code");
-			url.searchParams.set("client_id", options.clientId);
-			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
-			url.searchParams.set("state", state);
-			return url;
+			return createAuthorizationURL({
+				id: "slack",
+				options,
+				authorizationEndpoint: "https://slack.com/openid/connect/authorize",
+				scopes: _scopes,
+				state,
+				redirectURI,
+				additionalParams,
+			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://slack.com/api/openid.connect.token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -73,7 +80,7 @@ export const slack = (options: SlackOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://slack.com/api/openid.connect.token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

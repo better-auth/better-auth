@@ -22,6 +22,8 @@
         "STRIPE_WEBHOOK_SECRET",
         "APPLE_CLIENT_ID",
         "APPLE_CLIENT_SECRET",
+        "RAILWAY_CLIENT_ID",
+        "RAILWAY_CLIENT_SECRET",
         "VERCEL_CLIENT_ID",
         "VERCEL_CLIENT_SECRET"
       ]

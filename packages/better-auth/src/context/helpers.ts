@@ -1,22 +1,38 @@
 import type {
 	AuthContext,
+	AwaitableFunction,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
+import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
-import { createInternalAdapter } from "../db/internal-adapter";
+import { createCookieGetter, getCookies } from "../cookies";
+import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
-import { getBaseURL } from "../utils/url";
+import {
+	getBaseURL,
+	getOrigin,
+	isDynamicBaseURLConfig,
+	isRequestLike,
+	resolveBaseURL,
+} from "../utils/url";
 
-export async function runPluginInit(ctx: AuthContext) {
-	let options = ctx.options;
+export async function runPluginInit(context: AuthContext) {
+	let options = context.options;
 	const plugins = options.plugins || [];
-	let context: AuthContext = ctx;
-	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
+	const pluginTrustedOrigins: NonNullable<
+		BetterAuthOptions["trustedOrigins"]
+	>[] = [];
+	const dbHooks: {
+		source: string;
+		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
+	}[] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			let initPromise = plugin.init(context);
+			const initPromise = plugin.init(context);
 			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
 			if (isPromise(initPromise)) {
 				result = await initPromise;
@@ -25,31 +41,60 @@ export async function runPluginInit(ctx: AuthContext) {
 			}
 			if (typeof result === "object") {
 				if (result.options) {
-					const { databaseHooks, ...restOpts } = result.options;
+					const { databaseHooks, trustedOrigins, ...restOpts } = result.options;
 					if (databaseHooks) {
-						dbHooks.push(databaseHooks);
+						dbHooks.push({
+							source: `plugin:${plugin.id}`,
+							hooks: databaseHooks,
+						});
+					}
+					if (trustedOrigins) {
+						pluginTrustedOrigins.push(trustedOrigins);
 					}
 					options = defu(options, restOpts);
 				}
 				if (result.context) {
-					context = {
-						...context,
-						...(result.context as Partial<AuthContext>),
-					};
+					// Use Object.assign to keep the reference to the original context
+					Object.assign(context, result.context);
 				}
 			}
 		}
 	}
+	if (pluginTrustedOrigins.length > 0) {
+		const allSources = [
+			...(options.trustedOrigins ? [options.trustedOrigins] : []),
+			...pluginTrustedOrigins,
+		];
+		const staticOrigins = allSources.filter(Array.isArray).flat();
+		const dynamicOrigins = allSources.filter(
+			(s): s is Exclude<typeof s, string[]> => typeof s === "function",
+		);
+		if (dynamicOrigins.length > 0) {
+			options.trustedOrigins = async (request) => {
+				const resolved = await Promise.all(
+					dynamicOrigins.map((fn) => fn(request)),
+				);
+				return [...staticOrigins, ...resolved.flat()].filter(
+					(v): v is string => typeof v === "string" && v !== "",
+				);
+			};
+		} else {
+			options.trustedOrigins = staticOrigins;
+		}
+	}
+
 	// Add the global database hooks last
-	dbHooks.push(options.databaseHooks);
+	if (options.databaseHooks) {
+		dbHooks.push({ source: "user", hooks: options.databaseHooks });
+	}
+
 	context.internalAdapter = createInternalAdapter(context.adapter, {
 		options,
 		logger: context.logger,
-		hooks: dbHooks.filter((u) => u !== undefined),
+		hooks: dbHooks,
 		generateId: context.generateId,
 	});
 	context.options = options;
-	return { context };
 }
 
 export function getInternalPlugins(options: BetterAuthOptions) {
@@ -64,10 +109,40 @@ export async function getTrustedOrigins(
 	options: BetterAuthOptions,
 	request?: Request,
 ): Promise<string[]> {
-	const baseURL = getBaseURL(options.baseURL, options.basePath, request);
-	const trustedOrigins: (string | undefined | null)[] = baseURL
-		? [new URL(baseURL).origin]
-		: [];
+	const trustedOrigins: (string | undefined | null)[] = [];
+
+	if (isDynamicBaseURLConfig(options.baseURL)) {
+		const allowedHosts = options.baseURL.allowedHosts;
+		const proto = options.baseURL.protocol;
+		for (const host of allowedHosts) {
+			if (!host.includes("://")) {
+				if (!proto || proto === "https" || proto === "auto") {
+					trustedOrigins.push(`https://${host}`);
+				}
+				if (proto === "http" || proto === "auto" || isLoopbackHost(host)) {
+					trustedOrigins.push(`http://${host}`);
+				}
+			} else {
+				trustedOrigins.push(host);
+			}
+		}
+
+		if (options.baseURL.fallback) {
+			try {
+				trustedOrigins.push(new URL(options.baseURL.fallback).origin);
+			} catch {}
+		}
+	} else {
+		const baseURL = getBaseURL(
+			typeof options.baseURL === "string" ? options.baseURL : undefined,
+			options.basePath,
+			request,
+		);
+		if (baseURL) {
+			trustedOrigins.push(new URL(baseURL).origin);
+		}
+	}
+
 	if (options.trustedOrigins) {
 		if (Array.isArray(options.trustedOrigins)) {
 			trustedOrigins.push(...options.trustedOrigins);
@@ -82,4 +157,149 @@ export async function getTrustedOrigins(
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}
 	return trustedOrigins.filter((v): v is string => Boolean(v));
+}
+
+/**
+ * Input shape accepted by every `auth.api.*` endpoint invocation.
+ */
+type EndpointInput = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+>;
+
+/**
+ * Picks a `Request`-like or `Headers` value from a direct `auth.api` call.
+ * Headers are only accepted when they carry a host: without one, host
+ * resolution would fall back to `null` and the caller should use `fallback`
+ * or pass a `Request` instead.
+ */
+export function pickSource(
+	input: EndpointInput | undefined,
+): Request | Headers | undefined {
+	if (isRequestLike(input?.request)) return input.request;
+	if (!input?.headers) return undefined;
+
+	const headers =
+		input.headers instanceof Headers
+			? input.headers
+			: new Headers(input.headers);
+	if (!headers.has("host") && !headers.has("x-forwarded-host")) {
+		return undefined;
+	}
+	return headers;
+}
+
+/**
+ * Returns the effective `trustedProxyHeaders` value for dynamic `baseURL`
+ * resolution. Proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are
+ * ignored unless the user opts in with `advanced.trustedProxyHeaders: true`,
+ * matching the static-config path. Deployments behind a reverse proxy that
+ * only exposes the public host via `x-forwarded-host` must set the flag.
+ */
+export function resolveDynamicTrustedProxyHeaders(
+	options: BetterAuthOptions,
+): boolean {
+	return options.advanced?.trustedProxyHeaders ?? false;
+}
+
+/**
+ * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
+ * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
+ * when the URL cannot be resolved; callers on the direct-API path convert
+ * this to `APIError`.
+ */
+export async function resolveRequestContext(
+	ctx: AuthContext,
+	source?: Request | Headers,
+	trustedProxyHeaders?: boolean,
+): Promise<AuthContext> {
+	const dynamicBaseURLConfig = ctx.options.baseURL;
+	const basePath = ctx.options.basePath || "/api/auth";
+	const baseURL = resolveBaseURL(
+		dynamicBaseURLConfig,
+		basePath,
+		source,
+		undefined,
+		trustedProxyHeaders,
+	);
+	if (!baseURL) {
+		throw new BetterAuthError(
+			"Could not resolve base URL from request. Check your allowedHosts config.",
+		);
+	}
+
+	const resolved = Object.create(
+		Object.getPrototypeOf(ctx),
+		Object.getOwnPropertyDescriptors(ctx),
+	) as AuthContext;
+	resolved.baseURL = baseURL;
+	resolved.options = {
+		...ctx.options,
+		baseURL: getOrigin(baseURL) || undefined,
+	};
+
+	// Pass the dynamic config so getTrustedOrigins can expand `allowedHosts`.
+	const trustedOriginOptions: BetterAuthOptions = {
+		...resolved.options,
+		baseURL: dynamicBaseURLConfig,
+	};
+	// Only synthesize a Request for the user-facing callbacks that need one.
+	const needsRequest =
+		typeof ctx.options.trustedOrigins === "function" ||
+		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
+	let callbackRequest: Request | undefined;
+	if (needsRequest) {
+		if (isRequestLike(source)) {
+			callbackRequest = source;
+		} else if (source) {
+			callbackRequest = new Request(baseURL, { headers: source });
+		} else {
+			callbackRequest = undefined;
+		}
+	} else {
+		callbackRequest = undefined;
+	}
+	resolved.trustedOrigins = await getTrustedOrigins(
+		trustedOriginOptions,
+		callbackRequest,
+	);
+	resolved.trustedProviders = await getTrustedProviders(
+		resolved.options,
+		callbackRequest,
+	);
+
+	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {
+		resolved.authCookies = getCookies(resolved.options);
+		resolved.createAuthCookie = createCookieGetter(resolved.options);
+	}
+
+	return resolved;
+}
+
+export async function getAwaitableValue<T extends Record<string, any>>(
+	arr: AwaitableFunction<T>[] | undefined,
+	item: { field?: string; value: string },
+): Promise<T | undefined> {
+	if (!arr) return undefined;
+	for (const val of arr) {
+		const value = typeof val === "function" ? await val() : val;
+		if (value[item.field ?? "id"] === item.value) {
+			return value;
+		}
+	}
+	return undefined;
+}
+
+export async function getTrustedProviders(
+	options: BetterAuthOptions,
+	request?: Request,
+): Promise<string[]> {
+	const trustedProviders = options.account?.accountLinking?.trustedProviders;
+	if (!trustedProviders) {
+		return [];
+	}
+	if (Array.isArray(trustedProviders)) {
+		return trustedProviders.filter((v): v is string => Boolean(v));
+	}
+	const resolved = await trustedProviders(request);
+	return (resolved ?? []).filter((v): v is string => Boolean(v));
 }

@@ -1,31 +1,16 @@
-import { BetterAuthError } from "@better-auth/core/error";
-import { hex } from "@better-auth/utils/hex";
-import { scryptAsync } from "@noble/hashes/scrypt.js";
-import { hexToBytes } from "@noble/hashes/utils.js";
-import { constantTimeEqual } from "./buffer";
+/**
+ * `@better-auth/utils/password` uses the "node" export condition in package.json
+ * to automatically pick the right implementation:
+ *   - Node.js / Bun / Deno → `node:crypto scrypt` (libuv thread pool, non-blocking)
+ *   - Unsupported runtimes → `@noble/hashes scrypt` (pure JS fallback)
+ */
 
-const config = {
-	N: 16384,
-	r: 16,
-	p: 1,
-	dkLen: 64,
-};
+import {
+	hashPassword as _hashPassword,
+	verifyPassword as _verifyPassword,
+} from "@better-auth/utils/password";
 
-async function generateKey(password: string, salt: string) {
-	return await scryptAsync(password.normalize("NFKC"), salt, {
-		N: config.N,
-		p: config.p,
-		r: config.r,
-		dkLen: config.dkLen,
-		maxmem: 128 * config.N * config.r * 2,
-	});
-}
-
-export const hashPassword = async (password: string) => {
-	const salt = hex.encode(crypto.getRandomValues(new Uint8Array(16)));
-	const key = await generateKey(password, salt);
-	return `${salt}:${hex.encode(key)}`;
-};
+export const hashPassword = _hashPassword;
 
 export const verifyPassword = async ({
 	hash,
@@ -34,10 +19,5 @@ export const verifyPassword = async ({
 	hash: string;
 	password: string;
 }) => {
-	const [salt, key] = hash.split(":");
-	if (!salt || !key) {
-		throw new BetterAuthError("Invalid password hash");
-	}
-	const targetKey = await generateKey(password, salt!);
-	return constantTimeEqual(targetKey, hexToBytes(key));
+	return _verifyPassword(hash, password);
 };

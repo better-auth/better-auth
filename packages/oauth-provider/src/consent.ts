@@ -1,16 +1,25 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import { formatErrorURL, getIssuer } from "./authorize";
+import type { AuthorizeEndpointCaller } from "./continue";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
-import { deleteFromPrompt } from "./utils";
+import {
+	isSessionFreshForSignedQuery,
+	parsePrompt,
+	removeMaxAgeFromQuery,
+	removePromptFromQuery,
+	searchParamsToQuery,
+} from "./utils";
 
-export async function consentEndpoint(
+export async function consentEndpoint<Result>(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	// Obtain oauth query
-	const _query = (await oAuthState.get())?.query as string | undefined;
+	const oauthRequest = await oAuthState.get();
+	const _query = oauthRequest?.query as string | undefined;
 	if (!_query) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing oauth query",
@@ -43,17 +52,32 @@ export async function consentEndpoint(
 	if (!accepted) {
 		return {
 			redirect: true,
-			uri: formatErrorURL(
+			url: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
 				query.get("state") ?? undefined,
+				getIssuer(ctx, opts),
 			),
 		};
 	}
 
 	// Consent accepted
 	const session = await getSessionFromCtx(ctx);
+	const promptSet = parsePrompt(query.get("prompt") ?? "");
+	const hasLoginPrompt = promptSet.has("login");
+	const hasSatisfiedLoginPrompt =
+		hasLoginPrompt &&
+		isSessionFreshForSignedQuery(
+			session?.session.createdAt,
+			oauthRequest?.signedQueryIssuedAt,
+		);
+	if (hasLoginPrompt && !hasSatisfiedLoginPrompt) {
+		ctx?.headers?.set("accept", "application/json");
+		ctx.query = searchParamsToQuery(query);
+		return await authorize(ctx);
+	}
+
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session?.user!,
 		session: session?.session!,
@@ -83,12 +107,14 @@ export async function consentEndpoint(
 		},
 	);
 	const iat = Math.floor(Date.now() / 1000);
+	const resource = query.getAll("resource");
 	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
 		userId: session?.user.id!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
+		resources: resource.length ? resource : undefined,
 		referenceId,
 	};
 	foundConsent?.id
@@ -101,6 +127,7 @@ export async function consentEndpoint(
 					},
 				],
 				update: {
+					resources: consent.resources,
 					scopes: consent.scopes,
 					updatedAt: new Date(iat * 1000),
 				},
@@ -114,12 +141,20 @@ export async function consentEndpoint(
 			});
 
 	// Return authorization code
+	if (requestedScopes) {
+		query.set("scope", consent.scopes.join(" "));
+	}
 	ctx?.headers?.set("accept", "application/json");
-	ctx.query = deleteFromPrompt(query, "consent");
-	ctx.context.postLogin = true;
-	const { url } = await authorizeEndpoint(ctx, opts);
-	return {
-		redirect: true,
-		uri: url,
-	};
+	let authorizationQuery = removePromptFromQuery(query, "consent");
+	if (hasSatisfiedLoginPrompt) {
+		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
+		authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
+	}
+	ctx.query = searchParamsToQuery(authorizationQuery);
+	const postLoginClearedForThisSession =
+		oauthRequest?.postLoginClearedForSession !== undefined &&
+		oauthRequest.postLoginClearedForSession === session?.session.id;
+	return await authorize(ctx, {
+		postLogin: postLoginClearedForThisSession,
+	});
 }

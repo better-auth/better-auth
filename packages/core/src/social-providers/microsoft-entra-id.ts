@@ -1,13 +1,28 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { APIError, BetterAuthError } from "../error";
+import type {
+	ClientAssertionGetter,
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+
+/**
+ * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
+ * personal-account token carries it as the `tid` claim, so it distinguishes the
+ * consumer account class from work/school tenants.
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+ */
+const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
 /**
  * @see [Microsoft Identity Platform - Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)
@@ -34,7 +49,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** The primary username that represents the user */
 	preferred_username: string;
 	/** User's email address */
-	email: string;
+	email?: string;
 	/** Human-readable value that identifies the subject of the token */
 	name: string;
 	/** Matches the parameter included in the original authorize request */
@@ -115,39 +130,73 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 
 export interface MicrosoftOptions
 	extends ProviderOptions<MicrosoftEntraIDProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string | undefined;
+	tenantId?: string;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string | undefined;
+	authority?: string;
+	/**
+	 * Function that returns a JWT client assertion for token endpoint authentication.
+	 *
+	 * Use this instead of `clientSecret` when your Microsoft Entra ID app is
+	 * configured for client authentication with assertions (private_key_jwt or
+	 * workload identity federation).
+	 */
+	clientAssertion?: ClientAssertionGetter;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?:
-		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
-		| undefined;
+	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean | undefined;
+	disableProfilePhoto?: boolean;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
-	const authority = options.authority || "https://login.microsoftonline.com";
+	// Trim any trailing slash so endpoint URLs and the issuer comparison below
+	// never produce a double slash (e.g. a configured `https://host/` would make
+	// the expected issuer `https://host//<tid>/v2.0` and reject every token). A
+	// loop avoids a trailing-slash regex, which is a polynomial-ReDoS shape.
+	let authority = options.authority || "https://login.microsoftonline.com";
+	while (authority.endsWith("/")) {
+		authority = authority.slice(0, -1);
+	}
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
+	if (options.clientSecret && options.clientAssertion) {
+		throw new BetterAuthError(
+			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
+		);
+	}
+	const tokenEndpointAuth: TokenEndpointAuth | undefined =
+		options.clientAssertion
+			? {
+					method: "private_key_jwt",
+					getClientAssertion: options.clientAssertion,
+				}
+			: undefined;
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
+			// Microsoft Entra supports public clients (SPA / native apps with
+			// PKCE only), so clientSecret is intentionally not required here.
+			// See https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow
+			if (!getPrimaryClientId(options.clientId)) {
+				logger.error(
+					"Client Id is required for Microsoft Entra ID. Make sure to provide it in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email", "User.Read", "offline_access"];
@@ -163,6 +212,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {
@@ -172,7 +222,52 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint,
+				tokenEndpointAuth,
 			});
+		},
+		idToken: {
+			jwks: (header) => getMicrosoftPublicKey(header.kid!, tenant, authority),
+			audience: options.clientId,
+			maxTokenAge: "1h",
+			/**
+			 * Issuer varies per tenant for multi-tenant endpoints, so only validate it for
+			 * specific tenants.
+			 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
+			 */
+			issuer:
+				tenant !== "common" &&
+				tenant !== "organizations" &&
+				tenant !== "consumers"
+					? `${authority}/${tenant}/v2.0`
+					: undefined,
+			/**
+			 * The multi-tenant endpoints (common/organizations/consumers) skip the
+			 * issuer check above because the issuer varies per tenant, and the
+			 * organizations and consumers JWKS sets overlap. Enforce the tenant
+			 * binding explicitly so a token from a disallowed account class cannot
+			 * pass: the issuer must name the token's own tenant, and the account
+			 * class must match the configured restriction.
+			 * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+			 */
+			verifyClaims: (claims) => {
+				const tid = claims.tid;
+				if (
+					typeof tid !== "string" ||
+					claims.iss !== `${authority}/${tid}/v2.0`
+				) {
+					return false;
+				}
+				if (
+					tenant === "organizations" &&
+					tid === MICROSOFT_CONSUMER_TENANT_ID
+				) {
+					return false;
+				}
+				if (tenant === "consumers" && tid !== MICROSOFT_CONSUMER_TENANT_ID) {
+					return false;
+				}
+				return true;
+			},
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -252,8 +347,41 @@ export const microsoft = (options: MicrosoftOptions) => {
 							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
 						tokenEndpoint,
+						tokenEndpointAuth,
 					});
 				},
 		options,
 	} satisfies OAuthProvider;
+};
+
+export const getMicrosoftPublicKey = async (
+	kid: string,
+	tenant: string,
+	authority: string,
+) => {
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+			x5c?: string[];
+			x5t?: string;
+		}>;
+	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
+
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+
+	return await importJWK(jwk, jwk.alg);
 };

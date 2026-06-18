@@ -65,7 +65,7 @@ const cleanDoubleSlashes = (input: string = "") => {
 };
 
 const issuerToEndpoints = (issuer?: string | undefined) => {
-	let baseUrl = issuer || "https://gitlab.com";
+	const baseUrl = issuer || "https://gitlab.com";
 	return {
 		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),
 		tokenEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/token`),
@@ -87,6 +87,7 @@ export const gitlab = (options: GitlabOptions) => {
 			codeVerifier,
 			loginHint,
 			redirectURI,
+			additionalParams,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
 			if (options.scope) _scopes.push(...options.scope);
@@ -100,6 +101,7 @@ export const gitlab = (options: GitlabOptions) => {
 				redirectURI,
 				codeVerifier,
 				loginHint,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
@@ -141,7 +143,7 @@ export const gitlab = (options: GitlabOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.name ?? profile.username,
+					name: profile.name ?? profile.username ?? "",
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: profile.email_verified ?? false,

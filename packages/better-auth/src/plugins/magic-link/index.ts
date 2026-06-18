@@ -8,11 +8,13 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
+import { parseSessionOutput, parseUserOutput } from "../../db";
+import { isAPIError } from "../../utils/is-api-error";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"magic-link": {
 			creator: typeof magicLink;
 		};
@@ -26,6 +28,19 @@ export interface MagicLinkOptions {
 	 */
 	expiresIn?: number | undefined;
 	/**
+	 * Allowed attempts for verifying the magic link token.
+	 *
+	 * @deprecated Multi-attempt verification is no longer supported. Each
+	 * magic link token is consumed atomically on the first verification call,
+	 * so a given token mints at most one session regardless of this value
+	 * (see GHSA-hc7v-rggr-4hvx). The option is kept for source compatibility
+	 * and may be removed in a future major; any value other than `1` is
+	 * ignored and emits a `console.warn` at plugin construction.
+	 *
+	 * @default 1
+	 */
+	allowedAttempts?: number;
+	/**
 	 * Send magic link implementation.
 	 */
 	sendMagicLink: (
@@ -33,6 +48,7 @@ export interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			metadata?: Record<string, any>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
@@ -106,6 +122,12 @@ const signInMagicLinkBodySchema = z.object({
 			description: "URL to redirect after error.",
 		})
 		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "Additional metadata to pass to sendMagicLink.",
+		})
+		.optional(),
 });
 const magicLinkVerifyQuerySchema = z.object({
 	token: z.string().meta({
@@ -135,8 +157,15 @@ const magicLinkVerifyQuerySchema = z.object({
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
+		allowedAttempts: 1,
 		...options,
 	} satisfies MagicLinkOptions;
+
+	if (options.allowedAttempts !== undefined && options.allowedAttempts !== 1) {
+		console.warn(
+			"[better-auth/magic-link] `allowedAttempts` is ignored: tokens are consumed atomically on the first verification call (GHSA-hc7v-rggr-4hvx). Any value other than `1` has no effect; remove the option to silence this warning.",
+		);
+	}
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -154,6 +183,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 	return {
 		id: "magic-link",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -201,7 +231,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, metadata } = ctx.body;
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -236,6 +266,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							metadata,
 						},
 						ctx,
 					);
@@ -327,8 +358,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					);
 
-					function redirectWithError(error: string): never {
+					function redirectWithError(
+						error: string,
+						description?: string | undefined,
+					): never {
 						errorCallbackURL.searchParams.set("error", error);
+						if (description) {
+							errorCallbackURL.searchParams.set(
+								"error_description",
+								description,
+							);
+						}
 						throw ctx.redirect(errorCallbackURL.toString());
 					}
 
@@ -340,25 +380,17 @@ export const magicLink = (options: MagicLinkOptions) => {
 					).toString();
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
-						await ctx.context.internalAdapter.findVerificationValue(
+						await ctx.context.internalAdapter.consumeVerificationValue(
 							storedToken,
 						);
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					if (tokenValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							tokenValue.id,
-						);
-						redirectWithError("EXPIRED_TOKEN");
-					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						tokenValue.id,
-					);
 					const { email, name } = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string | undefined;
 					};
+
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
 						.findUserByEmail(email)
@@ -366,11 +398,26 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser({
-								email: email,
-								emailVerified: true,
-								name: name || "",
-							});
+							let newUser: Awaited<
+								ReturnType<typeof ctx.context.internalAdapter.createUser>
+							> | null;
+							try {
+								newUser = await ctx.context.internalAdapter.createUser(
+									{
+										email: email,
+										emailVerified: true,
+										name: name || "",
+									},
+									{ method: "magic-link" },
+								);
+							} catch (e) {
+								// Browser flow: forward a gate rejection's code to the error
+								// URL instead of surfacing a raw API error.
+								if (isAPIError(e) && e.body?.code) {
+									redirectWithError(e.body.code, e.body.message);
+								}
+								throw e;
+							}
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
@@ -402,15 +449,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
-							user: {
-								id: user.id,
-								email: user.email,
-								emailVerified: user.emailVerified,
-								name: user.name,
-								image: user.image,
-								createdAt: user.createdAt,
-								updatedAt: user.updatedAt,
-							},
+							user: parseUserOutput(ctx.context.options, user),
+							session: parseSessionOutput(ctx.context.options, session),
 						});
 					}
 					if (isNewUser) {

@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -7,6 +10,8 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
 	APIError,
+	addOAuthServerContext,
+	getOAuthState,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
@@ -15,7 +20,9 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import type { Session, User } from "../../types";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -24,9 +31,55 @@ import type {
 	UserWithAnonymous,
 } from "./types";
 
+/**
+ * Resolves the anonymous session being upgraded during an account-link callback.
+ *
+ * The anonymous session is normally read from the request cookie. When the
+ * OAuth callback arrives without that cookie (for example Expo's in-app browser,
+ * which only carries the OAuth state, not the session cookie), the anonymous
+ * user id captured at sign-in is recovered from the server-only OAuth state
+ * instead. Returns `null` when there is no anonymous session to link.
+ */
+async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
+	session: Session & Record<string, any>;
+	user: UserWithAnonymous & Record<string, any>;
+} | null> {
+	const cookieSession = await getSessionFromCtx<{
+		isAnonymous: boolean | null;
+	}>(ctx, { disableRefresh: true });
+	if (cookieSession?.user.isAnonymous) {
+		return {
+			session: cookieSession.session,
+			user: { ...cookieSession.user, isAnonymous: true },
+		};
+	}
+
+	const anonymousUserId = (await getOAuthState())?.serverContext
+		?.anonymousUserId;
+	if (typeof anonymousUserId !== "string") {
+		return null;
+	}
+	const user = (await ctx.context.internalAdapter.findUserById(
+		anonymousUserId,
+	)) as (User & { isAnonymous?: boolean | null }) | null;
+	if (!user?.isAnonymous) {
+		return null;
+	}
+	const [anonymousSession] = await ctx.context.internalAdapter.listSessions(
+		user.id,
+		{ onlyActiveSessions: true },
+	);
+	if (!anonymousSession) {
+		return null;
+	}
+	return {
+		session: anonymousSession,
+		user: { ...user, isAnonymous: true },
+	};
+}
+
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		anonymous: {
 			creator: typeof anonymous;
 		};
@@ -59,6 +112,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
@@ -107,14 +161,17 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 
 					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
-					const newUser = await ctx.context.internalAdapter.createUser({
-						email,
-						emailVerified: false,
-						isAnonymous: true,
-						name,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
+					const newUser = await ctx.context.internalAdapter.createUser(
+						{
+							email,
+							emailVerified: false,
+							isAnonymous: true,
+							name,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+						{ method: "anonymous" },
+					);
 					if (!newUser) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
@@ -125,12 +182,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						newUser.id,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,
@@ -138,14 +193,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: newUser.id,
-							email: newUser.email,
-							emailVerified: newUser.emailVerified,
-							name: newUser.name,
-							createdAt: newUser.createdAt,
-							updatedAt: newUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, newUser),
 					});
 				},
 			),
@@ -227,6 +275,21 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					}
 
 					try {
+						await ctx.context.internalAdapter.deleteUserSessions(
+							session.user.id,
+						);
+					} catch (error) {
+						ctx.context.logger.error(
+							"Failed to delete anonymous user sessions",
+							error,
+						);
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS,
+						);
+					}
+
+					try {
 						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					} catch (error) {
 						ctx.context.logger.error("Failed to delete anonymous user", error);
@@ -241,6 +304,29 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			),
 		},
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						// Generic OAuth providers also sign in through `/sign-in/social`,
+						// so this single path covers them too.
+						return ctx.path === "/sign-in/social";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, { disableRefresh: true });
+						if (!session?.user.isAnonymous) {
+							return;
+						}
+						// Carry the anonymous user id across the provider redirect so the
+						// callback can link the account even when the session cookie is
+						// absent (for example Expo's in-app browser).
+						await addOAuthServerContext({
+							anonymousUserId: session.user.id,
+						});
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {
@@ -248,12 +334,12 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/sign-in") ||
 							ctx.path?.startsWith("/sign-up") ||
 							ctx.path?.startsWith("/callback") ||
-							ctx.path?.startsWith("/oauth2/callback") ||
 							ctx.path?.startsWith("/magic-link/verify") ||
 							ctx.path?.startsWith("/email-otp/verify-email") ||
 							ctx.path?.startsWith("/one-tap/callback") ||
 							ctx.path?.startsWith("/passkey/verify-authentication") ||
 							ctx.path?.startsWith("/phone-number/verify") ||
+							ctx.path?.startsWith("/verify-email") ||
 							false
 						);
 					},
@@ -276,15 +362,12 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 						/**
-						 * Make sure the user had an anonymous session.
+						 * Make sure the user had an anonymous session. Falls back to the
+						 * server-only OAuth state when the callback arrives without the
+						 * anonymous session cookie (for example Expo).
 						 */
-						const session = await getSessionFromCtx<{
-							isAnonymous: boolean | null;
-						}>(ctx, {
-							disableRefresh: true,
-						});
-
-						if (!session || !session.user.isAnonymous) {
+						const session = await resolveAnonymousSession(ctx);
+						if (!session) {
 							return;
 						}
 
@@ -299,21 +382,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 
-						const user = {
-							...session.user,
-							// Type hack to ensure `isAnonymous` is correctly inferred as true.
-							// Without this, `isAnonymous` is inferred as `boolean | null` despite
-							// the conditional checks above suggesting otherwise.
-							isAnonymous: session.user.isAnonymous,
-						};
-
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the
 						// integrator can perform any additional logic such as transferring data
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
-							await options?.onLinkAccount?.({
-								anonymousUser: { session: session.session, user },
+							await options.onLinkAccount({
+								anonymousUser: {
+									session: session.session,
+									user: session.user,
+								},
 								newUser: newSession,
 								ctx,
 							});
@@ -330,7 +408,20 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						) {
 							return;
 						}
-						await ctx.context.internalAdapter.deleteUser(session.user.id);
+						try {
+							await ctx.context.internalAdapter.deleteUserSessions(
+								session.user.id,
+							);
+							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						} catch (error) {
+							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`
+							// to remove the partial-state window where sessions are deleted but
+							// the user row remains.
+							ctx.context.logger.error(
+								"Failed to clean up anonymous user during post-link cleanup",
+								{ anonymousUserId: session.user.id, error },
+							);
+						}
 					}),
 				},
 			],
@@ -340,3 +431,5 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

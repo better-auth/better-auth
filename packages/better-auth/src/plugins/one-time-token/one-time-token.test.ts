@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isAPIError } from "../../utils/is-api-error";
 import { oneTimeToken } from ".";
@@ -16,6 +16,11 @@ describe("One-time token", async () => {
 			},
 		},
 	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should work", async () => {
 		const { headers } = await signInWithTestUser();
 		const response = await auth.api.generateOneTimeToken({
@@ -54,6 +59,30 @@ describe("One-time token", async () => {
 			.catch((e) => e);
 		expect(isAPIError(shouldFail)).toBeTruthy();
 		vi.useRealTimers();
+	});
+
+	// A one-time token is single-use: racing two redemptions of the same
+	// valid token must burn the record exactly once, so only one caller
+	// gets a session and the other is rejected.
+	it("should only redeem a token once under concurrent verification", async () => {
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.generateOneTimeToken({
+			headers,
+		});
+		expect(response.token).toBeDefined();
+
+		const results = await Promise.allSettled([
+			auth.api.verifyOneTimeToken({ body: { token: response.token } }),
+			auth.api.verifyOneTimeToken({ body: { token: response.token } }),
+		]);
+
+		const fulfilled = results.filter((r) => r.status === "fulfilled");
+		const rejected = results.filter((r) => r.status === "rejected");
+		expect(fulfilled).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		expect(isAPIError((rejected[0] as PromiseRejectedResult).reason)).toBe(
+			true,
+		);
 	});
 
 	it("should work with client", async () => {

@@ -22,7 +22,7 @@ function ApiMethodTabs({
 	return (
 		<provider.Provider value={{ current, setCurrent }}>
 			<div
-				data-slot="tabs"
+				data-slot="api-method-tabs"
 				className={cn("flex flex-col gap-2", className)}
 				{...props}
 			/>

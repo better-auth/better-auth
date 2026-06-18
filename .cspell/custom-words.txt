@@ -1,3 +1,5 @@
+GHSA
+rggr
 SCIMAPI
 MCPO
 tocnav
@@ -13,3 +15,12 @@ prefs
 uncompromised
 myapp
 Neue
+CCPA
+CPRA
+tmcp
+ciba
+CIBA
+upvote
+Suliman
+Abdulrazzaq
+rethrowing

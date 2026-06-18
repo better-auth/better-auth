@@ -1,22 +1,69 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { base64, base64Url } from "@better-auth/utils/base64";
+import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
+	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import {
+	getClientDiscoveries,
+	getExtensionClientAuthenticationStrategy,
+	isExtensionTokenEndpointAuthMethod,
+} from "../extensions";
 import type { oauthProvider } from "../oauth";
+import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
+	ClientDiscovery,
+	Confirmation,
+	GrantType,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
 	Scope,
 	StoreTokenType,
+	TokenEndpointAuthMethod,
 } from "../types";
+
+export {
+	getSignedQueryIssuedAt,
+	postLoginClearedParam,
+	signedQueryIssuedAtParam,
+} from "../signed-query";
+
+/**
+ * Extracts the credentials from an `Authorization: Bearer <token>` header.
+ *
+ * Returns `undefined` when the header is absent or carries a non-Bearer scheme,
+ * leaving the caller to decide whether that is an error. Throws an
+ * `invalid_request` `APIError` when the Bearer scheme is present but the
+ * credentials are missing or the header carries extra parts. The scheme match
+ * is case-insensitive and the credentials are the single token after it.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+ * @see https://datatracker.ietf.org/doc/html/rfc7235#section-2.1
+ */
+export function parseBearerToken(
+	authorization: string | null | undefined,
+): string | undefined {
+	if (!authorization) return undefined;
+	const [scheme, credentials, ...extraParts] = authorization
+		.trim()
+		.split(/\s+/);
+	if (scheme?.toLowerCase() !== "bearer") return undefined;
+	if (!credentials || extraParts.length > 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "Malformed Bearer Authorization header",
+		});
+	}
+	return credentials;
+}
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -54,12 +101,129 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
 };
 
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
+
+/**
+ * Normalizes OAuth resource values into a non-empty string array.
+ */
+export function toResourceList(
+	value: string | string[] | undefined,
+): string[] | undefined {
+	if (typeof value === "string") return [value];
+	if (!value?.length) return undefined;
+	return value;
+}
+
+/**
+ * Normalizes audience values for JWT claims.
+ */
+export function toAudienceClaim(
+	audience: string | string[] | undefined,
+): string | string[] | undefined {
+	if (typeof audience === "string") return audience;
+	if (!audience?.length) return undefined;
+	return audience.length === 1 ? audience.at(0) : audience;
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	const queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const sigs = queryParams.getAll("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	const verifySig = await makeSignature(
+		canonicalizeOAuthQueryParams(queryParams).toString(),
+		secret,
+	);
+	return (
+		sigs.length === 1 &&
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -74,16 +238,42 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+	let dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 		where: [{ field: "clientId", value: clientId }],
 	});
+
+	const discoveries = getClientDiscoveries(options);
+	for (const discovery of discoveries) {
+		if (!discovery.matches(clientId)) continue;
+		const resolved = await discovery.resolve(ctx, clientId, dbClient);
+		if (resolved) {
+			dbClient = resolved;
+			break;
+		}
+	}
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
 	}
 
 	return dbClient;
+}
+
+/**
+ * Merge `discoveryMetadata` from every contributed {@link ClientDiscovery}
+ * into a single object. Entries are spread in order; later entries override
+ * earlier ones on key collisions.
+ *
+ * @internal
+ */
+export function mergeDiscoveryMetadata(
+	discoveries: ClientDiscovery[],
+): Record<string, unknown> {
+	return discoveries.reduce<Record<string, unknown>>(
+		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
+		{},
+	);
 }
 
 /**
@@ -113,7 +303,7 @@ export async function decryptStoredClientSecret(
 ) {
 	if (storageMethod === "encrypted") {
 		return await symmetricDecrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: storedClientSecret,
 		});
 	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
@@ -173,10 +363,20 @@ async function verifyStoredClientSecret(
 				constantTimeEqual(hashedClientSecret, storedClientSecret)
 			);
 		}
-	} else if (
-		storageMethod === "encrypted" ||
-		(typeof storageMethod === "object" && "decrypt" in storageMethod)
-	) {
+	} else if (storageMethod === "encrypted") {
+		try {
+			const decryptedClientSecret = await decryptStoredClientSecret(
+				ctx,
+				storageMethod,
+				storedClientSecret,
+			);
+			return (
+				!!clientSecret && constantTimeEqual(decryptedClientSecret, clientSecret)
+			);
+		} catch {
+			return false;
+		}
+	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
 		const decryptedClientSecret = await decryptStoredClientSecret(
 			ctx,
 			storageMethod,
@@ -207,7 +407,7 @@ export async function storeClientSecret(
 
 	if (storageMethod === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: clientSecret,
 		});
 	} else if (storageMethod === "hashed") {
@@ -274,33 +474,59 @@ export async function getStoredToken(
  *
  * @internal
  */
-export function basicToClientCredentials(authorization: string) {
-	if (authorization.startsWith("Basic ")) {
-		const encoded = authorization.replace("Basic ", "");
-		const decoded = new TextDecoder().decode(base64.decode(encoded));
-		if (!decoded.includes(":")) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		const [id, secret] = decoded.split(":", 2);
-		if (!id || !secret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid authorization header format",
-				error: "invalid_client",
-			});
-		}
-		return {
-			client_id: id,
-			client_secret: secret,
-		};
+// RFC 7235 §2.1: the auth scheme is case-insensitive and is followed by
+// one or more SP. Match liberally so requests using `basic` or extra
+// spaces aren't rejected before reaching the spec-correct decoder.
+const BASIC_SCHEME_PREFIX = /^Basic +/i;
+
+function basicToClientCredentials(authorization: string) {
+	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
+		return undefined;
+	}
+	try {
+		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
+		return { client_id: clientId, client_secret: clientSecret };
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid authorization header format",
+			error: "invalid_client",
+		});
 	}
 }
 
 /**
- * Validates client credentials failing on mismatches
- * and incorrectly provided information
+ * Whether a client is allowed to use a given grant type.
+ *
+ * A client's registered `grantTypes` defaults to the documented default
+ * `["authorization_code"]` when unset (see client registration). Refresh tokens
+ * are only ever issued through the authorization_code flow, so a client allowed
+ * to use `authorization_code` is implicitly allowed to use `refresh_token`.
+ *
+ * @internal
+ */
+export function clientAllowsGrant(
+	client: Pick<SchemaClient<Scope[]>, "grantTypes">,
+	grantType: GrantType,
+) {
+	const allowedGrants =
+		client.grantTypes && client.grantTypes.length > 0
+			? client.grantTypes
+			: (["authorization_code"] as GrantType[]);
+	if (
+		grantType === "refresh_token" &&
+		allowedGrants.includes("authorization_code")
+	) {
+		return true;
+	}
+	return allowedGrants.includes(grantType);
+}
+
+/**
+ * Resolves the registered client by id and authorizes it: existence, disabled
+ * state, registered auth method, requested scopes, and grant type. The record is
+ * always resolved here via `getClient`, so a client-auth strategy proves the
+ * caller controls `clientId` but never supplies the record. `preVerified` marks
+ * that an assertion already proved control, so the client-secret check is skipped.
  *
  * @internal
  */
@@ -310,6 +536,9 @@ export async function validateClientCredentials(
 	clientId: string,
 	clientSecret?: string, // optional because required if client is confidential or this value is defined
 	scopes?: string[], // checks requested scopes against allowed scopes
+	preVerified?: boolean, // an assertion already proved control of clientId; skip the secret check
+	grantType?: GrantType, // if set, enforces the client is registered for this grant type
+	authMethod?: TokenEndpointAuthMethod,
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
@@ -325,36 +554,65 @@ export async function validateClientCredentials(
 		});
 	}
 
-	// Require secret for confidential clients
-	if (!client.public && !clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client secret must be provided",
-			error: "invalid_client",
-		});
+	// Enforce registered auth method for assertion/pre-verified methods.
+	if (preVerified && authMethod) {
+		const registeredAuthMethod =
+			client.tokenEndpointAuthMethod ?? "client_secret_basic";
+		if (registeredAuthMethod !== authMethod) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
+				error: "invalid_client",
+			});
+		}
 	}
-
-	// Secret should not be received
-	if (clientSecret && !client.clientSecret) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "public client, client secret should not be received",
-			error: "invalid_client",
-		});
-	}
-
-	// Compare Secrets when secret is provided
 	if (
-		clientSecret &&
-		!(await verifyStoredClientSecret(
-			ctx,
-			options,
-			client.clientSecret!,
-			clientSecret,
-		))
+		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
+			isExtensionTokenEndpointAuthMethod(
+				options,
+				client.tokenEndpointAuthMethod,
+			)) &&
+		!preVerified
 	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "invalid client_secret",
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client registered for ${client.tokenEndpointAuthMethod} must use client_assertion`,
 			error: "invalid_client",
 		});
+	}
+
+	// Skip secret checks for pre-verified clients (already authenticated via assertion)
+	if (!preVerified) {
+		// Require secret for confidential clients
+		if (!client.public && !clientSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "client secret must be provided",
+				error: "invalid_client",
+			});
+		}
+
+		// Secret should not be received
+		if (clientSecret && !client.clientSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"public client, client secret should not be received",
+				error: "invalid_client",
+			});
+		}
+
+		// Compare Secrets when secret is provided
+		if (
+			clientSecret &&
+			!(await verifyStoredClientSecret(
+				ctx,
+				options,
+				client.clientSecret!,
+				clientSecret,
+			))
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "invalid client_secret",
+				error: "invalid_client",
+			});
+		}
 	}
 
 	// If scopes set, check against client allowed scopes
@@ -370,6 +628,14 @@ export async function validateClientCredentials(
 		}
 	}
 
+	// Enforce the client is registered for the requested grant type
+	if (grantType && !clientAllowsGrant(client, grantType)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: `client is not authorized to use grant type ${grantType}`,
+			error: "unauthorized_client",
+		});
+	}
+
 	return client;
 }
 
@@ -381,9 +647,156 @@ export async function validateClientCredentials(
  */
 export function parseClientMetadata(
 	metadata: string | object | undefined,
-): object | undefined {
+): Record<string, unknown> | undefined {
 	if (!metadata) return undefined;
-	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+	return typeof metadata === "string"
+		? JSON.parse(metadata)
+		: (metadata as Record<string, unknown>);
+}
+
+export type ExtractedCredentials =
+	| {
+			kind: "client_secret";
+			method: "client_secret_basic" | "client_secret_post";
+			clientId: string;
+			clientSecret: string;
+	  }
+	| {
+			kind: "pre_verified";
+			method: TokenEndpointAuthMethod;
+			clientId: string;
+			/** Sender-constraint the auth strategy proved, forwarded to issuance. */
+			confirmation?: Confirmation;
+	  }
+	| {
+			kind: "public";
+			method: "none";
+			clientId: string;
+	  };
+
+/** Unwraps ExtractedCredentials into the fields each grant handler needs. */
+export function destructureCredentials(
+	credentials: ExtractedCredentials | null,
+) {
+	return {
+		clientId: credentials?.clientId,
+		clientSecret:
+			credentials?.kind === "client_secret"
+				? credentials.clientSecret
+				: undefined,
+		preVerified: credentials?.kind === "pre_verified",
+		authMethod: credentials?.method,
+		confirmation:
+			credentials?.kind === "pre_verified"
+				? credentials.confirmation
+				: undefined,
+	};
+}
+
+/**
+ * Extracts and resolves client credentials from the request.
+ * Supports: client_secret_basic, client_secret_post, private_key_jwt, and none (public).
+ */
+export async function extractClientCredentials(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	expectedAudience?: string,
+): Promise<ExtractedCredentials | null> {
+	const body = (ctx.body ?? {}) as Record<string, unknown>;
+	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
+
+	// 1. Check for assertion-based client authentication.
+	if (body.client_assertion_type || body.client_assertion) {
+		if (!body.client_assertion || !body.client_assertion_type) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"client_assertion and client_assertion_type must both be provided",
+				error: "invalid_client",
+			});
+		}
+		if (
+			body.client_secret ||
+			(authorization && BASIC_SCHEME_PREFIX.test(authorization))
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"client_assertion cannot be combined with client_secret or Basic auth",
+				error: "invalid_client",
+			});
+		}
+		const assertion = body.client_assertion as string;
+		const assertionType = body.client_assertion_type as string;
+		const extensionStrategy = getExtensionClientAuthenticationStrategy(
+			opts,
+			assertionType,
+		);
+		if (extensionStrategy) {
+			const result = await extensionStrategy.strategy.authenticate({
+				ctx,
+				opts,
+				assertion,
+				assertionType,
+				clientId: body.client_id as string | undefined,
+				expectedAudience,
+			});
+			return {
+				kind: "pre_verified",
+				method: extensionStrategy.method,
+				clientId: result.clientId,
+				confirmation: result.confirmation,
+			};
+		}
+		const { verifyClientAssertion: verify } = await import(
+			"./client-assertion"
+		);
+		const result = await verify(
+			ctx,
+			opts,
+			assertion,
+			assertionType,
+			body.client_id as string | undefined,
+			expectedAudience,
+		);
+		return {
+			kind: "pre_verified",
+			method: "private_key_jwt",
+			clientId: result.clientId,
+		};
+	}
+
+	// 2. Check for Basic auth header
+	if (authorization && BASIC_SCHEME_PREFIX.test(authorization)) {
+		const res = basicToClientCredentials(authorization);
+		if (res) {
+			return {
+				kind: "client_secret",
+				method: "client_secret_basic",
+				clientId: res.client_id,
+				clientSecret: res.client_secret,
+			};
+		}
+	}
+
+	// 3. Check body params
+	if (body.client_id && body.client_secret) {
+		return {
+			kind: "client_secret",
+			method: "client_secret_post",
+			clientId: body.client_id as string,
+			clientSecret: body.client_secret as string,
+		};
+	}
+
+	// 4. client_id only (public client)
+	if (body.client_id) {
+		return {
+			kind: "public",
+			method: "none",
+			clientId: body.client_id as string,
+		};
+	}
+
+	return null;
 }
 
 /**
@@ -409,19 +822,140 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
- * Deletes a prompt value
+ * Extracts the sector identifier (hostname) from a client's first redirect URI.
  *
- * @param ctx
- * @param prompt - the prompt value to delete
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
  */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	let prompts = query.get("prompt")?.split(" ");
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	const uri = client.redirectUris?.[0];
+	if (!uri) {
+		throw new BetterAuthError(
+			"Client has no redirect URIs for sector identifier",
+		);
+	}
+	return new URL(uri).host;
+}
+
+/**
+ * Computes a pairwise subject identifier using HMAC-SHA256.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+async function computePairwiseSub(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	secret: string,
+): Promise<string> {
+	const sectorId = getSectorIdentifier(client);
+	return makeSignature(`${sectorId}.${userId}`, secret);
+}
+
+/**
+ * Returns the appropriate subject identifier for a user+client pair.
+ * Uses pairwise when the client opts in and the server has a secret configured.
+ *
+ * @internal
+ */
+export async function resolveSubjectIdentifier(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<string> {
+	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
+		return computePairwiseSub(userId, client, opts.pairwiseSecret);
+	}
+	return userId;
+}
+
+/**
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
+ */
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+export function isSessionFreshForSignedQuery(
+	sessionCreatedAt: Date | string | undefined,
+	signedQueryIssuedAt: Date | undefined,
+) {
+	if (!signedQueryIssuedAt) return false;
+	const normalized = normalizeTimestampValue(sessionCreatedAt);
+	if (!normalized) return false;
+	return normalized.getTime() >= signedQueryIssuedAt.getTime();
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return nextQuery;
+}
+
+export function removeMaxAgeFromQuery(query: URLSearchParams) {
+	const nextQuery = new URLSearchParams(query);
+	nextQuery.delete("max_age");
+	return nextQuery;
+}
+
+enum PKCERequirementErrors {
+	PUBLIC_CLIENT = "pkce is required for public clients",
+	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
+}
+/**
+ * Determines if PKCE is required for a given client and scope.
+ *
+ * PKCE is always required for:
+ * 1. Public clients (cannot securely store client_secret)
+ * 2. Requests with offline_access scope (refresh token security)
+ *
+ * For confidential clients without offline_access:
+ * - Uses client.requirePKCE if set (defaults to true)
+ *
+ * Returns false if PKCE is not required, or the reason it is required.
+ *
+ * @internal
+ */
+export function isPKCERequired(
+	client: SchemaClient<Scope[]>,
+	requestedScopes?: string[],
+): false | PKCERequirementErrors {
+	// Determine if client is public
+	const isPublicClient =
+		client.tokenEndpointAuthMethod === "none" ||
+		client.type === "native" ||
+		client.type === "user-agent-based" ||
+		client.public === true;
+
+	// PKCE always required for public clients
+	if (isPublicClient) {
+		return PKCERequirementErrors.PUBLIC_CLIENT;
+	}
+
+	// PKCE always required for offline_access scope (refresh tokens)
+	if (requestedScopes?.includes("offline_access")) {
+		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
+	}
+
+	if (client.requirePKCE ?? true) {
+		return PKCERequirementErrors.CLIENT_REQUIRE_PKCE;
+	}
+
+	return false;
 }

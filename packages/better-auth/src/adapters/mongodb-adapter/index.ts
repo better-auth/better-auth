@@ -1,1 +1,1 @@
-export * from "./mongodb-adapter";
+export * from "@better-auth/mongo-adapter";

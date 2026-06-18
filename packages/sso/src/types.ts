@@ -1,4 +1,10 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type {
+	DBFieldAttribute,
+	FieldAttributeToObject,
+	InferAdditionalFieldsFromPluginOptions,
+	RemoveFieldsWithReturnedFalse,
+} from "better-auth/db";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
@@ -24,7 +30,8 @@ export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	clientSecret: string;
+	/** Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. */
+	clientSecret?: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string | undefined;
@@ -32,25 +39,58 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic")
+		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
 		| undefined;
+	/** Key ID for private_key_jwt key resolution */
+	privateKeyId?: string | undefined;
+	/** Signing algorithm for private_key_jwt. @default "RS256" */
+	privateKeyAlgorithm?: string | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
+	/**
+	 * Accept callbacks from OIDC providers that initiate the OAuth flow
+	 * without sending a `state` parameter. When enabled, stateless callbacks
+	 * restart the OAuth flow server-side with a fresh `state` and PKCE
+	 * verifier. See the SSO docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }
 
 export interface SAMLConfig {
+	/**
+	 * SP Entity ID. Used as the `entityID` in SP metadata when
+	 * `spMetadata.entityID` is not set. Also used as the expected
+	 * audience for SAML assertion validation when `audience` is not set.
+	 */
 	issuer: string;
+	/**
+	 * IdP SSO URL. Used as the redirect destination when
+	 * `idpMetadata.metadata` is not provided. Ignored when
+	 * IdP metadata XML is set (the SSO URL is extracted from the XML).
+	 */
 	entryPoint: string;
-	cert: string;
-	callbackUrl: string;
+	/**
+	 * IdP signing certificate(s). Used to verify SAML response signatures when
+	 * `idpMetadata.metadata` is not provided. Ignored when IdP metadata XML is
+	 * set (the certificate is extracted from the XML). When both this and
+	 * `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence. Pass an
+	 * array of PEM strings for rolling rotation; responses signed by any
+	 * listed cert are accepted.
+	 */
+	cert?: string | string[];
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;
 				entityID?: string;
-				entityURL?: string;
-				redirectURL?: string;
-				cert?: string;
+				/**
+				 * IdP signing certificate(s). Pass a single PEM string or an array
+				 * for rolling rotation. Takes precedence over the top-level `cert`
+				 * when both are set. Omit when `metadata` XML is supplied.
+				 */
+				cert?: string | string[];
 				privateKey?: string;
 				privateKeyPass?: string;
 				isAssertionEncrypted?: boolean;
@@ -60,9 +100,18 @@ export interface SAMLConfig {
 					Binding: string;
 					Location: string;
 				}>;
+				singleLogoutService?: Array<{
+					Binding: string;
+					Location: string;
+				}>;
 		  }
 		| undefined;
-	spMetadata: {
+	/**
+	 * SP metadata configuration. All fields are optional; when omitted,
+	 * SP metadata is auto-generated from `issuer`, `wantAssertionsSigned`,
+	 * `authnRequestsSigned`, and `identifierFormat`.
+	 */
+	spMetadata?: {
 		metadata?: string | undefined;
 		entityID?: string | undefined;
 		binding?: string | undefined;
@@ -72,14 +121,72 @@ export interface SAMLConfig {
 		encPrivateKey?: string | undefined;
 		encPrivateKeyPass?: string | undefined;
 	};
+	/**
+	 * Request signed assertions from the IdP. When true, the SP metadata
+	 * advertises `WantAssertionsSigned="true"` and samlify will reject
+	 * unsigned assertions.
+	 */
 	wantAssertionsSigned?: boolean | undefined;
+	authnRequestsSigned?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;
 	privateKey?: string | undefined;
-	decryptionPvk?: string | undefined;
-	additionalParams?: Record<string, any> | undefined;
 	mapping?: SAMLMapping | undefined;
+}
+
+/** Stored AuthnRequest record for InResponseTo validation */
+export interface AuthnRequestRecord {
+	id: string;
+	providerId: string;
+	createdAt: number;
+	expiresAt: number;
+}
+
+/** Session data stored during SAML login for Single Logout */
+export interface SAMLSessionRecord {
+	/** Session row id, used to key the by-id lookup index. */
+	sessionId: string;
+	/** Session token, used to revoke the session during Single Logout. */
+	sessionToken: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
+/**
+ * Parsed SAML login response extract from samlify.
+ *
+ * samlify's extractor nests multi-attribute XML elements as objects:
+ * - `response` (Response/@ID, @IssueInstant, @Destination, @InResponseTo)
+ * - `sessionIndex` (AuthnStatement/@AuthnInstant, @SessionNotOnOrAfter, @SessionIndex)
+ * - `conditions` (Conditions/@NotBefore, @NotOnOrAfter)
+ *
+ * Single-value elements remain as strings: `nameID`, `audience`.
+ */
+export interface SAMLAssertionExtract {
+	nameID?: string;
+	/**
+	 * From `<AuthnStatement>` — samlify extracts all 3 attributes as an object.
+	 * To get the SessionIndex string, read `sessionIndex.sessionIndex`.
+	 */
+	sessionIndex?: {
+		authnInstant?: string;
+		sessionNotOnOrAfter?: string;
+		sessionIndex?: string;
+	};
+	conditions?: {
+		notBefore?: string;
+		notOnOrAfter?: string;
+	};
+	response?: {
+		id?: string;
+		issueInstant?: string;
+		destination?: string;
+		inResponseTo?: string;
+	};
+	/** Single string or array when multiple `<Audience>` elements are present. */
+	audience?: string | string[];
 }
 
 type BaseSSOProvider = {
@@ -92,12 +199,58 @@ type BaseSSOProvider = {
 	domain: string;
 };
 
+type SSOProviderAdditionalFields<
+	O extends SSOOptions,
+	IsClientSide extends boolean,
+> = O["schema"] extends {
+	ssoProvider?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? IsClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+export type SSOProviderAdditionalFieldsInput<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = InferAdditionalFieldsFromPluginOptions<"ssoProvider", O, IsClientSide>;
+
+export type InferSSOProvider<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = (O["domainVerification"] extends { enabled: true }
+	? {
+			domainVerified: boolean;
+		} & BaseSSOProvider
+	: BaseSSOProvider) &
+	SSOProviderAdditionalFields<O, IsClientSide>;
+
 export type SSOProvider<O extends SSOOptions> =
 	O["domainVerification"] extends { enabled: true }
 		? {
 				domainVerified: boolean;
-			} & BaseSSOProvider
-		: BaseSSOProvider;
+			} & BaseSSOProvider &
+				SSOProviderAdditionalFields<O, false>
+		: BaseSSOProvider & SSOProviderAdditionalFields<O, false>;
+
+export type SSOProviderSchema<O extends SSOOptions> = {
+	ssoProvider: {
+		modelName: string;
+		fields: Record<string, DBFieldAttribute> &
+			(O["schema"] extends {
+				ssoProvider?: {
+					additionalFields: infer Field extends Record<
+						string,
+						DBFieldAttribute
+					>;
+				};
+			}
+				? Field
+				: {});
+	};
+};
 
 export interface SSOOptions {
 	/**
@@ -123,6 +276,16 @@ export interface SSOOptions {
 				provider: SSOProvider<SSOOptions>;
 		  }) => Awaitable<void>)
 		| undefined;
+	/**
+	 * If true, the `provisionUser` callback will be called on every login,
+	 * not just when a new user is registered. This is useful when you need
+	 * to sync upstream identity provider profile changes on each sign-in.
+	 *
+	 * The `provisionUser` callback should be idempotent when this is enabled.
+	 *
+	 * @default false
+	 */
+	provisionUserOnEveryLogin?: boolean;
 	/**
 	 * Organization provisioning options
 	 */
@@ -173,6 +336,14 @@ export interface SSOOptions {
 				 * OIDC configuration
 				 */
 				oidcConfig?: OIDCConfig;
+				/**
+				 * Private key for `private_key_jwt` authentication.
+				 * Only used with defaultSSO — not stored in DB.
+				 */
+				privateKey?: {
+					privateKeyJwk?: JsonWebKey;
+					privateKeyPem?: string;
+				};
 		  }>
 		| undefined;
 	/**
@@ -208,6 +379,29 @@ export interface SSOOptions {
 		organizationId?: string | undefined;
 		domain?: string | undefined;
 	};
+	/**
+	 * The schema for the SSO plugin.
+	 */
+	schema?:
+		| {
+				ssoProvider?: {
+					modelName?: string | undefined;
+					fields?: {
+						issuer?: string | undefined;
+						oidcConfig?: string | undefined;
+						samlConfig?: string | undefined;
+						userId?: string | undefined;
+						providerId?: string | undefined;
+						organizationId?: string | undefined;
+						domain?: string | undefined;
+						domainVerified?: string | undefined;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
 	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.
@@ -252,12 +446,35 @@ export interface SSOOptions {
 		 */
 		enabled?: boolean;
 		/**
-		 * Prefix used to generate the domain verification token
+		 * Prefix used to generate the domain verification token.
+		 * An underscore is automatically prepended to follow DNS
+		 * infrastructure subdomain conventions (RFC 8552), so do
+		 * not include a leading underscore.
 		 *
-		 * @default "better-auth-token-"
+		 * @default "better-auth-token"
 		 */
 		tokenPrefix?: string;
 	};
+	/**
+	 * A shared redirect URI used by all OIDC providers instead of
+	 * per-provider callback URLs. Can be a path or a full URL.
+	 */
+	redirectURI?: string;
+	/**
+	 * Callback to resolve private key material for private_key_jwt authentication.
+	 * Called during token exchange when a provider uses tokenEndpointAuthentication: "private_key_jwt".
+	 * Keeps private keys out of the database — supports HSM/KMS/Vault integration.
+	 */
+	resolvePrivateKey?: (params: {
+		providerId: string;
+		keyId?: string;
+		issuer: string;
+	}) => Promise<{
+		privateKeyJwk?: JsonWebKey;
+		privateKeyPem?: string;
+		kid?: string;
+		algorithm?: string;
+	}>;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
@@ -273,7 +490,7 @@ export interface SSOOptions {
 		 *
 		 * This works correctly in serverless environments without any additional configuration.
 		 *
-		 * @default false
+		 * @default true
 		 */
 		enableInResponseToValidation?: boolean;
 		/**
@@ -281,9 +498,13 @@ export interface SSOOptions {
 		 * When true, responses without InResponseTo are accepted.
 		 * When false, all responses must correlate to a stored AuthnRequest.
 		 *
+		 * IdP-initiated SSO is a known attack vector — the SAML2Int
+		 * interoperability profile recommends against it. Only enable
+		 * this if your IdP requires it and you understand the risks.
+		 *
 		 * Only applies when InResponseTo validation is enabled.
 		 *
-		 * @default true
+		 * @default false
 		 */
 		allowIdpInitiated?: boolean;
 		/**
@@ -353,5 +574,32 @@ export interface SSOOptions {
 		 * @default 102400 (100KB)
 		 */
 		maxMetadataSize?: number;
+		/**
+		 * Enable SAML Single Logout
+		 * @default false
+		 */
+		enableSingleLogout?: boolean;
+		/**
+		 * TTL for LogoutRequest records in milliseconds
+		 * @default 300000 (5 minutes)
+		 */
+		logoutRequestTTL?: number;
+		/**
+		 * Require signed LogoutRequests from IdP
+		 * @default false
+		 */
+		wantLogoutRequestSigned?: boolean;
+		/**
+		 * Require signed LogoutResponses from IdP
+		 * @default false
+		 */
+		wantLogoutResponseSigned?: boolean;
 	};
+}
+
+export interface Member {
+	id: string;
+	userId: string;
+	organizationId: string;
+	role: string;
 }

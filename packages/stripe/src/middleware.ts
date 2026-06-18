@@ -43,7 +43,7 @@ export const referenceMiddleware = (
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+					STRIPE_ERROR_CODES.AUTHORIZE_REFERENCE_REQUIRED,
 				);
 			}
 

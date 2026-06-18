@@ -20,10 +20,17 @@ export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {
 }
 
 export const spotify = (options: SpotifyOptions) => {
+	const tokenEndpoint = "https://accounts.spotify.com/api/token";
 	return {
 		id: "spotify",
 		name: "Spotify",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope ? [] : ["user-read-email"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -35,6 +42,7 @@ export const spotify = (options: SpotifyOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -43,7 +51,7 @@ export const spotify = (options: SpotifyOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://accounts.spotify.com/api/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -56,7 +64,7 @@ export const spotify = (options: SpotifyOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://accounts.spotify.com/api/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

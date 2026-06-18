@@ -8,7 +8,6 @@ export interface AssertionCounts {
 	total: number;
 }
 
-/** @lintignore used in tests */
 export function countAssertions(xml: string): AssertionCounts {
 	let parsed: unknown;
 	try {
@@ -33,7 +32,9 @@ export function countAssertions(xml: string): AssertionCounts {
 export function validateSingleAssertion(samlResponse: string): void {
 	let xml: string;
 	try {
-		xml = new TextDecoder().decode(base64.decode(samlResponse));
+		xml = new TextDecoder().decode(
+			base64.decode(samlResponse.replace(/\s+/g, "")),
+		);
 		if (!xml.includes("<")) {
 			throw new Error("Not XML");
 		}

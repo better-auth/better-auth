@@ -1,0 +1,103 @@
+name: Setup Playwright
+description: Cache and install Playwright chromium browser with system dependencies.
+
+inputs:
+  working-directory:
+    description: 'Directory containing the project with the Playwright dependency'
+    required: false
+    default: 'e2e/integration'
+  browsers:
+    description: 'Browsers to install (e.g., "chromium", "chromium firefox", or leave empty for all)'
+    required: false
+    default: 'chromium'
+
+outputs:
+  cache-hit:
+    description: 'Whether the Playwright browser cache was hit'
+    value: ${{ steps.cache.outputs.cache-hit }}
+  playwright-version:
+    description: 'Detected Playwright version'
+    value: ${{ steps.detect-version.outputs.version }}
+  validated-browsers:
+    description: 'Validated browser arguments for Playwright install commands'
+    value: ${{ steps.validate-browsers.outputs.browsers }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine OS Cache Path
+      id: cache-path
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          echo "path=~/AppData/Local/ms-playwright" >> "$GITHUB_OUTPUT"
+        elif [ "$RUNNER_OS" = "macOS" ]; then
+          echo "path=~/Library/Caches/ms-playwright" >> "$GITHUB_OUTPUT"
+        else
+          echo "path=~/.cache/ms-playwright" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Detect Playwright Version
+      id: detect-version
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLAYWRIGHT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        PLAYWRIGHT_VERSION=$(pnpm --filter=. ls @playwright/test --json | jq --raw-output '.[0].devDependencies["@playwright/test"].version')
+        if [ -z "$PLAYWRIGHT_VERSION" ] || [ "$PLAYWRIGHT_VERSION" = "null" ]; then
+          echo "::error::Could not detect @playwright/test version in ${PLAYWRIGHT_WORKING_DIRECTORY}. Ensure dependencies are installed before running this action."
+          exit 1
+        fi
+        echo "version=$PLAYWRIGHT_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Validate Playwright Browsers
+      id: validate-browsers
+      shell: bash
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ inputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+          for browser in "${browser_args[@]}"; do
+            if [[ ! "$browser" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]]; then
+              echo "::error::Invalid Playwright browser name: $browser"
+              exit 1
+            fi
+          done
+        fi
+        echo "browsers=${browser_args[*]}" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright Browsers
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      id: cache
+      with:
+        path: ${{ steps.cache-path.outputs.path }}
+        key: ${{ runner.os }}-playwright-${{ steps.validate-browsers.outputs.browsers || 'all' }}-${{ steps.detect-version.outputs.version }}
+
+    - name: Install Playwright Browsers & OS Deps (Cache Miss)
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ steps.validate-browsers.outputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+        fi
+        pnpm exec playwright install "${browser_args[@]}" --with-deps
+
+    - name: Install Playwright OS Dependencies (Cache Hit)
+      if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLAYWRIGHT_BROWSERS: ${{ steps.validate-browsers.outputs.browsers }}
+      run: |
+        browser_args=()
+        if [ -n "$PLAYWRIGHT_BROWSERS" ]; then
+          read -r -a browser_args <<< "$PLAYWRIGHT_BROWSERS"
+        fi
+        pnpm exec playwright install-deps "${browser_args[@]}"

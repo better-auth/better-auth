@@ -1,5 +1,6 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -75,6 +76,7 @@ describe("Admin plugin", async () => {
 		customFetchImpl,
 	} = await getTestInstance(
 		{
+			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
@@ -83,16 +85,13 @@ describe("Admin plugin", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -112,6 +111,11 @@ describe("Admin plugin", async () => {
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -171,6 +175,39 @@ describe("Admin plugin", async () => {
 		);
 		newUser = res.data?.user;
 		expect(newUser?.role).toBe("user");
+	});
+
+	it("should allow admin to create users without password", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Passwordless User",
+				email: "passwordless@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.email).toBe("passwordless@email.com");
+		expect(res.data?.user?.name).toBe("Passwordless User");
+		expect(res.data?.user?.role).toBe("user");
+
+		// User should not be able to sign in with password since no credential account exists
+		const signInRes = await client.signIn.email({
+			email: "passwordless@email.com",
+			password: "anypassword",
+		});
+		expect(signInRes.error).toBeDefined();
+
+		// Clean up
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user?.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
 	});
 
 	it("should allow admin to create user with multiple roles", async () => {
@@ -335,6 +372,52 @@ describe("Admin plugin", async () => {
 			fetchOptions: {
 				headers: adminHeaders,
 			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7837
+	 */
+	it("should apply filter when filterValue is defined", async () => {
+		// Create a dedicated user for this test to avoid invalidating shared sessions
+		const { data: tempUser } = await client.signUp.email({
+			email: "falsy-filter-test@test.com",
+			password: "password",
+			name: "Falsy Filter Test",
+		});
+		const tempUserId = tempUser!.user.id;
+
+		const allUsers = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {},
+		});
+		const totalBefore = allUsers.total;
+		expect(totalBefore).toBeGreaterThanOrEqual(2);
+
+		// Ban the temp user so the dataset has both banned=true and banned=false
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
+		});
+
+		// Filter by banned = false should exclude the banned user
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+		});
+
+		expect(res.users.length).toBe(totalBefore - 1);
+		expect(res.users.every((u) => u.banned === false)).toBe(true);
+		expect(res.users.every((u) => u.id !== tempUserId)).toBe(true);
+
+		// Cleanup: unban the user
+		await auth.api.unbanUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
 		});
 	});
 
@@ -539,7 +622,44 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(errorLocation).toBeDefined();
-		expect(errorLocation).toContain("error=banned");
+		expect(errorLocation).toContain("error=BANNED_USER");
+	});
+
+	it("should redirect banned social sign-in to a cross-origin errorCallbackURL", async () => {
+		const errorCallbackURL = "https://frontend.example.com/auth-error";
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				errorCallbackURL,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				errorLocation = context.response.headers.get("location");
+			},
+		});
+		expect(errorLocation).toBeTruthy();
+		const url = new URL(errorLocation!);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(`${url.origin}${url.pathname}`).toBe(errorCallbackURL);
+		expect(url.searchParams.get("error")).toBe("BANNED_USER");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Custom banned user message",
+		);
 	});
 
 	it("should change banned user message", async () => {
@@ -599,6 +719,62 @@ describe("Admin plugin", async () => {
 		expect(res.data?.sessions.length).toBe(1);
 	});
 
+	it("should return 404 from unbanUser when the target user does not exist", async () => {
+		const res = await client.admin.unbanUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from banUser when the target user does not exist", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: "nonexistent-user-id",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from setRole when the target user does not exist", async () => {
+		const res = await client.admin.setRole(
+			{
+				userId: "nonexistent-user-id",
+				role: "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
+	it("should return 404 from admin.updateUser when the target user does not exist", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: "nonexistent-user-id",
+				data: {
+					name: "John Doe",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should not allow non-admin to list user sessions", async () => {
 		const res = await client.admin.listUserSessions(
 			{
@@ -642,6 +818,115 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.id).toBe(session.data?.user.id);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9401
+	 */
+	it("should revalidate useSession after admin impersonation", async () => {
+		vi.stubGlobal("window", {});
+		const { headers } = await signInWithTestUser();
+		const browserHeaders = new Headers(headers);
+		const browserClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [adminClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					const requestHeaders = new Headers(browserHeaders);
+					const nextHeaders = init?.headers;
+					if (nextHeaders instanceof Headers) {
+						for (const [key, value] of nextHeaders.entries()) {
+							requestHeaders.set(key, value);
+						}
+					} else if (nextHeaders && typeof nextHeaders === "object") {
+						for (const [key, value] of Object.entries(nextHeaders)) {
+							if (typeof value === "string") {
+								requestHeaders.set(key, value);
+							}
+						}
+					}
+					return customFetchImpl(url, {
+						...init,
+						headers: requestHeaders,
+					});
+				},
+			},
+		});
+		type SessionState = ReturnType<typeof browserClient.useSession.get>;
+		type SessionData = NonNullable<SessionState["data"]>;
+		const waitForSessionData = async (
+			matches: (session: SessionData) => boolean,
+			triggerRead = false,
+		) => {
+			return new Promise<SessionData>((resolve, reject) => {
+				let unsubscribe = () => {};
+				const timeoutId = setTimeout(() => {
+					unsubscribe();
+					reject(new Error("Timed out waiting for session data"));
+				}, 1500);
+
+				unsubscribe = browserClient.useSession.subscribe((state) => {
+					if (state.isPending || state.isRefetching || state.data === null) {
+						return;
+					}
+
+					if (!matches(state.data)) {
+						return;
+					}
+
+					clearTimeout(timeoutId);
+					unsubscribe();
+					resolve(state.data);
+				});
+
+				if (triggerRead) {
+					browserClient.useSession.get();
+				}
+			});
+		};
+		const targetUser = await client.signUp.email({
+			email: "impersonate-reactive@mail.com",
+			password: "password",
+			name: "Impersonate Reactive User",
+		});
+
+		try {
+			const freshAdminSession = await browserClient.getSession();
+			const reactiveAdminSession = await waitForSessionData(
+				(session) => session.user.id === freshAdminSession.data?.user.id,
+				true,
+			);
+
+			expect(reactiveAdminSession.user.id).toBe(
+				freshAdminSession.data?.user.id,
+			);
+
+			await browserClient.admin.impersonateUser(
+				{
+					userId: targetUser.data?.user.id || "",
+				},
+				{
+					onSuccess: (ctx) => {
+						cookieSetter(browserHeaders)(ctx);
+					},
+				},
+			);
+
+			const freshImpersonatedSession = await browserClient.getSession();
+			expect(freshImpersonatedSession.data?.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+
+			const reactiveImpersonatedSession = await waitForSessionData(
+				(session) => session.user.id === targetUser.data?.user.id,
+			);
+
+			expect(reactiveImpersonatedSession.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("should not allow non-admin to impersonate user", async () => {
 		const res = await client.admin.impersonateUser(
 			{
@@ -654,7 +939,7 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
-	it("should not allow to impersonate admins", async () => {
+	it("should not allow to impersonate admins without impersonate-admins permission", async () => {
 		const userToImpersonate = await client.signUp.email({
 			email: "impersonate-admin@mail.com",
 			password: "password",
@@ -676,6 +961,190 @@ describe("Admin plugin", async () => {
 		);
 
 		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow impersonating admins with impersonate-admins permission", async () => {
+		const ac = createAccessControl({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"impersonate-admins",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		} as const);
+
+		const superAdminRole = ac.newRole({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"impersonate-admins",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		});
+		const regularAdminRole = ac.newRole({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		});
+		const userRole = ac.newRole({
+			user: [],
+			session: [],
+		});
+
+		const {
+			signInWithTestUser: signInSuperAdmin,
+			signInWithUser: signInAsUser,
+			customFetchImpl: fetchImpl,
+		} = await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							"super-admin": superAdminRole,
+							admin: regularAdminRole,
+							user: userRole,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Super Admin") {
+									return { data: { ...user, role: "super-admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Super Admin" } },
+		);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [
+				adminClient({
+					ac,
+					roles: {
+						"super-admin": superAdminRole,
+						admin: regularAdminRole,
+						user: userRole,
+					},
+				}),
+			],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: superAdminHeaders } = await signInSuperAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-perm@test.com",
+			password: "password",
+			name: "Target Admin Perm",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: superAdminHeaders },
+		);
+
+		// super-admin has impersonate-admins permission, should succeed
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: superAdminHeaders },
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(targetAdmin!.user.id);
+
+		// regular admin does NOT have impersonate-admins permission, should fail
+		const { data: regularAdmin } = await c.signUp.email({
+			email: "regular-admin-perm@test.com",
+			password: "password",
+			name: "Regular Admin Perm",
+		});
+		await c.admin.setRole(
+			{ userId: regularAdmin!.user.id, role: "admin" },
+			{ headers: superAdminHeaders },
+		);
+		const { headers: regularAdminHeaders } = await signInAsUser(
+			"regular-admin-perm@test.com",
+			"password",
+		);
+		const res2 = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: regularAdminHeaders },
+		);
+		expect(res2.error?.status).toBe(403);
+	});
+
+	it("should allow impersonating admins with legacy allowImpersonatingAdmins option", async () => {
+		const { signInWithTestUser: signInAdmin, customFetchImpl: fetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [
+						admin({
+							allowImpersonatingAdmins: true,
+						}),
+					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return { data: { ...user, role: "admin" } };
+									}
+								},
+							},
+						},
+					},
+				},
+				{ testUser: { name: "Admin" } },
+			);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-legacy@test.com",
+			password: "password",
+			name: "Target Admin Legacy",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: aHeaders },
+		);
+
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(targetAdmin!.user.id);
 	});
 
 	it("should filter impersonated sessions", async () => {
@@ -864,6 +1333,64 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/3553
+	 */
+	it("should create a credential account when setting password for a user without one", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "No Credential User",
+				email: "no-credential@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user?.id || "";
+		expect(userId).not.toBe("");
+
+		const preSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(preSignIn.error).toBeDefined();
+
+		const setRes = await client.admin.setUserPassword(
+			{
+				userId,
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(setRes.data?.status).toBe(true);
+
+		const postSignIn = await client.signIn.email({
+			email: "no-credential@email.com",
+			password: "newPassword",
+		});
+		expect(postSignIn.error).toBeNull();
+		expect(postSignIn.data?.user.id).toBe(userId);
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+	});
+
+	it("should return USER_NOT_FOUND when setting password for a non-existent user", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "non-existent-user-id",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(404);
+		expect(res.error?.code).toBe("USER_NOT_FOUND");
+	});
+
 	it("should allow admin to delete user", async () => {
 		const res = await client.admin.removeUser(
 			{
@@ -933,9 +1460,118 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
+
+	it("should not allow updating password through update-user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					password: "new-password",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER");
+	});
+
+	it("should revoke sessions when banning a user via update-user", async () => {
+		const targetHeaders = new Headers();
+		const { data: target } = await client.signUp.email(
+			{
+				email: "ban-via-update@test.com",
+				password: "password",
+				name: "Ban Via Update",
+			},
+			{
+				onSuccess: cookieSetter(targetHeaders),
+			},
+		);
+		const targetId = target?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetId,
+				data: {
+					banned: true,
+					banReason: "Violation",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.banned).toBe(true);
+
+		const sessions = await client.admin.listUserSessions(
+			{
+				userId: targetId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessions.data?.sessions.length).toBe(0);
+	});
+
+	it("should not allow admins to ban themselves via update-user", async () => {
+		const { data: session } = await client.getSession({
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.updateUser(
+			{
+				userId: session?.user.id || "",
+				data: {
+					banned: true,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("YOU_CANNOT_BAN_YOURSELF");
+	});
+
+	it("should reject email updates that collide with another user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					email: "ban-via-update@test.com",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+	});
+
+	it("should allow admin to update user email and normalize it", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					email: "Updated-Email@Test.com",
+					emailVerified: false,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.email).toBe("updated-email@test.com");
+		expect(res.data?.emailVerified).toBe(false);
+	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		user: [
 			"create",
@@ -961,6 +1597,10 @@ describe("access control", async (it) => {
 		user: ["update"],
 		order: ["update"],
 	});
+	const creatorAc = ac.newRole({
+		user: ["create"],
+		order: [],
+	});
 
 	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
 		await getTestInstance(
@@ -972,6 +1612,7 @@ describe("access control", async (it) => {
 							admin: adminAc,
 							user: userAc,
 							support: supportAc,
+							creator: creatorAc,
 						},
 					}),
 				],
@@ -995,6 +1636,14 @@ describe("access control", async (it) => {
 										},
 									};
 								}
+								if (user.name === "Creator") {
+									return {
+										data: {
+											...user,
+											role: "creator",
+										},
+									};
+								}
 							},
 						},
 					},
@@ -1015,6 +1664,7 @@ describe("access control", async (it) => {
 					admin: adminAc,
 					user: userAc,
 					support: supportAc,
+					creator: creatorAc,
 				},
 			}),
 		],
@@ -1124,6 +1774,159 @@ describe("access control", async (it) => {
 		expect(res.data?.role).toBe("support");
 	});
 
+	it("should require user:set-role to assign roles via create-user", async () => {
+		const creatorHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "creator@test.com",
+				password: "password",
+				name: "Creator",
+			},
+			{
+				onSuccess: cookieSetter(creatorHeaders),
+			},
+		);
+
+		// `user:create` alone is enough when no role is requested
+		const ok = await client.admin.createUser(
+			{
+				name: "Created User",
+				email: "created-by-creator@test.com",
+				password: "password",
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(ok.data?.user.role).toBe("user");
+
+		// but requesting a role requires `user:set-role`
+		const res = await client.admin.createUser(
+			{
+				name: "Role Requested User",
+				email: "role-requested@test.com",
+				password: "password",
+				role: "admin",
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE");
+
+		// `data.role` must go through the same check
+		const res2 = await client.admin.createUser(
+			{
+				name: "Role Requested User",
+				email: "role-requested2@test.com",
+				password: "password",
+				data: {
+					role: "admin",
+				},
+			},
+			{
+				headers: creatorHeaders,
+			},
+		);
+		expect(res2.error?.status).toBe(403);
+		expect(res2.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE");
+	});
+
+	it("should reject non-existent roles via create-user", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Bad Role User",
+				email: "bad-role@test.com",
+				password: "password",
+				data: {
+					role: "non-existent-role",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should apply a validated data.role for callers with user:set-role", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Data Role User",
+				email: "data-role@test.com",
+				password: "password",
+				data: {
+					role: "support",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data?.user.role).toBe("support");
+	});
+
+	it("should require user:ban to update ban fields via update-user", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support-ban@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const targetUserId = supportSignUp?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					banned: true,
+					banReason: "self-served ban",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_BAN_USERS");
+	});
+
+	it("should require user:set-email to update email fields via update-user", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support-email@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const targetUserId = supportSignUp?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					email: "new-address@example.com",
+					emailVerified: true,
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL");
+	});
+
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
 			role: "admin",
@@ -1136,7 +1939,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateOrderLegacy = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 				user: ["read"],
 			},
@@ -1271,7 +2074,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1282,7 +2085,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "user", // user role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1312,7 +2115,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: bannedUserId, // banned user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1322,7 +2125,7 @@ describe("access control", async (it) => {
 		const checkWithoutRole = await auth.api.userHasPermission({
 			body: {
 				userId: bannedUserId, // banned user ID only
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1470,7 +2273,7 @@ describe("edge cases: userId validation", async () => {
 		{
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 			plugins: [
@@ -1481,16 +2284,13 @@ describe("edge cases: userId validation", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -1565,35 +2365,99 @@ describe("edge cases: userId validation", async () => {
 	});
 });
 
-describe("Admin plugin - Events", async () => {
+describe("Admin plugin id-token sign-in", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-admin-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const clientId = "admin-idtoken-client.googleusercontent.com";
+
+	const signIdToken = (email: string) =>
+		new SignJWT({
+			email,
+			email_verified: true,
+			name: "Banned ID Token User",
+			sub: "banned-google-sub",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(clientId)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		server.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it("should return BANNED_USER 403 JSON for id-token sign-in by banned user", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [admin({ bannedUserMessage: "Custom banned user message" })],
+				socialProviders: {
+					google: { clientId, clientSecret: "test-secret" },
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true, banned: true },
+							}),
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const idToken = await signIdToken("banned-idtoken@test.com");
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.message).toBe("Custom banned user message");
+	});
+});
+
+// Admin-created users flow through the createUser seam, so the provisioning
+// gate applies to them without the admin plugin calling it directly.
+describe("admin createUser validateUserInfo provisioning gate", async () => {
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
-			plugins: [
-				admin({
-					bannedUserMessage: "Custom banned user message",
-					events: {
-						impersonateStart: vi.fn(),
-						impersonateEnd: vi.fn(),
-						ban: vi.fn(),
-						unban: vi.fn(),
-						userCreate: vi.fn(),
-						userRemove: vi.fn(),
-					},
-				}),
-			],
+			user: {
+				validateUserInfo({ user, source }) {
+					if (source.method !== "admin") {
+						return;
+					}
+					expect(source.action).toBe("create-user");
+					if ((user.email as string).endsWith("@blocked.com")) {
+						return {
+							error: "admin_create_blocked",
+							errorDescription: "This email domain is not allowed",
+						};
+					}
+				},
+			},
+			plugins: [admin()],
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
-						},
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
@@ -1604,7 +2468,6 @@ describe("Admin plugin - Events", async () => {
 			},
 		},
 	);
-
 	const client = createAuthClient({
 		fetchOptions: {
 			customFetchImpl,
@@ -1612,759 +2475,29 @@ describe("Admin plugin - Events", async () => {
 		plugins: [adminClient()],
 		baseURL: "http://localhost:3000",
 	});
+	const { headers: adminHeaders } = await signInWithTestUser();
 
-	await signInWithTestUser();
-	const testUser = {
-		id: "123",
-		email: "eventtest@test.com",
-		password: "password",
-		name: "Event Test User",
-	};
-	const { data: testUserRes } = await client.signUp.email(testUser);
-	testUser.id = testUserRes?.user.id || "";
-
-	describe("userCreate event", () => {
-		it("should call userCreate event when admin creates a user", async () => {
-			const mockUserCreate = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: vi.fn(),
-				userCreate: mockUserCreate,
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			const res = await clientWithMocks.admin.createUser(
-				{
-					name: "Created User",
-					email: "created@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(res.data?.user).toBeDefined();
-			expect(mockUserCreate).toHaveBeenCalled();
-			const callArgs = mockUserCreate.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeDefined(); // adminSession
-			expect(callArgs?.[1]?.email).toBe("created@test.com");
-			expect(callArgs?.[1]?.name).toBe("Created User");
-		});
-
-		it("should pass null adminSession when creating user from server", async () => {
-			const mockUserCreate = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: vi.fn(),
-				userCreate: mockUserCreate,
-				userRemove: vi.fn(),
-			};
-
-			const { auth: authWithMocks } = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-				},
-				{
-					testUser: {
-						name: "Admin",
-					},
-				},
-			);
-
-			// Create user directly from server
-			const createdUser = await authWithMocks.api.createUser({
-				body: {
-					email: "servercreated@test.com",
-					password: "password123",
-					name: "Server Created",
-					role: "user",
-				},
-			});
-
-			expect(createdUser.user).toBeDefined();
-			expect(mockUserCreate).toHaveBeenCalled();
-			const callArgs = mockUserCreate.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeNull(); // adminSession should be null from server
-			expect(callArgs?.[1]?.email).toBe("servercreated@test.com");
-		});
+	it("rejects an admin-created user when validateUserInfo returns error", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Blocked User",
+				email: "new@blocked.com",
+				password: "password",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("admin_create_blocked");
 	});
 
-	describe("userRemove event", () => {
-		it("should call userRemove event when admin removes a user", async () => {
-			const mockUserRemove = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: vi.fn(),
-				userCreate: vi.fn(),
-				userRemove: mockUserRemove,
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			// Create a user first
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "User to Remove",
-					email: "toremove@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			const userId = createRes.data?.user.id;
-			expect(userId).toBeDefined();
-
-			// Clear previous calls
-			mockUserRemove.mockClear();
-
-			// Remove the user
-			const removeRes = await clientWithMocks.admin.removeUser(
-				{ userId: userId || "" },
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(removeRes.data?.success).toBe(true);
-			expect(mockUserRemove).toHaveBeenCalled();
-			const callArgs = mockUserRemove.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeDefined(); // adminSession
-			expect(callArgs?.[1]?.email).toBe("toremove@test.com");
-		});
-	});
-
-	describe("ban event", () => {
-		it("should call ban event when admin bans a user", async () => {
-			const mockBan = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: mockBan,
-				unban: vi.fn(),
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			// Create a user first
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "User to Ban",
-					email: "toban@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			const userId = createRes.data?.user.id;
-			mockBan.mockClear();
-
-			// Ban the user
-			const banRes = await clientWithMocks.admin.banUser(
-				{
-					userId: userId || "",
-					banReason: "Violating terms",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(banRes.data?.user.banned).toBe(true);
-			expect(banRes.data?.user.banReason).toBe("Violating terms");
-			expect(mockBan).toHaveBeenCalled();
-			const callArgs = mockBan.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeDefined(); // adminSession
-			expect(callArgs?.[1]?.email).toBe("toban@test.com");
-			expect(callArgs?.[1]?.banned).toBe(true);
-		});
-
-		it("should receive adminSession in ban event", async () => {
-			const mockBan = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: mockBan,
-				unban: vi.fn(),
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "Ban Test User",
-					email: "bantest@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			mockBan.mockClear();
-
-			await clientWithMocks.admin.banUser(
-				{
-					userId: createRes.data?.user.id || "",
-					banReason: "Test reason",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(mockBan).toHaveBeenCalled();
-			const callArgs = mockBan.mock.calls[0];
-			const [adminSession, bannedUser] = callArgs || [];
-			expect(adminSession?.user).toBeDefined();
-			expect(adminSession?.user.role).toBe("admin");
-			expect(adminSession?.session).toBeDefined();
-			expect(bannedUser?.banned).toBe(true);
-		});
-	});
-
-	describe("unban event", () => {
-		it("should call unban event when admin unban's a user", async () => {
-			const mockUnban = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: mockUnban,
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			// Create and ban a user
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "User to Unban",
-					email: "tounban@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			const userId = createRes.data?.user.id || "";
-
-			await clientWithMocks.admin.banUser(
-				{
-					userId,
-					banReason: "Test ban",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			mockUnban.mockClear();
-
-			// Unban the user
-			const unbanRes = await clientWithMocks.admin.unbanUser(
-				{ userId },
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(unbanRes.data?.user.banned).toBe(false);
-			expect(mockUnban).toHaveBeenCalled();
-			const callArgs = mockUnban.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeDefined(); // adminSession
-			expect(callArgs?.[1]?.email).toBe("tounban@test.com");
-			expect(callArgs?.[1]?.banned).toBe(false);
-		});
-
-		it("should receive adminSession in unban event", async () => {
-			const mockUnban = vi.fn();
-			const mockEvents = {
-				impersonateStart: vi.fn(),
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: mockUnban,
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "Unban Test User",
-					email: "unbantest@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			const userId = createRes.data?.user.id || "";
-
-			await clientWithMocks.admin.banUser(
-				{ userId, banReason: "Test" },
-				{
-					headers: adminHead,
-				},
-			);
-
-			mockUnban.mockClear();
-
-			await clientWithMocks.admin.unbanUser(
-				{ userId },
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(mockUnban).toHaveBeenCalled();
-			const callArgs = mockUnban.mock.calls[0];
-			const [adminSession, unbannedUser] = callArgs || [undefined, undefined];
-			expect(adminSession?.user).toBeDefined();
-			expect(adminSession?.user.role).toBe("admin");
-			expect(adminSession?.session).toBeDefined();
-			expect(unbannedUser?.banned).toBe(false);
-		});
-	});
-
-	describe("impersonateStart event", () => {
-		it("should call impersonateStart event when admin impersonates a user", async () => {
-			const mockImpersonateStart = vi.fn();
-			const mockEvents = {
-				impersonateStart: mockImpersonateStart,
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: vi.fn(),
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			// Create a user to impersonate
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "User to Impersonate",
-					email: "toimpersonate@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			const userId = createRes.data?.user.id || "";
-			mockImpersonateStart.mockClear();
-
-			// Impersonate the user
-			const impersonateRes = await clientWithMocks.admin.impersonateUser(
-				{ userId },
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(impersonateRes.data?.user).toBeDefined();
-			expect(mockImpersonateStart).toHaveBeenCalled();
-			const callArgs = mockImpersonateStart.mock.calls[0];
-			expect(callArgs).toBeDefined();
-			expect(callArgs?.[0]).toBeDefined(); // adminSession
-			expect(callArgs?.[1]?.email).toBe("toimpersonate@test.com");
-		});
-
-		it("should receive adminSession and impersonated user in impersonateStart", async () => {
-			const mockImpersonateStart = vi.fn();
-			const mockEvents = {
-				impersonateStart: mockImpersonateStart,
-				impersonateEnd: vi.fn(),
-				ban: vi.fn(),
-				unban: vi.fn(),
-				userCreate: vi.fn(),
-				userRemove: vi.fn(),
-			};
-
-			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
-				await getTestInstance(
-					{
-						plugins: [
-							admin({
-								events: mockEvents,
-							}),
-						],
-						databaseHooks: {
-							user: {
-								create: {
-									before: async (user) => {
-										if (user.name === "Admin") {
-											return {
-												data: {
-													...user,
-													role: "admin",
-												},
-											};
-										}
-									},
-								},
-							},
-						},
-					},
-					{
-						testUser: {
-							name: "Admin",
-						},
-					},
-				);
-
-			const clientWithMocks = createAuthClient({
-				fetchOptions: {
-					customFetchImpl: fetchImpl,
-				},
-				plugins: [adminClient()],
-				baseURL: "http://localhost:3000",
-			});
-
-			const { headers: adminHead } = await signInTest();
-
-			const createRes = await clientWithMocks.admin.createUser(
-				{
-					name: "Impersonate Test User",
-					email: "impersonatetest@test.com",
-					password: "password123",
-					role: "user",
-				},
-				{
-					headers: adminHead,
-				},
-			);
-
-			mockImpersonateStart.mockClear();
-
-			await clientWithMocks.admin.impersonateUser(
-				{ userId: createRes.data?.user.id || "" },
-				{
-					headers: adminHead,
-				},
-			);
-
-			expect(mockImpersonateStart).toHaveBeenCalled();
-			const callArgs = mockImpersonateStart.mock.calls[0];
-			const [adminSession, impersonatedUser] = callArgs || [
+	it("allows an admin-created user that passes validation", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Allowed User",
+				email: "ok@allowed.com",
+				password: "password",
+				role: "user",
 				undefined,
 				undefined,
 			];

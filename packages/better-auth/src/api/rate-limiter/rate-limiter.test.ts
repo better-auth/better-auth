@@ -1,131 +1,371 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
+import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
 
-describe(
-	"rate-limiter",
-	{
-		timeout: 10000,
-	},
-	async () => {
-		const { client, testUser } = await getTestInstance({
-			rateLimit: {
-				enabled: true,
-				window: 10,
-				max: 20,
-			},
-		});
+function createRateLimitSecondaryStorage(
+	store: Map<string, string>,
+	expirationMap?: Map<string, number>,
+): SecondaryStorage {
+	return {
+		set(key, value, ttl) {
+			store.set(key, value);
+			if (ttl !== undefined) expirationMap?.set(key, ttl);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			expirationMap?.delete(key);
+			return value;
+		},
+		increment(key, ttl) {
+			const existing = store.get(key);
+			const current = existing ? (JSON.parse(existing) as RateLimit) : null;
+			const count = (current?.count ?? 0) + 1;
+			const next: RateLimit = {
+				key,
+				count,
+				lastRequest: Date.now(),
+			};
+			store.set(key, JSON.stringify(next));
+			if (!current && ttl !== undefined) expirationMap?.set(key, ttl);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+			expirationMap?.delete(key);
+		},
+	};
+}
 
-		it("should return 429 after 3 request for sign-in", async () => {
-			for (let i = 0; i < 5; i++) {
-				const response = await client.signIn.email({
-					email: testUser.email,
-					password: testUser.password,
-				});
-				if (i >= 3) {
-					expect(response.error?.status).toBe(429);
-				} else {
-					expect(response.error).toBeNull();
-				}
-			}
-		});
+describe("rate-limiter", async () => {
+	const { client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			window: 10,
+			max: 20,
+		},
+	});
 
-		it("should reset the limit after the window period", async () => {
-			vi.useFakeTimers();
-			vi.advanceTimersByTime(11000);
-			for (let i = 0; i < 5; i++) {
-				const res = await client.signIn.email({
-					email: testUser.email,
-					password: testUser.password,
-				});
-				if (i >= 3) {
-					expect(res.error?.status).toBe(429);
-				} else {
-					expect(res.error).toBeNull();
-				}
-			}
-		});
-
-		it("should respond the correct retry-after header", async () => {
-			vi.useFakeTimers();
-			vi.advanceTimersByTime(3000);
-			let retryAfter = "";
-			await client.signIn.email(
-				{
-					email: testUser.email,
-					password: testUser.password,
-				},
-				{
-					onError(context) {
-						retryAfter = context.response.headers.get("X-Retry-After") ?? "";
-					},
-				},
-			);
-			expect(retryAfter).toBe("7");
-		});
-
-		it("should rate limit based on the path", async () => {
-			const signInRes = await client.signIn.email({
+	it("should return 429 after 3 request for sign-in", async () => {
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
 			});
-			expect(signInRes.error?.status).toBe(429);
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
 
-			const signUpRes = await client.signUp.email({
-				email: "new-test@email.com",
+	it("should reset the limit after the window period", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(11000);
+		for (let i = 0; i < 5; i++) {
+			const res = await client.signIn.email({
+				email: testUser.email,
 				password: testUser.password,
-				name: "test",
 			});
-			expect(signUpRes.error).toBeNull();
-		});
-
-		it("non-special-rules limits", async () => {
-			for (let i = 0; i < 25; i++) {
-				const response = await client.getSession();
-				expect(response.error?.status).toBe(i >= 20 ? 429 : undefined);
+			if (i >= 3) {
+				expect(res.error?.status).toBe(429);
+			} else {
+				expect(res.error).toBeNull();
 			}
-		});
+		}
+	});
 
-		it("query params should be ignored", async () => {
-			for (let i = 0; i < 25; i++) {
-				const response = await client.listSessions({
-					fetchOptions: {
-						query: {
-							"test-query": Math.random().toString(),
-						},
+	it("should respond the correct retry-after header", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(3000);
+		let retryAfter = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onError(context) {
+					retryAfter = context.response.headers.get("X-Retry-After") ?? "";
+				},
+			},
+		);
+		expect(retryAfter).toBe("7");
+	});
+
+	it("should rate limit based on the path", async () => {
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(signInRes.error?.status).toBe(429);
+
+		const signUpRes = await client.signUp.email({
+			email: "new-test@email.com",
+			password: testUser.password,
+			name: "test",
+		});
+		expect(signUpRes.error).toBeNull();
+	});
+
+	it("non-special-rules limits", async () => {
+		for (let i = 0; i < 25; i++) {
+			const response = await client.getSession();
+			expect(response.error?.status).toBe(i >= 20 ? 429 : undefined);
+		}
+	});
+
+	it("query params should be ignored", async () => {
+		for (let i = 0; i < 25; i++) {
+			const response = await client.listSessions({
+				fetchOptions: {
+					query: {
+						"test-query": Math.random().toString(),
 					},
-				});
+				},
+			});
 
-				if (i >= 20) {
-					expect(response.error?.status).toBe(429);
-				} else {
-					expect(response.error?.status).toBe(401);
-				}
+			if (i >= 20) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error?.status).toBe(401);
 			}
+		}
+	});
+});
+
+describe("atomic concurrent enforcement", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { client, testUser } = await getTestInstance({
+				rateLimit: {
+					enabled: true,
+					storage,
+					customRules: {
+						"/sign-in/email": { window: 10, max: 1 },
+					},
+				},
+			});
+
+			// The memory backend keeps a process-global store shared across test
+			// instances. Fake timers let each case advance the clock far past any
+			// prior 10s window so it starts from a clean window for this key. Each
+			// case advances by a distinct offset so frozen fake clocks across cases
+			// never collide on the same instant.
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("lets exactly one of two simultaneous requests through", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(120000);
+				const [a, b] = await Promise.all([
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+					client.signIn.email({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+				]);
+				const statuses = [a.error?.status, b.error?.status].sort();
+				expect(statuses).toEqual([429, undefined]);
+			});
+
+			it("resets the count once the window elapses", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(240000);
+				// Exhaust the max=1 budget, confirm the next request is blocked.
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(11000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
+
+			it("resets the count at the exact window boundary", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(360000);
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(10000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
 		});
-	},
-);
+	}
+});
+
+describe("database rate-limit pruning", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/get-session": { window: 120, max: 10 },
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("keeps active rows from longer configured windows", async () => {
+		const now = Date.now();
+		const longWindowKey = createRateLimitKey("127.0.0.1", "/get-session");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: longWindowKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 11_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeLongWindowRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: longWindowKey }],
+		});
+		expect(activeLongWindowRow).not.toBeNull();
+	});
+});
+
+describe("database rate-limit pruning with dynamic rules", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": () => ({ window: 120, max: 10 }),
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes stale rows using the longest observed dynamic window", async () => {
+		const now = Date.now();
+		const activeDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-active");
+		const staleDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-stale");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: activeDynamicKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleDynamicKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: activeDynamicKey }],
+		});
+		expect(activeDynamicRow).not.toBeNull();
+
+		const staleDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleDynamicKey }],
+		});
+		expect(staleDynamicRow).toBeNull();
+	});
+});
 
 describe("custom rate limiting storage", async () => {
-	let store = new Map<string, string>();
+	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
 		},
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-				if (ttl) expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-				expirationMap.delete(key);
-			},
-		},
+		secondaryStorage: createRateLimitSecondaryStorage(store, expirationMap),
 	});
 
 	it("should use custom storage", async () => {
@@ -138,18 +378,17 @@ describe("custom rate limiting storage", async () => {
 				password: testUser.password,
 			});
 			const rateLimitData: RateLimit = JSON.parse(
-				store.get("127.0.0.1/sign-in/email") ?? "{}",
+				store.get("127.0.0.1|/sign-in/email") ?? "{}",
 			);
 			expect(rateLimitData.lastRequest).toBeGreaterThanOrEqual(lastRequest);
 			lastRequest = rateLimitData.lastRequest;
 			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
-				expect(rateLimitData.count).toBe(3);
 			} else {
 				expect(response.error).toBeNull();
-				expect(rateLimitData.count).toBe(i + 1);
 			}
-			const rateLimitExp = expirationMap.get("127.0.0.1/sign-in/email");
+			expect(rateLimitData.count).toBe(i + 1);
+			const rateLimitExp = expirationMap.get("127.0.0.1|/sign-in/email");
 			expect(rateLimitExp).toBe(10);
 		}
 	});
@@ -246,17 +485,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -277,7 +506,7 @@ describe("should work in development/test environment", () => {
 		);
 
 		expect(signInKeys.length).toBeGreaterThan(0);
-		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}${REQUEST_PATH}`);
+		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}|${REQUEST_PATH}`);
 	});
 
 	it("should work in test environment", async () => {
@@ -290,17 +519,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -321,6 +540,169 @@ describe("should work in development/test environment", () => {
 		);
 
 		expect(signInKeys.length).toBeGreaterThan(0);
-		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}${REQUEST_PATH}`);
+		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}|${REQUEST_PATH}`);
+	});
+});
+
+describe("missing client IP warning", () => {
+	const warningMessage =
+		"Rate limiting could not determine a client IP and is falling back to a " +
+		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
+		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("should point users to ipAddressHeaders when no client IP is available outside dev/test", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const log = vi.fn();
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+			logger: {
+				level: "warn",
+				log,
+			},
+		});
+
+		const response = await client.getSession();
+
+		expect(response.error?.status).not.toBe(429);
+		expect(log).toHaveBeenCalledOnce();
+		expect(log).toHaveBeenCalledWith("warn", warningMessage);
+		expect(
+			log.mock.calls.some(([, message]) =>
+				`${message}`.includes("trustedProxies"),
+			),
+		).toBe(false);
+	});
+
+	it("should fail closed and still enforce the limit when no client IP is available", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+		});
+
+		// With no derivable client IP, requests share one per-path bucket and
+		// must still be limited rather than skipped (the previous fail-open let a
+		// client omit the IP header to bypass rate limiting entirely).
+		let limited = false;
+		for (let i = 0; i < 6; i++) {
+			const res = await client.getSession();
+			if (res.error?.status === 429) {
+				limited = true;
+				break;
+			}
+		}
+		expect(limited).toBe(true);
+	});
+});
+
+describe("IPv6 address normalization and rate limiting", () => {
+	it("should normalize IPv6 addresses to canonical form", () => {
+		// All these representations of the same IPv6 address should normalize to the same value
+		const representations = [
+			"2001:db8::1",
+			"2001:DB8::1",
+			"2001:0db8::1",
+			"2001:db8:0::1",
+			"2001:0db8:0:0:0:0:0:1",
+		];
+
+		const normalized = representations.map((ip) => normalizeIP(ip));
+		const uniqueValues = new Set(normalized);
+
+		// All should normalize to the same value
+		expect(uniqueValues.size).toBe(1);
+		expect(normalized[0]).toBe("2001:0db8:0000:0000:0000:0000:0000:0000");
+	});
+
+	it("should convert IPv4-mapped IPv6 to IPv4", () => {
+		const ipv4Mapped = [
+			"::ffff:192.0.2.1",
+			"::FFFF:192.0.2.1",
+			"::ffff:c000:0201", // hex-encoded
+		];
+
+		const normalized = ipv4Mapped.map((ip) => normalizeIP(ip));
+
+		// All should normalize to the same IPv4 address
+		normalized.forEach((ip) => {
+			expect(ip).toBe("192.0.2.1");
+		});
+	});
+
+	it("should support IPv6 subnet rate limiting", () => {
+		// Simulate attacker rotating through IPv6 addresses in their /64 allocation
+		const attackIPs = [
+			"2001:db8:abcd:1234:0000:0000:0000:0001",
+			"2001:db8:abcd:1234:1111:2222:3333:4444",
+			"2001:db8:abcd:1234:ffff:ffff:ffff:ffff",
+		];
+
+		const normalized = attackIPs.map((ip) =>
+			normalizeIP(ip, { ipv6Subnet: 64 }),
+		);
+
+		// All should map to same /64 subnet
+		const uniqueValues = new Set(normalized);
+		expect(uniqueValues.size).toBe(1);
+		expect(normalized[0]).toBe("2001:0db8:abcd:1234:0000:0000:0000:0000");
+	});
+
+	it("should rate limit different IPv6 subnets separately", () => {
+		// Different /64 subnets should have separate rate limits
+		const subnet1IPs = ["2001:db8:abcd:1111::1", "2001:db8:abcd:1111::2"];
+		const subnet2IPs = ["2001:db8:abcd:2222::1", "2001:db8:abcd:2222::2"];
+
+		const normalized1 = subnet1IPs.map((ip) =>
+			normalizeIP(ip, { ipv6Subnet: 64 }),
+		);
+		const normalized2 = subnet2IPs.map((ip) =>
+			normalizeIP(ip, { ipv6Subnet: 64 }),
+		);
+
+		// Same subnet should normalize to same value
+		expect(normalized1[0]).toBe(normalized1[1]);
+		expect(normalized2[0]).toBe(normalized2[1]);
+
+		// Different subnets should normalize to different values
+		expect(normalized1[0]).not.toBe(normalized2[0]);
+	});
+
+	it("should handle localhost IPv6 addresses", () => {
+		expect(normalizeIP("::1")).toBe("0000:0000:0000:0000:0000:0000:0000:0000");
+	});
+
+	it("should handle link-local IPv6 addresses", () => {
+		const linkLocal = normalizeIP("fe80::1");
+		expect(linkLocal).toBe("fe80:0000:0000:0000:0000:0000:0000:0000");
+	});
+
+	it("IPv6 subnet should not affect IPv4 addresses", () => {
+		const ipv4 = "192.168.1.1";
+		const normalized = normalizeIP(ipv4, { ipv6Subnet: 64 });
+		expect(normalized).toBe(ipv4);
 	});
 });
