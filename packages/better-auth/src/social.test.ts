@@ -3205,3 +3205,258 @@ describe("Reddit Provider — profile email mapping", async () => {
 		expect(result?.user.emailVerified).toBe(false);
 	});
 });
+
+/**
+ * `account.scope` is the user's accumulated grant set: linkSocial unions
+ * new scopes; re-auth and refresh-token responses never narrow the stored
+ * set, regardless of what the provider echoes.
+ *
+ * @see https://github.com/better-auth/better-auth/pull/3013
+ */
+describe("account.scope path-dependent semantics", async () => {
+	const { client, cookieSetter, auth } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const ctx = await auth.$context;
+
+	const buildIdToken = (sub: string) =>
+		signJWT(
+			{
+				email: `${sub}@email.com`,
+				email_verified: true,
+				name: "Scope User",
+				picture: "https://test.com/picture.png",
+				exp: 1234567890,
+				sub,
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "Scope",
+				family_name: "User",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+	function mockGoogleTokenResponse(
+		idToken: string,
+		responseScope: string | undefined,
+	) {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "test-access-token",
+					refresh_token: "test-refresh-token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+					...(responseScope !== undefined ? { scope: responseScope } : {}),
+				}),
+			),
+		);
+	}
+
+	async function completeSignIn(headers: Headers) {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			method: "GET",
+			headers,
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+	}
+
+	it("preserves stored scope on sign-in re-authentication when token claim is narrower", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-reauth-sub");
+
+		// Initial sign-in with full granted scope set.
+		mockGoogleTokenResponse(
+			idToken,
+			"openid email profile https://www.googleapis.com/auth/drive.readonly",
+		);
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const initial = await ctx.internalAdapter.findAccounts(userId);
+		expect(initial[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		// Re-sign-in echoing only a subset.
+		mockGoogleTokenResponse(idToken, "openid email");
+		await completeSignIn(headers);
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
+	it("unions stored scope with newly granted scopes on linkSocial incremental authorization", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-link-sub");
+
+		mockGoogleTokenResponse(idToken, "openid email profile");
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const initial = await ctx.internalAdapter.findAccounts(userId);
+		expect(initial[0]!.scope?.split(",").sort()).toEqual([
+			"email",
+			"openid",
+			"profile",
+		]);
+
+		// linkSocial requesting a new scope; provider echoes only that scope.
+		mockGoogleTokenResponse(
+			idToken,
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+			},
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		if (!linkRes.data || !("url" in linkRes.data) || !linkRes.data.url) {
+			throw new Error(
+				`linkSocial did not return an authorization URL: ${JSON.stringify(linkRes)}`,
+			);
+		}
+		const linkState = new URL(linkRes.data.url).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state: linkState, code: "test" },
+			method: "GET",
+			headers,
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		const merged = after[0]!.scope?.split(",") ?? [];
+		expect(merged).toContain("openid");
+		expect(merged).toContain("email");
+		expect(merged).toContain("profile");
+		expect(merged).toContain("https://www.googleapis.com/auth/drive.readonly");
+	});
+
+	it("preserves stored scope on /refresh-token when the refresh response is narrower", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-refresh-sub");
+
+		mockGoogleTokenResponse(
+			idToken,
+			"openid email profile https://www.googleapis.com/auth/drive.readonly",
+		);
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		expect(accounts[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		// Refresh response narrower than stored (RFC 6749 Section 1.5).
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "refreshed-access-token",
+					refresh_token: "refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email",
+				}),
+			),
+		);
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(refresh.data?.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
+	it("does not write stale account cookie scope on /refresh-token", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-refresh-cookie-sub");
+
+		mockGoogleTokenResponse(idToken, "openid email");
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		const accumulatedScope =
+			"openid,email,profile,https://www.googleapis.com/auth/drive.readonly";
+		await ctx.internalAdapter.updateAccount(accounts[0]!.id, {
+			scope: accumulatedScope,
+		});
+
+		// The account cookie still has the original narrower scope. Refresh must
+		// not write that stale cookie scope back over the stored accumulated grant.
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "cookie-refreshed-access-token",
+					refresh_token: "cookie-refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email",
+				}),
+			),
+		);
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		expect(refresh.data?.scope).toBe(accumulatedScope);
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toBe(accumulatedScope);
+	});
+});
