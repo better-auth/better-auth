@@ -62,7 +62,6 @@ export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
-		callbackPath: "/callback/github",
 		name: "GitHub",
 		createAuthorizationURL({
 			state,

@@ -29,7 +29,6 @@ export const vk = (options: VkOption) => {
 	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
 	return {
 		id: "vk",
-		callbackPath: "/callback/vk",
 		name: "VK",
 		async createAuthorizationURL({
 			state,

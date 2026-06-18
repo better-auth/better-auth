@@ -17,7 +17,7 @@ import {
 	generateState,
 	parseState,
 } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
+import { getOAuthCallbackPath, setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -106,7 +106,7 @@ export const callbackOAuth = createAuthEndpoint(
 					state: freshState,
 					codeVerifier,
 					idTokenNonce,
-					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+					redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				});
 				throw c.redirect(authUrl.toString());
 			}
@@ -191,7 +191,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

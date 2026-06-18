@@ -186,7 +186,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 			: undefined;
 	return {
 		id: "microsoft",
-		callbackPath: "/callback/microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with

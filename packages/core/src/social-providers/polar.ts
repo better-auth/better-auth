@@ -36,7 +36,6 @@ export const polar = (options: PolarOptions) => {
 	const tokenEndpoint = "https://api.polar.sh/v1/oauth2/token";
 	return {
 		id: "polar",
-		callbackPath: "/callback/polar",
 		name: "Polar",
 		createAuthorizationURL({
 			state,

@@ -32,7 +32,6 @@ export interface KickOptions extends ProviderOptions<KickProfile> {
 export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
-		callbackPath: "/callback/kick",
 		name: "Kick",
 		createAuthorizationURL({
 			state,

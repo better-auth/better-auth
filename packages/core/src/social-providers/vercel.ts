@@ -19,7 +19,6 @@ export interface VercelOptions extends ProviderOptions<VercelProfile> {
 export const vercel = (options: VercelOptions) => {
 	return {
 		id: "vercel",
-		callbackPath: "/callback/vercel",
 		name: "Vercel",
 		createAuthorizationURL({
 			state,

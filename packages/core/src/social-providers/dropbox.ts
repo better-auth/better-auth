@@ -30,7 +30,6 @@ export const dropbox = (options: DropboxOptions) => {
 
 	return {
 		id: "dropbox",
-		callbackPath: "/callback/dropbox",
 		name: "Dropbox",
 		createAuthorizationURL: async ({
 			state,

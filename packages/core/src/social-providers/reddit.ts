@@ -24,7 +24,6 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
-		callbackPath: "/callback/reddit",
 		name: "Reddit",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identity"];

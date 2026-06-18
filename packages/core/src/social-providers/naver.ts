@@ -43,7 +43,6 @@ export const naver = (options: NaverOptions) => {
 	const tokenEndpoint = "https://nid.naver.com/oauth2.0/token";
 	return {
 		id: "naver",
-		callbackPath: "/callback/naver",
 		name: "Naver",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["profile", "email"];

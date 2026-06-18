@@ -95,16 +95,14 @@ export interface OAuthProvider<
 > {
 	id: LiteralString;
 	/**
-	 * Path under the resolved per-request `baseURL` where this provider's
-	 * OAuth callback handler is mounted. Endpoints compose
-	 * `redirectURI = ctx.context.baseURL + callbackPath` per request, so the
-	 * provider must not hardcode an origin or `baseURL` here.
+	 * Optional path under the resolved per-request `baseURL` where this
+	 * provider's OAuth callback handler is mounted. Providers that use the
+	 * shared `/callback/<id>` route can omit this.
 	 *
-	 * Built-in social providers and generic-OAuth providers use
-	 * `/callback/<id>` so they share the core callback route. Custom plugin
-	 * providers may choose a different lane.
+	 * Endpoints compose `redirectURI = ctx.context.baseURL + callbackPath` per
+	 * request, so the provider must not hardcode an origin or `baseURL` here.
 	 */
-	callbackPath: string;
+	callbackPath?: string | undefined;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;

@@ -27,7 +27,6 @@ export const notion = (options: NotionOptions) => {
 	const tokenEndpoint = "https://api.notion.com/v1/oauth/token";
 	return {
 		id: "notion",
-		callbackPath: "/callback/notion",
 		name: "Notion",
 		createAuthorizationURL({
 			state,

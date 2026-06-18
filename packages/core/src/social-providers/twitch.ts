@@ -41,7 +41,6 @@ export const twitch = (options: TwitchOptions) => {
 	const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
 	return {
 		id: "twitch",
-		callbackPath: "/callback/twitch",
 		name: "Twitch",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope

@@ -49,7 +49,6 @@ export const line = (options: LineOptions) => {
 
 	return {
 		id: "line",
-		callbackPath: "/callback/line",
 		name: "LINE",
 		async createAuthorizationURL({
 			state,

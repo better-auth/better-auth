@@ -107,7 +107,6 @@ export const twitter = (options: TwitterOption) => {
 	const tokenEndpoint = "https://api.x.com/2/oauth2/token";
 	return {
 		id: "twitter",
-		callbackPath: "/callback/twitter",
 		name: "Twitter",
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope

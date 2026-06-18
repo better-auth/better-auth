@@ -151,7 +151,6 @@ export const zoom = (userOptions: ZoomOptions) => {
 
 	return {
 		id: "zoom",
-		callbackPath: "/callback/zoom",
 		name: "Zoom",
 		createAuthorizationURL: async ({
 			state,

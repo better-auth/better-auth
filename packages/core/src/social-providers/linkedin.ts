@@ -31,7 +31,6 @@ export const linkedin = (options: LinkedInOptions) => {
 
 	return {
 		id: "linkedin",
-		callbackPath: "/callback/linkedin",
 		name: "Linkedin",
 		createAuthorizationURL: async ({
 			state,
