@@ -1,14 +1,7 @@
 import { decodeProtectedHeader, jwtVerify } from "jose";
-import type {
-	OAuthIdTokenConfig,
-	OAuthProvider,
-	ProviderOptions,
-} from "./oauth-provider";
+import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
 
-type ProviderWithIdTokenConfig = {
-	idToken?: OAuthIdTokenConfig | undefined;
-	options?: Partial<ProviderOptions> | undefined;
-};
+type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
 
 async function sha256Hex(value: string) {
 	const data = new TextEncoder().encode(value);

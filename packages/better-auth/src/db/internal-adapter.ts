@@ -170,10 +170,15 @@ export const createInternalAdapter = (
 					"user",
 					undefined,
 				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
 				const createdAccount = await createWithHooks(
 					{
 						...account,
-						userId: createdUser!.id,
+						userId: createdUser.id,
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 						createdAt: new Date(),
 						updatedAt: new Date(),

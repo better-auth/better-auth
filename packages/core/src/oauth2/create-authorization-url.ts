@@ -73,7 +73,7 @@ export async function createAuthorizationURL({
 	}
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
-	if (scopes) {
+	if (scopes?.length) {
 		url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
 	}
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);

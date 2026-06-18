@@ -364,6 +364,43 @@ describe("open-api", async () => {
 		expect(schemas["User"]!.required).not.toContain("preferences");
 	});
 
+	it("should map array additionalFields to OpenAPI array schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+							required: false,
+						},
+						scores: {
+							type: "number[]",
+							required: true,
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.tags).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["User"]!.properties.scores).toEqual({
+			type: "array",
+			items: { type: "number" },
+		});
+		expect(schemas["User"]!.required).not.toContain("tags");
+		expect(schemas["User"]!.required).toContain("scores");
+	});
+
 	it("should omit runtime-generated defaults from model schemas", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<

@@ -205,6 +205,46 @@ describe("internal adapter test", async () => {
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
 	});
 
+	it("should abort oauth account creation when user creation is vetoed", async () => {
+		const database = new DatabaseSync(":memory:");
+		const abortingOptions = {
+			...opts,
+			database,
+			databaseHooks: {
+				user: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(abortingOptions)).runMigrations();
+			const abortingContext = await init(abortingOptions);
+
+			await expect(
+				abortingContext.internalAdapter.createOAuthUser(
+					{
+						email: "blocked@email.com",
+						name: "Blocked",
+						emailVerified: false,
+					},
+					{
+						providerId: "provider",
+						accountId: "account",
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+					},
+				),
+			).rejects.toThrow("Failed to create user");
+		} finally {
+			database.close();
+		}
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/9864
 	 */
