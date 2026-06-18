@@ -1766,3 +1766,96 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		expect(promoted?.emailVerified).toBe(true);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9959
+ */
+describe("oauth2 - account-linking logs use the configured logger", async () => {
+	const log = vi.fn();
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: { clientId: "test", clientSecret: "test", enabled: true },
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+		logger: { log },
+	});
+
+	const ctx = await auth.$context;
+
+	async function signInWithGoogle(email: string) {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "Logger Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_logger_link_fail",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Logger",
+					family_name: "User",
+				};
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+		});
+	}
+
+	it("forwards the failed-link error to the custom logger", async () => {
+		const email = "logger-link-fail@example.com";
+		const { data } = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Logger Test User",
+		});
+
+		// Pre-verify so the link passes the gate and reaches `linkAccount`.
+		await ctx.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: data!.user.id }],
+			update: { emailVerified: true },
+		});
+		// Force the link to throw, hitting the `c.context.logger.error` branch.
+		vi.spyOn(ctx.internalAdapter, "linkAccount").mockRejectedValueOnce(
+			new Error("boom"),
+		);
+
+		await signInWithGoogle(email);
+
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			"Unable to link account",
+			expect.anything(),
+		);
+	});
+});
