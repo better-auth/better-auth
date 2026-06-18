@@ -1,0 +1,54 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import ts from "typescript";
+import { describe, expect, it } from "vitest";
+import { generateDrizzleSchema } from "./generate-drizzle-schema";
+
+const generate = (options: BetterAuthOptions) =>
+	generateDrizzleSchema({
+		options,
+		provider: "pg",
+		adapterConfig: { provider: "pg" },
+	});
+
+/**
+ * Type-checks the generated schema and returns its diagnostics, ignoring
+ * module-resolution errors for `drizzle-orm` (not resolvable in this sandbox).
+ *
+ * @see https://github.com/dotansimha/graphql-code-generator/blob/2784ada257836190ded7ca8be290970e3c30fd69/packages/utils/graphql-codegen-testing/src/typescript.ts
+ */
+function typeErrors(code: string): string[] {
+	const fileName = "schema.ts";
+	const host = ts.createCompilerHost({});
+	const program = ts.createProgram(
+		[fileName],
+		{ noEmit: true, skipLibCheck: true },
+		{
+			...host,
+			getSourceFile: (name, languageVersion, onError, shouldCreate) =>
+				name === fileName
+					? ts.createSourceFile(name, code, ts.ScriptTarget.ESNext)
+					: host.getSourceFile(name, languageVersion, onError, shouldCreate),
+		},
+	);
+	return ts
+		.getPreEmitDiagnostics(program)
+		.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
+		.filter((message) => !message.includes("Cannot find module"));
+}
+
+describe("relations-v2 schema generator", () => {
+	it("generates valid TypeScript for the default schema", async () => {
+		const { code = "" } = await generate({});
+		expect(typeErrors(code)).toEqual([]);
+	});
+
+	// A model named `relations` collides with the hardcoded
+	// `export const relations = defineRelationsPart(...)`, producing a duplicate
+	// declaration that fails to compile.
+	it("generates valid TypeScript when a model's table name is `relations`", async () => {
+		const { code = "" } = await generate({
+			verification: { modelName: "relations" },
+		});
+		expect(typeErrors(code)).toEqual([]);
+	});
+});
