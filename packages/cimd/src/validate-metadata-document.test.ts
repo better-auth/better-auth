@@ -22,6 +22,14 @@ describe("isUrlClientId", () => {
 		expect(isUrlClientId("https://example.com/meta")).toBe(true);
 	});
 
+	it("matches mixed-case URL schemes (schemes are case-insensitive)", () => {
+		expect(isUrlClientId("HTTPS://example.com/meta")).toBe(true);
+		expect(isUrlClientId("HtTpS://example.com/meta")).toBe(true);
+		expect(
+			isUrlClientId("HTTP://localhost/meta", { allowLoopback: true }),
+		).toBe(true);
+	});
+
 	it("matches https:// loopback URLs regardless of allowLoopback", () => {
 		expect(isUrlClientId("https://127.0.0.1/meta")).toBe(true);
 		expect(isUrlClientId("https://localhost/meta")).toBe(true);

@@ -49,7 +49,7 @@ export type HostKind =
 	| "multicast"
 	/** IPv4 limited broadcast `255.255.255.255`. */
 	| "broadcast"
-	/** Other RFC 6890 special-purpose ranges (0/8, 192.0.0/24, 192.88.99/24, 240/4, 2001::/32, etc.). */
+	/** Other RFC 6890 special-purpose ranges (0.0.0.0/8, 192.0.0.0/24, 192.88.99.0/24, 240.0.0.0/4, 2001::/32, etc.). */
 	| "reserved"
 	/** Cloud metadata service FQDN (e.g. `metadata.google.internal`). */
 	| "cloudMetadata"
@@ -275,13 +275,9 @@ function classifyIPv6(expanded: string): HostKind {
 	if (expanded.startsWith("5f00:")) return "reserved";
 
 	// ::/96 — deprecated IPv4-compatible IPv6 (RFC 4291 §2.5.5.1). `::` and
-	// `::1` are matched above; every other value embeds an IPv4 (e.g.
-	// `::127.0.0.1`) and is not a valid public target.
-	if (expanded.startsWith("0000:0000:0000:0000:0000:0000:")) {
-		const embedded = extractEmbeddedIPv4(expanded, 6);
-		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
-		return "reserved";
-	}
+	// `::1` are matched above; the rest of the block embeds an IPv4 (e.g.
+	// `::127.0.0.1`) and is never a valid public target.
+	if (expanded.startsWith("0000:0000:0000:0000:0000:0000:")) return "reserved";
 
 	return "public";
 }

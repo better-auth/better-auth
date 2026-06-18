@@ -39,28 +39,31 @@ export interface ClientIdUrlOptions {
 /**
  * Detect a URL-formatted client_id (Client ID Metadata Document pattern).
  *
- * HTTPS URLs always match; the SSRF and loopback policy is enforced in
- * {@link validateClientIdUrl}. Plain HTTP matches only loopback hosts, and
- * only when `allowLoopback` is set.
+ * HTTPS URLs always match; plain HTTP matches only loopback hosts, and only
+ * when `allowLoopback` is set. This is a routing predicate, not a security
+ * gate: it performs no DNS resolution, so callers MUST also run
+ * {@link validateClientIdUrl} (and a fetch-time policy) before fetching.
  */
 export function isUrlClientId(
 	clientId: string,
 	options?: ClientIdUrlOptions,
 ): boolean {
-	if (clientId.startsWith("https://")) {
+	let parsed: URL;
+	try {
+		parsed = new URL(clientId);
+	} catch {
+		return false;
+	}
+	if (parsed.protocol === "https:") {
 		return true;
 	}
-	if (!clientId.startsWith("http://")) {
+	if (parsed.protocol !== "http:") {
 		return false;
 	}
 	if (!options?.allowLoopback) {
 		return false;
 	}
-	try {
-		return isLoopbackHost(new URL(clientId).hostname);
-	} catch {
-		return false;
-	}
+	return isLoopbackHost(parsed.hostname);
 }
 
 /**
@@ -117,7 +120,7 @@ export function validateClientIdUrl(
 		return "client_id URL must use HTTPS (HTTP is allowed only for loopback in development)";
 	}
 	if (!isPublicRoutableHost(parsed.hostname)) {
-		return "client_id URL must not resolve to a private or reserved address";
+		return "client_id URL must not target a private or reserved address";
 	}
 
 	return null;
