@@ -1,5 +1,19 @@
 # @better-auth/core
 
+## 1.7.0-beta.7
+
+### Minor Changes
+
+- [#9948](https://github.com/better-auth/better-auth/pull/9948) [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3) Thanks [@yordis](https://github.com/yordis)! - feat(generic-oauth): add `refreshTokenParams` config to forward extra params on token refresh
+
+  Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`) need to send extra body params on the refresh call to rescope tokens without a full authorization redirect. The generic-oauth plugin now accepts a `refreshTokenParams` option (object or sync/async function) that is merged into the refresh request body, with `grant_type` and `refresh_token` protected from override. The function form receives request metadata for the request that triggered the refresh, so request-scoped data (headers, cookies) is available without out-of-band state like AsyncLocalStorage.
+
+  `UpstreamProvider.refreshAccessToken` now accepts an optional second `ctx` argument; the change is backwards compatible because existing implementations that take only `refreshToken` remain valid. See [#7554](https://github.com/better-auth/better-auth/issues/7554).
+
+### Patch Changes
+
+- [#10126](https://github.com/better-auth/better-auth/pull/10126) [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden the host classifier (`@better-auth/core/utils/host`) against three non-public address forms it previously reported as public: deprecated IPv4-compatible IPv6 (`::w.x.y.z`, RFC 4291 §2.5.5.1, e.g. `[::127.0.0.1]` which `URL` normalizes to `[::7f00:1]`), the 6to4 relay anycast prefix `192.88.99.0/24` (RFC 7526), and deprecated site-local `fec0::/10` (RFC 3879). SSRF gates built on `isPublicRoutableHost` / `classifyHost` (`jwks_uri` validation, SSO OIDC discovery, CIMD metadata fetches) now reject these.
+
 ## 1.7.0-beta.6
 
 ### Minor Changes
