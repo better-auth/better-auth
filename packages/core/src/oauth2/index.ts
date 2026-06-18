@@ -66,8 +66,8 @@ export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthIdTokenConfig,
-	OAuthRefreshContext,
 	OAuthProvider,
+	OAuthRefreshContext,
 	ProviderOptions,
 } from "./oauth-provider";
 export {

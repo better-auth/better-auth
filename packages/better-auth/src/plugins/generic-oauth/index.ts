@@ -3,8 +3,8 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuthIdTokenConfig,
-	OAuthRefreshContext,
 	OAuthProvider,
+	OAuthRefreshContext,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
