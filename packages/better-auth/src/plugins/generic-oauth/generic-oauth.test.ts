@@ -239,7 +239,7 @@ describe("oauth2", async () => {
 			refreshToken: expect.any(String),
 			accessTokenExpiresAt: expect.any(Date),
 			refreshTokenExpiresAt: null,
-			grantedScopes: expect.any(Array),
+			scope: expect.any(String),
 			idToken: expect.any(String),
 		});
 	});

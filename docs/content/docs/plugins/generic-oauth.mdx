@@ -67,11 +67,8 @@ Generic OAuth providers are used through the standard social sign-in flow:
 await authClient.signIn.social({
     provider: "provider-id",
     callbackURL: "/dashboard",
-    scopes: ["my-scope"], // optional, additive
 })
 ```
-
-The `scopes` parameter is additive: appended to the provider's configured scopes, not a replacement. Whatever the user consents to accumulates into the account's `grantedScopes`. Re-authenticating never narrows previously granted scopes.
 
 You can also pass `additionalData` (a `Record<string, any>`) to round-trip client data through the flow; read it back on the callback with `getOAuthState()` and treat it as untrusted. See [Passing Additional Data Through OAuth Flow](/docs/concepts/oauth#passing-additional-data-through-oauth-flow).
 
@@ -96,11 +93,8 @@ Providers configured with explicit endpoints instead of `discoveryUrl` do not su
 await authClient.linkSocial({
     provider: "provider-id",
     callbackURL: "/settings",
-    scopes: ["repo"], // optional, additive
 })
 ```
-
-Additional scopes requested when linking accumulate into the account's `grantedScopes`; existing granted scopes are never removed.
 
 ### Handle OAuth Callback
 
@@ -313,7 +307,7 @@ interface GenericOAuthConfig {
 
 **tokenEndpointAuth**: (Optional) Client authentication configuration for token endpoint requests. Use `{ method: "private_key_jwt", getClientAssertion }` for RFC 7523 client assertions, `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` for secret-based clients, and `{ method: "none" }` for public clients. Secret-based methods require `clientSecret`; do not combine `clientSecret` with `private_key_jwt` or `none`. If omitted, Better Auth sends secret-based token requests when `clientSecret` is configured and public-client token requests when it is not.
 
-**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`). These are the default scopes requested at sign-in; the `scopes` passed to a sign-in or link request are added on top. Whatever the user consents to accumulates into the account's `grantedScopes`, and re-authenticating or refreshing tokens never narrows that set.
+**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
 **redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include the `:providerId` placeholder (e.g., `https://example.com/api/auth/callback/my-provider`).
 

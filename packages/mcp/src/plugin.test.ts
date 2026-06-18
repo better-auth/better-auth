@@ -275,7 +275,7 @@ describe("mcp plugin", async () => {
 
 		it("mints an access token through authorize + consent + token exchange", async () => {
 			const codeVerifier = generateRandomString(64);
-			const { url: authUrl } = await createAuthorizationURL({
+			const authUrl = await createAuthorizationURL({
 				id: providerId,
 				options: {
 					clientId: publicClientId,
@@ -415,7 +415,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 	/** Runs the real authorize + consent + token exchange to mint a refresh token. */
 	async function mintRefreshToken(): Promise<string> {
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,

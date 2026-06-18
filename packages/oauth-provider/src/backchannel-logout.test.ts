@@ -150,7 +150,7 @@ describe("oauth back-channel logout", async () => {
 		const { client: oauthClient, requestScopes = scopes } = params;
 		const redirectUri = `${rp.url}/callback`;
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,
@@ -415,7 +415,7 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 		}
 
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,
@@ -548,7 +548,7 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 		}
 
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,

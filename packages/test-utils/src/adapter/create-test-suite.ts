@@ -521,7 +521,7 @@ export const createTestSuite = <
 						idToken: generateId(),
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
-						grantedScopes: ["test"],
+						scope: "test",
 					};
 					return account as any;
 				}

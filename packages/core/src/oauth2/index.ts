@@ -63,28 +63,17 @@ export {
 	verifyDpopProof,
 } from "./dpop";
 export type {
-	AuthorizationURLResult,
-	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthIdTokenConfig,
+	OAuthProvider,
 	OAuthRefreshContext,
-	ProviderGrantAuthority,
 	ProviderOptions,
-	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export {
-	includesGrantedScope,
-	normalizeScopes,
-	parseScopeField,
-	readGrantedScopes,
-	resolveRequestedScopes,
-	unionGrantedScopes,
-} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,

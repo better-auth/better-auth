@@ -695,7 +695,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 
 		// 2. Build authorization URL with PKCE (no client secret)
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId,
