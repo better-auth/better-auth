@@ -4183,4 +4183,29 @@ describe("organization set-active updates session context", async () => {
 		expect(observed.session).toBe(organizationId);
 		expect(observed.newSession).toBe(organizationId);
 	});
+
+	it("reflects a cleared active organization (organizationId: null)", async () => {
+		// The clear branch (organizationId === null) received the same fix, so the
+		// after-hook must observe the cleared value rather than the stale id.
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Clear Probe Org", slug: "clear-probe-org" },
+		});
+		const organizationId = org?.id as string;
+		expect(organizationId).toBeTruthy();
+
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId },
+		});
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId: null },
+		});
+
+		expect(observed.session).toBeNull();
+		expect(observed.newSession).toBeNull();
+	});
 });
