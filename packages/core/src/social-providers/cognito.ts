@@ -72,6 +72,7 @@ export const cognito = (options: CognitoOptions) => {
 
 	return {
 		id: "cognito",
+		callbackPath: "/callback/cognito",
 		name: "Cognito",
 		async createAuthorizationURL({
 			state,

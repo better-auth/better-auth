@@ -105,6 +105,7 @@ export const kakao = (options: KakaoOptions) => {
 	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
 	return {
 		id: "kakao",
+		callbackPath: "/callback/kakao",
 		name: "Kakao",
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope

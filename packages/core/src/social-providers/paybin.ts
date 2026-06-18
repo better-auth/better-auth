@@ -35,6 +35,7 @@ export const paybin = (options: PaybinOptions) => {
 
 	return {
 		id: "paybin",
+		callbackPath: "/callback/paybin",
 		name: "Paybin",
 		async createAuthorizationURL({
 			state,

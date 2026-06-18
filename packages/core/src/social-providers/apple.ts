@@ -81,6 +81,7 @@ export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
 		id: "apple",
+		callbackPath: "/callback/apple",
 		name: "Apple",
 		async createAuthorizationURL({
 			state,

@@ -46,6 +46,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 	const tokenEndpoint = "https://huggingface.co/oauth/token";
 	return {
 		id: "huggingface",
+		callbackPath: "/callback/huggingface",
 		name: "Hugging Face",
 		createAuthorizationURL({
 			state,

@@ -297,6 +297,7 @@ export const genericOAuth = <const ID extends string>(
 				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
+					callbackPath: `/oauth2/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:

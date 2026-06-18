@@ -23,6 +23,7 @@ export const figma = (options: FigmaOptions) => {
 	const tokenEndpoint = "https://api.figma.com/v1/oauth/token";
 	return {
 		id: "figma",
+		callbackPath: "/callback/figma",
 		name: "Figma",
 		async createAuthorizationURL({
 			state,

@@ -33,6 +33,7 @@ export const atlassian = (options: AtlassianOptions) => {
 	const tokenEndpoint = "https://auth.atlassian.com/oauth/token";
 	return {
 		id: "atlassian",
+		callbackPath: "/callback/atlassian",
 		name: "Atlassian",
 
 		async createAuthorizationURL({

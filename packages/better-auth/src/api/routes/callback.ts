@@ -191,7 +191,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

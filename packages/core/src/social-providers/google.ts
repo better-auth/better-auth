@@ -61,6 +61,7 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
+		callbackPath: "/callback/google",
 		name: "Google",
 		async createAuthorizationURL({
 			state,

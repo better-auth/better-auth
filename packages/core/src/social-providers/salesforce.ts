@@ -62,6 +62,7 @@ export const salesforce = (options: SalesforceOptions) => {
 
 	return {
 		id: "salesforce",
+		callbackPath: "/callback/salesforce",
 		name: "Salesforce",
 
 		async createAuthorizationURL({

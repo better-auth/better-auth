@@ -367,7 +367,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				state,
 				codeVerifier,
 				idTokenNonce,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
 				additionalParams: c.body.additionalParams,
