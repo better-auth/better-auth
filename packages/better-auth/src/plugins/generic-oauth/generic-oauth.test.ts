@@ -1535,8 +1535,12 @@ describe("oauth2", async () => {
 			fetchOptions: { headers: flow.headers },
 		});
 		expect(session.data).not.toBeNull();
-		// The user was created with an empty email rather than failing.
-		expect(session.data?.user.email).toBe("");
+		// The user is created with a synthetic, per-account placeholder email on the
+		// reserved `.invalid` TLD (the column is unique+required until v2) rather than
+		// failing — and not a literal "" that would collide for a second such user.
+		expect(session.data?.user.email).toMatch(
+			/^no-email\+.*@better-auth\.invalid$/,
+		);
 
 		const accounts = await ctx.internalAdapter.findAccounts(
 			session.data?.user.id!,
@@ -1546,6 +1550,64 @@ describe("oauth2", async () => {
 			providerId: "no-email-allowed-test",
 			accountId: "no-email-user",
 		});
+	});
+
+	it("creates distinct users for multiple providers that return no email", async () => {
+		// Regression for the unique+required email column: two email-less sign-ups
+		// must not collide on a shared "" placeholder. @see #9124
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: ["a", "b"].map((suffix) => ({
+						providerId: `no-email-multi-${suffix}`,
+						authorizationUrl: `http://localhost:${port}/authorize`,
+						tokenUrl: `http://localhost:${port}/token`,
+						clientId: clientId,
+						clientSecret: clientSecret,
+						pkce: true,
+						allowSignUpWithoutEmail: true,
+						getUserInfo: async () => ({
+							id: `no-email-multi-${suffix}`,
+							name: `No Email ${suffix}`,
+							emailVerified: false,
+						}),
+					})),
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const emails: (string | undefined)[] = [];
+		for (const suffix of ["a", "b"]) {
+			const headers = new Headers();
+			const signIn = await authClient.signIn.oauth2({
+				providerId: `no-email-multi-${suffix}`,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const flow = await simulateOAuthFlow(
+				signIn.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			// Both sign-ups succeed — the second is not bounced by a unique violation.
+			expect(flow.callbackURL).not.toContain("error=");
+			const session = await authClient.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			emails.push(session.data?.user.email);
+		}
+		// Each placeholder is synthetic and unique, so the unique index is satisfied.
+		expect(emails[0]).toMatch(/^no-email\+.*@better-auth\.invalid$/);
+		expect(emails[1]).toMatch(/^no-email\+.*@better-auth\.invalid$/);
+		expect(emails[0]).not.toBe(emails[1]);
+		expect(await ctx.internalAdapter.listUsers(10, 0)).toHaveLength(2);
 	});
 
 	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {

@@ -180,10 +180,14 @@ export async function handleOAuthUserInfo(
 				...restUserInfo,
 				...(normalizedEmail !== undefined && { email: normalizedEmail }),
 				emailVerified:
-					normalizedEmail !== undefined &&
-					normalizedEmail === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
+					normalizedEmail === undefined
+						? // Provider returned no email: nothing about the email changed, so
+						  // preserve the existing verification state instead of letting a
+						  // provider default of `false` silently downgrade a verified user.
+						  dbUser.user.emailVerified
+						: normalizedEmail === dbUser.user.email
+							? dbUser.user.emailVerified || userInfo.emailVerified
+							: userInfo.emailVerified,
 			});
 		}
 	} else {
@@ -210,10 +214,14 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
-						// The user table still requires a string email until v2; a
-						// provider that returns none is stored with an empty email
-						// rather than failing the sign-up (see #9124).
-						email: userInfo.email?.toLowerCase() ?? "",
+						// The user table still requires a unique, non-null string email
+						// until v2 (see the TODO in core get-tables.ts). When a provider
+						// returns none, store a per-account synthetic placeholder on the
+						// reserved `.invalid` TLD: a literal "" would collide on the unique
+						// index, limiting the feature to a single email-less user. See #9124.
+						email:
+							userInfo.email?.toLowerCase() ??
+							`no-email+${account.providerId}-${userInfo.id}@better-auth.invalid`.toLowerCase(),
 					},
 					accountData,
 				);
@@ -224,9 +232,10 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				// Skip verification mail when the provider returned no email; there
-				// is no address to send it to (see #9124).
-				user.email &&
+				// Skip verification mail when the provider returned no email: the stored
+				// address is a synthetic `.invalid` placeholder, so gate on the real
+				// provider email rather than the stored one (see #9124).
+				userInfo.email &&
 				c.context.options.emailVerification?.sendOnSignUp &&
 				c.context.options.emailVerification?.sendVerificationEmail
 			) {
