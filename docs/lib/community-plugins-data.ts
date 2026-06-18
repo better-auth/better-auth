@@ -291,4 +291,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/SulimanAbdulrazzaq.png",
 		},
 	},
+	{
+		name: "@tinysend/better-auth",
+		url: "https://github.com/tiny-send/tinysend-better-auth",
+		description:
+			"Send better-auth's verification, reset, magic-link, and OTP emails through tinysend, with replies routed to a real inbox with webhooks and automations.",
+		author: {
+			name: "podviaznikov",
+			github: "podviaznikov",
+			avatar: "https://github.com/podviaznikov.png",
+		},
+	},
 ];
