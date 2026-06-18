@@ -1,44 +1,28 @@
-const USER_DENY = new Set([
-	"password",
-	"twoFactorSecret",
-	"twoFactorBackupCodes",
-]);
-
-const ACCOUNT_DENY = new Set([
-	"accessToken",
-	"refreshToken",
-	"idToken",
-	"password",
-]);
-
-const SESSION_DENY = new Set(["token"]);
-
-function omitKeys(
-	obj: Record<string, unknown>,
-	deny: Set<string>,
-): Record<string, unknown> {
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(obj)) {
-		if (deny.has(k)) continue;
-		out[k] = v;
-	}
-	return out;
-}
+import type { BetterAuthOptions } from "@better-auth/core";
+import {
+	parseAccountOutput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "better-auth/db";
+import type { Account, Session, User } from "better-auth/types";
 
 export function sanitizeUserRecord(
+	options: BetterAuthOptions,
 	user: Record<string, unknown>,
 ): Record<string, unknown> {
-	return omitKeys(user, USER_DENY);
+	return parseUserOutput(options, user as User);
 }
 
 export function sanitizeSessionRecord(
+	options: BetterAuthOptions,
 	session: Record<string, unknown>,
 ): Record<string, unknown> {
-	return omitKeys(session, SESSION_DENY);
+	return parseSessionOutput(options, session as Session);
 }
 
 export function sanitizeAccountRecord(
+	options: BetterAuthOptions,
 	account: Record<string, unknown>,
 ): Record<string, unknown> {
-	return omitKeys(account, ACCOUNT_DENY);
+	return parseAccountOutput(options, account as Account);
 }
