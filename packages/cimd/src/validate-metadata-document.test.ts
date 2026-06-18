@@ -22,27 +22,42 @@ describe("isUrlClientId", () => {
 		expect(isUrlClientId("https://example.com/meta")).toBe(true);
 	});
 
-	it("accepts http://localhost URLs (dev mode)", () => {
-		expect(isUrlClientId("http://localhost/meta")).toBe(true);
-		expect(isUrlClientId("http://localhost:3000/meta")).toBe(true);
+	it("matches mixed-case URL schemes (schemes are case-insensitive)", () => {
+		expect(isUrlClientId("HTTPS://example.com/meta")).toBe(true);
+		expect(isUrlClientId("HtTpS://example.com/meta")).toBe(true);
+		expect(
+			isUrlClientId("HTTP://localhost/meta", { allowLoopback: true }),
+		).toBe(true);
 	});
 
-	it("accepts http://127.0.0.1 (dev mode)", () => {
-		expect(isUrlClientId("http://127.0.0.1/meta")).toBe(true);
-		expect(isUrlClientId("http://127.0.0.1:8080/meta")).toBe(true);
+	it("matches https:// loopback URLs regardless of allowLoopback", () => {
+		expect(isUrlClientId("https://127.0.0.1/meta")).toBe(true);
+		expect(isUrlClientId("https://localhost/meta")).toBe(true);
 	});
 
-	it("accepts http://[::1] (dev mode)", () => {
-		expect(isUrlClientId("http://[::1]/meta")).toBe(true);
+	it("does not match http:// loopback without allowLoopback", () => {
+		expect(isUrlClientId("http://localhost/meta")).toBe(false);
+		expect(isUrlClientId("http://127.0.0.1:8080/meta")).toBe(false);
+		expect(isUrlClientId("http://[::1]/meta")).toBe(false);
+		expect(isUrlClientId("http://app.localhost/meta")).toBe(false);
 	});
 
-	it("accepts localhost subdomains (dev mode)", () => {
-		expect(isUrlClientId("http://app.localhost/meta")).toBe(true);
-		expect(isUrlClientId("http://app.localhost:3000/meta")).toBe(true);
+	it("matches http:// loopback when allowLoopback is set (dev mode)", () => {
+		const dev = { allowLoopback: true };
+		expect(isUrlClientId("http://localhost/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://localhost:3000/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://127.0.0.1/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://127.0.0.1:8080/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://[::1]/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://app.localhost/meta", dev)).toBe(true);
+		expect(isUrlClientId("http://app.localhost:3000/meta", dev)).toBe(true);
 	});
 
-	it("rejects http:// non-localhost URLs", () => {
+	it("rejects http:// non-loopback even with allowLoopback", () => {
 		expect(isUrlClientId("http://example.com/meta")).toBe(false);
+		expect(
+			isUrlClientId("http://example.com/meta", { allowLoopback: true }),
+		).toBe(false);
 	});
 
 	it("rejects non-URL strings", () => {
@@ -87,14 +102,20 @@ describe("validateClientIdUrl", () => {
 		);
 	});
 
-	it("rejects non-https non-localhost", () => {
+	it("rejects non-https non-loopback", () => {
 		const result = validateClientIdUrl("http://example.com/meta");
 		expect(result).toContain("HTTPS");
 	});
 
-	it("accepts http://localhost/meta (dev)", () => {
-		expect(validateClientIdUrl("http://localhost/meta")).toBeNull();
-		expect(validateClientIdUrl("http://localhost:8080/meta")).toBeNull();
+	it("rejects http://localhost without allowLoopback", () => {
+		expect(validateClientIdUrl("http://localhost/meta")).not.toBeNull();
+		expect(validateClientIdUrl("http://localhost:8080/meta")).not.toBeNull();
+	});
+
+	it("accepts http://localhost with allowLoopback (dev)", () => {
+		const dev = { allowLoopback: true };
+		expect(validateClientIdUrl("http://localhost/meta", dev)).toBeNull();
+		expect(validateClientIdUrl("http://localhost:8080/meta", dev)).toBeNull();
 	});
 
 	it("rejects private IP 10.0.0.1", () => {
@@ -117,10 +138,16 @@ describe("validateClientIdUrl", () => {
 		);
 	});
 
-	it("rejects loopback IP 127.0.0.1 via https", () => {
-		// 127.0.0.1 is localhost, so it should be allowed (localhost is exempt)
-		// but only over http; https://127.0.0.1 is treated as localhost
-		expect(validateClientIdUrl("https://127.0.0.1/meta")).toBeNull();
+	it("rejects loopback IP 127.0.0.1 via https without allowLoopback", () => {
+		expect(validateClientIdUrl("https://127.0.0.1/meta")).not.toBeNull();
+		expect(validateClientIdUrl("https://127.0.0.1:8080/meta")).not.toBeNull();
+	});
+
+	it("accepts loopback over https/http with allowLoopback (dev)", () => {
+		const dev = { allowLoopback: true };
+		expect(validateClientIdUrl("https://127.0.0.1:8080/meta", dev)).toBeNull();
+		expect(validateClientIdUrl("http://127.0.0.1:8080/meta", dev)).toBeNull();
+		expect(validateClientIdUrl("https://localhost/meta", dev)).toBeNull();
 	});
 
 	it("accepts public IP like 8.8.8.8", () => {
@@ -147,16 +174,17 @@ describe("validateClientIdUrl", () => {
 		);
 	});
 
-	it("rejects IPv4-mapped IPv6 targeting private IPs", () => {
+	it("rejects IPv4-mapped IPv6 targeting private/link-local IPs", () => {
 		expect(
 			validateClientIdUrl("https://[::ffff:169.254.169.254]/meta"),
 		).toContain("private");
-		expect(validateClientIdUrl("https://[::ffff:127.0.0.1]/meta")).toContain(
-			"private",
-		);
 		expect(validateClientIdUrl("https://[::ffff:10.0.0.1]/meta")).toContain(
 			"private",
 		);
+		// IPv4-mapped loopback classifies as loopback (not "private"); still rejected.
+		expect(
+			validateClientIdUrl("https://[::ffff:127.0.0.1]/meta"),
+		).not.toBeNull();
 	});
 
 	it("rejects cloud metadata hostname", () => {
@@ -165,8 +193,61 @@ describe("validateClientIdUrl", () => {
 		).toContain("private");
 	});
 
-	it("accepts subdomain of localhost", () => {
-		expect(validateClientIdUrl("http://app.localhost/meta")).toBeNull();
+	it("rejects subdomain of localhost without allowLoopback", () => {
+		expect(validateClientIdUrl("http://app.localhost/meta")).not.toBeNull();
+	});
+
+	it("accepts subdomain of localhost with allowLoopback (dev)", () => {
+		expect(
+			validateClientIdUrl("http://app.localhost/meta", { allowLoopback: true }),
+		).toBeNull();
+	});
+
+	it("rejects IPv6 unspecified [::] (0.0.0.0-day class)", () => {
+		expect(validateClientIdUrl("https://[::]/meta")).not.toBeNull();
+	});
+
+	it("rejects trailing-dot cloud-metadata FQDN", () => {
+		expect(
+			validateClientIdUrl("https://metadata.google.internal./meta"),
+		).not.toBeNull();
+	});
+
+	it("rejects additional cloud-metadata FQDNs", () => {
+		expect(validateClientIdUrl("https://metadata.goog/meta")).not.toBeNull();
+		expect(validateClientIdUrl("https://metadata/meta")).not.toBeNull();
+		expect(validateClientIdUrl("https://instance-data/meta")).not.toBeNull();
+		expect(
+			validateClientIdUrl("https://instance-data.ec2.internal/meta"),
+		).not.toBeNull();
+	});
+
+	it("rejects IPv6 tunnel forms embedding private/IMDS IPv4 (6to4, NAT64, Teredo)", () => {
+		expect(validateClientIdUrl("https://[2002:7f00:1::]/meta")).not.toBeNull();
+		expect(
+			validateClientIdUrl("https://[64:ff9b::7f00:1]/meta"),
+		).not.toBeNull();
+		expect(
+			validateClientIdUrl("https://[2001:0:0:0:0:0:7f00:1]/meta"),
+		).not.toBeNull();
+	});
+
+	it("rejects deprecated IPv4-compatible IPv6 embedding loopback/IMDS/private", () => {
+		// new URL() normalizes [::127.0.0.1] to [::7f00:1] (no ::ffff: marker).
+		expect(validateClientIdUrl("https://[::127.0.0.1]/meta")).not.toBeNull();
+		expect(
+			validateClientIdUrl("https://[::169.254.169.254]/meta"),
+		).not.toBeNull();
+		expect(validateClientIdUrl("https://[::10.0.0.1]/meta")).not.toBeNull();
+	});
+
+	it("rejects percent-encoded dot segments", () => {
+		expect(validateClientIdUrl("https://example.com/%2e%2e/meta")).toContain(
+			"dot segments",
+		);
+		expect(validateClientIdUrl("https://example.com/%2e/meta")).toContain(
+			"dot segments",
+		);
 	});
 });
 
@@ -418,16 +499,16 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it("rejects non-redirect origin-bound field with localhost URL", () => {
-		// Localhost bypass only applies to redirect URI fields. A localhost
-		// value on client_uri still fails origin binding.
+	it("rejects loopback URL on a non-redirect field (client_uri)", () => {
+		// The loopback exception applies only to redirect URI fields; a loopback
+		// client_uri is rejected by the SSRF check.
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
 			redirect_uris: ["https://example.com/callback"],
 			client_uri: "http://localhost:3000/about",
 		});
 		expect(result.valid).toBe(false);
-		expect(result.error).toContain("same origin");
+		expect(result.error).toContain("private");
 	});
 
 	it("accepts localhost URL on post_logout_redirect_uris", () => {
@@ -460,6 +541,28 @@ describe("validateCimdMetadata", () => {
 		);
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("private");
+	});
+
+	it("rejects IPv4-compatible IPv6 in logo_uri (SSRF)", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				logo_uri: "https://[::169.254.169.254]/logo.png",
+			}),
+		);
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("private");
+	});
+
+	it("accepts public client_uri and logo_uri", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				client_uri: "https://example.com/about",
+				logo_uri: "https://cdn.example.com/logo.png",
+			}),
+		);
+		expect(result.valid).toBe(true);
 	});
 
 	it("returns warning for query string in fetchUrl", () => {
