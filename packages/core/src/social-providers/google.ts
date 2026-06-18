@@ -96,11 +96,12 @@ export const google = (options: GoogleOptions) => {
 				: ["email", "profile", "openid"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const authorizationParams = Object.fromEntries(
-				Object.entries(additionalParams ?? {}).filter(
-					([key]) => key !== "include_granted_scopes",
-				),
-			);
+			const authorizationParams: Record<string, string> = {};
+			for (const [key, value] of Object.entries(additionalParams ?? {})) {
+				if (key !== "include_granted_scopes") {
+					authorizationParams[key] = value;
+				}
+			}
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
