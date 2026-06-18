@@ -242,10 +242,9 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * email, since the local user model treats email as the identity anchor.
 	 * Some providers legitimately return no email (e.g. a Discord account
 	 * registered with a phone number only). Set this to `true` to let such a
-	 * user be created/linked with an empty email instead of failing the flow.
-	 *
-	 * When enabled, a missing email is never matched against existing users, so
-	 * an account with no email can't be linked to the wrong user.
+	 * user be created with a synthetic per-account placeholder email instead of
+	 * failing the flow. A missing email is never matched against existing users,
+	 * so an account with no email can't be linked to the wrong user.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/9124
 	 * @default false

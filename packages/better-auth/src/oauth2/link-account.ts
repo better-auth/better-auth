@@ -9,9 +9,10 @@ import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // A provider may return a profile without an email (see #9124). The local user
-// row still keys on a (non-null) email column until v2 widens it, so a missing
-// email is normalized to an empty string on write while never being used as a
-// match key. Every `userInfo.email` access below is therefore null-safe.
+// row still keys on a unique, non-null email column until v2 widens it, so a
+// missing email is normalized to a per-account synthetic placeholder on write
+// while never being used as a match key. Every `userInfo.email` access below is
+// therefore null-safe.
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
@@ -196,7 +197,10 @@ export async function handleOAuthUserInfo(
 				...(normalizedEmail !== undefined && { email: normalizedEmail }),
 				emailVerified:
 					normalizedEmail === undefined
-						? dbUser.user.emailVerified
+						? // Provider returned no email: nothing about the email changed, so
+						  // preserve the existing verification state instead of letting a
+						  // provider default of `false` silently downgrade a verified user.
+						  dbUser.user.emailVerified
 						: normalizedEmail === dbUser.user.email
 							? dbUser.user.emailVerified || userInfo.emailVerified
 							: userInfo.emailVerified,
@@ -240,10 +244,14 @@ export async function handleOAuthUserInfo(
 						name,
 						image,
 						...additionalUserFields,
-						// The user table still requires a string email until v2; a
-						// provider that returns none is stored with an empty email
-						// rather than failing the sign-up (see #9124).
-						email: userInfo.email?.toLowerCase() ?? "",
+						// The user table still requires a unique, non-null string email
+						// until v2 (see the TODO in core get-tables.ts). When a provider
+						// returns none, store a per-account synthetic placeholder on the
+						// reserved `.invalid` TLD: a literal "" would collide on the unique
+						// index, limiting the feature to a single email-less user. See #9124.
+						email:
+							userInfo.email?.toLowerCase() ??
+							`no-email+${account.providerId}-${userInfo.id}@better-auth.invalid`.toLowerCase(),
 						emailVerified: userInfo.emailVerified,
 					},
 					accountData,
@@ -255,9 +263,10 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				// Skip verification mail when the provider returned no email; there
-				// is no address to send it to (see #9124).
-				user.email &&
+				// Skip verification mail when the provider returned no email: the stored
+				// address is a synthetic `.invalid` placeholder, so gate on the real
+				// provider email rather than the stored one (see #9124).
+				userInfo.email &&
 				c.context.options.emailVerification?.sendOnSignUp &&
 				c.context.options.emailVerification?.sendVerificationEmail
 			) {

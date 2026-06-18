@@ -194,8 +194,8 @@ export interface GenericOAuthConfig {
 	 *
 	 * By default the callback rejects a profile without an email. Set this to
 	 * `true` for providers that legitimately omit one so the user is created
-	 * with an empty email instead of failing the flow. A missing email is never
-	 * matched against existing users.
+	 * with a synthetic per-account placeholder email instead of failing the
+	 * flow. A missing email is never matched against existing users.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/9124
 	 * @default false
