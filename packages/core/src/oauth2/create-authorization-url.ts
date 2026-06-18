@@ -111,5 +111,5 @@ export async function createAuthorizationURL({
 			url.searchParams.set(key, value);
 		}
 	}
-	return { url, requestedScopes: scopes ?? [] };
+	return url;
 }

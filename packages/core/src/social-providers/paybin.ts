@@ -1,11 +1,10 @@
 import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -29,8 +28,6 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 	issuer?: string | undefined;
 }
 
-const PAYBIN_DEFAULT_SCOPES = ["openid", "email", "profile"];
-
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
 	const authorizationEndpoint = `${issuer}/oauth2/authorize`;
@@ -39,8 +36,7 @@ export const paybin = (options: PaybinOptions) => {
 	return {
 		id: "paybin",
 		name: "Paybin",
-		callbackPath: "/callback/paybin",
-		createAuthorizationURL({
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -57,16 +53,16 @@ export const paybin = (options: PaybinOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Paybin");
 			}
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				PAYBIN_DEFAULT_SCOPES,
-				scopes,
-			);
-			return createAuthorizationURL({
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "email", "profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			const url = await createAuthorizationURL({
 				id: "paybin",
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -74,6 +70,7 @@ export const paybin = (options: PaybinOptions) => {
 				loginHint,
 				additionalParams,
 			});
+			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
@@ -119,5 +116,5 @@ export const paybin = (options: PaybinOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<PaybinProfile>;
+	} satisfies OAuthProvider<PaybinProfile>;
 };

@@ -5,7 +5,6 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	additionalAuthorizationParamsSchema,
-	readGrantedScopes,
 	supportsIdTokenSignIn,
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
@@ -14,14 +13,15 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
-import { getAccountCookie } from "../../cookies/session-store";
-import { generateRandomString } from "../../crypto";
+import {
+	getAccountCookie,
+	setAccountCookie,
+} from "../../cookies/session-store";
 import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
-import { persistOAuthAccount } from "../../oauth2/persist-account";
-import { applyUpdateUserInfoOnLink } from "../../oauth2/resolve-account";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
-import { decryptOAuthToken } from "../../oauth2/token-encryption";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -68,7 +68,7 @@ export const listUserAccounts = createAuthEndpoint(
 											userId: {
 												type: "string",
 											},
-											grantedScopes: {
+											scopes: {
 												type: "array",
 												items: {
 													type: "string",
@@ -82,7 +82,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"updatedAt",
 											"accountId",
 											"userId",
-											"grantedScopes",
+											"scopes",
 										],
 									},
 								},
@@ -100,13 +100,10 @@ export const listUserAccounts = createAuthEndpoint(
 		);
 		return c.json(
 			accounts.map((a) => {
-				const { grantedScopes, ...parsed } = parseAccountOutput(
-					c.context.options,
-					a,
-				);
+				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
 				return {
 					...parsed,
-					grantedScopes: readGrantedScopes(grantedScopes),
+					scopes: scope?.split(",") || [],
 				};
 			}),
 		);
@@ -141,7 +138,6 @@ export const linkSocialAccount = createAuthEndpoint(
 					nonce: z.string().optional(),
 					accessToken: z.string().optional(),
 					refreshToken: z.string().optional(),
-					scopes: z.array(z.string()).optional(),
 				})
 				.optional(),
 			/**
@@ -349,22 +345,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			try {
-				await persistOAuthAccount(c, {
+				await c.context.internalAdapter.createAccount({
 					userId: session.user.id,
 					providerId: provider.id,
 					accountId: linkingUserId,
-					tokens: {
-						accessToken: c.body.idToken.accessToken,
-						refreshToken: c.body.idToken.refreshToken,
-						idToken: token,
-					},
-					// No `requestedScopes`: an id_token link never built a server-side
-					// authorization URL, so there is no provider-verified requested set
-					// to fall back to. The caller-supplied `idToken.scopes` are not
-					// recorded as granted (they are unverified).
-					mode: "link",
+					accessToken: c.body.idToken.accessToken,
+					idToken: token,
+					refreshToken: c.body.idToken.refreshToken,
 				});
-			} catch (_e: any) {
+			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 					code: "LINKING_FAILED",
@@ -381,28 +370,24 @@ export const linkSocialAccount = createAuthEndpoint(
 		}
 
 		// Handle OAuth flow
-		const stateNonce = generateRandomString(32);
-		const codeVerifier = generateRandomString(128);
 		const idTokenNonce = generateIdTokenNonce(provider);
-		const { url, requestedScopes } = await provider.createAuthorizationURL({
-			state: stateNonce,
-			codeVerifier,
-			idTokenNonce,
-			redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
-			scopes: c.body.scopes,
-			loginHint: c.body.loginHint,
-			additionalParams: c.body.additionalParams,
-		});
-		await generateState(c, {
+		const state = await generateState(c, {
 			link: {
 				userId: session.user.id,
 				email: session.user.email,
 			},
 			additionalData: c.body.additionalData,
-			requestedScopes,
-			state: stateNonce,
-			codeVerifier,
 			idTokenNonce,
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: state.state,
+			codeVerifier: state.codeVerifier,
+			idTokenNonce,
+			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		if (!c.body.disableRedirect) {
@@ -566,7 +551,7 @@ async function getValidAccessToken(
 	if (!provider) {
 		throw APIError.from("BAD_REQUEST", {
 			message: `Provider ${providerId} is not supported.`,
-			code: BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED.code,
+			code: "PROVIDER_NOT_SUPPORTED",
 		});
 	}
 	let account: Account | undefined = resolvedAccount;
@@ -611,17 +596,29 @@ async function getValidAccessToken(
 				ctx.context,
 			);
 			newTokens = await provider.refreshAccessToken(refreshToken, ctx);
-			// The seam owns the token rotation: it re-encrypts, leaves
-			// `grantedScopes` untouched (RFC 6749 §6), persists against the stored
-			// row, and re-seeds the account cookie. Fields the provider omits stay
-			// at their stored values.
-			await persistOAuthAccount(ctx, {
-				userId: account.userId,
-				providerId: account.providerId,
-				accountId: account.accountId,
-				tokens: newTokens,
-				mode: "refresh",
-			});
+			const updatedData = {
+				accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
+				accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
+				refreshToken: newTokens?.refreshToken
+					? await setTokenUtil(newTokens.refreshToken, ctx.context)
+					: account.refreshToken,
+				refreshTokenExpiresAt:
+					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
+				idToken: newTokens?.idToken || account.idToken,
+			};
+			let updatedAccount: Partial<Account> | null = null;
+			if (account.id) {
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedData,
+				);
+			}
+			if (ctx.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(ctx, {
+					...account,
+					...(updatedAccount ?? updatedData),
+				});
+			}
 		}
 
 		const accessTokenExpiresAt = (() => {
@@ -645,18 +642,14 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			grantedScopes: readGrantedScopes(account.grantedScopes),
+			scopes: account.scope?.split(",") ?? [],
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
-	} catch (error) {
-		// Surface the failure code, but log the underlying cause instead of
-		// discarding it: a swallowed refresh/decrypt error left the real problem
-		// invisible.
-		ctx.context.logger.error("Failed to get a valid access token", error);
-		throw APIError.from(
-			"BAD_REQUEST",
-			BASE_ERROR_CODES.FAILED_TO_GET_ACCESS_TOKEN,
-		);
+	} catch (_error) {
+		throw APIError.from("BAD_REQUEST", {
+			message: "Failed to get a valid access token",
+			code: "FAILED_TO_GET_ACCESS_TOKEN",
+		});
 	}
 }
 
@@ -781,12 +774,6 @@ export const refreshToken = createAuthEndpoint(
 											type: "string",
 											format: "date-time",
 										},
-										grantedScopes: {
-											type: "array",
-											items: {
-												type: "string",
-											},
-										},
 									},
 								},
 							},
@@ -808,13 +795,13 @@ export const refreshToken = createAuthEndpoint(
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
-				code: BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED.code,
+				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		if (!provider.refreshAccessToken) {
 			throw APIError.from("BAD_REQUEST", {
 				message: `Provider ${providerId} does not support token refreshing.`,
-				code: BASE_ERROR_CODES.TOKEN_REFRESH_NOT_SUPPORTED.code,
+				code: "TOKEN_REFRESH_NOT_SUPPORTED",
 			});
 		}
 
@@ -846,10 +833,10 @@ export const refreshToken = createAuthEndpoint(
 		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				BASE_ERROR_CODES.REFRESH_TOKEN_NOT_FOUND,
-			);
+			throw APIError.from("BAD_REQUEST", {
+				message: "Refresh token not found",
+				code: "REFRESH_TOKEN_NOT_FOUND",
+			});
 		}
 
 		try {
@@ -862,37 +849,56 @@ export const refreshToken = createAuthEndpoint(
 				ctx,
 			);
 
-			// The seam owns the token rotation: it re-encrypts, leaves
-			// `grantedScopes` untouched (RFC 6749 §6), persists against the stored
-			// row, and re-seeds the account cookie. Fields the provider omits stay
-			// at their stored values.
-			await persistOAuthAccount(ctx, {
-				userId: account.userId,
-				providerId: account.providerId,
-				accountId: account.accountId,
-				tokens,
-				mode: "refresh",
-			});
+			const resolvedRefreshToken = tokens.refreshToken
+				? await setTokenUtil(tokens.refreshToken, ctx.context)
+				: refreshToken;
+			const resolvedRefreshTokenExpiresAt =
+				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
 
+			if (account.id) {
+				const updateData = {
+					...(account || {}),
+					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
+					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+					scope: tokens.scopes?.join(",") || account.scope,
+					idToken: tokens.idToken || account.idToken,
+				};
+				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
+			}
+
+			if (
+				accountData &&
+				providerId === accountData.providerId &&
+				ctx.context.options.account?.storeAccountCookie
+			) {
+				const updateData = {
+					...accountData,
+					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
+					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+					scope: tokens.scopes?.join(",") || accountData.scope,
+					idToken: tokens.idToken || accountData.idToken,
+				};
+				await setAccountCookie(ctx, updateData);
+			}
 			return ctx.json({
 				accessToken: tokens.accessToken,
 				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshTokenExpiresAt:
-					tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				grantedScopes: readGrantedScopes(account.grantedScopes),
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+				scope: tokens.scopes?.join(",") || account.scope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.accountId,
 			});
-		} catch (error) {
-			// Surface the failure code, but log the underlying cause instead of
-			// discarding it.
-			ctx.context.logger.error("Failed to refresh access token", error);
-			throw APIError.from(
-				"BAD_REQUEST",
-				BASE_ERROR_CODES.FAILED_TO_REFRESH_ACCESS_TOKEN,
-			);
+		} catch (_error) {
+			throw APIError.from("BAD_REQUEST", {
+				message: "Failed to refresh access token",
+				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
+			});
 		}
 	},
 );

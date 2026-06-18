@@ -179,59 +179,13 @@ return (
 );
 ```
 
-This triggers a new OAuth flow that requests the additional scopes. The `scopes` you pass to `signIn.social` and `linkSocial` are **additive** to the provider's default scopes, not a replacement for them. Linking is incremental: the new scopes accumulate into the account's stored `grantedScopes` alongside any previously granted scopes.
-
-Whether a later flow can shrink that set depends on `includeGrantedScopes`. Token refresh never changes `grantedScopes` for any provider. With the default `includeGrantedScopes: true`, each sign-in resyncs `grantedScopes` to Google's combined grant, so a scope the user revoked in their Google account drops on the next sign-in (see [Incremental authorization](#incremental-authorization-includegrantedscopes) below). With `includeGrantedScopes: false`, the stored grant only grows and a narrower flow never removes a scope, so once an account holds Google Drive access it keeps it.
-
-```ts
-const drive = "https://www.googleapis.com/auth/drive.file";
-const { idToken } = await authClient.linkSocial({
-    provider: "google",
-    scopes: [drive],
-});
-// account.grantedScopes is now ["email", "openid", "profile", drive]
-```
-
-<Callout type="info">
-  The account's accumulated grant is stored as `grantedScopes`, a `string[]`, not the scopes echoed by the most recent token. The `list-accounts`, `get-access-token`, and `refresh-token` endpoints all return this `grantedScopes` array. With the default `includeGrantedScopes: true`, each Google sign-in resyncs the array to Google's authoritative combined grant; with `includeGrantedScopes: false` it is the union of every scope the user has granted this account over time.
-</Callout>
-
-To check whether an account already holds a scope before triggering another flow, use the `includesGrantedScope` helper:
-
-```ts title="auth.ts"
-import { includesGrantedScope } from "better-auth/oauth2";
-
-const accounts = await auth.api.listUserAccounts({ headers });
-const google = accounts.find((account) => account.providerId === "google");
-
-if (!includesGrantedScope(google?.grantedScopes, "https://www.googleapis.com/auth/drive.file")) {
-    // prompt the user to grant Drive access via linkSocial
-}
-```
+This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
 
 <Callout>
   Ensure you're using Better Auth version 1.2.7 or later to avoid "Social
   account already linked" errors when requesting additional scopes from the same
   provider.
 </Callout>
-
-### Incremental authorization (`includeGrantedScopes`)
-
-By default, Better Auth enables Google's [incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) by sending `include_granted_scopes=true`. Google then issues a token covering the project's full accumulated grant for the user, so a flow that only requests Drive access still returns a token that also carries the user's previously granted scopes.
-
-Because Google's token response is the authoritative combined grant under this setting, each sign-in **resyncs** the account's stored `grantedScopes` to it: the array is replaced, not merged. This keeps Better Auth in step with revocations. If the user removes your app's Drive access from their [Google account permissions](https://myaccount.google.com/permissions), the Drive scope is missing from the next token response, so it drops from `grantedScopes` on the next sign-in. The stored grant can therefore shrink in this configuration. Token refresh never changes `grantedScopes`, per [RFC 6749 §6](https://datatracker.ietf.org/doc/html/rfc6749#section-6); only a sign-in resync does.
-
-Set `includeGrantedScopes` to `false` to disable this and have each flow authorize only the scopes it requests. The grant then becomes **union-only**: `grantedScopes` accumulates across flows and never shrinks, so a narrower sign-in or refresh never removes a scope, and a revocation at Google is not reflected in the stored array. This matches the behavior of generic OAuth and most social providers, which never send `include_granted_scopes`.
-
-```ts title="auth.ts"
-socialProviders: {
-    google: {
-        clientId: process.env.GOOGLE_CLIENT_ID as string,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-        includeGrantedScopes: false, // [!code highlight]
-    },
-}
-```
 
 ### Always get refresh token
 

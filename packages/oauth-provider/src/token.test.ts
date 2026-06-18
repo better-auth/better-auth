@@ -116,7 +116,7 @@ describe("oauth token - authorization_code", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -545,7 +545,7 @@ describe("oauth token - refresh_token", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -1584,7 +1584,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 		const scopes = ["openid", "profile"];
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -1734,7 +1734,7 @@ describe("oauth token - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: credentials,
 			redirectURI: redirectUri,
@@ -2269,7 +2269,7 @@ describe("id token claim override security", async () => {
 
 		const scopes = ["openid", "profile"];
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -2383,7 +2383,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2434,7 +2434,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2487,7 +2487,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2521,7 +2521,7 @@ describe("loopback redirect URI matching", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2585,7 +2585,7 @@ describe("scope preservation through authorization code flow", async () => {
 
 		const requestedScopes = ["openid", "profile", "email"];
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,
@@ -2687,7 +2687,7 @@ describe("at_hash in id tokens", async () => {
 		}
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -2820,7 +2820,7 @@ describe("at_hash in id tokens", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: testOauthClient!.client_id!,
@@ -2932,7 +2932,7 @@ describe("customTokenResponseFields", async () => {
 		}
 
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -3028,7 +3028,7 @@ describe("customTokenResponseFields", async () => {
 		});
 
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: response!.client_id!,
@@ -3339,7 +3339,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 	// having to also register the refresh_token grant explicitly.
 	it("still issues refresh tokens to an authorization_code client with offline_access", async () => {
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: authCodeOnlyClient!.client_id!,
@@ -3419,7 +3419,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			},
 		});
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: ccClient!.client_id!,
@@ -3526,7 +3526,7 @@ describe("oauth token - DPoP", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -3758,7 +3758,7 @@ describe("oauth token - DPoP", async () => {
 			},
 		});
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: flagged!.client_id,

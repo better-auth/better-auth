@@ -2,12 +2,11 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -58,8 +57,6 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	identityProvider?: string | undefined;
 }
 
-const COGNITO_DEFAULT_SCOPES = ["openid", "profile", "email"];
-
 export const cognito = (options: CognitoOptions) => {
 	if (!options.domain || !options.region || !options.userPoolId) {
 		logger.error(
@@ -76,7 +73,6 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		callbackPath: "/callback/cognito",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -97,19 +93,19 @@ export const cognito = (options: CognitoOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_SECRET_REQUIRED");
 			}
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				COGNITO_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
-			const { url } = await createAuthorizationURL({
+			const url = await createAuthorizationURL({
 				id: "cognito",
 				options: {
 					...options,
 				},
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -130,12 +126,9 @@ export const cognito = (options: CognitoOptions) => {
 				// Manually append the scope with proper encoding to the URL
 				const urlString = url.toString();
 				const separator = urlString.includes("?") ? "&" : "?";
-				return {
-					url: new URL(`${urlString}${separator}scope=${encodedScope}`),
-					requestedScopes,
-				};
+				return new URL(`${urlString}${separator}scope=${encodedScope}`);
 			}
-			return { url, requestedScopes };
+			return url;
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -243,7 +236,7 @@ export const cognito = (options: CognitoOptions) => {
 		},
 
 		options,
-	} satisfies UpstreamProvider<CognitoProfile>;
+	} satisfies OAuthProvider<CognitoProfile>;
 };
 
 export const getCognitoPublicKey = async (

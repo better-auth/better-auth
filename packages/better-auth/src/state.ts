@@ -32,13 +32,6 @@ const stateDataSchema = z.looseObject({
 	 */
 	idTokenNonce: z.string().optional(),
 	/**
-	 * The effective set of scopes requested in the authorization URL, captured
-	 * from `createAuthorizationURL`. Persisted so the callback can fall back to
-	 * the request when the provider omits `scope` from its token response
-	 * (RFC 6749 §5.1).
-	 */
-	requestedScopes: z.array(z.string()).optional(),
-	/**
 	 * Server-controlled values that ride the state across the provider redirect.
 	 * Populated only by `generateState` from `addOAuthServerContext`, never from
 	 * the request body, so it is safe to trust on the callback.
@@ -89,9 +82,9 @@ export class StateError extends BetterAuthError {
 export async function generateGenericState(
 	c: GenericEndpointContext,
 	stateData: StateData,
-	settings?: { cookieName?: string; oauthState?: string },
+	settings?: { cookieName: string },
 ) {
-	const state = settings?.oauthState ?? generateRandomString(32);
+	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	// Cookie strategy:

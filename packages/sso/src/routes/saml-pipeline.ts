@@ -2,7 +2,7 @@ import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { signInWithOAuthIdentity } from "better-auth/oauth2";
+import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import type { FlowResult } from "samlify/types/src/flow";
 
@@ -385,18 +385,21 @@ export async function processSAMLResponse(
 	const postAuthRedirect = relayState?.callbackURL || ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
-	let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		result = await signInWithOAuthIdentity(ctx, {
+		result = await handleOAuthUserInfo(ctx, {
 			userInfo: {
 				email: userInfo.email as string,
 				name: (userInfo.name || userInfo.email) as string,
 				id: userInfo.id as string,
 				emailVerified: userInfo.emailVerified,
 			},
-			providerId,
-			accountId: userInfo.id as string,
-			tokens: {},
+			account: {
+				providerId,
+				accountId: userInfo.id as string,
+				accessToken: "",
+				refreshToken: "",
+			},
 			callbackURL: postAuthRedirect,
 			disableSignUp: options?.disableImplicitSignUp,
 			source: {

@@ -342,7 +342,7 @@ export const auth = betterAuth({
 * `clientSecret`: OAuth client secret from the provider
 * `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
 * `redirectURI`: Custom redirect URI for the OAuth callback (optional)
-* `scope`: Extra OAuth scopes to request, added on top of the provider's default scopes (optional). The scopes a user actually grants are accumulated on the account's `grantedScopes` array. For union-only providers (generic OAuth, most social providers, and Google with `includeGrantedScopes: false`), the stored grant only grows: a narrower sign-in or refresh response never shrinks it. The one exception is Google with the default `includeGrantedScopes: true`, where each sign-in resyncs `grantedScopes` to Google's authoritative combined grant, so a scope the user revoked at Google drops on the next sign-in. Token refresh never changes the grant for any provider. Use `signIn.social({ scopes })` or `linkSocial({ scopes })` to request additional scopes per request, which are also additive to the defaults.
+* `scope`: Additional OAuth scopes to request (optional)
 * `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
@@ -356,7 +356,6 @@ export const auth = betterAuth({
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
-* `includeGrantedScopes`: (Google only) Controls Google's server-side incremental authorization via `include_granted_scopes` (default: `true`). When enabled, Google's token response is the authoritative combined grant for the project, so on each sign-in the account's `grantedScopes` is resynced (replaced) to it: scopes the user revoked at Google are reflected and the stored grant can shrink. Set to `false` to authorize only the scopes requested in the current flow; the stored grant then becomes union-only and only ever grows.
 
 ## `plugins`
 

@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -33,14 +32,11 @@ export interface PolarProfile {
 
 export interface PolarOptions extends ProviderOptions<PolarProfile> {}
 
-const POLAR_DEFAULT_SCOPES = ["openid", "profile", "email"];
-
 export const polar = (options: PolarOptions) => {
 	const tokenEndpoint = "https://api.polar.sh/v1/oauth2/token";
 	return {
 		id: "polar",
 		name: "Polar",
-		callbackPath: "/callback/polar",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -48,16 +44,16 @@ export const polar = (options: PolarOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				POLAR_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "polar",
 				options,
 				authorizationEndpoint: "https://polar.sh/oauth2/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -118,5 +114,5 @@ export const polar = (options: PolarOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<PolarProfile>;
+	} satisfies OAuthProvider<PolarProfile>;
 };

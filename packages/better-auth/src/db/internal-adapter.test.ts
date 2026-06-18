@@ -161,46 +161,88 @@ describe("internal adapter test", async () => {
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
 
-	it("creates a user and linked account with custom generated ids, firing user-create hooks", async () => {
-		const user = await internalAdapter.createUser(
+	it("should create oauth user with custom generate id", async () => {
+		const user = await internalAdapter.createOAuthUser(
 			{
 				email: "email@email.com",
 				name: "name",
 				emailVerified: false,
 			},
-			{ method: "test" },
+			{
+				providerId: "provider",
+				accountId: "account",
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		);
-		const account = await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "provider",
-			accountId: "account",
-			accessTokenExpiresAt: new Date(),
-			refreshTokenExpiresAt: new Date(),
-		});
 		expect(user).toMatchObject({
-			id: "1",
-			name: "name",
-			email: "email@email.com",
-			emailVerified: false,
-			image: null,
-			createdAt: expect.any(Date),
-			updatedAt: expect.any(Date),
+			user: {
+				id: "1",
+				name: "name",
+				email: "email@email.com",
+				emailVerified: false,
+				image: null,
+				createdAt: expect.any(Date),
+				updatedAt: expect.any(Date),
+			},
+			account: {
+				id: "2",
+				userId: expect.any(String),
+				providerId: "provider",
+				accountId: "account",
+				accessToken: null,
+				refreshToken: null,
+				refreshTokenExpiresAt: expect.any(Date),
+				accessTokenExpiresAt: expect.any(Date),
+			},
 		});
-		expect(account).toMatchObject({
-			id: "2",
-			userId: "1",
-			providerId: "provider",
-			accountId: "account",
-			accessToken: null,
-			refreshToken: null,
-			refreshTokenExpiresAt: expect.any(Date),
-			accessTokenExpiresAt: expect.any(Date),
-		});
-		expect(account.userId).toBe(user.id);
+		expect(user?.user.id).toBe(user?.account.userId);
 		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+	});
+
+	it("should abort oauth account creation when user creation is vetoed", async () => {
+		const database = new DatabaseSync(":memory:");
+		const abortingOptions = {
+			...opts,
+			database,
+			databaseHooks: {
+				user: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(abortingOptions)).runMigrations();
+			const abortingContext = await init(abortingOptions);
+
+			await expect(
+				abortingContext.internalAdapter.createOAuthUser(
+					{
+						email: "blocked@email.com",
+						name: "Blocked",
+						emailVerified: false,
+					},
+					{
+						providerId: "provider",
+						accountId: "account",
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+					},
+				),
+			).rejects.toThrow("Failed to create user");
+		} finally {
+			database.close();
+		}
 	});
 
 	/**

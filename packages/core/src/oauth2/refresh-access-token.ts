@@ -6,6 +6,7 @@ import type {
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import { parseScopeField } from "./utils";
 
 interface RefreshAccessTokenRequestInput {
 	refreshToken: string;
@@ -143,7 +144,7 @@ export async function refreshAccessToken({
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
-		scope?: (string | string[]) | undefined;
+		scope?: unknown;
 		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
@@ -157,7 +158,7 @@ export async function refreshAccessToken({
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
 		tokenType: data.token_type,
-		scopes: Array.isArray(data.scope) ? data.scope : data.scope?.split(" "),
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 	};
 

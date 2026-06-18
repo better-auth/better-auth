@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -30,13 +29,10 @@ export interface KickOptions extends ProviderOptions<KickProfile> {
 	clientId: string;
 }
 
-const KICK_DEFAULT_SCOPES = ["user:read"];
-
 export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
-		callbackPath: "/callback/kick",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -44,17 +40,16 @@ export const kick = (options: KickOptions) => {
 			codeVerifier,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				KICK_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope ? [] : ["user:read"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+
 			return createAuthorizationURL({
 				id: "kick",
 				redirectURI,
 				options,
 				authorizationEndpoint: "https://id.kick.com/oauth/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				codeVerifier,
 				state,
 				additionalParams,
@@ -117,5 +112,5 @@ export const kick = (options: KickOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<KickProfile>;
+	} satisfies OAuthProvider<KickProfile>;
 };

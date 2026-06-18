@@ -15,7 +15,7 @@ const baseInput = {
 
 describe("createAuthorizationURL", () => {
 	it("appends additionalParams as query string entries", async () => {
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				identity_provider: "Google",
@@ -26,8 +26,17 @@ describe("createAuthorizationURL", () => {
 		expect(url.searchParams.get("hd")).toBe("example.com");
 	});
 
+	it("omits scope when the resolved scope list is empty", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			scopes: [],
+		});
+
+		expect(url.searchParams.has("scope")).toBe(false);
+	});
+
 	it("silently drops reserved OAuth params supplied via additionalParams", async () => {
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			...baseInput,
 			nonce: "server-nonce",
 			additionalParams: {

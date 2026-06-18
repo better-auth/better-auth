@@ -102,7 +102,7 @@ async function bootHarness(
 		overrides: { resource?: string | string[] } = {},
 	) => {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id!,

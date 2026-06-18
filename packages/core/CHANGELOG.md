@@ -42,7 +42,7 @@
 
   PayPal previously accepted any decodable id_token without verifying its signature. PayPal derives identity from the access token, so it now declares no `idToken` config, and the client id_token path returns `ID_TOKEN_NOT_SUPPORTED`. PayPal sign-in through the redirect flow is unchanged.
 
-  Custom providers that implement `UpstreamProvider` directly replace the removed `verifyIdToken` method with an `idToken` config:
+  Custom providers that implement `OAuthProvider` directly replace the removed `verifyIdToken` method with an `idToken` config:
 
   ```ts
   idToken: {

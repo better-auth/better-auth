@@ -285,18 +285,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
 				}
 
-				// Native scalar lists (Postgres/CockroachDB `String[]`/`Int[]`)
-				// default to an empty list. Emit `@default([])` explicitly so
-				// account-creation paths that omit the field (e.g. credential
-				// accounts that never set `grantedScopes`) don't fail validation.
-				const emitsNativeArray =
-					(attr.type === "string[]" || attr.type === "number[]") &&
-					provider !== "sqlite" &&
-					provider !== "mysql";
-				if (emitsNativeArray && attr.defaultValue === undefined) {
-					fieldBuilder.attribute("default([])");
-				}
-
 				if (attr.defaultValue !== undefined) {
 					if (Array.isArray(attr.defaultValue)) {
 						// for json objects and array of object

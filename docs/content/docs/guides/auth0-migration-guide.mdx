@@ -349,7 +349,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
                         refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
 
-                        grantedScopes: identity.scope?.split(/[\s,]+/).filter(Boolean) ?? [],
+                        scope: identity.scope,
                         idToken: identity.id_token,
                         createdAt: safeDateConversion(auth0User.created_at),
                         updatedAt: safeDateConversion(auth0User.updated_at)
@@ -371,7 +371,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             refreshToken: identity.refresh_token,
                             accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
                             refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
-                            grantedScopes: identity.scope?.split(/[\s,]+/).filter(Boolean) ?? [],
+                            scope: identity.scope,
                             idToken: identity.id_token,
                             createdAt: safeDateConversion(auth0User.created_at),
                             updatedAt: safeDateConversion(auth0User.updated_at)

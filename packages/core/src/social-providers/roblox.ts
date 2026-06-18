@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -37,30 +36,20 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 		| undefined;
 }
 
-const ROBLOX_DEFAULT_SCOPES = ["openid", "profile"];
-
 export const roblox = (options: RobloxOptions) => {
 	const tokenEndpoint = "https://apis.roblox.com/oauth/v1/token";
 	return {
 		id: "roblox",
 		name: "Roblox",
-		callbackPath: "/callback/roblox",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-			additionalParams,
-		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				ROBLOX_DEFAULT_SCOPES,
-				scopes,
-			);
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "roblox",
 				options,
 				authorizationEndpoint: "https://apis.roblox.com/oauth/v1/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				prompt: options.prompt || "select_account consent",
@@ -124,5 +113,5 @@ export const roblox = (options: RobloxOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<RobloxProfile>;
+	} satisfies OAuthProvider<RobloxProfile>;
 };

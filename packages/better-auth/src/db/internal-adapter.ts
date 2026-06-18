@@ -153,6 +153,45 @@ export const createInternalAdapter = (
 	}
 
 	return {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+		) => {
+			return runWithTransaction(adapter, async () => {
+				const createdUser = await createWithHooks(
+					{
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+						email: user.email?.toLowerCase(),
+					},
+					"user",
+					undefined,
+				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
+				};
+			});
+		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &

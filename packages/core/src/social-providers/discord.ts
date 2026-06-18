@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
@@ -84,31 +83,21 @@ export interface DiscordOptions extends ProviderOptions<DiscordProfile> {
 	permissions?: number | undefined;
 }
 
-const DISCORD_DEFAULT_SCOPES = ["identify", "email"];
-
 export const discord = (options: DiscordOptions) => {
 	const tokenEndpoint = "https://discord.com/api/oauth2/token";
 	return {
 		id: "discord",
 		name: "Discord",
-		callbackPath: "/callback/discord",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-			additionalParams,
-		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				DISCORD_DEFAULT_SCOPES,
-				scopes,
-			);
-			const hasBotScope = requestedScopes.includes("bot");
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
+			if (scopes) _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			const hasBotScope = _scopes.includes("bot");
 			return createAuthorizationURL({
 				id: "discord",
 				options,
 				authorizationEndpoint: "https://discord.com/api/oauth2/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				prompt: options.prompt || "none",
@@ -181,5 +170,5 @@ export const discord = (options: DiscordOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<DiscordProfile>;
+	} satisfies OAuthProvider<DiscordProfile>;
 };

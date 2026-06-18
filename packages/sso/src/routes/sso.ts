@@ -24,7 +24,7 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
-	signInWithOAuthIdentity,
+	handleOAuthUserInfo,
 } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
@@ -1088,8 +1088,6 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const requestedScopes = ctx.body.scopes ||
-					config.scopes || ["openid", "email", "profile", "offline_access"];
 				if (options?.redirectURI?.trim()) {
 					// The shared OIDC callback resolves the provider from server-only
 					// state, so it must not be client-spoofable.
@@ -1097,13 +1095,13 @@ export const signInSSO = (options?: SSOOptions) => {
 						ssoProviderId: provider.providerId,
 					});
 				}
-				const state = await generateState(ctx, { requestedScopes });
+				const state = await generateState(ctx);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
 					options,
 				);
-				const { url: authorizationURL } = await createAuthorizationURL({
+				const authorizationURL = await createAuthorizationURL({
 					id: provider.issuer,
 					options: {
 						clientId: config.clientId,
@@ -1112,7 +1110,8 @@ export const signInSSO = (options?: SSOOptions) => {
 					redirectURI,
 					state: state.state,
 					codeVerifier: config.pkce ? state.codeVerifier : undefined,
-					scopes: requestedScopes,
+					scopes: ctx.body.scopes ||
+						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
 					additionalParams: ctx.body.additionalParams,
@@ -1267,8 +1266,7 @@ async function handleOIDCCallback(
 			`${ctx.context.baseURL}/error`;
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
-	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
-		stateData;
+	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	const redirectOIDCError = (error: string, description: string): never => {
 		const baseURL = errorURL || callbackURL;
 		const params = new URLSearchParams({
@@ -1601,9 +1599,9 @@ async function handleOIDCCallback(
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfo.email, provider.domain);
 
-	let linked: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		linked = await signInWithOAuthIdentity(ctx, {
+		linked = await handleOAuthUserInfo(ctx, {
 			userInfo: {
 				email: userInfo.email,
 				name: userInfo.name || "",
@@ -1613,10 +1611,16 @@ async function handleOIDCCallback(
 					? userInfo.emailVerified || false
 					: false,
 			},
-			providerId: provider.providerId,
-			accountId: userInfo.id,
-			tokens: tokenResponse,
-			requestedScopes,
+			account: {
+				idToken: tokenResponse.idToken,
+				accessToken: tokenResponse.accessToken,
+				refreshToken: tokenResponse.refreshToken,
+				accountId: userInfo.id,
+				providerId: provider.providerId,
+				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+				scope: tokenResponse.scopes?.join(","),
+			},
 			callbackURL,
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
@@ -1786,20 +1790,13 @@ async function bounceIfIdpInitiated(
 		// so it must not be client-spoofable.
 		await addOAuthServerContext({ ssoProviderId: provider.providerId });
 	}
-	const state = await generateState(ctx, {
-		requestedScopes: config.scopes || [
-			"openid",
-			"email",
-			"profile",
-			"offline_access",
-		],
-	});
+	const state = await generateState(ctx);
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,
 		options,
 	);
-	const { url: authorizationURL } = await createAuthorizationURL({
+	const authorizationURL = await createAuthorizationURL({
 		id: provider.issuer,
 		options: {
 			clientId: config.clientId,
