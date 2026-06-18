@@ -15,6 +15,7 @@ import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
@@ -4613,5 +4614,135 @@ describe("oauth2", async () => {
 			where: [{ field: "providerId", value: "empty-id-test" }],
 		});
 		expect(accounts).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ * @see https://github.com/better-auth/better-auth/issues/9593
+ */
+describe("redirect_uri composition under dynamic baseURL", async () => {
+	const dynamicServer = new OAuth2Server();
+	await dynamicServer.start();
+	const dynamicPort = Number(new URL(dynamicServer.issuer.url!).port);
+
+	afterAll(async () => {
+		await dynamicServer.stop();
+	});
+
+	beforeAll(async () => {
+		await dynamicServer.issuer.keys.generate("RS256");
+	});
+
+	async function getAuthorizeRedirectUri(
+		auth: { handler: (request: Request) => Promise<Response> },
+		signInPath: string,
+		host: string,
+		providerId: string,
+	) {
+		const response = await auth.handler(
+			new Request(`http://${host}${signInPath}`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					provider: providerId,
+					callbackURL: "/dashboard",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		const json = (await response.json()) as { url?: string };
+		expect(json.url).toBeDefined();
+		const authUrl = new URL(json.url!);
+		return authUrl.searchParams.get("redirect_uri");
+	}
+
+	it("composes an absolute redirect_uri for a generic-oauth provider at the default basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+
+		expect(redirectUri).toBe(
+			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("composes an absolute redirect_uri for a generic-oauth provider at a custom basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			basePath: "/auth",
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+
+		expect(redirectUri).toBe(
+			"http://localhost:3000/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("composes an absolute redirect_uri for a built-in social provider", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			socialProviders: {
+				google: {
+					clientId: "google-client-id",
+					clientSecret: "google-client-secret",
+				},
+			},
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"google",
+		);
+
+		expect(redirectUri).toBe("http://localhost:3000/api/auth/callback/google");
+	});
+
+	it("normalizes custom callbackPath values without a leading slash", () => {
+		expect(
+			getOAuthCallbackPath({
+				id: "custom-oauth-test",
+				callbackPath: "callback/custom-oauth-test",
+			}),
+		).toBe("/callback/custom-oauth-test");
 	});
 });

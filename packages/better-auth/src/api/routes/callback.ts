@@ -1,5 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { mergeScopes } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
@@ -17,7 +18,7 @@ import {
 	generateState,
 	parseState,
 } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
+import { getOAuthCallbackPath, setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -106,7 +107,7 @@ export const callbackOAuth = createAuthEndpoint(
 					state: freshState,
 					codeVerifier,
 					idTokenNonce,
-					redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+					redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				});
 				throw c.redirect(authUrl.toString());
 			}
@@ -191,7 +192,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
@@ -295,6 +296,7 @@ export const callbackOAuth = createAuthEndpoint(
 						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 					);
 				}
+				const mergedScope = mergeScopes(existingAccount.scope, tokens.scopes);
 				const updateData = Object.fromEntries(
 					Object.entries({
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
@@ -302,7 +304,7 @@ export const callbackOAuth = createAuthEndpoint(
 						idToken: tokens.idToken,
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: tokens.scopes?.join(","),
+						scope: mergedScope || undefined,
 					}).filter(([_, value]) => value !== undefined),
 				);
 				await c.context.internalAdapter.updateAccount(

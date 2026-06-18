@@ -21,13 +21,25 @@ import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import {
+	decryptOAuthToken,
+	getOAuthCallbackPath,
+	setTokenUtil,
+} from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	isStateful,
 	sessionMiddleware,
 } from "./session";
+
+function parseStoredScopes(scope: string | null | undefined): string[] {
+	if (!scope) return [];
+	return scope
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -103,7 +115,7 @@ export const listUserAccounts = createAuthEndpoint(
 				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
 				return {
 					...parsed,
-					scopes: scope?.split(",") || [],
+					scopes: parseStoredScopes(scope),
 				};
 			}),
 		);
@@ -384,7 +396,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			idTokenNonce,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
 			additionalParams: c.body.additionalParams,
@@ -642,7 +654,7 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			scopes: account.scope?.split(",") ?? [],
+			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
 	} catch (_error) {
@@ -854,18 +866,25 @@ export const refreshToken = createAuthEndpoint(
 				: refreshToken;
 			const resolvedRefreshTokenExpiresAt =
 				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+			const updatedTokenData: Partial<Account> = {
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: resolvedRefreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+				idToken: tokens.idToken || account.idToken,
+			};
+			let updatedAccount: Account | null = null;
 
 			if (account.id) {
-				const updateData = {
-					...(account || {}),
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || account.scope,
-					idToken: tokens.idToken || account.idToken,
-				};
-				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
+				/**
+				 * `scope` intentionally omitted. Refresh response may be narrower.
+				 *
+				 * @see {@link Account.scope}
+				 */
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedTokenData,
+				);
 			}
 
 			if (
@@ -875,21 +894,17 @@ export const refreshToken = createAuthEndpoint(
 			) {
 				const updateData = {
 					...accountData,
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || accountData.scope,
-					idToken: tokens.idToken || accountData.idToken,
+					...(updatedAccount ?? updatedTokenData),
 				};
 				await setAccountCookie(ctx, updateData);
 			}
+			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
 				accessToken: tokens.accessToken,
 				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				scope: tokens.scopes?.join(",") || account.scope,
+				scope: responseScope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.accountId,
