@@ -200,7 +200,7 @@ describe("Host Classification", () => {
 
 		it("should flag deprecated site-local fec0::/10 (RFC 3879)", () => {
 			expect(classifyHost("fec0::1").kind).toBe("reserved");
-			expect(classifyHost("feff::1").kind).toBe("reserved");
+			expect(classifyHost("fef0::1").kind).toBe("reserved");
 			expect(isPublicRoutableHost("fec0::1")).toBe(false);
 		});
 
