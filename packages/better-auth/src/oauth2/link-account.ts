@@ -144,6 +144,11 @@ export async function handleOAuthUserInfo(
 				source: { ...source, action: "sign-in" },
 			});
 
+			/**
+			 * `scope` intentionally omitted. Updated only via linkSocial.
+			 *
+			 * @see {@link Account.scope}
+			 */
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
@@ -156,7 +161,6 @@ export async function handleOAuthUserInfo(
 								),
 								accessTokenExpiresAt: account.accessTokenExpiresAt,
 								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-								scope: account.scope,
 							}).filter(([_, value]) => value !== undefined),
 						)
 					: {};
