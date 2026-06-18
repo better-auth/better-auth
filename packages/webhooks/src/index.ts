@@ -126,9 +126,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"user.created",
 										sanitizeUserRecord(
-										authOptions,
-										user as Record<string, unknown>,
-									),
+											authOptions,
+											user as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -138,9 +138,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"user.updated",
 										sanitizeUserRecord(
-										authOptions,
-										user as Record<string, unknown>,
-									),
+											authOptions,
+											user as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -150,9 +150,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"user.deleted",
 										sanitizeUserRecord(
-										authOptions,
-										user as Record<string, unknown>,
-									),
+											authOptions,
+											user as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -164,9 +164,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"session.created",
 										sanitizeSessionRecord(
-										authOptions,
-										session as Record<string, unknown>,
-									),
+											authOptions,
+											session as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -176,9 +176,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"session.updated",
 										sanitizeSessionRecord(
-										authOptions,
-										session as Record<string, unknown>,
-									),
+											authOptions,
+											session as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -188,9 +188,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"session.deleted",
 										sanitizeSessionRecord(
-										authOptions,
-										session as Record<string, unknown>,
-									),
+											authOptions,
+											session as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -202,9 +202,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"account.created",
 										sanitizeAccountRecord(
-										authOptions,
-										account as Record<string, unknown>,
-									),
+											authOptions,
+											account as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -214,9 +214,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"account.updated",
 										sanitizeAccountRecord(
-										authOptions,
-										account as Record<string, unknown>,
-									),
+											authOptions,
+											account as Record<string, unknown>,
+										),
 									);
 								},
 							},
@@ -226,9 +226,9 @@ export function webhooks(options: WebhooksPluginOptions): BetterAuthPlugin {
 									dispatch(
 										"account.deleted",
 										sanitizeAccountRecord(
-										authOptions,
-										account as Record<string, unknown>,
-									),
+											authOptions,
+											account as Record<string, unknown>,
+										),
 									);
 								},
 							},
