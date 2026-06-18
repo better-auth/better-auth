@@ -1,8 +1,11 @@
-// Pure validation for Client ID Metadata Documents.
+// Validation for Client ID Metadata Documents.
 // Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
-// Zero side-effect imports: testable without building the monorepo.
+import {
+	isLoopbackHost,
+	isPublicRoutableHost,
+} from "@better-auth/core/utils/host";
 
-const DOT_SEGMENT_RE = /\/\.\.?(?:\/|$|#|\?)/;
+const DOT_SEGMENT_RE = /\/(?:\.|%2e)(?:\.|%2e)?(?:\/|$|#|\?)/i;
 
 const PROHIBITED_FIELDS = new Set([
 	"client_secret",
@@ -25,136 +28,36 @@ export interface ClientIdMetadataDocumentResult {
 	warnings?: string[];
 }
 
-/** Hostnames that are considered "localhost" for development flows. */
-export function isLocalhost(hostname: string): boolean {
-	return (
-		hostname === "localhost" ||
-		hostname === "127.0.0.1" ||
-		hostname === "[::1]" ||
-		hostname === "::1" ||
-		hostname.endsWith(".localhost")
-	);
+export interface ClientIdUrlOptions {
+	/**
+	 * Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`,
+	 * `*.localhost`) and plain HTTP for them. Off by default.
+	 */
+	allowLoopback?: boolean;
 }
 
 /**
- * Check whether a dotted-decimal IPv4 address is private, reserved, or
- * otherwise non-routable for a public SSRF target. Covers the subset of
- * RFC 6890 special-purpose ranges that an adversarial `client_id` URL
- * could point at to reach internal infrastructure or disrupt fetches.
- */
-function isPrivateIpv4(host: string): boolean {
-	const parts = host.split(".");
-	if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
-		return false;
-	}
-	const a = Number(parts[0]);
-	const b = Number(parts[1]);
-	const c = Number(parts[2]);
-	return (
-		// Loopback (127.0.0.0/8), private (RFC 1918), "this network"
-		// (0.0.0.0/8), link-local (169.254.0.0/16), shared address space
-		// (100.64.0.0/10).
-		a === 127 ||
-		a === 10 ||
-		a === 0 ||
-		(a === 172 && b >= 16 && b <= 31) ||
-		(a === 192 && b === 168) ||
-		(a === 169 && b === 254) ||
-		(a === 100 && b >= 64 && b <= 127) ||
-		// Benchmarking (RFC 2544): 198.18.0.0/15.
-		(a === 198 && (b === 18 || b === 19)) ||
-		// Documentation (RFC 5737).
-		(a === 192 && b === 0 && c === 2) ||
-		(a === 198 && b === 51 && c === 100) ||
-		(a === 203 && b === 0 && c === 113) ||
-		// 6to4 anycast relay (RFC 7526 deprecated): 192.88.99.0/24.
-		(a === 192 && b === 88 && c === 99) ||
-		// Multicast (RFC 5771): 224.0.0.0/4.
-		(a >= 224 && a <= 239) ||
-		// Reserved / future use (RFC 1112 + broadcast 255.255.255.255):
-		// 240.0.0.0/4.
-		a >= 240
-	);
-}
-
-// Matches ::ffff:a.b.c.d (dotted-decimal, as written by humans)
-const V4_MAPPED_DOTTED_RE =
-	/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
-
-// Matches hex-pair form (e.g. ::ffff:a9fe:a9fe), as normalized by the URL parser
-const V4_MAPPED_HEX_RE =
-	/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/;
-
-/**
- * Convert two hex groups from an IPv4-mapped IPv6 address to dotted-decimal IPv4.
- * e.g. "a9fe" "a9fe" -> "169.254.169.254"
- */
-function hexGroupsToIpv4(hi: string, lo: string): string {
-	const h = Number.parseInt(hi, 16);
-	const l = Number.parseInt(lo, 16);
-	return `${(h >> 8) & 0xff}.${h & 0xff}.${(l >> 8) & 0xff}.${l & 0xff}`;
-}
-
-/**
- * Check whether a hostname is private/reserved per RFC 6890.
+ * Detect a URL-formatted client_id (Client ID Metadata Document pattern).
  *
- * Handles bracketed IPv6 (as returned by URL.hostname), IPv4-mapped
- * IPv6 in both dotted-decimal and hex-normalized forms, and cloud
- * metadata hostnames. No DNS resolution, so it runs identically on
- * Node, Bun, Deno, and Workers.
+ * HTTPS URLs always match; the SSRF and loopback policy is enforced in
+ * {@link validateClientIdUrl}. Plain HTTP matches only loopback hosts, and
+ * only when `allowLoopback` is set.
  */
-function isPrivateHost(hostname: string): boolean {
-	const lower = hostname.toLowerCase();
-	const host =
-		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
-
-	if (host === "::1") {
-		return true;
-	}
-	if (isPrivateIpv4(host)) {
-		return true;
-	}
-	if (host.includes(":")) {
-		const dottedMatch = host.match(V4_MAPPED_DOTTED_RE);
-		if (dottedMatch && isPrivateIpv4(dottedMatch[1]!)) {
-			return true;
-		}
-		const hexMatch = host.match(V4_MAPPED_HEX_RE);
-		if (hexMatch) {
-			const ipv4 = hexGroupsToIpv4(hexMatch[1]!, hexMatch[2]!);
-			if (isPrivateIpv4(ipv4)) {
-				return true;
-			}
-		}
-		// Link-local (fe80::/10)
-		if (/^fe[89ab]/.test(host)) {
-			return true;
-		}
-		// Unique-local (fc00::/7)
-		if (host.startsWith("fc") || host.startsWith("fd")) {
-			return true;
-		}
-	}
-	if (host === "metadata.google.internal") {
-		return true;
-	}
-	return false;
-}
-
-/**
- * Detect URL-formatted client_id (Client ID Metadata Document pattern).
- * HTTPS always accepted; HTTP accepted for localhost variants
- * (localhost, 127.0.0.1, [::1], *.localhost) for development.
- */
-export function isUrlClientId(clientId: string): boolean {
+export function isUrlClientId(
+	clientId: string,
+	options?: ClientIdUrlOptions,
+): boolean {
 	if (clientId.startsWith("https://")) {
 		return true;
 	}
 	if (!clientId.startsWith("http://")) {
 		return false;
 	}
+	if (!options?.allowLoopback) {
+		return false;
+	}
 	try {
-		return isLocalhost(new URL(clientId).hostname);
+		return isLoopbackHost(new URL(clientId).hostname);
 	} catch {
 		return false;
 	}
@@ -162,9 +65,16 @@ export function isUrlClientId(clientId: string): boolean {
 
 /**
  * Validate a client_id URL per IETF draft §3.
- * Returns null on success, error string on failure.
+ * Returns null on success, an error string on failure.
+ *
+ * Loopback hosts are rejected unless `allowLoopback` is set; every other
+ * non-public host (private, link-local, cloud-metadata, IPv6 tunnels) is
+ * rejected.
  */
-export function validateClientIdUrl(url: string): string | null {
+export function validateClientIdUrl(
+	url: string,
+	options?: ClientIdUrlOptions,
+): string | null {
 	// §3: check the raw URL for dot segments before the URL class normalizes them
 	if (DOT_SEGMENT_RE.test(url)) {
 		return "client_id URL MUST NOT contain dot segments";
@@ -186,10 +96,6 @@ export function validateClientIdUrl(url: string): string | null {
 		return "client_id URL must use HTTPS";
 	}
 
-	if (parsed.protocol === "http:" && !isLocalhost(parsed.hostname)) {
-		return "client_id URL must use HTTPS (HTTP allowed only for localhost)";
-	}
-
 	// §3: MUST NOT contain credentials
 	if (parsed.username || parsed.password) {
 		return "client_id URL MUST NOT contain credentials";
@@ -200,8 +106,17 @@ export function validateClientIdUrl(url: string): string | null {
 		return "client_id URL MUST contain a path component";
 	}
 
-	// SSRF: block private/reserved hosts
-	if (!isLocalhost(parsed.hostname) && isPrivateHost(parsed.hostname)) {
+	if (isLoopbackHost(parsed.hostname)) {
+		if (!options?.allowLoopback) {
+			return "client_id URL must not target a loopback address (set allowLoopback to enable local development)";
+		}
+		return null;
+	}
+
+	if (parsed.protocol !== "https:") {
+		return "client_id URL must use HTTPS (HTTP is allowed only for loopback in development)";
+	}
+	if (!isPublicRoutableHost(parsed.hostname)) {
 		return "client_id URL must not resolve to a private or reserved address";
 	}
 
@@ -362,7 +277,7 @@ export function validateCimdMetadata(
 				if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
 					return { valid: false, error: `${field} must use HTTP(S)` };
 				}
-				if (!isLocalhost(parsed.hostname) && isPrivateHost(parsed.hostname)) {
+				if (!isPublicRoutableHost(parsed.hostname)) {
 					return {
 						valid: false,
 						error: `${field} must not point to a private or reserved address`,
@@ -429,12 +344,11 @@ export function validateCimdMetadata(
 				};
 			}
 
-			// Allow localhost redirect URIs for local/native app flows; the
-			// localhost exception only applies to redirect URI fields, never
-			// to client_uri or other origin-bound fields.
+			// Loopback redirect URIs are allowed for local/native app flows
+			// (RFC 8252); this exception applies only to redirect URI fields.
 			const isRedirectField =
 				key === "redirect_uris" || key === "post_logout_redirect_uris";
-			const localhostAllowed = isRedirectField && isLocalhost(uri.hostname);
+			const localhostAllowed = isRedirectField && isLoopbackHost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
 					valid: false,

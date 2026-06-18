@@ -145,6 +145,12 @@ describe("Host Classification", () => {
 			expect(classifyHost("254.255.255.254").kind).toBe("reserved");
 		});
 
+		it("should identify 6to4 relay anycast 192.88.99.0/24 as reserved (RFC 7526)", () => {
+			expect(classifyHost("192.88.99.1").kind).toBe("reserved");
+			expect(classifyHost("192.88.99.255").kind).toBe("reserved");
+			expect(isPublicRoutableHost("192.88.99.1")).toBe(false);
+		});
+
 		it("should identify public addresses", () => {
 			expect(classifyHost("8.8.8.8").kind).toBe("public");
 			expect(classifyHost("1.1.1.1").kind).toBe("public");
@@ -192,6 +198,12 @@ describe("Host Classification", () => {
 			expect(classifyHost("2001:0db8:abcd::1").kind).toBe("documentation");
 		});
 
+		it("should flag deprecated site-local fec0::/10 (RFC 3879)", () => {
+			expect(classifyHost("fec0::1").kind).toBe("reserved");
+			expect(classifyHost("feff::1").kind).toBe("reserved");
+			expect(isPublicRoutableHost("fec0::1")).toBe(false);
+		});
+
 		it("should identify public IPv6", () => {
 			expect(classifyHost("2606:4700:4700::1111").kind).toBe("public");
 			expect(classifyHost("2a00:1450:4001:828::200e").kind).toBe("public");
@@ -231,6 +243,15 @@ describe("Host Classification", () => {
 				expect(classifyHost("2001:0:0:0:0:0:80ff:fffe").kind).toBe("reserved");
 				// 169.254.169.254 XOR 0xFFFFFFFF → 5601:5601
 				expect(classifyHost("2001:0:0:0:0:0:5601:5601").kind).toBe("reserved");
+			});
+
+			it("should flag deprecated IPv4-compatible ::/96 (RFC 4291 §2.5.5.1)", () => {
+				// WHATWG URL normalizes [::127.0.0.1] to [::7f00:1] (no ::ffff: marker)
+				expect(classifyHost("::7f00:1").kind).toBe("reserved"); // 127.0.0.1
+				expect(classifyHost("::a9fe:a9fe").kind).toBe("reserved"); // IMDS
+				expect(classifyHost("::a00:1").kind).toBe("reserved"); // 10.0.0.1
+				expect(classifyHost("::808:808").kind).toBe("reserved"); // 8.8.8.8 (deprecated form)
+				expect(isPublicRoutableHost("::7f00:1")).toBe(false);
 			});
 		});
 
