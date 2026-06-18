@@ -1944,12 +1944,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "refreshToken": {
                         "type": "string",
                       },
-                      "scopes": {
-                        "items": {
-                          "type": "string",
-                        },
-                        "type": "array",
-                      },
                       "token": {
                         "type": "string",
                       },
