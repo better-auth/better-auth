@@ -99,6 +99,8 @@ export interface OAuthProvider<
 	 * provider's OAuth callback handler is mounted. Providers that use the
 	 * shared `/callback/<id>` route can omit this.
 	 *
+	 * Custom paths must start with `/`.
+	 *
 	 * Endpoints compose `redirectURI = ctx.context.baseURL + callbackPath` per
 	 * request, so the provider must not hardcode an origin or `baseURL` here.
 	 */

@@ -15,6 +15,7 @@ import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
@@ -4734,5 +4735,14 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 		);
 
 		expect(redirectUri).toBe("http://localhost:3000/api/auth/callback/google");
+	});
+
+	it("normalizes custom callbackPath values without a leading slash", () => {
+		expect(
+			getOAuthCallbackPath({
+				id: "custom-oauth-test",
+				callbackPath: "callback/custom-oauth-test",
+			}),
+		).toBe("/callback/custom-oauth-test");
 	});
 });

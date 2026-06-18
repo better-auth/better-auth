@@ -40,5 +40,10 @@ export function getOAuthCallbackPath(provider: {
 	id: LiteralString;
 	callbackPath?: string | undefined;
 }) {
-	return provider.callbackPath ?? `/callback/${provider.id}`;
+	if (!provider.callbackPath) {
+		return `/callback/${provider.id}`;
+	}
+	return provider.callbackPath.startsWith("/")
+		? provider.callbackPath
+		: `/${provider.callbackPath}`;
 }
