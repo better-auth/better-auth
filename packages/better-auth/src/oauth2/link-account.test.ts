@@ -18,8 +18,7 @@ import {
 } from "vitest";
 import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
-import { parseSetCookieHeader } from "../cookies";
-import { setCookieToHeader } from "../cookies/cookie-utils";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { signJWT } from "../crypto";
 import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
