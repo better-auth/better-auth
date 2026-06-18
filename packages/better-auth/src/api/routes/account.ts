@@ -33,6 +33,14 @@ import {
 	sessionMiddleware,
 } from "./session";
 
+function parseStoredScopes(scope: string | null | undefined): string[] {
+	if (!scope) return [];
+	return scope
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
 	{
@@ -107,7 +115,7 @@ export const listUserAccounts = createAuthEndpoint(
 				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
 				return {
 					...parsed,
-					scopes: scope?.split(",") || [],
+					scopes: parseStoredScopes(scope),
 				};
 			}),
 		);
@@ -646,7 +654,7 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			scopes: account.scope?.split(",") ?? [],
+			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
 	} catch (_error) {
