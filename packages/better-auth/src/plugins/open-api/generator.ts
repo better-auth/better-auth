@@ -108,10 +108,8 @@ function getOpenApiTypeFromZodType(zodType: z.ZodType<unknown>) {
 }
 
 export type FieldSchema = {
-	type: DBFieldType | "array";
-	/** Element schema for `type: "array"` (JSON Schema / OpenAPI array shape). */
-	items?: { type: string };
 	default?: DBFieldAttributeConfig["defaultValue"] | undefined;
+	type: DBFieldType;
 	readOnly?: boolean | undefined;
 	format?: string;
 };
@@ -123,20 +121,10 @@ export type OpenAPIModelSchema = {
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
-	// Array DB field types ("string[]"/"number[]") map to a JSON Schema array,
-	// not the literal type string (which is not a valid OpenAPI type keyword).
-	// TODO: the enum form (Array<LiteralString>) is not yet translated to an
-	// OpenAPI `enum`; no core field uses it today.
-	const arrayMatch =
-		typeof field.type === "string"
-			? /^(string|number)\[\]$/.exec(field.type)
-			: null;
-	const schema: FieldSchema = arrayMatch
-		? { type: "array", items: { type: arrayMatch[1]! } }
-		: {
-				type: field.type === "date" ? "string" : field.type,
-				...(field.type === "date" && { format: "date-time" }),
-			};
+	const schema: FieldSchema = {
+		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
+	};
 
 	if (field.defaultValue !== undefined) {
 		if (typeof field.defaultValue !== "function") {

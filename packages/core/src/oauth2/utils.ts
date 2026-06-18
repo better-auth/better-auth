@@ -1,6 +1,5 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { OAuth2Tokens } from "./oauth-provider";
-import { parseScopeField } from "./scopes";
 
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	const getDate = (seconds: number) => {
@@ -18,7 +17,11 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 		refreshTokenExpiresAt: data.refresh_token_expires_in
 			? getDate(data.refresh_token_expires_in)
 			: undefined,
-		scopes: parseScopeField(data.scope),
+		scopes: data?.scope
+			? typeof data.scope === "string"
+				? data.scope.split(" ")
+				: data.scope
+			: [],
 		idToken: data.id_token,
 		// Preserve the raw token response for provider-specific fields
 		raw: data,

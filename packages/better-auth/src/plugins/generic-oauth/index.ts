@@ -4,7 +4,7 @@ import type {
 	OAuth2Tokens,
 	OAuthIdTokenConfig,
 	OAuthRefreshContext,
-	UpstreamProvider,
+	OAuthProvider,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
@@ -211,7 +211,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: UpstreamProvider[] = [];
+			const genericProviders: OAuthProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -294,10 +294,9 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
-				const provider: UpstreamProvider = {
+				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
-					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:

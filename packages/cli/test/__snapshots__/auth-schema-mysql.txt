@@ -57,7 +57,7 @@ export const custom_account = mysqlTable(
     idToken: text("id_token"),
     accessTokenExpiresAt: timestamp("access_token_expires_at", { fsp: 3 }),
     refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { fsp: 3 }),
-    grantedScopes: text("granted_scopes", { mode: "json" }),
+    scope: text("scope"),
     password: text("password"),
     createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { fsp: 3 })

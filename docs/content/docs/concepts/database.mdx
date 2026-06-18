@@ -492,10 +492,9 @@ export const accountTableFields = [
 		isOptional: true,
 	},
 	{
-		name: "grantedScopes",
-		type: "string[]",
-		description:
-			"The OAuth scopes the user has granted to this account (accumulated; see the OAuth scopes docs).",
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
 		isOptional: true,
 	},
 	{

@@ -58,7 +58,7 @@ model Account {
   idToken               String?   @db.Text
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  grantedScopes         String?
+  scope                 String?   @db.Text
   password              String?   @db.Text
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

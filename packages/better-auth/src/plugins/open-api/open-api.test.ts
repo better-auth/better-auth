@@ -345,20 +345,6 @@ describe("open-api", async () => {
 		expect(schemas["Session"]!.required).toContain("id");
 	});
 
-	it("emits a valid OpenAPI array schema for string[] fields (grantedScopes)", async () => {
-		const schema = await auth.api.generateOpenAPISchema();
-		const schemas = schema.components.schemas as Record<
-			string,
-			Record<string, any>
-		>;
-		// Must be a JSON Schema array, never the invalid literal type "string[]".
-		expect(schemas["Account"]!.properties.grantedScopes).toEqual({
-			type: "array",
-			items: { type: "string" },
-		});
-		expect(schemas["Account"]!.required ?? []).not.toContain("grantedScopes");
-	});
-
 	it("should include additionalFields in the User schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<

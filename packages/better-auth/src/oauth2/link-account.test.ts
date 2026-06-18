@@ -429,7 +429,7 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 			name: "Test User",
 			picture: "https://example.com/photo.jpg",
 			exp: 1234567890,
-			sub: "google_oauth_sub_casing_idtoken",
+			sub: "google_oauth_sub_casing",
 			iat: 1234567890,
 			aud: "test",
 			azp: "test",
@@ -1150,7 +1150,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 
 		const oAuthHeaders = await signInAndLink(testEmail, "google_implicit_name");
 
-		// The cookie cache is seeded from the value signInWithOAuthIdentity returns,
+		// The cookie cache is seeded from the value handleOAuthUserInfo returns,
 		// and getSession serves it without a database read, so a stale return
 		// would surface right here.
 		const session = await client.getSession({
@@ -1767,91 +1767,6 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		expect(promoted?.emailVerified).toBe(true);
 	});
 });
-
-describe("oauth2 - provider identity is not linkable across users", async () => {
-	const { auth, client, cookieSetter } = await getTestInstance({
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
-				enabled: true,
-				verifyIdToken: async () => true,
-			},
-		},
-		emailAndPassword: { enabled: true },
-		account: {
-			accountLinking: {
-				enabled: true,
-				trustedProviders: ["google"],
-				// Lets the second user reach the seam's takeover guard rather than
-				// being stopped earlier by the email-match check.
-				allowDifferentEmails: true,
-			},
-		},
-	});
-	const ctx = await auth.$context;
-
-	const sharedSubIdToken = await signJWT(
-		{
-			email: "shared-sub@example.com",
-			email_verified: true,
-			name: "Shared Sub",
-			picture: "https://example.com/p.jpg",
-			exp: 1234567890,
-			sub: "google_shared_takeover_sub",
-			iat: 1234567890,
-			aud: "test",
-			azp: "test",
-			nbf: 1234567890,
-			iss: "test",
-			locale: "en",
-			jti: "test",
-			given_name: "Shared",
-			family_name: "Sub",
-		} satisfies GoogleProfile,
-		DEFAULT_SECRET,
-	);
-
-	async function signUp(email: string) {
-		const headers = new Headers();
-		const res = await client.signUp.email(
-			{ email, password: "password123", name: "User" },
-			{ onSuccess: cookieSetter(headers) },
-		);
-		return { userId: res.data!.user.id, headers };
-	}
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/9382
-	 */
-	it("rejects linking a provider identity already owned by another user", async () => {
-		const userA = await signUp("owner-a@example.com");
-		const ownerLink = await client.linkSocial(
-			{ provider: "google", idToken: { token: sharedSubIdToken } },
-			{ headers: userA.headers },
-		);
-		expect(ownerLink.error).toBeNull();
-
-		const userB = await signUp("attacker-b@example.com");
-		const takeover = await client.linkSocial(
-			{ provider: "google", idToken: { token: sharedSubIdToken } },
-			{ headers: userB.headers },
-		);
-
-		// The seam's takeover guard rejects the cross-user link.
-		expect(takeover.error).not.toBeNull();
-
-		// User B gains no google account, and user A keeps sole ownership.
-		const bAccounts = await ctx.internalAdapter.findAccounts(userB.userId);
-		expect(bAccounts.find((a) => a.providerId === "google")).toBeUndefined();
-		const linked = await ctx.internalAdapter.findAccountByProviderId(
-			"google_shared_takeover_sub",
-			"google",
-		);
-		expect(linked?.userId).toBe(userA.userId);
-	});
-});
-
 /**
  * @see https://github.com/better-auth/better-auth/issues/9486
  */

@@ -43,15 +43,6 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					foreignKeyId += " @db.ObjectId";
 				}
 
-				// Only PostgreSQL, CockroachDB, and MongoDB support Prisma scalar
-				// lists. They cannot be nullable (`String[]?` is invalid) and
-				// default to an empty list, so `@default([])` is emitted to match
-				// the generated schema. The other providers have no array type, so
-				// the adapter stores these as a JSON string in a plain `String`.
-				const supportsScalarList =
-					provider === "postgresql" ||
-					provider === "cockroachdb" ||
-					provider === "mongodb";
 				return {
 					string,
 					boolean: `Boolean${field.required === false ? "?" : ""}`,
@@ -59,10 +50,8 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					date: `DateTime${field.required === false ? "?" : ""}`,
 					json: `Json${field.required === false ? "?" : ""}`,
 					id,
-					"string[]": supportsScalarList ? "String[] @default([])" : "String",
-					"number[]": supportsScalarList
-						? `${field.bigint ? "BigInt" : "Int"}[] @default([])`
-						: "String",
+					"string[]": `String[]${field.required === false ? "?" : ""}`,
+					"number[]": `${field.bigint ? "BigInt" : "Int"}[]${field.required === false ? "?" : ""}`,
 					foreignKeyId,
 				};
 			});

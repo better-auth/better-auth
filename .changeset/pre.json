@@ -63,7 +63,6 @@
     "oauth-access-token-claim-authority",
     "oauth-additional-params",
     "oauth-dpop-support",
-    "oauth-granted-scopes-architecture",
     "oauth-idp-initiated-bounce",
     "oauth-idtoken-verifier",
     "oauth-no-store-headers",

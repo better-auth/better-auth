@@ -82,58 +82,7 @@ export function matchType(
 		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
-		// Kysely stores array fields in the dialect's JSON column type: jsonb on
-		// Postgres, json on MySQL, text on SQLite, varchar on MSSQL. On the three
-		// non-Postgres dialects string[] and number[] share that one scalar
-		// column, so they cannot be told apart and any of them matches.
-		const normalized = normalize(columnDataType);
-		if (map[dbType].json.map((t) => t.toLowerCase()).includes(normalized)) {
-			return true;
-		}
-		// Postgres can also use a real array column (e.g. a Drizzle-created
-		// `text[]`/`int[]`). pg introspection reports the element type prefixed
-		// with "_" ("_text", "_int4") or as "<element>[]"; match it exactly
-		// against the field's element type so a string[] field is not satisfied
-		// by a number[] column (and a type like `interval` does not pass as a
-		// number by prefix).
-		if (dbType === "postgres") {
-			const element = columnDataType
-				.toLowerCase()
-				.replace(/^_/, "")
-				.replace(/\[\]$/, "")
-				.trim();
-			const stringElements = new Set([
-				"text",
-				"varchar",
-				"character varying",
-				"char",
-				"character",
-				"bpchar",
-				"name",
-				"uuid",
-				"citext",
-			]);
-			const numberElements = new Set([
-				"int",
-				"int2",
-				"int4",
-				"int8",
-				"integer",
-				"smallint",
-				"bigint",
-				"numeric",
-				"decimal",
-				"real",
-				"float4",
-				"float8",
-				"double precision",
-				"money",
-			]);
-			return (fieldType === "string[]" ? stringElements : numberElements).has(
-				element,
-			);
-		}
-		return false;
+		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)

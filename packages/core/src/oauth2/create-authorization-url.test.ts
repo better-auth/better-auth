@@ -15,7 +15,7 @@ const baseInput = {
 
 describe("createAuthorizationURL", () => {
 	it("appends additionalParams as query string entries", async () => {
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				identity_provider: "Google",
@@ -27,7 +27,7 @@ describe("createAuthorizationURL", () => {
 	});
 
 	it("silently drops reserved OAuth params supplied via additionalParams", async () => {
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			...baseInput,
 			nonce: "server-nonce",
 			additionalParams: {
