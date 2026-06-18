@@ -4,6 +4,7 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
@@ -188,7 +189,7 @@ export function oidcServerMetadata(
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
-		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+		acr_values_supported: [UNSPECIFIED_ACR],
 		prompt_values_supported: [
 			"login",
 			"consent",

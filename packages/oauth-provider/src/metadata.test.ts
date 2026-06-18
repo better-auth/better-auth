@@ -122,7 +122,7 @@ describe("oauth metadata", async () => {
 			subject_types_supported: ["public"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
-			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+			acr_values_supported: ["0"],
 			prompt_values_supported: [
 				"login",
 				"consent",
