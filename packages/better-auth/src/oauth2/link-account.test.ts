@@ -1,7 +1,10 @@
+import { DatabaseSync } from "node:sqlite";
 import type {
 	DiscordProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import { Kysely } from "kysely";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -13,8 +16,11 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { parseSetCookieHeader } from "../cookies";
+import { betterAuth } from "../auth/full";
+import { createAuthClient } from "../client";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { signJWT } from "../crypto";
+import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
@@ -1335,6 +1341,103 @@ describe("oauth2 - override user info on sign-in", async () => {
 		});
 
 		expect(session.data?.user.email).toBe(testEmail);
+	});
+});
+
+describe("oauth2 - sign-up account creation rollback", async () => {
+	const sqlite = new DatabaseSync(":memory:");
+	const database = new Kysely({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: {
+			db: database,
+			type: "sqlite",
+			transaction: true,
+		},
+		account: {
+			additionalFields: {
+				requiredAccountField: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: (url, init) => auth.handler(new Request(url, init)),
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	afterAll(async () => {
+		await database.destroy();
+	});
+
+	it("rolls back the user row when the first OAuth account cannot be created", async () => {
+		const testEmail = "oauth-rollback@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_rollback",
+					email: testEmail,
+					email_verified: true,
+					name: "Rollback User",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: setCookieToHeader(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+				setCookieToHeader(oAuthHeaders)(context);
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_create_user");
+
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user).toBeNull();
 	});
 });
 

@@ -2,6 +2,7 @@ import type {
 	GenericEndpointContext,
 	UserProvisioningSource,
 } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
@@ -225,17 +226,23 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: userInfo.id.toString(),
 			};
-			const createdUser = await c.context.internalAdapter.createUser(
-				{
-					...restUserInfo,
-					email: userInfo.email.toLowerCase(),
+			const { createdUser, createdAccount } = await runWithTransaction(
+				c.context.adapter,
+				async () => {
+					const createdUser = await c.context.internalAdapter.createUser(
+						{
+							...restUserInfo,
+							email: userInfo.email.toLowerCase(),
+						},
+						source,
+					);
+					const createdAccount = await c.context.internalAdapter.createAccount({
+						...accountData,
+						userId: createdUser.id,
+					});
+					return { createdUser, createdAccount };
 				},
-				source,
 			);
-			const createdAccount = await c.context.internalAdapter.createAccount({
-				...accountData,
-				userId: createdUser.id,
-			});
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, createdAccount);
