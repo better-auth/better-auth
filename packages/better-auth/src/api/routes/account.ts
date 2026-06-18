@@ -866,6 +866,14 @@ export const refreshToken = createAuthEndpoint(
 				: refreshToken;
 			const resolvedRefreshTokenExpiresAt =
 				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+			const updatedTokenData: Partial<Account> = {
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: resolvedRefreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+				idToken: tokens.idToken || account.idToken,
+			};
+			let updatedAccount: Account | null = null;
 
 			if (account.id) {
 				/**
@@ -873,15 +881,10 @@ export const refreshToken = createAuthEndpoint(
 				 *
 				 * @see {@link Account.scope}
 				 */
-				const updateData = {
-					...(account || {}),
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					idToken: tokens.idToken || account.idToken,
-				};
-				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedTokenData,
+				);
 			}
 
 			if (
@@ -889,22 +892,19 @@ export const refreshToken = createAuthEndpoint(
 				providerId === accountData.providerId &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
-				const updateData = {
+				const updateData = updatedAccount ?? {
 					...accountData,
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					idToken: tokens.idToken || accountData.idToken,
+					...updatedTokenData,
 				};
 				await setAccountCookie(ctx, updateData);
 			}
+			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
 				accessToken: tokens.accessToken,
 				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				scope: tokens.scopes?.join(",") || account.scope,
+				scope: responseScope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.accountId,

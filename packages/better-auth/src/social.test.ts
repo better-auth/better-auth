@@ -3393,7 +3393,57 @@ describe("account.scope path-dependent semantics", async () => {
 				}),
 			),
 		);
-		await client.$fetch("/refresh-token", {
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(refresh.data?.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
+	it("does not write stale account cookie scope on /refresh-token", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-refresh-cookie-sub");
+
+		mockGoogleTokenResponse(idToken, "openid email");
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		const accumulatedScope =
+			"openid,email,profile,https://www.googleapis.com/auth/drive.readonly";
+		await ctx.internalAdapter.updateAccount(accounts[0]!.id, {
+			scope: accumulatedScope,
+		});
+
+		// The account cookie still has the original narrower scope. Refresh must
+		// not write that stale cookie scope back over the stored accumulated grant.
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "cookie-refreshed-access-token",
+					refresh_token: "cookie-refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email",
+				}),
+			),
+		);
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
 				accountId: accounts[0]!.accountId,
 				providerId: "google",
@@ -3405,9 +3455,8 @@ describe("account.scope path-dependent semantics", async () => {
 			},
 		});
 
+		expect(refresh.data?.scope).toBe(accumulatedScope);
 		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.scope).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
+		expect(after[0]!.scope).toBe(accumulatedScope);
 	});
 });
