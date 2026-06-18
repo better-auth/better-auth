@@ -1011,6 +1011,11 @@ export interface OAuthOptions<
 	 * example.com should namespace an organization at
 	 * https://example.com/organization.
 	 *
+	 * Reserved ID token claim names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`,
+	 * `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`,
+	 * `amr`, `azp`) are stripped at issuance with a warning log. The
+	 * authorization server owns these values.
+	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
 	customIdTokenClaims?: (info: {

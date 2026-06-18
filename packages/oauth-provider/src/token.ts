@@ -12,6 +12,10 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	stripReservedIdTokenClaims,
+	UNSPECIFIED_ACR,
+} from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
@@ -320,18 +324,16 @@ async function createIdToken(
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
-	// TODO: this should be validated against the login process
-	// - bronze : password only
-	// - silver : mfa
-	const acr = "urn:mace:incommon:iap:bronze";
 
-	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims({
-				user,
-				scopes,
-				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
+	const customClaims = stripReservedIdTokenClaims(
+		opts.customIdTokenClaims
+			? await opts.customIdTokenClaims({
+					user,
+					scopes,
+					metadata: parseClientMetadata(client.metadata),
+				})
+			: undefined,
+	);
 
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
@@ -357,7 +359,7 @@ async function createIdToken(
 	const payload: JWTPayload = {
 		...userClaims,
 		auth_time: authTimeSec,
-		acr,
+		acr: UNSPECIFIED_ACR,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -368,11 +370,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
-	// Extension and grant claims are additive: they only fill keys the provider
-	// does not already own, so a contributor cannot replace an identity claim
-	// (email/name/...), the authentication context, or an AS-owned claim.
-	// First-party `customIdTokenClaims` already overrode auth_time/acr above.
-	Object.assign(payload, pickClaims(extraClaims, payload));
+	// Extension and grant claims are additive: reserved OIDC/JWT names are
+	// stripped, and the remaining claims only fill keys the provider does not
+	// already own.
+	const additiveClaims = stripReservedIdTokenClaims(extraClaims);
+	Object.assign(payload, pickClaims(additiveClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret

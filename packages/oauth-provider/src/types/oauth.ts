@@ -258,19 +258,16 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Authentication Context Class Reference values supported.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
-	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
+	 * Better Auth does not advertise this field by default because it does not
+	 * currently evaluate requested Authentication Context Class References.
 	 *
 	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * undefined
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	 */
-	acr_values_supported: string[];
+	acr_values_supported?: string[];
 	/**
 	 * Supported subject types.
 	 *

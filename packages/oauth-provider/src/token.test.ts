@@ -2216,18 +2216,25 @@ describe("id token claim override security", async () => {
 				customIdTokenClaims: () => ({
 					acr: "silver",
 					auth_time: 0,
+					amr: ["evil"],
 					sub: "evil",
 					iss: "https://evil.com",
 					aud: "evil-client",
 					nonce: "evil-nonce",
 					iat: 0,
+					nbf: 0,
 					exp: 0,
+					jti: "evil-jti",
+					azp: "evil-authorized-party",
 					sid: "evil-sid",
+					at_hash: "evil-at-hash",
+					c_hash: "evil-code-hash",
+					s_hash: "evil-state-hash",
+					"https://example.com/custom": "safe-custom-claim",
 				}),
 			}),
 		],
 	});
-
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
@@ -2323,15 +2330,16 @@ describe("id token claim override security", async () => {
 		return decodeJwt(tokens.data!.id_token!);
 	}
 
-	it("customIdTokenClaims can override acr and auth_time", async ({
+	it("customIdTokenClaims cannot override authentication context claims", async ({
 		expect,
 	}) => {
 		const claims = await getIdTokenClaims();
-		expect(claims.acr).toBe("silver");
-		expect(claims.auth_time).toBe(0);
+		expect(claims.acr).toBe("0");
+		expect(claims.auth_time).not.toBe(0);
+		expect(claims.amr).toBeUndefined();
 	});
 
-	it("customIdTokenClaims cannot override pinned security claims", async ({
+	it("customIdTokenClaims cannot override provider-owned id token claims", async ({
 		expect,
 	}) => {
 		const claims = await getIdTokenClaims();
@@ -2340,8 +2348,15 @@ describe("id token claim override security", async () => {
 		expect(claims.aud).not.toBe("evil-client");
 		expect(claims.nonce).not.toBe("evil-nonce");
 		expect(claims.iat).not.toBe(0);
+		expect(claims.nbf).not.toBe(0);
 		expect(claims.exp).not.toBe(0);
+		expect(claims.jti).not.toBe("evil-jti");
+		expect(claims.azp).not.toBe("evil-authorized-party");
 		expect(claims.sid).not.toBe("evil-sid");
+		expect(claims.at_hash).not.toBe("evil-at-hash");
+		expect(claims.c_hash).not.toBe("evil-code-hash");
+		expect(claims.s_hash).not.toBe("evil-state-hash");
+		expect(claims["https://example.com/custom"]).toBe("safe-custom-claim");
 	});
 });
 
