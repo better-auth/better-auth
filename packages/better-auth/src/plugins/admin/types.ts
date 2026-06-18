@@ -96,15 +96,10 @@ export interface AdminOptions {
 		/**
 		 * A callback when `admin.stopImpersonating` is called.
 		 */
-		impersonateEnd: (
-			/**
-			 * `null` if the request is made from the server
-			 */
-			adminSession: {
-				user: User & Record<string, unknown>;
-				session: Session & Record<string, unknown>;
-			} | null,
-		) => Promise<void>;
+		impersonateEnd: (adminSession: {
+			user: User & Record<string, unknown>;
+			session: Session & Record<string, unknown>;
+		}) => Promise<void>;
 		/**
 		 * A callback when `admin.banUser` is called.
 		 */
@@ -142,13 +137,10 @@ export interface AdminOptions {
 		 * A callback when `admin.removeUser` is called.
 		 */
 		userRemove: (
-			/**
-			 * `null` if the request is made from the server
-			 */
 			adminSession: {
 				user: User & Record<string, unknown>;
 				session: Session & Record<string, unknown>;
-			} | null,
+			},
 			removedUser: UserWithRole,
 		) => Promise<void>;
 	};

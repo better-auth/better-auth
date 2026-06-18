@@ -902,10 +902,12 @@ admin({
 Triggered when `admin.impersonateUser` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
-- `impersonatedUser`: The user object that is being impersonated.
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+* `impersonatedUser`: The user object that is being impersonated.
 
 **Example:**
+
 ```ts
 impersonateStart: async (adminSession, impersonatedUser) => {
   console.log(`Admin ${adminSession?.user.email} started impersonating ${impersonatedUser.email}`);
@@ -917,12 +919,14 @@ impersonateStart: async (adminSession, impersonatedUser) => {
 Triggered when `admin.stopImpersonating` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
 
 **Example:**
+
 ```ts
 impersonateEnd: async (adminSession) => {
-  console.log(`Admin ${adminSession?.user.email} stopped impersonating`);
+  console.log(`Admin ${adminSession.user.email} stopped impersonating`);
 }
 ```
 
@@ -931,10 +935,12 @@ impersonateEnd: async (adminSession) => {
 Triggered when `admin.banUser` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
-- `bannedUser`: The user object that was banned (includes `banned`, `banReason`, and `banExpires` fields).
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
+* `bannedUser`: The user object that was banned (includes `banned`, `banReason`, and `banExpires` fields).
 
 **Example:**
+
 ```ts
 ban: async (adminSession, bannedUser) => {
   await auditLog.create({
@@ -951,10 +957,12 @@ ban: async (adminSession, bannedUser) => {
 Triggered when `admin.unbanUser` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
-- `unbannedUser`: The user object that was unbanned (the `banned` field will be `false`).
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
+* `unbannedUser`: The user object that was unbanned (the `banned` field will be `false`).
 
 **Example:**
+
 ```ts
 unban: async (adminSession, unbannedUser) => {
   await auditLog.create({
@@ -970,10 +978,12 @@ unban: async (adminSession, unbannedUser) => {
 Triggered when `admin.createUser` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
-- `createdUser`: The user object that was created.
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+* `createdUser`: The user object that was created.
 
 **Example:**
+
 ```ts
 userCreate: async (adminSession, createdUser) => {
   await sendWelcomeEmail({
@@ -988,18 +998,20 @@ userCreate: async (adminSession, createdUser) => {
 Triggered when `admin.removeUser` is called.
 
 **Parameters:**
-- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
-- `removedUser`: The user object that was removed (this is the user object before deletion).
+
+* `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
+* `removedUser`: The user object that was removed (this is the user object before deletion).
 
 **Example:**
+
 ```ts
 userRemove: async (adminSession, removedUser) => {
-  // Archive user data before deletion
+  // Archive user data after deletion
   await archiveUserData(removedUser.id);
 }
 ```
 
 <Callout>
   **Note:** All event callbacks are `async` functions and should return a `Promise<void>`.
-  If an event callback throws an error, the admin operation will fail unless you handle the error within the callback.
+  If an event callback throws an error, it will not prevent the admin operation from completing. Errors are logged via the auth logger.
 </Callout>

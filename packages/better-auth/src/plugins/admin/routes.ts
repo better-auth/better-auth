@@ -49,6 +49,24 @@ function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
 
+async function invokeAdminEvent(
+	ctx: {
+		context: {
+			logger: {
+				error: (message: string, error?: unknown) => void;
+			};
+		};
+	},
+	eventName: string,
+	callback: () => Promise<void>,
+) {
+	try {
+		await callback();
+	} catch (error) {
+		ctx.context.logger.error(`Admin event "${eventName}" threw`, error);
+	}
+}
+
 const setRoleBodySchema = z.object({
 	userId: z.coerce.string().meta({
 		description: "The user id",
@@ -472,7 +490,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 							session: session.session as Session & Record<string, unknown>,
 						}
 					: null;
-				await opts.events.userCreate(adminSession, user as UserWithRole);
+				await invokeAdminEvent(ctx, "userCreate", async () => {
+					await opts.events!.userCreate(adminSession, user as UserWithRole);
+				});
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
@@ -1043,13 +1063,15 @@ export const unbanUser = (opts: AdminOptions) =>
 
 			// Call unban event
 			if (opts.events?.unban) {
-				await opts.events.unban(
-					{
-						user: session.user as User & Record<string, unknown>,
-						session: session.session as Session & Record<string, unknown>,
-					},
-					user as UserWithRole,
-				);
+				await invokeAdminEvent(ctx, "unban", async () => {
+					await opts.events!.unban(
+						{
+							user: session.user as User & Record<string, unknown>,
+							session: session.session as Session & Record<string, unknown>,
+						},
+						user as UserWithRole,
+					);
+				});
 			}
 
 			return ctx.json({
@@ -1179,13 +1201,15 @@ export const banUser = (opts: AdminOptions) =>
 
 			// Call ban event
 			if (opts.events?.ban) {
-				await opts.events.ban(
-					{
-						user: session.user as User & Record<string, unknown>,
-						session: session.session as Session & Record<string, unknown>,
-					},
-					user as UserWithRole,
-				);
+				await invokeAdminEvent(ctx, "ban", async () => {
+					await opts.events!.ban(
+						{
+							user: session.user as User & Record<string, unknown>,
+							session: session.session as Session & Record<string, unknown>,
+						},
+						user as UserWithRole,
+					);
+				});
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
@@ -1350,7 +1374,9 @@ export const impersonateUser = (opts: AdminOptions) =>
 
 			// Call impersonateStart event after impersonation setup succeeds
 			if (opts.events?.impersonateStart) {
-				await opts.events.impersonateStart(adminSessionForEvent, targetUser);
+				await invokeAdminEvent(ctx, "impersonateStart", async () => {
+					await opts.events!.impersonateStart(adminSessionForEvent, targetUser);
+				});
 			}
 
 			return ctx.json({
@@ -1435,7 +1461,9 @@ export const stopImpersonating = (opts: AdminOptions) =>
 					user: user as User & Record<string, unknown>,
 					session: adminSession.session as Session & Record<string, unknown>,
 				};
-				await opts.events.impersonateEnd(adminSessionForEvent);
+				await invokeAdminEvent(ctx, "impersonateEnd", async () => {
+					await opts.events!.impersonateEnd(adminSessionForEvent);
+				});
 			}
 
 			return ctx.json({
@@ -1684,16 +1712,18 @@ export const removeUser = (opts: AdminOptions) =>
 			}
 
 			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
+			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 
-			// Call userRemove event before deleting the user
+			// Call userRemove event after deleting the user
 			if (opts.events?.userRemove) {
 				const adminSession = {
 					user: session.user as User & Record<string, unknown>,
 					session: session.session as Session & Record<string, unknown>,
 				};
-				await opts.events.userRemove(adminSession, user as UserWithRole);
+				await invokeAdminEvent(ctx, "userRemove", async () => {
+					await opts.events!.userRemove(adminSession, user as UserWithRole);
+				});
 			}
-			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});
