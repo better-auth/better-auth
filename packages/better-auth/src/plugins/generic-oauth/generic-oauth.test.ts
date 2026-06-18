@@ -4681,7 +4681,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 		);
 
 		expect(redirectUri).toBe(
-			"http://localhost:3000/api/auth/oauth2/callback/dynamic-oauth-test",
+			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
 		);
 	});
 
@@ -4711,7 +4711,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 		);
 
 		expect(redirectUri).toBe(
-			"http://localhost:3000/auth/oauth2/callback/dynamic-oauth-test",
+			"http://localhost:3000/auth/callback/dynamic-oauth-test",
 		);
 	});
 
