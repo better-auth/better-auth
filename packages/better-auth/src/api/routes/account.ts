@@ -3,6 +3,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
@@ -15,14 +20,26 @@ import {
 import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
-import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import { generateIdTokenNonce, generateState } from "../../oauth2/state";
+import {
+	decryptOAuthToken,
+	getOAuthCallbackPath,
+	setTokenUtil,
+} from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	isStateful,
 	sessionMiddleware,
 } from "./session";
+
+function parseStoredScopes(scope: string | null | undefined): string[] {
+	if (!scope) return [];
+	return scope
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -98,7 +115,7 @@ export const listUserAccounts = createAuthEndpoint(
 				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
 				return {
 					...parsed,
-					scopes: scope?.split(",") || [],
+					scopes: parseStoredScopes(scope),
 				};
 			}),
 		);
@@ -133,7 +150,6 @@ export const linkSocialAccount = createAuthEndpoint(
 					nonce: z.string().optional(),
 					accessToken: z.string().optional(),
 					refreshToken: z.string().optional(),
-					scopes: z.array(z.string()).optional(),
 				})
 				.optional(),
 			/**
@@ -174,6 +190,22 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * The login hint to forward to the provider authorization endpoint.
+			 */
+			loginHint: z
+				.string()
+				.meta({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
+			/**
+			 * Extra query parameters to append to the provider authorization URL.
+			 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+			 * code_challenge, code_challenge_method, nonce, scope) are rejected.
+			 */
+			additionalParams: additionalAuthorizationParamsSchema,
 			/**
 			 * Any additional data to pass through the oauth flow.
 			 */
@@ -233,7 +265,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		// Handle ID Token flow if provided
 		if (c.body.idToken) {
-			if (!provider.verifyIdToken) {
+			if (!supportsIdTokenSignIn(provider)) {
 				c.context.logger.error(
 					"Provider does not support id token verification",
 					{
@@ -247,7 +279,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			const { token, nonce } = c.body.idToken;
-			const valid = await provider.verifyIdToken(token, nonce);
+			const valid = await verifyProviderIdToken(provider, token, nonce);
 			if (!valid) {
 				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,
@@ -332,9 +364,8 @@ export const linkSocialAccount = createAuthEndpoint(
 					accessToken: c.body.idToken.accessToken,
 					idToken: token,
 					refreshToken: c.body.idToken.refreshToken,
-					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch (_e: any) {
+			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 					code: "LINKING_FAILED",
@@ -351,20 +382,24 @@ export const linkSocialAccount = createAuthEndpoint(
 		}
 
 		// Handle OAuth flow
-		const state = await generateState(
-			c,
-			{
+		const idTokenNonce = generateIdTokenNonce(provider);
+		const state = await generateState(c, {
+			link: {
 				userId: session.user.id,
 				email: session.user.email,
 			},
-			c.body.additionalData,
-		);
+			additionalData: c.body.additionalData,
+			idTokenNonce,
+		});
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
 			codeVerifier: state.codeVerifier,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			idTokenNonce,
+			redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		if (!c.body.disableRedirect) {
@@ -572,7 +607,7 @@ async function getValidAccessToken(
 				account.refreshToken,
 				ctx.context,
 			);
-			newTokens = await provider.refreshAccessToken(refreshToken);
+			newTokens = await provider.refreshAccessToken(refreshToken, ctx);
 			const updatedData = {
 				accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
 				accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
@@ -583,7 +618,7 @@ async function getValidAccessToken(
 					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
 				idToken: newTokens?.idToken || account.idToken,
 			};
-			let updatedAccount: Record<string, any> | null = null;
+			let updatedAccount: Partial<Account> | null = null;
 			if (account.id) {
 				updatedAccount = await ctx.context.internalAdapter.updateAccount(
 					account.id,
@@ -619,7 +654,7 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			scopes: account.scope?.split(",") ?? [],
+			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
 	} catch (_error) {
@@ -823,6 +858,7 @@ export const refreshToken = createAuthEndpoint(
 			);
 			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
 				decryptedRefreshToken,
+				ctx,
 			);
 
 			const resolvedRefreshToken = tokens.refreshToken
@@ -830,41 +866,45 @@ export const refreshToken = createAuthEndpoint(
 				: refreshToken;
 			const resolvedRefreshTokenExpiresAt =
 				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+			const updatedTokenData: Partial<Account> = {
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: resolvedRefreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+				idToken: tokens.idToken || account.idToken,
+			};
+			let updatedAccount: Account | null = null;
 
 			if (account.id) {
-				const updateData = {
-					...(account || {}),
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || account.scope,
-					idToken: tokens.idToken || account.idToken,
-				};
-				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
+				/**
+				 * `scope` intentionally omitted. Refresh response may be narrower.
+				 *
+				 * @see {@link Account.scope}
+				 */
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedTokenData,
+				);
 			}
 
 			if (
-				usedAccountCookie &&
+				accountData &&
+				providerId === accountData.providerId &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
 				const updateData = {
 					...accountData,
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || accountData.scope,
-					idToken: tokens.idToken || accountData.idToken,
+					...(updatedAccount ?? updatedTokenData),
 				};
 				await setAccountCookie(ctx, updateData);
 			}
+			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
 				accessToken: tokens.accessToken,
 				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				scope: tokens.scopes?.join(",") || account.scope,
+				scope: responseScope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.accountId,

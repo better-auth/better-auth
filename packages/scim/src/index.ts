@@ -1,10 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
+	createSCIMGroup,
 	createSCIMUser,
+	deleteSCIMGroup,
 	deleteSCIMProviderConnection,
 	deleteSCIMUser,
 	generateSCIMToken,
+	getSCIMGroup,
 	getSCIMProviderConnection,
 	getSCIMResourceType,
 	getSCIMResourceTypes,
@@ -12,9 +15,12 @@ import {
 	getSCIMSchemas,
 	getSCIMServiceProviderConfig,
 	getSCIMUser,
+	listSCIMGroups,
 	listSCIMProviderConnections,
 	listSCIMUsers,
+	patchSCIMGroup,
 	patchSCIMUser,
+	updateSCIMGroup,
 	updateSCIMUser,
 } from "./routes";
 import type { SCIMOptions } from "./types";
@@ -33,11 +39,6 @@ export const scim = (options?: SCIMOptions) => {
 		storeSCIMToken: "plain",
 		...options,
 	} satisfies SCIMOptions;
-	// TODO(scim-provider-ownership-default-on): flip default to `true` on next.
-	// Kept default-off on main so existing SQL deployments don't need a schema
-	// migration mid-upgrade. The dedicated next-minor PR adds the
-	// `scimProvider.userId` column and flips the default in one step.
-	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
@@ -55,6 +56,12 @@ export const scim = (options?: SCIMOptions) => {
 			deleteSCIMUser: deleteSCIMUser(authMiddleware),
 			updateSCIMUser: updateSCIMUser(authMiddleware),
 			listSCIMUsers: listSCIMUsers(authMiddleware),
+			getSCIMGroup: getSCIMGroup(authMiddleware),
+			createSCIMGroup: createSCIMGroup(authMiddleware, opts),
+			patchSCIMGroup: patchSCIMGroup(authMiddleware, opts),
+			deleteSCIMGroup: deleteSCIMGroup(authMiddleware),
+			updateSCIMGroup: updateSCIMGroup(authMiddleware, opts),
+			listSCIMGroups: listSCIMGroups(authMiddleware),
 			getSCIMServiceProviderConfig,
 			getSCIMSchemas,
 			getSCIMSchema,
@@ -78,14 +85,159 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
-					...(providerOwnershipEnabled
-						? {
-								userId: {
-									type: "string",
-									required: false,
-								},
-							}
-						: {}),
+					userId: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+			scimGroup: {
+				fields: {
+					providerId: {
+						type: "string",
+						required: true,
+					},
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					scimGroupId: {
+						type: "string",
+						required: true,
+						unique: true,
+					},
+					externalId: {
+						type: "string",
+						required: false,
+					},
+					externalIdKey: {
+						type: "string",
+						required: false,
+						unique: true,
+						returned: false,
+					},
+					displayName: {
+						type: "string",
+						required: true,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
+					updatedAt: {
+						type: "date",
+						required: false,
+					},
+				},
+			},
+			scimGroupMember: {
+				fields: {
+					groupId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "scimGroup",
+							field: "id",
+						},
+					},
+					providerId: {
+						type: "string",
+						required: true,
+					},
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "user",
+							field: "id",
+						},
+					},
+					membershipKey: {
+						type: "string",
+						required: true,
+						unique: true,
+						returned: false,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
+				},
+			},
+			scimGroupRole: {
+				fields: {
+					groupId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "scimGroup",
+							field: "id",
+						},
+					},
+					role: {
+						type: "string",
+						required: true,
+					},
+					roleKey: {
+						type: "string",
+						required: true,
+						unique: true,
+						returned: false,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
+				},
+			},
+			scimGroupRoleGrant: {
+				fields: {
+					groupId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "scimGroup",
+							field: "id",
+						},
+					},
+					providerId: {
+						type: "string",
+						required: true,
+					},
+					organizationId: {
+						type: "string",
+						required: true,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "user",
+							field: "id",
+						},
+					},
+					role: {
+						type: "string",
+						required: true,
+					},
+					roleGrantKey: {
+						type: "string",
+						required: true,
+						unique: true,
+						returned: false,
+					},
+					isRoleProjected: {
+						type: "boolean",
+						required: true,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+					},
 				},
 			},
 		},

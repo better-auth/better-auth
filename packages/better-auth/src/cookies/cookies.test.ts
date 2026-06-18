@@ -4,6 +4,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeCookie } from "better-call";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -24,6 +25,7 @@ import {
 	parseCookies,
 } from "../cookies";
 import { signJWT, symmetricDecodeJWT } from "../crypto";
+import { jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../utils/constants";
 import {
@@ -35,6 +37,9 @@ import {
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -1168,6 +1173,71 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should work with JWT strategy backed by JWKS keys", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("Cookie-cache JWT not found");
+		}
+
+		const header = decodeProtectedHeader(token);
+		expect(header.alg).toBe("EdDSA");
+		expect(header.kid).toEqual(expect.any(String));
+
+		const jwks = await auth.api.getJwks();
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks,
+			},
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		expect(header.typ).toBe(COOKIE_CACHE_JWT_TYPE);
+		expect(verified.payload.session).toBeDefined();
+		expect(verified.payload.user).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(cache?.user?.id);
+		expect(verified.payload.sid).toBe(cache?.session?.token);
+	});
+
 	it("should work with compact strategy", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
@@ -1220,13 +1290,107 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).toBeNull();
 	});
 
-	it("should default to JWT strategy when not specified", async () => {
+	it("should require JWKS input for helper verification in JWKS mode", async () => {
+		const headers = new Headers();
+		headers.set("cookie", "better-auth.session_data=token");
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		await expect(
+			getCookieCache(request, {
+				strategy: "jwt",
+				jwt: {
+					signingKey: "jwt-plugin",
+				},
+			}),
+		).rejects.toThrow(
+			'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
+		);
+	});
+
+	it("should reject JWT plugin tokens that are not cookie-cache JWTs", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+		});
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "user-id",
+				},
+			},
+		});
+		const jwks = await auth.api.getJwks();
+
+		const headers = new Headers();
+		headers.set("cookie", `better-auth.session_data=${token.token}`);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks,
+			},
+		});
+
+		expect(cache).toBeNull();
+	});
+
+	it("should return null when JWKS verification uses the wrong key set", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		expect((await auth.api.getJwks()).keys.length).toBeGreaterThan(0);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks: {
+					keys: [],
+				},
+			},
+		});
+
+		expect(cache).toBeNull();
+	});
+
+	it("should default to compact strategy when not specified", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
 					enabled: true,
-					// No strategy specified, should default to "jwt"
+					// No strategy specified, should default to "compact"
 				},
 			},
 		});
@@ -1249,7 +1413,7 @@ describe("Cookie Cache Field Filtering", () => {
 
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
-			// No strategy specified, should default to "jwt"
+			// No strategy specified, should default to "compact"
 		});
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
@@ -1334,6 +1498,83 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual("chunk-test@example.com");
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should chunk JWKS-backed JWT cookies when they exceed 4KB", async () => {
+		const largeString = "j".repeat(2000);
+
+		const { auth, client } = await getTestInstance({
+			user: {
+				additionalFields: {
+					field1: {
+						type: "string",
+						defaultValue: "",
+					},
+					field2: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signUp.email(
+			{
+				name: "JWKS Chunk User",
+				email: "jwks-chunk-test@example.com",
+				password: "password123",
+				field1: largeString,
+				field2: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasChunks = false;
+
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunks = true;
+						}
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+
+					expect(hasChunks).toBe(true);
+				},
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks: await auth.api.getJwks(),
+			},
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("jwks-chunk-test@example.com");
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 

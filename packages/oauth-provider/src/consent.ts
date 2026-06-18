@@ -5,8 +5,9 @@ import type { AuthorizeEndpointCaller } from "./continue";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
-	normalizeTimestampValue,
+	isSessionFreshForSignedQuery,
 	parsePrompt,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 } from "./utils";
@@ -67,7 +68,7 @@ export async function consentEndpoint<Result>(
 	const hasLoginPrompt = promptSet.has("login");
 	const hasSatisfiedLoginPrompt =
 		hasLoginPrompt &&
-		sessionSatisfiesLoginPrompt(
+		isSessionFreshForSignedQuery(
 			session?.session.createdAt,
 			oauthRequest?.signedQueryIssuedAt,
 		);
@@ -106,12 +107,14 @@ export async function consentEndpoint<Result>(
 		},
 	);
 	const iat = Math.floor(Date.now() / 1000);
+	const resource = query.getAll("resource");
 	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
 		userId: session?.user.id!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
+		resources: resource.length ? resource : undefined,
 		referenceId,
 	};
 	foundConsent?.id
@@ -124,6 +127,7 @@ export async function consentEndpoint<Result>(
 					},
 				],
 				update: {
+					resources: consent.resources,
 					scopes: consent.scopes,
 					updatedAt: new Date(iat * 1000),
 				},
@@ -144,6 +148,7 @@ export async function consentEndpoint<Result>(
 	let authorizationQuery = removePromptFromQuery(query, "consent");
 	if (hasSatisfiedLoginPrompt) {
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
+		authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
 	const postLoginClearedForThisSession =
@@ -152,16 +157,4 @@ export async function consentEndpoint<Result>(
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
 	});
-}
-
-// Relies on session.createdAt being immutable for the session's lifetime; a
-// refresh path that rewrites it would silently accept a pre-request session.
-function sessionSatisfiesLoginPrompt(
-	sessionCreatedAt: Date | string | undefined,
-	signedQueryIssuedAt: Date | undefined,
-) {
-	if (!signedQueryIssuedAt) return false;
-	const normalized = normalizeTimestampValue(sessionCreatedAt);
-	if (!normalized) return false;
-	return normalized.getTime() >= signedQueryIssuedAt.getTime();
 }

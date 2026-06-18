@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -54,7 +54,7 @@ describe("PKCE optional - default behavior", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client
@@ -181,7 +181,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client with PKCE disabled
@@ -254,7 +254,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			options: {
@@ -308,7 +308,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
@@ -376,7 +376,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier,
@@ -431,7 +431,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
@@ -474,7 +474,7 @@ describe("PKCE optional - consistency checks", async () => {
 		expect(code).toBeDefined();
 
 		// Try to exchange WITHOUT code_verifier (should fail)
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			// Intentionally omit codeVerifier
@@ -522,7 +522,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange WITH code_verifier (should fail)
 		const wrongCodeVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongCodeVerifier,
@@ -578,7 +578,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange with WRONG code_verifier
 		const wrongVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongVerifier,
@@ -637,7 +637,7 @@ describe("PKCE optional - registration restrictions", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	it("admin create endpoint should persist require_pkce", async () => {
 		const pkceDisabledClient = await auth.api.adminCreateOAuthClient({

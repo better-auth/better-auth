@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -42,6 +42,19 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	region: string;
 	userPoolId: string;
 	requireClientSecret?: boolean | undefined;
+	/**
+	 * Skip the Cognito hosted-UI identity-provider picker by preselecting an
+	 * IdP (maps to the `identity_provider` query parameter on the authorize
+	 * request). Accepts `"COGNITO"`, a SAML/OIDC provider name configured on
+	 * the User Pool, or one of the social providers (`"Google"`, `"Facebook"`,
+	 * `"LoginWithAmazon"`, `"SignInWithApple"`).
+	 *
+	 * Per-request overrides via `signIn.social({ additionalParams: { identity_provider } })`
+	 * take precedence over this value.
+	 *
+	 * @see https://docs.aws.amazon.com/cognito/latest/developerguide/authorization-endpoint.html
+	 */
+	identityProvider?: string | undefined;
 }
 
 export const cognito = (options: CognitoOptions) => {
@@ -60,7 +73,13 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!getPrimaryClientId(options.clientId)) {
 				logger.error(
 					"ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
@@ -91,6 +110,12 @@ export const cognito = (options: CognitoOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams: {
+					...(options.identityProvider
+						? { identity_provider: options.identityProvider }
+						: {}),
+					...(additionalParams ?? {}),
+				},
 			});
 			// AWS Cognito requires scopes to be encoded with %20 instead of +
 			// URLSearchParams encodes spaces as + by default, so we need to fix this
@@ -130,41 +155,12 @@ export const cognito = (options: CognitoOptions) => {
 					});
 				},
 
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			try {
-				const decodedHeader = decodeProtectedHeader(token);
-				const { kid, alg: jwtAlg } = decodedHeader;
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getCognitoPublicKey(
-					kid,
-					options.region,
-					options.userPoolId,
-				);
-				const expectedIssuer = `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`;
-
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: expectedIssuer,
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				});
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-				return true;
-			} catch (error) {
-				logger.error("Failed to verify ID token:", error);
-				return false;
-			}
+		idToken: {
+			jwks: (header) =>
+				getCognitoPublicKey(header.kid!, options.region, options.userPoolId),
+			issuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
+			audience: options.clientId,
+			maxTokenAge: "1h",
 		},
 
 		async getUserInfo(token) {

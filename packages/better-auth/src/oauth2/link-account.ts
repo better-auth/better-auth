@@ -1,10 +1,15 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	UserProvisioningSource,
+} from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
-import { redirectOnError } from "./errors";
+import { assertValidUserInfo } from "../utils/validate-user-info";
+import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -18,23 +23,16 @@ export async function handleOAuthUserInfo(
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
-		/**
-		 * Whether `account.providerId` may be matched against the globally
-		 * configured `accountLinking.trustedProviders` list to infer trust.
-		 *
-		 * Defaults to `true` for built-in social/OAuth providers, whose
-		 * `providerId` namespace is controlled by the developer's config. Callers
-		 * whose `providerId` is user-controlled (e.g. the SSO plugin, where any
-		 * authenticated user can register a provider with an arbitrary id) must
-		 * pass `false` so a provider named after a trusted social provider can't
-		 * launder that trust. Such callers should supply their own
-		 * `isTrustedProvider` signal instead.
-		 */
 		trustProviderByName?: boolean | undefined;
+		source?: UserProvisioningSource | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
 		opts;
+	const source = opts.source ?? {
+		method: "oauth",
+		oauth: { providerId: account.providerId },
+	};
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -88,6 +86,15 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
+				const { id: _providerAccountId, ...providerUserInfo } = userInfo;
+				await assertValidUserInfo(c, {
+					user: {
+						...providerUserInfo,
+						id: dbUser.user.id,
+						email: userInfo.email.toLowerCase(),
+					},
+					source: { ...source, action: "link-account" },
+				});
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
@@ -100,6 +107,9 @@ export async function handleOAuthUserInfo(
 					scope: account.scope,
 				});
 			} catch (e) {
+				if (isAPIError(e)) {
+					throw e;
+				}
 				logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
@@ -124,6 +134,21 @@ export async function handleOAuthUserInfo(
 			user =
 				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
 		} else {
+			const { id: _providerAccountId, ...providerUserInfo } = userInfo;
+			await assertValidUserInfo(c, {
+				user: {
+					...providerUserInfo,
+					id: dbUser.user.id,
+					email: userInfo.email.toLowerCase(),
+				},
+				source: { ...source, action: "sign-in" },
+			});
+
+			/**
+			 * `scope` intentionally omitted. Updated only via linkSocial.
+			 *
+			 * @see {@link Account.scope}
+			 */
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
@@ -136,7 +161,6 @@ export async function handleOAuthUserInfo(
 								),
 								accessTokenExpiresAt: account.accessTokenExpiresAt,
 								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-								scope: account.scope,
 							}).filter(([_, value]) => value !== undefined),
 						)
 					: {};
@@ -168,14 +192,23 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
-				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
-			});
+			const updatedUser = await c.context.internalAdapter.updateUser(
+				dbUser.user.id,
+				{
+					...restUserInfo,
+					email: userInfo.email.toLowerCase(),
+					emailVerified:
+						userInfo.email.toLowerCase() === dbUser.user.email
+							? dbUser.user.emailVerified || userInfo.emailVerified
+							: userInfo.emailVerified,
+				},
+			);
+			if (updatedUser == null) {
+				logger.warn(
+					"Could not update user info during OAuth sign in; preserving existing user for session.",
+				);
+			}
+			user = updatedUser ?? user;
 		}
 	} else {
 		if (disableSignUp) {
@@ -197,53 +230,32 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: userInfo.id.toString(),
 			};
-			const { user: createdUser, account: createdAccount } =
-				await c.context.internalAdapter.createOAuthUser(
-					{
-						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
-					},
-					accountData,
-				);
+			const { createdUser, createdAccount } = await runWithTransaction(
+				c.context.adapter,
+				async () => {
+					const createdUser = await c.context.internalAdapter.createUser(
+						{
+							...restUserInfo,
+							email: userInfo.email.toLowerCase(),
+						},
+						source,
+					);
+					const createdAccount = await c.context.internalAdapter.createAccount({
+						...accountData,
+						userId: createdUser.id,
+					});
+					return { createdUser, createdAccount };
+				},
+			);
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, createdAccount);
 			}
-			if (
-				!userInfo.emailVerified &&
-				user &&
-				c.context.options.emailVerification?.sendOnSignUp &&
-				c.context.options.emailVerification?.sendVerificationEmail
-			) {
-				const token = await createEmailVerificationToken(
-					c.context.secret,
-					user.email,
-					undefined,
-					c.context.options.emailVerification?.expiresIn,
-				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-					callbackURL || "/",
-				)}`;
-				await c.context.runInBackgroundOrAwait(
-					c.context.options.emailVerification.sendVerificationEmail(
-						{
-							user,
-							url,
-							token,
-						},
-						c.request,
-					),
-				);
-			}
-		} catch (e: any) {
-			logger.error(e);
+		} catch (e) {
 			if (isAPIError(e)) {
-				return {
-					error: e.message,
-					data: null,
-					isRegister: false,
-				};
+				throw e;
 			}
+			logger.error("Unable to create OAuth user", e);
 			return {
 				error: "unable to create user",
 				data: null,
@@ -256,6 +268,30 @@ export async function handleOAuthUserInfo(
 			error: "unable to create user",
 			data: null,
 			isRegister: false,
+		};
+	}
+
+	const requireEmailVerification = c.context.socialProviders.find(
+		(p) => p.id === account.providerId,
+	)?.options?.requireEmailVerification;
+
+	if (
+		isRegister &&
+		!user.emailVerified &&
+		(c.context.options.emailVerification?.sendOnSignUp ??
+			requireEmailVerification)
+	) {
+		await dispatchVerificationEmail(c, user, callbackURL);
+	}
+
+	if (requireEmailVerification && !user.emailVerified) {
+		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
+			await dispatchVerificationEmail(c, user, callbackURL);
+		}
+		return {
+			error: OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED,
+			data: null,
+			isRegister,
 		};
 	}
 
@@ -276,6 +312,41 @@ export async function handleOAuthUserInfo(
 		error: null,
 		isRegister,
 	};
+}
+
+async function dispatchVerificationEmail(
+	c: GenericEndpointContext,
+	user: User,
+	callbackURL: string | undefined,
+) {
+	const sendVerificationEmail =
+		c.context.options.emailVerification?.sendVerificationEmail;
+	if (!sendVerificationEmail) {
+		return;
+	}
+	try {
+		const token = await createEmailVerificationToken(
+			c.context.secret,
+			user.email,
+			undefined,
+			c.context.options.emailVerification?.expiresIn,
+		);
+		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			callbackURL || "/",
+		)}`;
+		await c.context.runInBackgroundOrAwait(
+			sendVerificationEmail(
+				{
+					user,
+					url,
+					token,
+				},
+				c.request,
+			),
+		);
+	} catch (e) {
+		c.context.logger.error("Failed to send OAuth verification email", e);
+	}
 }
 
 /**

@@ -92,6 +92,52 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		expect(session.data?.user.email).toBe(testUser.email);
 	});
 
+	it("should expire malformed compact session_data and fall through to session_token DB validation", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		const sessionToken = cookies.get("better-auth.session_token");
+		expect(sessionToken).toBeDefined();
+
+		const tampered = new Headers();
+		tampered.set(
+			"cookie",
+			`better-auth.session_data=${btoa("not-json")}; better-auth.session_token=${sessionToken}`,
+		);
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: tampered,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+		expect(setCookieHeader).toContain("better-auth.session_data=");
+		expect(setCookieHeader).toContain("Max-Age=0");
+	});
+
 	it("should still return null when both session_data and session_token are invalid", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {

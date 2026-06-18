@@ -1,6 +1,8 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { betterFetch } from "@better-fetch/fetch";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
+import { OAuth2Server } from "oauth2-mock-server";
 import {
 	afterAll,
 	afterEach,
@@ -14,8 +16,31 @@ import * as apiModule from "../../api";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { genericOAuth } from "../generic-oauth";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
+
+/**
+ * Drops the session cookie while keeping every other cookie (notably the OAuth
+ * `state` cookie). This reproduces the callback an Expo in-app browser makes:
+ * it carries the state cookie forwarded by the auth proxy but never the
+ * `httpOnly` session cookie, which was set on the originating app request.
+ */
+function stripSessionCookie(
+	headers: Headers,
+	sessionCookiePrefix = "better-auth.session_token",
+): Headers {
+	const result = new Headers(headers);
+	const kept = (headers.get("cookie") ?? "")
+		.split(";")
+		.map((part) => part.trim())
+		.filter((part) => part && !part.startsWith(sessionCookiePrefix));
+	result.delete("cookie");
+	if (kept.length) {
+		result.set("cookie", kept.join("; "));
+	}
+	return result;
+}
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -66,7 +91,7 @@ afterAll(() => server.close());
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { client, sessionSetter, testUser, cookieSetter } =
+	const { client, sessionSetter, testUser, cookieSetter, auth } =
 		await getTestInstance(
 			{
 				plugins: [
@@ -113,6 +138,36 @@ describe("anonymous", async () => {
 		expect(session.data?.user.isAnonymous).toBe(true);
 	});
 
+	it("should reject anonymous sign-in when validateUserInfo returns error", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						if (source.method !== "anonymous") {
+							return;
+						}
+						expect(source.action).toBe("create-user");
+						return {
+							error: "anonymous_blocked",
+							errorDescription: "Anonymous users are not allowed",
+						};
+					},
+				},
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.anonymous();
+		expect(res.error?.code).toBe("anonymous_blocked");
+		expect(res.error?.message).toBe("Anonymous users are not allowed");
+	});
+
 	it("link anonymous user account", async () => {
 		expect(linkAccountFn).toHaveBeenCalledTimes(0);
 		await client.signIn.email(testUser, {
@@ -152,6 +207,79 @@ describe("anonymous", async () => {
 			headers,
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8692
+	 */
+	it("should link the anonymous account on social sign-in when the callback has no session cookie (Expo)", async () => {
+		linkAccountFn.mockClear();
+		const anonHeaders = new Headers();
+		await client.signIn.anonymous({
+			fetchOptions: { onSuccess: sessionSetter(anonHeaders) },
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers: anonHeaders },
+		});
+		expect(session.data?.user.isAnonymous).toBe(true);
+
+		// The before-hook reads the anonymous session from this request's cookie
+		// and stashes the user id in the server-only OAuth state.
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(anonHeaders),
+				headers: anonHeaders,
+			},
+		});
+		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+
+		// The in-app browser returns to the callback with the state cookie but
+		// without the session cookie. Linking must still fire via the OAuth state.
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers: stripSessionCookie(anonHeaders),
+		});
+
+		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
+	it("should ignore a client-supplied anonymousUserId on the OAuth callback", async () => {
+		linkAccountFn.mockClear();
+
+		// A real anonymous user whose id an attacker would try to inject.
+		const victimHeaders = new Headers();
+		const victim = await client.signIn.anonymous({
+			fetchOptions: { onSuccess: sessionSetter(victimHeaders) },
+		});
+		const victimId = victim.data?.user.id;
+		expect(victimId).toBeTruthy();
+
+		// The attacker is not anonymous and passes the victim id through the
+		// client-controlled additionalData bag.
+		const attackerHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			additionalData: { anonymousUserId: victimId },
+			fetchOptions: {
+				onSuccess: cookieSetter(attackerHeaders),
+				headers: attackerHeaders,
+			},
+		});
+		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers: attackerHeaders,
+		});
+
+		// The spoofed id is never read from `serverContext`, so no link fires and
+		// the victim survives.
+		expect(linkAccountFn).not.toHaveBeenCalled();
+		const ctx = await auth.$context;
+		const stillThere = await ctx.internalAdapter.findUserById(victimId!);
+		expect(stillThere?.id).toBe(victimId);
 	});
 
 	it("should call onLinkAccount when anonymous user verifies email", async () => {
@@ -546,5 +674,107 @@ describe("anonymous", async () => {
 			expect(deleteUserSessions).toHaveBeenCalledWith("anon-user");
 			expect(deleteUser).toHaveBeenCalledWith("anon-user");
 		});
+	});
+});
+
+/**
+ * Generic OAuth providers register as social providers, so they sign in through
+ * `/sign-in/social` and return on `/callback/:providerId`. The cookie-less Expo
+ * callback must still link the anonymous account on that path.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8692
+ */
+describe("anonymous linking through generic oauth (Expo)", async () => {
+	const linkAccountFn = vi.fn();
+	const providerId = "test";
+	const server = new OAuth2Server();
+	await server.start();
+	const port = Number(server.issuer.url?.split(":")[2]!);
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	const { client, sessionSetter, cookieSetter, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							linkAccountFn(data);
+						},
+					}),
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "test-client-id",
+								clientSecret: "test-client-secret",
+								pkce: true,
+							},
+						],
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+	});
+
+	server.service.on("beforeUserinfo", (userInfoResponse) => {
+		userInfoResponse.body = {
+			email: "anon-generic-oauth@test.com",
+			name: "Anon Generic OAuth",
+			sub: "anon-generic-oauth",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	});
+
+	it("links the anonymous account when the callback lacks the session cookie", async () => {
+		linkAccountFn.mockClear();
+		const anonHeaders = new Headers();
+		await client.signIn.anonymous({
+			fetchOptions: { onSuccess: sessionSetter(anonHeaders) },
+		});
+
+		// Generic providers sign in through /sign-in/social; the before-hook
+		// captures the anonymous user id from this request's session cookie.
+		const signInRes = await client.signIn.social({
+			provider: providerId,
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(anonHeaders),
+				headers: anonHeaders,
+			},
+		});
+
+		// Follow the provider redirect to obtain the callback URL (code + state).
+		let callbackLocation: string | null = null;
+		await betterFetch(signInRes.data?.url || "", {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		if (!callbackLocation) throw new Error("No redirect location found");
+
+		// Return to the callback without the session cookie (Expo in-app browser).
+		await betterFetch(callbackLocation, {
+			method: "GET",
+			customFetchImpl,
+			headers: stripSessionCookie(anonHeaders),
+			onError() {},
+		});
+
+		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 });

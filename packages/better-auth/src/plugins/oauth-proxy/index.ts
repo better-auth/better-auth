@@ -17,6 +17,7 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -100,6 +101,8 @@ type OAuthProxyStatePackage = {
 type PassthroughPayload = {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
+	profile?: Record<string, unknown> | undefined;
 	state: string;
 	callbackURL: string;
 	newUserURL?: string;
@@ -253,6 +256,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							source: {
+								method: "oauth",
+								oauth: {
+									providerId: payload.account.providerId,
+									profile: payload.profile,
+								},
+							},
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -293,10 +303,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			before: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -441,7 +448,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
+								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
@@ -482,6 +489,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
+							profile: userInfoResult?.data,
 							account: {
 								providerId: provider.id,
 								accountId: String(userInfo.id),
@@ -518,10 +526,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);

@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -56,6 +56,17 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * can be used to restrict sign-in to a Workspace domain.
 	 */
 	hd?: string | undefined;
+	/**
+	 * Whether to send `include_granted_scopes=true` to Google's authorization
+	 * endpoint, which lets new access tokens cover scopes from prior grants
+	 * in addition to the ones requested for this flow. Set to `false` when
+	 * each OAuth flow should request only its own scopes.
+	 *
+	 * Defaults to `true`.
+	 *
+	 * @see https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -69,6 +80,7 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			additionalParams,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -98,7 +110,10 @@ export const google = (options: GoogleOptions) => {
 				loginHint,
 				hd: options.hd,
 				additionalParams: {
-					include_granted_scopes: "true",
+					...(options.includeGrantedScopes === false
+						? {}
+						: { include_granted_scopes: "true" }),
+					...(additionalParams ?? {}),
 				},
 			});
 			return url;
@@ -125,46 +140,20 @@ export const google = (options: GoogleOptions) => {
 						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			// Verify JWT integrity
-			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
-
-			try {
-				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-				if (!kid || !jwtAlg) return false;
-
-				const publicKey = await getGooglePublicKey(kid);
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience: options.clientId,
-					maxTokenAge: "1h",
-				});
-
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-
-				// Google's `hd` authorization parameter is only a UI hint and can
-				// be removed or changed by the user. When a hosted domain is
-				// configured, the `hd` claim in the verified id token is the
-				// authoritative value and must match, otherwise accounts outside
-				// the workspace domain would be accepted.
-				if (options.hd && jwtClaims.hd !== options.hd) {
-					return false;
-				}
-
-				return true;
-			} catch {
-				return false;
-			}
+		idToken: {
+			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+			jwks: (header) => getGooglePublicKey(header.kid!),
+			issuer: ["https://accounts.google.com", "accounts.google.com"],
+			audience: options.clientId,
+			maxTokenAge: "1h",
+			// Google's `hd` authorization parameter is only a UI hint and can be
+			// removed or changed by the user. When a hosted domain is configured,
+			// the `hd` claim in the verified id token is the authoritative value
+			// and must match, otherwise accounts outside the workspace domain would
+			// be accepted on the id_token sign-in path.
+			verifyClaims: options.hd
+				? (claims) => claims.hd === options.hd
+				: undefined,
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

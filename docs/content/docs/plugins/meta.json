@@ -25,7 +25,7 @@
     "one-time-token",
     "oauth-proxy",
     "oauth-provider",
-    "oidc-provider",
+    "cimd",
     "mcp",
     "device-authorization",
     "stripe",

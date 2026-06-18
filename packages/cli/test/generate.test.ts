@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { promisify } from "node:util";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -13,8 +15,91 @@ import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
+import { cliPath } from "./utils";
+
+const execFileAsync = promisify(execFile);
 
 describe("generate", async () => {
+	describe("command output paths", () => {
+		it("should use adapter-specific filenames when output points to an existing directory", async () => {
+			const cases = [
+				{
+					adapter: "drizzle",
+					dialect: "sqlite",
+					expectedFileName: "auth-schema.ts",
+				},
+				{
+					adapter: "prisma",
+					dialect: "sqlite",
+					expectedFileName: "schema.prisma",
+				},
+				{
+					adapter: "kysely",
+					expectedFileName: /^\d{4}-\d{2}-\d{2}T.*\.sql$/,
+				},
+			];
+
+			for (const testCase of cases) {
+				const cacheDir = path.join(
+					process.cwd(),
+					"node_modules",
+					".cache",
+					"generate-output-",
+				);
+				fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+				const tmpDir = fs.mkdtempSync(cacheDir);
+				const outputDir = path.join(tmpDir, "schema-output");
+				fs.mkdirSync(outputDir);
+				fs.writeFileSync(
+					path.join(tmpDir, "auth.ts"),
+					`import { betterAuth } from "better-auth";
+import Database from "better-sqlite3";
+
+export const auth = betterAuth({
+	database: new Database(":memory:"),
+	secret: "test-secret",
+	baseURL: "http://localhost:3000",
+});
+`,
+				);
+				try {
+					const args = [
+						cliPath,
+						"generate",
+						"--cwd",
+						tmpDir,
+						"--config",
+						"auth.ts",
+						"--adapter",
+						testCase.adapter,
+						"--output",
+						"schema-output",
+						"--yes",
+					];
+					if (testCase.dialect) {
+						args.push("--dialect", testCase.dialect);
+					}
+					await execFileAsync(process.execPath, args, {
+						cwd: tmpDir,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					});
+					const files = fs.readdirSync(outputDir);
+					expect(files).toHaveLength(1);
+					if (typeof testCase.expectedFileName === "string") {
+						expect(files[0]).toBe(testCase.expectedFileName);
+					} else {
+						expect(files[0]).toMatch(testCase.expectedFileName);
+					}
+				} finally {
+					fs.rmSync(tmpDir, { recursive: true, force: true });
+				}
+			}
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",

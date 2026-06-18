@@ -655,13 +655,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser({
-					...additionalFields,
-					email,
-					emailVerified: true,
-					name: name || "",
-					image,
-				});
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						...additionalFields,
+						email,
+						emailVerified: true,
+						name: name || "",
+						image,
+					},
+					{ method: "email-otp" },
+				);
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);

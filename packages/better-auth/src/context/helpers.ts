@@ -190,14 +190,15 @@ export function pickSource(
 
 /**
  * Returns the effective `trustedProxyHeaders` value for dynamic `baseURL`
- * resolution. When the user hasn't set `advanced.trustedProxyHeaders`,
- * proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are trusted by
- * default so deployments behind a reverse proxy work without extra config.
+ * resolution. Proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are
+ * ignored unless the user opts in with `advanced.trustedProxyHeaders: true`,
+ * matching the static-config path. Deployments behind a reverse proxy that
+ * only exposes the public host via `x-forwarded-host` must set the flag.
  */
 export function resolveDynamicTrustedProxyHeaders(
 	options: BetterAuthOptions,
 ): boolean {
-	return options.advanced?.trustedProxyHeaders ?? true;
+	return options.advanced?.trustedProxyHeaders ?? false;
 }
 
 /**

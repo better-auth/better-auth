@@ -58,6 +58,9 @@ export type SvelteAuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
+			hydrateSession: (
+				session: NonNullable<ClientSession<Option>> | null,
+			) => void;
 			useSession: () => Atom<{
 				data: ClientSession<Option>;
 				error: BetterFetchError | null;
@@ -84,6 +87,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
+		hydrateSession,
 		$fetch,
 		atomListeners,
 		$store,
@@ -95,6 +99,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		hydrateSession,
 		$fetch,
 		$store,
 	};

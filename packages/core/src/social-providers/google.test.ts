@@ -1,4 +1,3 @@
-import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,13 +41,6 @@ async function createSignedGoogleToken(payload: Record<string, unknown>) {
 	return { publicJWK, token };
 }
 
-function mockGoogleJwks(publicJWK: JWK) {
-	mockedBetterFetch.mockResolvedValueOnce({
-		data: { keys: [publicJWK] },
-		error: null,
-	} as Awaited<ReturnType<typeof betterFetch>>);
-}
-
 // decodeJwt (used by getUserInfo) does not verify the signature, so a plain
 // encoded JWT is enough for the profile path.
 async function encodeGoogleToken(payload: Record<string, unknown>) {
@@ -59,71 +51,6 @@ async function encodeGoogleToken(payload: Record<string, unknown>) {
 describe("google hosted domain (hd) enforcement", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
-	});
-
-	describe("verifyIdToken", () => {
-		it("accepts a token whose hd claim matches the configured hd", async () => {
-			const { publicJWK, token } = await createSignedGoogleToken({
-				hd: "example.com",
-			});
-			mockGoogleJwks(publicJWK);
-
-			const provider = google({
-				clientId: CLIENT_ID,
-				clientSecret: CLIENT_SECRET,
-				hd: "example.com",
-			});
-
-			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
-				true,
-			);
-		});
-
-		it("rejects a token whose hd claim does not match", async () => {
-			const { publicJWK, token } = await createSignedGoogleToken({
-				hd: "other.com",
-			});
-			mockGoogleJwks(publicJWK);
-
-			const provider = google({
-				clientId: CLIENT_ID,
-				clientSecret: CLIENT_SECRET,
-				hd: "example.com",
-			});
-
-			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
-				false,
-			);
-		});
-
-		it("rejects a token missing the hd claim when hd is configured", async () => {
-			const { publicJWK, token } = await createSignedGoogleToken({});
-			mockGoogleJwks(publicJWK);
-
-			const provider = google({
-				clientId: CLIENT_ID,
-				clientSecret: CLIENT_SECRET,
-				hd: "example.com",
-			});
-
-			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
-				false,
-			);
-		});
-
-		it("does not require an hd claim when hd is not configured", async () => {
-			const { publicJWK, token } = await createSignedGoogleToken({});
-			mockGoogleJwks(publicJWK);
-
-			const provider = google({
-				clientId: CLIENT_ID,
-				clientSecret: CLIENT_SECRET,
-			});
-
-			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
-				true,
-			);
-		});
 	});
 
 	describe("getUserInfo", () => {

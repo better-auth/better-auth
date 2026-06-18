@@ -287,6 +287,12 @@ trustedOrigins: async (request) => {
 
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
+#### Redirecting OIDC endpoints
+
+Better Auth does not follow redirects for server-side OIDC requests. Configure the final canonical URL for the discovery, token, userinfo, and JWKS endpoints.
+
+If one of those endpoints returns a `3xx` response, registration or sign-in fails with `oidc_endpoint_redirect`. This keeps endpoint validation tied to the exact URL that Better Auth fetches.
+
 #### Why Discovery Can Fail
 
 Better Auth validates that the IdP's metadata is correct and complete **before** allowing registration. This prevents subtle runtime failures during sign-in or token validation.
@@ -309,6 +315,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                                      |
 | `discovery_untrusted_origin`    | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
 | `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                                   |
+| `oidc_endpoint_redirect`        | The discovery, token, userinfo, or JWKS endpoint returned a redirect; configure the final endpoint URL instead                      |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support                                                           |
 
 **Supported token auth methods:**
@@ -354,8 +361,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
         domain: "example.com",
         samlConfig: {
             entryPoint: "https://idp.example.com/sso",
-            cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-            callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
             audience: "https://yourapp.com",
             wantAssertionsSigned: true,
             signatureAlgorithm: "sha256",
@@ -405,8 +410,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
             domain: "example.com",
             samlConfig: {
                 entryPoint: "https://idp.example.com/sso",
-                cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
                 audience: "https://yourapp.com",
                 wantAssertionsSigned: true,
                 signatureAlgorithm: "sha256",
@@ -451,13 +454,19 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 
 ### IdP-Initiated SSO
 
+For OIDC providers that initiate logins without sending a `state` parameter, set `allowIdpInitiated: true` on the provider's `oidcConfig`. When a stateless callback arrives at `/sso/callback/:providerId`, the IdP-issued code is discarded and a new OAuth flow is started server-side with a fresh `state` and PKCE verifier. CSRF protection remains in effect. This flag defaults to `false`.
+
+<Callout type="warn">
+  Set the global `baseURL` option when enabling `allowIdpInitiated` on an OIDC provider. IdP-initiated callbacks carry no initiating request body, so the bounce uses `baseURL` as the post-login destination. If `baseURL` is unset, the bounce fails with `CALLBACK_URL_REQUIRED`.
+</Callout>
+
 For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
 
 <Tabs items={["next-js-app-router"]}>
   <Tab value="next-js-app-router">
     Create this file to prevent 404 errors:
 
-    ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
+    ```ts title="app/api/auth/sso/saml2/sp/acs/[providerId]/route.ts"
     import { auth } from "@/lib/auth";
     import { NextResponse } from "next/server";
 
@@ -919,7 +928,6 @@ const auth = betterAuth({
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
                         cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                        callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs/default-saml",
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -976,6 +984,30 @@ You also need to provide Identity Provider (IdP) configuration:
 * **isAssertionEncrypted**: Whether assertions from IdP are encrypted
 * **encPrivateKey**: Private key for IdP assertion decryption
 * **encPrivateKeyPass**: Password for the IdP decryption key
+
+### Signing Certificates and Rotation
+
+When your IdP rotates its signing certificate, list both the old and the new PEM under `idpMetadata.cert` as an array. Better Auth accepts SAML responses signed by either, so users keep signing in while the rotation completes.
+
+```ts
+samlConfig: {
+    entryPoint: "https://idp.example.com/sso",
+    idpMetadata: {
+        entityID: "https://idp.example.com",
+        singleSignOnService: [
+            { Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST", Location: "https://idp.example.com/sso" },
+        ],
+        cert: [
+            "-----BEGIN CERTIFICATE-----\n<current>\n-----END CERTIFICATE-----",
+            "-----BEGIN CERTIFICATE-----\n<next>\n-----END CERTIFICATE-----",
+        ],
+    },
+}
+```
+
+Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
+
+If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
 
 ### SAML Attribute Mapping
 
@@ -1067,10 +1099,7 @@ The SSO plugin includes assertion replay protection to prevent attackers from ca
 3. If it's a new assertion, it's stored in the database until its `NotOnOrAfter` expiration
 4. If it's a duplicate (replay attack), the request is rejected
 
-**Both SAML endpoints are protected:**
-
-* `/sso/saml2/callback/:providerId`
-* `/sso/saml2/sp/acs/:providerId`
+The SAML ACS endpoint (`/sso/saml2/sp/acs/:providerId`) is protected against assertion replay.
 
 <Callout type="info">
   Replay protection uses the database verification table, so it works correctly in multi-instance deployments without additional configuration.
@@ -1417,16 +1446,16 @@ you can create a new verification token:
 The plugin automatically creates the following SAML endpoints:
 
 * **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
-* **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}` (supports both GET and POST)
+* **SAML ACS (Assertion Consumer Service)**: `/api/auth/sso/saml2/sp/acs/{providerId}` (supports both GET and POST)
 
 ### SAML Callback URL Configuration
 
-The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
+The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
 
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
-**Important**: `callbackUrl` in your SAML configuration is used as the Assertion Consumer Service (ACS) URL. Set it to the SAML callback route for your provider (e.g., `https://yourapp.com/api/auth/sso/saml2/sp/acs/my-provider`). If omitted, Better Auth derives it automatically from your `baseURL` and `providerId`.
+Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 
 The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
@@ -1438,6 +1467,50 @@ await authClient.signIn.sso({
 ```
 
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
+
+### Additional Provider Fields
+
+You can add custom columns to the `ssoProvider` table with `schema.ssoProvider.additionalFields`. These fields can be used to store provider metadata, such as a display name shown when an organization has multiple SSO providers.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      schema: {
+        ssoProvider: {
+          additionalFields: {
+            displayName: {
+              type: "string",
+              required: true,
+            },
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+Then include the field when registering or updating a provider:
+
+```ts
+await auth.api.registerSSOProvider({
+  body: {
+    providerId: "okta-main",
+    displayName: "Okta",
+    issuer: "https://idp.example.com",
+    domain: "example.com",
+    oidcConfig: {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    },
+  },
+  headers,
+});
+```
 
 ## Schema
 
@@ -1517,7 +1590,7 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 **How it works:**
 
 1. User clicks your app icon in the IdP dashboard
-2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/callback/{providerId}`
+2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/sp/acs/{providerId}`
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
