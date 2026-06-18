@@ -49,6 +49,12 @@ function escapeLikePattern(
 	return String(value).replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
+// Object filters can't express case-insensitive matching portably, so those
+// clauses fall back to the SQL builder.
+function hasInsensitiveWhere(where?: Where[]): boolean {
+	return !!where?.some((w) => w.mode === "insensitive");
+}
+
 /**
  * Derive the number of affected rows from a Drizzle write result.
  *
@@ -603,7 +609,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins) {
+					if (options.experimental?.joins && !hasInsensitiveWhere(where)) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
@@ -690,7 +696,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins) {
+					if (options.experimental?.joins && !hasInsensitiveWhere(where)) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
