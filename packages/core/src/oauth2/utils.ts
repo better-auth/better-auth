@@ -72,8 +72,13 @@ export function mergeScopes(
 	stored: string | null | undefined,
 	incoming: string[] | undefined,
 ): string {
-	const existing = stored ? stored.split(",").filter(Boolean) : [];
-	const next = incoming ?? [];
+	const existing = stored
+		? stored
+				.split(",")
+				.map((scope) => scope.trim())
+				.filter(Boolean)
+		: [];
+	const next = (incoming ?? []).map((scope) => scope.trim()).filter(Boolean);
 	return [...new Set([...existing, ...next])].join(",");
 }
 

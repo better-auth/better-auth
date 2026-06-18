@@ -6,7 +6,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 import { refreshAccessToken } from "./refresh-access-token";
-import { parseScopeField } from "./utils";
+import { mergeScopes, parseScopeField } from "./utils";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
@@ -184,5 +184,18 @@ describe("parseScopeField", () => {
 		expect(parseScopeField("")).toEqual([]);
 		expect(parseScopeField(undefined)).toEqual([]);
 		expect(parseScopeField({ scope: "openid" })).toEqual([]);
+	});
+});
+
+describe("mergeScopes", () => {
+	it("normalizes stored and incoming scopes before merging", () => {
+		expect(
+			mergeScopes("openid, email,,profile ", [
+				"email",
+				" offline_access ",
+				"",
+				"openid",
+			]),
+		).toBe("openid,email,profile,offline_access");
 	});
 });
