@@ -3510,7 +3510,7 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
 	});
 
-	it("does not let additionalParams disable `include_granted_scopes`", async () => {
+	it("lets additionalParams disable `include_granted_scopes` for a single flow", async () => {
 		const { client } = await getTestInstance(
 			{
 				socialProviders: {
@@ -3532,7 +3532,7 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		});
 
 		const authUrl = new URL(signInRes.data!.url!);
-		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("false");
 	});
 
 	it("omits `include_granted_scopes` from the authorization URL when disabled", async () => {
@@ -3563,7 +3563,7 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		);
 	});
 
-	it("does not let additionalParams re-enable `include_granted_scopes`", async () => {
+	it("lets additionalParams re-enable `include_granted_scopes` for a single flow", async () => {
 		const { client } = await getTestInstance(
 			{
 				socialProviders: {
@@ -3586,6 +3586,6 @@ describe("Google Provider - includeGrantedScopes", async () => {
 		});
 
 		const authUrl = new URL(signInRes.data!.url!);
-		expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
 	});
 });

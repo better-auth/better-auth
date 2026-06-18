@@ -201,6 +201,8 @@ socialProviders: {
 }
 ```
 
+Call-time `additionalParams.include_granted_scopes` still follows the general OAuth parameter precedence rules and can override this provider default for a single flow.
+
 See Google's [Incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) docs for the underlying parameter behavior.
 
 ### Always get refresh token
