@@ -892,9 +892,9 @@ export const refreshToken = createAuthEndpoint(
 				providerId === accountData.providerId &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
-				const updateData = updatedAccount ?? {
+				const updateData = {
 					...accountData,
-					...updatedTokenData,
+					...(updatedAccount ?? updatedTokenData),
 				};
 				await setAccountCookie(ctx, updateData);
 			}
