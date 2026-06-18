@@ -244,6 +244,37 @@ describe("oauth-provider device-code grant", async () => {
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
 	});
 
+	it("returns invalid_grant (not invalid_scope) when a narrower-scoped client replays a code", async () => {
+		// Victim code is created for a client with a broad scope set.
+		const victimClientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(
+			victimClientId,
+			"openid profile email",
+		);
+
+		// Attacker client is registered for only `openid`. The ownership check must
+		// fire before scope validation, so replaying the code can't reveal the
+		// victim's requested scopes through an invalid_scope error.
+		const { headers } = await signInWithTestUser();
+		const attacker = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				type: "native",
+			},
+		});
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: attacker!.client_id,
+		});
+		expect(res.error?.status).toBe(400);
+		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+
 	it("blocks redeeming an OAuth-client device code at the first-party /device/token", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);

@@ -83,8 +83,10 @@ async function handleDeviceCodeGrant(
 	input: OAuthExtensionGrantHandlerInput,
 ): Promise<OAuthTokenResponse> {
 	const { ctx, provider } = input;
-	const deviceCode = (ctx.body as { device_code?: string } | undefined)
-		?.device_code;
+	const body = ctx.body as
+		| { device_code?: string; client_id?: string; resource?: string | string[] }
+		| undefined;
+	const deviceCode = body?.device_code;
 	if (!deviceCode) {
 		tokenError("BAD_REQUEST", "invalid_request", "device_code is required");
 	}
@@ -95,6 +97,21 @@ async function handleDeviceCodeGrant(
 	});
 	if (!record) {
 		tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
+	}
+
+	// Confirm the caller owns this device code before any work that depends on the
+	// record. Comparing the request's client_id up front returns a uniform
+	// invalid_grant instead of leaking the recorded scopes: otherwise
+	// authenticateClient validates those scopes against the caller's registered
+	// set, and a narrower-scoped client replaying a stolen device_code would get
+	// invalid_scope. The post-auth check below still covers confidential clients
+	// that send client_id only in the Authorization header.
+	if (
+		record.clientId &&
+		body?.client_id &&
+		record.clientId !== body.client_id
+	) {
+		tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 	}
 
 	// Authenticate the polling client against the scopes captured at the device
@@ -178,9 +195,7 @@ async function handleDeviceCodeGrant(
 			);
 		}
 
-		const resources = toResourceList(
-			(ctx.body as { resource?: string | string[] } | undefined)?.resource,
-		);
+		const resources = toResourceList(body?.resource);
 		return provider.issueTokens({
 			client,
 			scopes: claimed.scope ? claimed.scope.split(" ") : [],
