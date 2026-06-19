@@ -838,6 +838,7 @@ describe("oauth token - refresh_token", async () => {
 		});
 		const result = await client.$fetch<{
 			error?: string;
+			error_description?: string;
 		}>("/oauth2/token", {
 			method: "POST",
 			body,
@@ -847,6 +848,10 @@ describe("oauth token - refresh_token", async () => {
 		expect((result.error as { error?: string } | null | undefined)?.error).toBe(
 			"invalid_grant",
 		);
+		expect(
+			(result.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("invalid refresh token");
 	});
 
 	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
