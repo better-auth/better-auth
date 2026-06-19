@@ -70,6 +70,36 @@ export function pickClaims(
 	return next;
 }
 
+function getUserInfoAccessToken(ctx: GenericEndpointContext) {
+	const authorization = ctx.headers?.get("authorization");
+	const headerAccessTokenAuthorization =
+		parseAccessTokenAuthorization(authorization);
+	const bodyToken =
+		ctx.request?.method === "POST"
+			? ((ctx.body as { access_token?: string } | undefined)?.access_token ??
+				undefined)
+			: undefined;
+
+	if (headerAccessTokenAuthorization && bodyToken) {
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"Multiple access token transport methods are not allowed",
+			error: "invalid_request",
+		});
+	}
+
+	const bodyAccessTokenAuthorization = bodyToken
+		? { scheme: "Bearer" as const, token: bodyToken }
+		: undefined;
+	const accessTokenAuthorization =
+		headerAccessTokenAuthorization ?? bodyAccessTokenAuthorization;
+
+	return {
+		authorization: accessTokenAuthorization,
+		token: accessTokenAuthorization?.token,
+	};
+}
+
 /**
  * Handles the /oauth2/userinfo endpoint
  */
@@ -80,11 +110,11 @@ export async function userInfoEndpoint(
 	// TODO: converge on parseBearerToken (utils) once we decide whether userinfo
 	// should keep accepting a non-Bearer Authorization value as a bare token; the
 	// shared parser is strict and would reject that fallback.
-	const authorization = ctx.headers?.get("authorization");
-	const accessTokenAuthorization = parseAccessTokenAuthorization(authorization);
+	const { authorization: accessTokenAuthorization } =
+		getUserInfoAccessToken(ctx);
 	if (!accessTokenAuthorization?.token) {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "authorization header not found",
+			error_description: "access token not found",
 			error: "invalid_request",
 		});
 	}

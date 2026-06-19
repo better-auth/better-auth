@@ -1244,8 +1244,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/userinfo",
 				{
 					method: ["GET", "POST"],
+					body: z
+						.object({
+							access_token: z.string().optional(),
+						})
+						.passthrough()
+						.optional(),
 					metadata: {
 						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
