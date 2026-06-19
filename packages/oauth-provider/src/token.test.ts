@@ -802,6 +802,53 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 	});
 
+	it("rejects refresh token use by a different client with invalid_grant", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const otherRedirectUri = `${rpBaseUrl}/api/auth/callback/other`;
+		const otherClient = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [otherRedirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(otherClient.client_id).toBeDefined();
+		expect(otherClient.client_secret).toBeDefined();
+
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken: tokens!.refresh_token!,
+			options: {
+				clientId: otherClient.client_id,
+				clientSecret: otherClient.client_secret,
+				redirectURI: otherRedirectUri,
+			},
+			extraParams: {
+				scope: scopes.join(" "),
+			},
+		});
+		const result = await client.$fetch<{
+			error?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect((result.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
 	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
 		expect,
 	}) => {
