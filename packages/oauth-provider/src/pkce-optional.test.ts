@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { decodeJwt } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -465,8 +466,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		confidentialClient = confResponse;
 	});
 
-	it("offline_access without PKCE should fail even with requirePKCE: false", async () => {
-		// Try to authorize with offline_access but without PKCE
+	it("offline_access without PKCE or OIDC nonce should fail even with requirePKCE: false", async () => {
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
 		authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -483,8 +483,94 @@ describe("PKCE optional - offline_access scope", async () => {
 
 		expect(errorRedirect).toContain("error=invalid_request");
 		expect(errorRedirect).toContain(
-			"pkce+is+required+when+requesting+offline_access+scope",
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
 		);
+	});
+
+	it("offline_access without PKCE should succeed for confidential OIDC requests with nonce", async () => {
+		const nonce = "offline-access-nonce";
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			nonce,
+		});
+
+		let callbackUrl = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackUrl).toContain(redirectUri);
+		expect(callbackUrl).toContain("code=");
+		expect(callbackUrl).not.toContain("error=");
+
+		const url = resolveUrl(callbackUrl, authServerBaseUrl);
+		const code = url.searchParams.get("code");
+		expect(code).toBeDefined();
+
+		const { body, headers } = await authorizationCodeRequest({
+			code: code!,
+			redirectURI: redirectUri,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokenResponse = await authenticatedClient.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+
+		expect(tokenResponse.data?.access_token).toBeDefined();
+		expect(tokenResponse.data?.id_token).toBeDefined();
+		expect(tokenResponse.data?.refresh_token).toBeDefined();
+		expect(decodeJwt(tokenResponse.data!.id_token!).nonce).toBe(nonce);
+	});
+
+	it("offline_access without PKCE should fail for non-OIDC requests with nonce", async () => {
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "123",
+			scopes: ["offline_access"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			nonce: "unused-without-openid",
+		});
+
+		let errorRedirect = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirect).toContain("error=invalid_request");
+		expect(errorRedirect).toContain(
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
+		);
+		expect(errorRedirect).not.toContain("code=");
 	});
 
 	it("offline_access with PKCE should succeed", async () => {
