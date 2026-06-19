@@ -1084,6 +1084,7 @@ describe("oauth authorize - consented resources", async () => {
 								clientId: z.string(),
 								scopes: z.array(z.string()),
 								userId: z.string(),
+								requestedUserInfoClaims: z.array(z.string()).optional(),
 							}),
 							use: [sessionMiddleware],
 							metadata: {
@@ -1165,6 +1166,61 @@ describe("oauth authorize - consented resources", async () => {
 		expect(consentRedirectUrl).not.toContain(`${redirectUri}?code=`);
 	});
 
+	it("should re-prompt for consent when stored consent has no requested UserInfo claim", async () => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		await auth.api.testerCreateConsent({
+			headers,
+			body: {
+				clientId: dedicatedClient.client_id,
+				userId: user.id,
+				scopes: ["openid"],
+			},
+		});
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "userinfo-claim-consent");
+		authUrl.searchParams.set(
+			"claims",
+			JSON.stringify({
+				userinfo: {
+					email: null,
+				},
+			}),
+		);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+		expect(consentRedirectUrl).not.toContain(`${redirectUri}?code=`);
+		const consentUrl = new URL(consentRedirectUrl, authServerBaseUrl);
+		expect(JSON.parse(consentUrl.searchParams.get("claims") ?? "{}")).toEqual({
+			userinfo: {
+				email: null,
+			},
+		});
+	});
+
 	it("should persist multiple resource values onto OAuthConsent.resources", async ({
 		onTestFinished,
 	}) => {
@@ -1231,6 +1287,90 @@ describe("oauth authorize - consented resources", async () => {
 			validResource,
 			secondValidResource,
 		]);
+	});
+
+	it("should persist only accepted UserInfo claims onto OAuthConsent", async ({
+		onTestFinished,
+	}) => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "persist-userinfo-claims");
+		authUrl.searchParams.set(
+			"claims",
+			JSON.stringify({
+				userinfo: {
+					name: null,
+					email: null,
+				},
+			}),
+		);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentResult = await client.oauth2.consent(
+			{
+				accept: true,
+				claims: {
+					userinfo: {
+						name: null,
+					},
+				},
+			},
+			{
+				throw: true,
+			},
+		);
+
+		expect(consentResult.url).toContain(`${redirectUri}?code=`);
+
+		const context = await auth.$context;
+		const savedConsent = await context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: dedicatedClient.client_id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+
+		expect(savedConsent?.requestedUserInfoClaims).toEqual(["name"]);
 	});
 
 	it("should return consent_required for prompt=none when requested resource is not covered by prior consent", async () => {

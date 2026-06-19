@@ -13,33 +13,34 @@ import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
 } from "./extensions";
-import { requireActiveAccessToken } from "./introspect";
+import { requireActiveAccessTokenWithClaims } from "./introspect";
+import { STANDARD_CLAIMS } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
 
 /**
- * Provides shared /userinfo and id_token claims functionality
+ * Builds the standard OIDC claims (OIDC Core §5.1) for the UserInfo response.
+ *
+ * A claim is included when its backing scope was granted, or when it was named
+ * individually through the `claims.userinfo` request parameter (§5.4, §5.5).
+ * `sub` is always present. Values come from the one claim registry, so the
+ * advertisement, the scope mapping, and the resolution cannot drift apart.
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
-function userNormalClaims(user: User, scopes: string[]) {
-	const name = user.name.split(" ").filter((v) => v !== "");
-	const profile = {
-		name: user.name ?? undefined,
-		picture: user.image ?? undefined,
-		given_name: name.length > 1 ? name.slice(0, -1).join(" ") : undefined,
-		family_name: name.length > 1 ? name.at(-1) : undefined,
-	};
-	const email = {
-		email: user.email ?? undefined,
-		email_verified: user.emailVerified ?? false,
-	};
-
-	return {
-		sub: user.id ?? undefined,
-		...(scopes.includes("profile") ? profile : {}),
-		...(scopes.includes("email") ? email : {}),
-	};
+function userNormalClaims(
+	user: User,
+	scopes: string[],
+	requestedClaims: string[] = [],
+) {
+	const requested = new Set(requestedClaims);
+	const claims: Record<string, unknown> = { sub: user.id ?? undefined };
+	for (const [name, definition] of Object.entries(STANDARD_CLAIMS)) {
+		if (scopes.includes(definition.scope) || requested.has(name)) {
+			claims[name] = definition.resolve(user);
+		}
+	}
+	return claims;
 }
 
 /**
@@ -118,11 +119,12 @@ export async function userInfoEndpoint(
 			error: "invalid_request",
 		});
 	}
-	const jwt = await requireActiveAccessToken(
-		ctx,
-		opts,
-		accessTokenAuthorization.token,
-	);
+	const { payload: jwt, requestedUserInfoClaims: requestedClaims } =
+		await requireActiveAccessTokenWithClaims(
+			ctx,
+			opts,
+			accessTokenAuthorization.token,
+		);
 
 	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
 	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
@@ -179,7 +181,7 @@ export async function userInfoEndpoint(
 		});
 	}
 
-	const baseUserClaims = userNormalClaims(user, scopes ?? []);
+	const baseUserClaims = userNormalClaims(user, scopes ?? [], requestedClaims);
 	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
 	// Load the client only when something needs it: pairwise subject resolution
 	// or a UserInfo claim extension. The token was already validated against its
@@ -201,11 +203,17 @@ export async function userInfoEndpoint(
 				scopes,
 				jwt,
 				client: client ?? undefined,
+				requestedClaims,
 			})
 		: {};
 	const additionalInfoUserClaims =
 		opts.customUserInfoClaims && scopes?.length
-			? await opts.customUserInfoClaims({ user, scopes, jwt })
+			? await opts.customUserInfoClaims({
+					user,
+					scopes,
+					jwt,
+					requestedClaims,
+				})
 			: {};
 	return {
 		...baseUserClaims,

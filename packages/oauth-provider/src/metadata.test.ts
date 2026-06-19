@@ -27,12 +27,12 @@ describe("oauth metadata", async () => {
 		"sid",
 		"scope",
 		"azp",
-		"email",
-		"email_verified",
 		"name",
 		"picture",
-		"family_name",
 		"given_name",
+		"family_name",
+		"email",
+		"email_verified",
 	];
 
 	async function createTestInstance(opts?: {
@@ -118,6 +118,7 @@ describe("oauth metadata", async () => {
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
+			claims_parameter_supported: true,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
 			acr_values_supported: ["0"],
@@ -356,6 +357,7 @@ describe("oauth metadata", async () => {
 
 		expect(metadata.request_parameter_supported).toBe(false);
 		expect(metadata.request_uri_parameter_supported).toBe(false);
+		expect(metadata.claims_parameter_supported).toBe(true);
 	});
 
 	it("should advertise the unspecified ACR value by default", async () => {
