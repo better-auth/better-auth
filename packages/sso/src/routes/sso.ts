@@ -26,7 +26,6 @@ import {
 	additionalAuthorizationParamsSchema,
 	handleOAuthUserInfo,
 } from "better-auth/oauth2";
-import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
@@ -1473,6 +1472,7 @@ async function handleOIDCCallback(
 		emailVerified?: boolean;
 		[key: string]: any;
 	} | null = null;
+	let claims: Record<string, unknown> = {};
 	const mapping = config.mapping || {};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
@@ -1506,6 +1506,7 @@ async function handleOIDCCallback(
 			userInfoResponse.data ??
 			redirectOIDCError("invalid_provider", "userinfo_response_not_found");
 		rawProfile = rawUserInfo;
+		claims = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1524,8 +1525,6 @@ async function handleOIDCCallback(
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
 		};
 	} else if (tokenResponse.idToken) {
-		const idToken = decodeJwt(tokenResponse.idToken);
-		rawProfile = idToken as Record<string, unknown>;
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
 				`${
@@ -1556,22 +1555,25 @@ async function handleOIDCCallback(
 			);
 		}
 
+		const verifiedClaims = verified.payload as Record<string, unknown>;
+		claims = verifiedClaims;
+		rawProfile = verifiedClaims;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
 					key,
-					verified.payload[value],
+					verifiedClaims[value],
 				]),
 			),
-			id: idToken[mapping.id || "sub"],
-			email: idToken[mapping.email || "email"],
+			id: verifiedClaims[mapping.id || "sub"],
+			email: verifiedClaims[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
-						idToken[mapping.emailVerified || "email_verified"],
+						verifiedClaims[mapping.emailVerified || "email_verified"],
 					)
 				: false,
-			name: idToken[mapping.name || "name"],
-			image: idToken[mapping.image || "picture"],
+			name: verifiedClaims[mapping.name || "name"],
+			image: verifiedClaims[mapping.image || "picture"],
 		} as {
 			id?: string;
 			email?: string;
@@ -1674,6 +1676,7 @@ async function handleOIDCCallback(
 			email: userInfo.email,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,
+			claims,
 		},
 		provider,
 		token: tokenResponse,
