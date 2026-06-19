@@ -34,6 +34,9 @@
       "path": "./packages/telemetry/tsconfig.json"
     },
     {
+      "path": "./packages/webhooks/tsconfig.json"
+    },
+    {
       "path": "./packages/prisma-adapter/tsconfig.json"
     },
     {

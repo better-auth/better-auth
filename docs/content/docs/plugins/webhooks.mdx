@@ -1,0 +1,255 @@
+---
+title: Webhooks
+description: Send signed HTTP webhooks when users, sessions, or accounts change in the database.
+---
+
+The **Webhooks** plugin (`@better-auth/webhooks`) delivers **outbound**, **signed** JSON events to URLs you configure. Use it to sync your auth state with internal services, queues, analytics, or any HTTPS endpoint that can verify HMAC signatures.
+
+<Callout type="info">
+  This plugin emits events from **database lifecycle hooks** (create / update / delete on `user`, `session`, and `account`). It does not fire on every HTTP auth action (for example a failed sign-in that never touches the database).
+</Callout>
+
+## Features
+
+- **Signed deliveries** — HMAC-SHA256 over `timestamp + raw body` with a per-endpoint secret
+- **Replay protection** — timestamp embedded in the signature; verify with `verifyWebhookSignature()` and `maxAgeSeconds`
+- **Idempotency hint** — each request includes `x-better-auth-webhook-id` (unique per delivery)
+- **Multiple destinations** — different URLs, secrets, and per-endpoint event filters
+- **Automatic redaction** — sensitive fields removed from payloads (passwords, OAuth tokens, session token, etc.)
+- **Retries** — configurable timeout and retry count for failed HTTP responses or network errors
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Install the package
+
+        ```package-install
+        @better-auth/webhooks
+        ```
+    </Step>
+    <Step>
+        ### Add the plugin
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { webhooks } from "@better-auth/webhooks"
+
+        export const auth = betterAuth({
+            plugins: [
+                webhooks({
+                    endpoints: [
+                        {
+                            url: "https://api.example.com/internal/better-auth-webhooks",
+                            secret: process.env.AUTH_WEBHOOK_SECRET!,
+                        },
+                    ],
+                }),
+            ],
+        })
+        ```
+    </Step>
+</Steps>
+
+There is **no client plugin** — webhooks are server-only.
+
+## Events
+
+Events are sent **after** the corresponding database operation succeeds.
+
+| Event | When |
+| ----- | ---- |
+| `user.created` | A user row was created |
+| `user.updated` | A user row was updated |
+| `user.deleted` | A user row was deleted |
+| `session.created` | A session row was created |
+| `session.updated` | A session row was updated |
+| `session.deleted` | A session row was deleted |
+| `account.created` | An account row was created |
+| `account.updated` | An account row was updated |
+| `account.deleted` | An account row was deleted |
+
+### Filtering events
+
+Use `events` on an endpoint to send only specific event names; omit it to receive **all** events on that URL.
+
+```ts title="auth.ts"
+webhooks({
+    endpoints: [
+        {
+            url: "https://hooks.example.com/auth",
+            secret: process.env.AUTH_WEBHOOK_SECRET!,
+            events: ["user.created", "user.deleted", "session.deleted"],
+        },
+    ],
+})
+```
+
+## HTTP request shape
+
+Each delivery is an HTTP **POST** with:
+
+| Header | Description |
+| ------ | ----------- |
+| `content-type` | `application/json; charset=utf-8` |
+| `x-better-auth-webhook-id` | UUID for this delivery (matches `id` in the JSON body) |
+| `x-better-auth-webhook-signature` | `t=<unixSeconds>,v1=<hexHmac>` — see [Signature](#signature) |
+| `user-agent` | `Better-Auth-Webhooks/1.0` |
+
+### Body
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "user.created",
+  "timestamp": "2026-03-30T12:00:00.000Z",
+  "data": {}
+}
+```
+
+- **`type`** — one of the [event names](#events) above.
+- **`data`** — sanitized record fields for that model (see [Redaction](#redaction)).
+
+### Success and retries
+
+The plugin treats **any HTTP 2xx** response as success. Non-2xx responses, network failures, and timeouts are logged and retried according to `retries` and `timeoutMs` (see [Options](#options)). The total number of attempts is **`retries + 1`** (the first try plus `retries` additional attempts).
+
+Deliveries run **asynchronously** after the database hook; they do not block the user’s request.
+
+## Signature
+
+The signature covers the exact **raw JSON string** of the body (as sent in the POST) and a **Unix timestamp in seconds**:
+
+```
+signed_message = String(timestampSeconds) + "." + rawBody
+signature_hex  = HMAC_SHA256(secret, signed_message)  // lowercase hex
+```
+
+The header value is:
+
+```
+x-better-auth-webhook-signature: t=<timestampSeconds>,v1=<signature_hex>
+```
+
+## Redaction
+
+The following keys are **never** included in webhook `data`:
+
+**User:** `password`, `twoFactorSecret`, `twoFactorBackupCodes`
+
+**Session:** `token`
+
+**Account:** `accessToken`, `refreshToken`, `idToken`, `password`
+
+Other fields pass through as stored in the database (including custom plugin fields where applicable).
+
+## Verifying webhooks (receiver)
+
+Always verify the signature using the **raw request body** (string) before parsing JSON. Use the **same secret** as the `secret` for that endpoint in your auth config.
+
+```ts
+import {
+    verifyWebhookSignature,
+    WEBHOOK_SIGNATURE_HEADER,
+} from "@better-auth/webhooks"
+```
+
+<Tabs items={["Next.js (App Router)", "Node / Express"]}>
+    <Tab value="Next.js (App Router)">
+
+```ts title="app/api/internal/webhooks/auth/route.ts"
+import {
+    verifyWebhookSignature,
+    WEBHOOK_SIGNATURE_HEADER,
+} from "@better-auth/webhooks"
+
+export async function POST(request: Request) {
+    const rawBody = await request.text()
+    const ok = await verifyWebhookSignature({
+        rawBody,
+        signatureHeader: request.headers.get(WEBHOOK_SIGNATURE_HEADER),
+        secret: process.env.AUTH_WEBHOOK_SECRET!,
+        maxAgeSeconds: 300,
+    })
+    if (!ok) {
+        return new Response("Invalid signature", { status: 401 })
+    }
+
+    const payload = JSON.parse(rawBody) as {
+        type: string
+        data: Record<string, unknown>
+    }
+
+    // Handle payload.type, payload.data …
+
+    return new Response(null, { status: 200 })
+}
+```
+
+    </Tab>
+    <Tab value="Node / Express">
+
+```ts
+import type { Request, Response } from "express"
+import {
+    verifyWebhookSignature,
+    WEBHOOK_SIGNATURE_HEADER,
+} from "@better-auth/webhooks"
+
+app.post(
+    "/internal/better-auth-webhooks",
+    express.raw({ type: "application/json" }),
+    async (req: Request, res: Response) => {
+        const rawBody = req.body.toString("utf8")
+        const ok = await verifyWebhookSignature({
+            rawBody,
+            signatureHeader: req.get(WEBHOOK_SIGNATURE_HEADER),
+            secret: process.env.AUTH_WEBHOOK_SECRET!,
+            maxAgeSeconds: 300,
+        })
+        if (!ok) {
+            res.status(401).send("Invalid signature")
+            return
+        }
+        const payload = JSON.parse(rawBody)
+        res.status(200).end()
+    },
+)
+```
+
+Use a raw body parser for the webhook route so the byte-for-byte body matches what was signed.
+
+    </Tab>
+</Tabs>
+
+### Manual verification
+
+You can recompute the signature with `signWebhookPayload(secret, timestampSeconds, rawBody)` and compare to the `v1` field from `parseSignatureHeader(header)`.
+
+## Options
+
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| `endpoints` | `WebhookEndpoint[]` | **Required.** At least one destination. Each item: `url` (http/https), `secret` (minimum **16** characters), optional `events`. |
+| `timeoutMs` | `number` | Per-attempt fetch timeout in ms. **Default:** `10000`. |
+| `retries` | `number` | Extra attempts after the first failed delivery. **Default:** `1` (up to **2** attempts total). |
+
+## Exports
+
+Import from `@better-auth/webhooks`:
+
+| Export | Purpose |
+| ------ | ------- |
+| `webhooks` | Server plugin factory |
+| `verifyWebhookSignature` | Validate `x-better-auth-webhook-signature` for a raw body |
+| `signWebhookPayload` | Low-level HMAC (hex) for the same signing scheme |
+| `formatSignatureHeader` / `parseSignatureHeader` | Build or parse `t=…,v1=…` |
+| `WEBHOOK_SIGNATURE_HEADER` | Header name constant (`x-better-auth-webhook-signature`) |
+| `WEBHOOK_ID_HEADER` | Header name constant (`x-better-auth-webhook-id`) |
+| Types: `WebhooksPluginOptions`, `WebhookEndpoint`, `WebhookEventName`, `WebhookPayload` | Configuration and typing |
+
+## Limitations
+
+- **No delivery guarantee** — if your endpoint is down after retries, the event is not persisted for later replay; consider a message queue on the receiver side if you need durability.
+- **Ordering** — concurrent requests may cause webhooks to arrive out of order relative to user perception; use `timestamp` and `id` for ordering and deduplication.
+- **Local development** — `http://` URLs are allowed for local testing; use HTTPS in production.
