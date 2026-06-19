@@ -8,19 +8,47 @@ import {
 
 const authorizationEndpoint = "https://dash.cloudflare.com/oauth2/auth";
 const tokenEndpoint = "https://dash.cloudflare.com/oauth2/token";
-const userinfoEndpoint = "https://dash.cloudflare.com/oauth2/userinfo";
+/**
+ * Cloudflare's OIDC `userinfo` endpoint only returns the `sub` claim, so it
+ * cannot be used to build a user. The user's profile (email, name, ...) is
+ * read from the Cloudflare API `/user` endpoint instead, which the access
+ * token can call when the `user-details.read` scope is granted.
+ *
+ * @see https://developers.cloudflare.com/api/resources/user/methods/get/
+ */
+const userEndpoint = "https://api.cloudflare.com/client/v4/user";
 
+/**
+ * The user profile returned by the Cloudflare API `/user` endpoint.
+ *
+ * @see https://developers.cloudflare.com/api/resources/user/methods/get/
+ */
 export interface CloudflareProfile {
-	/** The user's unique Cloudflare OAuth subject. */
-	sub: string;
-	/** The user's email address, when returned by Cloudflare. */
-	email?: string | undefined;
-	/** Whether Cloudflare reports the email as verified. */
-	email_verified?: boolean | undefined;
-	/** The user's display name, when returned by Cloudflare. */
-	name?: string | undefined;
-	/** URL of the user's profile picture, when returned by Cloudflare. */
-	picture?: string | undefined;
+	/** Identifier of the user. */
+	id: string;
+	/** Current email address of the user. */
+	email: string;
+	/** The user's first name. */
+	first_name?: string | null | undefined;
+	/** The user's last name. */
+	last_name?: string | null | undefined;
+	/** The country in which the user lives. */
+	country?: string | null | undefined;
+	/** The user's telephone number. */
+	telephone?: string | null | undefined;
+	/** The zipcode or postal code where the user lives. */
+	zipcode?: string | null | undefined;
+	/** Indicates whether two-factor authentication is enabled for the user account. */
+	two_factor_authentication_enabled?: boolean | undefined;
+	/** Indicates whether the user has been suspended. */
+	suspended?: boolean | undefined;
+}
+
+/** The standard Cloudflare API response envelope for the `/user` endpoint. */
+interface CloudflareUserResponse {
+	success: boolean;
+	errors: { code: number; message: string }[];
+	result: CloudflareProfile | null;
 }
 
 export interface CloudflareOptions extends ProviderOptions<CloudflareProfile> {
@@ -106,21 +134,31 @@ export const cloudflare = (options: CloudflareOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<CloudflareProfile>(
-				userinfoEndpoint,
+			const { data, error } = await betterFetch<CloudflareUserResponse>(
+				userEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);
-			if (error || !profile) {
+			if (error || !data?.success || !data.result) {
 				return null;
 			}
+			const profile = data.result;
+			const name = [profile.first_name, profile.last_name]
+				.filter(Boolean)
+				.join(" ");
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
-					name: profile.name ?? "",
+					id: profile.id,
+					name,
 					email: profile.email,
-					image: profile.picture,
-					emailVerified: profile.email_verified ?? false,
+					/**
+					 * The Cloudflare `/user` endpoint does not expose an email
+					 * verification status. Completing the OAuth flow proves the user
+					 * controls the Cloudflare account, so the account email is treated
+					 * as verified. Override via `mapProfileToUser` if you need different
+					 * behavior.
+					 */
+					emailVerified: true,
 					...userMap,
 				},
 				data: profile,

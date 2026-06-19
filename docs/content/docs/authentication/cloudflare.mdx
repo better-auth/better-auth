@@ -24,7 +24,11 @@ description: Cloudflare provider setup and usage.
   <Step>
     ### Configure the provider
 
-    To configure the provider, pass the `clientId` and `clientSecret` to `socialProviders.cloudflare` in your auth configuration. The provider requests `user-details.read` by default so Better Auth can read the user's profile details.
+    To configure the provider, pass the `clientId` and `clientSecret` to `socialProviders.cloudflare` in your auth configuration. The provider requests `user-details.read` by default so Better Auth can read the user's profile details from the Cloudflare API `/user` endpoint (`https://api.cloudflare.com/client/v4/user`).
+
+    <Callout>
+      Cloudflare's OIDC `userinfo` endpoint only returns the `sub` claim, so the provider reads the user's email and name from the Cloudflare API `/user` endpoint instead. This requires the `user-details.read` scope to be granted on your OAuth client.
+    </Callout>
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
@@ -141,11 +145,11 @@ export const auth = betterAuth({
 })
 ```
 
-### Handling missing email
+### Profile and email verification
 
-If your Cloudflare client does not return an email from the user info endpoint, Better Auth cannot create a user unless you map one yourself.
+The provider reads the user's profile from the Cloudflare API `/user` endpoint. This returns the user's `id`, `email`, `first_name`, and `last_name`. The display name is composed from the first and last name, and Cloudflare does not provide a profile picture, so `image` is left empty.
 
-Use `mapProfileToUser` to provide an application-specific placeholder email:
+Cloudflare's `/user` endpoint does not expose an email-verification status. Because completing the OAuth flow proves the user controls the Cloudflare account, the account email is treated as verified (`emailVerified: true`). To change this, map it yourself with `mapProfileToUser`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -156,7 +160,7 @@ export const auth = betterAuth({
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
             mapProfileToUser: (profile) => ({
-                email: profile.email ?? `${profile.sub}@cloudflare.placeholder.local`, // [!code highlight]
+                emailVerified: false, // [!code highlight]
             }),
         },
     },
@@ -164,7 +168,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  Synthesized emails are placeholders, not contact addresses. Use a domain you control, or a reserved suffix like `.invalid` or `.local`, so no real inbox is addressed by mistake.
+  Reading the profile requires the `user-details.read` scope. If it is not granted on your Cloudflare OAuth client, the `/user` request fails and sign-in cannot complete.
 </Callout>
 
 For more information about Cloudflare OAuth, refer to the [Cloudflare OAuth documentation](https://developers.cloudflare.com/fundamentals/oauth/).

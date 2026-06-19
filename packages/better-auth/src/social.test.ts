@@ -2313,15 +2313,23 @@ describe("Cloudflare Provider", async () => {
 					});
 				},
 			),
-			http.get("https://dash.cloudflare.com/oauth2/userinfo", async () => {
-				return HttpResponse.json({
-					sub: "cloudflare_user_123",
-					email: "cloudflare@test.com",
-					email_verified: true,
-					name: "Cloudflare User",
-					picture: "https://dash.cloudflare.com/avatar.png",
-				} satisfies CloudflareProfile);
-			}),
+			http.get(
+				"https://api.cloudflare.com/client/v4/user",
+				async ({ request }) => {
+					expect(request.headers.get("authorization")).toMatch(/^Bearer /);
+					return HttpResponse.json({
+						success: true,
+						errors: [],
+						messages: [],
+						result: {
+							id: "cloudflare_user_123",
+							email: "cloudflare@test.com",
+							first_name: "Cloudflare",
+							last_name: "User",
+						} satisfies CloudflareProfile,
+					});
+				},
+			),
 		);
 	});
 
@@ -2477,9 +2485,8 @@ describe("Cloudflare Provider", async () => {
 		expect(session.data).toBeDefined();
 		expect(session.data?.user.email).toBe("cloudflare@test.com");
 		expect(session.data?.user.name).toBe("Cloudflare User");
-		expect(session.data?.user.image).toBe(
-			"https://dash.cloudflare.com/avatar.png",
-		);
+		// Cloudflare's /user endpoint does not expose an avatar.
+		expect(session.data?.user.image).toBeNull();
 		expect(session.data?.user.emailVerified).toBe(true);
 
 		const ctx = await auth.$context;
@@ -2616,6 +2623,90 @@ describe("Cloudflare Provider", async () => {
 		});
 
 		expect(session.data?.user.email).toBe("cloudflare@test.com");
+	});
+
+	/**
+	 * Cloudflare's OIDC `userinfo` endpoint only returns the `sub` claim, so the
+	 * provider must read the profile (email, name) from the Cloudflare API
+	 * `/user` endpoint. This guards against regressing back to `userinfo`, which
+	 * cannot produce an email and breaks sign-in.
+	 *
+	 * Kept last in this block: it overrides the shared `/user` handler, and the
+	 * suite does not reset handlers between tests.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/9908
+	 */
+	it("derives the profile from the Cloudflare API /user endpoint, not the OIDC userinfo endpoint", async () => {
+		mswServer.use(
+			// Re-register the token handler: earlier tests in this block override
+			// it (and the suite does not reset handlers), so pin it for this test.
+			http.post("https://dash.cloudflare.com/oauth2/token", async () => {
+				return HttpResponse.json({
+					access_token: "cloudflare_access_token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get("https://dash.cloudflare.com/oauth2/userinfo", async () => {
+				// Real Cloudflare userinfo only returns `sub` — no email/name.
+				return HttpResponse.json({ sub: "cloudflare_user_123" });
+			}),
+			http.get("https://api.cloudflare.com/client/v4/user", async () => {
+				return HttpResponse.json({
+					success: true,
+					errors: [],
+					messages: [],
+					result: {
+						id: "cloudflare_user_123",
+						email: "first-only@test.com",
+						first_name: "First",
+						// no last_name
+					} satisfies CloudflareProfile,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					cloudflare: {
+						clientId: "cloudflare-test-client-id",
+						clientSecret: "cloudflare-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "cloudflare",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/cloudflare", {
+			query: { state, code: "cloudflare_user_endpoint_code" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.email).toBe("first-only@test.com");
+		// Name is composed from first_name/last_name; only first_name is present.
+		expect(session.data?.user.name).toBe("First");
 	});
 });
 
