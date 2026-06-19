@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
@@ -355,14 +355,16 @@ describe("PKCE optional - dynamic client registration policy", async () => {
 				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
 			},
 		});
-		onTestFinished(() => {
-			vi.unstubAllGlobals();
-		});
-
-		const consentResponse = await authenticatedClient.oauth2.consent(
-			{ accept: true },
-			{ headers, throw: true },
-		);
+		const consentResponse = await (async () => {
+			try {
+				return await authenticatedClient.oauth2.consent(
+					{ accept: true },
+					{ headers, throw: true },
+				);
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		})();
 		expect(consentResponse.url).toContain("code=");
 		expect(consentResponse.url).toContain(`state=${state}`);
 
