@@ -1102,14 +1102,23 @@ async function checkVerificationValue(
 			error: "invalid_grant",
 		});
 	}
-	if (
-		verificationValue.query?.redirect_uri &&
-		verificationValue.query?.redirect_uri !== redirect_uri
-	) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri mismatch",
-			error: "invalid_request",
-		});
+	// RFC 6749 §4.1.3: redirect_uri is required at the token endpoint only if it
+	// was present in the authorization request, and then must match. A headless
+	// authorization request (first-party-apps / device-style) carries none, so it
+	// is exchanged without one.
+	if (verificationValue.query?.redirect_uri) {
+		if (!redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "redirect_uri is required",
+				error: "invalid_request",
+			});
+		}
+		if (verificationValue.query.redirect_uri !== redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "redirect_uri mismatch",
+				error: "invalid_request",
+			});
+		}
 	}
 	// Prefer the new top-level field, but keep compatibility with legacy values in query.resource.
 	const storedResources =
@@ -1182,12 +1191,9 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
-	if (!redirect_uri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri is required",
-			error: "invalid_request",
-		});
-	}
+	// redirect_uri is validated conditionally against the stored code in
+	// checkVerificationValue (RFC 6749 §4.1.3): required and matched only when the
+	// authorization request included one, so headless codes can omit it.
 
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
