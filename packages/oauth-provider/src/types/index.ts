@@ -1112,14 +1112,6 @@ export interface OAuthOptions<
 		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
 		 */
 		claims_supported?: string[];
-		/**
-		 * Advertised ACR values supported by the provider.
-		 *
-		 * Better Auth uses "0" for the unspecified authentication context by
-		 * default. Override this only when your deployment returns other ACR
-		 * values from ID tokens.
-		 */
-		acr_values_supported?: string[];
 	};
 	/**
 	 * Attach prefixes to returned token types.

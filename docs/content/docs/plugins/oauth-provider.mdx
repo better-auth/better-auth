@@ -1664,6 +1664,9 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
+Better Auth advertises `acr_values_supported: ["0"]`, which is the unspecified authentication context. Custom ACR policies are not currently supported; authorization requests for other
+`acr_values` are rejected with `invalid_request`.
+
 #### Scopes
 
 ```ts title="auth.ts"

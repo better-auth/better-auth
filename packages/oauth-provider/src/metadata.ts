@@ -177,9 +177,7 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		acr_values_supported: opts.advertisedMetadata?.acr_values_supported ?? [
-			UNSPECIFIED_ACR,
-		],
+		acr_values_supported: [UNSPECIFIED_ACR],
 		id_token_signing_alg_values_supported: (() => {
 			if (opts.disableJwtPlugin) return ["HS256" as const];
 			// Advertise every algorithm the plugin can sign with: the primary
