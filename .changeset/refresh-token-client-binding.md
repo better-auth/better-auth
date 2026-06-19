@@ -2,4 +2,4 @@
 "@better-auth/oauth-provider": patch
 ---
 
-Returns `invalid_grant` when a client tries to use a refresh token issued to another OAuth client.
+Refresh-token requests now return `invalid_grant` with an `invalid refresh token` description when a client tries to use a refresh token issued to another OAuth client.
