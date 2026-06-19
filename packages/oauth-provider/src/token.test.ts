@@ -40,27 +40,26 @@ describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validResource = "https://myapi.example.com";
-	const { auth, signInWithTestUser, customFetchImpl, testUser } =
-		await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						issuer: authServerBaseUrl,
-					},
-				}),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					resources: [validResource],
-					enforcePerClientResources: false,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-				}),
-			],
-		});
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validResource],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -279,7 +278,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.protectedHeader).toBeDefined();
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
-		expect(idToken.payload.name).toBe(testUser.name);
+		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.email).toBeUndefined();
 	});
 
@@ -320,7 +319,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
 		expect(idToken.payload.name).toBeUndefined();
-		expect(idToken.payload.email).toBe(testUser.email);
+		expect(idToken.payload.email).toBeUndefined();
 	});
 
 	it("scope openid+offline_access should provide opaque access_token, id_token, and refresh_token", async ({
@@ -751,7 +750,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(idToken.protectedHeader).toBeDefined();
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
-		expect(idToken.payload.name).toBeDefined();
+		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.email).toBeUndefined();
 
 		return tokens.data;
@@ -1625,30 +1624,29 @@ describe("oauth token - client_credentials", async () => {
 describe("oauth token - customIdTokenClaims precedence", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const { auth, signInWithTestUser, customFetchImpl, testUser } =
-		await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						issuer: authServerBaseUrl,
-					},
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customIdTokenClaims: () => ({
+					given_name: "CustomFirst",
+					family_name: "CustomLast",
+					custom_field: "custom_value",
 				}),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-					customIdTokenClaims: () => ({
-						given_name: "CustomFirst",
-						family_name: "CustomLast",
-						custom_field: "custom_value",
-					}),
-				}),
-			],
-		});
+			}),
+		],
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -1693,7 +1691,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		jwks = createLocalJWKSet(jwksResult.data);
 	});
 
-	it("custom claims should override standard profile claims in id_token", async ({
+	it("custom claims can add profile claim names to id_token", async ({
 		expect,
 	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
@@ -1755,13 +1753,13 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		expect(tokens.data?.id_token).toBeDefined();
 		const idToken = await jwtVerify(tokens.data?.id_token!, jwks);
 
-		// Custom claims must override the auto-derived profile claims
+		// First-party custom claims can deliberately place profile claims in the
+		// ID token, even though scopes now place them on UserInfo by default.
 		expect(idToken.payload.given_name).toBe("CustomFirst");
 		expect(idToken.payload.family_name).toBe("CustomLast");
 		expect(idToken.payload.custom_field).toBe("custom_value");
 
-		// Standard name should still come from the user record (not overridden)
-		expect(idToken.payload.name).toBe(testUser.name);
+		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.sub).toBeDefined();
 	});
 });

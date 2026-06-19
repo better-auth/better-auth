@@ -120,6 +120,7 @@ describe("oauth metadata", async () => {
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
+			acr_values_supported: ["0"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
 			prompt_values_supported: [
@@ -355,6 +356,13 @@ describe("oauth metadata", async () => {
 
 		expect(metadata.request_parameter_supported).toBe(false);
 		expect(metadata.request_uri_parameter_supported).toBe(false);
+	});
+
+	it("should advertise the unspecified ACR value by default", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.acr_values_supported).toEqual(["0"]);
 	});
 
 	it("should fail if advertised scope invalid", async () => {
