@@ -1102,13 +1102,31 @@ async function checkVerificationValue(
 			error: "invalid_grant",
 		});
 	}
-	if (
-		verificationValue.query?.redirect_uri &&
-		verificationValue.query?.redirect_uri !== redirect_uri
-	) {
+	// RFC 6749 §4.1.3: redirect_uri is bound at the token endpoint only when the
+	// authorization request carried one. Enforce an exact correspondence in both
+	// directions: a code minted with a redirect_uri must be redeemed with the
+	// identical value, and a headless code (first-party-apps / device-style)
+	// minted without one must be redeemed without one.
+	const boundRedirectUri = verificationValue.query.redirect_uri;
+	if (boundRedirectUri) {
+		if (!redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "redirect_uri is required",
+				error: "invalid_request",
+			});
+		}
+		if (boundRedirectUri !== redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				// RFC 6749 §5.2: a redirect_uri that does not match the one bound to
+				// the code is an invalid grant, not a malformed request.
+				error_description: "redirect_uri mismatch",
+				error: "invalid_grant",
+			});
+		}
+	} else if (redirect_uri) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "redirect_uri mismatch",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	// Prefer the new top-level field, but keep compatibility with legacy values in query.resource.
@@ -1182,12 +1200,9 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
-	if (!redirect_uri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri is required",
-			error: "invalid_request",
-		});
-	}
+	// redirect_uri is validated conditionally against the stored code in
+	// checkVerificationValue (RFC 6749 §4.1.3): required and matched only when the
+	// authorization request included one, so headless codes can omit it.
 
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;

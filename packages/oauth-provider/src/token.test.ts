@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
+import { storeToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
@@ -576,6 +577,138 @@ describe("oauth token - authorization_code", async () => {
 			deleteMany.mockRestore();
 			loggerError.mockRestore();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10159
+	 *
+	 * RFC 6749 §4.1.3 binds redirect_uri at the token endpoint only when the
+	 * authorization request carried one. The authorize endpoint always records a
+	 * redirect_uri (it delivers the code through it), so a headless code is
+	 * inserted the way authorize.ts persists one to exercise redemption directly.
+	 */
+	describe("redirect_uri conditional (RFC 6749 §4.1.3)", () => {
+		const tokenRequestHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function s256Challenge(verifier: string) {
+			const digest = await crypto.subtle.digest(
+				"SHA-256",
+				new TextEncoder().encode(verifier),
+			);
+			return base64url.encode(new Uint8Array(digest));
+		}
+
+		// Headless first-party / device flows are public clients, so the code is
+		// minted with a PKCE challenge and redeemed with its verifier.
+		async function mintHeadlessCode() {
+			const context = await auth.$context;
+			const session = await auth.api.getSession({ headers });
+			if (!session) throw new Error("test session unavailable");
+			const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+			const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
+			const now = Date.now();
+			await context.internalAdapter.createVerificationValue({
+				identifier: await storeToken("hashed", code, "authorization_code"),
+				value: JSON.stringify({
+					type: "authorization_code",
+					query: {
+						client_id: oauthClient!.client_id,
+						scope: "openid",
+						code_challenge: await s256Challenge(codeVerifier),
+						code_challenge_method: "S256",
+					},
+					userId: session.user.id,
+					sessionId: session.session.id,
+					authTime: now,
+				}),
+				expiresAt: new Date(now + 600_000),
+			});
+			return { code, codeVerifier };
+		}
+
+		async function mintRedirectBoundCode() {
+			const { url: authUrl } = await createAuthUrl();
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			return new URL(callbackRedirectUrl).searchParams.get("code")!;
+		}
+
+		it("exchanges a headless code that omits redirect_uri", async () => {
+			const { code, codeVerifier } = await mintHeadlessCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+		});
+
+		it("rejects a redirect_uri supplied against a headless code with invalid_grant", async () => {
+			const { code, codeVerifier } = await mintHeadlessCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					redirect_uri: redirectUri,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+		});
+
+		it("requires redirect_uri when the code was bound to one", async () => {
+			const code = await mintRedirectBoundCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_request",
+			);
+		});
+
+		it("rejects a mismatched redirect_uri with invalid_grant", async () => {
+			const code = await mintRedirectBoundCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					redirect_uri: "https://attacker.example/callback",
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+		});
 	});
 });
 
@@ -3316,6 +3449,25 @@ describe("verificationValueSchema", () => {
 				response_type: "code",
 				client_id: "test-client",
 				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10159
+	 */
+	it("should validate a headless verification value without redirect_uri", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
 				scope: "openid",
 			},
 			userId: "user-1",

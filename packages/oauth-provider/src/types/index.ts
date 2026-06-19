@@ -1532,6 +1532,19 @@ export interface OAuthClientResource {
 }
 
 /**
+ * The authorization request as persisted alongside a minted code. Identical to
+ * {@link OAuthAuthorizationQuery} except `redirect_uri` is optional: a headless
+ * authorization request (first-party-apps / device-style) carries none, and
+ * RFC 6749 §4.1.3 only binds `redirect_uri` at the token endpoint when the
+ * authorization request included one. Mirrors the runtime
+ * `storedAuthorizationQuerySchema`.
+ */
+export interface StoredAuthorizationQuery
+	extends Omit<OAuthAuthorizationQuery, "redirect_uri"> {
+	redirect_uri?: string;
+}
+
+/**
  * Stored within the verification.value field
  * in JSON format.
  *
@@ -1540,7 +1553,7 @@ export interface OAuthClientResource {
  */
 export interface VerificationValue {
 	type: "authorization_code";
-	query: OAuthAuthorizationQuery;
+	query: StoredAuthorizationQuery;
 	sessionId: string;
 	userId: string;
 	resource?: string[];
