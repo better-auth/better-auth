@@ -915,7 +915,7 @@ export function removeMaxAgeFromQuery(query: URLSearchParams) {
 
 enum PKCERequirementErrors {
 	PUBLIC_CLIENT = "pkce is required for public clients",
-	OFFLINE_ACCESS_SCOPE = "pkce or nonce is required when requesting offline_access scope",
+	OFFLINE_ACCESS_SCOPE = "pkce or OIDC nonce is required when requesting offline_access scope",
 	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
 }
 
@@ -956,10 +956,12 @@ export function isPKCERequired(
 	}
 
 	const requestScopes = request?.scopes ?? [];
+	const isOpenIdRequest = requestScopes.includes("openid");
 	const hasNonce =
 		typeof request?.nonce === "string" && request.nonce.length > 0;
+	const hasOidcNonce = isOpenIdRequest && hasNonce;
 
-	if (requestScopes.includes("offline_access") && !hasNonce) {
+	if (requestScopes.includes("offline_access") && !hasOidcNonce) {
 		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
 	}
 

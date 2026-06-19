@@ -465,7 +465,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		confidentialClient = confResponse;
 	});
 
-	it("offline_access without PKCE or nonce should fail even with requirePKCE: false", async () => {
+	it("offline_access without PKCE or OIDC nonce should fail even with requirePKCE: false", async () => {
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
 		authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -482,7 +482,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 		expect(errorRedirect).toContain("error=invalid_request");
 		expect(errorRedirect).toContain(
-			"pkce+or+nonce+is+required+when+requesting+offline_access+scope",
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
 		);
 	});
 
@@ -540,6 +540,35 @@ describe("PKCE optional - offline_access scope", async () => {
 		expect(tokenResponse.data?.access_token).toBeDefined();
 		expect(tokenResponse.data?.id_token).toBeDefined();
 		expect(tokenResponse.data?.refresh_token).toBeDefined();
+	});
+
+	it("offline_access without PKCE should fail for non-OIDC requests with nonce", async () => {
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "123",
+			scopes: ["offline_access"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			nonce: "unused-without-openid",
+		});
+
+		let errorRedirect = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirect).toContain("error=invalid_request");
+		expect(errorRedirect).toContain(
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
+		);
+		expect(errorRedirect).not.toContain("code=");
 	});
 
 	it("offline_access with PKCE should succeed", async () => {

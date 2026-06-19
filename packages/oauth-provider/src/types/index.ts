@@ -718,7 +718,7 @@ export interface OAuthOptions<
 	 * This is server-owned registration policy. Dynamic client registration does
 	 * not accept `require_pkce` from the client request, and public clients or
 	 * authorization requests with `offline_access` still require PKCE unless the
-	 * confidential OIDC request includes `nonce`.
+	 * confidential OIDC request includes both `openid` and `nonce`.
 	 *
 	 * @default true
 	 */
