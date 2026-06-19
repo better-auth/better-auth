@@ -82,6 +82,26 @@ export interface OrganizationClientOptions {
 		| undefined;
 }
 
+const ACTIVE_ORG_SESSION_PATHS = new Set([
+	"/sign-out",
+	"/sign-in/email",
+	"/sign-in/username",
+	"/sign-in/phone-number",
+	"/sign-in/email-otp",
+	"/sign-up/email",
+	"/verify-email",
+	"/phone-number/verify",
+	"/email-otp/verify-email",
+	"/two-factor/verify-totp",
+	"/two-factor/verify-otp",
+	"/two-factor/verify-backup-code",
+	"/update-session",
+	"/delete-user",
+	"/admin/impersonate-user",
+	"/admin/stop-impersonating",
+	"/multi-session/set-active",
+]);
+
 export const organizationClient = <CO extends OrganizationClientOptions>(
 	options?: CO | undefined,
 ) => {
@@ -248,7 +268,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path === "/sign-out" || path.startsWith("/organization");
+					return (
+						ACTIVE_ORG_SESSION_PATHS.has(path) ||
+						path.startsWith("/organization")
+					);
 				},
 				signal: "$activeOrgSignal",
 			},
