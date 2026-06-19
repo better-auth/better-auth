@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 
@@ -142,12 +142,8 @@ export interface GenericOAuthConfig {
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?:
-		| (
-				| Record<string, string>
-				| ((
-						ctx: GenericEndpointContext,
-				  ) => Record<string, string> | Promise<Record<string, string>>)
-		  )
+		| Record<string, string>
+		| ((ctx: GenericEndpointContext) => Awaitable<Record<string, string>>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.

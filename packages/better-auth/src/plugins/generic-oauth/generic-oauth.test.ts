@@ -2908,9 +2908,8 @@ describe("oauth2", async () => {
 		});
 
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		expect(
-			new URL(res.data?.url || "").searchParams.get("resource"),
-		).toBe("https://api.example.com");
+		const url = new URL(res.data?.url || "");
+		expect(url.searchParams.get("resource")).toBe("https://api.example.com");
 	});
 
 	it("should apply authorizationUrlParams provided as an async function", async () => {
@@ -2952,9 +2951,8 @@ describe("oauth2", async () => {
 		});
 
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		expect(
-			new URL(res.data?.url || "").searchParams.get("resource"),
-		).toBe("https://api.example.com");
+		const url = new URL(res.data?.url || "");
+		expect(url.searchParams.get("resource")).toBe("https://api.example.com");
 	});
 
 	describe("Duplicate Provider ID Detection", () => {
