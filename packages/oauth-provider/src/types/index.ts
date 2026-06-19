@@ -1319,6 +1319,13 @@ export interface OAuthAuthorizationQuery {
 	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
 	response_type?: "code";
 	/**
+	 * OpenID Connect Request Object by value.
+	 *
+	 * The parameter is parsed so unsupported use can be rejected with
+	 * `request_not_supported`; Better Auth does not process Request Objects yet.
+	 */
+	request?: string;
+	/**
 	 * PAR request_uri. When present, other params are resolved from the stored request.
 	 */
 	request_uri?: string;

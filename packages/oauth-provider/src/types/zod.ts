@@ -111,6 +111,7 @@ export const authorizationQuerySchema = z
 			.string()
 			.pipe(z.enum(["code"]))
 			.optional(),
+		request: z.string().optional(),
 		request_uri: z.string().optional(),
 		redirect_uri: SafeUrlSchema.optional(),
 		scope: z.string().optional(),

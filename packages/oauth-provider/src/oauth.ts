@@ -47,7 +47,6 @@ import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	authorizationQuerySchema,
 	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
@@ -303,14 +302,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
 		"/oauth2/authorize",
 		{
-			method: "GET",
-			query: authorizationQuerySchema,
+			method: ["GET", "POST"],
+			body: z.object({}).passthrough(),
 			redirectOnError: authorizeRedirectOnError(opts),
-			errorCodesByField: {
-				response_type: { invalid: "unsupported_response_type" },
-				resource: { invalid: "invalid_target" },
-			},
 			metadata: {
+				allowedMediaTypes: ["application/x-www-form-urlencoded"],
 				openapi: {
 					description: "Authorize an OAuth2 request",
 					parameters: [
