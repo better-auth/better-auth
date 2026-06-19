@@ -36,6 +36,27 @@ const PRIVATE_JWK_MEMBER_NAMES = [
 	"oth",
 ] as const;
 
+function hasStringJwkMember(key: Record<string, unknown>, memberName: string) {
+	return typeof key[memberName] === "string" && key[memberName].length > 0;
+}
+
+function isSupportedPublicJwk(key: Record<string, unknown>) {
+	switch (key.kty) {
+		case "RSA":
+			return hasStringJwkMember(key, "n") && hasStringJwkMember(key, "e");
+		case "EC":
+			return (
+				hasStringJwkMember(key, "crv") &&
+				hasStringJwkMember(key, "x") &&
+				hasStringJwkMember(key, "y")
+			);
+		case "OKP":
+			return hasStringJwkMember(key, "crv") && hasStringJwkMember(key, "x");
+		default:
+			return false;
+	}
+}
+
 function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
 	const grantTypes = client.grant_types ?? [
 		...DEFAULT_REGISTRATION_GRANT_TYPES,
@@ -86,6 +107,13 @@ function validatePublicJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: "jwks must contain only public asymmetric keys",
+			});
+		}
+		if (!isSupportedPublicJwk(key)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"jwks keys must be supported public JWKs with required key parameters",
 			});
 		}
 	}

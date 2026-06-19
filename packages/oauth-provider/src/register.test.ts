@@ -393,6 +393,21 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
+	it.for([
+		{},
+		{ use: "sig" },
+		{ kty: "RSA", n: "test" },
+		{ kty: "EC", crv: "P-256", x: "test" },
+		{ kty: "OKP", crv: "Ed25519" },
+		{ kty: "unsupported", n: "test", e: "test-exponent" },
+	])("should reject malformed jwks public keys", async (key) => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			jwks: { keys: [key] },
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
 	it("should reject admin registration with an empty jwks array", async () => {
 		await expect(
 			auth.api.adminCreateOAuthClient({
