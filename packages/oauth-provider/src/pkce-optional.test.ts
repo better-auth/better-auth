@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { decodeJwt } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -540,6 +541,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		expect(tokenResponse.data?.access_token).toBeDefined();
 		expect(tokenResponse.data?.id_token).toBeDefined();
 		expect(tokenResponse.data?.refresh_token).toBeDefined();
+		expect(decodeJwt(tokenResponse.data!.id_token!).nonce).toBe(nonce);
 	});
 
 	it("offline_access without PKCE should fail for non-OIDC requests with nonce", async () => {
