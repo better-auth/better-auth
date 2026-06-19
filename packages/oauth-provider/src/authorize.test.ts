@@ -17,7 +17,7 @@ import {
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
 } from "./signed-query";
-import type { OAuthConsent, Scope } from "./types";
+import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { verifyOAuthQueryParams } from "./utils";
 
@@ -507,6 +507,49 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
 	const requestUriWithInvalidMaxAge = "urn:better-auth:par:invalid-max-age";
 	const requestUriWithReorderedPrompt = "urn:better-auth:par:reordered-prompt";
+	type RequestUriResolver = NonNullable<
+		OAuthOptions<Scope[]>["requestUriResolver"]
+	>;
+	type RequestUriResolverInput = Parameters<RequestUriResolver>[0];
+	const requestUriResolver = vi.fn(
+		async ({ requestUri: receivedRequestUri }: RequestUriResolverInput) => {
+			const resolvedParams = {
+				response_type: "code",
+				redirect_uri: redirectUri,
+				scope: "openid",
+				state: "par-state",
+				code_challenge: "a".repeat(43),
+				code_challenge_method: "S256",
+			};
+
+			if (receivedRequestUri === requestUri) {
+				return resolvedParams;
+			}
+
+			if (receivedRequestUri === requestUriWithPostLoginMarker) {
+				return {
+					...resolvedParams,
+					[postLoginClearedParam]: "attacker-session",
+				};
+			}
+
+			if (receivedRequestUri === requestUriWithInvalidMaxAge) {
+				return {
+					...resolvedParams,
+					max_age: "-1",
+				};
+			}
+
+			if (receivedRequestUri === requestUriWithReorderedPrompt) {
+				return {
+					...resolvedParams,
+					prompt: "consent login",
+				};
+			}
+
+			return null;
+		},
+	);
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -514,43 +557,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				requestUriResolver: async ({ requestUri: receivedRequestUri }) => {
-					const resolvedParams = {
-						response_type: "code",
-						redirect_uri: redirectUri,
-						scope: "openid",
-						state: "par-state",
-						code_challenge: "a".repeat(43),
-						code_challenge_method: "S256",
-					};
-
-					if (receivedRequestUri === requestUri) {
-						return resolvedParams;
-					}
-
-					if (receivedRequestUri === requestUriWithPostLoginMarker) {
-						return {
-							...resolvedParams,
-							[postLoginClearedParam]: "attacker-session",
-						};
-					}
-
-					if (receivedRequestUri === requestUriWithInvalidMaxAge) {
-						return {
-							...resolvedParams,
-							max_age: "-1",
-						};
-					}
-
-					if (receivedRequestUri === requestUriWithReorderedPrompt) {
-						return {
-							...resolvedParams,
-							prompt: "consent login",
-						};
-					}
-
-					return null;
-				},
+				requestUriResolver,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -579,6 +586,26 @@ describe("oauth authorize - request_uri resolution", async () => {
 		});
 		expect(response?.client_id).toBeDefined();
 		oauthClient = response;
+	});
+
+	it("should reject request_uri without client_id before resolver lookup", async () => {
+		requestUriResolver.mockClear();
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("request_uri", requestUri);
+
+		let errorRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(requestUriResolver).not.toHaveBeenCalled();
+		const errorRedirect = new URL(errorRedirectUrl, authServerBaseUrl);
+		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
+		expect(errorRedirect.searchParams.get("error_description")).toMatch(
+			/client_id/,
+		);
 	});
 
 	it("should sign the resolved PAR parameters for the login redirect", async () => {

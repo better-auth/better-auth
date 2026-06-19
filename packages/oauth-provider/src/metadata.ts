@@ -188,6 +188,8 @@ export function oidcServerMetadata(
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
+		request_parameter_supported: false,
+		request_uri_parameter_supported: false,
 		prompt_values_supported: [
 			"login",
 			"consent",

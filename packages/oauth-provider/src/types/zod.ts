@@ -111,11 +111,12 @@ export const authorizationQuerySchema = z
 			.string()
 			.pipe(z.enum(["code"]))
 			.optional(),
+		request: z.string().optional(),
 		request_uri: z.string().optional(),
 		redirect_uri: SafeUrlSchema.optional(),
 		scope: z.string().optional(),
 		state: z.string().optional(),
-		client_id: z.string(),
+		client_id: z.string().min(1, "client_id is required"),
 		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),

@@ -7,6 +7,7 @@ import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
+import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import { resolveResourcePolicy } from "./resources";
 import {
 	canonicalizeOAuthQueryParams,
@@ -106,6 +107,31 @@ function deriveResponseMode(
 		return "fragment";
 	}
 	return "query";
+}
+
+const authorizationQueryErrorCodesByField = {
+	response_type: { invalid: "unsupported_response_type" },
+	resource: { invalid: "invalid_target" },
+} as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getStringParameter(value: unknown): string | undefined {
+	return typeof value === "string" ? value : undefined;
+}
+
+function getAuthorizationRequestParameters(
+	ctx: GenericEndpointContext,
+	settings: AuthorizeEndpointSettings | undefined,
+): OAuthAuthorizationQuery {
+	const source =
+		ctx.method === "POST" && settings?.isAuthorize === true
+			? ctx.body
+			: ctx.query;
+	const parameters = isRecord(source) ? source : {};
+	return { ...parameters } as unknown as OAuthAuthorizationQuery;
 }
 
 export const handleRedirect = (
@@ -333,29 +359,58 @@ export async function authorizeEndpoint(
 	}
 	const request = ctx.request;
 
+	// Normalize GET query serialization and POST form serialization through one
+	// authorization-request path (OIDC Core §3.1.2.1).
+	let query: OAuthAuthorizationQuery = getAuthorizationRequestParameters(
+		ctx,
+		settings,
+	);
+	ctx.query = query;
+	const requestObject = getStringParameter(query.request);
+	const requestUri = getStringParameter(query.request_uri);
+	if (requestObject !== undefined && requestUri !== undefined) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "request and request_uri cannot be used together",
+			ctx,
+		});
+	}
+	if (requestObject !== undefined) {
+		return authorizeRedirectOnError(opts)({
+			error: "request_not_supported",
+			error_description: "request object not supported",
+			ctx,
+		});
+	}
+
 	// Resolve request_uri (PAR) before processing
-	let query: OAuthAuthorizationQuery = ctx.query;
-	if (query.request_uri) {
-		if (!opts.requestUriResolver) {
-			return handleRedirect(
+	if (requestUri !== undefined) {
+		const clientId = getStringParameter(query.client_id);
+		if (!clientId) {
+			return authorizeRedirectOnError(opts)({
+				error: "invalid_request",
+				error_description: "client_id is required",
 				ctx,
-				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
-			);
+			});
+		}
+		if (!opts.requestUriResolver) {
+			return authorizeRedirectOnError(opts)({
+				error: "request_uri_not_supported",
+				error_description: "request_uri not supported",
+				ctx,
+			});
 		}
 		const resolvedParams = await opts.requestUriResolver({
-			requestUri: query.request_uri,
-			clientId: query.client_id ?? "",
+			requestUri,
+			clientId,
 			ctx,
 		});
 		if (!resolvedParams) {
-			return handleRedirect(
+			return authorizeRedirectOnError(opts)({
+				error: "invalid_request_uri",
+				error_description: "request_uri is invalid or expired",
 				ctx,
-				getErrorURL(
-					ctx,
-					"invalid_request_uri",
-					"request_uri is invalid or expired",
-				),
-			);
+			});
 		}
 		// RFC 9126 §4: all params come from the stored request, not the URL.
 		// Only client_id is carried from the authorization URL.
@@ -368,9 +423,12 @@ export async function authorizeEndpoint(
 	ctx.query = query;
 	const parsedQuery = authorizationQuerySchema.safeParse(query);
 	if (!parsedQuery.success) {
+		const mappedError = mapIssuesToOAuthError(
+			parsedQuery.error.issues,
+			authorizationQueryErrorCodesByField,
+		);
 		return authorizeRedirectOnError(opts)({
-			error: "invalid_request",
-			error_description: "invalid authorization request",
+			...mappedError,
 			ctx,
 		});
 	}
@@ -379,13 +437,6 @@ export async function authorizeEndpoint(
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});
-
-	if (!query.client_id) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
-		);
-	}
 
 	if (!query.response_type) {
 		return authorizeRedirectOnError(opts)({

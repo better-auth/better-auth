@@ -349,6 +349,14 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
+	it("should explicitly advertise unsupported request object parameters", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.request_parameter_supported).toBe(false);
+		expect(metadata.request_uri_parameter_supported).toBe(false);
+	});
+
 	it("should fail if advertised scope invalid", async () => {
 		const advertisedScopes = ["create:test"];
 		expect(() =>
