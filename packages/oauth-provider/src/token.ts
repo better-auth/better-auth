@@ -42,7 +42,7 @@ import type {
 } from "./types";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
-import { pickClaims, userNormalClaims } from "./userinfo";
+import { pickClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
 	decryptStoredClientSecret,
@@ -61,6 +61,15 @@ import {
 	toResourceList,
 	validateClientCredentials,
 } from "./utils";
+
+const ID_TOKEN_SCOPE_CLAIM_GUARDS = {
+	name: undefined,
+	picture: undefined,
+	given_name: undefined,
+	family_name: undefined,
+	email: undefined,
+	email_verified: undefined,
+} satisfies Record<string, undefined>;
 
 /**
  * Token presentation scheme implied by a confirmation: a DPoP key thumbprint
@@ -320,7 +329,6 @@ async function createIdToken(
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
-	const userClaims = userNormalClaims(user, scopes);
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
@@ -357,7 +365,7 @@ async function createIdToken(
 		client.enableEndSession || client.backchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
-		...userClaims,
+		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
 		acr: UNSPECIFIED_ACR,
 		...customClaims,

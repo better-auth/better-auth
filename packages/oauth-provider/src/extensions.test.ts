@@ -553,10 +553,9 @@ describe("oauth-provider extensions", async () => {
 		expect(idTokenPayload.jti).toBeUndefined();
 		expect(idTokenPayload.c_hash).toBeUndefined();
 		expect(idTokenPayload.s_hash).toBeUndefined();
-		// Extension id-token claims are additive: they cannot replace the user's
-		// identity claims or fill reserved OIDC/JWT claim names.
-		expect(idTokenPayload.email).toBe(user.email);
-		expect(idTokenPayload.email).not.toBe("evil@malicious.example");
+		// Extension id-token claims are additive: they cannot fill standard
+		// identity claims that scope values only request from UserInfo.
+		expect(idTokenPayload.email).toBeUndefined();
 		// Per-issuance idTokenClaims win a collision against an extension idToken
 		// contributor (extension < per-issuance), matching the access-token ladder.
 		expect(idTokenPayload.order_probe).toBe("grant");

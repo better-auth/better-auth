@@ -498,6 +498,102 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 });
 
+describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+	});
+
+	function authorizeUrl(acrValues: string) {
+		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", oauthClient.client_id);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("state", "acr-state");
+		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge_method", "S256");
+		url.searchParams.set("acr_values", acrValues);
+		return url.toString();
+	}
+
+	async function redirectFor(acrValues: string) {
+		let location = "";
+		await authenticatedClient.$fetch(authorizeUrl(acrValues), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return location;
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10152
+	 */
+	it("rejects unsupported acr_values instead of silently downgrading", async () => {
+		const location = await redirectFor("1");
+		const errorRedirect = new URL(location);
+
+		expect(errorRedirect.origin + errorRedirect.pathname).toBe(redirectUri);
+		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
+		expect(errorRedirect.searchParams.get("error_description")).toBe(
+			"unsupported acr_values",
+		);
+		expect(errorRedirect.searchParams.get("state")).toBe("acr-state");
+		expect(errorRedirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("accepts the advertised unspecified acr value", async () => {
+		const location = await redirectFor("0");
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+			redirectUri,
+		);
+		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+	});
+
+	it("accepts multiple requested acr values when one is supported", async () => {
+		const location = await redirectFor("1 0");
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+			redirectUri,
+		);
+		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+	});
+});
+
 describe("oauth authorize - request_uri resolution", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";

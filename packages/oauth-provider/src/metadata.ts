@@ -4,6 +4,7 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
@@ -176,6 +177,7 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
+		acr_values_supported: [UNSPECIFIED_ACR],
 		id_token_signing_alg_values_supported: (() => {
 			if (opts.disableJwtPlugin) return ["HS256" as const];
 			// Advertise every algorithm the plugin can sign with: the primary

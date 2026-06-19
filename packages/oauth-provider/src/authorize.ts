@@ -5,6 +5,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -132,6 +133,12 @@ function getAuthorizationRequestParameters(
 			: ctx.query;
 	const parameters = isRecord(source) ? source : {};
 	return { ...parameters } as unknown as OAuthAuthorizationQuery;
+}
+
+function isAcrValuesRequestSupported(acrValues: string | undefined): boolean {
+	if (acrValues === undefined) return true;
+	const requestedAcrValues = acrValues.split(" ").filter(Boolean);
+	return requestedAcrValues.includes(UNSPECIFIED_ACR);
 }
 
 export const handleRedirect = (
@@ -434,6 +441,13 @@ export async function authorizeEndpoint(
 	}
 	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
+	if (!isAcrValuesRequestSupported(query.acr_values)) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "unsupported acr_values",
+			ctx,
+		});
+	}
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});

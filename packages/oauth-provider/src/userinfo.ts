@@ -22,7 +22,7 @@ import { getClient, resolveSubjectIdentifier } from "./utils";
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
-export function userNormalClaims(user: User, scopes: string[]) {
+function userNormalClaims(user: User, scopes: string[]) {
 	const name = user.name.split(" ").filter((v) => v !== "");
 	const profile = {
 		name: user.name ?? undefined,
