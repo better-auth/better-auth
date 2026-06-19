@@ -264,21 +264,22 @@ describe("oauthClient private_key_jwt clients", async () => {
 	});
 
 	it("should create private_key_jwt clients with jwks and jwks_uri", async () => {
+		const inlineJwks = {
+			keys: [
+				{ ...publicJwk, kid: "crud-inline-key", alg: "RS256", use: "sig" },
+			],
+		};
 		const inlineClient = await authClient.oauth2.createClient({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",
-			jwks: [
-				{ ...publicJwk, kid: "crud-inline-key", alg: "RS256", use: "sig" },
-			],
+			jwks: inlineJwks,
 		});
 		expect(inlineClient.data?.client_id).toBeDefined();
 		expect(inlineClient.data?.client_secret).toBeUndefined();
 		expect(inlineClient.data?.token_endpoint_auth_method).toBe(
 			"private_key_jwt",
 		);
-		expect(inlineClient.data?.jwks).toEqual([
-			{ ...publicJwk, kid: "crud-inline-key", alg: "RS256", use: "sig" },
-		]);
+		expect(inlineClient.data?.jwks).toEqual(inlineJwks);
 		jwksClient = inlineClient.data!;
 
 		const remoteClient = await authClient.oauth2.createClient({

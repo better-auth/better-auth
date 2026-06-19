@@ -332,7 +332,7 @@ export interface OAuthClient {
 	contacts?: string[];
 	tos_uri?: string;
 	policy_uri?: string;
-	//---- Jwks (only one can be used) ----//
+	//---- Client key metadata (only one can be used) ----//
 	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
 	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
