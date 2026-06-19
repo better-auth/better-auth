@@ -551,14 +551,18 @@ async function revokeTokensIssuedForAuthorizationCode(
 	ctx: GenericEndpointContext,
 	authorizationCodeId: string,
 ) {
-	await ctx.context.adapter.deleteMany({
-		model: "oauthAccessToken",
-		where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
-	});
-	await ctx.context.adapter.deleteMany({
-		model: "oauthRefreshToken",
-		where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
-	});
+	try {
+		await ctx.context.adapter.deleteMany({
+			model: "oauthAccessToken",
+			where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+		});
+		await ctx.context.adapter.deleteMany({
+			model: "oauthRefreshToken",
+			where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+		});
+	} catch (error) {
+		ctx.context.logger.error("authorization code replay cleanup failed", error);
+	}
 }
 
 async function createRefreshToken(
