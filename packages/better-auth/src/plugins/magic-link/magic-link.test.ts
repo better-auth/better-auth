@@ -771,3 +771,100 @@ describe("magic link single-use semantics", async () => {
 		expect(sessionTokens).toHaveLength(1);
 	});
 });
+
+describe("magic link per-request expiresIn", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+
+	const { auth, customFetchImpl, testUser, sessionSetter } =
+		await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should honor expiresIn on server-side auth.api calls", async () => {
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				expiresIn: 1,
+			},
+			headers: new Headers(),
+		});
+		const token = verificationEmail.token;
+
+		await new Promise((r) => setTimeout(r, 1500));
+
+		await client.magicLink.verify(
+			{
+				query: { token, callbackURL: "/callback" },
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=INVALID_TOKEN");
+				},
+			},
+		);
+	});
+
+	it("should verify successfully with a longer server-side expiresIn", async () => {
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				expiresIn: 60,
+			},
+			headers: new Headers(),
+		});
+		const token = verificationEmail.token;
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: { token },
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data?.token).toBeDefined();
+	});
+
+	it("should ignore expiresIn from HTTP client calls", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+			expiresIn: 1,
+		});
+		const token = verificationEmail.token;
+
+		await new Promise((r) => setTimeout(r, 1500));
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: { token },
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data?.token).toBeDefined();
+	});
+});
