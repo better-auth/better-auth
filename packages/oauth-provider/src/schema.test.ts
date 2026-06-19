@@ -104,6 +104,8 @@ describe("oauth provider schema", () => {
 		);
 		expect(refreshFields.confirmation).toBeDefined();
 		expect(accessFields.confirmation).toBeDefined();
+		expect(refreshFields.authorizationCodeId).toBeDefined();
+		expect(accessFields.authorizationCodeId).toBeDefined();
 
 		// Other sender-constraint/token-format columns are intentionally absent
 		// from the schema.

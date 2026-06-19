@@ -21,7 +21,7 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import { confirmationTokenType } from "./token";
@@ -459,6 +459,124 @@ describe("oauth token - authorization_code", async () => {
 		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
 			"invalid_grant",
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
+	it("rejects authorization code replay with invalid_grant and revokes issued tokens", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect(replay.error?.status).toBe(400);
+		expect((replay.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					Authorization: `Bearer ${tokens.data!.access_token}`,
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
+	it("rejects authorization code replay with invalid_grant and still attempts refresh-token cleanup when access-token cleanup fails", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		const context = await auth.$context;
+		const deleteMany = vi
+			.spyOn(context.adapter, "deleteMany")
+			.mockRejectedValueOnce(new Error("cleanup failed"));
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+
+		try {
+			const replay = await validateAuthCode({ code: code!, codeVerifier });
+			expect(replay.error?.status).toBe(400);
+			expect((replay.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(loggerError).toHaveBeenCalledWith(
+				"authorization code replay cleanup failed",
+				expect.any(Error),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ model: "oauthAccessToken" }),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({ model: "oauthRefreshToken" }),
+			);
+
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+			const refresh = await client.$fetch<{ error?: string }>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+			expect(refresh.error?.status).toBe(400);
+			expect((refresh.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+		} finally {
+			deleteMany.mockRestore();
+			loggerError.mockRestore();
+		}
 	});
 });
 
