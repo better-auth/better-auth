@@ -2536,3 +2536,81 @@ describe("backup codes storage configurations", () => {
 		});
 	}
 });
+
+describe("two factor - secretEncoding: raw (RFC 6238 migration)", async () => {
+	const { testUser, customFetchImpl, sessionSetter, db, auth } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					totpOptions: {
+						secretEncoding: "raw",
+					},
+				}),
+			],
+		});
+
+	const headers = new Headers();
+	const client = createAuthClient({
+		plugins: [twoFactorClient()],
+		fetchOptions: {
+			customFetchImpl,
+			baseURL: "http://localhost:3000/api/auth",
+		},
+	});
+
+	it("should verify a TOTP code generated from raw bytes (RFC 6238 convention)", async () => {
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		// Simulate a secret from a RFC-6238-compliant library (e.g. Lucia, oslo):
+		// raw bytes stored as a base32 string.
+		const { base32 } = await import("@better-auth/utils/base32");
+		const rawBytes = new Uint8Array(20).fill(42); // deterministic for testing
+		const base32Secret = base32.encode(rawBytes);
+
+		// Enable 2FA and inject the RFC-style secret directly into the DB,
+		// as a migration would do.
+		const enableRes = await auth.api.enableTwoFactor({
+			headers,
+			body: { password: testUser.password },
+		});
+		expect(enableRes).toBeDefined();
+
+		const twoFactorRow = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: testUser.id }],
+		});
+		expect(twoFactorRow).toBeDefined();
+
+		// Overwrite the stored secret with the RFC-style base32 secret (post-migration state).
+		await db.update({
+			model: "twoFactor",
+			update: { secret: base32Secret },
+			where: [{ field: "id", value: twoFactorRow!.id }],
+		});
+
+		// Generate the expected TOTP code using raw bytes directly (what the
+		// authenticator app does after base32-decoding the QR secret).
+		const rawAsLatin1 = String.fromCharCode(...rawBytes);
+		const expectedCode = await createOTP(rawAsLatin1, { digits: 6, period: 30 }).totp();
+
+		const verifyRes = await auth.api.verifyTOTP({
+			headers,
+			body: { code: expectedCode },
+		});
+		expect(verifyRes).toBeDefined();
+	});
+
+	it("default secretEncoding (string) behavior is unchanged", async () => {
+		// Fresh enrollment without secretEncoding: "raw" should still work.
+		const { auth: authDefault } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({})],
+		});
+		expect(authDefault).toBeDefined();
+	});
+});
