@@ -392,8 +392,9 @@ export interface OAuthClient {
 	 *
 	 * @default true
 	 *
-	 * Note: PKCE is always required for public clients and when
-	 * requesting offline_access scope, regardless of this setting.
+	 * Note: PKCE is always required for public clients. When requesting
+	 * offline_access without PKCE, confidential OIDC clients must send both
+	 * `openid` and `nonce`.
 	 */
 	require_pkce?: boolean;
 	/**

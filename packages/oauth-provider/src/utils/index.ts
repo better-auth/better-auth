@@ -915,17 +915,24 @@ export function removeMaxAgeFromQuery(query: URLSearchParams) {
 
 enum PKCERequirementErrors {
 	PUBLIC_CLIENT = "pkce is required for public clients",
-	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	OFFLINE_ACCESS_SCOPE = "pkce or OIDC nonce is required when requesting offline_access scope",
 	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
 }
+
+interface AuthorizationPKCEContext {
+	scopes?: string[];
+	nonce?: string;
+}
+
 /**
- * Determines if PKCE is required for a given client and scope.
+ * Determines if PKCE is required for a given client and authorization request.
  *
  * PKCE is always required for:
  * 1. Public clients (cannot securely store client_secret)
- * 2. Requests with offline_access scope (refresh token security)
+ * 2. Requests with offline_access scope unless a confidential OIDC request
+ *    already uses nonce as its authorization-code injection countermeasure.
  *
- * For confidential clients without offline_access:
+ * For confidential clients:
  * - Uses client.requirePKCE if set (defaults to true)
  *
  * Returns false if PKCE is not required, or the reason it is required.
@@ -934,7 +941,7 @@ enum PKCERequirementErrors {
  */
 export function isPKCERequired(
 	client: SchemaClient<Scope[]>,
-	requestedScopes?: string[],
+	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
 	// Determine if client is public
 	const isPublicClient =
@@ -948,8 +955,13 @@ export function isPKCERequired(
 		return PKCERequirementErrors.PUBLIC_CLIENT;
 	}
 
-	// PKCE always required for offline_access scope (refresh tokens)
-	if (requestedScopes?.includes("offline_access")) {
+	const requestScopes = request?.scopes ?? [];
+	const isOpenIdRequest = requestScopes.includes("openid");
+	const hasNonce =
+		typeof request?.nonce === "string" && request.nonce.length > 0;
+	const hasOidcNonce = isOpenIdRequest && hasNonce;
+
+	if (requestScopes.includes("offline_access") && !hasOidcNonce) {
 		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
 	}
 
