@@ -269,28 +269,30 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"/oauth2/authorize",
 		{
 			method: "GET",
-			query: z.object({
-				response_type: z.enum(["code"]).optional(),
-				client_id: z.string(),
-				redirect_uri: SafeUrlSchema.optional(),
-				scope: z.string().optional(),
-				state: z.string().optional(),
-				request_uri: z.string().optional(),
-				code_challenge: z.string().optional(),
-				code_challenge_method: z.enum(["S256"]).optional(),
-				nonce: z.string().optional(),
-				prompt: z
-					.enum([
-						"none",
-						"consent",
-						"login",
-						"create",
-						"select_account",
-						"login consent",
-						"select_account consent",
-					])
-					.optional(),
-			}),
+			query: z
+				.object({
+					response_type: z.enum(["code"]).optional(),
+					client_id: z.string(),
+					redirect_uri: SafeUrlSchema.optional(),
+					scope: z.string().optional(),
+					state: z.string().optional(),
+					request_uri: z.string().optional(),
+					code_challenge: z.string().optional(),
+					code_challenge_method: z.enum(["S256"]).optional(),
+					nonce: z.string().optional(),
+					prompt: z
+						.enum([
+							"none",
+							"consent",
+							"login",
+							"create",
+							"select_account",
+							"login consent",
+							"select_account consent",
+						])
+						.optional(),
+				})
+				.passthrough(),
 			metadata: {
 				openapi: {
 					description: "Authorize an OAuth2 request",

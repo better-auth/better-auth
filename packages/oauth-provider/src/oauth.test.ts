@@ -386,8 +386,14 @@ describe("oauth", async () => {
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
+		// Standard OIDC params (e.g. login_hint) and custom params should be forwarded
+		// to the login page via the signed query, not silently dropped by validation.
+		const authorizeUrlWithHints = new URL(data.url);
+		authorizeUrlWithHints.searchParams.set("login_hint", "user@example.com");
+		authorizeUrlWithHints.searchParams.set("ext_custom_param", "custom-value");
+
 		let loginRedirectUri = "";
-		await authClient.$fetch(data.url, {
+		await authClient.$fetch(authorizeUrlWithHints.toString(), {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
@@ -398,6 +404,10 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
+		const forwardedParams = new URL(loginRedirectUri, authServerBaseUrl)
+			.searchParams;
+		expect(forwardedParams.get("login_hint")).toBe("user@example.com");
+		expect(forwardedParams.get("ext_custom_param")).toBe("custom-value");
 		vi.stubGlobal("window", {
 			location: {
 				search: new URL(loginRedirectUri, authServerBaseUrl).search,
