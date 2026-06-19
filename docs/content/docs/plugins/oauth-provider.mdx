@@ -1379,7 +1379,7 @@ The `require_pkce` field:
 * Defaults to `true` (PKCE required)
 * Only applies to confidential clients
 * Ignored for public clients (PKCE always required)
-* Ignored for `offline_access` scope (PKCE always required)
+* Requires `nonce` when `offline_access` is requested without PKCE
 
 #### Dynamic Client Registration PKCE Configuration
 
@@ -1392,7 +1392,7 @@ oauthProvider({
 })
 ```
 
-This only applies to confidential clients created through dynamic client registration. Public clients and authorization requests with the `offline_access` scope still require PKCE.
+This only applies to confidential clients created through dynamic client registration. Public clients still require PKCE. Confidential OIDC clients that request `offline_access` without PKCE must send `nonce`.
 
 **When to use `require_pkce: false`:**
 

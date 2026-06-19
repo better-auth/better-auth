@@ -583,8 +583,11 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	// Check if PKCE is required for this client and scope
-	const pkceRequired = isPKCERequired(client, requestedScopes);
+	// Check if PKCE is required for this client and authorization request
+	const pkceRequired = isPKCERequired(client, {
+		scopes: requestedScopes,
+		nonce: query.nonce,
+	});
 
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
