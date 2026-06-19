@@ -47,7 +47,6 @@ import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	authorizationQuerySchema,
 	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
@@ -303,51 +302,49 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
 		"/oauth2/authorize",
 		{
-			method: "GET",
-			query: authorizationQuerySchema,
+			method: ["GET", "POST"],
+			body: z.object({}).passthrough(),
 			redirectOnError: authorizeRedirectOnError(opts),
-			errorCodesByField: {
-				response_type: { invalid: "unsupported_response_type" },
-				resource: { invalid: "invalid_target" },
-			},
 			metadata: {
+				allowedMediaTypes: ["application/x-www-form-urlencoded"],
 				openapi: {
-					description: "Authorize an OAuth2 request",
+					description:
+						"Authorize an OAuth 2.1 request from query parameters or an application/x-www-form-urlencoded POST body",
 					parameters: [
 						{
 							name: "response_type",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 response type (e.g., 'code')",
+							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
 							name: "client_id",
 							in: "query",
 							required: true,
 							schema: { type: "string" },
-							description: "OAuth2 client ID",
+							description: "OAuth 2.1 client ID",
 						},
 						{
 							name: "redirect_uri",
 							in: "query",
 							required: false,
 							schema: { type: "string", format: "uri" },
-							description: "OAuth2 redirect URI",
+							description: "OAuth 2.1 redirect URI",
 						},
 						{
 							name: "scope",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 scopes (space-separated)",
+							description: "OAuth 2.1 scopes (space-separated)",
 						},
 						{
 							name: "state",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 state parameter",
+							description: "OAuth 2.1 state parameter",
 						},
 						{
 							name: "request_uri",

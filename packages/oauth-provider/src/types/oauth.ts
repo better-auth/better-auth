@@ -302,6 +302,23 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	end_session_endpoint: string;
 	/**
+	 * Whether the OP supports OpenID Connect Request Objects by value.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_parameter_supported?: boolean;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by reference.
+	 *
+	 * Discovery defaults this field to true when omitted, so providers that do
+	 * not support it should advertise false explicitly.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_uri_parameter_supported?: boolean;
+	/**
 	 * Prompt values supported by this OIDC server
 	 *
 	 * @see https://openid.net/specs/openid-connect-prompt-create-1_0.html#OpenID.Discovery
@@ -362,7 +379,7 @@ export interface OAuthClient {
 	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
-	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1
+	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
 	//---- RFC6749 Spec ----//
 	public?: boolean;
 	type?: "web" | "native" | "user-agent-based";
