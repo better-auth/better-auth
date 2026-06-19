@@ -72,27 +72,31 @@ export function pickClaims(
 
 function getUserInfoAccessToken(ctx: GenericEndpointContext) {
 	const authorization = ctx.headers?.get("authorization");
-	const accessTokenAuthorization = parseAccessTokenAuthorization(authorization);
-	const headerToken = accessTokenAuthorization?.token;
+	const headerAccessTokenAuthorization =
+		parseAccessTokenAuthorization(authorization);
 	const bodyToken =
 		ctx.request?.method === "POST"
 			? ((ctx.body as { access_token?: string } | undefined)?.access_token ??
 				undefined)
 			: undefined;
 
-	if (headerToken && bodyToken) {
+	if (headerAccessTokenAuthorization && bodyToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
-				"Multiple bearer token transport methods are not allowed",
+				"Multiple access token transport methods are not allowed",
 			error: "invalid_request",
 		});
 	}
 
+	const bodyAccessTokenAuthorization = bodyToken
+		? { scheme: "Bearer" as const, token: bodyToken }
+		: undefined;
+	const accessTokenAuthorization =
+		headerAccessTokenAuthorization ?? bodyAccessTokenAuthorization;
+
 	return {
-		authorization:
-			accessTokenAuthorization ??
-			(bodyToken ? { scheme: "Bearer" as const, token: bodyToken } : undefined),
-		token: headerToken ?? bodyToken,
+		authorization: accessTokenAuthorization,
+		token: accessTokenAuthorization?.token,
 	};
 }
 
@@ -106,19 +110,19 @@ export async function userInfoEndpoint(
 	// TODO: converge on parseBearerToken (utils) once we decide whether userinfo
 	// should keep accepting a non-Bearer Authorization value as a bare token; the
 	// shared parser is strict and would reject that fallback.
-	const { authorization: accessTokenAuthorization, token: accessToken } =
+	const { authorization: accessTokenAuthorization } =
 		getUserInfoAccessToken(ctx);
-	if (!accessToken) {
+	if (!accessTokenAuthorization?.token) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "access token not found",
 			error: "invalid_request",
 		});
 	}
-	const jwt = await requireActiveAccessToken(ctx, opts, accessToken);
-	const accessTokenPresentation = accessTokenAuthorization ?? {
-		scheme: "Bearer" as const,
-		token: accessToken,
-	};
+	const jwt = await requireActiveAccessToken(
+		ctx,
+		opts,
+		accessTokenAuthorization.token,
+	);
 
 	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
 	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
@@ -134,7 +138,7 @@ export async function userInfoEndpoint(
 	try {
 		await enforceDpopBinding({
 			payload: jwt,
-			authorization: accessTokenPresentation,
+			authorization: accessTokenAuthorization,
 			proofJwt: getDpopProofJwt(ctx),
 			method: ctx.request?.method ?? "GET",
 			url: getEndpointUrl(ctx, "/oauth2/userinfo"),

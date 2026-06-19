@@ -357,6 +357,10 @@ describe("oauth userinfo", async () => {
 		expect(
 			(userinfo.error as { error?: string } | null | undefined)?.error,
 		).toBe("invalid_request");
+		expect(
+			(userinfo.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("Multiple access token transport methods are not allowed");
 	});
 
 	/**
@@ -457,6 +461,36 @@ describe("oauth userinfo", async () => {
 			},
 		);
 		expect(bearerUserinfo.error?.status).toBe(401);
+
+		const bodyTokenUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(bodyTokenUserinfo.error?.status).toBe(401);
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error,
+		).toBe("invalid_token");
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error_description,
+		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
 
 		const userinfoDpopProof = await createDpopProof({
 			privateKey: dpopKey.privateKey,
