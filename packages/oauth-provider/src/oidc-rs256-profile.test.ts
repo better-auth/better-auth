@@ -84,9 +84,9 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			],
 			code_challenge_methods_supported: ["S256"],
 			subject_types_supported: ["public"],
+			acr_values_supported: ["0"],
 			id_token_signing_alg_values_supported: ["RS256"],
 		});
-		expect(metadata.acr_values_supported).toBeUndefined();
 
 		const jwks = await client.$fetch<JSONWebKeySet>("/jwks", {
 			method: "GET",
@@ -188,11 +188,11 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			sub: expect.any(String),
 			auth_time: expect.any(Number),
 			acr: "0",
-			name: testUser.name,
-			email: testUser.email,
-			email_verified: expect.any(Boolean),
 		});
 		expect(idToken.payload.at_hash).toEqual(expect.any(String));
+		expect(idToken.payload.name).toBeUndefined();
+		expect(idToken.payload.email).toBeUndefined();
+		expect(idToken.payload.email_verified).toBeUndefined();
 
 		const userinfo = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/userinfo",

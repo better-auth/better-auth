@@ -1166,8 +1166,8 @@ Scopes allow clients specific access to specific resources.
 By default, we support the following scopes are supported:
 
 * `openid`: Returns the user's ID (`sub` claim).
-* `profile`: Returns name, picture, given\_name, family\_name
-* `email`: Returns email and email\_verified
+* `profile`: Returns name, picture, given\_name, family\_name from UserInfo
+* `email`: Returns email and email\_verified from UserInfo
 * `offline_access`: Returns a refresh token
 
 The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
@@ -1182,7 +1182,7 @@ oauthProvider({
 
 Internally supported claims include \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
-ID token and user info claims should be namespaced when possible to avoid potential future conflicts.
+ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile` and `email` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
 
 `customIdTokenClaims` is additive for protocol-owned ID token claims. Reserved names such as `iss`, `sub`, `aud`, token lifetime claims, `nonce`, `sid`, hash claims, `auth_time`, `acr`, `amr`, and `azp` are stripped at issuance with a warning log. Use namespaced claim names such as `https://example.com/org` for application-specific data.
 
@@ -1494,11 +1494,11 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
 
 Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override profile-style identity claims; protocol-owned identity, lifetime, binding, and authentication-context claims are always pinned or reserved by the provider.
 
-| Token        | Order (lowest to highest authority)                                                                                            | Pinned or reserved by provider                                                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims` | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing               |
-| ID token     | base identity claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive   | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) |
-| UserInfo     | base identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                                  | `sub` (re-pinned last)                                                                                                                                     |
+| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
+| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
+| UserInfo     | base identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                                         | `sub` (re-pinned last)                                                                                                                                                                            |
 
 Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
 
