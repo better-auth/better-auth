@@ -1518,8 +1518,8 @@ async function handleRefreshTokenGrant(
 	}
 	if (refreshToken.clientId !== client_id) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid client_id",
-			error: "invalid_client",
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
 		});
 	}
 	if (refreshToken.expiresAt < new Date()) {
