@@ -388,10 +388,11 @@ export async function authorizeEndpoint(
 	}
 
 	if (!query.response_type) {
-		return handleRedirect(
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "response_type is required",
 			ctx,
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
-		);
+		});
 	}
 
 	const promptSet = ctx.query?.prompt
