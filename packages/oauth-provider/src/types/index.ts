@@ -1720,6 +1720,11 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	referenceId?: string;
 	/**
+	 * Stored authorization-code identifier that produced this token family.
+	 * Used to revoke tokens after authorization-code replay is detected.
+	 */
+	authorizationCodeId?: string;
+	/**
 	 * The refresh token the access token is associated with.
 	 *
 	 * Not available without the "offline_access" scope
@@ -1762,6 +1767,7 @@ export interface OAuthRefreshToken<
 	sessionId?: string;
 	userId: string;
 	referenceId?: string;
+	authorizationCodeId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;

@@ -351,6 +351,11 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
 				type: "string[]",
 				required: false,
@@ -435,6 +440,11 @@ export const schema = {
 			referenceId: {
 				type: "string",
 				required: false,
+			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
 			},
 			resources: {
 				type: "string[]",
