@@ -468,6 +468,7 @@ async function createOpaqueAccessToken(
 	payload: JWTPayload,
 	resources?: string[],
 	referenceId?: string,
+	authorizationCodeId?: string,
 	refreshId?: string,
 	confirmation?: Confirmation,
 ) {
@@ -484,6 +485,7 @@ async function createOpaqueAccessToken(
 			sessionId: payload?.sid,
 			userId: user?.id,
 			referenceId,
+			authorizationCodeId,
 			resources,
 			refreshId,
 			confirmation,
@@ -545,11 +547,26 @@ export async function invalidateRefreshFamily(
 	});
 }
 
+async function revokeTokensIssuedForAuthorizationCode(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+) {
+	await ctx.context.adapter.deleteMany({
+		model: "oauthAccessToken",
+		where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+	});
+	await ctx.context.adapter.deleteMany({
+		model: "oauthRefreshToken",
+		where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+	});
+}
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	user: User,
 	referenceId: string | undefined,
+	authorizationCodeId: string | undefined,
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
@@ -575,6 +592,7 @@ async function createRefreshToken(
 		sessionId,
 		userId: user.id,
 		referenceId,
+		authorizationCodeId,
 		authTime,
 		confirmation,
 		scopes,
@@ -647,6 +665,7 @@ async function createRefreshToken(
 
 type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
+	authorizationCodeId?: string;
 };
 
 interface ResourceGrantIssuance {
@@ -885,6 +904,7 @@ async function createUserTokens(
 					opts,
 					user,
 					referenceId,
+					params.authorizationCodeId,
 					client,
 					effectiveScopes,
 					{
@@ -952,6 +972,7 @@ async function createUserTokens(
 					},
 					params?.resources,
 					referenceId,
+					params.authorizationCodeId,
 					earlyRefreshToken?.id,
 					confirmation,
 				),
@@ -963,6 +984,7 @@ async function createUserTokens(
 						opts,
 						user,
 						referenceId,
+						params.authorizationCodeId,
 						client,
 						effectiveScopes,
 						{
@@ -1016,16 +1038,22 @@ async function checkVerificationValue(
 	redirect_uri?: string,
 	resource?: string[],
 ) {
+	const authorizationCodeId = await storeToken(
+		opts.storeTokens,
+		code,
+		"authorization_code",
+	);
 	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
 	// receives the row and mints tokens; concurrent racers receive `null`
 	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
 	const verification =
 		await ctx.context.internalAdapter.consumeVerificationValue(
-			await storeToken(opts.storeTokens, code, "authorization_code"),
+			authorizationCodeId,
 		);
 
 	if (!verification) {
-		throw new APIError("UNAUTHORIZED", {
+		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid code",
 			error: "invalid_grant",
 		});
@@ -1035,14 +1063,14 @@ async function checkVerificationValue(
 	try {
 		rawValue = JSON.parse(verification.value);
 	} catch {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",
 			error: "invalid_grant",
 		});
 	}
 	const parsed = verificationValueSchema.safeParse(rawValue);
 	if (!parsed.success) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",
 			error: "invalid_grant",
 		});
@@ -1051,9 +1079,9 @@ async function checkVerificationValue(
 	const verificationValue = parsed.data as VerificationValue;
 
 	if (verificationValue.query.client_id !== client_id) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid client_id",
-			error: "invalid_client",
+			error: "invalid_grant",
 		});
 	}
 	if (
@@ -1088,6 +1116,7 @@ async function checkVerificationValue(
 		verificationValue,
 		effectiveResources,
 		authorizedResources: storedResources,
+		authorizationCodeId,
 	};
 }
 
@@ -1153,15 +1182,19 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	/** Get and check Verification Value */
-	const { verificationValue, effectiveResources, authorizedResources } =
-		await checkVerificationValue(
-			ctx,
-			opts,
-			code,
-			client_id,
-			redirect_uri,
-			resources,
-		);
+	const {
+		verificationValue,
+		effectiveResources,
+		authorizedResources,
+		authorizationCodeId,
+	} = await checkVerificationValue(
+		ctx,
+		opts,
+		code,
+		client_id,
+		redirect_uri,
+		resources,
+	);
 	const scopes = verificationValue.query.scope?.split(" ");
 	if (!scopes) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -1297,6 +1330,7 @@ async function handleAuthorizationCodeGrant(
 		nonce: verificationValue.query?.nonce,
 		authTime,
 		verificationValue,
+		authorizationCodeId,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
 	});
@@ -1542,6 +1576,7 @@ async function handleRefreshTokenGrant(
 		user,
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
+		authorizationCodeId: refreshToken.authorizationCodeId,
 		sessionId: refreshToken.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,

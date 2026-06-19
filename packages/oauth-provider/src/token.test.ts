@@ -460,6 +460,45 @@ describe("oauth token - authorization_code", async () => {
 			"invalid_grant",
 		);
 	});
+
+	it("rejects authorization code replay with invalid_grant and revokes issued tokens", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect(replay.error?.status).toBe(400);
+		expect((replay.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					Authorization: `Bearer ${tokens.data!.access_token}`,
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+	});
 });
 
 describe("oauth token - refresh_token", async () => {
