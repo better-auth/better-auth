@@ -236,6 +236,30 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 		});
 
+		it("missing response_type with trusted redirect_uri → invalid_request", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const state = "missing-response-type";
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				state,
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			const errorUrl = new URL(redirectLocation);
+			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+			expect(errorUrl.searchParams.get("error_description")).toMatch(
+				/response_type/,
+			);
+			expect(errorUrl.searchParams.get("state")).toBe(state);
+			expect(errorUrl.searchParams.get("iss")).toBeTruthy();
+		});
+
 		it("missing client_id → server error page with invalid_request (no RP to trust)", async () => {
 			const qs = new URLSearchParams({
 				redirect_uri: redirectUri,
