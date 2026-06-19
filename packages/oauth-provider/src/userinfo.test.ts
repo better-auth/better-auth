@@ -318,6 +318,51 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data).toMatchObject({ sub: user.id });
 	});
 
+	it("should accept POST with the bearer token in the form body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+	});
+
+	it("should reject UserInfo requests with bearer tokens in both header and body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(400);
+		expect(
+			(userinfo.error as { error?: string } | null | undefined)?.error,
+		).toBe("invalid_request");
+		expect(
+			(userinfo.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("Multiple access token transport methods are not allowed");
+	});
+
 	/**
 	 * Programmatic callers have no `ctx.request`, so userinfo must resolve the
 	 * bearer token from `ctx.headers` for both transports.
@@ -351,7 +396,7 @@ describe("oauth userinfo", async () => {
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({
 				error: "invalid_request",
-				error_description: "authorization header not found",
+				error_description: "access token not found",
 			});
 		}
 	});
@@ -416,6 +461,36 @@ describe("oauth userinfo", async () => {
 			},
 		);
 		expect(bearerUserinfo.error?.status).toBe(401);
+
+		const bodyTokenUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(bodyTokenUserinfo.error?.status).toBe(401);
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error,
+		).toBe("invalid_token");
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error_description,
+		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
 
 		const userinfoDpopProof = await createDpopProof({
 			privateKey: dpopKey.privateKey,
