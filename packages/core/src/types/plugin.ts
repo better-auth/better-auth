@@ -4,11 +4,11 @@ import type {
 	InputContext,
 	Middleware,
 } from "better-call";
-import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
+import type { DatabaseMigration } from "./database";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -133,7 +133,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	 * ⚠️ Only uses this if you dont't want to use the schema option and you disabled migrations for
 	 * the tables.
 	 */
-	migrations?: Record<string, Migration> | undefined;
+	migrations?: Record<string, DatabaseMigration> | undefined;
 	/**
 	 * The options of the plugin
 	 */

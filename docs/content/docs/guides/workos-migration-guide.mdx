@@ -66,6 +66,12 @@ Before getting started, let’s review which WorkOS authentication features are 
     });
     ```
 
+    <Callout type="info">
+      Passing a raw database connection uses Better Auth's built-in Kysely adapter.
+      Install Kysely alongside Better Auth with `npm install kysely`. ORM adapters
+      (Drizzle, Prisma, MongoDB) don't need it.
+    </Callout>
+
     ### Email & Password
 
     Enable Email & Password authentication as shown below. Since WorkOS verifies each user’s email by default, this setup is similar to the default behavior. You can adjust it if needed. For more information, see the [email/password authentication documentation](/docs/authentication/email-password).
