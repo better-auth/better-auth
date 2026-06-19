@@ -1358,11 +1358,11 @@ By default, PKCE is required for all clients. This provides maximum security and
 
 #### Per-Client PKCE Configuration
 
-Individual clients can opt-out of PKCE requirement during registration if needed for compatibility:
+Admin-created confidential clients can opt out of the PKCE requirement if needed for compatibility:
 
-```ts title="register-client.ts"
+```ts title="admin-create-oauth.ts"
 // Register a confidential client that doesn't support PKCE
-const response = await auth.api.createOAuthClient({
+const response = await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     client_name: 'Legacy Backend Service',
@@ -1380,6 +1380,19 @@ The `require_pkce` field:
 * Only applies to confidential clients
 * Ignored for public clients (PKCE always required)
 * Ignored for `offline_access` scope (PKCE always required)
+
+#### Dynamic Client Registration PKCE Configuration
+
+Dynamic client registration does not accept `require_pkce` from client requests. To change the server-owned default for dynamically registered confidential clients, set `clientRegistrationRequirePKCE`.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  clientRegistrationRequirePKCE: false,
+})
+```
+
+This only applies to confidential clients created through dynamic client registration. Public clients and authorization requests with the `offline_access` scope still require PKCE.
 
 **When to use `require_pkce: false`:**
 

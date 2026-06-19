@@ -713,6 +713,16 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationAllowedScopes?: Scopes;
 	/**
+	 * Whether dynamically registered confidential clients require PKCE by default.
+	 *
+	 * This is server-owned registration policy. Dynamic client registration does
+	 * not accept `require_pkce` from the client request, and public clients or
+	 * authorization requests with `offline_access` still require PKCE.
+	 *
+	 * @default true
+	 */
+	clientRegistrationRequirePKCE?: boolean;
+	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
 	 *

@@ -581,6 +581,13 @@ export async function createOAuthClientEndpoint(
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
+	const isPKCEOptionalForRegisteredClient =
+		settings.isRegister &&
+		!isPublic &&
+		opts.clientRegistrationRequirePKCE === false;
+	const requirePKCE =
+		body.require_pkce ??
+		(isPKCEOptionalForRegisteredClient ? false : undefined);
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
@@ -611,6 +618,7 @@ export async function createOAuthClientEndpoint(
 		client_id: clientId,
 		client_secret: storedClientSecret,
 		client_id_issued_at: iat,
+		require_pkce: requirePKCE,
 		public: isPublic,
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
