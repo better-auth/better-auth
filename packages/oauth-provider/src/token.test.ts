@@ -461,6 +461,9 @@ describe("oauth token - authorization_code", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
 	it("rejects authorization code replay with invalid_grant and revokes issued tokens", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -500,13 +503,16 @@ describe("oauth token - authorization_code", async () => {
 		expect(userinfo.error?.status).toBe(401);
 	});
 
-	it("rejects authorization code replay with invalid_grant when cleanup fails", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
+	it("rejects authorization code replay with invalid_grant and still attempts refresh-token cleanup when access-token cleanup fails", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
-			scopes: ["openid"],
+			scopes: ["openid", "offline_access"],
 		});
 
 		let callbackRedirectUrl = "";
@@ -521,6 +527,7 @@ describe("oauth token - authorization_code", async () => {
 		const tokens = await validateAuthCode({ code: code!, codeVerifier });
 		expect(tokens.error).toBeNull();
 		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
 
 		const context = await auth.$context;
 		const deleteMany = vi
@@ -539,6 +546,32 @@ describe("oauth token - authorization_code", async () => {
 			expect(loggerError).toHaveBeenCalledWith(
 				"authorization code replay cleanup failed",
 				expect.any(Error),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ model: "oauthAccessToken" }),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({ model: "oauthRefreshToken" }),
+			);
+
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+			const refresh = await client.$fetch<{ error?: string }>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+			expect(refresh.error?.status).toBe(400);
+			expect((refresh.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
 			);
 		} finally {
 			deleteMany.mockRestore();
