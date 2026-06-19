@@ -379,7 +379,7 @@ export interface OAuthClient {
 	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
-	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1
+	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
 	//---- RFC6749 Spec ----//
 	public?: boolean;
 	type?: "web" | "native" | "user-agent-based";

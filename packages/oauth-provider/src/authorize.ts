@@ -118,6 +118,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function getStringParameter(value: unknown): string | undefined {
+	return typeof value === "string" ? value : undefined;
+}
+
 function getAuthorizationRequestParameters(
 	ctx: GenericEndpointContext,
 	settings: AuthorizeEndpointSettings | undefined,
@@ -362,14 +366,16 @@ export async function authorizeEndpoint(
 		settings,
 	);
 	ctx.query = query;
-	if (query.request && query.request_uri) {
+	const requestObject = getStringParameter(query.request);
+	const requestUri = getStringParameter(query.request_uri);
+	if (requestObject !== undefined && requestUri !== undefined) {
 		return authorizeRedirectOnError(opts)({
 			error: "invalid_request",
 			error_description: "request and request_uri cannot be used together",
 			ctx,
 		});
 	}
-	if (query.request) {
+	if (requestObject !== undefined) {
 		return authorizeRedirectOnError(opts)({
 			error: "request_not_supported",
 			error_description: "request object not supported",
@@ -378,7 +384,15 @@ export async function authorizeEndpoint(
 	}
 
 	// Resolve request_uri (PAR) before processing
-	if (query.request_uri) {
+	if (requestUri !== undefined) {
+		const clientId = getStringParameter(query.client_id);
+		if (!clientId) {
+			return authorizeRedirectOnError(opts)({
+				error: "invalid_request",
+				error_description: "client_id is required",
+				ctx,
+			});
+		}
 		if (!opts.requestUriResolver) {
 			return authorizeRedirectOnError(opts)({
 				error: "request_uri_not_supported",
@@ -387,8 +401,8 @@ export async function authorizeEndpoint(
 			});
 		}
 		const resolvedParams = await opts.requestUriResolver({
-			requestUri: query.request_uri,
-			clientId: query.client_id ?? "",
+			requestUri,
+			clientId,
 			ctx,
 		});
 		if (!resolvedParams) {
@@ -423,13 +437,6 @@ export async function authorizeEndpoint(
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});
-
-	if (!query.client_id) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
-		);
-	}
 
 	if (!query.response_type) {
 		return authorizeRedirectOnError(opts)({

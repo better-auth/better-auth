@@ -333,6 +333,27 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			expect(errorUrl.searchParams.get("code")).toBeNull();
 		});
 
+		it("empty request object parameter → request_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request: "",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe("request_not_supported");
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
 		it("unsupported request_uri without resolver → request_uri_not_supported", async () => {
 			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
 			const qs = new URLSearchParams({
@@ -341,6 +362,29 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 				response_type: "code",
 				scope: "openid",
 				request_uri: "https://rp.example.com/request.jwt",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe(
+				"request_uri_not_supported",
+			);
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
+		it("empty request_uri parameter without resolver → request_uri_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request_uri: "",
 			}).toString();
 			const { status, location } = await captureRedirect(
 				`/oauth2/authorize?${qs}`,

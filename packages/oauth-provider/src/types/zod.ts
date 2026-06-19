@@ -116,7 +116,7 @@ export const authorizationQuerySchema = z
 		redirect_uri: SafeUrlSchema.optional(),
 		scope: z.string().optional(),
 		state: z.string().optional(),
-		client_id: z.string(),
+		client_id: z.string().min(1, "client_id is required"),
 		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),

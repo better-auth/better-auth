@@ -1316,7 +1316,7 @@ export interface OAuthAuthorizationQuery {
 	 * - "code": authorization code flow.
 	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
-	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
+	// NEVER SUPPORT "token" or "id_token" - deprecated in OAuth 2.1
 	response_type?: "code";
 	/**
 	 * OpenID Connect Request Object by value.
