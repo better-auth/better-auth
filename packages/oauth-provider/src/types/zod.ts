@@ -137,8 +137,14 @@ export const authorizationQuerySchema = z
 	})
 	.passthrough();
 
+// redirect_uri stays optional in the stored code: a headless authorization
+// request (e.g. first-party-apps / device-style flows) legitimately omits it,
+// and RFC 6749 §4.1.3 only requires it at the token endpoint when the
+// authorization request carried one. The token endpoint enforces that
+// conditional match; forcing it here would reject valid headless codes as
+// "malformed verification value".
 const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
-	redirect_uri: SafeUrlSchema,
+	redirect_uri: SafeUrlSchema.optional(),
 });
 
 /**
