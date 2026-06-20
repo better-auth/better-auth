@@ -58,9 +58,9 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
+    "@cloudflare/workers-types": "^4.20250121.0",
     "kysely": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"

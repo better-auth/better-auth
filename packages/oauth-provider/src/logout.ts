@@ -290,7 +290,7 @@ async function deliverBackchannelLogoutTokens(
 	);
 }
 
-export { revokeAndPlanBackchannelLogout, deliverBackchannelLogoutTokens };
+export { deliverBackchannelLogoutTokens, revokeAndPlanBackchannelLogout };
 
 /**
  * RP-Initiated Logout (OIDC RP-Initiated Logout 1.0). The RP presents a signed
