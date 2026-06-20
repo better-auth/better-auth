@@ -18,7 +18,7 @@
     "lint": "biome check . --error-on-warnings",
     "lint:dependencies": "knip && knip --production",
     "lint:fix": "biome check . --fix --unsafe",
-    "lint:spell": "cspell . --color",
+    "lint:spell": "git ls-files | cspell --file-list stdin --color",
     "lint:types": "turbo lint:types --filter=./packages/*",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "changeset": "changeset",
