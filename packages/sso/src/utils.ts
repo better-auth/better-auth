@@ -107,6 +107,32 @@ export function getHostnameFromDomain(domain: string): string | null {
 	return getHostname(domain) || null;
 }
 
+/**
+ * Reduce a provider `domain` value (single host, URL, or comma-separated list)
+ * to the set of hostnames it authorizes. Returns `null` if any entry cannot be
+ * reduced to a hostname.
+ */
+export function parseDomainHostnames(domain: string): string[] | null {
+	const entries = domain
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	if (entries.length === 0) {
+		return null;
+	}
+	const hostnames: string[] = [];
+	for (const entry of entries) {
+		const hostname = getHostnameFromDomain(entry)?.toLowerCase();
+		if (!hostname) {
+			return null;
+		}
+		if (!hostnames.includes(hostname)) {
+			hostnames.push(hostname);
+		}
+	}
+	return hostnames;
+}
+
 export function maskClientId(clientId: string): string {
 	if (clientId.length <= 4) {
 		return "****";

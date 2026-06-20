@@ -6,7 +6,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import type { SSOOptions, SSOProvider } from "../types";
-import { getHostnameFromDomain } from "../utils";
+import { parseDomainHostnames } from "../utils";
 import { checkProviderAccess } from "./providers";
 
 const DNS_LABEL_MAX_LENGTH = 63;
@@ -159,7 +159,6 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			let records: string[] = [];
 			let dns: typeof import("node:dns/promises");
 
 			try {
@@ -175,34 +174,37 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			const hostname = getHostnameFromDomain(provider.domain);
-			if (!hostname) {
+			const hostnames = parseDomainHostnames(provider.domain);
+			if (!hostnames) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid domain",
 					code: "INVALID_DOMAIN",
 				});
 			}
 
-			try {
-				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
-				records = dnsRecords.flat();
-			} catch (error) {
-				ctx.context.logger.warn(
-					"DNS resolution failure while validating domain ownership",
-					error,
-				);
-			}
+			for (const hostname of hostnames) {
+				let records: string[] = [];
+				try {
+					const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
+					records = dnsRecords.flat();
+				} catch (error) {
+					ctx.context.logger.warn(
+						"DNS resolution failure while validating domain ownership",
+						error,
+					);
+				}
 
-			const record = records.find((record) =>
-				record.includes(
-					`${activeVerification.identifier}=${activeVerification.value}`,
-				),
-			);
-			if (!record) {
-				throw new APIError("BAD_GATEWAY", {
-					message: "Unable to verify domain ownership. Try again later",
-					code: "DOMAIN_VERIFICATION_FAILED",
-				});
+				const record = records.find((record) =>
+					record.includes(
+						`${activeVerification.identifier}=${activeVerification.value}`,
+					),
+				);
+				if (!record) {
+					throw new APIError("BAD_GATEWAY", {
+						message: "Unable to verify domain ownership. Try again later",
+						code: "DOMAIN_VERIFICATION_FAILED",
+					});
+				}
 			}
 
 			await ctx.context.adapter.update<SSOProvider<SSOOptions>>({

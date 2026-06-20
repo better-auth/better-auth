@@ -151,6 +151,7 @@ describe("Domain verification", async () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+		dnsMock.resolveTxt.mockReset();
 	});
 
 	describe("POST /sso/request-domain-verification", () => {
@@ -674,6 +675,105 @@ describe("Domain verification", async () => {
 				message: "Domain has already been verified",
 				code: "DOMAIN_VERIFIED",
 			});
+		});
+
+		it("does not verify a multi-domain provider when only one listed domain is owned", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "multi-domain-provider",
+					issuer: "https://idp.example.com",
+					// The "/x" makes URL parsing collapse the first entry to
+					// "first.example"; "second.example" stays a co-listed domain.
+					domain: "first.example/x,second.example",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "multi-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+			const { domainVerificationToken } = await requestResponse.json();
+
+			// Only first.example publishes the verifying record; second.example does not.
+			dnsMock.resolveTxt.mockImplementation(async (name: string) => {
+				if (name === "_better-auth-token-multi-domain-provider.first.example") {
+					return [
+						[
+							`_better-auth-token-multi-domain-provider=${domainVerificationToken}`,
+						],
+					];
+				}
+				return [];
+			});
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "multi-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			// second.example ownership was never proven, so the provider must not verify.
+			expect(verifyResponse.status).toBe(502);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-multi-domain-provider.second.example",
+			);
+		});
+
+		it("verifies a multi-domain provider when every listed domain is owned", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "owned-multi-domain",
+					issuer: "https://idp.company.example",
+					domain: "company.com,subsidiary.com",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "owned-multi-domain" },
+				headers,
+				asResponse: true,
+			});
+			const { domainVerificationToken } = await requestResponse.json();
+
+			// Both listed domains publish the verifying record.
+			dnsMock.resolveTxt.mockResolvedValue([
+				[`_better-auth-token-owned-multi-domain=${domainVerificationToken}`],
+			]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "owned-multi-domain" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-owned-multi-domain.company.com",
+			);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-owned-multi-domain.subsidiary.com",
+			);
 		});
 	});
 
