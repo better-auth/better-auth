@@ -1,0 +1,353 @@
+---
+title: "Better Auth 1.7"
+description: "OAuth and OpenID Connect conformance, protected resources, DPoP, MCP package migration, SAML and SCIM updates, safer defaults, and more."
+date: 2026-06-20
+author:
+  name: "Better Auth Maintainers"
+  avatar: ""
+tags: ["1.7", "OAuth", "OpenID Connect", "MCP", "SAML", "SCIM", "security"]
+---
+
+# Better Auth 1.7
+
+Better Auth 1.7 is, above all, an OAuth and OpenID Connect release. It matters most if your app signs users in with Google or Microsoft, lets other apps "Sign in with \[your app]", connects to a corporate identity provider over SAML, or powers an MCP server.
+
+Three threads run through it.
+
+**It makes Better Auth a standards-compliant identity provider.** When your app issues tokens to other apps, it now follows the OAuth and OpenID specs much more closely: sender-constrained tokens, single sign-out, forced re-login, and per-API token rules all work the way the standards describe.
+
+**It connects to identity providers that did not fit before.** Amazon Cognito, Microsoft Entra ID with certificate login, any standards-based OpenID provider, and "school login" style providers like Clever can all be wired up cleanly now.
+
+**It makes the safe choice the default.** A large security pass replaces racy database logic with atomic operations, stops trusting forwarded proxy headers unless you ask it to, and tightens a handful of other defaults.
+
+Most projects get these changes after upgrading. A few changes need a config line or a database migration; those are marked **Breaking change** below and explained in full in the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+
+## Upgrade impact at a glance
+
+| If you use                                     | What to expect                                                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Basic Better Auth setup                        | Usually just the upgrade command and any generated schema changes                                           |
+| Social login, generic OAuth, or SSO            | New login-client behavior, especially generic OAuth, identity-token verification, and Google One Tap        |
+| `@better-auth/oauth-provider`                  | The largest set of changes: resources, DPoP, back-channel logout, `max_age`, and stricter protocol handling |
+| MCP                                            | A package move to `@better-auth/mcp`, new imports, new endpoint paths, and a schema migration               |
+| SAML or SCIM                                   | Node 20 or newer for SAML, clearer SAML defaults, and a manual SCIM ownership cleanup                       |
+| Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                             |
+| Custom proxy or TLS termination                | Check how your app computes its public origin before relying on DPoP or IdP redirects                       |
+
+## OAuth vocabulary used below
+
+| Term                    | Meaning in this release                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authorization server    | The service that issues access tokens. When other apps "Sign in with \[your app]", you are the authorization server.                                           |
+| OpenID Provider         | An authorization server that also proves who the user is. Google and Microsoft are OpenID Providers to your app; in 1.7 Better Auth can be one for other apps. |
+| Relying party or client | The app on the receiving end of a login. When you add "Sign in with Google", your app is the relying party.                                                    |
+
+***
+
+## Better Auth as an identity provider
+
+This is the biggest area of the release. The OAuth provider grows from "it issues tokens" to "it behaves like a real, conformant authorization server."
+
+### Protected resources: one login server, many APIs
+
+You can now describe each API behind your login server as its own **resource**, with its own token lifetimes, allowed scopes, custom claims, and signing keys. Set them up with the `resources` option or the `oauthResource` admin API.
+
+This replaces a single flat list of allowed audiences. The old approach had a real gap: a client could ask for a token aimed at any API on the list, even one the user never agreed to. Now the target API is captured at login time and locked to that grant. A later request can narrow it but never widen it, and asking for an API the login did not cover is rejected.
+
+This is what makes the common setup correct: a single login server in front of several APIs, where a token minted for one API cannot be replayed against another.
+
+**Breaking change, needs a migration.** The old `validAudiences` option is removed. See the upgrade guide.
+
+### DPoP: stolen tokens cannot be reused
+
+Better Auth can now issue **DPoP** tokens. DPoP ties an access token to a key held by the client, so a token copied off the wire is useless to anyone else (the standard is RFC 9449). This is the proof-of-possession model that high-security and banking-grade APIs expect.
+
+A client opts in at registration, on the login request, or by targeting an API that requires it. The token then stays bound to the client's key through refresh, introspection, and the userinfo endpoint. On the API side, one helper verifies the whole DPoP request, including replay protection that holds up across multiple server instances.
+
+**Breaking change, needs a migration.** The raw token-checking helper is renamed, and a new column is added to the token tables. See the upgrade guide.
+
+### Single sign-out across apps
+
+When a user signs out of your identity provider, every app they signed into through you is now told to end its own session. This is **OIDC Back-Channel Logout**, and it was missing before.
+
+On sign-out, your server sends a signed logout message to each app that registered a logout URL. Tokens tied to that session stop working immediately: they were valid until they expired before, which is the behavior change to watch. Apps opt in by registering a `backchannel_logout_uri`. On serverless platforms, point `advanced.backgroundTasks.handler` at the runtime's background-task API (Vercel's `waitUntil`, Cloudflare's `ctx.waitUntil`) so sending those messages does not slow down sign-out.
+
+**Breaking change, needs a migration.** Session-bound tokens now stop working at sign-out, and new columns are added.
+
+### Forced re-login actually works
+
+OpenID has a `max_age` parameter that lets an app say "make the user log in again if their last login is older than this." Before, Better Auth accepted it and ignored it. Now it honors it: if the user's login is too old, they are sent back to log in, and the new ID token reflects the fresh login time. Apps that relied on it being ignored will start seeing re-login prompts.
+
+**Breaking change (behavior).**
+
+### Consistent token introspection
+
+**Introspection** is how an API asks your login server "is this token still good, and what can it do?" In 1.7 the answer is the same whether the token is a compact opaque string or a self-contained JWT. Opaque tokens used to return less information; now they carry the same claims a JWT would for the same grant.
+
+Two more improvements come with it. Your server keeps control of the standard claim names, so a custom-claims callback can no longer overwrite them by accident. And a separate API service can now check a token that was issued to a different client, which is the normal setup where a front-end holds the token and a back-end API validates it.
+
+### An extension surface for new standards
+
+OAuth keeps adding new standards (token exchange, CIBA, client-id metadata documents, and more). Adding one used to mean changing the core of the OAuth provider. Now a companion plugin can register new grant types, client-authentication methods, discovery metadata, and token claims through one entry point, `extendOAuthProvider`, called from the plugin's setup hook.
+
+The provider keeps control of anything security-sensitive: a plugin can add to the discovery document and contribute claims, but it cannot override the server's own decisions about a client. The new `@better-auth/cimd` package is the first plugin built this way.
+
+### Client ID Metadata Documents (new `@better-auth/cimd` package)
+
+The new `@better-auth/cimd` package lets a client identify itself by hosting a small document at an HTTPS URL, where the URL itself is the client's ID. This is how MCP clients connect without registering ahead of time.
+
+It ships with the safety you want for fetching a remote document: protection against requests to internal network addresses, a fetch timeout, a response-size cap, and an `allowFetch` gate so you can add your own allowlist.
+
+### Self-service registration for machine clients
+
+**Dynamic Client Registration** lets a client register itself instead of an admin setting it up by hand. In 1.7 a backend service can do this without a logged-in user: it presents a pre-shared registration token, which you check with the new `validateInitialAccessToken` option. This fills the gap between "a human must be logged in to register" and "anyone can register."
+
+Two related fixes ship with it: the registration endpoint now enforces the same permission checks as the manual create-client endpoints, and creating a client returns the correct `201 Created` status.
+
+### Working with real MCP clients
+
+MCP clients like Claude, Codex, and Factory Droid register themselves in a way that earlier versions rejected with an error. Better Auth now accepts those registrations and quietly registers them as public clients, which the standard allows, and tells the client which method it ended up with. This is what lets those tools connect out of the box.
+
+### Ask for specific user details
+
+A client can now ask for individual user details by name through the standard `claims.userinfo` request parameter, and the user-info endpoint returns the ones it can supply on top of what the granted scopes already cover. The request becomes part of what the user consents to, and the provider advertises this support in its discovery document.
+
+### ID-token claims stay protocol-safe
+
+**Breaking change.** Your custom ID-token claims can no longer overwrite the protocol claims the standard reserves for the server: the issuer, subject, audience, expiry, nonce, session binding, `auth_time`, `acr`, `amr`, and `azp`. Your own namespaced claims still appear as before. ID tokens also now report `acr: "0"` rather than a vendor-specific value, and the discovery document no longer advertises authentication-strength classes the provider does not yet support. If a `customIdTokenClaims` callback set any of those reserved claims, that value is now ignored.
+
+### Conformance polish
+
+A broad set of fixes brings the OAuth and OpenID endpoints in line with the specs:
+
+* **Standard error responses.** Malformed requests return the `{ error, error_description }` shape the specs require, including the right redirect behavior for login errors and a redirect when `response_type` is missing.
+* **No caching of credentials.** Token, introspection, user-info, and registration responses tell proxies and browsers not to cache them.
+* **Tamper-proof ID tokens.** ID tokens include an `at_hash` claim that binds them to their access token.
+* **Stricter token handling.** A refresh token presented by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are all now rejected with the correct standard error, and a replayed code revokes the tokens it already issued.
+* **Flexible request handling.** The authorization and user-info endpoints accept form-encoded requests, and the user-info endpoint accepts a bearer token in the request body.
+* **PKCE flexibility.** Set `clientRegistrationRequirePKCE: false` to let confidential clients registered through Dynamic Client Registration complete the login without PKCE; public clients and offline-access requests still require it.
+
+### The old OIDC provider plugin is gone
+
+The `oidcProvider` plugin, deprecated in 1.6, is removed. Move OpenID provider setups to `@better-auth/oauth-provider`.
+
+**Breaking change.**
+
+***
+
+## Connecting to more identity providers
+
+The other half of the OAuth work is about Better Auth as the app receiving a login. Several providers that did not fit cleanly before now do.
+
+### Scopes are kept across logins
+
+When you ask a provider for permission to do something, that permission is a **scope**. Before, each new login overwrote the stored scopes with whatever that login asked for, so a permission granted earlier could disappear on a later, smaller login. That broke apps that ask for more access over time.
+
+Now a granted scope is preserved. Better Auth keeps the scopes already on the account across re-login and token refresh, and a provider that returns a narrower set no longer shrinks what you have. This is a behavior fix with no schema change and no action on your part. Google also gains an `includeGrantedScopes` option, on by default, so each login carries forward the scopes already granted; set it to `false` to request only the current login's scopes.
+
+### Per-request login options: the Cognito and Entra unlock
+
+`signIn.social`, `linkSocial`, and `signIn.sso` now accept `additionalParams`, extra options added to the login URL for that one request. Before, these could only be set as fixed server config, which made several integrations impossible.
+
+This one change unlocks the most providers:
+
+* **Amazon Cognito.** Cognito often sits in front of other providers (Google, a SAML directory, and so on). To send a user straight to one of those, you pass Cognito's `identity_provider` value, which changes per login. Cognito also gets a typed `identityProvider` option so you avoid loose strings.
+* **Microsoft Entra ID.** Multi-tenant apps route users to the right tenant with `domain_hint`, now settable per login.
+* **Google.** Offline access and "ask for consent again" can be set per login instead of globally.
+
+Security is handled for you: the few parameters that must not be tampered with (like `state` and `redirect_uri`) are rejected if a caller tries to set them.
+
+### Certificate login for Microsoft Entra ID
+
+Many enterprise Entra setups authenticate with a signed certificate instead of a shared secret. The Entra provider now accepts a `clientAssertion` for exactly that.
+
+### Signed-assertion login for any provider
+
+More broadly, generic OAuth providers can now authenticate to the token endpoint with a signed JWT (the standard is RFC 7523) through a new `tokenEndpointAuth` option, or register as a public client with no secret at all. This connects Better Auth to enterprise and banking-grade providers that require signed-assertion login.
+
+**Breaking change (small).** A misconfigured signing setup now fails immediately at startup instead of silently doing the wrong thing.
+
+### Generic OAuth, rebuilt
+
+The generic OAuth plugin is rebuilt on the same path as the built-in social providers, with safer defaults: PKCE (a standard that protects the login redirect from hijacking) is on by default, and issuer validation happens automatically through discovery. This changes the API you call and the callback URL you configure.
+
+**Breaking change.** See the upgrade guide.
+
+### Verified login for any OpenID provider
+
+Point a generic OAuth provider at a provider's discovery URL and Better Auth now verifies the provider's identity token against that provider's published keys, and accepts identity-token login on mobile and single-page apps. This is what makes integrating an arbitrary standards-based OpenID provider a matter of supplying one URL.
+
+### One verifier for all identity tokens
+
+All identity-token logins now go through a single, properly-verifying code path instead of a per-provider method. This closes a real gap: PayPal previously accepted an identity token without checking its signature. PayPal now derives identity from its access token instead, and its normal redirect login is unchanged.
+
+**Breaking change** for custom providers. See the upgrade guide.
+
+### Providers that start the login themselves
+
+Some providers, common in education like Clever, start the login on their side and call your app back without the usual security token. Set `allowIdpInitiated: true` and Better Auth restarts the flow on the server with fresh security tokens, so protection is kept rather than turned off.
+
+### Require a verified email per provider
+
+You can now set `requireEmailVerification` on a single social or generic provider. When that provider reports an unverified email, the account is still created or linked, but no session is issued until the email is verified. It is off by default and does not affect your other providers, so turn it on only for providers whose "email verified" signal you trust.
+
+### Account linking that works in mobile browsers
+
+Linking an anonymous account after a social login now works in Expo and other in-app browsers, where the login returns without the usual cookie. Before, the link was silently skipped and the anonymous user was lost. A new `addOAuthServerContext` API carries trusted data across the login that a client cannot forge, which is what makes this reliable.
+
+### Google One Tap signs in the right person
+
+Google One Tap now signs in the user who actually owns the Google account. Before, it matched on email, so a Google account could sign in a different user who happened to share that email. It now also needs a Google client ID configured so it can verify the token is meant for your app.
+
+**Breaking change.** A Google client ID is now required for One Tap.
+
+***
+
+## Enterprise SSO, SAML, and SCIM
+
+### Rotate SAML certificates without downtime
+
+SAML signing certificates can now be a list, not just one value. That lets an administrator publish a new certificate next to the old one and finish the rotation without forcing everyone to sign in again, since a response signed by either certificate is accepted.
+
+**Breaking change.** The management endpoints now always return the certificate as a list.
+
+### Stricter SAML validation
+
+Several SAML checks that were quietly not working are fixed, and unsolicited "IdP-initiated" logins are now off by default, in line with the recommended interoperability profile. This comes with an upgrade of the underlying SAML library that fixes a high-severity vulnerability and requires Node 20 or newer.
+
+**Breaking change.** Set `allowIdpInitiated: true` to restore the old behavior if you depend on it.
+
+### Simpler SAML configuration
+
+The SAML setup is streamlined: the callback URL is derived automatically, the service-provider metadata is generated for you, and several unused fields are removed. Single Logout also correctly ends the user's session now.
+
+**Breaking change.** A few fields and one endpoint path change. See the upgrade guide.
+
+### SCIM groups and ownership
+
+SCIM, the standard for provisioning users from a directory, gains durable **group** resources with membership, roles, and lifecycle endpoints. A security fix ships alongside: a personal SCIM connection is now always owned by the person who created it. Before, ownership was optional, and an unowned connection could be read or deleted by any signed-in user.
+
+**Breaking change, needs a migration.** Connections created before the upgrade need to be reclaimed. See the upgrade guide.
+
+### OpenID SSO on Cloudflare Workers
+
+OpenID SSO with discovery now works on Cloudflare Workers. Endpoints that redirect are rejected with a clear configuration error instead of failing in a confusing, runtime-specific way.
+
+***
+
+## MCP
+
+The MCP plugin moves into its own package, `@better-auth/mcp`, built on the OAuth provider. The payoff is that MCP now inherits a fully conformant authorization server instead of carrying its own.
+
+The move changes imports, endpoint paths, a couple of helper names, and the database tables, and it requires the `jwt()` plugin and an explicit resource identifier. Client adapters ship for Hono, the official MCP SDK, and `mcp-use`.
+
+**Breaking change, needs a migration.** This is the largest single change for existing MCP users; the upgrade guide has a step-by-step.
+
+***
+
+## Sessions
+
+* **Verify sessions with a public key.** The session cookie cache can now use asymmetric JWTs, so a fleet of services can read sessions with a public key instead of sharing the signing secret.
+* **No more first-render flash.** A new `hydrateSession` method seeds the client with a server-fetched session, so `useSession` returns data on the first render instead of briefly showing nothing.
+* **Tokens revoked on sign-out.** Signing out now revokes the OAuth tokens tied to that session, even in setups that keep the session in a separate store. These were left valid until they expired before.
+* **Larger caches survive.** Session cookies that approach the browser's size limit are split into chunks instead of being silently dropped.
+
+***
+
+## Secure by default
+
+### Atomic state, no more races
+
+The largest security change replaces "check, then write" database logic with single atomic operations across the framework. The bugs this fixes are the kind that only show up under load: two requests using the same one-time token both succeeding, a team admitting more members than its limit, or a rate limit slipping when requests arrive at once.
+
+You inherit the fix for free in normal use:
+
+* **One-time tokens** (password reset, email and phone codes, device codes, magic links, and more) can no longer be used twice, even by simultaneous requests.
+* **Team limits** are enforced correctly under load.
+* **Rate limits** are checked and counted in a single step, so a burst of requests cannot slip past.
+* **Breached-password checks** now cover more password-setting routes by default.
+
+If you wrote a **custom database adapter or storage backend**, this introduces required methods. See the upgrade guide.
+
+### Forwarded proxy headers are not trusted by default
+
+When your app reads its own address from the request, it now uses the `Host` header and ignores forwarded headers (`x-forwarded-host`, `x-forwarded-proto`) unless you opt in with `advanced.trustedProxyHeaders: true`. This closes a spoofing gap. Common platforms (nginx, Vercel, Cloudflare, Netlify) rewrite the host for you and need no change.
+
+**Breaking change** for setups behind a proxy that only forwards the public host.
+
+### Electron requires modern PKCE
+
+The Electron login flow now requires the stronger S256 form of PKCE and no longer trusts a custom header to set the request origin, so the client and server must be upgraded together. Custom URL-scheme matching is also tightened so a trusted entry cannot be impersonated by a lookalike host.
+
+**Breaking change.**
+
+### Captcha matches full paths
+
+Captcha rules now match full request paths or explicit wildcards, which closes a way of slipping past a partial rule. Replace a partial path like `/sign-in` with `/sign-in/*`.
+
+**Breaking change.**
+
+### A gate for new identities
+
+A new `user.validateUserInfo` hook lets your app reject an identity before a user is created or an account is linked, across every sign-up method. It also re-runs when an existing user signs in again through a provider, so a policy can catch an identity that has moved out of bounds.
+
+***
+
+## Developer experience
+
+* **i18n in 22 languages.** `@better-auth/i18n` ships built-in translations for 22 languages, and the English fallback is fixed so messages no longer slip into an unexpected language.
+* **A `create-admin` CLI command** creates your first admin user, and the CLI now auto-detects configs that export the instance both ways.
+* **Cloudflare and Expo fixes.** Cloudflare Workers apps no longer crash on startup when importing certain subpaths, and Expo no longer loses logins from providers that issue large tokens, such as Keycloak.
+* **A server-only phone OTP API** verifies and consumes a code for custom flows, without touching users or sessions.
+* **An immutable username option** lets a user set a username once and not change it.
+* **Smaller quality-of-life fixes:** clear an organization's logo with `logo: null`, list another member's teams, Stripe SDK v21 and v22 support, and a real-HTTP test helper.
+
+***
+
+## New integrations unlocked
+
+These setups were impossible, broken, or unsafe before, and work now.
+
+### Logging your users in with an external provider
+
+| Provider or setup                                    | What was blocked                                                     | How it works now                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Amazon Cognito** federated login                   | You could not route a user to a specific upstream provider per login | Typed `identityProvider` option and per-request `additionalParams`                                   |
+| **Microsoft Entra ID** certificate login             | Only shared-secret login was supported                               | `clientAssertion` for certificate login; `domain_hint` per login                                     |
+| **Google** offline and incremental access            | Options were global; granted scopes were overwritten each login      | Per-request options; scopes preserved across logins; `includeGrantedScopes` option                   |
+| **Any OpenID provider** via discovery                | The provider's identity token was not verified                       | Point at a discovery URL; tokens are verified automatically                                          |
+| **Zitadel, Auth0, other multi-tenant OIDC**          | No way to send extra parameters when refreshing a token              | `refreshTokenParams` forwards extra parameters on refresh, to rescope tokens without a full redirect |
+| **Providers needing signed-assertion login**         | Only secret-based login was supported                                | `tokenEndpointAuth` with a signed JWT                                                                |
+| **Clever and similar education providers**           | A login started by the provider failed                               | `allowIdpInitiated: true` restarts the flow safely                                                   |
+| **Keycloak and other large-token providers on Expo** | The login cookie was silently dropped on the device                  | The Expo store now splits and reassembles it                                                         |
+
+### Other apps logging in through you
+
+| Setup                                          | What was blocked                       | How it works now                                                 |
+| ---------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
+| **APIs needing theft-resistant tokens**        | Only plain bearer tokens               | DPoP tokens bound to the client's key                            |
+| **Several APIs behind one login server**       | One token could be used on any API     | Per-API resources; tokens locked to the API they were issued for |
+| **Machine clients registering themselves**     | Registration required a logged-in user | Pre-shared registration tokens                                   |
+| **MCP clients (Claude, Codex, Factory Droid)** | Their registration was rejected        | Accepted automatically; Client ID Metadata Document support      |
+| **Single sign-out across apps**                | Sign-out did not notify other apps     | OIDC Back-Channel Logout                                         |
+| **Forced re-login**                            | The request was ignored                | `max_age` is enforced                                            |
+
+### Enterprise SSO
+
+| Setup                                | What was blocked                     | How it works now                                   |
+| ------------------------------------ | ------------------------------------ | -------------------------------------------------- |
+| **SAML certificate rotation**        | Only one certificate at a time       | A list of certificates is accepted during rotation |
+| **SCIM group provisioning**          | No durable group resources           | First-class groups with lifecycle endpoints        |
+| **OpenID SSO on Cloudflare Workers** | Redirecting endpoints broke the flow | Rejected with a clear configuration error          |
+
+***
+
+## Upgrading
+
+Most projects upgrade with one command:
+
+```package-install
+npx auth upgrade
+```
+
+Several features add or change database tables, and a couple need a manual data step. Read the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) for the breaking changes that apply to your setup and the exact steps to take.
