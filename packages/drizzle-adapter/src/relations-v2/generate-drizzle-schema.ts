@@ -166,17 +166,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array()`
 						: `integer('${name}').array()`,
-					mysql: `text('${name}', { mode: 'json' })`,
+					mysql: `json('${name}')`,
 				},
 				"string[]": {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `text('${name}').array()`,
-					mysql: `text('${name}', { mode: "json" })`,
+					mysql: `json('${name}')`,
 				},
 				json: {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `jsonb('${name}')`,
-					mysql: `json('${name}', { mode: "json" })`,
+					mysql: `json('${name}')`,
 				},
 			} as const;
 			const dbTypeMap = (

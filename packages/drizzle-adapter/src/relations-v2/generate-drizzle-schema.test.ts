@@ -10,6 +10,16 @@ const generate = (options: BetterAuthOptions) =>
 		adapterConfig: { provider: "pg" },
 	});
 
+const generateFor = (
+	provider: "sqlite" | "mysql" | "pg",
+	options: BetterAuthOptions,
+) =>
+	generateDrizzleSchema({
+		options,
+		provider,
+		adapterConfig: { provider },
+	});
+
 /**
  * Type-checks the generated schema and returns its diagnostics, ignoring
  * module-resolution errors for `drizzle-orm` (not resolvable in this sandbox).
@@ -50,5 +60,35 @@ describe("relations-v2 schema generator", () => {
 			verification: { modelName: "relations" },
 		});
 		expect(typeErrors(code)).toEqual([]);
+	});
+
+	/**
+	 * Drizzle ORM `>=1.0.0-rc.1` removed the `mode: "json"` option from the
+	 * MySQL `text` and `json` column builders. Generating MySQL schemas with
+	 * those signatures produces code that fails to compile and crashes
+	 * `drizzle-kit push` for any user with `string[]` / `number[]` / `json`
+	 * additional fields.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/9489#discussion
+	 */
+	it("emits valid Drizzle RC3 MySQL columns for json and array additional fields", async () => {
+		const { code = "" } = await generateFor("mysql", {
+			user: {
+				additionalFields: {
+					tags: { type: "string[]" },
+					scores: { type: "number[]" },
+					metadata: { type: "json" },
+				},
+			},
+		});
+
+		expect(code).not.toMatch(/text\([^)]*mode:\s*["']json["']/);
+		expect(code).not.toMatch(/json\([^)]*mode:\s*["']json["']/);
+		expect(code).toMatch(/tags:\s*json\(['"]tags['"]\)/);
+		expect(code).toMatch(/scores:\s*json\(['"]scores['"]\)/);
+		expect(code).toMatch(/metadata:\s*json\(['"]metadata['"]\)/);
+		expect(code).toMatch(
+			/import\s*\{[^}]*\bjson\b[^}]*\}\s*from\s*["']drizzle-orm\/mysql-core["']/,
+		);
 	});
 });
