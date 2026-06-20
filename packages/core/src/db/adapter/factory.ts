@@ -29,15 +29,15 @@ import type {
 } from "./types";
 import { withApplyDefault } from "./utils";
 
-export {
-	initGetDefaultModelName,
-	initGetDefaultFieldName,
-	initGetModelName,
-	initGetFieldName,
-	initGetFieldAttributes,
-	initGetIdField,
-};
 export * from "./types";
+export {
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldAttributes,
+	initGetFieldName,
+	initGetIdField,
+	initGetModelName,
+};
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;

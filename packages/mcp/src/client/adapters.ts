@@ -258,4 +258,4 @@ function normalizeURL(url: string | undefined | null): string | undefined {
 	return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-export type { McpSession, McpResourceClient, McpResourceClientOptions };
+export type { McpResourceClient, McpResourceClientOptions, McpSession };
