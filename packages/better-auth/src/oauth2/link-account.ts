@@ -3,7 +3,7 @@ import type {
 	UserProvisioningSource,
 } from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
-import { isDevelopment, logger } from "@better-auth/core/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
@@ -40,7 +40,7 @@ export async function handleOAuthUserInfo(
 			account.providerId,
 		)
 		.catch((e) => {
-			logger.error(
+			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
@@ -76,7 +76,7 @@ export async function handleOAuthUserInfo(
 				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
-					logger.warn(
+					c.context.logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
 				}
@@ -110,7 +110,7 @@ export async function handleOAuthUserInfo(
 				if (isAPIError(e)) {
 					throw e;
 				}
-				logger.error("Unable to link account", e);
+				c.context.logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
@@ -204,7 +204,7 @@ export async function handleOAuthUserInfo(
 				},
 			);
 			if (updatedUser == null) {
-				logger.warn(
+				c.context.logger.warn(
 					"Could not update user info during OAuth sign in; preserving existing user for session.",
 				);
 			}
@@ -255,7 +255,7 @@ export async function handleOAuthUserInfo(
 			if (isAPIError(e)) {
 				throw e;
 			}
-			logger.error("Unable to create OAuth user", e);
+			c.context.logger.error("Unable to create OAuth user", e);
 			return {
 				error: "unable to create user",
 				data: null,

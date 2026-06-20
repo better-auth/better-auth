@@ -490,8 +490,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 						);
 					}
-					const maxAge =
-						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+					const maxAge = ctx.context.sessionConfig.expiresIn;
 					await setSessionCookie(
 						ctx,
 						{
