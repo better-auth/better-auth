@@ -296,6 +296,13 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	claims_supported: string[];
 	/**
+	 * Whether the OP supports the OIDC `claims` request parameter.
+	 *
+	 * @default true
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	claims_parameter_supported?: boolean;
+	/**
 	 * RP-Initiated Logout Endpoint
 	 *
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html

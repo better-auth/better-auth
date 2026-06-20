@@ -12,6 +12,7 @@ import {
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 } from "./extensions";
+import { getSupportedClaims } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -171,8 +172,8 @@ export function oidcServerMetadata(
 		id_token_signing_alg_values_supported: JWSAlgorithms[] | ["HS256"];
 	} = {
 		...authMetadata,
-		claims_supported:
-			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],
+		claims_supported: getSupportedClaims(opts),
+		claims_parameter_supported: true,
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]

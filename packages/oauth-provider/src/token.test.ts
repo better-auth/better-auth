@@ -3478,6 +3478,43 @@ describe("verificationValueSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
+	it("should validate a verification value with UserInfo claims", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+					},
+				}),
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject a verification value with malformed claims", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				claims: "not-json",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		});
+		expect(result.success).toBe(false);
+	});
 	it("should reject a verification value with wrong type", () => {
 		const result = verificationValueSchema.safeParse({
 			type: "password_reset",

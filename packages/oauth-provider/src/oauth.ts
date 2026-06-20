@@ -18,6 +18,7 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
@@ -44,6 +45,7 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
@@ -146,7 +148,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
-	// Validate claims
+	// Discovery `claims_supported`: protocol claims that are always present, plus
+	// the standard identity claims whose backing scope is configured. The
+	// identity set is derived from the one claim registry so the advertisement
+	// cannot drift from what UserInfo actually resolves.
 	const claims = new Set([
 		"sub",
 		"iss",
@@ -156,10 +161,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
-		...(scopes.has("email") ? ["email", "email_verified"] : []),
-		...(scopes.has("profile")
-			? ["name", "picture", "family_name", "given_name"]
-			: []),
+		...STANDARD_CLAIM_NAMES.filter((name) =>
+			scopes.has(STANDARD_CLAIMS[name].scope),
+		),
 	]);
 
 	const opts: O & { claims?: string[] } = {
@@ -730,6 +734,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional().meta({
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
+						claims: claimsRequestParameterSchema.optional().meta({
+							description:
+								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
