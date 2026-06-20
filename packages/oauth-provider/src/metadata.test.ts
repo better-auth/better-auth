@@ -27,12 +27,12 @@ describe("oauth metadata", async () => {
 		"sid",
 		"scope",
 		"azp",
-		"email",
-		"email_verified",
 		"name",
 		"picture",
-		"family_name",
 		"given_name",
+		"family_name",
+		"email",
+		"email_verified",
 	];
 
 	async function createTestInstance(opts?: {
@@ -118,8 +118,10 @@ describe("oauth metadata", async () => {
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
+			claims_parameter_supported: true,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
+			acr_values_supported: ["0"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
 			prompt_values_supported: [
@@ -347,6 +349,22 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	it("should explicitly advertise unsupported request object parameters", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.request_parameter_supported).toBe(false);
+		expect(metadata.request_uri_parameter_supported).toBe(false);
+		expect(metadata.claims_parameter_supported).toBe(true);
+	});
+
+	it("should advertise the unspecified ACR value by default", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.acr_values_supported).toEqual(["0"]);
 	});
 
 	it("should fail if advertised scope invalid", async () => {

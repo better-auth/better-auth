@@ -351,7 +351,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -436,7 +445,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -498,6 +516,10 @@ export const schema = {
 				required: false,
 			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
