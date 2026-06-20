@@ -88,8 +88,8 @@
     "@better-auth/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.6.2",
-    "electron": "^41.2.2",
+    "better-sqlite3": "^12.11.1",
+    "electron": "^42.4.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

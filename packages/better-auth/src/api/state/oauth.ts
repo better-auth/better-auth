@@ -69,8 +69,8 @@ const addOAuthServerContext = async (
 };
 
 export {
-	getOAuthState,
-	setOAuthState,
 	addOAuthServerContext,
 	getOAuthServerContext,
+	getOAuthState,
+	setOAuthState,
 };
