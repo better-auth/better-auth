@@ -85,6 +85,11 @@
 - [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
 
 ## 1.7.0-beta.4
+## 1.6.20
+
+### Patch Changes
+
+- [#8734](https://github.com/better-auth/better-auth/pull/8734) [`930f534`](https://github.com/better-auth/better-auth/commit/930f5341d956bf3075f43758392a5c7f50947104) Thanks [@sleepe229](https://github.com/sleepe229)! - Declare inherited `APIError` properties to fix TypeScript inference errors.
 
 ## 1.6.19
 

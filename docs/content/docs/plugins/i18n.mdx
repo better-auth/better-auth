@@ -291,7 +291,7 @@ translations: {
 
 **Type:** `string`
 
-**Default:** `"en" when possible, otherwise the first locale in the translations dictionary`
+**Default:** `"en"`
 
 The fallback locale to use when no locale can be detected or the detected locale is not in the translations.
 
@@ -332,6 +332,6 @@ A custom function to detect the locale when using the `"callback"` detection str
 ## Fallback Behavior
 
 * If a translation is not found for a specific error code in the detected locale, the built-in English message is kept.
-* If the detected locale is not in the translations dictionary, the built-in English message is used.
-* If no locale can be detected from any strategy, the built-in English message is used.
+* If the detected locale is not in the translations dictionary, the plugin falls back to `defaultLocale`.
+* If no locale can be detected from any strategy, the plugin falls back to `defaultLocale` (defaults to `"en"`).
 * Non-error responses are never modified by this plugin.
