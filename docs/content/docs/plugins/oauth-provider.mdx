@@ -619,6 +619,10 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      * Space-separated list of accepted scopes. If not provided, the originally requested scopes are accepted.
      */
     scope?: string,
+    /**
+     * Accepted OIDC claims request object. If not provided, the originally requested claims are accepted.
+     */
+    claims?: string | Record<string, unknown>,
   }
   ```
 </APIMethod>
@@ -776,7 +780,11 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 * `profile`: Returns `name`, `picture`, `given_name`, `family_name`
 * `email`: Returns `email` and `email_verified`
 
-The `customUserInfoClaims` function receives the user object, requested scopes array, and the passed access token, allowing you to add additional information to the response.
+The endpoint also honors the OIDC `claims` request parameter for UserInfo. Claims listed under `claims.userinfo` are added to the scope-requested claims when Better Auth or your custom claim logic can supply them, bounded to the names advertised in `claims_supported`. Missing values are omitted from the JSON response rather than returned as `null` or an empty string.
+
+Per-claim selection through `claims.userinfo` applies to opaque access tokens. A JWT access token resolves UserInfo claims from its granted scopes, so an individually requested claim without its backing scope is omitted (OIDC Core §5.5.1). Request the backing scope, or issue an opaque access token, when a client needs a claim that no granted scope covers.
+
+The `customUserInfoClaims` function receives the user object, requested scopes array, requested UserInfo claim names, and the passed access token, allowing you to add additional information to the response.
 
 ### Well-Known
 
@@ -1000,15 +1008,20 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+The plugin will redirect the user to the specified path with `client_id`, `scope`, and, when requested, `claims` query parameters. Use `scope` and `claims.userinfo` to display the complete access request on your consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
 
+const claims = new URLSearchParams(window.location.search).get("claims");
+const requestedClaims = claims ? JSON.parse(claims) : undefined;
+
 const res = await authClient.oauth2.consent({
 	accept: true,
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
-  scope: "openid profile email"
+  scope: "openid profile email",
+  // optional claims accepted (if not sent, accepted claims match the original request)
+  claims: requestedClaims
 });
 ```
 
@@ -1182,7 +1195,7 @@ oauthProvider({
 
 Internally supported claims include \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
-ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile` and `email` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
+ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile`, `email`, and `claims.userinfo` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
 
 `customIdTokenClaims` is additive for protocol-owned ID token claims. Reserved names such as `iss`, `sub`, `aud`, token lifetime claims, `nonce`, `sid`, hash claims, `auth_time`, `acr`, `amr`, and `azp` are stripped at issuance with a warning log. Use namespaced claim names such as `https://example.com/org` for application-specific data.
 
@@ -1207,9 +1220,12 @@ oauthProvider({
     };
   },
   // Additional user info claims
-  customUserInfoClaims: ({ user, scopes, jwt }) => {
+  customUserInfoClaims: ({ user, scopes, requestedClaims, jwt }) => {
     return {
       locale: "en-GB",
+      ...(requestedClaims.includes("website")
+        ? { website: "https://example.com" }
+        : {}),
     };
   },
 })
@@ -1498,7 +1514,7 @@ Three claim surfaces resolve contributions in a fixed order. Across all three, t
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
 | ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
-| UserInfo     | base identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                                         | `sub` (re-pinned last)                                                                                                                                                                            |
+| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
 
 Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
 
@@ -2354,6 +2370,12 @@ export const oauthConsentTableFields = [
     name: "scopes",
     type: "string[]",
     description: "Array of scopes consented to",
+  },
+  {
+    name: "requestedUserInfoClaims",
+    type: "string[]",
+    description: "Array of OIDC UserInfo claim names consented to",
+    isOptional: true,
   },
   {
     name: "createdAt",

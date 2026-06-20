@@ -17,6 +17,7 @@ import {
 	UNSPECIFIED_ACR,
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
+import { getRequestedUserInfoClaims } from "./claims-request";
 import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
@@ -25,6 +26,7 @@ import {
 } from "./extensions";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
+import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
@@ -62,14 +64,14 @@ import {
 	validateClientCredentials,
 } from "./utils";
 
-const ID_TOKEN_SCOPE_CLAIM_GUARDS = {
-	name: undefined,
-	picture: undefined,
-	given_name: undefined,
-	family_name: undefined,
-	email: undefined,
-	email_verified: undefined,
-} satisfies Record<string, undefined>;
+// Seed the ID token with the standard UserInfo claim names set to `undefined`,
+// so a `customIdTokenClaims` or extension contributor cannot inject a
+// scope-gated identity claim into the ID token. Derived from the one claim
+// registry so the guard tracks the standard claims with no separate list.
+const ID_TOKEN_SCOPE_CLAIM_GUARDS: Record<string, undefined> =
+	Object.fromEntries(
+		STANDARD_CLAIM_NAMES.map((name) => [name, undefined] as const),
+	);
 
 /**
  * Token presentation scheme implied by a confirmation: a DPoP key thumbprint
@@ -479,6 +481,7 @@ async function createOpaqueAccessToken(
 	authorizationCodeId?: string,
 	refreshId?: string,
 	confirmation?: Confirmation,
+	requestedUserInfoClaims?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -497,6 +500,9 @@ async function createOpaqueAccessToken(
 			resources,
 			refreshId,
 			confirmation,
+			requestedUserInfoClaims: requestedUserInfoClaims?.length
+				? requestedUserInfoClaims
+				: undefined,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -592,6 +598,7 @@ async function createRefreshToken(
 	authTime?: Date,
 	resources?: string[],
 	confirmation?: Confirmation,
+	requestedUserInfoClaims?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -613,6 +620,9 @@ async function createRefreshToken(
 		authorizationCodeId,
 		authTime,
 		confirmation,
+		requestedUserInfoClaims: requestedUserInfoClaims?.length
+			? requestedUserInfoClaims
+			: undefined,
 		scopes,
 		resources,
 		createdAt: new Date(iat * 1000),
@@ -913,6 +923,10 @@ async function createUserTokens(
 			verificationValue,
 			refreshToken: existingRefreshToken,
 		}));
+	const requestedUserInfoClaims =
+		params.requestedUserInfoClaims ??
+		existingRefreshToken?.requestedUserInfoClaims ??
+		[];
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -934,6 +948,7 @@ async function createUserTokens(
 					authTime,
 					refreshResources,
 					confirmation,
+					requestedUserInfoClaims,
 				)
 			: undefined;
 
@@ -993,6 +1008,7 @@ async function createUserTokens(
 					params.authorizationCodeId,
 					earlyRefreshToken?.id,
 					confirmation,
+					requestedUserInfoClaims,
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
@@ -1014,6 +1030,7 @@ async function createUserTokens(
 						authTime,
 						refreshResources,
 						confirmation,
+						requestedUserInfoClaims,
 					)
 				: undefined,
 	]);
@@ -1355,6 +1372,10 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.authTime != null
 			? normalizeTimestampValue(verificationValue.authTime)
 			: resolveSessionAuthTime(session);
+	const requestedUserInfoClaims = getRequestedUserInfoClaims(
+		verificationValue.query.claims,
+		getSupportedClaims(opts),
+	);
 
 	return createUserTokens(ctx, opts, {
 		client,
@@ -1367,6 +1388,7 @@ async function handleAuthorizationCodeGrant(
 		authTime,
 		verificationValue,
 		authorizationCodeId,
+		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
 	});
@@ -1617,5 +1639,6 @@ async function handleRefreshTokenGrant(
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
+		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
 	});
 }
