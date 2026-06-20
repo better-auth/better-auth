@@ -1,5 +1,44 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-beta.9
+
+### Minor Changes
+
+- [#10156](https://github.com/better-auth/better-auth/pull/10156) [`e3125e8`](https://github.com/better-auth/better-auth/commit/e3125e872d40cdd6588cbcb65d8ca0d640bae15b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OIDC provider now honors the `claims.userinfo` authorization request parameter. A client can ask for individual standard claims, and the UserInfo endpoint returns the ones it can supply in addition to the scope-granted claims. The requested claims become part of the user's consent, and `claims_parameter_supported` is advertised in discovery.
+
+  A claim requested through `claims.userinfo` is honored for opaque access tokens. With a JWT access token, UserInfo returns only the claims the granted scopes cover, so request the backing scope when a client needs a specific claim.
+
+  This adds a `requestedUserInfoClaims` column to the OAuth access-token, refresh-token, and consent tables. Run your database migrations after upgrading.
+
+- [#10146](https://github.com/better-auth/better-auth/pull/10146) [`a8200b2`](https://github.com/better-auth/better-auth/commit/a8200b297c4092cb51397a9285ef4d1f024dea75) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider now lets servers set `clientRegistrationRequirePKCE: false` to allow confidential clients created through Dynamic Client Registration to complete authorization-code flows without PKCE. Public clients and authorization requests with `offline_access` still require PKCE.
+
+- [#10140](https://github.com/better-auth/better-auth/pull/10140) [`335cda7`](https://github.com/better-auth/better-auth/commit/335cda702ef8e2aecad4b26a427f16953e3aabd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID tokens now report `acr: "0"` instead of the InCommon Bronze URI. The default OpenID discovery document no longer advertises `acr_values_supported`, since the provider does not support requestable ACR classes yet.
+
+  `customIdTokenClaims`, extension ID-token claims, and per-issuance `idTokenClaims` can no longer set OIDC/JWT protocol claims such as issuer, subject, audience, token lifetime, nonce, session or hash binding, `auth_time`, `acr`, `amr`, or `azp`. Namespaced custom claims still appear in ID tokens.
+
+### Patch Changes
+
+- [#10149](https://github.com/better-auth/better-auth/pull/10149) [`132e293`](https://github.com/better-auth/better-auth/commit/132e293d7a82db30d7d1a63fb32c28df863204ae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider authorization requests that omit `response_type` now return `invalid_request` to the verified client redirect URI instead of falling back to the provider error page.
+
+- [#10151](https://github.com/better-auth/better-auth/pull/10151) [`267229b`](https://github.com/better-auth/better-auth/commit/267229bd24d5f918ac4c9c7eca7507e8c603e310) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Adds form-encoded POST support to the OIDC authorization endpoint and explicitly rejects unsupported OpenID Connect request objects with standard `request_not_supported` and `request_uri_not_supported` errors.
+
+- [#10150](https://github.com/better-auth/better-auth/pull/10150) [`508d8d6`](https://github.com/better-auth/better-auth/commit/508d8d6f06488d33a44d11059c873fcb8721d7a1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider authorization-code replay now returns `invalid_grant` with a `400` token response and revokes previously issued opaque tokens from that authorization code.
+
+- [#10159](https://github.com/better-auth/better-auth/pull/10159) [`7d1288e`](https://github.com/better-auth/better-auth/commit/7d1288e7c56a2385713cbcc232a376a7fe228be4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `redirect_uri` is enforced conditionally at the OAuth token endpoint: required and matched only when the authorization request included one (RFC 6749 §4.1.3), so an authorization code issued without a `redirect_uri` can be exchanged without one. A `redirect_uri` that does not match the code's bound value now returns `invalid_grant` instead of `invalid_request` (RFC 6749 §5.2).
+
+- [#10152](https://github.com/better-auth/better-auth/pull/10152) [`d368217`](https://github.com/better-auth/better-auth/commit/d368217efc1265996460d96c539b2ca669e33d49) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Keeps `profile` and `email` scope claims on the OIDC UserInfo response instead of adding them to authorization-code ID tokens by default, advertises `acr_values_supported: ["0"]`, and rejects unsupported
+  `acr_values` authorization requests instead of silently downgrading them.
+
+- [#10153](https://github.com/better-auth/better-auth/pull/10153) [`dd42701`](https://github.com/better-auth/better-auth/commit/dd42701af4b8aa56287c6890a8217a270249571f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allows confidential OIDC clients that have opted out of PKCE to request `offline_access` when the authorization request includes both `openid` and `nonce`.
+
+- [#10154](https://github.com/better-auth/better-auth/pull/10154) [`6f9a188`](https://github.com/better-auth/better-auth/commit/6f9a188bbb2665e56be1f1fb566eb1f5f919e1c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh-token requests now return `invalid_grant` with an `invalid refresh token` description when a client tries to use a refresh token issued to another OAuth client.
+
+- [#10155](https://github.com/better-auth/better-auth/pull/10155) [`5ac6249`](https://github.com/better-auth/better-auth/commit/5ac62493ef7296b4ac89359d257a0a99305ac189) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC UserInfo `POST` requests now accept bearer access tokens in an `application/x-www-form-urlencoded` request body. Requests that send bearer tokens in both the Authorization header and form body now return `invalid_request`.
+
+- Updated dependencies []:
+  - better-auth@1.7.0-beta.9
+  - @better-auth/core@1.7.0-beta.9
+
 ## 1.7.0-beta.8
 
 ### Patch Changes
