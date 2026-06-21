@@ -79,10 +79,10 @@ export interface PhoneNumberOptions {
 	/**
 	 * Treat `phoneNumber` as a non-writable user field (`input: false`).
 	 *
-	 * By default `phoneNumber` can be set directly as sign-up or `update-user`
-	 * input, before it is verified. When this is enabled, it is rejected as
-	 * plain input (the request returns a `400` error) and can only be attached
-	 * to an account through a flow that verifies ownership of the number first:
+	 * By default `phoneNumber` can be provided in the sign-up body, before it
+	 * is verified. When this is enabled, passing it at sign-up is rejected with
+	 * a `400` error, so a number can only be attached to an account through a
+	 * flow that verifies ownership of it first:
 	 *
 	 * - `signUpOnVerification` — the account is created after the OTP is verified.
 	 * - a session-bound `/phone-number/verify` with `updatePhoneNumber: true`.

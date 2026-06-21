@@ -37,17 +37,16 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		createdAt: "createdAt",
 	};
 
-	// Build a fresh schema (never mutate the shared module-level `schema`).
-	// When `disablePhoneNumberInput` is set, mark `phoneNumber` as `input: false`
-	// so it is only attached to an account through a verified flow rather than
-	// being accepted as plain sign-up/update input.
+	// Clone every field so `mergeSchema` can never mutate the shared
+	// module-level `schema` across plugin instances.
 	const pluginSchema = {
 		user: {
 			fields: {
-				phoneNumber: options?.disablePhoneNumberInput
-					? { ...schema.user.fields.phoneNumber, input: false }
-					: schema.user.fields.phoneNumber,
-				phoneNumberVerified: schema.user.fields.phoneNumberVerified,
+				phoneNumber: {
+					...schema.user.fields.phoneNumber,
+					...(options?.disablePhoneNumberInput ? { input: false } : {}),
+				},
+				phoneNumberVerified: { ...schema.user.fields.phoneNumberVerified },
 			},
 		},
 	} satisfies BetterAuthPluginDBSchema;

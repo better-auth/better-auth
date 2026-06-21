@@ -356,7 +356,7 @@ When enabled, users cannot sign in with their phone number until it has been ver
 
 ### `disablePhoneNumberInput`
 
-By default `phoneNumber` is a writable user field, so it can be set directly as sign-up or `update-user` input, before it is verified. When `disablePhoneNumberInput` is enabled, `phoneNumber` is marked as `input: false`: it is rejected as plain input (the request returns a `400` error) and can only be attached to an account through a flow that verifies ownership of the number first:
+By default `phoneNumber` can be provided in the sign-up body, before it is verified. When `disablePhoneNumberInput` is enabled, `phoneNumber` is marked as `input: false`, so passing it at sign-up is rejected with a `400`. A number can then only be attached to an account through a flow that verifies ownership of it first:
 
 * `signUpOnVerification` — the account is created after the OTP is verified.
 * A session-bound `/phone-number/verify` with `updatePhoneNumber: true` — the number is attached to the already-authenticated user after the OTP is verified.

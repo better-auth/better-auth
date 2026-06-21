@@ -1323,7 +1323,6 @@ describe("phone-number disablePhoneNumberInput", async () => {
 			email: "first@test.com",
 			password: "password123",
 			name: "first",
-			// phoneNumber is no longer a valid sign-up input when the option is on
 			...({ phoneNumber: phoneNumberValue } as Record<string, string>),
 		});
 		expect(res.error?.status).toBe(400);
