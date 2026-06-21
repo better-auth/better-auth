@@ -468,6 +468,19 @@ describe("username with displayUsername validation", async () => {
 		);
 	});
 
+	it("should not validate inferred displayUsername during sign-up", async () => {
+		const res = await client.signUp.email({
+			email: "inferred-display@email.com",
+			username: "valid.username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("valid.username");
+		expect(res.data?.user.displayUsername).toBe("valid.username");
+	});
+
 	it("should update displayUsername with valid value", async () => {
 		const headers = new Headers();
 		await client.signUp.email(
