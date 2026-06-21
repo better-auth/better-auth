@@ -73,6 +73,45 @@ const map = {
 	mssql: mssqlMap,
 };
 
+// cspell:ignore bpchar
+function matchesPostgresArrayColumn(
+	columnDataType: string,
+	fieldType: "string[]" | "number[]",
+) {
+	const lower = columnDataType.toLowerCase();
+	if (lower.includes("json")) {
+		return true;
+	}
+	// Kysely/pg introspection reports internal array type names (e.g. _text, _int4).
+	if (fieldType === "string[]") {
+		return (
+			lower === "_text" ||
+			lower === "_varchar" ||
+			lower === "_bpchar" ||
+			(lower.includes("[]") &&
+				(lower.includes("text") ||
+					lower.includes("char") ||
+					lower.includes("varchar"))) ||
+			lower === "array"
+		);
+	}
+	return (
+		lower === "_int4" ||
+		lower === "_int2" ||
+		lower === "_int8" ||
+		lower === "_numeric" ||
+		lower === "_float4" ||
+		lower === "_float8" ||
+		(lower.includes("[]") &&
+			(lower.includes("int") ||
+				lower.includes("numeric") ||
+				lower.includes("bigint") ||
+				lower.includes("smallint") ||
+				lower.includes("double") ||
+				lower.includes("real")))
+	);
+}
+
 export function matchType(
 	columnDataType: string,
 	fieldType: DBFieldType,
@@ -82,6 +121,9 @@ export function matchType(
 		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
+		if (dbType === "postgres") {
+			return matchesPostgresArrayColumn(columnDataType, fieldType);
+		}
 		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType]!;
@@ -373,13 +415,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 			},
 			"string[]": {
 				sqlite: "text",
-				postgres: "jsonb",
+				postgres: sql`text[]`,
 				mysql: "json",
 				mssql: "varchar(8000)",
 			},
 			"number[]": {
 				sqlite: "text",
-				postgres: "jsonb",
+				postgres: sql`integer[]`,
 				mysql: "json",
 				mssql: "varchar(8000)",
 			},

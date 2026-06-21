@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -685,5 +686,87 @@ describe("index generation for columns added to existing tables", () => {
 		expect(apikeyAdded!.fields).toHaveProperty("referenceId");
 
 		await expect(runMigrations()).resolves.not.toThrow();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9853
+ */
+describe.runIf(isPostgresAvailable)("PostgreSQL native array columns", () => {
+	const pool = new Pool({ connectionString: CONNECTION_STRING });
+	const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+
+	const arrayTestPlugin = {
+		id: "array-roundtrip-test",
+		schema: {
+			testModel: {
+				fields: {
+					stringArray: {
+						type: "string[]",
+						required: true,
+					},
+					numberArray: {
+						type: "number[]",
+						required: true,
+					},
+				},
+			},
+		},
+	} satisfies BetterAuthPlugin;
+
+	const options = {
+		database: pool,
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [arrayTestPlugin],
+	} satisfies BetterAuthOptions;
+
+	const adapter = kyselyAdapter(db, { type: "postgres" })(options);
+
+	beforeAll(async () => {
+		await pool.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+		const { runMigrations } = await getMigrations(options);
+		await runMigrations();
+	});
+
+	afterAll(async () => {
+		await db.destroy();
+	});
+
+	it("round-trips string[] and number[] through the kysely adapter", async () => {
+		const created = await adapter.create<{
+			id: string;
+			stringArray: string[];
+			numberArray: number[];
+		}>({
+			model: "testModel",
+			data: {
+				stringArray: ["a", "b"],
+				numberArray: [1, 2, 3],
+			},
+		});
+
+		expect(created.stringArray).toEqual(["a", "b"]);
+		expect(created.numberArray).toEqual([1, 2, 3]);
+
+		const found = await adapter.findOne<{
+			stringArray: string[];
+			numberArray: number[];
+		}>({
+			model: "testModel",
+			where: [{ field: "id", value: created.id }],
+		});
+
+		expect(found?.stringArray).toEqual(["a", "b"]);
+		expect(found?.numberArray).toEqual([1, 2, 3]);
+	});
+
+	it("does not re-migrate native array columns (_text / _int4 introspection)", async () => {
+		const { toBeAdded, toBeCreated } = await getMigrations(options);
+		const testModelPending =
+			toBeCreated.find((t) => t.table === "testModel") ??
+			toBeAdded.find((t) => t.table === "testModel");
+		expect(testModelPending).toBeUndefined();
 	});
 });
