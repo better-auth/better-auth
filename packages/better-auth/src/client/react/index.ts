@@ -115,8 +115,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as ReactAuthClient<Option>;
 }
 
-export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
 export type * from "../../types/helper";
 export type { UnionToIntersection } from "../../types/helper";
+export { useStore };

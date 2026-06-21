@@ -40,7 +40,7 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 				const number = field.bigint
 					? provider === "sqlite"
 						? `t.blob("${fieldName}", { mode: "bigint" })`
-						: `t.bigint("${fieldName}")`
+						: `t.bigint("${fieldName}", { mode: "number" })`
 					: provider === "mysql"
 						? `t.int("${fieldName}")`
 						: `t.integer("${fieldName}")`;

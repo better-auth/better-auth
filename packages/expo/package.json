@@ -75,11 +75,11 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~55.0.7",
-    "expo-linking": "~55.0.7",
-    "expo-network": "~55.0.8",
-    "expo-web-browser": "~55.0.9",
-    "react-native": "~0.84.1",
+    "expo-constants": "~56.0.18",
+    "expo-linking": "~56.0.14",
+    "expo-network": "~56.0.5",
+    "expo-web-browser": "~56.0.5",
+    "react-native": "~0.86.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
