@@ -1893,6 +1893,67 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=signup_disabled");
 	});
 
+	it("rejects a SAML assertion whose audience does not match this SP", async () => {
+		const { auth: authAudience, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await authAudience.api.registerSSOProvider({
+			body: {
+				providerId: "saml-audience-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					// Empty spMetadata: this SP's entity id falls back to its issuer
+					// (http://localhost:8081), which differs from the assertion's
+					// <Audience> (the IdP's spMetadata entity id).
+					spMetadata: {},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await authAudience.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-audience-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=invalid_saml_response");
+		expect(redirectLocation).toContain("Audience");
+	});
+
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
 		const { auth: authUntrusted, signInWithTestUser } = await getTestInstance({
 			account: {

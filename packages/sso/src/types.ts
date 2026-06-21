@@ -111,6 +111,7 @@ export interface SAMLAssertionExtract {
 	nameID?: string;
 	sessionIndex?: string;
 	inResponseTo?: string;
+	audience?: string | string[];
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;

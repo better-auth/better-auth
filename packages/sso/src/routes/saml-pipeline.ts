@@ -246,6 +246,35 @@ export async function processSAMLResponse(
 		logger: ctx.context.logger,
 	});
 
+	// 11b. Audience validation — the assertion's <Audience> must match this SP's
+	// entity id, or an explicitly configured `audience`.
+	const expectedAudiences = new Set(
+		[sp.entityMeta.getEntityID(), parsedSamlConfig.audience].filter(
+			Boolean,
+		) as string[],
+	);
+	const assertionAudienceRaw = (extract as SAMLAssertionExtract).audience;
+	const assertionAudiences = (
+		Array.isArray(assertionAudienceRaw)
+			? assertionAudienceRaw
+			: assertionAudienceRaw
+				? [assertionAudienceRaw]
+				: []
+	).filter(Boolean);
+	if (
+		assertionAudiences.length === 0 ||
+		!assertionAudiences.some((audience) => expectedAudiences.has(audience))
+	) {
+		ctx.context.logger.error("SAML audience validation failed", {
+			providerId,
+			expected: [...expectedAudiences],
+			received: assertionAudiences,
+		});
+		throw ctx.redirect(
+			`${samlRedirectUrl}?error=invalid_saml_response&error_description=Audience+mismatch`,
+		);
+	}
+
 	// 12. InResponseTo validation
 	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
 		| string
