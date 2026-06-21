@@ -614,6 +614,20 @@ export const username = (options?: UsernameOptions | undefined) => {
 		),
 		hooks: {
 			before: [
+				// Keep username fallback before validation so the stored username is validated.
+				{
+					matcher(context) {
+						return context.path === "/sign-up/email";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
+					}),
+				},
 				{
 					matcher(context) {
 						return (
@@ -704,19 +718,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 									);
 								}
 							}
-						}
-					}),
-				},
-				{
-					matcher(context) {
-						return context.path === "/sign-up/email";
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.body.username && !ctx.body.displayUsername) {
-							ctx.body.displayUsername = ctx.body.username;
-						}
-						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
 						}
 					}),
 				},

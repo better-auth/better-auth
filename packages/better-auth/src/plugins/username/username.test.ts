@@ -276,7 +276,7 @@ describe("username", async () => {
 		await client.signUp.email(
 			{
 				email: "display-test@email.com",
-				displayUsername: "Test Username",
+				displayUsername: "Test_Username",
 				password: "test-password",
 				name: "test-name",
 			},
@@ -292,8 +292,20 @@ describe("username", async () => {
 			},
 		});
 
-		expect(session?.user.username).toBe("test username");
-		expect(session?.user.displayUsername).toBe("Test Username");
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("Test_Username");
+	});
+
+	it("should validate a displayUsername-only value before storing it as username", async () => {
+		const res = await client.signUp.email({
+			email: "invalid-display-username@email.com",
+			displayUsername: "Invalid Username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.INVALID_USERNAME.code);
 	});
 
 	it("should preserve both username and displayUsername when both are provided", async () => {
@@ -434,6 +446,7 @@ describe("username with displayUsername validation", async () => {
 	it("should accept valid displayUsername", async () => {
 		const res = await client.signUp.email({
 			email: "display-valid@email.com",
+			username: "valid_display_123",
 			displayUsername: "Valid_Display-123",
 			password: "test-password",
 			name: "test-name",
@@ -444,6 +457,7 @@ describe("username with displayUsername validation", async () => {
 	it("should reject invalid displayUsername", async () => {
 		const res = await client.signUp.email({
 			email: "display-invalid@email.com",
+			username: "invalid_display",
 			displayUsername: "Invalid Display!",
 			password: "test-password",
 			name: "test-name",
@@ -501,6 +515,7 @@ describe("username with displayUsername validation", async () => {
 		await client.signUp.email(
 			{
 				email: "update-invalid@email.com",
+				username: "valid_name",
 				displayUsername: "Valid_Name",
 				password: "test-password",
 				name: "test-name",
