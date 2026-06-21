@@ -578,6 +578,11 @@ export const deleteSSOProvider = () => {
 				where: [{ field: "providerId", value: providerId }],
 			});
 
+			await ctx.context.adapter.deleteMany({
+				model: "account",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
 			return ctx.json({ success: true });
 		},
 	);

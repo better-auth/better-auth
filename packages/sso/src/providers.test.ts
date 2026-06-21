@@ -1282,7 +1282,7 @@ describe("SSO provider read endpoints", () => {
 			expect(response.status).toBe(403);
 		});
 
-		it("should not delete linked accounts when provider is deleted", async () => {
+		it("deletes linked account rows when the provider is deleted", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false);
 
@@ -1307,14 +1307,16 @@ describe("SSO provider read endpoints", () => {
 				refreshToken: "refresh",
 			});
 
-			const accountCountBefore = data.account.length;
-
 			await auth.api.deleteSSOProvider({
 				body: { providerId: "my-saml-provider" },
 				headers,
 			});
 
-			expect(data.account.length).toBe(accountCountBefore);
+			const accounts = data.account as { providerId: string }[];
+			expect(accounts.some((a) => a.providerId === "my-saml-provider")).toBe(
+				false,
+			);
+			expect(accounts.some((a) => a.providerId === "credential")).toBe(true);
 		});
 	});
 
