@@ -153,4 +153,80 @@ describe("kysely withReturning mysql update", () => {
 		expect(result!.id).toBe("a");
 		expect(result!.clientId).toBe("c2");
 	});
+
+	// The re-SELECT only sees one field at a time, so when the caller puts a
+	// non-unique guard first (`revoked IS NULL`) and the unique id second,
+	// returning the row keyed off the first predicate would be ambiguous
+	// across multiple revoked-null rows. The adapter prefers a unique
+	// `id` from anywhere in `where[]` (or from `values`) for the lookup so
+	// the post-update row resolves unambiguously regardless of caller-side
+	// predicate ordering.
+	it("re-SELECTs by id when id is not the first where predicate", async () => {
+		await db
+			.insertInto("tokens")
+			.values([
+				{ id: "a", revoked: null, clientId: "c1" },
+				{ id: "b", revoked: null, clientId: "c1" },
+				{ id: "c", revoked: null, clientId: "c1" },
+			])
+			.execute();
+
+		const adapter = buildAdapter();
+
+		const result = await adapter.update<TokensTable>({
+			model: "tokens",
+			where: [
+				{ field: "revoked", operator: "eq", value: null },
+				{ field: "id", value: "b" },
+			],
+			update: { clientId: "c2" },
+		});
+
+		expect(result).not.toBeNull();
+		expect(result!.id).toBe("b");
+		expect(result!.clientId).toBe("c2");
+
+		const others = await db
+			.selectFrom("tokens")
+			.selectAll()
+			.where("id", "in", ["a", "c"])
+			.execute();
+		for (const row of others) {
+			expect(row.clientId).toBe("c1");
+		}
+	});
+
+	// `update` is the single-row variant. An empty `where` would otherwise
+	// compile to `UPDATE table SET ...` with no predicate and silently
+	// mutate every row in the table; on MySQL it would also fall through
+	// to the `withReturning` insert-fetch cascade. Use `updateMany` for
+	// bulk operations instead.
+	it("returns null and does not mutate any row when where is empty", async () => {
+		await db
+			.insertInto("tokens")
+			.values([
+				{ id: "a", revoked: null, clientId: "c1" },
+				{ id: "b", revoked: null, clientId: "c1" },
+			])
+			.execute();
+
+		const adapter = buildAdapter();
+
+		const result = await adapter.update<TokensTable>({
+			model: "tokens",
+			where: [],
+			update: { clientId: "c2" },
+		});
+		expect(result).toBeNull();
+
+		const rows = await db
+			.selectFrom("tokens")
+			.selectAll()
+			.orderBy("id")
+			.execute();
+		expect(rows).toHaveLength(2);
+		for (const row of rows) {
+			expect(row.clientId).toBe("c1");
+		}
+	});
 });

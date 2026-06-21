@@ -29,6 +29,19 @@ import type { KyselyDatabaseType } from "./types";
 interface KyselyAdapterConfig {
 	/**
 	 * Database type.
+	 *
+	 * For `"mysql"`, this adapter depends on the driver returning
+	 * "rows matched" counts from `UPDATE`/`DELETE` operations (in
+	 * mysql2: `affectedRows`, exposed by Kysely as `numUpdatedRows`).
+	 * By default, `mysql2` enables this via the `FOUND_ROWS` client
+	 * flag.
+	 *
+	 * Do not disable this flag. If you remove it (e.g. with
+	 * `flags: '-FOUND_ROWS'` in your pool config), MySQL will report
+	 * "rows changed" semantics: an idempotent `UPDATE` (where the new
+	 * value equals the old value) will show zero affected rows, causing
+	 * adapter methods like `update`, `incrementOne`, or `updateMany` to
+	 * return `null` or `0` even if a row matched the predicate.
 	 */
 	type?: KyselyDatabaseType | undefined;
 	/**
@@ -141,6 +154,12 @@ export const kyselyAdapter = (
 					// writers via `SELECT ... FOR UPDATE`, but `update`
 					// must not lie to callers about whether the UPDATE
 					// matched.
+					//
+					// The gate assumes the driver reports "rows matched"
+					// semantics in `numUpdatedRows` (mysql2 default via the
+					// `CLIENT_FOUND_ROWS` flag). See `KyselyAdapterConfig.type`
+					// JSDoc — disabling that flag swaps the result to "rows
+					// changed" and surfaces idempotent updates as null.
 					if (where.length > 0) {
 						type Builder = UpdateQueryBuilder<any, string, string, any>;
 						const updateResult = await (builder as Builder).executeTakeFirst();
@@ -151,13 +170,40 @@ export const kyselyAdapter = (
 							return undefined;
 						}
 
-						const field = values.id
-							? "id"
-							: where[0]?.field
-								? where[0].field
-								: "id";
-						const value =
-							values[field] !== undefined ? values[field] : where[0]?.value;
+						// Pick the re-SELECT lookup field. The gate above only
+						// confirms that *some* row was mutated by the UPDATE;
+						// the re-SELECT then has to identify that row by a
+						// single field. Prefer the unique row id whenever it
+						// is available (in `values` or anywhere in `where`)
+						// so non-`id`-first guard orderings like
+						// `[{ field: "revoked", value: null }, { field: "id" }]`
+						// still resolve to the row that was just written.
+						// Fall back to `where[0]` only when no id is in scope;
+						// in that case the caller must ensure `where[0]`
+						// uniquely identifies the row, otherwise the returned
+						// row may not be the one the UPDATE mutated. Use
+						// `incrementOne` (transaction-locked CAS) when that
+						// guarantee matters.
+						const idWhere = where.find(
+							(w) =>
+								w.field === "id" && w.value !== undefined && w.value !== null,
+						);
+						let field: string;
+						let value: any;
+						if (values.id !== undefined && values.id !== null) {
+							field = "id";
+							value = values.id;
+						} else if (idWhere) {
+							field = "id";
+							value = idWhere.value;
+						} else if (where[0]?.field) {
+							field = where[0].field;
+							value =
+								values[field] !== undefined ? values[field] : where[0].value;
+						} else {
+							return undefined;
+						}
+
 						return await db
 							.selectFrom(model)
 							.selectAll()
@@ -688,6 +734,14 @@ export const kyselyAdapter = (
 					return res;
 				},
 				async update({ model, where, update: values }) {
+					// `update` is the single-row variant; an empty `where`
+					// would otherwise compile to `UPDATE table SET ...` with
+					// no predicate and mutate every row in the table. Treat
+					// it as an invalid call and return null on every dialect.
+					// Use `updateMany` if a bulk update is actually intended.
+					if (where.length === 0) {
+						return null;
+					}
 					const { and, or } = convertWhereClause(model, where);
 
 					let query = db.updateTable(model).set(values as any);
