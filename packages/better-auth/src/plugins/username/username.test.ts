@@ -296,16 +296,43 @@ describe("username", async () => {
 		expect(session?.user.displayUsername).toBe("Test_Username");
 	});
 
-	it("should validate a displayUsername-only value before storing it as username", async () => {
+	it("should not store an invalid displayUsername-only value as username", async () => {
+		const headers = new Headers();
+		const res = await client.signUp.email(
+			{
+				email: "invalid-display-username@email.com",
+				displayUsername: "Invalid Username",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		expect(res.error).toBeNull();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBeNull();
+		expect(session?.user.displayUsername).toBe("Invalid Username");
+	});
+
+	it("should not replace an explicit empty username with displayUsername", async () => {
 		const res = await client.signUp.email({
-			email: "invalid-display-username@email.com",
-			displayUsername: "Invalid Username",
+			email: "empty-username@email.com",
+			username: "",
+			displayUsername: "valid_username",
 			password: "test-password",
 			name: "test-name",
 		});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.INVALID_USERNAME.code);
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code);
 	});
 
 	it("should preserve both username and displayUsername when both are provided", async () => {
@@ -446,12 +473,13 @@ describe("username with displayUsername validation", async () => {
 	it("should accept valid displayUsername", async () => {
 		const res = await client.signUp.email({
 			email: "display-valid@email.com",
-			username: "valid_display_123",
 			displayUsername: "Valid_Display-123",
 			password: "test-password",
 			name: "test-name",
 		});
 		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBeNull();
+		expect(res.data?.user.displayUsername).toBe("Valid_Display-123");
 	});
 
 	it("should reject invalid displayUsername", async () => {
