@@ -17,7 +17,7 @@ import { SqliteAdapter, SqliteQueryCompiler } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-} from "kysely/migration";
+} from "./kysely-migration-tables";
 
 class D1SqliteAdapter extends SqliteAdapter {}
 

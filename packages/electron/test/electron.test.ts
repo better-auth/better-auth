@@ -16,6 +16,13 @@ import { electron } from "../src/index";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
 import { encodeRedirectToken, it, testUtils } from "./utils";
 
+// Electron transfers require S256 PKCE. These provide a consistent
+// verifier/challenge pair for token-exchange tests.
+const TEST_PKCE_VERIFIER = "test-challenge";
+const TEST_PKCE_CHALLENGE = base64Url.encode(
+	await createHash("SHA-256").digest(TEST_PKCE_VERIFIER),
+);
+
 const mockElectron = vi.hoisted(() => {
 	const BrowserWindow = {
 		constructor: vi.fn(),
@@ -123,7 +130,7 @@ describe("Electron", () => {
 				query: {
 					client_id: "electron",
 					code_challenge: "test-challenge",
-					code_challenge_method: "plain",
+					code_challenge_method: "S256",
 					state: "abc",
 				},
 				onResponse: async (ctx) => {
@@ -160,7 +167,7 @@ describe("Electron", () => {
 				query: {
 					client_id: "electron",
 					code_challenge: "test-challenge",
-					code_challenge_method: "plain",
+					code_challenge_method: "S256",
 					state: "abc",
 				},
 			},
@@ -224,6 +231,62 @@ describe("Electron", () => {
 		expect(mockElectron.safeStorage.encryptString).toHaveBeenCalled();
 	});
 
+	// The Electron authorization code is single-use. Two concurrent exchanges of
+	// the same valid token/state/code_verifier must yield exactly one session;
+	// the losing racer must be rejected because the code is consumed atomically.
+	it("should mint only one session for concurrent exchanges of the same code", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				email: "concurrent-exchange@test.com",
+				password: "password",
+				name: "Concurrent Exchange",
+			},
+		});
+
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = base64Url.encode(
+			await createHash("SHA-256").digest(codeVerifier),
+		);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge,
+					codeChallengeMethod: "s256",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		const exchange = () =>
+			client.$fetch<any>("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				},
+			});
+
+		const results = await Promise.all([exchange(), exchange()]);
+
+		const succeeded = results.filter((r) => r.data?.token);
+		const failed = results.filter((r) => r.error);
+
+		expect(succeeded).toHaveLength(1);
+		expect(failed).toHaveLength(1);
+		expect(failed[0]?.error?.status).toBe(404);
+	});
+
 	it("should emit authenticated event on success", async ({
 		setProcessType,
 	}) => {
@@ -236,8 +299,13 @@ describe("Electron", () => {
 			},
 		});
 
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = base64Url.encode(
+			await createHash("SHA-256").digest(codeVerifier),
+		);
+
 		(globalThis as any)[kElectron] = new Map<string, string>([
-			["abc", "test-challenge"],
+			["abc", codeVerifier],
 		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -247,8 +315,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -319,8 +387,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge: TEST_PKCE_CHALLENGE,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 999),
@@ -397,8 +465,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: "non-existent-user",
-					codeChallenge: "x",
-					codeChallengeMethod: "plain",
+					codeChallenge: TEST_PKCE_CHALLENGE,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300_000),
@@ -409,7 +477,11 @@ describe("Electron", () => {
 			client
 				.$fetch("/electron/token", {
 					method: "POST",
-					body: { token: identifier, code_verifier: "x", state: "abc" },
+					body: {
+						token: identifier,
+						code_verifier: TEST_PKCE_VERIFIER,
+						state: "abc",
+					},
 					throw: true,
 					customFetchImpl: (url, init) => {
 						const req = new Request(url.toString(), init);
@@ -446,8 +518,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "x",
-					codeChallengeMethod: "plain",
+					codeChallenge: TEST_PKCE_CHALLENGE,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300_000),
@@ -461,7 +533,11 @@ describe("Electron", () => {
 			await expect(
 				client.$fetch("/electron/token", {
 					method: "POST",
-					body: { token: identifier, code_verifier: "x", state: "abc" },
+					body: {
+						token: identifier,
+						code_verifier: TEST_PKCE_VERIFIER,
+						state: "abc",
+					},
 					throw: true,
 					customFetchImpl: (url, init) => {
 						const req = new Request(url.toString(), init);
@@ -534,8 +610,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge: TEST_PKCE_CHALLENGE,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -588,8 +664,8 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
-					codeChallenge: "test-challenge",
-					codeChallengeMethod: "plain",
+					codeChallenge: TEST_PKCE_CHALLENGE,
+					codeChallengeMethod: "s256",
 					state: "abc",
 				}),
 				expiresAt: new Date(Date.now() + 300 * 1000),
@@ -640,7 +716,6 @@ describe("Electron", () => {
 		});
 
 		const ctx = await auth.$context;
-		const spy = vi.spyOn(ctx.internalAdapter, "deleteVerificationByIdentifier");
 
 		const { data } = await client.$fetch<any>("/electron/token", {
 			method: "POST",
@@ -653,12 +728,16 @@ describe("Electron", () => {
 
 		expect(data?.token).toBeDefined();
 		expect(data?.user.id).toBe(user.id);
-		expect(spy).toHaveBeenCalled();
+
+		const remaining = await ctx.internalAdapter.findVerificationValue(
+			`electron:${identifier}`,
+		);
+		expect(remaining).toBeNull();
 	});
 
 	describe("transferUser", () => {
 		const transferQuery =
-			"client_id=electron&state=xyz&code_challenge=challenge";
+			"client_id=electron&state=xyz&code_challenge=challenge&code_challenge_method=S256";
 		const post = (cookie: string, body?: object) =>
 			auth.handler(
 				new Request(
@@ -760,6 +839,40 @@ describe("Electron", () => {
 			const setCookie = res.headers.get("set-cookie") ?? "";
 			const cookies = parseSetCookieHeader(setCookie);
 			expect(cookies.has("better-auth.electron")).toBe(true);
+		});
+
+		it("should reject a transfer with a non-S256 PKCE method", async () => {
+			const cookie = await getSessionCookie();
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/electron/transfer-user?client_id=electron&state=xyz&code_challenge=plain-text-challenge&code_challenge_method=plain",
+					{
+						method: "POST",
+						headers: { cookie, "content-type": "application/json" },
+						body: JSON.stringify({}),
+					},
+				),
+			);
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.code).toBe(ELECTRON_ERROR_CODES.INVALID_PKCE_METHOD.code);
+		});
+
+		it("should reject a transfer with a missing PKCE method", async () => {
+			const cookie = await getSessionCookie();
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/electron/transfer-user?client_id=electron&state=xyz&code_challenge=plain-text-challenge",
+					{
+						method: "POST",
+						headers: { cookie, "content-type": "application/json" },
+						body: JSON.stringify({}),
+					},
+				),
+			);
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.code).toBe(ELECTRON_ERROR_CODES.INVALID_PKCE_METHOD.code);
 		});
 	});
 
@@ -876,8 +989,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
 				},
@@ -918,8 +1031,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 						state: "def",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1022,6 +1135,52 @@ describe("Electron", () => {
 				}),
 			).rejects.toThrowError("BAD_REQUEST");
 		});
+
+		// A `plain` PKCE method adds nothing: the verifier equals the challenge,
+		// which travels in the sign-in URL, so whoever chose the challenge
+		// already knows the verifier. The exchange must reject it.
+		it("should reject token exchange when the stored PKCE method is not S256", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signInEmail({
+				body: { email: "test@test.com", password: "password" },
+			});
+
+			const plainChallenge = "client-known-challenge";
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: plainChallenge,
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300_000),
+				},
+			});
+
+			await expect(
+				client.$fetch("/electron/token", {
+					method: "POST",
+					// In plain mode this verifier would have matched the challenge.
+					body: {
+						token: identifier,
+						code_verifier: plainChallenge,
+						state: "abc",
+					},
+					throw: true,
+					customFetchImpl: (url, init) => {
+						const req = new Request(url.toString(), init);
+						return auth.handler(req);
+					},
+				}),
+			).rejects.toThrowError("BAD_REQUEST");
+		});
 	});
 
 	describe("cookies", () => {
@@ -1039,8 +1198,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1647,8 +1806,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1705,8 +1864,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1889,8 +2048,8 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
-						codeChallenge: "test-challenge",
-						codeChallengeMethod: "plain",
+						codeChallenge: TEST_PKCE_CHALLENGE,
+						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),

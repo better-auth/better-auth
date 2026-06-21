@@ -45,6 +45,18 @@ export const domainMatches = (searchDomain: string, domainList: string) => {
 };
 
 /**
+ * Strictly parse a provider-supplied email-verification claim.
+ *
+ * OIDC userInfo, OIDC id-token, and SAML attribute values are frequently
+ * strings, so a loose `Boolean(value)` or truthy fallback treats the string
+ * `"false"` as verified. Only a boolean `true` or the exact string `"true"`
+ * count as verified; every other value, including `"false"`, `"0"`, `""`,
+ * numbers, arrays, and objects, is unverified.
+ */
+export const parseProviderEmailVerified = (value: unknown): boolean =>
+	value === true || value === "true";
+
+/**
  * Validates email domain against allowed domain(s).
  * Supports comma-separated domains for multi-domain SSO.
  */

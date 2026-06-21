@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { isDevelopment, logger } from "@better-auth/core/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
@@ -18,6 +18,19 @@ export async function handleOAuthUserInfo(
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
+		/**
+		 * Whether `account.providerId` may be matched against the globally
+		 * configured `accountLinking.trustedProviders` list to infer trust.
+		 *
+		 * Defaults to `true` for built-in social/OAuth providers, whose
+		 * `providerId` namespace is controlled by the developer's config. Callers
+		 * whose `providerId` is user-controlled (e.g. the SSO plugin, where any
+		 * authenticated user can register a provider with an arbitrary id) must
+		 * pass `false` so a provider named after a trusted social provider can't
+		 * launder that trust. Such callers should supply their own
+		 * `isTrustedProvider` signal instead.
+		 */
+		trustProviderByName?: boolean | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
@@ -29,7 +42,7 @@ export async function handleOAuthUserInfo(
 			account.providerId,
 		)
 		.catch((e) => {
-			logger.error(
+			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
@@ -52,7 +65,8 @@ export async function handleOAuthUserInfo(
 			const accountLinking = c.context.options.account?.accountLinking;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				c.context.trustedProviders.includes(account.providerId);
+				(opts.trustProviderByName !== false &&
+					c.context.trustedProviders.includes(account.providerId));
 			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
 			// the gate unconditional.
 			const requireLocalEmailVerified =
@@ -64,7 +78,7 @@ export async function handleOAuthUserInfo(
 				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
-					logger.warn(
+					c.context.logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
 				}
@@ -86,7 +100,7 @@ export async function handleOAuthUserInfo(
 					scope: account.scope,
 				});
 			} catch (e) {
-				logger.error("Unable to link account", e);
+				c.context.logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
@@ -222,7 +236,7 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		} catch (e: any) {
-			logger.error(e);
+			c.context.logger.error(e);
 			if (isAPIError(e)) {
 				return {
 					error: e.message,
