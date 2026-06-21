@@ -296,7 +296,7 @@ export type BetterAuthDBSchema = Record<
 		 * Whether to disable migrations for this table
 		 * @default false
 		 */
-		disableMigrations?: boolean | undefined;
+		disableMigration?: boolean | undefined;
 		/**
 		 * The order of the table
 		 */

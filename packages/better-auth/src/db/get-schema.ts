@@ -13,6 +13,7 @@ export function getSchema(config: BetterAuthOptions) {
 	> = {};
 	for (const key in tables) {
 		const table = tables[key]!;
+		if (table.disableMigration) continue;
 		const fields = table.fields;
 		const actualFields: Record<string, DBFieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {

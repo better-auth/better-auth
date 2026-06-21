@@ -72,6 +72,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
+		if (tables[table]?.disableMigration) continue;
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
@@ -101,6 +102,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const indexedFields = new Map<string, string[]>();
 	for (const table in tables) {
+		if (tables[table]?.disableMigration) continue;
 		const fields = tables[table]?.fields;
 		const customModelName = tables[table]?.modelName || table;
 		const modelName = capitalizeFirstLetter(getModelName(customModelName));
@@ -117,6 +119,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
+			if (tables[table]?.disableMigration) continue;
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
