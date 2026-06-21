@@ -155,7 +155,7 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
+        uses: anthropics/claude-code-action/base-action@d5726de019ec4498aa667642bc3a80fca83aa102 # v1.0.148
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
@@ -432,7 +432,7 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
+        uses: anthropics/claude-code-action/base-action@d5726de019ec4498aa667642bc3a80fca83aa102 # v1.0.148
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
