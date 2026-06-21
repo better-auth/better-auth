@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Validate display username values before using them as fallback usernames during email sign-up.
+Only store display username fallbacks as usernames when they pass username validation during email sign-up.
