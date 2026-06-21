@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
@@ -35,6 +36,21 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		code: "code",
 		createdAt: "createdAt",
 	};
+
+	// Build a fresh schema (never mutate the shared module-level `schema`).
+	// When `disablePhoneNumberInput` is set, mark `phoneNumber` as `input: false`
+	// so it is only attached to an account through a verified flow rather than
+	// being accepted as plain sign-up/update input.
+	const pluginSchema = {
+		user: {
+			fields: {
+				phoneNumber: options?.disablePhoneNumberInput
+					? { ...schema.user.fields.phoneNumber, input: false }
+					: schema.user.fields.phoneNumber,
+				phoneNumberVerified: schema.user.fields.phoneNumberVerified,
+			},
+		},
+	} satisfies BetterAuthPluginDBSchema;
 
 	return {
 		id: "phone-number",
@@ -95,7 +111,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				opts as RequiredPhoneNumberOptions,
 			),
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(pluginSchema, options?.schema),
 		rateLimit: [
 			{
 				pathMatcher(path) {

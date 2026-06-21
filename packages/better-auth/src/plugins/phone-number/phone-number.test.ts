@@ -1283,3 +1283,79 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 });
+
+/**
+ * When `disablePhoneNumberInput` is enabled, `phoneNumber` is marked as
+ * `input: false`: it is rejected as plain sign-up/update input and can only be
+ * attached to an account through a verified flow.
+ */
+describe("phone-number disablePhoneNumberInput", async () => {
+	let otp = "";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					disablePhoneNumberInput: true,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const phoneNumberValue = "+251911121314";
+
+	it("should reject phoneNumber passed as plain sign-up input", async () => {
+		const res = await client.signUp.email({
+			email: "first@test.com",
+			password: "password123",
+			name: "first",
+			// phoneNumber is no longer a valid sign-up input when the option is on
+			...({ phoneNumber: phoneNumberValue } as Record<string, string>),
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should let a user attach the number through a verified flow", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "owner@test.com",
+				password: "password123",
+				name: "owner",
+			},
+			{ onSuccess: sessionSetter(headers) },
+		);
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: phoneNumberValue,
+			fetchOptions: { headers },
+		});
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: phoneNumberValue,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers },
+		});
+		expect(verifyRes.error).toBe(null);
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(session.data?.user.phoneNumber).toBe(phoneNumberValue);
+		expect(session.data?.user.phoneNumberVerified).toBe(true);
+	});
+});

@@ -354,6 +354,24 @@ An object with the following properties:
 
 When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
 
+### `disablePhoneNumberInput`
+
+By default `phoneNumber` is a writable user field, so it can be set directly as sign-up or `update-user` input, before it is verified. When `disablePhoneNumberInput` is enabled, `phoneNumber` is marked as `input: false`: it is rejected as plain input (the request returns a `400` error) and can only be attached to an account through a flow that verifies ownership of the number first:
+
+* `signUpOnVerification` — the account is created after the OTP is verified.
+* A session-bound `/phone-number/verify` with `updatePhoneNumber: true` — the number is attached to the already-authenticated user after the OTP is verified.
+
+```ts
+phoneNumber({
+  sendOTP,
+  disablePhoneNumberInput: true,
+})
+```
+
+<Callout type="warn">
+  If your sign-up flow currently sends `phoneNumber` in the sign-up body, move it to a verified flow before enabling this, otherwise those sign-up requests will start returning `400`.
+</Callout>
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table
