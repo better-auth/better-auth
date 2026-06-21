@@ -126,10 +126,31 @@ export const kyselyAdapter = (
 				where: Where[],
 			) => {
 				if (config?.type === "mysql") {
-					await builder.execute();
-
-					// Updates: re-query by the where clause field
+					// Updates: MySQL has no `UPDATE ... RETURNING`. Run the
+					// guarded UPDATE, then gate the return on `numUpdatedRows`
+					// before re-SELECTing so a zero-row UPDATE returns
+					// `undefined` the same way other common DBs do.
+					// Without the gate, the re-SELECT below would match by a single
+					// field, dropping every predicate past `where[0]` and
+					// its operator, and silently return the row even when
+					// the UPDATE matched nothing. That makes any caller
+					// reading the result as a compare-and-swap winner/loser
+					// signal (e.g. `WHERE id = ? AND revoked IS NULL`) fail
+					// open on MySQL only. `incrementOne` remains the
+					// portable CAS primitive, it serializes concurrent
+					// writers via `SELECT ... FOR UPDATE`, but `update`
+					// must not lie to callers about whether the UPDATE
+					// matched.
 					if (where.length > 0) {
+						type Builder = UpdateQueryBuilder<any, string, string, any>;
+						const updateResult = await (builder as Builder).executeTakeFirst();
+						if (
+							!updateResult ||
+							Number(updateResult.numUpdatedRows ?? 0) === 0
+						) {
+							return undefined;
+						}
+
 						const field = values.id
 							? "id"
 							: where[0]?.field
@@ -149,6 +170,7 @@ export const kyselyAdapter = (
 							.executeTakeFirst();
 					}
 
+					await builder.execute();
 					// Inserts: cascading strategy inside a transaction
 					const fetchInserted = async (trx: any) => {
 						// 1. Known id from the data
