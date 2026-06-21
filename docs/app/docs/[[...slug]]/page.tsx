@@ -88,9 +88,8 @@ export default async function Page({
 				<div className="flex flex-wrap items-center gap-2 not-prose lg:shrink-0">
 					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
 					<ViewOptions
-						markdownUrl={`${page.url}.mdx`}
+						markdownUrl={`/llms.txt${page.url}.md`}
 						githubUrl={`${githubBase}/${page.path}`}
-						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
 			</div>
