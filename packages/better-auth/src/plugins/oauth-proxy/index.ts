@@ -118,10 +118,7 @@ const consumeOAuthProxyState = async (
 		});
 		return true;
 	} catch (e) {
-		ctx.context.logger.warn(
-			"OAuth proxy state missing, expired, or already used",
-			e,
-		);
+		ctx.context.logger.warn("OAuth proxy state missing or invalid", e);
 		return false;
 	}
 };
