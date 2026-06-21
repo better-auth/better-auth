@@ -64,14 +64,31 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
-	// A model named `relations` collides with the hardcoded
-	// `export const relations = defineRelationsPart(...)`, producing a duplicate
-	// declaration that fails to compile.
-	it("generates valid TypeScript when a model's table name is `relations`", async () => {
-		const { code = "" } = await generate({
-			verification: { modelName: "relations" },
+	/**
+	 * A hardcoded `export const relations = defineRelationsPart(...)` collides
+	 * with a user model whose table name is `relations` (e.g.
+	 * `verification: { modelName: "relations" }`), producing
+	 * `Duplicate identifier 'relations'` and breaking schema compilation.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/9489
+	 */
+	describe("relations part export name", () => {
+		it("exports the relations part as `authRelations`, not `relations`", async () => {
+			const { code = "" } = await generate({});
+
+			expect(code).toMatch(
+				/^export const authRelations\s*=\s*defineRelationsPart\(/m,
+			);
+			expect(code).not.toMatch(/^export const relations\s*=/m);
 		});
-		expect(typeErrors(code)).toEqual([]);
+
+		it("compiles without duplicate identifier errors when a model's table name is `relations`", async () => {
+			const { code = "" } = await generate({
+				verification: { modelName: "relations" },
+			});
+
+			expect(typeErrors(code)).toEqual([]);
+		});
 	});
 
 	/**

@@ -221,7 +221,7 @@ the drizzle instance — `schema` is no longer required since Drizzle v1 RC:
 ```ts title="db.ts"
 import { drizzle } from 'drizzle-orm/...';
 // generated relations from auth CLI (uses defineRelationsPart)
-import { relations as authRelations } from './auth-schema.ts';
+import { authRelations } from './auth-schema.ts';
 // your app's own relations (uses defineRelations)
 import { relations } from './app-schema.ts';
 

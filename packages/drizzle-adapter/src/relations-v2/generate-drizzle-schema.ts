@@ -496,7 +496,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		}
 
 		if (relationsEntries.length > 0) {
-			relationsString = `\n\nexport const relations = defineRelationsPart(${schemaObject}, (r) => ({\n${relationsEntries.join(",\n")}\n}));\n`;
+			relationsString = `\n\nexport const authRelations = defineRelationsPart(${schemaObject}, (r) => ({\n${relationsEntries.join(",\n")}\n}));\n`;
 		}
 	}
 
