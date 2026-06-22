@@ -31,7 +31,8 @@ import type {
  * Will also provide additional types on the user to include role types.
  */
 const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
+	// Force a DB-backed session read so authorization always reflects live role/ban state.
+	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
 	if (!session) {
 		throw APIError.fromStatus("UNAUTHORIZED");
 	}
@@ -333,7 +334,11 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx<{ role: string }>(ctx);
+			// `disableCookieCache` so the privilege check below authorizes off
+			// live role state rather than a stale cookie-cache snapshot.
+			const session = await getSessionFromCtx<{ role: string }>(ctx, {
+				disableCookieCache: true,
+			});
 			if (!session && (ctx.request || ctx.headers)) {
 				throw ctx.error("UNAUTHORIZED");
 			}
