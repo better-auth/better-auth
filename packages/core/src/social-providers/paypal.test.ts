@@ -97,7 +97,7 @@ describe("paypal.getUserInfo", () => {
 		expect(result).toBeNull();
 	});
 
-	it("uses the profile subject when PayPal returns one", async () => {
+	it("prefers the profile subject over user_id when validating the id token", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			userInfoResponse(
 				profile("paypal-user-123", {
