@@ -87,8 +87,7 @@ function resolveRequiredRoles(
 
 // TODO(scim-provider-ownership-default-on): flip default to `true` on next so
 // new non-org SCIM tokens are owner-locked by default. Coupled with the
-// `scimProvider.userId` schema column. Tracks the SCIM provider-ownership
-// advisory.
+// `scimProvider.userId` schema column.
 function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
 	return opts.providerOwnership?.enabled ?? false;
 }
