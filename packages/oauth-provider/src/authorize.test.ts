@@ -1421,3 +1421,130 @@ describe("oauth authorize - consented resources", async () => {
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });
+
+describe("oauth authorize - validateRedirectURI", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	// An unregistered, dynamic redirect target (e.g. a per-branch preview deploy).
+	const previewRedirectUri =
+		"https://branch-xyz789.preview.example.com/api/auth/oauth2/callback/test";
+
+	// Records every call so we can assert the hook receives the client + URI.
+	const seen: { redirectURI: string; clientId: string }[] = [];
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+				validateRedirectURI: ({ client, redirectURI }) => {
+					seen.push({ redirectURI, clientId: client.clientId });
+					try {
+						const url = new URL(redirectURI);
+						return (
+							url.protocol === "https:" &&
+							url.hostname.endsWith(".preview.example.com")
+						);
+					} catch {
+						return false;
+					}
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const registeredRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredRedirectUri], skip_consent: true },
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("accepts an unregistered redirect_uri that validateRedirectURI approves", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: previewRedirectUri,
+			state: "preview-state",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(previewRedirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).toContain("state=preview-state");
+		expect(callbackRedirectUrl).not.toContain("error=invalid_redirect");
+		// The hook was consulted with the requested URI and the resolved client.
+		expect(seen.at(-1)).toEqual({
+			redirectURI: previewRedirectUri,
+			clientId: oauthClient.client_id,
+		});
+	});
+
+	it("rejects an unregistered redirect_uri that validateRedirectURI declines", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const untrustedRedirectUri = "https://attacker.example.org/callback";
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: untrustedRedirectUri,
+			state: "rejected-state",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier,
+		});
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// A declined URI must never receive the code: the error goes to the auth
+		// server's own error page, not the untrusted redirect target.
+		expect(location).not.toContain("attacker.example.org");
+		expect(location).not.toContain("code=");
+		expect(location).toContain("error=invalid_redirect");
+	});
+});

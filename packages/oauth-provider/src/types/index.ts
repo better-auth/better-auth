@@ -788,6 +788,40 @@ export interface OAuthOptions<
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<boolean | undefined>;
 	/**
+	 * Authorize a `redirect_uri` that is NOT among the client's registered
+	 * `redirectUris`.
+	 *
+	 * Called during `/authorize` ONLY after the built-in checks fail — i.e. the
+	 * requested URI did not exactly match any registered URI and was not an
+	 * RFC 8252 loopback-IP equivalent of one. Return `true` to accept the
+	 * requested URI as though it were registered; the authorization code is then
+	 * delivered to it.
+	 *
+	 * Use this for dynamic or ephemeral redirect targets that cannot be
+	 * pre-registered — for example per-branch preview deployments whose
+	 * hostnames are not known ahead of time.
+	 *
+	 * SECURITY: the `redirect_uri` is where the authorization code is sent. A
+	 * permissive matcher is an open-redirector and authorization-code
+	 * exfiltration vector. Validate strictly: bind to the specific `client`,
+	 * require an exact scheme and host allow-list, and never accept apex
+	 * wildcards or user-controlled hosts.
+	 *
+	 * @example
+	 * validateRedirectURI: ({ client, redirectURI }) => {
+	 * 	const url = new URL(redirectURI);
+	 * 	return (
+	 * 		url.protocol === "https:" &&
+	 * 		url.hostname.endsWith(`.${client.clientId}.preview.example.com`)
+	 * 	);
+	 * }
+	 */
+	validateRedirectURI?: (context: {
+		ctx: GenericEndpointContext;
+		client: SchemaClient<Scopes>;
+		redirectURI: string;
+	}) => Awaitable<boolean>;
+	/**
 	 * List default scopes when using the token endpoint's
 	 * grant type "client_credentials". This is used
 	 * only when oauthClients are stored in the database
