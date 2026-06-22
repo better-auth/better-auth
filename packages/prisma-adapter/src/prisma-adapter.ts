@@ -49,7 +49,7 @@ export interface PrismaConfig {
 interface PrismaClient {}
 
 // Prisma raises `P2025` for every "record not found" surface area we care
-// about — `update`, `delete`, and `incrementOne` — with the actual cause
+// about (`update`, `delete`, and `incrementOne`) with the actual cause
 // distinguishable via `meta.cause` (e.g. "Record to update not found." vs
 // "Record to delete does not exist."). Match on the code alone: any other
 // failure (constraint, connection, permission) must propagate so the caller
