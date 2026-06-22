@@ -555,13 +555,10 @@ export const mcp = (options: MCPOptions) => {
 					// caller receives the row; concurrent racers receive `null`
 					// and fall through to the `invalid_grant` error path.
 					//
-					// TODO(legacy-hardening-coordinate): in-flight follow-ups at
-					// https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
-					// and https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
-					// touch this same surface. Whoever lands second must rebase
-					// to keep the atomic consume + `invalid_grant` semantics in
-					// place; do not regress to a `findVerificationValue` +
-					// delete pair.
+					// TODO(legacy-hardening-coordinate): follow-up hardening touches
+					// this same surface. Whoever lands second must rebase to keep
+					// the atomic consume + `invalid_grant` semantics in place; do
+					// not regress to a `findVerificationValue` + delete pair.
 					const verificationValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
 							code.toString(),
