@@ -139,27 +139,24 @@ export const kyselyAdapter = (
 				where: Where[],
 			) => {
 				if (config?.type === "mysql") {
-					// Updates: MySQL has no `UPDATE ... RETURNING`. Run the
-					// guarded UPDATE, then gate the return on `numUpdatedRows`
-					// before re-SELECTing so a zero-row UPDATE returns
-					// `undefined` the same way other common DBs do.
-					// Without the gate, the re-SELECT below would match by a single
-					// field, dropping every predicate past `where[0]` and
-					// its operator, and silently return the row even when
-					// the UPDATE matched nothing. That makes any caller
-					// reading the result as a compare-and-swap winner/loser
-					// signal (e.g. `WHERE id = ? AND revoked IS NULL`) fail
-					// open on MySQL only. `incrementOne` remains the
-					// portable CAS primitive, it serializes concurrent
-					// writers via `SELECT ... FOR UPDATE`, but `update`
-					// must not lie to callers about whether the UPDATE
-					// matched.
+					// MySQL has no `UPDATE ... RETURNING`. Gate the re-SELECT
+					// on `numUpdatedRows` so a zero-row UPDATE returns
+					// `undefined` like other DBs. Otherwise the re-SELECT
+					// below matches by a single field (dropping every
+					// predicate past `where[0]`) and silently returns a row
+					// even when the UPDATE matched nothing. That makes any
+					// caller reading the result as a CAS winner/loser signal
+					// (e.g. `WHERE id = ? AND revoked IS NULL`) fail open on
+					// MySQL only. `incrementOne` remains the portable CAS
+					// primitive (serializes writers via `SELECT ... FOR
+					// UPDATE`), but `update` must not lie about whether the
+					// UPDATE matched.
 					//
-					// The gate assumes the driver reports "rows matched"
-					// semantics in `numUpdatedRows` (mysql2 default via the
-					// `CLIENT_FOUND_ROWS` flag). See `KyselyAdapterConfig.type`
-					// JSDoc — disabling that flag swaps the result to "rows
-					// changed" and surfaces idempotent updates as null.
+					// The gate assumes "rows matched" semantics in
+					// `numUpdatedRows` (mysql2 default via `CLIENT_FOUND_ROWS`).
+					// See `KyselyAdapterConfig.type` JSDoc. Disabling that
+					// flag swaps to "rows changed" and surfaces idempotent
+					// updates as null.
 					if (where.length > 0) {
 						type Builder = UpdateQueryBuilder<any, string, string, any>;
 						const updateResult = await (builder as Builder).executeTakeFirst();
@@ -170,23 +167,29 @@ export const kyselyAdapter = (
 							return undefined;
 						}
 
-						// Pick the re-SELECT lookup field. The gate above only
-						// confirms that *some* row was mutated by the UPDATE;
-						// the re-SELECT then has to identify that row by a
-						// single field. Prefer the unique row id whenever it
-						// is available (in `values` or anywhere in `where`)
-						// so non-`id`-first guard orderings like
-						// `[{ field: "revoked", value: null }, { field: "id" }]`
-						// still resolve to the row that was just written.
-						// Fall back to `where[0]` only when no id is in scope;
-						// in that case the caller must ensure `where[0]`
-						// uniquely identifies the row, otherwise the returned
-						// row may not be the one the UPDATE mutated. Use
-						// `incrementOne` (transaction-locked CAS) when that
-						// guarantee matters.
+						// The gate above only confirms *some* row was mutated;
+						// the re-SELECT identifies which row by a single
+						// field. Prefer the unique row id (from `values` or
+						// anywhere in `where`) so non-`id`-first guard
+						// orderings like `[{ field: "revoked", value: null },
+						// { field: "id" }]` still resolve to the written row.
+						// Fall back to `where[0]` only when no id is in
+						// scope; the caller must then ensure `where[0]`
+						// uniquely identifies the row, or use `incrementOne`
+						// (transaction-locked CAS) if that guarantee matters.
+						//
+						// Only an `AND`-joined equality on `id` is safe to
+						// key off: a non-`eq` operator (e.g. `ne`) means the
+						// UPDATE *excluded* that id, and `connector: "OR"`
+						// makes the predicate non-mandatory (the matched row
+						// may have satisfied a different branch).
 						const idWhere = where.find(
 							(w) =>
-								w.field === "id" && w.value !== undefined && w.value !== null,
+								w.field === "id" &&
+								(w.operator === undefined || w.operator === "eq") &&
+								w.connector !== "OR" &&
+								w.value !== undefined &&
+								w.value !== null,
 						);
 						let field: string;
 						let value: any;

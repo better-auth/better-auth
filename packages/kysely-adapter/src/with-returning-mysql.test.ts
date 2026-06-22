@@ -196,6 +196,41 @@ describe("kysely withReturning mysql update", () => {
 		}
 	});
 
+	it("does not key the re-SELECT off a non-eq `id` predicate", async () => {
+		await db
+			.insertInto("tokens")
+			.values([
+				{ id: "a", revoked: null, clientId: "c1" },
+				{ id: "b", revoked: null, clientId: "c2" },
+			])
+			.execute();
+
+		const adapter = buildAdapter();
+
+		const result = await adapter.update<TokensTable>({
+			model: "tokens",
+			where: [
+				{ field: "clientId", operator: "eq", value: "c2" },
+				{ field: "id", operator: "ne", value: "a" },
+			],
+			update: { revoked: "2024-01-01T00:00:00.000Z" },
+		});
+
+		expect(result).not.toBeNull();
+		// The UPDATE matched row "b" (clientId = c2 AND id != a). The
+		// re-SELECT must NOT key off `id = "a"` — that would return the row
+		// the UPDATE intentionally skipped (row "a" with revoked still null).
+		expect(result!.id).toBe("b");
+		expect(result!.revoked).toBe("2024-01-01T00:00:00.000Z");
+
+		const rowA = await db
+			.selectFrom("tokens")
+			.selectAll()
+			.where("id", "=", "a")
+			.executeTakeFirst();
+		expect(rowA?.revoked).toBeNull();
+	});
+
 	// `update` is the single-row variant. An empty `where` would otherwise
 	// compile to `UPDATE table SET ...` with no predicate and silently
 	// mutate every row in the table; on MySQL it would also fall through
