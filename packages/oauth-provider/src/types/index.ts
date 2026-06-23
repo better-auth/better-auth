@@ -807,13 +807,6 @@ export interface OAuthOptions<
 	 * pre-registered — for example per-branch preview deployments whose
 	 * hostnames are not known ahead of time.
 	 *
-	 * SECURITY: a permissive matcher is an open redirector. For `"authorize"` it
-	 * additionally leaks the authorization code (an account-takeover vector), so
-	 * the bar is higher there. Validate strictly for BOTH types: bind to the
-	 * specific `client`, require an exact scheme and host allow-list, and never
-	 * accept apex wildcards or user-controlled hosts. Branch on `type` only to
-	 * make logout MORE permissive than authorize, never the reverse.
-	 *
 	 * @example
 	 * validateRedirectURI: ({ client, redirectURI, type }) => {
 	 * 	const url = new URL(redirectURI);
