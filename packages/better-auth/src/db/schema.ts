@@ -223,15 +223,18 @@ export function parseUserInput(
 }
 
 /**
- * Returns a shallow copy of `user` with any field the user model marks as
+ * Returns a shallow copy of `user` with any field the model marks as
  * non-input (`input: false`) removed.
+ *
+ * Operates on the user model's "input" schema only — additional and
+ * plugin-contributed fields.
  */
-export function stripNonInputUserFields<T extends Record<string, any>>(
+export function stripNonInputUserFields<T extends Record<string, unknown>>(
 	options: BetterAuthOptions,
 	user: T,
 ): T {
 	const fields = getFields(options, "user", "input");
-	const result: Record<string, any> = Object.create(null);
+	const result: Record<string, unknown> = Object.create(null);
 	for (const key in user) {
 		if (fields[key]?.input === false) continue;
 		result[key] = user[key];
