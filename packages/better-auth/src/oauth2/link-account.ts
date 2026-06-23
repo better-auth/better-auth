@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
+import { stripNonInputUserFields } from "../db";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { redirectOnError } from "./errors";
@@ -166,7 +167,8 @@ export async function handleOAuthUserInfo(
 			}
 		}
 		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
+			const { id: _, ...rest } = userInfo;
+			const restUserInfo = stripNonInputUserFields(c.context.options, rest);
 			// update user info from the provider if overrideUserInfo is true
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
@@ -186,7 +188,8 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
-			const { id: _, ...restUserInfo } = userInfo;
+			const { id: _, ...rest } = userInfo;
+			const restUserInfo = stripNonInputUserFields(c.context.options, rest);
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -318,8 +321,9 @@ export async function applyUpdateUserInfoOnLink(
 		id: _id,
 		email: _email,
 		emailVerified: _emailVerified,
-		...profile
+		...rawProfile
 	} = userInfo;
+	const profile = stripNonInputUserFields(c.context.options, rawProfile);
 	try {
 		return await c.context.internalAdapter.updateUser(userId, profile);
 	} catch (e) {

@@ -1077,6 +1077,11 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 		user: {
 			additionalFields: {
 				googleSub: { type: "string", required: false },
+				serverManagedField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 			},
 		},
 		socialProviders: {
@@ -1085,7 +1090,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 				clientSecret: "test",
 				enabled: true,
 				mapProfileToUser(profile: GoogleProfile) {
-					return { googleSub: profile.sub };
+					return { googleSub: profile.sub, serverManagedField: "elevated" };
 				},
 			},
 		},
@@ -1174,16 +1179,122 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 		});
 		expect(user?.googleSub).toBe("google_implicit_mapped");
 	});
+
+	it("does not copy fields marked input: false from the provider on link", async () => {
+		const testEmail = "implicit-link-input-false@example.com";
+		await ctx.adapter.create({
+			model: "user",
+			data: { email: testEmail, name: "Original Name", emailVerified: true },
+		});
+
+		await signInAndLink(testEmail, "google_link_input_false");
+
+		const user = await ctx.adapter.findOne<
+			User & { googleSub?: string; serverManagedField?: string | null }
+		>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user?.googleSub).toBe("google_link_input_false");
+		expect(user?.serverManagedField ?? null).toBeNull();
+	});
+});
+
+describe("oauth2 - first sign-in provisioning ignores input: false fields", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		user: {
+			additionalFields: {
+				googleSub: { type: "string", required: false },
+				serverManagedField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				mapProfileToUser(profile: GoogleProfile) {
+					return { googleSub: profile.sub, serverManagedField: "elevated" };
+				},
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("does not copy fields marked input: false from the provider on first sign-in", async () => {
+		const testEmail = "implicit-create-input-false@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub: "google_create_input_false",
+					email: testEmail,
+					email_verified: true,
+					name: "Created From Google",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
+
+		const user = await ctx.adapter.findOne<
+			User & { googleSub?: string; serverManagedField?: string | null }
+		>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		// The mapped, input-enabled field is still written...
+		expect(user?.googleSub).toBe("google_create_input_false");
+		// ...while the input: false field is ignored.
+		expect(user?.serverManagedField ?? null).toBeNull();
+	});
 });
 
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
+		user: {
+			additionalFields: {
+				serverManagedField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+			},
+		},
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
 				overrideUserInfoOnSignIn: true,
+				mapProfileToUser() {
+					return { serverManagedField: "elevated" };
+				},
 			},
 		},
 		account: {
@@ -1268,6 +1379,65 @@ describe("oauth2 - override user info on sign-in", async () => {
 		});
 
 		expect(session.data?.user.name).toBe("Updated Name");
+	});
+
+	it("does not copy fields marked input: false from the provider when overriding", async () => {
+		const testEmail = "override-input-false@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: testEmail,
+				name: "Initial Name",
+				emailVerified: true,
+			},
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_override_input_false",
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
+
+		const user = await ctx.adapter.findOne<
+			User & { serverManagedField?: string | null }
+		>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		// overrideUserInfo still applied the provider's name...
+		expect(user?.name).toBe("Updated Name");
+		// ...but the input: false field was ignored.
+		expect(user?.serverManagedField ?? null).toBeNull();
 	});
 });
 
