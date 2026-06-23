@@ -23,6 +23,15 @@ describe("oauth logout", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
+	// An unregistered, dynamic post-logout target (e.g. a per-branch preview deploy).
+	const previewLogoutRedirectUri =
+		"https://branch-xyz789.preview.example.com/logout/callback";
+	// Records every validateRedirectURI call so we can assert the flow type.
+	const seen: {
+		redirectURI: string;
+		clientId: string;
+		type: "authorize" | "logout";
+	}[] = [];
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
@@ -36,6 +45,18 @@ describe("oauth logout", async () => {
 					openidConfig: true,
 				},
 				scopes,
+				validateRedirectURI: ({ client, redirectURI, type }) => {
+					seen.push({ redirectURI, clientId: client.clientId, type });
+					try {
+						const url = new URL(redirectURI);
+						return (
+							url.protocol === "https:" &&
+							url.hostname.endsWith(".preview.example.com")
+						);
+					} catch {
+						return false;
+					}
+				},
 			}),
 			jwt(),
 		],
@@ -376,6 +397,135 @@ describe("oauth logout", async () => {
 		expect(logoutRedirectRes).toContain(logoutRedirectUri);
 		expect(logoutRedirectRes).toContain("state=123");
 		expect(logoutRes.error?.status).toBe(302);
+	});
+
+	it("accepts an unregistered post_logout_redirect_uri that validateRedirectURI approves", async () => {
+		// Register a client WITHOUT the preview URI so the exact-match check fails
+		// and the validateRedirectURI hook is consulted as a last resort.
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				enable_end_session: true,
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+			options: {
+				clientId: response.client_id,
+				clientSecret: response.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const tokens = await validateAuthCode({
+			code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+			codeVerifier,
+			options: {
+				clientId: response.client_id,
+				clientSecret: response.client_secret,
+			},
+		});
+		expect(tokens.data?.id_token).toBeDefined();
+
+		let logoutRedirectRes = "";
+		const logoutRes = await client.oauth2.endSession(
+			{
+				query: {
+					id_token_hint: tokens.data?.id_token!,
+					post_logout_redirect_uri: previewLogoutRedirectUri,
+					state: "123",
+				},
+			},
+			{
+				onResponse(ctx) {
+					logoutRedirectRes = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expect(logoutRedirectRes).toContain(previewLogoutRedirectUri);
+		expect(logoutRedirectRes).toContain("state=123");
+		expect(logoutRes.error?.status).toBe(302);
+		// The hook was consulted with the logout flow type and the resolved client.
+		expect(seen.at(-1)).toEqual({
+			redirectURI: previewLogoutRedirectUri,
+			clientId: response.client_id,
+			type: "logout",
+		});
+	});
+
+	it("rejects an unregistered post_logout_redirect_uri that validateRedirectURI declines", async () => {
+		const untrustedLogoutUri = "https://attacker.example.org/logout";
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				enable_end_session: true,
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+			options: {
+				clientId: response.client_id,
+				clientSecret: response.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const tokens = await validateAuthCode({
+			code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+			codeVerifier,
+			options: {
+				clientId: response.client_id,
+				clientSecret: response.client_secret,
+			},
+		});
+		expect(tokens.data?.id_token).toBeDefined();
+
+		let logoutRedirectRes = "";
+		await client.oauth2.endSession(
+			{
+				query: {
+					id_token_hint: tokens.data?.id_token!,
+					post_logout_redirect_uri: untrustedLogoutUri,
+					state: "123",
+				},
+			},
+			{
+				onResponse(ctx) {
+					logoutRedirectRes = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		// A declined URI must never receive a redirect: the session still ends, but
+		// the user agent is not sent to the untrusted host.
+		expect(logoutRedirectRes).toBe("");
+		expect(logoutRedirectRes).not.toContain("attacker.example.org");
+		expect(seen.at(-1)).toEqual({
+			redirectURI: untrustedLogoutUri,
+			clientId: response.client_id,
+			type: "logout",
+		});
 	});
 });
 

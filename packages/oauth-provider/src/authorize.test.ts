@@ -1430,7 +1430,11 @@ describe("oauth authorize - validateRedirectURI", async () => {
 		"https://branch-xyz789.preview.example.com/api/auth/oauth2/callback/test";
 
 	// Records every call so we can assert the hook receives the client + URI.
-	const seen: { redirectURI: string; clientId: string }[] = [];
+	const seen: {
+		redirectURI: string;
+		clientId: string;
+		type: "authorize" | "logout";
+	}[] = [];
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -1439,8 +1443,8 @@ describe("oauth authorize - validateRedirectURI", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
-				validateRedirectURI: ({ client, redirectURI }) => {
-					seen.push({ redirectURI, clientId: client.clientId });
+				validateRedirectURI: ({ client, redirectURI, type }) => {
+					seen.push({ redirectURI, clientId: client.clientId, type });
 					try {
 						const url = new URL(redirectURI);
 						return (
@@ -1507,10 +1511,12 @@ describe("oauth authorize - validateRedirectURI", async () => {
 		expect(callbackRedirectUrl).toContain("code=");
 		expect(callbackRedirectUrl).toContain("state=preview-state");
 		expect(callbackRedirectUrl).not.toContain("error=invalid_redirect");
-		// The hook was consulted with the requested URI and the resolved client.
+		// The hook was consulted with the requested URI, the resolved client, and
+		// the flow type.
 		expect(seen.at(-1)).toEqual({
 			redirectURI: previewRedirectUri,
 			clientId: oauthClient.client_id,
+			type: "authorize",
 		});
 	});
 

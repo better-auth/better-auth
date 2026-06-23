@@ -788,38 +788,50 @@ export interface OAuthOptions<
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<boolean | undefined>;
 	/**
-	 * Authorize a `redirect_uri` that is NOT among the client's registered
-	 * `redirectUris`.
+	 * Authorize a redirect URI that is NOT among the client's registered URIs.
 	 *
-	 * Called during `/authorize` ONLY after the built-in checks fail — i.e. the
-	 * requested URI did not exactly match any registered URI and was not an
-	 * RFC 8252 loopback-IP equivalent of one. Return `true` to accept the
-	 * requested URI as though it were registered; the authorization code is then
-	 * delivered to it.
+	 * Consulted in two flows, distinguished by `type`:
+	 *
+	 * - `"authorize"` — validates the `redirect_uri` at `/oauth2/authorize`.
+	 *   Called ONLY after the built-in checks fail, i.e. the requested URI did
+	 *   not exactly match any registered `redirectUris` entry and was not an
+	 *   RFC 8252 loopback-IP equivalent of one. Returning `true` delivers the
+	 *   authorization code to the requested URI as though it were registered.
+	 *
+	 * - `"logout"` — validates the `post_logout_redirect_uri` at RP-Initiated
+	 *   Logout. Called ONLY after the requested URI failed to exactly match any
+	 *   registered `postLogoutRedirectUris` entry. Returning `true` redirects the
+	 *   user agent there (with `state` echoed) after the session ends.
 	 *
 	 * Use this for dynamic or ephemeral redirect targets that cannot be
 	 * pre-registered — for example per-branch preview deployments whose
 	 * hostnames are not known ahead of time.
 	 *
-	 * SECURITY: the `redirect_uri` is where the authorization code is sent. A
-	 * permissive matcher is an open-redirector and authorization-code
-	 * exfiltration vector. Validate strictly: bind to the specific `client`,
-	 * require an exact scheme and host allow-list, and never accept apex
-	 * wildcards or user-controlled hosts.
+	 * SECURITY: a permissive matcher is an open redirector. For `"authorize"` it
+	 * additionally leaks the authorization code (an account-takeover vector), so
+	 * the bar is higher there. Validate strictly for BOTH types: bind to the
+	 * specific `client`, require an exact scheme and host allow-list, and never
+	 * accept apex wildcards or user-controlled hosts. Branch on `type` only to
+	 * make logout MORE permissive than authorize, never the reverse.
 	 *
 	 * @example
-	 * validateRedirectURI: ({ client, redirectURI }) => {
+	 * validateRedirectURI: ({ client, redirectURI, type }) => {
 	 * 	const url = new URL(redirectURI);
-	 * 	return (
-	 * 		url.protocol === "https:" &&
-	 * 		url.hostname.endsWith(`.${client.clientId}.preview.example.com`)
-	 * 	);
+	 * 	if (url.protocol !== "https:") return false;
+	 * 	return url.hostname.endsWith(`.${client.clientId}.preview.example.com`);
 	 * }
 	 */
 	validateRedirectURI?: (context: {
 		ctx: GenericEndpointContext;
 		client: SchemaClient<Scopes>;
 		redirectURI: string;
+		/**
+		 * Which flow is requesting validation:
+		 * - `"authorize"` — the `redirect_uri` at `/oauth2/authorize`. Delivers
+		 *   the authorization code, so validate most strictly.
+		 * - `"logout"` — the `post_logout_redirect_uri` at RP-Initiated Logout.
+		 */
+		type: "authorize" | "logout";
 	}) => Awaitable<boolean>;
 	/**
 	 * List default scopes when using the token endpoint's

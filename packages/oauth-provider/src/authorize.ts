@@ -528,6 +528,7 @@ export async function authorizeEndpoint(
 			ctx,
 			client,
 			redirectURI: query.redirect_uri,
+			type: "authorize",
 		});
 		if (accepted) {
 			redirectUri = query.redirect_uri;

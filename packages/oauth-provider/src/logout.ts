@@ -461,7 +461,21 @@ export async function rpInitiatedLogoutEndpoint(
 
 	if (post_logout_redirect_uri) {
 		const registeredUris = client.postLogoutRedirectUris;
-		if (registeredUris?.includes(post_logout_redirect_uri)) {
+		let accepted = registeredUris?.includes(post_logout_redirect_uri) ?? false;
+		// Last resort: let the server authorize a post_logout_redirect_uri that
+		// isn't registered (e.g. a dynamic/ephemeral preview deployment). Only
+		// consulted when the exact-match check above did not match, and the
+		// implementer is responsible for validating it strictly — see
+		// `validateRedirectURI` in the plugin options.
+		if (!accepted && opts.validateRedirectURI) {
+			accepted = await opts.validateRedirectURI({
+				ctx,
+				client,
+				redirectURI: post_logout_redirect_uri,
+				type: "logout",
+			});
+		}
+		if (accepted) {
 			const redirectUri = new URL(post_logout_redirect_uri);
 			if (state) {
 				redirectUri.searchParams.set("state", state);
