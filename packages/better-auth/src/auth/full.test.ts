@@ -348,6 +348,92 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		expect(tenantBCount).toBe(1);
 	});
 
+	/**
+	 * The router/endpoint table is built once per instance and reused, with only
+	 * the per-request context passed per call. For the no-baseURL config the host
+	 * is derived from the request, so the once-built router must not leak the
+	 * first request's host onto concurrent requests resolving to a different one.
+	 * @see https://github.com/better-auth/better-auth/issues/10188
+	 */
+	test("should isolate per-request host for concurrent requests without a configured baseURL", async () => {
+		const resolvedBaseURLs: string[] = [];
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: undefined,
+			advanced: { trustedProxyHeaders: true },
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					if (ctx.context.baseURL) {
+						resolvedBaseURLs.push(ctx.context.baseURL);
+					}
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+		});
+
+		resolvedBaseURLs.length = 0;
+
+		await Promise.all([
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-b.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		]);
+
+		expect(resolvedBaseURLs).toContain("https://tenant-a.example.com/api/auth");
+		expect(resolvedBaseURLs).toContain("https://tenant-b.example.com/api/auth");
+		const tenantACount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-a.example.com/api/auth",
+		).length;
+		const tenantBCount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-b.example.com/api/auth",
+		).length;
+		expect(tenantACount).toBe(1);
+		expect(tenantBCount).toBe(1);
+	});
+
+	/**
+	 * Direct `auth.api` calls go through the same per-request context resolver as
+	 * the HTTP handler, so a no-baseURL config resolves the host from a `request`
+	 * passed to the call instead of falling back to an empty baseURL.
+	 * @see https://github.com/better-auth/better-auth/issues/10188
+	 */
+	test("should resolve baseURL from a direct auth.api call's request when no baseURL is configured", async () => {
+		let resolvedBaseURL: string | undefined;
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: { trustedProxyHeaders: true },
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					resolvedBaseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+
+		const request = new Request(
+			"https://tenant.example.com/api/auth/get-session",
+			{
+				headers: {
+					"x-forwarded-host": "tenant.example.com",
+					"x-forwarded-proto": "https",
+				},
+			},
+		);
+		await auth.api.getSession({ headers: request.headers, request });
+
+		expect(resolvedBaseURL).toBe("https://tenant.example.com/api/auth");
+	});
+
 	test("should include all allowedHosts in trustedOrigins", async () => {
 		let trustedOrigins: string[] = [];
 		const { customFetchImpl } = await getTestInstance({

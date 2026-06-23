@@ -273,9 +273,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 export const router = <Option extends BetterAuthOptions>(
 	ctx: AuthContext,
 	options: Option,
+	basePathBaseURL?: string,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);
-	const basePath = new URL(ctx.baseURL).pathname;
+	// Request-invariant (only the origin varies, not the pathname), so the
+	// router can be built once from the first request's baseURL.
+	const basePath = new URL(basePathBaseURL ?? ctx.baseURL).pathname;
 
 	return createRouter(api, {
 		routerContext: ctx,
@@ -292,16 +295,17 @@ export const router = <Option extends BetterAuthOptions>(
 		],
 		allowedMediaTypes: ["application/json"],
 		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
-		async onRequest(req) {
+		async onRequest(req, requestContext) {
+			const rctx = requestContext ?? ctx;
 			//handle disabled paths
-			const disabledPaths = ctx.options.disabledPaths || [];
+			const disabledPaths = rctx.options.disabledPaths || [];
 			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
 
 			let currentRequest = req;
-			for (const plugin of ctx.options.plugins || []) {
+			for (const plugin of rctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await withSpan(
 						`onRequest ${plugin.id}`,
@@ -309,7 +313,7 @@ export const router = <Option extends BetterAuthOptions>(
 							[ATTR_HOOK_TYPE]: "onRequest",
 							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
 						},
-						() => plugin.onRequest!(currentRequest, ctx),
+						() => plugin.onRequest!(currentRequest, rctx),
 					);
 					if (response && "response" in response) {
 						return response.response;
@@ -320,15 +324,16 @@ export const router = <Option extends BetterAuthOptions>(
 				}
 			}
 
-			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, rctx);
 			if (rateLimitResponse) {
 				return rateLimitResponse;
 			}
 
 			return currentRequest;
 		},
-		async onResponse(res, req) {
-			for (const plugin of ctx.options.plugins || []) {
+		async onResponse(res, _req, requestContext) {
+			const rctx = requestContext ?? ctx;
+			for (const plugin of rctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
 						`onResponse ${plugin.id}`,
@@ -337,7 +342,7 @@ export const router = <Option extends BetterAuthOptions>(
 							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
 							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
 						},
-						() => plugin.onResponse!(res, ctx),
+						() => plugin.onResponse!(res, rctx),
 					);
 					if (response) {
 						return response.response;
@@ -346,7 +351,8 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 			return res;
 		},
-		onError(e) {
+		onError(e, _req, requestContext) {
+			const rctx = requestContext ?? ctx;
 			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
@@ -354,7 +360,7 @@ export const router = <Option extends BetterAuthOptions>(
 				throw e;
 			}
 			if (options.onAPIError?.onError) {
-				options.onAPIError.onError(e, ctx);
+				options.onAPIError.onError(e, rctx);
 				return;
 			}
 
@@ -379,18 +385,18 @@ export const router = <Option extends BetterAuthOptions>(
 						e.message.includes("table") ||
 						e.message.includes("does not exist")
 					) {
-						ctx.logger?.error(e.message);
+						rctx.logger?.error(e.message);
 						return;
 					}
 				}
 
 				if (isAPIError(e)) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
-						ctx.logger.error(e.status, e);
+						rctx.logger.error(e.status, e);
 					}
 					log?.error(e.message);
 				} else {
-					ctx.logger?.error(
+					rctx.logger?.error(
 						e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 						e,
 					);
