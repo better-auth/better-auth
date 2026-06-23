@@ -201,29 +201,45 @@ export function resolveDynamicTrustedProxyHeaders(
 }
 
 /**
- * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
- * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
- * when the URL cannot be resolved; callers on the direct-API path convert
- * this to `APIError`.
+ * Resolves the per-request {@link AuthContext} for any baseURL config, overlaying
+ * the request-varying slice onto a clone without mutating the shared context.
+ * Throws for an unresolvable dynamic host; returns the shared context unchanged
+ * for a static no-baseURL config with no request.
  */
 export async function resolveRequestContext(
 	ctx: AuthContext,
 	source?: Request | Headers,
-	trustedProxyHeaders?: boolean,
 ): Promise<AuthContext> {
-	const dynamicBaseURLConfig = ctx.options.baseURL;
+	const config = ctx.options.baseURL;
+	const isDynamic = isDynamicBaseURLConfig(config);
+	const hasRequestDependentTrust =
+		typeof ctx.options.trustedOrigins === "function" ||
+		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
+	// Already resolved at init and nothing varies per request.
+	if (!isDynamic && !hasRequestDependentTrust && ctx.baseURL) {
+		return ctx;
+	}
+
 	const basePath = ctx.options.basePath || "/api/auth";
+	// Dynamic validates the host itself, so proxy headers default to trusted;
+	// static keeps the user's setting to avoid trusting a spoofable host.
+	const trustedProxyHeaders = isDynamic
+		? resolveDynamicTrustedProxyHeaders(ctx.options)
+		: ctx.options.advanced?.trustedProxyHeaders;
 	const baseURL = resolveBaseURL(
-		dynamicBaseURLConfig,
+		config,
 		basePath,
 		source,
 		undefined,
 		trustedProxyHeaders,
 	);
 	if (!baseURL) {
-		throw new BetterAuthError(
-			"Could not resolve base URL from request. Check your allowedHosts config.",
-		);
+		if (isDynamic) {
+			throw new BetterAuthError(
+				"Could not resolve base URL from request. Check your allowedHosts config.",
+			);
+		}
+		return ctx;
 	}
 
 	const resolved = Object.create(
@@ -236,27 +252,19 @@ export async function resolveRequestContext(
 		baseURL: getOrigin(baseURL) || undefined,
 	};
 
-	// Pass the dynamic config so getTrustedOrigins can expand `allowedHosts`.
-	const trustedOriginOptions: BetterAuthOptions = {
-		...resolved.options,
-		baseURL: dynamicBaseURLConfig,
-	};
+	// Dynamic needs the config for `allowedHosts` expansion; static already has
+	// the resolved origin in `resolved.options.baseURL`.
+	const trustedOriginOptions: BetterAuthOptions = isDynamic
+		? { ...resolved.options, baseURL: config }
+		: resolved.options;
 	// Only synthesize a Request for the user-facing callbacks that need one.
-	const needsRequest =
-		typeof ctx.options.trustedOrigins === "function" ||
-		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
-	let callbackRequest: Request | undefined;
-	if (needsRequest) {
-		if (isRequestLike(source)) {
-			callbackRequest = source;
-		} else if (source) {
-			callbackRequest = new Request(baseURL, { headers: source });
-		} else {
-			callbackRequest = undefined;
-		}
-	} else {
-		callbackRequest = undefined;
-	}
+	const callbackRequest: Request | undefined = !hasRequestDependentTrust
+		? undefined
+		: isRequestLike(source)
+			? source
+			: source
+				? new Request(baseURL, { headers: source })
+				: undefined;
 	resolved.trustedOrigins = await getTrustedOrigins(
 		trustedOriginOptions,
 		callbackRequest,
