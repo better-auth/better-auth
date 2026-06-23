@@ -9,6 +9,7 @@ export function getSchema(config: BetterAuthOptions) {
 		{
 			fields: Record<string, DBFieldAttribute>;
 			order: number;
+			disableMigrations?: boolean | undefined;
 		}
 	> = {};
 	for (const key in tables) {
@@ -38,6 +39,7 @@ export function getSchema(config: BetterAuthOptions) {
 		schema[table.modelName] = {
 			fields: actualFields,
 			order: table.order || Infinity,
+			disableMigrations: table.disableMigrations,
 		};
 	}
 	return schema;
