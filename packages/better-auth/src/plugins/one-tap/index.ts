@@ -133,6 +133,11 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// matches the redirect sign-in flow, which rejects tokens whose
 					// `hd` claim is missing or does not equal the configured value.
 					if (googleProvider?.hd && payload.hd !== googleProvider.hd) {
+						ctx.context.logger.error(
+							`Google One Tap sign-in rejected: id token hosted domain (hd) "${
+								payload.hd ?? "<missing>"
+							}" does not match the configured "hd" option "${googleProvider.hd}".`,
+						);
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
