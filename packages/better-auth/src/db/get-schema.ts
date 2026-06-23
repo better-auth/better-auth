@@ -34,6 +34,9 @@ export function getSchema(config: BetterAuthOptions) {
 				...schema[table.modelName]!.fields,
 				...actualFields,
 			};
+			if (table.disableMigrations) {
+				schema[table.modelName]!.disableMigrations = true;
+			}
 			continue;
 		}
 		schema[table.modelName] = {
