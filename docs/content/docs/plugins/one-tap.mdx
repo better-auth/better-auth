@@ -205,6 +205,21 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 * `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
 * `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
 
+<Callout type="info">
+  **Restricting to a Google Workspace domain (`hd`)**
+
+  The One Tap callback applies the hosted-domain restriction from
+  `socialProviders.google.hd`, matching the standard Google sign-in flow:
+  when `hd` is set, a token whose `hd` claim is missing or does not match is
+  rejected.
+
+  This value is read from `socialProviders.google`, so the restriction only
+  applies when you configure the Google provider. If you set up One Tap with
+  only `oneTap({ clientId })` and no `socialProviders.google`, no
+  hosted-domain restriction is applied. To restrict One Tap sign-in to a
+  Workspace domain, configure `socialProviders.google` with `hd`.
+</Callout>
+
 ### Authorized JavaScript origins
 
 Ensure you have configured the Authorized JavaScript origins (e.g., [http://localhost:3000](http://localhost:3000), [https://example.com](https://example.com)) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.

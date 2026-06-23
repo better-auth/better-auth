@@ -129,6 +129,14 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "invalid id token",
 						});
 					}
+					// Apply the configured Google hosted domain (`hd`) so One Tap
+					// matches the redirect sign-in flow, which rejects tokens whose
+					// `hd` claim is missing or does not equal the configured value.
+					if (googleProvider?.hd && payload.hd !== googleProvider.hd) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
 					const {
 						email: rawEmail,
 						email_verified,

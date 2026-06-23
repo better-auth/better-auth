@@ -462,3 +462,102 @@ describe("one-tap audience enforcement", async () => {
 		);
 	});
 });
+
+describe("one-tap hosted domain (hd)", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+		(verifiedPayload as Record<string, unknown>).hd = undefined;
+	});
+
+	const withHd = {
+		clientId: "test-client",
+		clientSecret: "test-secret",
+		enabled: true,
+		hd: "company.com",
+	};
+
+	it("rejects a token whose hd does not match the configured value", async () => {
+		verifiedPayload.email = "one-tap-hd-mismatch@other.com";
+		verifiedPayload.sub = "one-tap-hd-mismatch-sub";
+		(verifiedPayload as Record<string, unknown>).hd = "other.com";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: withHd },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("rejects a token with no hd when one is configured", async () => {
+		verifiedPayload.email = "one-tap-hd-missing@company.com";
+		verifiedPayload.sub = "one-tap-hd-missing-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: withHd },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("accepts a token whose hd matches the configured value", async () => {
+		verifiedPayload.email = "one-tap-hd-match@company.com";
+		verifiedPayload.sub = "one-tap-hd-match-sub";
+		(verifiedPayload as Record<string, unknown>).hd = "company.com";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: withHd },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+
+	it("ignores the token hd when no hosted domain is configured", async () => {
+		verifiedPayload.email = "one-tap-no-hd-config@anywhere.com";
+		verifiedPayload.sub = "one-tap-no-hd-config-sub";
+		(verifiedPayload as Record<string, unknown>).hd = "anywhere.com";
+
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+});
