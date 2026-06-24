@@ -1,6 +1,11 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import { decodeJwt } from "jose";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
@@ -11,14 +16,28 @@ export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 }
 
 interface MicrosoftEntraIdProfile {
-	sub: string;
+	sub?: string;
+	oid?: string;
+	tid?: string;
 	name?: string;
 	email?: string;
 	preferred_username?: string;
 	picture?: string;
 	given_name?: string;
 	family_name?: string;
+	givenname?: string;
+	familyname?: string;
 	email_verified?: boolean;
+}
+
+function getMicrosoftProfileName(profile: MicrosoftEntraIdProfile) {
+	return (
+		profile.name ??
+		(`${profile.given_name ?? profile.givenname ?? ""} ${
+			profile.family_name ?? profile.familyname ?? ""
+		}`.trim() ||
+			undefined)
+	);
 }
 
 /**
@@ -55,7 +74,34 @@ export function microsoftEntraId(
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
+		if (!tokens.idToken) {
+			return null;
+		}
+
+		let tokenProfile: MicrosoftEntraIdProfile;
+		try {
+			tokenProfile = decodeJwt(tokens.idToken) as MicrosoftEntraIdProfile;
+		} catch {
+			return null;
+		}
+
+		const accountId =
+			typeof tokenProfile.oid === "string" && tokenProfile.oid.length > 0
+				? tokenProfile.oid
+				: undefined;
+		const tokenUserInfo = {
+			...tokenProfile,
+			...(accountId !== undefined ? { id: accountId } : {}),
+			name: getMicrosoftProfileName(tokenProfile),
+			email: tokenProfile.email ?? tokenProfile.preferred_username ?? undefined,
+			image: tokenProfile.picture,
+			emailVerified: tokenProfile.email_verified ?? false,
+		};
+		if (!accountId || !tokens.accessToken) {
+			return tokenUserInfo;
+		}
+
 		const { data: profile, error } = await betterFetch<MicrosoftEntraIdProfile>(
 			userInfoUrl,
 			{
@@ -66,23 +112,37 @@ export function microsoftEntraId(
 		);
 
 		if (error || !profile) {
-			return null;
+			return tokenUserInfo;
+		}
+		if (
+			typeof profile.sub === "string" &&
+			typeof tokenProfile.sub === "string" &&
+			profile.sub !== tokenProfile.sub
+		) {
+			return tokenUserInfo;
 		}
 
-		return {
-			id: profile.sub,
+		const profileWithClaims = {
+			...profile,
+			...tokenProfile,
+			id: accountId,
 			name:
-				profile.name ??
-				(`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() ||
-					undefined),
-			email: profile.email ?? profile.preferred_username ?? undefined,
-			image: profile.picture,
+				getMicrosoftProfileName(tokenProfile) ??
+				getMicrosoftProfileName(profile),
+			email:
+				tokenProfile.email ??
+				profile.email ??
+				tokenProfile.preferred_username ??
+				profile.preferred_username ??
+				undefined,
+			image: tokenProfile.picture ?? profile.picture,
 			// Note: Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
-			// We default to false when not provided
-			// The built-in provider hardcodes this to true, assuming Microsoft accounts are verified.
-			emailVerified: profile.email_verified ?? false,
+			// We default to false when not provided.
+			emailVerified:
+				tokenProfile.email_verified ?? profile.email_verified ?? false,
 		};
+		return profileWithClaims;
 	};
 
 	return {
@@ -99,6 +159,7 @@ export function microsoftEntraId(
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
 		overrideUserInfo: options.overrideUserInfo,
+		disableImplicitSubAccountId: true,
 		getUserInfo,
 	};
 }

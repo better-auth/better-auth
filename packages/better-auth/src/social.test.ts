@@ -2158,6 +2158,7 @@ describe("Microsoft Provider", async () => {
 		)
 			.setProtectedHeader({ alg: "RS256", kid: msKid })
 			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-456/v2.0")
 			.setAudience("test-ms-client-jwks")
 			.setExpirationTime("1h")
 			.sign(rsaKeyPair.privateKey);
@@ -2187,7 +2188,7 @@ describe("Microsoft Provider", async () => {
 			}),
 		);
 
-		const { client, cookieSetter } = await getTestInstance(
+		const { auth, client, cookieSetter } = await getTestInstance(
 			{
 				socialProviders: {
 					microsoft: {
@@ -2232,6 +2233,13 @@ describe("Microsoft Provider", async () => {
 
 		expect(session.data?.user.email).toBe("jwksuser@outlook.com");
 		expect(session.data?.user.name).toBe("JWKS User");
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data!.user.id,
+		);
+		expect(
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
+		).toBe("ms-oid-456");
 	});
 
 	it("should support id token sign in", async () => {
@@ -2267,7 +2275,7 @@ describe("Microsoft Provider", async () => {
 			}),
 		);
 
-		const { client } = await getTestInstance(
+		const { auth, client } = await getTestInstance(
 			{
 				socialProviders: {
 					microsoft: {
@@ -2293,11 +2301,79 @@ describe("Microsoft Provider", async () => {
 		expect(res.data!.redirect).toBe(false);
 		const data = res.data as {
 			token: string;
-			user: { email: string; name: string };
+			user: { id: string; email: string; name: string };
 		};
 		expect(data.token).toBeDefined();
 		expect(data.user.email).toBe("id-tokenuser@outlook.com");
 		expect(data.user.name).toBe("IdToken User");
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(data.user.id);
+		expect(
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
+		).toBe("ms-oid-789");
+	});
+
+	it("should reject id token sign in when oid is missing", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-missing-oid-user",
+			email: "missing-oid@outlook.com",
+			name: "Missing Oid User",
+			tid: "ms-tenant-missing-oid",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-missing-oid/v2.0")
+			.setAudience("test-ms-client-missing-oid")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-missing-oid",
+						clientSecret: "test-ms-secret-missing-oid",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.error?.status).toBe(401);
+		const ctx = await auth.$context;
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "microsoft" }],
+		});
+		expect(accounts).toHaveLength(0);
 	});
 
 	it("should report id_token sign-in unsupported when disableIdTokenSignIn is true", async () => {
@@ -2363,6 +2439,7 @@ describe("Microsoft Provider", async () => {
 			sub: "ms-tenant-user",
 			email: "tenant@outlook.com",
 			name: "Tenant User",
+			oid: "ms-tenant-oid",
 			tid: tenantId,
 		};
 

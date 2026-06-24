@@ -151,6 +151,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
+	 * Disable falling back to the profile's `sub` claim as the account id when
+	 * `id` and `mapProfileToUser().id` are absent. Provider helpers can use this
+	 * when `sub` is available for custom mapping but must not be stored as the
+	 * default account id.
+	 */
+	disableImplicitSubAccountId?: boolean | undefined;
+	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
