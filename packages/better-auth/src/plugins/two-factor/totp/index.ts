@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
+import { base32 } from "@better-auth/utils/base32";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
@@ -47,6 +48,23 @@ export type TOTPOptions = {
 	 * Disable totp
 	 */
 	disable?: boolean | undefined;
+	/**
+	 * How the stored secret is interpreted as an HMAC key.
+	 *
+	 * - `"string"` (default): current behavior — the secret string is encoded
+	 *   with TextEncoder before being used as the HMAC key. Works correctly
+	 *   for fresh Better Auth enrollments.
+	 *
+	 * - `"raw"`: RFC 6238 compliant — the stored secret is treated as a
+	 *   base32-encoded string and decoded to raw bytes before use as the HMAC
+	 *   key. This matches the convention used by Google Authenticator, Authy,
+	 *   Lucia, Auth.js, oslo, otplib, speakeasy, and most other libraries.
+	 *   Use this when migrating existing TOTP enrollments from RFC-compliant
+	 *   libraries to Better Auth.
+	 *
+	 * @default "string"
+	 */
+	secretEncoding?: "string" | "raw" | undefined;
 };
 
 const generateTOTPBodySchema = z.object({
@@ -72,6 +90,23 @@ const verifyTOTPBodySchema = z.object({
 		})
 		.optional(),
 });
+
+/**
+ * Resolves a stored TOTP secret to the value passed to createOTP.
+ *
+ * In "raw" mode the stored value is a base32 string (RFC 6238 convention).
+ * We decode it to raw bytes and convert to a latin-1 string so that
+ * TextEncoder.encode() inside createHMAC produces the same byte sequence
+ * that authenticator apps derive from base32_decode(secret).
+ */
+function resolveSecret(
+	secret: string,
+	encoding: "string" | "raw" | undefined,
+): string {
+	if (encoding !== "raw") return secret;
+	const raw = base32.decode(secret);
+	return String.fromCharCode(...raw);
+}
 
 export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
@@ -209,7 +244,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				await ctx.context.password.checkPassword(user.id, ctx);
 			}
-			const totpURI = createOTP(secret, {
+			const totpURI = createOTP(resolveSecret(secret, options?.secretEncoding), {
 				digits: opts.digits,
 				period: opts.period,
 			}).url(options?.issuer || ctx.context.appName, user.email);
@@ -285,7 +320,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				key: ctx.context.secretConfig,
 				data: twoFactor.secret,
 			});
-			const status = await createOTP(decrypted, {
+			const status = await createOTP(resolveSecret(decrypted, options?.secretEncoding), {
 				period: opts.period,
 				digits: opts.digits,
 			}).verify(ctx.body.code);
