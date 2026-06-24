@@ -113,4 +113,52 @@ describe("getAuthTables", () => {
 
 		expect(tables.verification).toBeDefined();
 	});
+
+	it("should propagate disableMigration from a plugin schema onto the table", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						skipped: {
+							fields: { name: { type: "string" } },
+							disableMigration: true,
+						},
+						kept: {
+							fields: { name: { type: "string" } },
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.skipped!.disableMigrations).toBe(true);
+		expect(tables.kept!.disableMigrations).toBeUndefined();
+	});
+
+	it("should keep disableMigration when plugins accumulate the same table key", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "a",
+					schema: {
+						shared: {
+							fields: { a: { type: "string" } },
+							disableMigration: true,
+						},
+					},
+				},
+				{
+					id: "b",
+					schema: {
+						shared: {
+							fields: { b: { type: "string" } },
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.shared!.disableMigrations).toBe(true);
+	});
 });
