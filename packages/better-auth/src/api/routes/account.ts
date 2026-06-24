@@ -284,20 +284,25 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
-			const existingAccounts = await c.context.internalAdapter.findAccounts(
-				session.user.id,
-			);
+			const linkedAccount =
+				await c.context.internalAdapter.findAccountByProviderId(
+					linkingUserId,
+					provider.id,
+				);
 
-			const hasBeenLinked = existingAccounts.find(
-				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
-			);
+			if (linkedAccount) {
+				if (linkedAccount.userId === session.user.id) {
+					return c.json({
+						url: "", // this is for type inference
+						status: true,
+						redirect: false,
+					});
+				}
 
-			if (hasBeenLinked) {
-				return c.json({
-					url: "", // this is for type inference
-					status: true,
-					redirect: false,
-				});
+				throw APIError.from(
+					"CONFLICT",
+					BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
+				);
 			}
 
 			const isTrustedProvider = c.context.trustedProviders.includes(
