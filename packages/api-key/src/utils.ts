@@ -15,9 +15,8 @@ export function isAPIError(error: unknown): error is APIError {
 
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isDevelopment, isTest } from "@better-auth/core/env";
-import { isValidIP, normalizeIP } from "@better-auth/core/utils/ip";
+import { getIPFromHeader } from "@better-auth/core/utils/ip";
 
-// Localhost IP used for test and development environments
 const LOCALHOST_IP = "127.0.0.1";
 
 export function getIp(
@@ -38,11 +37,12 @@ export function getIp(
 	for (const key of ipHeaders) {
 		const value = "get" in headers ? headers.get(key) : headers[key];
 		if (typeof value === "string") {
-			const ip = value.split(",")[0]!.trim();
-			if (isValidIP(ip)) {
-				return normalizeIP(ip, {
-					ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
-				});
+			const ip = getIPFromHeader(value, {
+				ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
+				trustedProxies: options.advanced?.ipAddress?.trustedProxies,
+			});
+			if (ip) {
+				return ip;
 			}
 		}
 	}

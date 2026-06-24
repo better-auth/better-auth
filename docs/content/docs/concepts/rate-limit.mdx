@@ -74,6 +74,41 @@ export const auth = betterAuth({
 })
 ```
 
+By default Better Auth does not trust comma-separated forwarded IP chains, since
+the leftmost `X-Forwarded-For` token is client-controlled behind an appending
+proxy. Behind a reverse proxy or load balancer, do one of the following.
+
+Point `ipAddressHeaders` at a single trusted header your proxy sets (for example
+`x-real-ip` or `cf-connecting-ip`):
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    advanced: {
+        ipAddress: {
+            ipAddressHeaders: ["x-real-ip"],
+        },
+    },
+})
+```
+
+Or list your proxies in `trustedProxies`. Better Auth walks the chain right to
+left, skips the trusted hops, and takes the first untrusted address as the client:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    advanced: {
+        ipAddress: {
+            // your proxies' addresses, not a broad private range that also covers clients
+            trustedProxies: ["192.0.2.10", "10.0.0.0/24"],
+        },
+    },
+})
+```
+
+For the forwarded chain to be reliable, requests should reach Better Auth only
+through these proxies, so keep your origin reachable through the proxy rather than
+directly.
+
 #### IPv6 Address Support
 
 Better Auth automatically normalizes IPv6 addresses to prevent bypass attacks where attackers use different representations of the same IPv6 address (e.g., `2001:db8::1` vs `2001:0db8:0000:0000:0000:0000:0000:0001`). This ensures that all representations of the same IPv6 address are treated as the same for rate limiting purposes.

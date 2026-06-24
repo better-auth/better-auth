@@ -240,6 +240,16 @@ export type BetterAuthAdvancedOptions = {
 				 * @default 64
 				 */
 				ipv6Subnet?: number;
+				/**
+				 * Trusted reverse-proxy IPs or CIDR ranges. When set, a forwarded IP
+				 * chain is walked right to left, trusted hops are skipped, and the
+				 * first untrusted address is the client IP. Unset trusts only
+				 * single-value IP headers. Use the actual address or subnet of your
+				 * proxies, not a broad private range that also covers clients.
+				 *
+				 * @example ["192.0.2.10", "10.0.0.0/24"]
+				 */
+				trustedProxies?: string[];
 		  }
 		| undefined;
 	/**
