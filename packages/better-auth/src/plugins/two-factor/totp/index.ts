@@ -8,13 +8,14 @@ import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import { beginTwoFactorAttempt, verifyTwoFactor } from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
@@ -258,7 +259,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid, key } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
 			const isSignIn = !session.session;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -281,6 +282,16 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
+			// Enforce the per-challenge attempt budget on the sign-in path. The
+			// re-verify branch (already authenticated, e.g. enabling TOTP) has no
+			// challenge counter, so it is not gated.
+			const attempt = isSignIn
+				? await beginTwoFactorAttempt(
+						ctx,
+						key,
+						DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS,
+					)
+				: null;
 			const decrypted = await symmetricDecrypt({
 				key: ctx.context.secretConfig,
 				data: twoFactor.secret,
@@ -290,6 +301,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				digits: opts.digits,
 			}).verify(ctx.body.code);
 			if (!status) {
+				await attempt?.recordFailure();
 				return invalid("INVALID_CODE");
 			}
 
