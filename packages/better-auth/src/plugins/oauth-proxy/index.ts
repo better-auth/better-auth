@@ -108,6 +108,21 @@ type PassthroughPayload = {
 	timestamp: number;
 };
 
+const consumeOAuthProxyState = async (
+	ctx: GenericEndpointContext,
+	state: string,
+) => {
+	try {
+		await parseGenericState(ctx, state, {
+			skipStateCookieCheck: true,
+		});
+		return true;
+	} catch (e) {
+		ctx.context.logger.warn("OAuth proxy state missing or invalid", e);
+		return false;
+	}
+};
+
 const oauthProxyQuerySchema = z.object({
 	callbackURL: z.string().meta({
 		description: "The URL to redirect to after the proxy",
@@ -219,6 +234,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						typeof payload.timestamp !== "number" ||
 						!payload.userInfo ||
 						!payload.account ||
+						!payload.state ||
 						!payload.callbackURL
 					) {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload");
@@ -237,13 +253,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "payload_expired");
 					}
 
-					// Clean up OAuth state
-					try {
-						await parseGenericState(ctx, payload.state, {
-							skipStateCookieCheck: true,
-						});
-					} catch (e) {
-						ctx.context.logger.warn("Failed to clean up OAuth state", e);
+					const stateConsumed = await consumeOAuthProxyState(
+						ctx,
+						payload.state,
+					);
+					if (!stateConsumed) {
+						throw redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
 					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
