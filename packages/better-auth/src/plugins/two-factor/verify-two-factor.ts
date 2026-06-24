@@ -135,6 +135,44 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				user,
 			},
 			key: signedTwoFactorCookie,
+			beginAttempt: async (allowedAttempts: number) => {
+				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
+				const consumed = await ctx.context.internalAdapter
+					.consumeVerificationValue(identifier)
+					.catch(() => null);
+				let attempts = 0;
+				if (consumed) {
+					const parsed = Number(consumed.value);
+					// A corrupt counter fails closed (treated as spent).
+					attempts =
+						Number.isInteger(parsed) && parsed >= 0 ? parsed : allowedAttempts;
+				}
+				if (attempts >= allowedAttempts) {
+					// Budget spent: cancel the whole challenge so every factor must
+					// start a new sign-in, and clear the now-dead cookie.
+					await ctx.context.internalAdapter
+						.consumeVerificationValue(signedTwoFactorCookie)
+						.catch(() => {});
+					expireCookie(ctx, twoFactorCookie);
+					throw APIError.from(
+						"BAD_REQUEST",
+						TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+					);
+				}
+				return {
+					recordFailure: async () => {
+						// A write failure must not mask the wrong-code response; the
+						// rate limit backstops the un-incremented budget.
+						await ctx.context.internalAdapter
+							.createVerificationValue({
+								value: `${attempts + 1}`,
+								identifier,
+								expiresAt: verificationToken.expiresAt,
+							})
+							.catch(() => {});
+					},
+				};
+			},
 		};
 	}
 	return {
@@ -147,53 +185,9 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		invalid,
 		session,
 		key: `${session.user.id}!${session.session.id}`,
-	};
-}
-
-/**
- * Consume the per-challenge attempt counter for a sign-in 2FA verification and
- * enforce the attempt budget. The counter row (`2fa-attempts-${key}`) is created
- * alongside the challenge in the sign-in after-hook.
- *
- * `verify-otp` keeps its own counter on the code row; this covers `verify-totp`
- * and `verify-backup-code`, which have no per-code row to ride a counter on.
- *
- * The consume is the atomic race gate: the first concurrent submission wins the
- * row, every other racer (and a spent or expired counter) receives `null`, so a
- * burst of guesses cannot be raced past the budget. Returns a `recordFailure`
- * callback the caller invokes on a wrong code to re-arm the counter under the
- * original challenge expiry; a correct code leaves the row consumed so the
- * challenge cannot be reused.
- *
- * TODO(totp-attempt-cap): superseded by the per-sign-in-attempt budget in the
- * two-factor rewrite (RFC 0012 / PR #9278), which unifies all factors on the
- * `signInAttempt` table. Remove this helper with the per-challenge counter.
- */
-export async function beginTwoFactorAttempt(
-	ctx: GenericEndpointContext,
-	key: string,
-	allowedAttempts: number,
-) {
-	const identifier = `2fa-attempts-${key}`;
-	const consumed =
-		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
-	const attempts = consumed ? Number.parseInt(consumed.value, 10) || 0 : 0;
-	if (!consumed || attempts >= allowedAttempts) {
-		// No counter row means the challenge is expired or the budget is already
-		// spent; either way the challenge is locked. Leaving a spent row consumed
-		// keeps it locked for every later submission.
-		throw APIError.from(
-			"BAD_REQUEST",
-			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
-		);
-	}
-	return {
-		recordFailure: async () => {
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${attempts + 1}`,
-				identifier,
-				expiresAt: consumed.expiresAt,
-			});
-		},
+		// Re-verification is already authenticated, so it carries no attempt cap.
+		beginAttempt: async (_allowedAttempts: number) => ({
+			recordFailure: async () => {},
+		}),
 	};
 }

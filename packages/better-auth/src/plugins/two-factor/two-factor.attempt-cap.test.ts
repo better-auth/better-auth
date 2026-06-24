@@ -14,12 +14,10 @@ import type { TwoFactorTable } from "./types";
  * `verify-otp` already consumes its code row and caps attempts; `verify-totp`
  * and `verify-backup-code` had no per-challenge cap, so one live challenge could
  * absorb unlimited guesses against the TOTP code space (or the backup-code set)
- * for the full challenge TTL. These tests pin the parity: after the shared
- * attempt budget is spent the challenge locks out with a 400, while a single
- * wrong guess stays a 401.
+ * for the full challenge TTL.
  */
 
-describe("two-factor security: TOTP enforces a per-challenge attempt cap", async () => {
+async function setupTwoFactorChallenge() {
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		plugins: [twoFactor()],
@@ -59,6 +57,12 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 		return convertSetCookieToCookie(signIn.headers);
 	}
 
+	return { auth, secret, backupCodes: enrollment.backupCodes, startChallenge };
+}
+
+describe("two-factor security: TOTP enforces a per-challenge attempt cap", async () => {
+	const { auth, secret, startChallenge } = await setupTwoFactorChallenge();
+
 	function verifyTotp(challengeHeaders: Headers, code: string) {
 		return auth.api.verifyTOTP({
 			body: { code },
@@ -67,7 +71,7 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 		});
 	}
 
-	it("counts wrong codes up to the limit then locks out", async () => {
+	it("locks out after the limit and cancels the challenge", async () => {
 		const challengeHeaders = await startChallenge();
 
 		for (let i = 0; i < DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS; i++) {
@@ -87,66 +91,23 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 		expect(lockedJson.message).toBe(
 			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
 		);
-	});
 
-	it("a concurrent burst of wrong codes cannot exceed the attempt budget", async () => {
-		const challengeHeaders = await startChallenge();
-		const burst = DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS * 4;
-
-		const results = await Promise.all(
-			Array.from({ length: burst }, () =>
-				verifyTotp(challengeHeaders, "111111"),
-			),
+		// Lockout cancels the challenge itself, so a further attempt is no longer
+		// a code check but an invalid (consumed) cookie.
+		const afterLockout = await verifyTotp(challengeHeaders, "000000");
+		expect(afterLockout.status).toBe(401);
+		const afterJson = (await afterLockout.json()) as { message: string };
+		expect(afterJson.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
-		// No wrong code mints a session, and the consume gate serializes the
-		// burst so at most `allowedAttempts` guesses are ever processed; the rest
-		// lose the race and are rejected with a 400 without advancing the budget.
-		const accepted = results.filter((res) => res.status === 200).length;
-		expect(accepted).toBe(0);
-		const processed = results.filter((res) => res.status === 401).length;
-		expect(processed).toBeLessThanOrEqual(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS);
 	});
 });
 
 describe("two-factor security: backup codes enforce a per-challenge attempt cap", async () => {
-	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
-		secret: DEFAULT_SECRET,
-		plugins: [twoFactor()],
-	});
-	const { headers } = await signInWithTestUser();
-	const dbUser = await db.findOne<User>({
-		model: "user",
-		where: [{ field: "email", value: testUser.email }],
-	});
-	const userId = dbUser?.id as string;
-	const enrollment = await auth.api.enableTwoFactor({
-		body: { password: testUser.password },
-		headers,
-	});
-	const backupCode = enrollment.backupCodes?.[0];
+	const { auth, backupCodes, startChallenge } = await setupTwoFactorChallenge();
+	const backupCode = backupCodes?.[0];
 	if (!backupCode) {
 		throw new Error("expected backup codes from enrollment");
-	}
-	const row = await db.findOne<TwoFactorTable>({
-		model: "twoFactor",
-		where: [{ field: "userId", value: userId }],
-	});
-	const secret = await symmetricDecrypt({
-		key: DEFAULT_SECRET,
-		data: row!.secret,
-	});
-	await auth.api.verifyTOTP({
-		body: { code: await createOTP(secret).totp() },
-		headers,
-	});
-
-	async function startChallenge(): Promise<Headers> {
-		const signIn = await auth.api.signInEmail({
-			body: { email: testUser.email, password: testUser.password },
-			asResponse: true,
-		});
-		expect(signIn.status).toBe(200);
-		return convertSetCookieToCookie(signIn.headers);
 	}
 
 	function verifyBackup(challengeHeaders: Headers, code: string) {

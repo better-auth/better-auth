@@ -490,23 +490,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
-						const expiresAt = new Date(Date.now() + maxAge * 1000);
 						await ctx.context.internalAdapter.createVerificationValue({
 							value: data.user.id,
 							identifier,
-							expiresAt,
-						});
-						// Shared attempt-budget counter for verify-totp and
-						// verify-backup-code (verify-otp keeps its own counter on the
-						// code row). A distinct prefix from `2fa-otp-${key}` avoids
-						// colliding when a challenge offers both factors.
-						// TODO(totp-attempt-cap): superseded by the per-sign-in-attempt
-						// budget in the two-factor rewrite (RFC 0012 / PR #9278); remove
-						// this row when that lands on this line.
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: "0",
-							identifier: `2fa-attempts-${identifier}`,
-							expiresAt,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
 						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,

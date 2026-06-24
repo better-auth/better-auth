@@ -16,7 +16,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { beginTwoFactorAttempt, verifyTwoFactor } from "../verify-two-factor";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -319,7 +319,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid, key } = await verifyTwoFactor(ctx);
+					const { session, valid, beginAttempt } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
 					const isSignIn = !session.session;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -338,13 +338,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						);
 					}
 					// Enforce the per-challenge attempt budget on the sign-in path.
-					// The re-verify branch (already authenticated) has no counter.
+					// The re-verify branch (already authenticated) is not gated.
 					const attempt = isSignIn
-						? await beginTwoFactorAttempt(
-								ctx,
-								key,
-								DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS,
-							)
+						? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 						: null;
 					const validate = await verifyBackupCode(
 						{

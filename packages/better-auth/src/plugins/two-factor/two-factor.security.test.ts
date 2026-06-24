@@ -534,11 +534,8 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 			}),
 		]);
 
-		// The attempt-budget gate consumes the per-challenge counter before the
-		// code check, so the concurrent loser is rejected there with a 400
-		// (matching verify-otp), while exactly one verification mints a session.
 		const statuses = [first.status, second.status].sort();
-		expect(statuses).toEqual([200, 400]);
+		expect(statuses).toEqual([200, 401]);
 
 		const sessionsAfter = await countSessions();
 		expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);

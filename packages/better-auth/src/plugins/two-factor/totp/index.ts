@@ -15,7 +15,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { beginTwoFactorAttempt, verifyTwoFactor } from "../verify-two-factor";
+import { verifyTwoFactor } from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
@@ -259,7 +259,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid, key } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid, beginAttempt } =
+				await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
 			const isSignIn = !session.session;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -283,14 +284,9 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				);
 			}
 			// Enforce the per-challenge attempt budget on the sign-in path. The
-			// re-verify branch (already authenticated, e.g. enabling TOTP) has no
-			// challenge counter, so it is not gated.
+			// re-verify branch (already authenticated) is not gated.
 			const attempt = isSignIn
-				? await beginTwoFactorAttempt(
-						ctx,
-						key,
-						DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS,
-					)
+				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
 			const decrypted = await symmetricDecrypt({
 				key: ctx.context.secretConfig,
