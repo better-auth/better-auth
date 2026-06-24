@@ -1,6 +1,6 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -16,6 +16,7 @@ import { createAuthorizationURL } from "../oauth2";
 const PAYPAL_ID_TOKEN_ALGORITHMS = ["RS256", "HS256"] as const;
 
 export interface PayPalProfile {
+	sub?: string | undefined;
 	user_id: string;
 	name: string;
 	given_name: string;
@@ -298,6 +299,26 @@ export const paypal = (options: PayPalOptions) => {
 				}
 
 				const userInfo = response.data;
+				if (token.idToken) {
+					let idTokenSubject: string | undefined;
+					try {
+						idTokenSubject = decodeJwt(token.idToken).sub;
+					} catch (error) {
+						logger.error("Failed to decode PayPal ID token:", error);
+						return null;
+					}
+
+					// OIDC binds UserInfo to the ID Token with `sub`. Keep `user_id`
+					// as the account id below for existing PayPal account mappings.
+					const userInfoSubject = userInfo.sub ?? userInfo.user_id;
+					if (!idTokenSubject || userInfoSubject !== idTokenSubject) {
+						logger.error(
+							"PayPal user info subject does not match ID token subject",
+						);
+						return null;
+					}
+				}
+
 				const userMap = await options.mapProfileToUser?.(userInfo);
 
 				const result = {
