@@ -603,6 +603,9 @@ export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
 			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			// Resolve the client IP yourself, before `ipAddressHeaders`.
+			// Return a string to use it, or `null`/`undefined` to fall through.
+			getClientIp: (request) => null,
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
