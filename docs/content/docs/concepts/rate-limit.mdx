@@ -105,9 +105,12 @@ export const auth = betterAuth({
 })
 ```
 
-For the forwarded chain to be reliable, requests should reach Better Auth only
-through these proxies, so keep your origin reachable through the proxy rather than
-directly.
+<Callout type="warning">
+  `trustedProxies` only interprets the forwarded header chain and cannot verify the
+  direct sender. Keep your origin reachable only through these proxies, and make each
+  proxy overwrite or sanitize the forwarded IP headers. Otherwise a client can set
+  `X-Forwarded-For` directly and spoof its address.
+</Callout>
 
 #### IPv6 Address Support
 

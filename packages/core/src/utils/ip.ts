@@ -281,7 +281,8 @@ export function findInvalidTrustedProxies(entries: string[]): string[] {
 /**
  * Resolves the client IP from a forwarded header. The leftmost token is spoofable,
  * so with `trustedProxies` the chain is stripped from the right to the first
- * untrusted hop. Otherwise only a single-value header is trusted. `null` = shared bucket.
+ * untrusted hop. Otherwise only a single-value header is trusted. Returns `null`
+ * when no trustworthy client IP can be resolved.
  */
 export function getIPFromHeader(
 	value: string,

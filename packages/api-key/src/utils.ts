@@ -19,6 +19,8 @@ import { getIPFromHeader } from "@better-auth/core/utils/ip";
 
 const LOCALHOST_IP = "127.0.0.1";
 
+// TODO: this duplicates `better-auth` request-IP resolver. Centralize it
+// behind a shared export so the security-sensitive logic lives in one place.
 export function getIp(
 	req: Request | Headers,
 	options: BetterAuthOptions,

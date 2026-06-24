@@ -247,6 +247,11 @@ export type BetterAuthAdvancedOptions = {
 				 * single-value IP headers. Use the actual address or subnet of your
 				 * proxies, not a broad private range that also covers clients.
 				 *
+				 * This only interprets the forwarded header chain and cannot verify
+				 * the direct sender. It is safe only when your origin is reachable
+				 * through these proxies and clients cannot set forwarded headers
+				 * directly.
+				 *
 				 * @example ["192.0.2.10", "10.0.0.0/24"]
 				 */
 				trustedProxies?: string[];

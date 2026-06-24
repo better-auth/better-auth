@@ -389,14 +389,15 @@ describe("missing client IP warning", () => {
 	const warningMessage =
 		"Rate limiting could not determine a client IP and is falling back to a " +
 		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+		"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+		"`advanced.ipAddress.trustedProxies` so the address can be resolved.";
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.resetModules();
 	});
 
-	it("should point users to ipAddressHeaders when no client IP is available outside dev/test", async () => {
+	it("should point users to ipAddressHeaders and trustedProxies when no client IP is available outside dev/test", async () => {
 		vi.stubEnv("NODE_ENV", "production");
 		vi.stubEnv("TEST", "false");
 		vi.resetModules();
@@ -422,11 +423,6 @@ describe("missing client IP warning", () => {
 		expect(response.error?.status).not.toBe(429);
 		expect(log).toHaveBeenCalledOnce();
 		expect(log).toHaveBeenCalledWith("warn", warningMessage);
-		expect(
-			log.mock.calls.some(([, message]) =>
-				`${message}`.includes("trustedProxies"),
-			),
-		).toBe(false);
 	});
 
 	it("should fail closed and still enforce the limit when no client IP is available", async () => {
