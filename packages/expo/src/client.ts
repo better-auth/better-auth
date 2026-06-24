@@ -522,24 +522,20 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					options = options || {};
 					options.credentials = "omit";
-					/**
-					 * ID token flow (native sign-in) doesn't need cookie-based auth.
-					 * The ID token itself is cryptographically signed by the provider
-					 * and validated server-side, so no session cookies or origin
-					 * validation is required.
-					 *
-					 * Sending cookie/expo-origin headers for ID token requests triggers
-					 * unnecessary origin checks that fail for custom URL schemes.
-					 */
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
-						const cookie = url.includes("/link-social")
+						const isLinkSocial = url.includes("/link-social");
+						// ID token sign-in validates the provider token directly. Link-social
+						// still needs the current session cookie, so it also needs an origin
+						// header for the server-side CSRF check.
+						const cookie = isLinkSocial
 							? getCookie(storage.getItem(cookieName) || "{}")
 							: "";
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
+							...(isLinkSocial ? { "expo-origin": getOrigin(scheme!) } : {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
