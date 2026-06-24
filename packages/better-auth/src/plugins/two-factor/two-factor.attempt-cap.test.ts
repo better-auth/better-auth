@@ -101,6 +101,28 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
 	});
+
+	it("a concurrent burst cannot exceed the attempt budget", async () => {
+		const challengeHeaders = await startChallenge();
+		const burst = DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS * 4;
+
+		const results = await Promise.all(
+			Array.from({ length: burst }, () =>
+				verifyTotp(challengeHeaders, "111111"),
+			),
+		);
+		const bodies = await Promise.all(
+			results.map((res) => res.json() as Promise<{ message?: string }>),
+		);
+		// No wrong code mints a session.
+		expect(results.some((res) => res.status === 200)).toBe(false);
+		// The atomic consume gate serializes the burst, so at most the budget is
+		// actually spent on guesses; the rest lose the race and are rejected.
+		const processed = bodies.filter(
+			(body) => body.message === TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		).length;
+		expect(processed).toBeLessThanOrEqual(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS);
+	});
 });
 
 describe("two-factor security: backup codes enforce a per-challenge attempt cap", async () => {

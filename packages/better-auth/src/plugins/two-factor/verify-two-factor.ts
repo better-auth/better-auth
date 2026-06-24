@@ -137,16 +137,22 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			key: signedTwoFactorCookie,
 			beginAttempt: async (allowedAttempts: number) => {
 				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
+				// The counter is precreated with the challenge and consumed here as
+				// the atomic race gate. A missing row means this submission lost the
+				// race or the challenge expired: treat it as a stale challenge.
 				const consumed = await ctx.context.internalAdapter
 					.consumeVerificationValue(identifier)
 					.catch(() => null);
-				let attempts = 0;
-				if (consumed) {
-					const parsed = Number(consumed.value);
-					// A corrupt counter fails closed (treated as spent).
-					attempts =
-						Number.isInteger(parsed) && parsed >= 0 ? parsed : allowedAttempts;
+				if (!consumed) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+					);
 				}
+				const parsed = Number(consumed.value);
+				// A corrupt counter fails closed (treated as spent).
+				const attempts =
+					Number.isInteger(parsed) && parsed >= 0 ? parsed : allowedAttempts;
 				if (attempts >= allowedAttempts) {
 					// Budget spent: cancel the whole challenge so every factor must
 					// start a new sign-in, and clear the now-dead cookie.
