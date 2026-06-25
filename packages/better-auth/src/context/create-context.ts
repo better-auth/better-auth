@@ -12,6 +12,7 @@ import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
+import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -197,6 +198,17 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	checkEndpointConflicts(options, logger);
+
+	const trustedProxies = options.advanced?.ipAddress?.trustedProxies;
+	if (trustedProxies && trustedProxies.length > 0) {
+		const invalid = findInvalidTrustedProxies(trustedProxies);
+		if (invalid.length > 0) {
+			logger.warn(
+				`Ignoring invalid \`advanced.ipAddress.trustedProxies\` entries: ${invalid.join(", ")}. Each entry must be an IP address or CIDR range.`,
+			);
+		}
+	}
+
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	// TODO(#9294): allow registering the same provider multiple times under
