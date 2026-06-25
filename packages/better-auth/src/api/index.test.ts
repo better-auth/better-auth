@@ -255,7 +255,7 @@ describe("base path leading-prefix enforcement", () => {
 		expect(response.status).toBe(404);
 	});
 
-	it("does not let a path before basePath bypass disabledPaths", async () => {
+	it("rejects a path before basePath that targets a disabled route", async () => {
 		const { auth } = await getTestInstance({
 			basePath: "/api/auth",
 			disabledPaths: ["/sign-up/email"],
@@ -267,7 +267,7 @@ describe("base path leading-prefix enforcement", () => {
 			name: "Test User",
 		});
 
-		// The canonical path is disabled, so it returns 404.
+		// The canonical path is rejected by `disabledPaths` in onRequest.
 		const blocked = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-up/email", {
 				method: "POST",
@@ -277,7 +277,9 @@ describe("base path leading-prefix enforcement", () => {
 		);
 		expect(blocked.status).toBe(404);
 
-		// A segment before basePath must not re-enable the disabled route.
+		// The confused variant resolves to `/sign-up/email` on a router that
+		// strips basePath anywhere. The leading-prefix router rejects it before
+		// routing, so it never reaches the endpoint or the deny-list.
 		const confused = await auth.handler(
 			new Request("http://localhost:3000/x/api/auth/sign-up/email", {
 				method: "POST",
