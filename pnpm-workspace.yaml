@@ -105,6 +105,11 @@ minimumReleaseAgeExclude:
   - '@better-fetch/fetch'
   - 'better-call'
 
+packageExtensions:
+  drizzle-kit:
+    peerDependencies:
+      drizzle-orm: '*'
+
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch
 
