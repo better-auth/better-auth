@@ -389,14 +389,15 @@ describe("missing client IP warning", () => {
 	const warningMessage =
 		"Rate limiting could not determine a client IP and is falling back to a " +
 		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+		"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+		"`advanced.ipAddress.trustedProxies` so the address can be resolved.";
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.resetModules();
 	});
 
-	it("should point users to ipAddressHeaders when no client IP is available outside dev/test", async () => {
+	it("should point users to ipAddressHeaders and trustedProxies when no client IP is available outside dev/test", async () => {
 		vi.stubEnv("NODE_ENV", "production");
 		vi.stubEnv("TEST", "false");
 		vi.resetModules();
@@ -422,11 +423,6 @@ describe("missing client IP warning", () => {
 		expect(response.error?.status).not.toBe(429);
 		expect(log).toHaveBeenCalledOnce();
 		expect(log).toHaveBeenCalledWith("warn", warningMessage);
-		expect(
-			log.mock.calls.some(([, message]) =>
-				`${message}`.includes("trustedProxies"),
-			),
-		).toBe(false);
 	});
 
 	it("should fail closed and still enforce the limit when no client IP is available", async () => {
@@ -457,6 +453,119 @@ describe("missing client IP warning", () => {
 			}
 		}
 		expect(limited).toBe(true);
+	});
+});
+
+describe("forwarded IP chains", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("should not key limits by untrusted forwarded chain entries", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const store = new Map<string, string>();
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client, testUser } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 20,
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers: {
+						"x-forwarded-for": `198.51.100.${i + 20}, 10.0.0.5`,
+					},
+				},
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("no-trusted-ip|/sign-in/email")).toBe(true);
+	});
+
+	it("should key the real client when trusted proxies are configured", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const store = new Map<string, string>();
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client, testUser } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 20,
+			},
+			advanced: {
+				ipAddress: {
+					trustedProxies: ["10.0.0.0/8"],
+				},
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// `<rotating spoofed>, <real client>, <trusted proxy>`: spoofed rotation
+		// cannot escape the bucket keyed by the constant real client.
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers: {
+						"x-forwarded-for": `203.0.113.${i + 20}, 198.51.100.10, 10.0.0.5`,
+					},
+				},
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("198.51.100.10|/sign-in/email")).toBe(true);
+		expect(store.has("no-trusted-ip|/sign-in/email")).toBe(false);
 	});
 });
 

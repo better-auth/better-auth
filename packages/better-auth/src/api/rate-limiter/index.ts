@@ -384,7 +384,8 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		ctx.logger.warn(
 			"Rate limiting could not determine a client IP and is falling back to a " +
 				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-				"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
+				"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+				"`advanced.ipAddress.trustedProxies` so the address can be resolved.",
 		);
 		ipWarningLogged = true;
 	}
