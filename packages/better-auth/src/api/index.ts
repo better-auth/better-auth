@@ -301,6 +301,12 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 
 			let currentRequest = req;
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await withSpan(
@@ -318,11 +324,6 @@ export const router = <Option extends BetterAuthOptions>(
 						currentRequest = response.request;
 					}
 				}
-			}
-
-			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
-			if (rateLimitResponse) {
-				return rateLimitResponse;
 			}
 
 			return currentRequest;

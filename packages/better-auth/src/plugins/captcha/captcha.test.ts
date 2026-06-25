@@ -91,6 +91,56 @@ describe("captcha", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("should apply rate limits before verifying captcha tokens", async () => {
+		mockBetterFetch.mockClear();
+		mockBetterFetch.mockResolvedValue({
+			data: {
+				success: false,
+				"error-codes": ["invalid-input-response"],
+			},
+		});
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				customRules: {
+					"/sign-in/email": {
+						window: 10,
+						max: 1,
+					},
+				},
+			},
+			plugins: [
+				captcha({
+					provider: "cloudflare-turnstile",
+					secretKey: "xx-secret-key",
+				}),
+			],
+		});
+
+		const first = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "invalid-captcha-token",
+				},
+			},
+		});
+		const second = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "invalid-captcha-token",
+				},
+			},
+		});
+
+		expect(first.error?.status).toBe(403);
+		expect(second.error?.status).toBe(429);
+		expect(mockBetterFetch).toHaveBeenCalledTimes(1);
+	});
+
 	it("Should return 500 if an unexpected error occurs", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
