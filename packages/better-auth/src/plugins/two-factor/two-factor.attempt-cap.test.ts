@@ -141,13 +141,13 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 		const validSecret = row!.secret;
 
 		// Corrupt the stored secret so verification throws a server error mid-flight
-		// (not a wrong-code result).
+		// (not a wrong-code result); the attempt must actually error.
 		await db.update({
 			model: "twoFactor",
 			where: [{ field: "userId", value: userId }],
 			update: { secret: "not-a-valid-encrypted-secret" },
 		});
-		await verifyTotp(challengeHeaders, "000000").catch(() => undefined);
+		await expect(verifyTotp(challengeHeaders, "000000")).rejects.toThrow();
 
 		// The slot was restored, so the same challenge still works once the
 		// transient failure clears. Without the restore the consumed counter would
