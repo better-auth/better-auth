@@ -239,3 +239,52 @@ describe("skipTrailingSlashes option", () => {
 		expect(response.status).not.toBe(404);
 	});
 });
+
+describe("base path leading-prefix enforcement", () => {
+	it("rejects a path where basePath is not a leading prefix", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/api/auth",
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/x/api/auth/ok", {
+				method: "GET",
+			}),
+		);
+
+		expect(response.status).toBe(404);
+	});
+
+	it("does not let a path before basePath bypass disabledPaths", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/api/auth",
+			disabledPaths: ["/sign-up/email"],
+		});
+
+		const body = JSON.stringify({
+			email: "user@example.com",
+			password: "password12345",
+			name: "Test User",
+		});
+
+		// The canonical path is disabled, so it returns 404.
+		const blocked = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body,
+			}),
+		);
+		expect(blocked.status).toBe(404);
+
+		// A segment before basePath must not re-enable the disabled route.
+		const confused = await auth.handler(
+			new Request("http://localhost:3000/x/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body,
+			}),
+		);
+		expect(confused.status).toBe(404);
+	});
+});
