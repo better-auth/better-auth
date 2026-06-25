@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.6.20
+
+### Patch Changes
+
+- [#10121](https://github.com/better-auth/better-auth/pull/10121) [`21448b1`](https://github.com/better-auth/better-auth/commit/21448b1b77681e71e80ae0728d8658c936c18eb8) Thanks [@adityachaudhary99](https://github.com/adityachaudhary99)! - OAuth account-linking and create-user error logs now respect a custom `logger` configured in `betterAuth()`, instead of always being written to the default console logger.
+
+- [#9621](https://github.com/better-auth/better-auth/pull/9621) [`8ecf238`](https://github.com/better-auth/better-auth/commit/8ecf23817f5e501bdd8ab63ad5fdf2554ff1dff5) Thanks [@dipan-ck](https://github.com/dipan-ck)! - Session refresh no longer emits a cookie Max-Age above the browser's 400-day ceiling when using a database without fractional-second precision.
+
+- [#8734](https://github.com/better-auth/better-auth/pull/8734) [`930f534`](https://github.com/better-auth/better-auth/commit/930f5341d956bf3075f43758392a5c7f50947104) Thanks [@sleepe229](https://github.com/sleepe229)! - declare inherited APIError properties to fix TypeScript inference errors
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.20
+  - @better-auth/drizzle-adapter@1.6.20
+  - @better-auth/kysely-adapter@1.6.20
+  - @better-auth/memory-adapter@1.6.20
+  - @better-auth/mongo-adapter@1.6.20
+  - @better-auth/prisma-adapter@1.6.20
+  - @better-auth/telemetry@1.6.20
+
 ## 1.6.19
 
 ### Patch Changes
