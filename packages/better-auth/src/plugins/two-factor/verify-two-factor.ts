@@ -137,9 +137,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			key: signedTwoFactorCookie,
 			beginAttempt: async (allowedAttempts: number) => {
 				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
-				// The counter is precreated with the challenge and consumed here as
-				// the atomic race gate. A missing row means this submission lost the
-				// race or the challenge expired: treat it as a stale challenge.
+				// Consume the precreated counter as the atomic race gate; a missing
+				// row means a lost race or an expired challenge.
 				const consumed = await ctx.context.internalAdapter
 					.consumeVerificationValue(identifier)
 					.catch(() => null);
@@ -174,9 +173,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						})
 						.catch(() => {});
 				return {
-					// A wrong code spends a slot; a server error before the code is
-					// checked restores it so a transient failure does not forfeit the
-					// challenge. Both swallow write errors (fail closed).
+					// recordFailure spends a slot; restore returns it on a server
+					// error. Both swallow write errors (fail closed).
 					recordFailure: () => rearm(attempts + 1),
 					restore: () => rearm(attempts),
 				};
