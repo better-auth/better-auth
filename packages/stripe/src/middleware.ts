@@ -6,6 +6,7 @@ import type {
 	AuthorizeReferenceAction,
 	CustomerType,
 	StripeCtxSession,
+	StripeOptions,
 	SubscriptionOptions,
 } from "./types";
 
@@ -22,10 +23,11 @@ export const stripeSessionMiddleware = createAuthMiddleware(
 );
 
 export const referenceMiddleware = (
-	subscriptionOptions: SubscriptionOptions,
+	options: StripeOptions,
 	action: AuthorizeReferenceAction,
 ) =>
 	createAuthMiddleware(async (ctx) => {
+		const subscriptionOptions = options.subscription as SubscriptionOptions;
 		const ctxSession = ctx.context.session as StripeCtxSession;
 		if (!ctxSession) {
 			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
@@ -33,8 +35,10 @@ export const referenceMiddleware = (
 
 		const customerType: CustomerType =
 			ctx.body?.customerType || ctx.query?.customerType;
-		const explicitReferenceId = ctx.body?.referenceId || ctx.query?.referenceId;
+		const explicitReferenceId: string | undefined =
+			ctx.body?.referenceId || ctx.query?.referenceId;
 
+		// Resolve once and expose on the context so the handler reads this exact id instead of re-deriving it.
 		if (customerType === "organization") {
 			// Organization subscriptions always require authorizeReference
 			if (!subscriptionOptions.authorizeReference) {
@@ -67,17 +71,14 @@ export const referenceMiddleware = (
 			if (!isAuthorized) {
 				throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 			}
-			return;
+			return { referenceId };
 		}
 
-		// User subscriptions - pass if no explicit referenceId
-		if (!explicitReferenceId) {
-			return;
-		}
+		const referenceId = explicitReferenceId || ctxSession.user.id;
 
-		// Pass if referenceId is user id
-		if (explicitReferenceId === ctxSession.user.id) {
-			return;
+		// User subscriptions - pass for own id or no explicit referenceId
+		if (!explicitReferenceId || explicitReferenceId === ctxSession.user.id) {
+			return { referenceId };
 		}
 
 		if (!subscriptionOptions.authorizeReference) {
@@ -93,7 +94,7 @@ export const referenceMiddleware = (
 			{
 				user: ctxSession.user,
 				session: ctxSession.session,
-				referenceId: explicitReferenceId,
+				referenceId,
 				action,
 			},
 			ctx,
@@ -101,4 +102,5 @@ export const referenceMiddleware = (
 		if (!isAuthorized) {
 			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
+		return { referenceId };
 	});

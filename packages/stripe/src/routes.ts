@@ -19,8 +19,6 @@ import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
 	CheckoutSessionLocale,
-	CustomerType,
-	StripeCtxSession,
 	StripeOptions,
 	Subscription,
 	SubscriptionOptions,
@@ -84,40 +82,6 @@ function getUrl(ctx: GenericEndpointContext, url: string) {
 	return `${ctx.context.options.baseURL}${
 		url.startsWith("/") ? url : `/${url}`
 	}`;
-}
-
-/**
- * Determines the reference ID based on customer type.
- * - `user` (default): uses userId
- * - `organization`: uses activeOrganizationId from session
- * @internal
- */
-function getReferenceId(
-	ctxSession: StripeCtxSession,
-	customerType: CustomerType | undefined,
-	options: StripeOptions,
-): string {
-	const { user, session } = ctxSession;
-	const type = customerType || "user";
-
-	if (type === "organization") {
-		if (!options.organization?.enabled) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
-			);
-		}
-
-		if (!session.activeOrganizationId) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-			);
-		}
-		return session.activeOrganizationId;
-	}
-
-	return user.id;
 }
 
 /**
@@ -304,7 +268,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			},
 			use: [
 				stripeSessionMiddleware,
-				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
+				referenceMiddleware(options, "upgrade-subscription"),
 				originCheck((c) => {
 					return [
 						c.body.successUrl as string,
@@ -317,9 +281,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
 			const customerType = ctx.body.customerType || "user";
-			const referenceId =
-				ctx.body.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
+			const referenceId = ctx.context.referenceId;
 
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
 				throw APIError.from(
@@ -1287,7 +1249,6 @@ const cancelSubscriptionBodySchema = z.object({
  */
 export const cancelSubscription = (options: StripeOptions) => {
 	const client = options.stripeClient;
-	const subscriptionOptions = options.subscription as SubscriptionOptions;
 	return createAuthEndpoint(
 		"/subscription/cancel",
 		{
@@ -1300,15 +1261,12 @@ export const cancelSubscription = (options: StripeOptions) => {
 			},
 			use: [
 				stripeSessionMiddleware,
-				referenceMiddleware(subscriptionOptions, "cancel-subscription"),
+				referenceMiddleware(options, "cancel-subscription"),
 				originCheck((ctx) => ctx.body.returnUrl),
 			],
 		},
 		async (ctx) => {
-			const customerType = ctx.body.customerType || "user";
-			const referenceId =
-				ctx.body.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
+			const referenceId = ctx.context.referenceId;
 
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
@@ -1451,7 +1409,6 @@ const restoreSubscriptionBodySchema = z.object({
 
 export const restoreSubscription = (options: StripeOptions) => {
 	const client = options.stripeClient;
-	const subscriptionOptions = options.subscription as SubscriptionOptions;
 	return createAuthEndpoint(
 		"/subscription/restore",
 		{
@@ -1464,14 +1421,11 @@ export const restoreSubscription = (options: StripeOptions) => {
 			},
 			use: [
 				stripeSessionMiddleware,
-				referenceMiddleware(subscriptionOptions, "restore-subscription"),
+				referenceMiddleware(options, "restore-subscription"),
 			],
 		},
 		async (ctx) => {
-			const customerType = ctx.body.customerType || "user";
-			const referenceId =
-				ctx.body.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
+			const referenceId = ctx.context.referenceId;
 
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
@@ -1667,7 +1621,6 @@ const listActiveSubscriptionsQuerySchema = z.optional(
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/stripe#api-method-subscription-list)
  */
 export const listActiveSubscriptions = (options: StripeOptions) => {
-	const subscriptionOptions = options.subscription as SubscriptionOptions;
 	return createAuthEndpoint(
 		"/subscription/list",
 		{
@@ -1680,14 +1633,11 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 			},
 			use: [
 				stripeSessionMiddleware,
-				referenceMiddleware(subscriptionOptions, "list-subscription"),
+				referenceMiddleware(options, "list-subscription"),
 			],
 		},
 		async (ctx) => {
-			const customerType = ctx.query?.customerType || "user";
-			const referenceId =
-				ctx.query?.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
+			const referenceId = ctx.context.referenceId;
 
 			const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
@@ -1944,7 +1894,6 @@ const createBillingPortalBodySchema = z.object({
 
 export const createBillingPortal = (options: StripeOptions) => {
 	const client = options.stripeClient;
-	const subscriptionOptions = options.subscription as SubscriptionOptions;
 	return createAuthEndpoint(
 		"/subscription/billing-portal",
 		{
@@ -1957,16 +1906,14 @@ export const createBillingPortal = (options: StripeOptions) => {
 			},
 			use: [
 				stripeSessionMiddleware,
-				referenceMiddleware(subscriptionOptions, "billing-portal"),
+				referenceMiddleware(options, "billing-portal"),
 				originCheck((ctx) => ctx.body.returnUrl),
 			],
 		},
 		async (ctx) => {
 			const { user } = ctx.context.session;
 			const customerType = ctx.body.customerType || "user";
-			const referenceId =
-				ctx.body.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
+			const referenceId = ctx.context.referenceId;
 
 			let customerId: string | undefined;
 
