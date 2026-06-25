@@ -2540,10 +2540,8 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 
 		// And the DB role must remain `user` (re-escalation did not persist).
 		const liveSession = await client.getSession({
-			fetchOptions: {
-				headers: attackerHeaders,
-				query: { disableCookieCache: true },
-			},
+			query: { disableCookieCache: true },
+			fetchOptions: { headers: attackerHeaders },
 		});
 		expect((liveSession.data?.user as UserWithRole)?.role).toBe("user");
 	});
