@@ -63,7 +63,7 @@ afterEach(async () => {
 
 describe("kysely withReturning mysql update", () => {
 	/**
-	 * @see Predicate-drop CAS regression: the MySQL re-SELECT path used to
+	 * Predicate-drop CAS regression: the MySQL re-SELECT path used to
 	 * match by `where[0].field` alone, returning the row even when the
 	 * guarded UPDATE matched zero rows. Callers building compare-and-swap
 	 * on top of `update` (e.g. `WHERE id = ? AND revoked IS NULL`) would
