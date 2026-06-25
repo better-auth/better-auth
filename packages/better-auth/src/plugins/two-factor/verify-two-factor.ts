@@ -165,18 +165,20 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 					);
 				}
+				const rearm = (count: number) =>
+					ctx.context.internalAdapter
+						.createVerificationValue({
+							value: `${count}`,
+							identifier,
+							expiresAt: verificationToken.expiresAt,
+						})
+						.catch(() => {});
 				return {
-					recordFailure: async () => {
-						// A write failure must not mask the wrong-code response; the
-						// rate limit backstops the un-incremented budget.
-						await ctx.context.internalAdapter
-							.createVerificationValue({
-								value: `${attempts + 1}`,
-								identifier,
-								expiresAt: verificationToken.expiresAt,
-							})
-							.catch(() => {});
-					},
+					// A wrong code spends a slot; a server error before the code is
+					// checked restores it so a transient failure does not forfeit the
+					// challenge. Both swallow write errors (fail closed).
+					recordFailure: () => rearm(attempts + 1),
+					restore: () => rearm(attempts),
 				};
 			},
 		};
@@ -194,6 +196,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		// Re-verification is already authenticated, so it carries no attempt cap.
 		beginAttempt: async (_allowedAttempts: number) => ({
 			recordFailure: async () => {},
+			restore: async () => {},
 		}),
 	};
 }

@@ -57,11 +57,19 @@ async function setupTwoFactorChallenge() {
 		return convertSetCookieToCookie(signIn.headers);
 	}
 
-	return { auth, secret, backupCodes: enrollment.backupCodes, startChallenge };
+	return {
+		auth,
+		db,
+		userId,
+		secret,
+		backupCodes: enrollment.backupCodes,
+		startChallenge,
+	};
 }
 
 describe("two-factor security: TOTP enforces a per-challenge attempt cap", async () => {
-	const { auth, secret, startChallenge } = await setupTwoFactorChallenge();
+	const { auth, db, userId, secret, startChallenge } =
+		await setupTwoFactorChallenge();
 
 	function verifyTotp(challengeHeaders: Headers, code: string) {
 		return auth.api.verifyTOTP({
@@ -122,6 +130,38 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 			(body) => body.message === TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
 		).length;
 		expect(processed).toBeLessThanOrEqual(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS);
+	});
+
+	it("a server error during verification does not spend an attempt slot", async () => {
+		const challengeHeaders = await startChallenge();
+		const row = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		const validSecret = row!.secret;
+
+		// Corrupt the stored secret so verification throws a server error mid-flight
+		// (not a wrong-code result).
+		await db.update({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+			update: { secret: "not-a-valid-encrypted-secret" },
+		});
+		await verifyTotp(challengeHeaders, "000000").catch(() => undefined);
+
+		// The slot was restored, so the same challenge still works once the
+		// transient failure clears. Without the restore the consumed counter would
+		// reject the correct code as an invalid two-factor cookie.
+		await db.update({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+			update: { secret: validSecret },
+		});
+		const ok = await verifyTotp(
+			challengeHeaders,
+			await createOTP(secret).totp(),
+		);
+		expect(ok.status).toBe(200);
 	});
 });
 

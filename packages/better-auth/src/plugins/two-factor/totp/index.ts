@@ -288,14 +288,21 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			const attempt = isSignIn
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
-			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secretConfig,
-				data: twoFactor.secret,
-			});
-			const status = await createOTP(decrypted, {
-				period: opts.period,
-				digits: opts.digits,
-			}).verify(ctx.body.code);
+			let status: boolean;
+			try {
+				const decrypted = await symmetricDecrypt({
+					key: ctx.context.secretConfig,
+					data: twoFactor.secret,
+				});
+				status = await createOTP(decrypted, {
+					period: opts.period,
+					digits: opts.digits,
+				}).verify(ctx.body.code);
+			} catch (error) {
+				// A server error before the code is checked must not spend the slot.
+				await attempt?.restore();
+				throw error;
+			}
 			if (!status) {
 				await attempt?.recordFailure();
 				return invalid("INVALID_CODE");

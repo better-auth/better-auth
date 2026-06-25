@@ -342,14 +342,21 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					const attempt = isSignIn
 						? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 						: null;
-					const validate = await verifyBackupCode(
-						{
-							backupCodes: twoFactor.backupCodes,
-							code: ctx.body.code,
-						},
-						ctx.context.secretConfig,
-						opts,
-					);
+					let validate: Awaited<ReturnType<typeof verifyBackupCode>>;
+					try {
+						validate = await verifyBackupCode(
+							{
+								backupCodes: twoFactor.backupCodes,
+								code: ctx.body.code,
+							},
+							ctx.context.secretConfig,
+							opts,
+						);
+					} catch (error) {
+						// A server error before the code is checked must not spend the slot.
+						await attempt?.restore();
+						throw error;
+					}
 					if (!validate.status || !validate.updated) {
 						await attempt?.recordFailure();
 						throw APIError.from(
