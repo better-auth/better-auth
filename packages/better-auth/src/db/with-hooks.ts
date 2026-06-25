@@ -3,6 +3,7 @@ import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
 	queueAfterTransactionHook,
+	runWithTransaction,
 } from "@better-auth/core/context";
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -65,13 +66,41 @@ export function getWithHooks(
 			}
 		}
 
-		let created: any = null;
-		if (!customCreateFn || customCreateFn.executeMainFn) {
-			created = await (await getCurrentAdapter(adapter)).create<T>({
+		// acts as a helper function to avoid writing this code twice in bellow block
+		const createFn = async (adapter: DBAdapter<BetterAuthOptions>) => {
+			return await (await getCurrentAdapter(adapter)).create<T>({
 				model,
 				data: actualData as any,
 				forceAllowId: true,
 			});
+		};
+
+		const createFnTransaction = async (
+			adapter: DBAdapter<BetterAuthOptions>,
+		) => {
+			let toTransaction = null;
+			for (const { hooks } of hooksEntries) {
+				toTransaction = hooks["user"]?.create?.afterTransaction;
+			}
+
+			const result = await runWithTransaction(adapter, async () => {
+				const tempCreated = await createFn(adapter);
+
+				// @ts-expect-error context type mismatch
+				if (toTransaction) await toTransaction(tempCreated as any, context);
+				return tempCreated;
+			});
+
+			return result;
+		};
+
+		let created: any = null;
+		if (!customCreateFn || customCreateFn.executeMainFn) {
+			if (model == "user") {
+				created = await createFnTransaction(adapter);
+			} else {
+				created = await createFn(adapter);
+			}
 		}
 		if (customCreateFn?.fn) {
 			created = await customCreateFn.fn(created ?? actualData);
