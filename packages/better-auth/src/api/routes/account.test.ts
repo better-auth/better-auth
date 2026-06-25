@@ -680,6 +680,9 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10214
+	 */
 	it("should reject idToken linkSocial when the provider account belongs to another user", async () => {
 		const {
 			auth: scopedAuth,
