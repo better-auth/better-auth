@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -286,6 +287,21 @@ export const siwe = (options: SIWEPluginOptions) => {
 
 						// Create new user if none exists
 						if (!user) {
+							// A SIWE signature proves wallet control, not ownership of a
+							// caller-supplied email. Reject a collision so a wallet sign-in
+							// cannot bind an email another account already owns.
+							// FIXME(siwe-contact-ownership): drop the email input and require a
+							// separate verified-email link flow (breaking, next minor).
+							if (!isAnon && email) {
+								const existingUser =
+									await ctx.context.internalAdapter.findUserByEmail(email);
+								if (existingUser) {
+									throw APIError.from(
+										"UNPROCESSABLE_ENTITY",
+										BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+									);
+								}
+							}
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							// Use checksummed address for email generation
