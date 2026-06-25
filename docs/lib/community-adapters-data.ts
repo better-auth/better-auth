@@ -166,6 +166,17 @@ export const communityAdapters: CommunityAdapter[] = [
 		},
 	},
 	{
+		name: "@lubiah/better-auth-mikro-orm",
+		url: "https://github.com/lubiah/better-auth-mikro-orm",
+		database: "MikroORM",
+		databaseUrl: "https://mikro-orm.io/",
+		author: {
+			name: "lubiah",
+			url: "https://github.com/lubiah",
+			avatar: "https://github.com/lubiah.png",
+		},
+	},
+	{
 		name: "better-auth-mikro-orm",
 		url: "https://github.com/octet-stream/better-auth-mikro-orm",
 		database: "MikroORM",
