@@ -287,14 +287,17 @@ export const siwe = (options: SIWEPluginOptions) => {
 
 						// Create new user if none exists
 						if (!user) {
+							const normalizedEmail = email?.toLowerCase();
 							// A SIWE signature proves wallet control, not ownership of a
 							// caller-supplied email. Reject a collision so a wallet sign-in
 							// cannot bind an email another account already owns.
 							// FIXME(siwe-contact-ownership): drop the email input and require a
 							// separate verified-email link flow (breaking, next minor).
-							if (!isAnon && email) {
+							if (!isAnon && normalizedEmail) {
 								const existingUser =
-									await ctx.context.internalAdapter.findUserByEmail(email);
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
 								if (existingUser) {
 									throw APIError.from(
 										"UNPROCESSABLE_ENTITY",
@@ -306,7 +309,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							// Use checksummed address for email generation
 							const userEmail =
-								!isAnon && email ? email : `${walletAddress}@${domain}`;
+								!isAnon && normalizedEmail
+									? normalizedEmail
+									: `${walletAddress}@${domain}`;
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
 

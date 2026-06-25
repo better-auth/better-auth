@@ -396,7 +396,54 @@ describe("siwe", async () => {
 
 		expect(data).toBeNull();
 		expect(error?.status).toBe(422);
-		expect(error?.message).toBe("User already exists. Use another email.");
+		expect(error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+	});
+
+	it("should reject a case-variant of an email already stored by a prior sign-in", async () => {
+		const otherWallet = "0x000000000000000000000000000000000000bEEF";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const first = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+			email: "Mixed@Case.com",
+		});
+		expect(first.error).toBeNull();
+
+		await client.siwe.nonce({ walletAddress: otherWallet, chainId });
+		const second = await client.siwe.verify({
+			message: siweMessage({ address: otherWallet }),
+			signature: "valid_signature",
+			walletAddress: otherWallet,
+			chainId,
+			email: "mixed@case.com",
+		});
+		expect(second.data).toBeNull();
+		expect(second.error?.status).toBe(422);
+		expect(second.error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
 	});
 
 	it("should reject invalid email format when anonymous is false", async () => {
