@@ -65,7 +65,7 @@ function hasInsensitiveWhere(where?: Where[]): boolean {
  */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany",
+	operation: "updateMany" | "deleteMany" | "consumeOne",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
@@ -868,12 +868,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const delCount =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							// mysql2's `.execute()` resolves with `[OkPacket, FieldPacket[]]`,
+							// while postgres-js exposes `rowCount` and better-sqlite3 uses
+							// `changes`. Read the driver-specific affected-row count through
+							// the shared helper so all three providers behave the same.
+							const delCount = getAffectedRowCount(delRes, "consumeOne", {
+								model,
+								where,
+							});
 							return delCount > 0 ? (target as any) : null;
 						};
 						return inTransaction
