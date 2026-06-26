@@ -344,20 +344,20 @@ export async function applyUpdateUserInfoOnLink(
 	) {
 		return undefined;
 	}
-	const {
-		id: _id,
-		email: _email,
-		emailVerified: _emailVerified,
-		name,
-		image,
-		...providerProfile
-	} = userInfo;
-	const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
-		c.context.options,
-		providerProfile,
-		"update",
-	);
 	try {
+		const {
+			id: _id,
+			email: _email,
+			emailVerified: _emailVerified,
+			name,
+			image,
+			...providerProfile
+		} = userInfo;
+		const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+			c.context.options,
+			providerProfile,
+			"update",
+		);
 		return await c.context.internalAdapter.updateUser(userId, {
 			name,
 			image,

@@ -13,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import * as z from "zod";
 import { signJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
@@ -1086,6 +1087,13 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 						},
 					},
 				},
+				validatedProfileCode: {
+					type: "string",
+					required: false,
+					validator: {
+						input: z.string().min(3),
+					},
+				},
 				serverManagedField: {
 					type: "string",
 					required: false,
@@ -1102,6 +1110,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 					return {
 						googleSub: profile.sub,
 						profileCode: profile.sub,
+						validatedProfileCode: profile.sub,
 						serverManagedField: "elevated",
 					};
 				},
@@ -1226,6 +1235,36 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 		});
 		expect(user?.googleSub).toBe("google_link_input_false");
 		expect(user?.serverManagedField ?? null).toBeNull();
+	});
+
+	it("continues linking when mapped profile fields fail validation", async () => {
+		const testEmail = "implicit-link-invalid-profile@example.com";
+		await ctx.adapter.create({
+			model: "user",
+			data: { email: testEmail, name: "Original Name", emailVerified: true },
+		});
+
+		const oAuthHeaders = await signInAndLink(testEmail, "x");
+
+		const session = await client.getSession({
+			fetchOptions: { headers: oAuthHeaders },
+		});
+		expect(session.data?.user.email).toBe(testEmail);
+		expect(session.data?.user.name).toBe("Original Name");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: session.data!.user.id }],
+		});
+		expect(accounts.find((a) => a.providerId === "google")).toBeTruthy();
+
+		const user = await ctx.adapter.findOne<
+			User & { validatedProfileCode?: string | null }
+		>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user?.validatedProfileCode ?? null).toBeNull();
 	});
 });
 
