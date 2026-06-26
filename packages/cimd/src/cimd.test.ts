@@ -9,6 +9,10 @@ import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cimd } from "./index";
 
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 describe("Client ID Metadata Document - integration", async () => {
 	const port = 3002;
 	const authServerBaseUrl = `http://localhost:${port}`;
