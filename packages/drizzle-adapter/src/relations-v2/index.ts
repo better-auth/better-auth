@@ -349,9 +349,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				}
 				// MySQL has no RETURNING. For serial ids, Drizzle's `$returningId`
 				// performs the insert and hands back the generated id, normalizing the
-				// per-driver result shape for us.
+				// per-driver result shape for us. `create` calls this without a `where`,
+				// `update` always passes one (even if empty), and `$returningId` only
+				// exists on the insert builder, so gate on the absence of `where`.
 				const isSerialInsert =
-					!where?.length && options.advanced?.database?.generateId === "serial";
+					where === undefined &&
+					options.advanced?.database?.generateId === "serial";
 				const insertResult = isSerialInsert
 					? await builder.$returningId().execute()
 					: await builder.execute();
