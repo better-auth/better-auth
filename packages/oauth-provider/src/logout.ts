@@ -38,6 +38,13 @@ function isLoopbackUrl(url: string): boolean {
 	}
 }
 
+function isTrustedBackchannelLogoutUrl(
+	ctx: GenericEndpointContext,
+	url: string,
+): boolean {
+	return isLoopbackUrl(url) || ctx.context.isTrustedOrigin(url);
+}
+
 interface TokenRow {
 	id: string;
 	clientId: string;
@@ -284,7 +291,7 @@ async function deliverBackchannelLogoutTokens(
 						body: new URLSearchParams({ logout_token: token }),
 						signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
 					},
-					{ isTrustedOrigin: isLoopbackUrl },
+					{ isTrustedOrigin: (url) => isTrustedBackchannelLogoutUrl(ctx, url) },
 				);
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.

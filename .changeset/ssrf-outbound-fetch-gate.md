@@ -9,4 +9,4 @@
 
 Hardened outbound OAuth/OIDC fetches. Better Auth now refuses provider redirects and blocks externally supplied endpoints that resolve to private, link-local, or cloud-metadata addresses.
 
-Add private SSO, Generic OAuth, or OAuth Provider JWKS origins to `trustedOrigins`. OAuth Provider clients still need public `backchannel_logout_uri` endpoints.
+Add private SSO, Generic OAuth, OAuth Provider JWKS, or back-channel logout origins to `trustedOrigins`.

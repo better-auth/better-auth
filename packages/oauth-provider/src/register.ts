@@ -502,11 +502,15 @@ export async function checkOAuthClient(
 			});
 		}
 		// SSRF guard: the OP issues an outbound POST to this URI on every
-		// session end, so reject any host that is not publicly routable.
-		// Loopback is exempt for local development (e.g.
-		// http://127.0.0.1:<port> or https://localhost); non-loopback private,
-		// link-local, tunneled, and cloud-metadata targets are always rejected.
-		if (isPrivateHostname(url.hostname) && !loopback) {
+		// session end. Loopback supports local dev; trustedOrigins is the
+		// operator escape hatch for private RP origins.
+		const trustedBackchannelOrigin =
+			settings?.ctx?.context.isTrustedOrigin(url.href) ?? false;
+		if (
+			isPrivateHostname(url.hostname) &&
+			!loopback &&
+			!trustedBackchannelOrigin
+		) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
