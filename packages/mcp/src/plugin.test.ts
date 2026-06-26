@@ -337,6 +337,8 @@ describe("mcp plugin", async () => {
 			});
 			const tokens = (await tokenResponse.json()) as {
 				access_token?: string;
+				expires_at?: number;
+				expires_in?: number;
 				id_token?: string;
 				refresh_token?: string;
 				token_type?: string;
@@ -348,6 +350,50 @@ describe("mcp plugin", async () => {
 			expect(tokens.refresh_token).toBeDefined();
 			expect(tokens.token_type?.toLowerCase()).toBe("bearer");
 			expect(tokens.scope).toBe("openid offline_access");
+
+			const { body: firstRefreshBody, headers: firstRefreshHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const firstRefreshResponse = await customFetchImpl(
+				`${baseURL}/oauth2/token`,
+				{
+					method: "POST",
+					body: firstRefreshBody.toString(),
+					headers: firstRefreshHeaders,
+				},
+			);
+			const firstRefresh = (await firstRefreshResponse.json()) as typeof tokens;
+			expect(firstRefresh.access_token).toBeDefined();
+			expect(firstRefresh.refresh_token).toBeDefined();
+
+			const { body: replayBody, headers: replayHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const replayResponse = await customFetchImpl(`${baseURL}/oauth2/token`, {
+				method: "POST",
+				body: replayBody.toString(),
+				headers: replayHeaders,
+			});
+			const replay = (await replayResponse.json()) as typeof tokens;
+			expect(replay).toMatchObject({
+				access_token: firstRefresh.access_token,
+				expires_at: firstRefresh.expires_at,
+				refresh_token: firstRefresh.refresh_token,
+				token_type: firstRefresh.token_type,
+				scope: firstRefresh.scope,
+				id_token: firstRefresh.id_token,
+			});
+			expect(replay.expires_in).toBeLessThanOrEqual(firstRefresh.expires_in!);
 		});
 	});
 });

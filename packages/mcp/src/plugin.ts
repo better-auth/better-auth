@@ -30,6 +30,20 @@ const AUTHORIZATION_SERVER_ONLY_SCOPES = new Set([
  */
 export interface McpOptions extends OAuthOptions<Scope[]> {
 	/**
+	 * Seconds that a rotated refresh token can be reused to receive the same
+	 * token response for the same effective scopes, requested resources, and
+	 * sender constraint.
+	 *
+	 * MCP overrides the OAuth Provider default because native/public MCP clients
+	 * can have multiple local sessions racing the same refresh token. Set to `0`
+	 * to keep strict replay handling.
+	 *
+	 * @default 30
+	 */
+	refreshTokenReuseInterval?: OAuthOptions<
+		Scope[]
+	>["refreshTokenReuseInterval"];
+	/**
 	 * The protected resource identifier (RFC 8707 / RFC 9728) that access tokens
 	 * are bound to. Published as `resource` in the protected resource metadata,
 	 * added to `resources`, and used as the expected token audience.
@@ -105,6 +119,9 @@ const buildResourceServerMetadata = (
  * MCP: it enables dynamic client registration, binds issued tokens to the MCP
  * `resource`, and, as the resource server, serves the RFC 9728 protected resource
  * metadata so MCP clients discover and use it through standard OAuth discovery.
+ * It also defaults `refreshTokenReuseInterval` to 30 seconds for native/public
+ * MCP clients that may retry a refresh after a local process loses the rotated
+ * response.
  * Because it is the OAuth provider, it cannot be combined with a separate
  * {@link oauthProvider}.
  *
@@ -127,7 +144,7 @@ const buildResourceServerMetadata = (
  * ```
  */
 export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
-	const { resource, ...oauthOptions } = options;
+	const { resource, refreshTokenReuseInterval = 30, ...oauthOptions } = options;
 	// RFC 8707: reject an invalid or fragment-containing resource before it is
 	// published in the protected resource metadata.
 	ResourceUriSchema.parse(resource);
@@ -135,6 +152,7 @@ export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
 		// MCP clients self-register; public clients use PKCE without a secret.
 		allowDynamicClientRegistration: true,
 		allowUnauthenticatedClientRegistration: true,
+		refreshTokenReuseInterval,
 		...oauthOptions,
 		// RFC 8707: bind issued tokens to the MCP resource so the resource server
 		// can verify the token audience against its protected resource identifier.
