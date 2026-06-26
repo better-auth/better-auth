@@ -121,3 +121,112 @@ describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 		).toEqual(["s1", "s2"]);
 	});
 });
+
+describe("drizzle relations-v2 adapter: missing relational query namespace", () => {
+	const sqliteDb = new Database(":memory:");
+	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	// Simulate a db built without the relational-query namespace. The adapter
+	// must fall back to the SQL path rather than dereference `undefined`.
+	(db as { query?: unknown }).query = undefined;
+
+	const adapter = drizzleAdapter(db, {
+		schema: { user: users, session: sessions, relations },
+		provider: "sqlite",
+	})({ experimental: { joins: true } });
+
+	beforeEach(() => {
+		sqliteDb.exec("DROP TABLE IF EXISTS user;");
+		sqliteDb.exec(`
+			CREATE TABLE user (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				email TEXT NOT NULL,
+				emailVerified INTEGER NOT NULL DEFAULT 0,
+				image TEXT,
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+		`);
+		const nowTs = Date.now();
+		sqliteDb.exec(`
+			INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt)
+			VALUES ('u1', 'Alice', 'alice@test.com', 0, NULL, ${nowTs}, ${nowTs});
+		`);
+	});
+
+	afterAll(() => {
+		sqliteDb.close();
+	});
+
+	it("findOne falls back to the SQL path instead of throwing", async () => {
+		const result = await adapter.findOne<Record<string, any>>({
+			model: "user",
+			where: [{ field: "id", value: "u1" }],
+		});
+
+		expect(result?.id).toBe("u1");
+	});
+});
+
+describe("drizzle relations-v2 adapter: query key via relations internal", () => {
+	const sqliteDb = new Database(":memory:");
+	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	// Drizzle 1.0 drops the v1 `db._.fullSchema` internal, so the key lookup must
+	// also work off `db._.relations`. Remove fullSchema to force that path.
+	(db._ as { fullSchema?: unknown }).fullSchema = undefined;
+
+	const adapter = drizzleAdapter(db, {
+		schema: { user: users, session: sessions, relations },
+		provider: "sqlite",
+	})({ experimental: { joins: true } });
+
+	beforeEach(() => {
+		sqliteDb.exec("DROP TABLE IF EXISTS session;");
+		sqliteDb.exec("DROP TABLE IF EXISTS user;");
+		sqliteDb.exec(`
+			CREATE TABLE user (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				email TEXT NOT NULL,
+				emailVerified INTEGER NOT NULL DEFAULT 0,
+				image TEXT,
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+		`);
+		sqliteDb.exec(`
+			CREATE TABLE session (
+				id TEXT PRIMARY KEY,
+				userId TEXT NOT NULL REFERENCES user(id),
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+		`);
+		const nowTs = Date.now();
+		sqliteDb.exec(`
+			INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt)
+			VALUES ('u1', 'Alice', 'alice@test.com', 0, NULL, ${nowTs}, ${nowTs});
+		`);
+		sqliteDb.exec(`
+			INSERT INTO session (id, userId, createdAt, updatedAt)
+			VALUES ('s1', 'u1', ${nowTs}, ${nowTs});
+		`);
+	});
+
+	afterAll(() => {
+		sqliteDb.close();
+	});
+
+	it("resolves the plural key and joins via db._.relations", async () => {
+		const result = await adapter.findOne<Record<string, any>>({
+			model: "user",
+			where: [{ field: "id", value: "u1" }],
+			join: { session: true },
+		});
+
+		expect(result?.id).toBe("u1");
+		expect((result?.session as { id: string }[]).map((s) => s.id)).toEqual([
+			"s1",
+		]);
+	});
+});

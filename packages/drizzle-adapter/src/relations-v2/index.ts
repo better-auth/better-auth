@@ -293,6 +293,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 * scan the schema for the key pointing at the same table.
 			 */
 			function getQueryModel(model: string): string | null {
+				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
@@ -303,12 +304,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				if (config.schema) {
 					const targetTable = config.schema[model];
 					if (targetTable) {
-						const fullSchema = db._.fullSchema;
-						if (fullSchema) {
-							for (const key of Object.keys(db.query)) {
-								if (fullSchema[key] === targetTable) {
-									return key;
-								}
+						// `db.query` is keyed by the relations export names, so map each
+						// key back to its table to find the one for this model.
+						// `db._.relations` is the relations-v2 internal and
+						// `db._.fullSchema` the v1 RQB one, so check both to survive the
+						// drizzle-orm beta to 1.0 transition.
+						const relations = db._?.relations;
+						const fullSchema = db._?.fullSchema;
+						for (const key of Object.keys(db.query)) {
+							const table = relations?.[key]?.table ?? fullSchema?.[key];
+							if (table === targetTable) {
+								return key;
 							}
 						}
 					}
