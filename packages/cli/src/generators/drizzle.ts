@@ -43,10 +43,23 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		if (table.disableMigrations) {
+		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
 		const modelName = getModelName(tableKey);
@@ -276,10 +289,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								}
 							}
 							const referencesDisabledModel =
-								attr.references &&
-								(tables[getModelName(attr.references.model)]
-									?.disableMigrations ||
-									tables[attr.references.model]?.disableMigrations);
+								attr.references && isMigrationDisabled(attr.references.model);
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
@@ -301,7 +311,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		if (table.disableMigrations) {
+		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
 		const modelName = getModelName(tableKey);
@@ -342,10 +352,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			if (
-				tables[getModelName(referencedModel)]?.disableMigrations ||
-				tables[referencedModel]?.disableMigrations
-			) {
+			if (isMigrationDisabled(referencedModel)) {
 				continue;
 			}
 			const relationKey = getModelName(referencedModel);

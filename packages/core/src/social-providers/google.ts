@@ -71,8 +71,11 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 }
 
 const GOOGLE_ID_TOKEN_MAX_AGE = "1h";
-const GOOGLE_ID_TOKEN_ALGORITHMS = ["RS256"] as const;
-type GoogleIdTokenAlgorithm = (typeof GOOGLE_ID_TOKEN_ALGORITHMS)[number];
+const GOOGLE_ID_TOKEN_ALGORITHM = "RS256";
+type GoogleIdTokenAlgorithm = typeof GOOGLE_ID_TOKEN_ALGORITHM;
+const GOOGLE_ID_TOKEN_ALGORITHMS: GoogleIdTokenAlgorithm[] = [
+	GOOGLE_ID_TOKEN_ALGORITHM,
+];
 
 function isGoogleIdTokenAlgorithm(
 	algorithm: unknown,
@@ -297,6 +300,6 @@ const getGooglePublicKeys = async (kid?: string) => {
 	}
 
 	return Promise.all(
-		jwks.map((jwk) => importJWK(jwk, GOOGLE_ID_TOKEN_ALGORITHMS[0])),
+		jwks.map((jwk) => importJWK(jwk, GOOGLE_ID_TOKEN_ALGORITHM)),
 	);
 };

@@ -1628,10 +1628,12 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=missing_user_info`,
 		);
 	}
+	const userInfoEmail = userInfo.email;
+	const userInfoId = userInfo.id;
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
-		validateEmailDomain(userInfo.email, provider.domain);
+		validateEmailDomain(userInfoEmail, provider.domain);
 
 	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
@@ -1639,9 +1641,9 @@ async function handleOIDCCallback(
 			await lockSSOProviderForAccountLink(ctx, provider);
 			return handleOAuthUserInfo(ctx, {
 				userInfo: {
-					email: userInfo.email,
+					email: userInfoEmail,
 					name: userInfo.name || "",
-					id: userInfo.id,
+					id: userInfoId,
 					image: userInfo.image,
 					emailVerified: options?.trustEmailVerified
 						? userInfo.emailVerified || false
@@ -1651,7 +1653,7 @@ async function handleOIDCCallback(
 					idToken: tokenResponse.idToken,
 					accessToken: tokenResponse.accessToken,
 					refreshToken: tokenResponse.refreshToken,
-					accountId: userInfo.id,
+					accountId: userInfoId,
 					providerId: provider.providerId,
 					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1707,8 +1709,8 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfo.id,
-			email: userInfo.email,
+			accountId: userInfoId,
+			email: userInfoEmail,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,
 		},
