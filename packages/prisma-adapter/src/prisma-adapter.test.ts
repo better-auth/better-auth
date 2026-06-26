@@ -125,6 +125,60 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	// A guarded `adapter.update` (e.g. `WHERE id = ? AND revoked IS NULL`)
+	// uses Prisma's `db.update` because `id` is unique, but the extra
+	// predicates still gate the write. When the guard misses, Prisma raises
+	// P2025; we must surface that as `null` so the contract matches every
+	// other adapter (Kysely's RETURNING/OUTPUT paths, the memory adapter).
+	// Without this, callers building CAS on top of `adapter.update` see an
+	// exception on Prisma and `null` everywhere else.
+	it("update returns null when a guarded predicate excludes the row (P2025)", async () => {
+		const notFound = Object.assign(new Error("Record to update not found."), {
+			code: "P2025",
+		});
+		const update = vi.fn().mockRejectedValue(notFound);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				update,
+			},
+		});
+
+		const result = await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "emailVerified", value: false },
+			],
+			update: { emailVerified: true },
+		});
+
+		expect(result).toBeNull();
+		expect(update).toHaveBeenCalledTimes(1);
+	});
+
+	it("update propagates non-P2025 errors from db.update", async () => {
+		const failure = Object.assign(new Error("connection refused"), {
+			code: "P1001",
+		});
+		const update = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				update,
+			},
+		});
+
+		await expect(
+			adapter.update({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+				update: { name: "test" },
+			}),
+		).rejects.toThrow("connection refused");
+		expect(update).toHaveBeenCalledTimes(1);
+	});
+
 	it("should fall back to updateMany when where has insensitive mode on a supporting provider", async () => {
 		const update = vi.fn();
 		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
