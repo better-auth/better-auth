@@ -111,6 +111,38 @@ describe("google hosted domain (hd) enforcement", () => {
 			);
 		});
 
+		it("accepts any Workspace hd when hd is configured as a wildcard", async () => {
+			const { publicJWK, token } = await createSignedGoogleToken({
+				hd: "example.com",
+			});
+			mockGoogleJwks(publicJWK);
+
+			const provider = google({
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				hd: "*",
+			});
+
+			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
+				true,
+			);
+		});
+
+		it("rejects a token missing the hd claim when hd is configured as a wildcard", async () => {
+			const { publicJWK, token } = await createSignedGoogleToken({});
+			mockGoogleJwks(publicJWK);
+
+			const provider = google({
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				hd: "*",
+			});
+
+			await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(
+				false,
+			);
+		});
+
 		it("does not require an hd claim when hd is not configured", async () => {
 			const { publicJWK, token } = await createSignedGoogleToken({});
 			mockGoogleJwks(publicJWK);
@@ -163,6 +195,36 @@ describe("google hosted domain (hd) enforcement", () => {
 				clientId: CLIENT_ID,
 				clientSecret: CLIENT_SECRET,
 				hd: "example.com",
+			});
+
+			const result = await provider.getUserInfo({
+				idToken,
+				accessToken: "access",
+			});
+			expect(result).toBeNull();
+		});
+
+		it("returns the user for any Workspace hd when hd is configured as a wildcard", async () => {
+			const idToken = await encodeGoogleToken({ hd: "example.com" });
+			const provider = google({
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				hd: "*",
+			});
+
+			const result = await provider.getUserInfo({
+				idToken,
+				accessToken: "access",
+			});
+			expect(result?.user.email).toBe("user@example.com");
+		});
+
+		it("returns null when the hd claim is missing and hd is configured as a wildcard", async () => {
+			const idToken = await encodeGoogleToken({});
+			const provider = google({
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+				hd: "*",
 			});
 
 			const result = await provider.getUserInfo({

@@ -1,6 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import {
+	isGoogleHostedDomainAllowed,
+	verifyGoogleIdToken,
+} from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -110,21 +114,32 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
 						});
 					}
-					let payload: any;
-					try {
-						const JWKS = createRemoteJWKSet(
-							new URL("https://www.googleapis.com/oauth2/v3/certs"),
+					const payload = (await verifyGoogleIdToken({
+						token: idToken,
+						audience,
+					})) as Partial<GoogleProfile> | null;
+					if (!payload) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					if (!payload.sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					// Apply the configured Google hosted domain (`hd`) so One Tap
+					// matches the redirect sign-in flow, which rejects tokens whose
+					// `hd` claim is missing or outside the configured restriction.
+					const configuredHostedDomain = googleProvider?.hd;
+					if (
+						!isGoogleHostedDomainAllowed(configuredHostedDomain, payload.hd)
+					) {
+						ctx.context.logger.error(
+							`Google One Tap sign-in rejected: id token hosted domain (hd) "${
+								payload.hd ?? "<missing>"
+							}" does not satisfy the configured "hd" option "${configuredHostedDomain}".`,
 						);
-						const { payload: verifiedPayload } = await jwtVerify(
-							idToken,
-							JWKS,
-							{
-								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience,
-							},
-						);
-						payload = verifiedPayload;
-					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
