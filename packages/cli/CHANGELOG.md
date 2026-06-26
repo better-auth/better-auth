@@ -1,5 +1,14 @@
 # auth
 
+## 1.7.0-rc.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - better-auth@1.7.0-rc.0
+  - @better-auth/core@1.7.0-rc.0
+  - @better-auth/telemetry@1.7.0-rc.0
+
 ## 1.7.0-beta.10
 
 ### Minor Changes

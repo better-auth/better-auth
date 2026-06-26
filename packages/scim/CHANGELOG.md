@@ -1,5 +1,17 @@
 # @better-auth/scim
 
+## 1.7.0-rc.0
+
+### Minor Changes
+
+- [#10249](https://github.com/better-auth/better-auth/pull/10249) [`dfecb48`](https://github.com/better-auth/better-auth/commit/dfecb481fa0453c65cdc582adbaf3b69329a6580) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Runtime SCIM tokens now require `organizationId`; use `staticProviders` for app-level SCIM.
+
+  SCIM-managed accounts now use namespaced provider IDs (`scim:{organizationId}:{providerId}` or `scim:{providerId}` for app-level static providers). Migrate only known SCIM-managed account rows before upgrading; leave non-SCIM accounts unchanged even when they share the same provider ID.
+
+  Organization-scoped `active: false` now makes a user inactive in that organization while keeping SCIM group and team associations available for reactivation. Use `DELETE` to fully deprovision organization-scoped SCIM state.
+
+  `defaultSCIM` has been replaced by `staticProviders`. `linkExistingUsers.trustedDomains` has been removed; use `requireExistingOrgMembership`, `shouldLinkUser`, or explicit `true` instead.
+
 ## 1.7.0-beta.10
 
 ## 1.7.0-beta.9
