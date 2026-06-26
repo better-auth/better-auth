@@ -1,3 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
@@ -7,6 +9,7 @@ import type { User } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { TWO_FACTOR_ERROR_CODES, twoFactor } from ".";
 import type { TwoFactorOptions, TwoFactorTable } from "./types";
+import { recordTwoFactorFailure } from "./verify-two-factor";
 
 /**
  * Account-level lockout caps consecutive failed second-factor verifications per
@@ -260,5 +263,65 @@ describe("two-factor: account-level lockout across challenges", () => {
 		);
 		const ok = await verifyTotp(await startChallenge(), await correctTotp());
 		expect(ok.status).toBe(200);
+	});
+
+	it("sets the lock with a guarded counter transition", async () => {
+		type IncrementOneCall = Parameters<DBAdapter["incrementOne"]>[0];
+		const calls: IncrementOneCall[] = [];
+		const twoFactorRow: TwoFactorTable = {
+			id: "two-factor-id",
+			userId: "user-id",
+			secret: "secret",
+			backupCodes: "codes",
+			verified: true,
+			failedVerificationCount: 2,
+			lockedUntil: null,
+		};
+		const incrementOne: DBAdapter["incrementOne"] = async <T>(
+			data: IncrementOneCall,
+		): Promise<T | null> => {
+			calls.push(data);
+			if (calls.length === 1) {
+				return {
+					...twoFactorRow,
+					failedVerificationCount: 3,
+				} as T;
+			}
+			return null;
+		};
+		const ctx = {
+			context: {
+				getPlugin: () => ({
+					options: {
+						accountLockout: {
+							maxFailedAttempts: 3,
+							durationSeconds: 60,
+						},
+					},
+				}),
+				adapter: {
+					incrementOne,
+				},
+			},
+		} as unknown as GenericEndpointContext;
+
+		await recordTwoFactorFailure(ctx, "twoFactor", twoFactorRow);
+
+		expect(calls).toHaveLength(2);
+		expect(calls[1]).toMatchObject({
+			model: "twoFactor",
+			where: [
+				{ field: "id", value: "two-factor-id" },
+				{
+					field: "failedVerificationCount",
+					operator: "gte",
+					value: 3,
+				},
+			],
+			increment: {},
+			set: {
+				lockedUntil: expect.any(Date),
+			},
+		});
 	});
 });
