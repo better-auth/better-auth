@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.7.0-rc.11",
+  "version": "1.7.0-rc.0",
   "description": "Passkey plugin for Better Auth",
   "type": "module",
   "license": "MIT",

@@ -1,17 +1,17 @@
 # better-auth
 
-## 1.7.0-rc.11
+## 1.7.0-rc.0
 
 ### Patch Changes
 
 - Updated dependencies []:
-  - @better-auth/core@1.7.0-rc.11
-  - @better-auth/drizzle-adapter@1.7.0-rc.11
-  - @better-auth/kysely-adapter@1.7.0-rc.11
-  - @better-auth/memory-adapter@1.7.0-rc.11
-  - @better-auth/mongo-adapter@1.7.0-rc.11
-  - @better-auth/prisma-adapter@1.7.0-rc.11
-  - @better-auth/telemetry@1.7.0-rc.11
+  - @better-auth/core@1.7.0-rc.0
+  - @better-auth/drizzle-adapter@1.7.0-rc.0
+  - @better-auth/kysely-adapter@1.7.0-rc.0
+  - @better-auth/memory-adapter@1.7.0-rc.0
+  - @better-auth/mongo-adapter@1.7.0-rc.0
+  - @better-auth/prisma-adapter@1.7.0-rc.0
+  - @better-auth/telemetry@1.7.0-rc.0
 
 ## 1.7.0-beta.10
 

@@ -1,6 +1,6 @@
 # @better-auth/electron
 
-## 1.7.0-rc.11
+## 1.7.0-rc.0
 
 ## 1.7.0-beta.10
 
