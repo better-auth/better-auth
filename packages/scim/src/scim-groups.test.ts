@@ -94,6 +94,7 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		organizationId?: string,
 	) {
 		const headers = await getAuthCookieHeaders();
+		if (!organizationId) throw new Error("SCIM token requires an organization");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
@@ -107,7 +108,7 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 
 	async function getOrganizationSCIMToken(providerId = "scim-groups-provider") {
 		const org = await registerOrganization();
-		const scimToken = await getSCIMToken(providerId, org?.id);
+		const scimToken = await getSCIMToken(providerId, org!.id);
 		return { organization: org, scimToken };
 	}
 
@@ -656,16 +657,9 @@ describe("SCIM Groups", () => {
 		);
 	});
 
-	it("rejects non-org tokens and invalid group members", async () => {
-		const {
-			auth,
-			headers,
-			createGroup,
-			createUser,
-			getSCIMToken,
-			getOrganizationSCIMToken,
-		} = createTestInstance();
-		const nonOrgToken = await getSCIMToken("personal-provider");
+	it("rejects invalid group members", async () => {
+		const { auth, headers, createGroup, createUser, getOrganizationSCIMToken } =
+			createTestInstance();
 		const { scimToken: orgAToken } =
 			await getOrganizationSCIMToken("provider-a");
 		const { scimToken: orgBToken } =
@@ -673,11 +667,6 @@ describe("SCIM Groups", () => {
 		const userA = await createUser(orgAToken, "org-a@test.com");
 		const userB = await createUser(orgBToken, "org-b@test.com");
 
-		await expect(
-			createGroup(nonOrgToken, { displayName: "Personal" }),
-		).rejects.toMatchObject({
-			body: { status: "400", scimType: "invalidValue" },
-		});
 		await expect(
 			createGroup(orgAToken, {
 				displayName: "Nested",

@@ -35,16 +35,10 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 		}
 
 		let scimProvider: Omit<SCIMProvider, "id"> | null =
-			opts.defaultSCIM?.find((p) => {
-				if (p.providerId === providerId && !organizationId) {
-					return true;
-				}
-
-				return !!(
-					p.providerId === providerId &&
-					organizationId &&
-					p.organizationId === organizationId
-				);
+			opts.staticProviders?.find((p) => {
+				if (p.providerId !== providerId) return false;
+				if (!organizationId) return !p.organizationId;
+				return p.organizationId === organizationId;
 			}) ?? null;
 
 		if (scimProvider) {
@@ -61,9 +55,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			model: "scimProvider",
 			where: [
 				{ field: "providerId", value: providerId },
-				...(organizationId
-					? [{ field: "organizationId", value: organizationId }]
-					: []),
+				{ field: "organizationId", value: organizationId || null },
 			],
 		});
 

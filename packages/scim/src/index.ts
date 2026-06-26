@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { BetterAuthError } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
 	createSCIMGroup,
@@ -45,6 +46,13 @@ export const scim = (options?: SCIMOptions) => {
 	return {
 		id: "scim",
 		version: PACKAGE_VERSION,
+		init(ctx) {
+			if (!ctx.hasPlugin("organization") && !opts.staticProviders?.length) {
+				throw new BetterAuthError(
+					"The scim plugin requires the organization plugin. Register it, or configure app-level providers via `staticProviders` for single-tenant SCIM.",
+				);
+			}
+		},
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
 			listSCIMProviderConnections: listSCIMProviderConnections(opts),
@@ -74,7 +82,6 @@ export const scim = (options?: SCIMOptions) => {
 					providerId: {
 						type: "string",
 						required: true,
-						unique: true,
 					},
 					scimToken: {
 						type: "string",
@@ -83,11 +90,7 @@ export const scim = (options?: SCIMOptions) => {
 					},
 					organizationId: {
 						type: "string",
-						required: false,
-					},
-					userId: {
-						type: "string",
-						required: false,
+						required: true,
 					},
 				},
 			},
