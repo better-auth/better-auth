@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-beta.10
+
+### Minor Changes
+
+- [#10145](https://github.com/better-auth/better-auth/pull/10145) [`5838df2`](https://github.com/better-auth/better-auth/commit/5838df2f4146433164ca16ffdba2d196a4f8ff51) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider can now replay the same refresh-token response for duplicate refresh requests during a configured `refreshTokenReuseInterval`. OAuth Provider keeps strict replay handling by default; set this option to opt into the overlap window.
+
+  The MCP plugin defaults that interval to 30 seconds for native/public clients that can retry a refresh with the old token after another local session already rotated it. Set `refreshTokenReuseInterval: 0` to keep strict replay handling.
+
 ## 1.7.0-beta.9
 
 ### Minor Changes
@@ -175,6 +183,7 @@
   Breaking change: when the authorization includes a `resource`, the token and refresh requests may only narrow it. A request for a resource the authorization did not cover returns `invalid_target`. The `customAccessTokenClaims` callback now receives a `resources` array in place of the `resource` string.
 
   Migration: run the schema migration (`npx @better-auth/cli migrate`, or `generate` if you manage the schema yourself) to add the new resource columns.
+
 ## 1.6.22
 
 ### Patch Changes

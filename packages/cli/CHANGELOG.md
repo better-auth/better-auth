@@ -1,5 +1,18 @@
 # auth
 
+## 1.7.0-beta.10
+
+### Minor Changes
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `auth` CLI now requires Node.js 22.12 or newer, following its upgrade to Commander 15. Update your Node.js runtime before upgrading the CLI.
+
+### Patch Changes
+
+- Updated dependencies [[`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52)]:
+  - better-auth@1.7.0-beta.10
+  - @better-auth/core@1.7.0-beta.10
+  - @better-auth/telemetry@1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -50,6 +63,7 @@
 ### Minor Changes
 
 - [#9547](https://github.com/better-auth/better-auth/pull/9547) [`15bb169`](https://github.com/better-auth/better-auth/commit/15bb1690b274b9f1e2a58c5db039bd240dc5e99b) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `create-admin` CLI command for creating an initial admin user through the configured Better Auth instance.
+
 ## 1.6.22
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.0-beta.10
+
+### Minor Changes
+
+- [#9489](https://github.com/better-auth/better-auth/pull/9489) [`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a new `@better-auth/drizzle-adapter/relations-v2` entry point for projects using Drizzle Relations v2. The schema generator now emits relations using `defineRelationsPart` so the generated auth schema can be merged alongside your app's relations without changing your database structure.
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -36,6 +42,7 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
 ## 1.6.22
 
 ### Patch Changes
