@@ -75,19 +75,24 @@ export function getWithHooks(
 			});
 		};
 
+		type AfterTransactionHook = NonNullable<
+			NonNullable<
+				NonNullable<BetterAuthOptions["databaseHooks"]>["user"]
+			>["create"]
+		>["afterTransaction"];
+
 		const createFnTransaction = async (
 			adapter: DBAdapter<BetterAuthOptions>,
+			transactionHooks: AfterTransactionHook[],
 		) => {
-			let toTransaction = null;
-			for (const { hooks } of hooksEntries) {
-				toTransaction = hooks["user"]?.create?.afterTransaction;
-			}
-
 			const result = await runWithTransaction(adapter, async () => {
 				const tempCreated = await createFn(adapter);
+				// transaction hook does not allow muttating the final user object
+				for (const transaction of transactionHooks) {
+					// @ts-expect-error context type mismatch
+					await transaction(tempCreated as any, context);
+				}
 
-				// @ts-expect-error context type mismatch
-				if (toTransaction) await toTransaction(tempCreated as any, context);
 				return tempCreated;
 			});
 
@@ -97,7 +102,18 @@ export function getWithHooks(
 		let created: any = null;
 		if (!customCreateFn || customCreateFn.executeMainFn) {
 			if (model == "user") {
-				created = await createFnTransaction(adapter);
+				const transactionHooksToRun: AfterTransactionHook[] = [];
+
+				for (const { hooks } of hooksEntries) {
+					const transaction = hooks["user"]?.create?.afterTransaction;
+					if (transaction) transactionHooksToRun.push(transaction);
+				}
+
+				if (transactionHooksToRun.length > 0) {
+					created = await createFnTransaction(adapter, transactionHooksToRun);
+				} else {
+					created = await createFn(adapter);
+				}
 			} else {
 				created = await createFn(adapter);
 			}
