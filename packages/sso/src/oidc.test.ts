@@ -1245,6 +1245,22 @@ describe("OIDC SSO with defaultSSO array", async () => {
 								"http://localhost:8080/.well-known/openid-configuration",
 						},
 					},
+					{
+						domain:
+							"https://default-oidc-normalized.com/path,default-oidc-secondary.com",
+						providerId: "default-oidc-provider-normalized",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "normalized-client",
+							clientSecret: "normalized-secret",
+							pkce: false,
+							authorizationEndpoint: "http://localhost:8080/authorize",
+							tokenEndpoint: "http://localhost:8080/token",
+							jwksEndpoint: "http://localhost:8080/jwks",
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
 				],
 			}),
 			organization(),
@@ -1274,10 +1290,17 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 	const tokenHandler = (token: any) => {
 		const isExplicit = token.payload.aud === "explicit-client";
-		currentEmail = isExplicit
-			? "default-sso-user@default-oidc-explicit.com"
-			: "default-sso-user@default-oidc.com";
-		currentSub = isExplicit ? "explicit-sso-sub" : "default-sso-sub";
+		const isNormalized = token.payload.aud === "normalized-client";
+		currentEmail = isNormalized
+			? "default-sso-user@default-oidc-secondary.com"
+			: isExplicit
+				? "default-sso-user@default-oidc-explicit.com"
+				: "default-sso-user@default-oidc.com";
+		currentSub = isNormalized
+			? "normalized-sso-sub"
+			: isExplicit
+				? "explicit-sso-sub"
+				: "default-sso-sub";
 		token.payload.email = currentEmail;
 		token.payload.email_verified = true;
 		token.payload.name = "Default SSO User";
@@ -1370,6 +1393,36 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in via defaultSSO OIDC using normalized domain matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "someone@default-oidc-secondary.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider-normalized",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe(
+			"default-sso-user@default-oidc-secondary.com",
+		);
 	});
 
 	it("should sign in via defaultSSO OIDC with all endpoints explicit (no discovery needed)", async () => {

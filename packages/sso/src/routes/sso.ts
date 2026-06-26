@@ -1099,7 +1099,8 @@ export const signInSSO = (options?: SSOOptions) => {
 							(defaultProvider) => defaultProvider.providerId === providerId,
 						)
 					: options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.domain === domain,
+							(defaultProvider) =>
+								domain && domainMatches(domain, defaultProvider.domain),
 						);
 
 				if (matchingDefault) {
