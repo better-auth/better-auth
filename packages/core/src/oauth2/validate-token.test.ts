@@ -162,6 +162,7 @@ describe("validateToken", () => {
 	it("refuses a redirecting JWKS endpoint and fetches with redirects disabled", async () => {
 		const { privateKey, kid } = await createTestJWKS("RS256");
 		const token = await createSignedToken(privateKey, "RS256", kid);
+		mockedFetch.mockClear();
 		mockedFetch.mockResolvedValueOnce(
 			new Response("", {
 				status: 302,

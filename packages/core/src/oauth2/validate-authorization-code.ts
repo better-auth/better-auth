@@ -176,8 +176,8 @@ export async function validateToken(
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
 		[customFetch]: async (url, init) => {
-			const response = await fetch(url, { ...init, redirect: "manual" });
-			assertNoRedirect(jwksEndpoint, response.status);
+			const response = await fetch(url, { ...init, ...NO_FOLLOW_REDIRECT });
+			assertNoRedirect(String(url), response.status);
 			return response;
 		},
 	});

@@ -12,9 +12,7 @@ import { BetterAuthError } from "../error";
  */
 const HTTP_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-export function isHttpRedirectStatus(
-	status: number | undefined | null,
-): boolean {
+function isHttpRedirectStatus(status: number | undefined | null): boolean {
 	return typeof status === "number" && HTTP_REDIRECT_STATUSES.has(status);
 }
 

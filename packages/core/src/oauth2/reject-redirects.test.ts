@@ -8,40 +8,31 @@ import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import { clientCredentialsToken } from "./client-credentials-token";
 import { refreshAccessToken } from "./refresh-access-token";
-import { assertNoRedirect, isHttpRedirectStatus } from "./reject-redirects";
+import { assertNoRedirect } from "./reject-redirects";
 import { validateAuthorizationCode } from "./validate-authorization-code";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
-describe("isHttpRedirectStatus", () => {
-	it("is true for redirect statuses", () => {
-		for (const status of [301, 302, 303, 307, 308]) {
-			expect(isHttpRedirectStatus(status)).toBe(true);
-		}
-	});
-
-	it("is false for non-redirect statuses and absent values", () => {
-		for (const status of [200, 304, 400, 401, 0]) {
-			expect(isHttpRedirectStatus(status)).toBe(false);
-		}
-		expect(isHttpRedirectStatus(undefined)).toBe(false);
-		expect(isHttpRedirectStatus(null)).toBe(false);
-	});
-});
-
 describe("assertNoRedirect", () => {
-	it("throws on a redirect status", () => {
-		expect(() => assertNoRedirect("https://idp.example/token", 302)).toThrow(
-			BetterAuthError,
-		);
+	it("throws on every redirect status", () => {
+		for (const status of [301, 302, 303, 307, 308]) {
+			expect(() =>
+				assertNoRedirect("https://idp.example/token", status),
+			).toThrow(BetterAuthError);
+		}
 	});
 
 	it("does nothing for non-redirect or absent statuses", () => {
-		expect(() =>
-			assertNoRedirect("https://idp.example/token", 200),
-		).not.toThrow();
+		for (const status of [200, 304, 400, 401, 0]) {
+			expect(() =>
+				assertNoRedirect("https://idp.example/token", status),
+			).not.toThrow();
+		}
 		expect(() =>
 			assertNoRedirect("https://idp.example/token", undefined),
+		).not.toThrow();
+		expect(() =>
+			assertNoRedirect("https://idp.example/token", null),
 		).not.toThrow();
 	});
 });
