@@ -126,7 +126,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 	it("validateToken (JWKS) rejects the redirect and never connects to the internal host", async () => {
 		await expect(
 			validateToken(signedToken, `${baseUrl}/redirecting-jwks`),
-		).rejects.toThrow();
+		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
 	});
 });

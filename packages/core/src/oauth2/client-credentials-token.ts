@@ -1,8 +1,7 @@
 import { base64Url } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
-import { assertNoRedirect, NO_FOLLOW_REDIRECT } from "./reject-redirects";
+import { fetchRefusingRedirects } from "./reject-redirects";
 
 export async function clientCredentialsTokenRequest({
 	options,
@@ -97,7 +96,7 @@ export async function clientCredentialsToken({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<{
+	const { data, error } = await fetchRefusingRedirects<{
 		access_token: string;
 		expires_in?: number | undefined;
 		token_type?: string | undefined;
@@ -106,9 +105,7 @@ export async function clientCredentialsToken({
 		method: "POST",
 		body,
 		headers,
-		...NO_FOLLOW_REDIRECT,
 	});
-	assertNoRedirect(tokenEndpoint, error?.status);
 	if (error) {
 		throw error;
 	}
