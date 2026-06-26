@@ -78,9 +78,10 @@ export async function revokeUnprovenAccountAccess(
 			await ctx.context.internalAdapter.deleteAccount(account.id);
 		}
 		await ctx.context.internalAdapter.deleteUserSessions(userId);
-		return ctx.context.internalAdapter.updateUser(userId, {
+		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
 			emailVerified: true,
 		});
+		return updatedUser;
 	} finally {
 		await ctx.context.internalAdapter
 			.deleteVerificationByIdentifier(lockIdentifier)
