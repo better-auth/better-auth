@@ -6,12 +6,18 @@ import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
 import {
+	DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS,
+	DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import type { UserWithTwoFactor } from "./types";
+import type {
+	TwoFactorOptions,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
@@ -197,4 +203,100 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			restore: async () => {},
 		}),
 	};
+}
+
+function resolveAccountLockoutConfig(ctx: GenericEndpointContext) {
+	const options = ctx.context.getPlugin("two-factor")?.options as
+		| TwoFactorOptions
+		| undefined;
+	const lockout = options?.accountLockout;
+	return {
+		enabled: lockout?.enabled ?? true,
+		maxFailedAttempts:
+			lockout?.maxFailedAttempts ?? DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
+		durationMs:
+			(lockout?.durationSeconds ?? DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS) *
+			1000,
+	};
+}
+
+/**
+ * Reject the verification when the account is locked, and lazily clear an
+ * expired lock. The lock caps consecutive failed verifications per account,
+ * across challenges and factors (NIST SP 800-63B §5.2.2).
+ */
+export async function assertTwoFactorNotLocked(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled } = resolveAccountLockoutConfig(ctx);
+	if (!enabled || !twoFactor.lockedUntil) return;
+	const lockedUntil = new Date(twoFactor.lockedUntil);
+	if (lockedUntil.getTime() > Date.now()) {
+		throw APIError.from(
+			"TOO_MANY_REQUESTS",
+			TWO_FACTOR_ERROR_CODES.ACCOUNT_TEMPORARILY_LOCKED,
+		);
+	}
+	// Clear the expired lock, guarded on it still being expired, so a lock set
+	// by a concurrent request after this read is not wiped.
+	await ctx.context.adapter.incrementOne({
+		model: twoFactorTable,
+		where: [
+			{ field: "id", value: twoFactor.id },
+			{ field: "lockedUntil", operator: "lte", value: new Date() },
+		],
+		increment: {},
+		set: { failedVerificationCount: 0, lockedUntil: null },
+	});
+}
+
+/**
+ * Count one failed verification toward the account-level budget, and lock the
+ * account once the budget is spent. The increment is atomic, so concurrent
+ * failures cannot lose updates. It is unguarded so it still applies to a row
+ * whose counter is null or absent (an unmigrated row, or a document-store
+ * record predating the column), where a guarded comparison would never match.
+ */
+export async function recordTwoFactorFailure(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled, maxFailedAttempts, durationMs } =
+		resolveAccountLockoutConfig(ctx);
+	if (!enabled) return;
+	const updated = await ctx.context.adapter.incrementOne<TwoFactorTable>({
+		model: twoFactorTable,
+		where: [{ field: "id", value: twoFactor.id }],
+		increment: { failedVerificationCount: 1 },
+	});
+	if ((updated?.failedVerificationCount ?? 0) >= maxFailedAttempts) {
+		await ctx.context.adapter.update({
+			model: twoFactorTable,
+			where: [{ field: "id", value: twoFactor.id }],
+			update: { lockedUntil: new Date(Date.now() + durationMs) },
+		});
+	}
+}
+
+/**
+ * Clear the account-level failure budget after a successful verification, so the
+ * count tracks only consecutive failures. The write is unconditional: a snapshot
+ * read at the start of the request can miss a concurrent failure, so skipping it
+ * could leave the counter non-zero after a success.
+ */
+export async function resetTwoFactorFailures(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled } = resolveAccountLockoutConfig(ctx);
+	if (!enabled) return;
+	await ctx.context.adapter.update({
+		model: twoFactorTable,
+		where: [{ field: "id", value: twoFactor.id }],
+		update: { failedVerificationCount: 0, lockedUntil: null },
+	});
 }
