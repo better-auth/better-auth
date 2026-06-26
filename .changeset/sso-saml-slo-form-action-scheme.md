@@ -2,4 +2,4 @@
 "@better-auth/sso": patch
 ---
 
-The SAML single-logout POST form now only emits http(s) URLs into the form `action`, rejecting `javascript:`/`data:` IdP SLO locations.
+SAML single logout now rejects IdP SLO POST URLs that use non-http(s) schemes, such as `javascript:` or `data:`.

