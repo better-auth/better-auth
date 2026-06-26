@@ -256,8 +256,9 @@ export async function assertTwoFactorNotLocked(
  * Count one failed verification toward the account-level budget, and lock the
  * account once the budget is spent. The increment is atomic, so concurrent
  * failures cannot lose updates. It is unguarded so it still applies to a row
- * whose counter is null or absent (an unmigrated row, or a document-store
- * record predating the column), where a guarded comparison would never match.
+ * whose counter is null or absent (a row created before the migration, or a
+ * document-store record predating the column), where a guarded comparison
+ * would never match.
  */
 export async function recordTwoFactorFailure(
 	ctx: GenericEndpointContext,
