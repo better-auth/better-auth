@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	domainMatches,
 	getHostnameFromDomain,
+	parseProviderDomains,
 	parseProviderEmailVerified,
 	validateEmailDomain,
 } from "./utils";
@@ -34,6 +36,21 @@ describe("parseProviderEmailVerified", () => {
 		]) {
 			expect(parseProviderEmailVerified(value)).toBe(false);
 		}
+	});
+});
+
+describe("parseProviderDomains", () => {
+	it("normalizes comma-separated provider domains", () => {
+		expect(
+			parseProviderDomains(
+				"https://company.com/path, subsidiary.com, COMPANY.com",
+			),
+		).toEqual(["company.com", "subsidiary.com"]);
+	});
+
+	it("returns null when no domain can be parsed", () => {
+		expect(parseProviderDomains(", ,")).toBeNull();
+		expect(parseProviderDomains("")).toBeNull();
 	});
 });
 
@@ -119,6 +136,19 @@ describe("validateEmailDomain", () => {
 			const domains = "Company.COM,SUBSIDIARY.com";
 			expect(validateEmailDomain("user@company.com", domains)).toBe(true);
 			expect(validateEmailDomain("USER@SUBSIDIARY.COM", domains)).toBe(true);
+		});
+
+		it("should use the same normalized domains as ownership verification", () => {
+			const domains = "https://attacker.com/path,victim.com";
+			expect(domainMatches("attacker.com", domains)).toBe(true);
+			expect(validateEmailDomain("user@attacker.com", domains)).toBe(true);
+			expect(validateEmailDomain("user@victim.com", domains)).toBe(true);
+		});
+
+		it("should not normalize malformed email domains", () => {
+			expect(
+				validateEmailDomain("user@https://victim.com/path", "victim.com"),
+			).toBe(false);
 		});
 	});
 

@@ -6,7 +6,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import type { SSOOptions, SSOProvider } from "../types";
-import { parseDomainHostnames } from "../utils";
+import { parseProviderDomains } from "../utils";
 import { checkProviderAccess } from "./providers";
 
 const DNS_LABEL_MAX_LENGTH = 63;
@@ -174,39 +174,44 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			const hostnames = parseDomainHostnames(provider.domain);
-			if (!hostnames) {
+			const domains = parseProviderDomains(provider.domain);
+			if (!domains) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid domain",
 					code: "INVALID_DOMAIN",
 				});
 			}
 
-			for (const hostname of hostnames) {
+			for (const domain of domains) {
 				let records: string[] = [];
 				try {
-					const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
+					const dnsRecords = await dns.resolveTxt(`${identifier}.${domain}`);
 					records = dnsRecords.flat();
 				} catch (error) {
 					ctx.context.logger.warn(
-						"DNS resolution failure while validating domain ownership",
+						`DNS resolution failure while validating domain ownership for ${domain}`,
 						error,
 					);
 				}
 
-				const record = records.find((record) =>
-					record.includes(
-						`${activeVerification.identifier}=${activeVerification.value}`,
-					),
+				const verificationValue = activeVerification.value;
+				const verificationRecord = `${activeVerification.identifier}=${verificationValue}`;
+				const record = records.find(
+					(record) =>
+						record.includes(verificationRecord) ||
+						record.includes(verificationValue),
 				);
 				if (!record) {
 					throw new APIError("BAD_GATEWAY", {
-						message: "Unable to verify domain ownership. Try again later",
+						message: `Unable to verify domain ownership for ${domain}. Try again later`,
 						code: "DOMAIN_VERIFICATION_FAILED",
 					});
 				}
 			}
 
+			// FIXME(next): this remains a provider-level proof bit. When the next
+			// schema can change, store verification per normalized domain or force
+			// previously verified multi-domain providers through re-verification.
 			await ctx.context.adapter.update<SSOProvider<SSOOptions>>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: provider.providerId }],

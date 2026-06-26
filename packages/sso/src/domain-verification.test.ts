@@ -436,7 +436,8 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(502);
 			expect(await response.json()).toEqual({
-				message: "Unable to verify domain ownership. Try again later",
+				message:
+					"Unable to verify domain ownership for hello.com. Try again later",
 				code: "DOMAIN_VERIFICATION_FAILED",
 			});
 		});
@@ -677,7 +678,7 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it("does not verify a multi-domain provider when only one listed domain is owned", async () => {
+		it("does not verify a URL-like multi-domain provider unless every later-accepted domain is owned", async () => {
 			const { auth, getAuthHeaders } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
 
@@ -685,9 +686,9 @@ describe("Domain verification", async () => {
 				body: {
 					providerId: "multi-domain-provider",
 					issuer: "https://idp.example.com",
-					// The "/x" makes URL parsing collapse the first entry to
-					// "first.example"; "second.example" stays a co-listed domain.
-					domain: "first.example/x,second.example",
+					// The URL-like first entry exercises the shared normalization used
+					// by both verification and later domain matching.
+					domain: "https://attacker.com/path,victim.com",
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
@@ -705,9 +706,9 @@ describe("Domain verification", async () => {
 			});
 			const { domainVerificationToken } = await requestResponse.json();
 
-			// Only first.example publishes the verifying record; second.example does not.
+			// Only attacker.com publishes the verifying record; victim.com does not.
 			dnsMock.resolveTxt.mockImplementation(async (name: string) => {
-				if (name === "_better-auth-token-multi-domain-provider.first.example") {
+				if (name === "_better-auth-token-multi-domain-provider.attacker.com") {
 					return [
 						[
 							`_better-auth-token-multi-domain-provider=${domainVerificationToken}`,
@@ -723,10 +724,15 @@ describe("Domain verification", async () => {
 				asResponse: true,
 			});
 
-			// second.example ownership was never proven, so the provider must not verify.
+			// victim.com ownership was never proven, so the provider must not verify.
 			expect(verifyResponse.status).toBe(502);
+			expect(await verifyResponse.json()).toEqual({
+				message:
+					"Unable to verify domain ownership for victim.com. Try again later",
+				code: "DOMAIN_VERIFICATION_FAILED",
+			});
 			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
-				"_better-auth-token-multi-domain-provider.second.example",
+				"_better-auth-token-multi-domain-provider.victim.com",
 			);
 		});
 
@@ -757,9 +763,7 @@ describe("Domain verification", async () => {
 			const { domainVerificationToken } = await requestResponse.json();
 
 			// Both listed domains publish the verifying record.
-			dnsMock.resolveTxt.mockResolvedValue([
-				[`_better-auth-token-owned-multi-domain=${domainVerificationToken}`],
-			]);
+			dnsMock.resolveTxt.mockResolvedValue([[domainVerificationToken]]);
 
 			const verifyResponse = await auth.api.verifyDomain({
 				body: { providerId: "owned-multi-domain" },

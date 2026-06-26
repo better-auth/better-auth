@@ -36,12 +36,14 @@ export function safeJsonParse<T>(
  * Checks if a domain matches any domain in a comma-separated list.
  */
 export const domainMatches = (searchDomain: string, domainList: string) => {
-	const search = searchDomain.toLowerCase();
-	const domains = domainList
-		.split(",")
-		.map((d) => d.trim().toLowerCase())
-		.filter(Boolean);
-	return domains.some((d) => search === d || search.endsWith(`.${d}`));
+	const search = searchDomain.trim().toLowerCase();
+	const domains = parseProviderDomains(domainList);
+	if (!search || !domains) {
+		return false;
+	}
+	return domains.some(
+		(domain) => search === domain || search.endsWith(`.${domain}`),
+	);
 };
 
 /**
@@ -108,11 +110,13 @@ export function getHostnameFromDomain(domain: string): string | null {
 }
 
 /**
- * Reduce a provider `domain` value (single host, URL, or comma-separated list)
- * to the set of hostnames it authorizes. Returns `null` if any entry cannot be
- * reduced to a hostname.
+ * Normalize a provider `domain` value to the email domains it authorizes.
+ *
+ * TODO(next): replace the serialized provider.domain string with a canonical
+ * domains array and reject URL/path-shaped values at register/update once main
+ * and next provider schemas are reconciled.
  */
-export function parseDomainHostnames(domain: string): string[] | null {
+export function parseProviderDomains(domain: string): string[] | null {
 	const entries = domain
 		.split(",")
 		.map((entry) => entry.trim())
@@ -120,17 +124,15 @@ export function parseDomainHostnames(domain: string): string[] | null {
 	if (entries.length === 0) {
 		return null;
 	}
-	const hostnames: string[] = [];
+	const domains = new Set<string>();
 	for (const entry of entries) {
-		const hostname = getHostnameFromDomain(entry)?.toLowerCase();
-		if (!hostname) {
+		const parsedDomain = getHostnameFromDomain(entry)?.toLowerCase();
+		if (!parsedDomain) {
 			return null;
 		}
-		if (!hostnames.includes(hostname)) {
-			hostnames.push(hostname);
-		}
+		domains.add(parsedDomain);
 	}
-	return hostnames;
+	return [...domains];
 }
 
 export function maskClientId(clientId: string): string {
