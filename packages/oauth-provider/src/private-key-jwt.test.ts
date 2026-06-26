@@ -59,6 +59,8 @@ describe("private_key_jwt authentication", async () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
+		lookup.mockReset();
+		lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 	});
 
 	beforeAll(async () => {
@@ -193,6 +195,22 @@ describe("private_key_jwt authentication", async () => {
 		});
 	}
 
+	function stubJwksFetch(kid = "trusted-jwks-key") {
+		const fetchSpy = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					keys: [{ ...rsaPublicJwk, kid, alg: "RS256", use: "sig" }],
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		vi.stubGlobal("fetch", fetchSpy);
+		return fetchSpy;
+	}
+
 	it("should exchange code with valid private_key_jwt assertion", async () => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -209,28 +227,7 @@ describe("private_key_jwt authentication", async () => {
 	});
 
 	it("should exchange code using a trusted jwks_uri", async () => {
-		lookup.mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }]);
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				new Response(
-					JSON.stringify({
-						keys: [
-							{
-								...rsaPublicJwk,
-								kid: "trusted-jwks-key",
-								alg: "RS256",
-								use: "sig",
-							},
-						],
-					}),
-					{
-						status: 200,
-						headers: { "content-type": "application/json" },
-					},
-				),
-			),
-		);
+		const fetchSpy = stubJwksFetch();
 
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(jwksUriClient.client_id, codeVerifier);
@@ -247,7 +244,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(tokens.data?.access_token).toBeDefined();
-		expect(globalThis.fetch).toHaveBeenCalledWith(
+		expect(fetchSpy).toHaveBeenCalledWith(
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
@@ -256,8 +253,8 @@ describe("private_key_jwt authentication", async () => {
 		);
 	});
 
-	it("should reject a trusted jwks_uri that resolves to a private address", async () => {
-		const dnsRebindingClient = (await auth.api.adminCreateOAuthClient({
+	it("should exchange code using a trusted private-DNS jwks_uri", async () => {
+		const trustedPrivateDnsClient = (await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -266,27 +263,36 @@ describe("private_key_jwt authentication", async () => {
 				jwks_uri: "https://trusted.example.com/private-dns-jwks.json",
 			},
 		}))!;
-		const fetchSpy = vi.fn();
-		vi.stubGlobal("fetch", fetchSpy);
+		const fetchSpy = stubJwksFetch("trusted-private-dns-key");
+		lookup.mockClear();
 		lookup.mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
 
 		const codeVerifier = generateRandomString(32);
-		const code = await getAuthCode(dnsRebindingClient.client_id, codeVerifier);
+		const code = await getAuthCode(
+			trustedPrivateDnsClient.client_id,
+			codeVerifier,
+		);
 		const assertion = await signAssertion({
-			clientId: dnsRebindingClient.client_id,
-			kid: "trusted-jwks-key",
+			clientId: trustedPrivateDnsClient.client_id,
+			kid: "trusted-private-dns-key",
 		});
 
 		const tokens = await exchangeCodeForTokens({
-			clientId: dnsRebindingClient.client_id,
+			clientId: trustedPrivateDnsClient.client_id,
 			code,
 			codeVerifier,
 			assertion,
 		});
 
-		expect(tokens.error?.status).toBeGreaterThanOrEqual(400);
-		expect(tokens.error?.status).toBeLessThan(500);
-		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(fetchSpy).toHaveBeenCalledWith(
+			"https://trusted.example.com/private-dns-jwks.json",
+			expect.objectContaining({
+				headers: { accept: "application/json" },
+				redirect: "manual",
+			}),
+		);
+		expect(lookup).not.toHaveBeenCalled();
 	});
 
 	it("should reject assertion signed with wrong key", async () => {

@@ -61,9 +61,7 @@ function validateJwksUri(
 			error: "invalid_client",
 		});
 	}
-	// Trust a jwks_uri that shares origin with a URL-format client_id: the
-	// discovery that installed the client has already verified the
-	// client_id URL, and same-origin jwks_uri is part of that verification.
+	// URL-format client IDs prove same-origin jwks_uri during discovery.
 	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
 		return;
 	}
@@ -73,6 +71,18 @@ function validateJwksUri(
 			error: "invalid_client",
 		});
 	}
+}
+
+function isTrustedJwksOrigin(
+	ctx: GenericEndpointContext,
+	target: string,
+	clientIdUrlOrigin?: string,
+): boolean {
+	const parsed = new URL(target);
+	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
+		return true;
+	}
+	return ctx.context.isTrustedOrigin(target);
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
@@ -86,7 +96,10 @@ function urlClientIdOrigin(clientId: string): string | undefined {
 	}
 }
 
-async function fetchJwksFromUri(jwksUri: string): Promise<JSONWebKeySet> {
+async function fetchJwksFromUri(
+	jwksUri: string,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<JSONWebKeySet> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
@@ -96,7 +109,7 @@ async function fetchJwksFromUri(jwksUri: string): Promise<JSONWebKeySet> {
 				signal: controller.signal,
 				headers: { accept: "application/json" },
 			},
-			{ isTrustedOrigin: () => false },
+			{ isTrustedOrigin },
 		);
 		if (!response.ok) {
 			await response.body?.cancel().catch(() => {});
@@ -127,7 +140,8 @@ async function fetchClientJwks(
 		});
 	}
 
-	validateJwksUri(ctx, client.jwksUri, urlClientIdOrigin(client.clientId));
+	const clientIdUrlOrigin = urlClientIdOrigin(client.clientId);
+	validateJwksUri(ctx, client.jwksUri, clientIdUrlOrigin);
 
 	const now = Date.now();
 	const cached = jwksCache.get(client.jwksUri);
@@ -136,7 +150,9 @@ async function fetchClientJwks(
 	}
 
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
+		const jwks = await fetchJwksFromUri(client.jwksUri, (target) =>
+			isTrustedJwksOrigin(ctx, target, clientIdUrlOrigin),
+		);
 		setJwksCache(client.jwksUri, jwks, now);
 		return jwks;
 	} catch {
@@ -159,11 +175,15 @@ async function fetchClientJwks(
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
  */
 async function refetchClientJwks(
+	ctx: GenericEndpointContext,
 	client: SchemaClient<Scope[]>,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
+		const clientIdUrlOrigin = urlClientIdOrigin(client.clientId);
+		const jwks = await fetchJwksFromUri(client.jwksUri, (target) =>
+			isTrustedJwksOrigin(ctx, target, clientIdUrlOrigin),
+		);
 		setJwksCache(client.jwksUri, jwks, Date.now());
 		return jwks;
 	} catch {
@@ -410,7 +430,7 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(client);
+			const refreshed = await refetchClientJwks(ctx, client);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(
