@@ -44,7 +44,13 @@ function escapeLikePattern(
 	value: string | number | boolean | string[] | number[] | Date | null,
 ): string {
 	if (value == null) return "";
-	return String(value).replace(/%/g, "\\%").replace(/_/g, "\\_");
+	// Escape the backslash first so the `\` added for `%` and `_` is not
+	// re-escaped, and a literal backslash in the input stays literal under the
+	// `ESCAPE '\'` clause.
+	return String(value)
+		.replace(/\\/g, "\\\\")
+		.replace(/%/g, "\\%")
+		.replace(/_/g, "\\_");
 }
 
 // Object filters can't express case-insensitive matching portably, so those

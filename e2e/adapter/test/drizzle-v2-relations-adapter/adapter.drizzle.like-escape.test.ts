@@ -100,4 +100,22 @@ describe("drizzle relations-v2 adapter: LIKE wildcard escaping", () => {
 
 		expect(result.map((r) => r.id).sort()).toEqual(["u1"]);
 	});
+
+	it("contains treats a backslash as a literal character", async () => {
+		const nowTs = Date.now();
+		// "a\\b" in source is the three-character string a, backslash, b. The
+		// backslash is the escape character, so it must itself be escaped.
+		sqliteDb
+			.prepare(
+				"INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			)
+			.run("u5", "a\\b", "u5@test.com", 0, null, nowTs, nowTs);
+
+		const result = await adapter.findMany<User>({
+			model: "user",
+			where: [{ field: "name", operator: "contains", value: "a\\b" }],
+		});
+
+		expect(result.map((r) => r.id).sort()).toEqual(["u5"]);
+	});
 });
