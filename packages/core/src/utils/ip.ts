@@ -1,4 +1,6 @@
 import * as z from "zod";
+import { isDevelopment, isTest } from "../env";
+import type { BetterAuthOptions } from "../types";
 
 /**
  * Normalizes an IP address for consistent rate limiting.
@@ -334,6 +336,48 @@ export function getIPFromHeader(
 	}
 
 	return normalizeIP(selectedIp, { ipv6Subnet: options.ipv6Subnet });
+}
+
+const LOCALHOST_IP = "127.0.0.1";
+const DEFAULT_IP_HEADERS = ["x-forwarded-for"];
+
+/**
+ * Resolves the client IP for a request from the configured IP headers.
+ * Honors `disableIpTracking`, walks `ipAddressHeaders` in order (default
+ * `x-forwarded-for`), and falls back to localhost in development and test.
+ * Returns `null` when tracking is disabled or no trustworthy IP can be resolved.
+ */
+export function getIp(
+	req: Request | Headers,
+	options: BetterAuthOptions,
+): string | null {
+	if (options.advanced?.ipAddress?.disableIpTracking) {
+		return null;
+	}
+
+	const headers = "headers" in req ? req.headers : req;
+
+	const ipHeaders =
+		options.advanced?.ipAddress?.ipAddressHeaders || DEFAULT_IP_HEADERS;
+
+	for (const key of ipHeaders) {
+		const value = "get" in headers ? headers.get(key) : headers[key];
+		if (typeof value === "string") {
+			const ip = getIPFromHeader(value, {
+				ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
+				trustedProxies: options.advanced?.ipAddress?.trustedProxies,
+			});
+			if (ip) {
+				return ip;
+			}
+		}
+	}
+
+	if (isTest() || isDevelopment()) {
+		return LOCALHOST_IP;
+	}
+
+	return null;
 }
 
 /**
