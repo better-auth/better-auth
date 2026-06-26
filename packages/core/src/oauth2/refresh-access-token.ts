@@ -32,7 +32,7 @@ interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
 	 * Origins exempt from the public-routable gate, for an operator whose token
 	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 /**
@@ -132,7 +132,7 @@ export async function refreshAccessToken({
 	tokenEndpointAuth,
 	extraParams,
 	resource,
-	trustedOrigins,
+	isTrustedOrigin,
 }: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
@@ -156,7 +156,7 @@ export async function refreshAccessToken({
 		method: "POST",
 		body,
 		headers,
-		trustedOrigins,
+		isTrustedOrigin,
 	});
 	if (error) {
 		throw error;

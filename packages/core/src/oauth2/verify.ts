@@ -53,7 +53,7 @@ type JwksFetchOptions = {
 	 * Origins exempt from the public-routable gate, for an operator whose JWKS
 	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 };
 
 type ResolvedJwks = {
@@ -117,7 +117,7 @@ function shouldRefetchCachedJwksWithoutKid(
 
 async function fetchJwks(
 	jwksFetch: JwksFetchOptions["jwksFetch"],
-	trustedOrigins?: (url: string) => boolean,
+	isTrustedOrigin?: (url: string) => boolean,
 ): Promise<JSONWebKeySet> {
 	const jwks =
 		typeof jwksFetch === "string"
@@ -125,7 +125,7 @@ async function fetchJwks(
 					headers: {
 						Accept: "application/json",
 					},
-					trustedOrigins,
+					isTrustedOrigin,
 				}).then(async (res) => {
 					if (res.error)
 						throw new Error(
@@ -182,7 +182,7 @@ export interface VerifyAccessTokenOptions {
 	 * introspection endpoint runs on a private network. Forwarded to the SSRF
 	 * fetch boundary.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 export interface VerifyAccessTokenRequestOptions
@@ -341,7 +341,7 @@ async function getJwksForVerification(
 		? undefined
 		: getFreshJwksWithKid(cached, kid);
 	if (!cachedJwks) {
-		const jwks = await fetchJwks(opts.jwksFetch, opts.trustedOrigins);
+		const jwks = await fetchJwks(opts.jwksFetch, opts.isTrustedOrigin);
 		const fetchedAt = Date.now();
 		jwksCache.set(cacheKey, {
 			jwks,
@@ -370,7 +370,7 @@ async function verifyAccessTokenPayload(
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch: opts.jwksUrl,
 				verifyOptions: opts.verifyOptions,
-				trustedOrigins: opts.trustedOrigins,
+				isTrustedOrigin: opts.isTrustedOrigin,
 			});
 		} catch (error) {
 			if (error instanceof Error) {
@@ -415,7 +415,7 @@ async function verifyAccessTokenPayload(
 					token,
 					token_type_hint: "access_token",
 				}).toString(),
-				trustedOrigins: opts.trustedOrigins,
+				isTrustedOrigin: opts.isTrustedOrigin,
 			});
 		if (introspectError)
 			logger.error(

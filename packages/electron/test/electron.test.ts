@@ -2575,6 +2575,16 @@ describe("Electron", () => {
 					expect.objectContaining({ redirect: "manual" }),
 				);
 			});
+
+			it("should still reject non-loopback private hosts in development", async () => {
+				const result = await fetchUserImage(
+					undefined,
+					"http://10.0.0.5/avatar.png",
+				);
+
+				expect(result).toBeNull();
+				expect(mockElectron.net.fetch).not.toHaveBeenCalled();
+			});
 		});
 	});
 });

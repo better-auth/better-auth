@@ -18,6 +18,7 @@ export function remapSsrfError(error: unknown): never {
 	if (error instanceof SsrfRefusedError) {
 		switch (error.code) {
 			case "ssrf_private_host":
+			case "ssrf_dns_lookup_failed":
 				throw new DiscoveryError("discovery_private_host", error.message, {
 					url: error.url,
 					resolved: error.resolvedAddress,

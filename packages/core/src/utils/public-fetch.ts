@@ -5,47 +5,20 @@ import { BetterAuthError } from "../error";
 import { classifyHost, isPublicRoutableHost } from "./host";
 
 /**
- * Single chokepoint for server-side fetches to a URL that an authenticated user
- * or remote provider can influence: OAuth/OIDC token, refresh, introspection,
- * discovery, userinfo, and JWKS endpoints, and OAuth client-metadata documents.
+ * Shared fetch boundary for provider, client, and discovery-controlled auth
+ * URLs. Redirect refusal is always on. Host gating runs only when the caller
+ * passes `isTrustedOrigin`.
  *
- * Two protections with different scopes:
- *   - Redirect refusal is universal: a 3xx is never followed to a new host, on
- *     every fetch, because a conformant endpoint answers these requests directly.
- *   - The host gate (classify + DNS resolve + re-classify) is for URLs whose host
- *     an external party can influence (a registered SSO/OIDC provider, an OAuth
- *     client-metadata document). A consumer opts in by supplying `trustedOrigins`,
- *     its allowlist of internal hosts. Endpoints the application configures
- *     directly (built-in social providers) omit it: the operator already trusts
- *     that host, so only redirect refusal applies and no DNS lookup is spent.
- *
- * Host gate layers, when enabled:
- *   1. URL parse + http(s) scheme   -> ssrf_invalid_url
- *   2. Public-routable literal host  -> {@link isPublicRoutableHost} (RFC 6890)
- *   3. trustedOrigins escape hatch   -> operator opt-in for internal services
- *   4. DNS resolve + re-classify     -> rejects FQDNs that resolve to private IPs
- *
- * Best-effort by design. The DNS step resolves once and validates the result;
- * it does not pin the address for the subsequent connection, so a rebind between
- * this lookup and the fetch is theoretically possible. On runtimes without
- * `node:dns` (Cloudflare Workers, edge) the resolve step is skipped and the
- * synchronous host check plus the platform's egress controls apply. Routing
- * every outbound fetch through this module keeps a future connection-pinning
- * dispatcher a single-file change rather than a contract change.
+ * DNS validation is pre-connect only: a rebind between lookup and fetch is still
+ * possible. Edge runtimes without `node:dns` keep the literal-host check and
+ * rely on platform egress controls.
  */
 
 const httpRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 /**
- * Whether a response from a `redirect: "manual"` fetch is a redirect.
- *
- * Node/undici exposes the real 3xx status. Spec-compliant runtimes (Cloudflare
- * Workers, Deno, browsers) return an opaque-redirect filtered response with
- * status 0 and type `"opaqueredirect"`, so the status alone is not enough.
- *
- * Exported for callers that own their transport (an Electron `net.fetch`, a
- * size-capped streaming reader) and must detect a manual-mode redirect on a
- * response they fetched themselves.
+ * Detects manual-mode redirects across runtimes. Undici keeps the 3xx status;
+ * Workers, Deno, and browsers expose `opaqueredirect` with status 0.
  */
 export function isRedirectResponse(response: Response): boolean {
 	return (
@@ -57,6 +30,7 @@ export function isRedirectResponse(response: Response): boolean {
 export type SsrfRefusedCode =
 	| "ssrf_invalid_url"
 	| "ssrf_private_host"
+	| "ssrf_dns_lookup_failed"
 	| "ssrf_redirect_refused";
 
 export class SsrfRefusedError extends BetterAuthError {
@@ -80,15 +54,10 @@ export class SsrfRefusedError extends BetterAuthError {
 
 export interface PublicFetchOptions {
 	/**
-	 * The consumer's allowlist of internal origins. Supplying it enables the
-	 * host gate: the target host is classified and resolved, and anything that is
-	 * not publicly routable is rejected unless this predicate allows it (the
-	 * escape hatch for an internal IdP on a private network). Omitting it leaves
-	 * the host unchecked; only redirect refusal applies. Pass this for endpoints an
-	 * external party can influence; omit it for endpoints your application
-	 * configures directly.
+	 * Enables the host gate. Return true only for configured private or internal
+	 * origins that should bypass public-routability checks.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 function parsePublicUrl(target: string | URL): URL {
@@ -121,10 +90,7 @@ function redirectRefused(url: string): SsrfRefusedError {
 }
 
 /**
- * Run the host gate explicitly, for callers that own their transport (an
- * Electron `net.fetch`, a size-capped streaming reader) and cannot delegate the
- * request to {@link fetchPublicResource}. This always classifies and resolves
- * the host; `trustedOrigins` is the allowlist, not a switch.
+ * Run the host gate for callers that own their transport.
  *
  * @throws SsrfRefusedError on a malformed URL, non-public host, or a host that
  * resolves to a non-public address.
@@ -135,7 +101,7 @@ export async function assertPublicFetchTarget(
 ): Promise<void> {
 	const url = parsePublicUrl(target);
 
-	if (options?.trustedOrigins?.(url.toString())) return;
+	if (options?.isTrustedOrigin?.(url.toString())) return;
 
 	const host = url.hostname;
 	if (!isPublicRoutableHost(host)) {
@@ -154,8 +120,7 @@ export async function assertPublicFetchTarget(
 	try {
 		dns = await import("node:dns/promises");
 	} catch {
-		// Runtime without node:dns (Workers/edge): rely on the synchronous host
-		// check and the platform's own egress controls.
+		// Workers and edge runtimes have no node:dns; keep the literal-host check.
 		return;
 	}
 
@@ -163,8 +128,11 @@ export async function assertPublicFetchTarget(
 	try {
 		resolved = await dns.lookup(host, { all: true });
 	} catch {
-		// Resolution failure: let the actual fetch surface the network error.
-		return;
+		throw new SsrfRefusedError(
+			"ssrf_dns_lookup_failed",
+			`The host "${host}" could not be resolved before a server-side fetch. If this is an internal service, add its origin to trustedOrigins.`,
+			url.toString(),
+		);
 	}
 
 	for (const { address } of resolved) {
@@ -180,19 +148,19 @@ export async function assertPublicFetchTarget(
 }
 
 /**
- * `betterFetch` that refuses redirects, for callers that want the `{ data, error }`
- * shape (OAuth token, refresh, client-credentials, introspection, JWKS). Supply
- * `trustedOrigins` to also gate the host (see {@link PublicFetchOptions}).
+ * `betterFetch` wrapper that refuses redirects. Supply `isTrustedOrigin` to
+ * also gate the host.
  *
- * @throws SsrfRefusedError if the endpoint redirects, or if `trustedOrigins` is
+ * @throws SsrfRefusedError if the endpoint redirects, or if `isTrustedOrigin` is
  * supplied and the target host is not public.
  */
 export async function fetchPublicResource<T>(
 	target: string,
 	options?: BetterFetchOption & PublicFetchOptions,
 ) {
-	const { trustedOrigins, ...fetchOptions } = options ?? {};
-	if (trustedOrigins) await assertPublicFetchTarget(target, { trustedOrigins });
+	const { isTrustedOrigin, ...fetchOptions } = options ?? {};
+	if (isTrustedOrigin)
+		await assertPublicFetchTarget(target, { isTrustedOrigin });
 
 	let redirected = false;
 	const onError = fetchOptions.onError;
@@ -212,12 +180,10 @@ export async function fetchPublicResource<T>(
 }
 
 /**
- * Native-`fetch` that refuses redirects, returning the `Response`. For jose's
- * `createRemoteJWKSet` custom-fetch hook and other callers that need the raw
- * response. Supply `trustedOrigins` to also gate the host (see
- * {@link PublicFetchOptions}).
+ * Native `fetch` wrapper that refuses redirects and returns the raw `Response`.
+ * Supply `isTrustedOrigin` to also gate the host.
  *
- * @throws SsrfRefusedError if the endpoint redirects, or if `trustedOrigins` is
+ * @throws SsrfRefusedError if the endpoint redirects, or if `isTrustedOrigin` is
  * supplied and the target host is not public.
  */
 export async function fetchPublicResponse(
@@ -225,8 +191,11 @@ export async function fetchPublicResponse(
 	init: RequestInit,
 	options?: PublicFetchOptions,
 ): Promise<Response> {
-	if (options?.trustedOrigins) await assertPublicFetchTarget(target, options);
+	if (options?.isTrustedOrigin) await assertPublicFetchTarget(target, options);
 	const response = await fetch(target, { ...init, redirect: "manual" });
-	if (isRedirectResponse(response)) throw redirectRefused(String(target));
+	if (isRedirectResponse(response)) {
+		await response.body?.cancel().catch(() => {});
+		throw redirectRefused(String(target));
+	}
 	return response;
 }

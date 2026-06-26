@@ -1,5 +1,6 @@
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import {
 	assertPublicFetchTarget,
 	isRedirectResponse,
@@ -61,14 +62,21 @@ export async function fetchUserImage(
 		customValidator: validateImage = detectImageType,
 	} = options?.userImageProxy ?? {};
 
-	const trustedOrigins = () => isDevelopment();
+	const isTrustedOrigin = (target: string) => {
+		if (!isDevelopment()) return false;
+		try {
+			return isLoopbackHost(new URL(target).hostname);
+		} catch {
+			return false;
+		}
+	};
 
 	let response: Response | null = null;
 	let next: URL | null = parsed;
 	for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop++) {
 		if (!next) return null;
 		try {
-			await assertPublicFetchTarget(next, { trustedOrigins });
+			await assertPublicFetchTarget(next, { isTrustedOrigin });
 		} catch (error) {
 			if (error instanceof SsrfRefusedError) return null;
 			throw error;

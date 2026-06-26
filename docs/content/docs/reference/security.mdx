@@ -300,11 +300,11 @@ You can also dynamically set the list of trusted origins by providing a function
 
 ## Outbound OAuth Requests
 
-Better Auth makes server-side requests to OAuth and OIDC provider endpoints: discovery, token exchange, token refresh, token introspection, userinfo, and key-set (JWKS) requests. None of these follow HTTP redirects. A conformant provider answers them directly and never redirects, so standard integrations are unaffected. Refusing redirects keeps a provider endpoint from steering a server-side request to an unintended internal address.
+Better Auth refuses redirects for server-side OAuth and OIDC fetches, including discovery, token, refresh, introspection, userinfo, and JWKS requests. Provider endpoints should answer directly.
 
-When the endpoint host can be supplied by a party other than your application, Better Auth also verifies that it is publicly routable. This applies to providers registered through the SSO plugin, the Generic OAuth plugin, and dynamic client registration, where the endpoint comes from a registration payload or a discovery document. The host is resolved and rejected if it points at a private, link-local, or cloud-metadata address. To allow an identity provider that runs on a private network, add its origin to [`trustedOrigins`](#trusted-origins).
+When a provider, OAuth client, or registration payload controls the host, Better Auth also blocks private, link-local, and cloud-metadata targets. Node.js-compatible runtimes check DNS before fetching; edge runtimes without `node:dns` still reject non-public literal hosts. Add private IdPs to [`trustedOrigins`](#trusted-origins).
 
-Built-in social providers and any provider whose host you configure directly are exempt from the host check, since you already control that host. Redirect refusal still applies to them. The Electron user-image proxy follows avatar redirects but re-checks each hop, refusing one that resolves to a private address.
+Directly configured social-provider hosts skip the DNS host gate, but still refuse redirects. The Electron user-image proxy re-checks each avatar redirect hop.
 
 ## Email Enumeration Protection
 

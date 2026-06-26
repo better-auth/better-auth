@@ -24,10 +24,10 @@ describe("assertPublicFetchTarget", () => {
 		expect(lookup).not.toHaveBeenCalled();
 	});
 
-	it("skips the gate when trustedOrigins returns true", async () => {
+	it("skips the gate when isTrustedOrigin returns true", async () => {
 		await expect(
 			assertPublicFetchTarget("http://10.0.0.5/internal", {
-				trustedOrigins: () => true,
+				isTrustedOrigin: () => true,
 			}),
 		).resolves.toBeUndefined();
 		expect(lookup).not.toHaveBeenCalled();
@@ -69,6 +69,17 @@ describe("assertPublicFetchTarget", () => {
 		await expect(
 			assertPublicFetchTarget("https://example.com/"),
 		).resolves.toBeUndefined();
+	});
+
+	it("fails closed when DNS lookup fails for an FQDN", async () => {
+		lookup.mockRejectedValueOnce(new Error("lookup failed"));
+
+		await expect(
+			assertPublicFetchTarget("https://unresolvable.example/"),
+		).rejects.toMatchObject({
+			code: "ssrf_dns_lookup_failed",
+			url: "https://unresolvable.example/",
+		});
 	});
 
 	it("throws ssrf_invalid_url for a non-http(s) scheme", async () => {
@@ -154,7 +165,7 @@ describe("fetchPublicResource refuses redirects", () => {
 		await expect(
 			fetchPublicResource("http://10.0.0.5/token", {
 				method: "POST",
-				trustedOrigins: () => false,
+				isTrustedOrigin: () => false,
 			}),
 		).rejects.toBeInstanceOf(SsrfRefusedError);
 		expect(mockedFetch).not.toHaveBeenCalled();

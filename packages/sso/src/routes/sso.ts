@@ -1464,7 +1464,7 @@ async function handleOIDCCallback(
 			method: "POST",
 			body,
 			headers,
-			trustedOrigins: (url) => ctx.context.isTrustedOrigin(url),
+			isTrustedOrigin: (url) => ctx.context.isTrustedOrigin(url),
 		}).catch(remapSsrfError);
 		if (error) {
 			redirectOIDCError(
@@ -1516,7 +1516,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
-				trustedOrigins: (url) => ctx.context.isTrustedOrigin(url),
+				isTrustedOrigin: (url) => ctx.context.isTrustedOrigin(url),
 			},
 		)
 			.catch(remapSsrfError)

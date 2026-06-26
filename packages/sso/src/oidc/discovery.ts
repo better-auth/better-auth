@@ -130,14 +130,7 @@ export function validateDiscoveryUrl(
 	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): void {
 	const discoveryEndpoint = parseURL("discoveryEndpoint", url).toString();
-
-	if (!isTrustedOrigin(discoveryEndpoint)) {
-		throw new DiscoveryError(
-			"discovery_untrusted_origin",
-			`The main discovery endpoint "${discoveryEndpoint}" is not trusted by your trusted origins configuration.`,
-			{ url: discoveryEndpoint },
-		);
-	}
+	validateOIDCFetchUrl("discoveryEndpoint", discoveryEndpoint, isTrustedOrigin);
 }
 
 /**
@@ -164,8 +157,8 @@ export function validateDiscoveryUrl(
  * @throws DiscoveryError(discovery_invalid_url)  — malformed URL or non-http(s) scheme
  * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
  */
-function validateOIDCEndpointUrl(
-	name: OIDCConfigEndpointName,
+function validateOIDCFetchUrl(
+	name: string,
 	endpoint: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): void {
@@ -182,7 +175,7 @@ function validateOIDCEndpointUrl(
 /**
  * Validate every present OIDC endpoint URL in a registration or update body.
  *
- * Each provided URL is checked with {@link validateOIDCEndpointUrl}.
+ * Each provided URL is checked with {@link validateOIDCFetchUrl}.
  * Omitted (undefined / null / empty) fields are skipped.
  *
  * @param config - OIDC endpoint URLs from the request body
@@ -207,7 +200,7 @@ export function validateOIDCEndpointUrls(
 		["discoveryEndpoint", config.discoveryEndpoint],
 	];
 	for (const [name, url] of fields) {
-		if (url) validateOIDCEndpointUrl(name, url, isTrustedOrigin);
+		if (url) validateOIDCFetchUrl(name, url, isTrustedOrigin);
 	}
 }
 
@@ -226,9 +219,7 @@ export async function validateOIDCIdToken(
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
 		[customFetch]: (url, init) =>
-			fetchPublicResponse(url, init, { trustedOrigins: isTrustedOrigin }).catch(
-				remapSsrfError,
-			),
+			fetchPublicResponse(url, init, { isTrustedOrigin }).catch(remapSsrfError),
 	});
 	return jwtVerify(token, jwks, {
 		audience: options.audience,
@@ -253,7 +244,7 @@ export async function fetchDiscoveryDocument(
 		const response = await fetchPublicResource<OIDCDiscoveryDocument>(url, {
 			method: "GET",
 			timeout,
-			trustedOrigins: isTrustedOrigin,
+			isTrustedOrigin,
 		}).catch(remapSsrfError);
 
 		if (response.error) {
@@ -476,14 +467,7 @@ function normalizeAndValidateUrl(
 	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): string {
 	const url = normalizeUrl(name, endpoint, issuer);
-
-	if (!isTrustedOrigin(url)) {
-		throw new DiscoveryError(
-			"discovery_untrusted_origin",
-			`The ${name} "${url}" is not trusted by your trusted origins configuration.`,
-			{ endpoint: name, url },
-		);
-	}
+	validateOIDCFetchUrl(name, url, isTrustedOrigin);
 
 	return url;
 }

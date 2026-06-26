@@ -1,4 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
+import { fetchPublicResponse } from "@better-auth/core/utils/public-fetch";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT } from "better-auth/plugins";
@@ -27,6 +29,14 @@ const LOGOUT_TOKEN_LIFETIME_SECONDS = 120;
 // Spec §2.5: "the OP SHOULD NOT retransmit", so a single attempt within the
 // window is enough.
 const BACKCHANNEL_DISPATCH_TIMEOUT_MS = 5_000;
+
+function isLoopbackUrl(url: string): boolean {
+	try {
+		return isLoopbackHost(new URL(url).hostname);
+	} catch {
+		return false;
+	}
+}
 
 interface TokenRow {
 	id: string;
@@ -263,16 +273,19 @@ async function deliverBackchannelLogoutTokens(
 						jti,
 					},
 				);
-				const response = await fetch(client.backchannelLogoutUri!, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-						Accept: "application/json",
+				const response = await fetchPublicResponse(
+					client.backchannelLogoutUri!,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Accept: "application/json",
+						},
+						body: new URLSearchParams({ logout_token: token }),
+						signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
 					},
-					body: new URLSearchParams({ logout_token: token }),
-					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
-				});
+					{ isTrustedOrigin: isLoopbackUrl },
+				);
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.
 				if (response.status !== 200 && response.status !== 204) {

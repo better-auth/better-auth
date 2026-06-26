@@ -17,6 +17,18 @@ import {
 } from "vitest";
 import { cimd } from "./index";
 
+const lookup = vi.hoisted(() =>
+	vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+);
+
+vi.mock("node:dns/promises", () => ({
+	lookup,
+}));
+
+afterEach(() => {
+	lookup.mockClear();
+});
+
 const PKCE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
@@ -666,8 +678,9 @@ describe("CIMD - SSRF fetch boundary", async () => {
 
 	it("blocks a loopback client_id by default", async () => {
 		const loopbackUrl = "https://127.0.0.1/client-metadata.json";
+		const originalFetch = globalThis.fetch.bind(globalThis);
 		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
-			globalThis.fetch.call(globalThis, input, init),
+			originalFetch(input, init),
 		);
 		vi.stubGlobal("fetch", fetchSpy);
 

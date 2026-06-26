@@ -43,7 +43,7 @@ interface ValidateAuthorizationCodeInput extends AuthorizationCodeRequestInput {
 	 * Origins exempt from the public-routable gate, for an operator whose token
 	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 export async function authorizationCodeRequest({
@@ -138,7 +138,7 @@ export async function validateAuthorizationCode({
 	headers,
 	additionalParams = {},
 	resource,
-	trustedOrigins,
+	isTrustedOrigin,
 }: ValidateAuthorizationCodeInput) {
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
@@ -158,7 +158,7 @@ export async function validateAuthorizationCode({
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
-		trustedOrigins,
+		isTrustedOrigin,
 	});
 	if (error) {
 		throw error;
@@ -173,13 +173,13 @@ export async function validateToken(
 	options?: {
 		audience?: string | string[];
 		issuer?: string | string[];
-		trustedOrigins?: (url: string) => boolean;
+		isTrustedOrigin?: (url: string) => boolean;
 	},
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
 		[customFetch]: (url, init) =>
 			fetchPublicResponse(url, init, {
-				trustedOrigins: options?.trustedOrigins,
+				isTrustedOrigin: options?.isTrustedOrigin,
 			}),
 	});
 	const verified = await jwtVerify(token, jwks, {

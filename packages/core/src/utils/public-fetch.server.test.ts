@@ -17,7 +17,7 @@ import {
  * connected to. A mocked fetch cannot prove the second part, because there is no
  * real second request to observe.
  *
- * The loopback origin is exempted via `trustedOrigins` so the request reaches the
+ * The loopback origin is exempted via `isTrustedOrigin` so the request reaches the
  * server; the redirect refusal, not the host gate, is what must catch the 302.
  */
 describe("server-side OAuth fetches never follow a redirect to an internal host", () => {
@@ -100,7 +100,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				redirectURI: `${baseUrl}/callback`,
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
-				trustedOrigins: allowLoopback,
+				isTrustedOrigin: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -112,7 +112,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				refreshToken: "refresh-token",
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
-				trustedOrigins: allowLoopback,
+				isTrustedOrigin: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -124,7 +124,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
 				scope: "openid",
-				trustedOrigins: allowLoopback,
+				isTrustedOrigin: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -133,7 +133,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 	it("validateToken (JWKS) rejects the redirect and never connects to the internal host", async () => {
 		await expect(
 			validateToken(signedToken, `${baseUrl}/redirecting-jwks`, {
-				trustedOrigins: allowLoopback,
+				isTrustedOrigin: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);

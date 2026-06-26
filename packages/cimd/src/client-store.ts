@@ -288,9 +288,7 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	// Pre-fetch gate: operators can block domains, rate-limit, or reject
-	// URLs whose hostnames resolve to non-public addresses (DNS-level SSRF
-	// defense beyond the IP-literal check in `validateClientIdUrl`).
+	// Caller policy runs before Better Auth's shared host gate.
 	if (cimdOptions.allowFetch) {
 		const allowed = await cimdOptions.allowFetch(clientIdUrl, ctx);
 		if (!allowed) {
@@ -302,12 +300,10 @@ async function fetchAndValidateMetadataDocument(
 		}
 	}
 
-	// Shared SSRF host gate: classify + DNS-resolve the target. `allowLoopback`
-	// is the only escape hatch, mapped to the trustedOrigins allowlist; every
-	// other non-public host is refused.
+	// The shared host gate allows loopback only when CIMD opted into it.
 	try {
 		await assertPublicFetchTarget(clientIdUrl, {
-			trustedOrigins: cimdOptions.allowLoopback
+			isTrustedOrigin: cimdOptions.allowLoopback
 				? (url) => {
 						try {
 							return isLoopbackHost(new URL(url).hostname);

@@ -10,6 +10,14 @@ import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
 import { isPrivateHostname } from "./utils/client-assertion";
 
+const lookup = vi.hoisted(() =>
+	vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+);
+
+vi.mock("node:dns/promises", () => ({
+	lookup,
+}));
+
 describe("private_key_jwt authentication", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -201,6 +209,7 @@ describe("private_key_jwt authentication", async () => {
 	});
 
 	it("should exchange code using a trusted jwks_uri", async () => {
+		lookup.mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }]);
 		vi.stubGlobal(
 			"fetch",
 			vi.fn().mockResolvedValue(
@@ -242,9 +251,42 @@ describe("private_key_jwt authentication", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
+	});
+
+	it("should reject a trusted jwks_uri that resolves to a private address", async () => {
+		const dnsRebindingClient = (await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks_uri: "https://trusted.example.com/private-dns-jwks.json",
+			},
+		}))!;
+		const fetchSpy = vi.fn();
+		vi.stubGlobal("fetch", fetchSpy);
+		lookup.mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
+
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(dnsRebindingClient.client_id, codeVerifier);
+		const assertion = await signAssertion({
+			clientId: dnsRebindingClient.client_id,
+			kid: "trusted-jwks-key",
+		});
+
+		const tokens = await exchangeCodeForTokens({
+			clientId: dnsRebindingClient.client_id,
+			code,
+			codeVerifier,
+			assertion,
+		});
+
+		expect(tokens.error?.status).toBeGreaterThanOrEqual(400);
+		expect(tokens.error?.status).toBeLessThan(500);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it("should reject assertion signed with wrong key", async () => {

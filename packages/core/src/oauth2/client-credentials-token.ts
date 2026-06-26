@@ -31,7 +31,7 @@ interface ClientCredentialsTokenInput
 	 * Origins exempt from the public-routable gate, for an operator whose token
 	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
 	 */
-	trustedOrigins?: (url: string) => boolean;
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 export async function clientCredentialsTokenRequest({
@@ -104,7 +104,7 @@ export async function clientCredentialsToken({
 	authentication,
 	tokenEndpointAuth,
 	resource,
-	trustedOrigins,
+	isTrustedOrigin,
 }: ClientCredentialsTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
@@ -124,7 +124,7 @@ export async function clientCredentialsToken({
 		method: "POST",
 		body,
 		headers,
-		trustedOrigins,
+		isTrustedOrigin,
 	});
 	if (error) {
 		throw error;
