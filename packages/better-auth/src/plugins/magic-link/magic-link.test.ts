@@ -367,6 +367,11 @@ describe("magic link", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			accountId: "attacker-google",
+			providerId: "google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -387,11 +392,10 @@ describe("magic link", async () => {
 		const session = await testClient.getSession({ fetchOptions: { headers } });
 		expect(session.data?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			auth.api.signInEmail({ body: { email, password: existingPassword } }),
 		).rejects.toThrow();
