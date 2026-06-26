@@ -21,9 +21,9 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
-Each section starts with a change type and an attention level.
+Each change uses one label.
 
-| Type            | Meaning                                                           |
+| Label           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
 | **Breaking**    | You may need to change code, config, data, or database schema.    |
 | **Behavior**    | The result may change, but most projects do not need a migration. |
@@ -32,11 +32,7 @@ Each section starts with a change type and an attention level.
 
 Security is the reason for some changes, not a separate type. If a safer check changes runtime behavior, the section is marked **Behavior**. If it needs code, config, data, or schema changes, it is marked **Breaking**.
 
-| Attention  | Meaning                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------- |
-| **High**   | It changes behavior quietly, or it touches your data or security if you ignore it. Read it. |
-| **Medium** | It causes a clear error that points you at the fix.                                         |
-| **Low**    | It is niche, or no action is needed for most setups.                                        |
+Inside each section, breaking changes come first, then behavior changes, then new features, then deprecations.
 
 ## Before you upgrade
 
@@ -80,15 +76,9 @@ The SCIM reclaim is the one manual data step. Plan for it before you cut over.
 
 This covers social login, the generic OAuth plugin, One Tap, and consuming SSO.
 
-### Scopes are kept across logins - Behavior, Low
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-Granted scopes used to overwrite each other. A permission granted earlier could disappear after a later login that asked for less access.
-
-Better Auth now keeps the scopes already on the account across re-login and token refresh, using the existing `account.scope` field. This is a behavior fix: no schema change, no backfill, and no action for most projects.
-
-If you tracked the 1.7 prereleases, note that an early beta moved scopes into a `grantedScopes` array and a later beta reverted it. The shipped 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column from an early beta, drop it and restore `scope` on every schema you changed. See [Tracking prereleases](#tracking-prereleases).
-
-### Generic OAuth is rebuilt on the social-provider path - Breaking, High
+### Generic OAuth is rebuilt on the social-provider path
 
 The generic OAuth plugin now works like the built-in social providers.
 
@@ -102,41 +92,63 @@ The generic OAuth plugin now works like the built-in social providers.
 * Remove `issuer` and `requireIssuerValidation`; issuer validation is now automatic.
 * `authorizationUrlParams` and `tokenUrlParams` now accept only plain string maps.
 
-### Identity tokens go through one verifier - Breaking, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Identity tokens go through one verifier
 
 Each provider used to verify its own identity tokens. Now there is one verifier, and each provider declares an `idToken` config: keys, issuer, and audience.
 
 **What to do:** a custom provider should replace its `verifyIdToken` method with an `idToken` config. PayPal no longer accepts identity-token login; it uses its access token instead. Switch PayPal identity-token login to the redirect flow. The built-in provider options are unchanged.
 
-### Discovery providers verify their identity tokens - Behavior, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-A generic OAuth provider configured with a discovery URL now verifies the provider identity token. A token that fails verification is rejected.
-
-**What to do:** if a discovery provider returned a token that could not be verified and your app trusted it anyway, the login is now rejected. Confirm the provider's published keys, issuer, and audience.
-
-### Provider profile fields respect `input: false` - Behavior, Medium
-
-OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user.
-
-**What to do:** if you used `mapProfileToUser` to fill fields marked `input: false`, move that assignment into server-side provisioning code that you control.
-
-### Google One Tap needs a client ID - Breaking, Medium
+### Google One Tap needs a client ID
 
 One Tap now checks that the token is meant for your app and signs in the user who actually owns the Google account. It also applies the configured Google hosted-domain restriction before creating a session.
 
 **What to do:** set a Google client ID on `oneTap({ clientId })` or `socialProviders.google.clientId`. Without one, One Tap server callbacks now fail. If you use hosted-domain restrictions, check that One Tap and normal Google sign-in both use the same `hd` policy. Use `hd: "*"` only when you want to allow any Google Workspace hosted domain while still rejecting accounts with no hosted-domain claim.
 
-### Signed-assertion login validates at startup - Behavior, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-A signed-assertion login setup, also called private-key JWT, is now checked when it is created. An unsupported algorithm, a key with no material, or a mismatch between the declared algorithm and the key now fails immediately instead of silently doing the wrong thing.
-
-**What to do:** fix any signing setup whose declared algorithm disagrees with the key. Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest`.
-
-### Electron requires modern PKCE - Breaking, High
+### Electron requires modern PKCE
 
 The Electron login flow now requires S256 PKCE, no longer trusts a custom origin header, and matches custom URL schemes more safely.
 
 **What to do:** upgrade the `@better-auth/electron` client and server together. Make sure your app URL scheme is in `trustedOrigins`. Remove the old `disableOriginOverride` option. Review trusted entries with a host, such as `myapp://callback`, because they no longer match lookalike hosts.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Scopes are kept across logins
+
+Granted scopes used to overwrite each other. A permission granted earlier could disappear after a later login that asked for less access.
+
+Better Auth now keeps the scopes already on the account across re-login and token refresh, using the existing `account.scope` field. This is a behavior fix: no schema change, no backfill, and no action for most projects.
+
+If you tracked the 1.7 prereleases, note that an early beta moved scopes into a `grantedScopes` array and a later beta reverted it. The shipped 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column from an early beta, drop it and restore `scope` on every schema you changed. See [Tracking prereleases](#tracking-prereleases).
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Discovery providers verify their identity tokens
+
+A generic OAuth provider configured with a discovery URL now verifies the provider identity token. A token that fails verification is rejected.
+
+**What to do:** if a discovery provider returned a token that could not be verified and your app trusted it anyway, the login is now rejected. Confirm the provider's published keys, issuer, and audience.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Provider profile fields respect `input: false`
+
+OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user.
+
+**What to do:** if you used `mapProfileToUser` to fill fields marked `input: false`, move that assignment into server-side provisioning code that you control.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Signed-assertion login validates at startup
+
+A signed-assertion login setup, also called private-key JWT, is now checked when it is created. An unsupported algorithm, a key with no material, or a mismatch between the declared algorithm and the key now fails immediately instead of silently doing the wrong thing.
+
+**What to do:** fix any signing setup whose declared algorithm disagrees with the key. Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest`.
 
 ***
 
@@ -144,7 +156,9 @@ The Electron login flow now requires S256 PKCE, no longer trusts a custom origin
 
 This covers `@better-auth/oauth-provider`. Several changes need a schema migration; run `generate` and `migrate` once after applying them.
 
-### Protected resources replace the audience list - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Protected resources replace the audience list
 
 Audiences are now resources. Each resource can have its own token lifetime, scopes, claims, and signing keys. The old `validAudiences` list is removed.
 
@@ -157,13 +171,17 @@ Audiences are now resources. Each resource can have its own token lifetime, scop
 
 **If you accept dynamically registered clients,** the resource model enforces per-client resource access by default. A dynamic client's token request can be rejected with `invalid_target`. Set `enforcePerClientResources: false` for that case, and register each client's `grant_types` explicitly, or the token endpoint rejects them with `unauthorized_client`.
 
-### Token target is locked to the login - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Token target is locked to the login
 
 The API a token is for is now captured at login and locked to that grant. A later request can narrow the target API but cannot widen it. Asking for an API the login did not cover is rejected. A custom-claims callback now receives a list of resources instead of one value.
 
 **What to do:** run the migration to add the resource columns. Update custom-claims callbacks to read the resource list. Make sure clients ask only for resources their login covered.
 
-### DPoP renames the token verifier - Breaking, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### DPoP renames the token verifier
 
 The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToken` and now rejects DPoP tokens. Use the new `verifyAccessTokenRequest` on endpoints that may receive DPoP requests.
 
@@ -171,19 +189,25 @@ The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToke
 
 **Watch the proxy case.** Native DPoP checks the proof's `htu` claim against the URL the token endpoint computes for itself. Behind a TLS-terminating proxy or a custom server, that computed URL can be the internal bind address (`http://0.0.0.0:3000`) or the proxy's internal scheme and port. The client signed `htu` from your public discovery URL, so a valid proof can be rejected. Canonicalize the incoming request's scheme and host to your configured `baseURL` at the route boundary before the provider reads it.
 
-### Refresh-token retries can be tolerated - New, Low
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-The OAuth provider can replay the same refresh response for duplicate refresh requests during `refreshTokenReuseInterval`. Strict refresh-token replay handling remains the default.
-
-**What to do:** set `refreshTokenReuseInterval` only if a public or native client can retry a refresh request with an old token after another local session already rotated it. MCP defaults this window to 30 seconds for native and public clients. Set `refreshTokenReuseInterval: 0` to keep strict replay handling.
-
-### Sign-out revokes session tokens - Breaking, High
+### Sign-out revokes session tokens
 
 When a session ends, the access tokens tied to it are now revoked. They read as inactive at introspection and userinfo. Before, they lived until they expired. Your server also sends a logout message to each app that registered a logout URL.
 
 **What to do:** run `generate` and `migrate` to add the new columns. Expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
 
-### `max_age` is enforced - Behavior, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Custom ID-token claims cannot override protocol claims
+
+Your custom ID-token claims can no longer set protocol claims that the standard reserves for the server: issuer, subject, audience, expiry, nonce, session binding, `auth_time`, `acr`, `amr`, and `azp`. Your own namespaced claims still appear. ID tokens also report `acr: "0"` rather than a vendor-specific value.
+
+**What to do:** if a `customIdTokenClaims` callback, an extension claim contributor, or a per-issuance `idTokenClaims` set one of those reserved claims, that value is now ignored. Move the data into a namespaced claim of your own, or rely on the server's value.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### `max_age` is enforced
 
 When a client asks for `max_age` and the user's login is older than that, the provider sends them back to log in. Before, the request was ignored.
 
@@ -191,45 +215,59 @@ When a client asks for `max_age` and the user's login is older than that, the pr
 
 **Watch your date columns.** The `max_age` check reads a session's creation time back as a date. If your custom schema stores session timestamps as text instead of a real date or integer-timestamp type, the check can misread the value and send users into a login loop. Store `user`, `session`, `account`, and `verification` timestamps with a date or timestamp type. The Better Auth CLI generates the correct type.
 
-### Custom ID-token claims cannot override protocol claims - Breaking, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
-Your custom ID-token claims can no longer set protocol claims that the standard reserves for the server: issuer, subject, audience, expiry, nonce, session binding, `auth_time`, `acr`, `amr`, and `azp`. Your own namespaced claims still appear. ID tokens also report `acr: "0"` rather than a vendor-specific value.
-
-**What to do:** if a `customIdTokenClaims` callback, an extension claim contributor, or a per-issuance `idTokenClaims` set one of those reserved claims, that value is now ignored. Move the data into a namespaced claim of your own, or rely on the server's value.
-
-### The old `oidcProvider` plugin is removed - Deprecation, Medium
-
-**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider`, move your config across, and run the schema migration.
-
-### Client creation returns 201 - Behavior, Medium
+### Client creation returns 201
 
 Creating a client now returns `201 Created` instead of `200 OK`, and the registration endpoint enforces the same permission checks as the manual create endpoints.
 
 **What to do:** update any client that expects a `200` from client creation to accept `201`. To allow machine clients to register, configure `validateInitialAccessToken`.
 
-### Client authentication is tied to the grant - Behavior, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Client authentication is tied to the grant
 
 A custom client-authentication method registered through the extension surface can now only prove which client is calling. The server decides what that client is allowed to do.
 
 **What to do:** companion plugins that added a client-authentication method should rely on the server-resolved client rather than returning their own client decision.
 
-### If you extended the OAuth provider by hand - New, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
-If you added custom grants, claims, or client-authentication methods by patching or forking the OAuth provider, use the supported extension surface instead of re-applying a patch. Register your contributions with `extendOAuthProvider(ctx, ...)` from your plugin's `init(ctx)` hook. Mint tokens with `provider.issueTokens(...)`, authenticate a client with `provider.authenticateClient(...)`, and hash a token with `provider.hashToken(...)`. Bind a token's audience by passing `resources` to `issueTokens`; the server owns the audience.
-
-A contribution written in an older or hand-rolled shape can fail silently here. It may type-check and run while the grant or claim never reaches a token. After moving each one into `init()`, confirm it on a real token before you trust it.
-
-### Server-side OAuth requests refuse redirects - Behavior, Low
+### Server-side OAuth requests refuse redirects
 
 Better Auth now refuses HTTP redirects on the server-side OAuth requests it makes: token exchange, token refresh, client credentials, token introspection, and JWKS requests. Conformant OAuth providers answer these endpoints directly and do not redirect.
 
 **What to do:** nothing for standard providers. If a custom provider endpoint redirects, make it return the final response directly.
 
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Refresh-token retries can be tolerated
+
+The OAuth provider can replay the same refresh response for duplicate refresh requests during `refreshTokenReuseInterval`. Strict refresh-token replay handling remains the default.
+
+**What to do:** set `refreshTokenReuseInterval` only if a public or native client can retry a refresh request with an old token after another local session already rotated it. MCP defaults this window to 30 seconds for native and public clients. Set `refreshTokenReuseInterval: 0` to keep strict replay handling.
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### If you extended the OAuth provider by hand
+
+If you added custom grants, claims, or client-authentication methods by patching or forking the OAuth provider, use the supported extension surface instead of re-applying a patch. Register your contributions with `extendOAuthProvider(ctx, ...)` from your plugin's `init(ctx)` hook. Mint tokens with `provider.issueTokens(...)`, authenticate a client with `provider.authenticateClient(...)`, and hash a token with `provider.hashToken(...)`. Bind a token's audience by passing `resources` to `issueTokens`; the server owns the audience.
+
+A contribution written in an older or hand-rolled shape can fail silently here. It may type-check and run while the grant or claim never reaches a token. After moving each one into `init()`, confirm it on a real token before you trust it.
+
+<HeaderLabel variant="warning">Deprecation</HeaderLabel>
+
+### The old `oidcProvider` plugin is removed
+
+**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider`, move your config across, and run the schema migration.
+
 ***
 
 ## MCP
 
-### MCP moves to its own package - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### MCP moves to its own package
 
 The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OAuth provider. This is the largest single change for existing MCP users.
 
@@ -249,43 +287,57 @@ The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clien
 
 The SAML changes upgrade the underlying library, which requires **Node 20 or newer**.
 
-### IdP-initiated SAML is off by default - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### IdP-initiated SAML is off by default
 
 Unsolicited logins started by the identity provider are now disabled by default, and several SAML validation checks now work. Better Auth rejects SAML responses whose audience, bearer recipient, or response destination does not match the configured Service Provider.
 
 **What to do:** set `saml.allowIdpInitiated: true` to restore the old behavior if you depend on it. Make sure your configured audience, ACS URL, and destination match what the identity provider sends, or previously accepted logins may now be rejected.
 
-### SAML certificates can be a list - Breaking, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### SAML certificates can be a list
 
 Signing certificates now accept a single value or a list, which lets you rotate certificates without downtime. The management endpoints always return the certificate as a list.
 
 **What to do:** update any code that reads the certificate from those endpoints to expect a list. Make sure every SAML config supplies a certificate, or registration fails.
 
-### SAML configuration is simplified - Breaking, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### SAML configuration is simplified
 
 The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect are now uppercase.
 
 **What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the uppercase versions.
 
-### SSO domain verification checks every listed domain - Behavior, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-When a provider lists multiple comma-separated domains, every listed domain must now publish the verification TXT record before the provider is marked verified.
-
-**What to do:** add the verification TXT record to every domain listed on each SSO provider. The verifier accepts either the raw verification token or the existing `identifier=value` format.
-
-### SAML Single Logout accepts only http(s) URLs - Behavior, Low
-
-SAML Single Logout now rejects IdP POST URLs that use non-http(s) schemes, such as `javascript:` or `data:`.
-
-**What to do:** use an `http` or `https` Single Logout URL.
-
-### SCIM connections are owned by their creator - Breaking, High
+### SCIM connections are owned by their creator
 
 A personal SCIM connection is now always owned by the user who created it, and ownership can no longer be turned off.
 
 **What to do:** run a migration to make the owner column permanent. Connections created before the upgrade have no owner and become unreachable. Reclaim them in the database: delete connection rows that have neither an organization nor an owner, or set the owner, then regenerate their tokens. Organization connections are not affected.
 
-### SCIM writes are safer - Behavior, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### SSO domain verification checks every listed domain
+
+When a provider lists multiple comma-separated domains, every listed domain must now publish the verification TXT record before the provider is marked verified.
+
+**What to do:** add the verification TXT record to every domain listed on each SSO provider. The verifier accepts either the raw verification token or the existing `identifier=value` format.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### SAML Single Logout accepts only http(s) URLs
+
+SAML Single Logout now rejects IdP POST URLs that use non-http(s) schemes, such as `javascript:` or `data:`.
+
+**What to do:** use an `http` or `https` Single Logout URL.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### SCIM writes are safer
 
 SCIM user writes now honor the `active` attribute, and non-organization SCIM deletes only remove the global user when the SCIM account is their only identity. `PUT` and `PATCH` reject changing a user's email to one already used by another user.
 
@@ -295,7 +347,9 @@ SCIM user writes now honor the `active` attribute, and non-organization SCIM del
 
 ## Behind a proxy
 
-### Forwarded headers are not trusted by default - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Forwarded headers are not trusted by default
 
 When your app reads its own address, it now uses the `Host` header and ignores forwarded headers unless you opt in.
 
@@ -312,7 +366,9 @@ betterAuth({
 
 Setups where the proxy rewrites the host for you, such as nginx, Vercel, Cloudflare, and Netlify, need no change.
 
-### IdP redirects and DPoP need your canonical origin - Behavior, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### IdP redirects and DPoP need your canonical origin
 
 Two OAuth-provider behaviors read the incoming request origin. Behind a custom server or TLS-terminating proxy, that origin can be the internal bind address rather than your public origin. The provider returns your `consentPage` and `loginPage` as relative paths, so a server-side redirect, such as `NextResponse.redirect`, needs them resolved against an absolute origin. Native DPoP also compares the proof's `htu` against the URL the token endpoint computes for itself.
 
@@ -324,25 +380,33 @@ Two OAuth-provider behaviors read the incoming request origin. Behind a custom s
 
 The atomic-state work introduces required methods. If you use only the built-in adapters and storage, you can skip this.
 
-### Database adapters must implement `incrementOne` - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Database adapters must implement `incrementOne`
 
 `incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. The old fallback is gone.
 
 **What to do:** implement `incrementOne` in any custom adapter. All built-in adapters already do.
 
-### Secondary storage must implement `increment` - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Secondary storage must implement `increment`
 
 `increment(key, ttl)` bumps a counter by one and sets the expiry only when the key is first created.
 
 **What to do:** implement `increment` in custom secondary storage. Redis storage already does.
 
-### Rate-limit storage uses `consume` - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Rate-limit storage uses `consume`
 
 Rate-limit storage now needs a single `consume(key, rule)` method that checks and increments in one step. Separate `get` and `set` are no longer accepted.
 
 **What to do:** replace `get` and `set` in custom rate-limit storage with `consume`.
 
-### Two internal helpers changed - Breaking, Medium
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Two internal helpers changed
 
 `findAccount(accountId)` is removed because an account ID is not unique on its own. `deleteSessions` is split into `deleteUserSessions(userId)` and `deleteSessions(tokens)`.
 
@@ -352,7 +416,9 @@ Rate-limit storage now needs a single `consume(key, rule)` method that checks an
 
 ## Captcha
 
-### Captcha matches full paths - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Captcha matches full paths
 
 Captcha rules now match full request paths or explicit wildcards, which closes a way to skip a captcha rule through partial path matching.
 
@@ -362,19 +428,25 @@ Captcha rules now match full request paths or explicit wildcards, which closes a
 
 ## Two-factor and passwordless security
 
-### Two-factor account lockout adds schema fields - Breaking, High
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Two-factor account lockout adds schema fields
 
 Two-factor verification now has an account-level lockout. TOTP, email OTP, and backup codes share one failed-attempt counter, and a successful verification resets it. By default, an account locks for 15 minutes after 10 consecutive failed verifications.
 
 **What to do:** run `generate` and `migrate` if you use two-factor authentication. This adds `failedVerificationCount` and `lockedUntil` to the `twoFactor` table. Configure the behavior with `twoFactor({ accountLockout: { enabled, maxFailedAttempts, durationSeconds } })`.
 
-### Two-factor challenges cap wrong codes - Behavior, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Two-factor challenges cap wrong codes
 
 TOTP and backup-code verification now stop after five wrong codes per sign-in challenge. Once the limit is reached, Better Auth returns `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE`, and the user must start a new sign-in challenge.
 
 **What to do:** make sure your UI can show that error and send the user back to sign in. During a rolling deploy, two-factor challenges issued by the previous version may ask the user to sign in again; this clears once the deploy completes.
 
-### Magic-link and email-OTP sign-in can clear unproven credentials - Behavior, Medium
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Magic-link and email-OTP sign-in can clear unproven credentials
 
 Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth for an account whose email had never been confirmed. If that account had an unproven password, Better Auth removes the password and revokes existing sessions before signing the user in.
 
