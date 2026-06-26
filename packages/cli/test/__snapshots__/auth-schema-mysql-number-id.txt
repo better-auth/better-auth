@@ -94,6 +94,8 @@ export const twoFactor = mysqlTable(
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
     verified: boolean("verified").default(true),
+    failedVerificationCount: int("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until", { fsp: 3 }),
   },
   (table) => [
     index("twoFactor_secret_idx").on(table.secret),
