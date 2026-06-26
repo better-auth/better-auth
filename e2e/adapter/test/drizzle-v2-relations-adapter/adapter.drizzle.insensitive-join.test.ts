@@ -1,12 +1,7 @@
 /**
- * Regression test for case-insensitive where clauses on the joins path. The
- * adapter skipped the relational query whenever a where used `mode:
- * "insensitive"`, falling back to the non-relational SQL path. Under
- * `experimental.joins` the factory does not run its own fallback join, so the
- * joined data came back empty. Insensitive conditions are now routed through
- * `RAW`, so the relational query handles them and still performs the join.
- *
- * @see https://github.com/better-auth/better-auth/pull/9489
+ * The adapter skipped the relational query for case-insensitive where clauses,
+ * falling back to the non-relational path. Under `experimental.joins` that
+ * returned empty joins, so insensitive conditions are now routed through `RAW`.
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import Database from "better-sqlite3";

@@ -69,8 +69,6 @@ describe("relations-v2 schema generator", () => {
 	 * with a user model whose table name is `relations` (e.g.
 	 * `verification: { modelName: "relations" }`), producing
 	 * `Duplicate identifier 'relations'` and breaking schema compilation.
-	 *
-	 * @see https://github.com/better-auth/better-auth/pull/9489
 	 */
 	describe("relations part export name", () => {
 		it("exports the relations part as `authRelations`, not `relations`", async () => {
@@ -97,8 +95,6 @@ describe("relations-v2 schema generator", () => {
 	 * those signatures produces code that fails to compile and crashes
 	 * `drizzle-kit push` for any user with `string[]` / `number[]` / `json`
 	 * additional fields.
-	 *
-	 * @see https://github.com/better-auth/better-auth/pull/9489#discussion
 	 */
 	it("emits valid Drizzle RC3 MySQL columns for json and array additional fields", async () => {
 		const { code = "" } = await generateFor("mysql", {

@@ -60,8 +60,10 @@ function escapeLikePattern(
  * exposes `rowCount`, postgres-js returns an Array subclass with the count on
  * `.count`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as the first
  * element of a result-header array), and better-sqlite3 uses `changes`. The
- * adapter contract requires `updateMany`/`deleteMany` to return a finite number;
- * the factory throws otherwise.
+ * adapter contract requires `updateMany`/`deleteMany` to return a finite number.
+ * The factory throws otherwise.
+ *
+ * @see https://github.com/porsager/postgres#result-array
  */
 function getAffectedRowCount(
 	result: unknown,

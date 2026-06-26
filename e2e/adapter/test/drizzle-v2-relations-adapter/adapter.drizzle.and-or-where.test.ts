@@ -3,8 +3,6 @@
  * `(AND group) AND (OR group)`. The adapter passed both groups as two
  * arguments to Drizzle's single-argument `.where()`, silently dropping the OR
  * group.
- *
- * @see https://github.com/better-auth/better-auth/pull/9489
  */
 import type { User } from "@better-auth/core/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
@@ -48,8 +46,8 @@ describe("drizzle relations-v2 adapter: mixed AND/OR where clauses", () => {
 			);
 		`);
 		const nowTs = Date.now();
-		// image = 'keep.png' is the AND condition; name in (Alice, Bob) is the OR
-		// group. Only u1 and u2 satisfy both. u3 satisfies AND but not OR, so it
+		// image = 'keep.png' is the AND condition, and name in (Alice, Bob) is the
+		// OR group. Only u1 and u2 satisfy both. u3 satisfies AND but not OR, so it
 		// is the row that leaks through when the OR group is dropped.
 		sqliteDb.exec(`
 			INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt)

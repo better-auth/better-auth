@@ -5,7 +5,6 @@
  * wrong rows.
  *
  * @see https://www.sqlite.org/lang_expr.html
- * @see https://github.com/better-auth/better-auth/pull/9489
  */
 import type { User } from "@better-auth/core/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";

@@ -1,19 +1,16 @@
 /**
- * Regression test for affected-row counting with the postgres-js driver.
- * `updateMany`/`deleteMany` run without `RETURNING`, and Drizzle's postgres-js
- * driver returns the raw postgres-js `Result`, an Array subclass whose affected
- * count lives only on `.count` (the array length is 0). The adapter matched the
- * `Array.isArray` branch first and returned `result.length` (0), so every
- * update/delete reported 0 affected rows. The count is now read from `.count`
- * before the array branch.
+ * `updateMany`/`deleteMany` run without `RETURNING`, and the postgres-js driver
+ * returns a custom Array whose affected-row count lives on `.count` (length is
+ * 0). The adapter matched the `Array.isArray` branch and returned `length` (0),
+ * so writes reported 0 affected rows. The count is now read from `.count`.
  *
- * @see https://github.com/better-auth/better-auth/pull/9489
+ * @see https://github.com/porsager/postgres#result-array
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
 
-// Real table so the adapter can resolve the where clause; the fake db short
+// Real table so the adapter can resolve the where clause. The fake db short
 // circuits the actual query and returns a simulated postgres-js result.
 const users = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -26,7 +23,7 @@ const users = sqliteTable("user", {
 });
 
 // postgres-js Result is an Array subclass carrying the affected-row count on
-// `.count`; a non-returning write has length 0.
+// `.count`. A non-returning write has length 0.
 class PostgresJsResult extends Array {
 	count = 0;
 }

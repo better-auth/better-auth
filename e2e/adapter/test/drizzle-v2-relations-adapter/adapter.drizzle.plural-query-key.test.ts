@@ -1,12 +1,8 @@
 /**
- * Regression test for `db.query` key resolution on the joins path. Drizzle keys
- * `db.query` by the schema export names, which are commonly plural ("users")
- * even though Better Auth passes singular model names ("user"). The adapter
- * accessed `db.query[model]` directly, so a plural-keyed schema fell back to the
- * non-relational query. With `experimental.joins` the factory does not run its
- * own fallback join, so the joined data came back empty.
- *
- * @see https://github.com/better-auth/better-auth/pull/9489
+ * Drizzle keys `db.query` by the schema export names, commonly plural ("users"),
+ * while Better Auth passes singular model names. The adapter read
+ * `db.query[model]` directly, so a plural-keyed schema fell back to the
+ * non-relational query, returning empty joins under `experimental.joins`.
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import Database from "better-sqlite3";
