@@ -164,6 +164,8 @@ export function createSAMLPostForm(
 	samlValue: string,
 	relayState?: string,
 ): Response {
+	// TODO(next): Reconcile PR #10225 here by rejecting non-http(s)
+	// SAML POST binding locations and asserting the BAD_REQUEST APIError contract.
 	const safeAction = escapeHtml(action);
 	const safeSamlParam = escapeHtml(samlParam);
 	const safeSamlValue = escapeHtml(samlValue);
