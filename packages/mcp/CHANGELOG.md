@@ -1,5 +1,12 @@
 # @better-auth/mcp
 
+## 1.7.0-rc.11
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.0-rc.11
+
 ## 1.7.0-beta.7
 
 ### Minor Changes

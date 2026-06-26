@@ -108,6 +108,7 @@
     "safe-url-runtime-fragment",
     "saml-response-validation-hardening",
     "scim-group-resources",
+    "scim-org-scoped-connections",
     "scim-personal-provider-ownership",
     "silver-gardens-wander",
     "social-auth-validation",
