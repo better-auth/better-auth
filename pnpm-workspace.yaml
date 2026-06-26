@@ -106,6 +106,8 @@ minimumReleaseAgeExclude:
   - 'better-call'
 
 packageExtensions:
+  # drizzle-kit has no drizzle-orm peer, so a monorepo can feed it the wrong version.
+  # https://github.com/drizzle-team/drizzle-orm/issues/5573
   drizzle-kit:
     peerDependencies:
       drizzle-orm: '*'
