@@ -319,7 +319,7 @@ export async function processSAMLResponse(
 		currentCallbackPath,
 		assertionConsumerServiceUrl,
 	);
-	let samlBindingContent = samlContent;
+	let samlBindingContent: string;
 	try {
 		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
 		validateSAMLResponseBinding(samlBindingContent, {
@@ -433,9 +433,7 @@ export async function processSAMLResponse(
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
-	const assertionId = samlBindingContent
-		? extractAssertionId(samlBindingContent)
-		: null;
+	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
 		const issuer = idp.entityMeta.getEntityID();
