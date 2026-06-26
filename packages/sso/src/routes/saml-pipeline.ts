@@ -10,6 +10,7 @@ import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
+	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,
 	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
@@ -18,6 +19,7 @@ import {
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
 	SAMLAssertionExtract,
@@ -121,6 +123,21 @@ function getExpectedSAMLRecipients(
 		...configuredPostAssertionConsumerServiceUrls,
 		...toArray(assertionConsumerServiceUrl),
 	];
+}
+
+async function getSAMLResponseBindingContent(
+	sp: ReturnType<typeof createSP>,
+	samlContent: string,
+): Promise<string> {
+	if (!hasSAMLEncryptedAssertion(samlContent)) {
+		return samlContent;
+	}
+
+	const [decryptedContent] = await saml.SamlLib.decryptAssertion(
+		sp,
+		samlContent,
+	);
+	return decryptedContent;
 }
 
 /**
@@ -302,8 +319,10 @@ export async function processSAMLResponse(
 		currentCallbackPath,
 		assertionConsumerServiceUrl,
 	);
+	let samlBindingContent = samlContent;
 	try {
-		validateSAMLResponseBinding(samlContent, {
+		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
 		});
@@ -323,7 +342,18 @@ export async function processSAMLResponse(
 				}),
 			);
 		}
-		throw error;
+		ctx.context.logger.error("SAML response binding validation failed", {
+			providerId,
+			error,
+			expectedAudiences: expectedAudiences.filter(Boolean),
+			expectedRecipients: expectedRecipients.filter(Boolean),
+		});
+		throw ctx.redirect(
+			buildSAMLRedirectUrl(samlRedirectUrl, {
+				error: "invalid_saml_response",
+				error_description: "SAML response binding could not be validated",
+			}),
+		);
 	}
 
 	// 12. InResponseTo validation
@@ -403,7 +433,9 @@ export async function processSAMLResponse(
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
-	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
+	const assertionId = samlBindingContent
+		? extractAssertionId(samlBindingContent)
+		: null;
 
 	if (assertionId) {
 		const issuer = idp.entityMeta.getEntityID();

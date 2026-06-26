@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
+	hasSAMLEncryptedAssertion,
 	validateSAMLResponseBinding,
 } from "./response-binding";
 
@@ -159,5 +160,18 @@ describe("getSAMLPostAssertionConsumerServiceUrls", () => {
 	it("returns no locations for empty or invalid metadata", () => {
 		expect(getSAMLPostAssertionConsumerServiceUrls(undefined)).toEqual([]);
 		expect(getSAMLPostAssertionConsumerServiceUrls("<")).toEqual([]);
+	});
+});
+
+describe("hasSAMLEncryptedAssertion", () => {
+	it("detects encrypted assertions without treating plain assertions as encrypted", () => {
+		const encryptedResponse = `
+			<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml:EncryptedAssertion />
+			</samlp:Response>
+		`;
+
+		expect(hasSAMLEncryptedAssertion(encryptedResponse)).toBe(true);
+		expect(hasSAMLEncryptedAssertion(buildSAMLResponse())).toBe(false);
 	});
 });

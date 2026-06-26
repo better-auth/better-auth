@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { findNode, xmlParser } from "./parser";
+import { countAllNodes, findNode, xmlParser } from "./parser";
 
 export const SAML_HTTP_POST_BINDING =
 	"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
@@ -85,6 +85,15 @@ export function getSAMLPostAssertionConsumerServiceUrls(
 		return [...new Set(locations)];
 	} catch {
 		return [];
+	}
+}
+
+export function hasSAMLEncryptedAssertion(samlContent: string): boolean {
+	try {
+		const parsed = xmlParser.parse(samlContent);
+		return countAllNodes(parsed, "EncryptedAssertion") > 0;
+	} catch {
+		return false;
 	}
 }
 
