@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { BetterAuthError } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
 	createSCIMGroup,
@@ -34,6 +35,32 @@ declare module "@better-auth/core" {
 	}
 }
 
+function validateStaticProviders(
+	opts: SCIMOptions,
+	hasOrganizationPlugin: boolean,
+) {
+	const providerKeys = new Set<string>();
+	for (const provider of opts.staticProviders ?? []) {
+		if (!provider.providerId || provider.providerId.includes(":")) {
+			throw new BetterAuthError(
+				"SCIM static provider ids must be non-empty and cannot contain `:`.",
+			);
+		}
+		if (provider.organizationId && !hasOrganizationPlugin) {
+			throw new BetterAuthError(
+				"Organization-scoped SCIM static providers require the organization plugin.",
+			);
+		}
+		const providerKey = `${provider.organizationId ?? ""}:${provider.providerId}`;
+		if (providerKeys.has(providerKey)) {
+			throw new BetterAuthError(
+				"SCIM static providers must be unique per provider id and organization.",
+			);
+		}
+		providerKeys.add(providerKey);
+	}
+}
+
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
@@ -45,6 +72,15 @@ export const scim = (options?: SCIMOptions) => {
 	return {
 		id: "scim",
 		version: PACKAGE_VERSION,
+		init(ctx) {
+			const hasOrganizationPlugin = ctx.hasPlugin("organization");
+			validateStaticProviders(opts, hasOrganizationPlugin);
+			if (!hasOrganizationPlugin && !opts.staticProviders?.length) {
+				throw new BetterAuthError(
+					"The scim plugin requires the organization plugin. Register it, or configure app-level providers via `staticProviders` for single-tenant SCIM.",
+				);
+			}
+		},
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
 			listSCIMProviderConnections: listSCIMProviderConnections(opts),
@@ -74,7 +110,12 @@ export const scim = (options?: SCIMOptions) => {
 					providerId: {
 						type: "string",
 						required: true,
+					},
+					providerKey: {
+						type: "string",
+						required: true,
 						unique: true,
+						returned: false,
 					},
 					scimToken: {
 						type: "string",
@@ -83,11 +124,7 @@ export const scim = (options?: SCIMOptions) => {
 					},
 					organizationId: {
 						type: "string",
-						required: false,
-					},
-					userId: {
-						type: "string",
-						required: false,
+						required: true,
 					},
 				},
 			},
