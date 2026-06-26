@@ -128,7 +128,7 @@ and a `ctx` context object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
 
-**allowedAttempts** (deprecated): Each verification call now consumes the token atomically on the first attempt, so retries always fail with `?error=INVALID_TOKEN` regardless of this setting (see [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx)). The option is kept for source compatibility but ignored; multi-attempt redemption is no longer supported. Setting it to any value other than `1` emits a `console.warn` at startup (including `0`, which previously rejected immediately and now has no effect).
+**allowedAttempts** (deprecated): Each verification call now consumes the token atomically on the first attempt, so retries always fail with `?error=INVALID_TOKEN` regardless of this setting. The option is kept for source compatibility but ignored; multi-attempt redemption is no longer supported. Setting it to any value other than `1` emits a `console.warn` at startup (including `0`, which previously rejected immediately and now has no effect).
 
 **disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
 
@@ -153,5 +153,5 @@ The `storeToken` function can be one of the following:
 The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
 
 <Callout type="warn">
-  When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee from [GHSA-hc7v-rggr-4hvx](https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-rggr-4hvx) requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). Better Auth no longer falls back to separate `get` and `delete` operations for verification consumes.
+  When `secondaryStorage` backs verification (`verification.storeInDatabase: false`), the atomic single-use guarantee requires your secondary storage to expose `getAndDelete` (Redis `GETDEL`, KV `getAndDelete`). Better Auth does not fall back to separate `get` and `delete` operations for verification consumes. Multi-instance deployments using secondary-storage verification must configure a backend that implements `getAndDelete`.
 </Callout>

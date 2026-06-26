@@ -31,6 +31,16 @@ export const auth = betterAuth({
   [MySQLDialect](https://kysely-org.github.io/kysely-apidoc/classes/MysqlDialect.html).
 </Callout>
 
+<Callout type="warn">
+  The Kysely adapter relies on the MySQL driver reporting "rows matched"
+  semantics for `UPDATE` (mysql2 enables the `CLIENT_FOUND_ROWS` client flag
+  by default — leave it on). If you opt out — for example by passing
+  `flags: '-FOUND_ROWS'` to `createPool` — MySQL falls back to "rows changed"
+  semantics. An idempotent `UPDATE` (new value equal to the current value)
+  then reports zero affected rows, and `adapter.update`, `incrementOne`, and
+  `updateMany` will treat that as a miss even though the predicate matched.
+</Callout>
+
 ## Schema generation & migration
 
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate

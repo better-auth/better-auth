@@ -13,8 +13,11 @@ catalogs:
       specifier: 1.3.1
       version: 1.3.1
     better-call:
-      specifier: 1.3.6
-      version: 1.3.6
+      specifier: 1.3.7
+      version: 1.3.7
+    kysely:
+      specifier: ^0.28.17 || ^0.29.0
+      version: 0.28.17
     nanostores:
       specifier: ^1.3.0
       version: 1.3.0
@@ -857,7 +860,7 @@ importers:
         version: 0.4.2
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -912,7 +915,7 @@ importers:
         version: 7.4.1(prisma@7.4.1(@types/react@19.2.17)(better-sqlite3@12.6.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3)
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       better-sqlite3:
         specifier: ^12.0.0
         version: 12.6.2
@@ -1027,7 +1030,7 @@ importers:
     dependencies:
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1174,7 +1177,7 @@ importers:
         version: 2.8.0(@opentelemetry/api@1.9.1)
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -1216,7 +1219,7 @@ importers:
         version: 1.3.1
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       conf:
         specifier: ^15.0.2
         version: 15.1.0
@@ -1250,7 +1253,7 @@ importers:
         version: 1.3.1
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -1339,7 +1342,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       listhen:
         specifier: 1.9.0
         version: 1.9.0
@@ -1390,7 +1393,7 @@ importers:
         version: 1.3.1
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -1427,7 +1430,7 @@ importers:
         version: 13.3.1
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -1498,7 +1501,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -1551,7 +1554,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1582,7 +1585,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.6(zod@4.3.6)
+        version: 1.3.7(zod@4.3.6)
       stripe:
         specifier: ^22.0.1
         version: 22.0.1(@types/node@25.9.4)
@@ -7245,10 +7248,10 @@ packages:
     peerDependencies:
       better-auth: ^1.0.3
 
-  better-call@1.3.6:
-    resolution: {integrity: sha512-no1jI+h6Bkxs1NVBo4rONbVIzsPjZ8IUu7IHaJBiFwVX1XEQGN8KpHots5fSWmXe9nNyLuLIcgx6WEUcE6EDaA==}
+  better-call@1.3.7:
+    resolution: {integrity: sha512-Al51/hjp2SSp6CRTa3F2ptcx4yQVS1xWKoY6jcVXqNYOap6mHFP2jUBn5EwIL4iIed1/Sq4hlQ+Umm6EflZG+w==}
     peerDependencies:
-      zod: 4.3.6
+      zod: ^4.0.0
     peerDependenciesMeta:
       zod:
         optional: true
@@ -20104,10 +20107,10 @@ snapshots:
       mailchecker: 6.0.19
       validator: 13.15.26
 
-  better-call@1.3.6(zod@4.3.6):
+  better-call@1.3.7(zod@4.3.6):
     dependencies:
-      '@better-auth/utils': 0.4.1
-      '@better-fetch/fetch': 1.3.0
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
       rou3: 0.7.12
       set-cookie-parser: 3.1.0
     optionalDependencies:

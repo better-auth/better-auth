@@ -135,6 +135,58 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				user,
 			},
 			key: signedTwoFactorCookie,
+			beginAttempt: async (allowedAttempts: number) => {
+				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
+				// Consume the precreated counter as the atomic race gate; a missing
+				// row means a lost race or an expired challenge.
+				const consumed = await ctx.context.internalAdapter
+					.consumeVerificationValue(identifier)
+					.catch(() => null);
+				if (!consumed) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+					);
+				}
+				const parsed = Number(consumed.value);
+				// A corrupt counter fails closed (treated as spent).
+				const attempts =
+					Number.isInteger(parsed) && parsed >= 0 ? parsed : allowedAttempts;
+				if (attempts >= allowedAttempts) {
+					// Budget spent: cancel the whole challenge so every factor must
+					// start a new sign-in, and clear the now-dead cookie.
+					try {
+						await ctx.context.internalAdapter.consumeVerificationValue(
+							signedTwoFactorCookie,
+						);
+					} catch {
+						expireCookie(ctx, twoFactorCookie);
+						throw APIError.from("INTERNAL_SERVER_ERROR", {
+							message: "Failed to invalidate two-factor challenge",
+							code: "FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE",
+						});
+					}
+					expireCookie(ctx, twoFactorCookie);
+					throw APIError.from(
+						"BAD_REQUEST",
+						TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+					);
+				}
+				const rearm = (count: number) =>
+					ctx.context.internalAdapter
+						.createVerificationValue({
+							value: `${count}`,
+							identifier,
+							expiresAt: verificationToken.expiresAt,
+						})
+						.catch(() => {});
+				return {
+					// recordFailure spends a slot; restore returns it on a server
+					// error. Both swallow write errors (fail closed).
+					recordFailure: () => rearm(attempts + 1),
+					restore: () => rearm(attempts),
+				};
+			},
 		};
 	}
 	return {
@@ -147,5 +199,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		invalid,
 		session,
 		key: `${session.user.id}!${session.session.id}`,
+		// Re-verification is already authenticated, so it carries no attempt cap.
+		beginAttempt: async (_allowedAttempts: number) => ({
+			recordFailure: async () => {},
+			restore: async () => {},
+		}),
 	};
 }
