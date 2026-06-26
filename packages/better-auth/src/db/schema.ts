@@ -222,6 +222,22 @@ export function parseUserInput(
 	return parseInputData(user, { fields: schema, action });
 }
 
+export function parseAdditionalUserInputFromProviderProfile(
+	options: BetterAuthOptions,
+	profile: Record<string, unknown> = {},
+	action: "create" | "update",
+) {
+	const schema = getFields(options, "user", "input");
+	const allowedProfileFields: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(profile)) {
+		if (schema[key]?.input === false) {
+			continue;
+		}
+		allowedProfileFields[key] = profile[key];
+	}
+	return parseInputData(allowedProfileFields, { fields: schema, action });
+}
+
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any> | undefined,
