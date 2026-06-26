@@ -39,7 +39,10 @@ describe("siwe", async () => {
 		return msg;
 	};
 
-	it("should generate a valid nonce for a valid public key", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8116
+	 */
+	it("should generate a valid nonce before the wallet address and chain are known", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -61,14 +64,14 @@ describe("siwe", async () => {
 				},
 			},
 		);
-		const { data } = await client.siwe.nonce({ walletAddress, chainId });
+		const { data } = await client.siwe.nonce();
 		// to be of type string
 		expect(typeof data?.nonce).toBe("string");
 		// to be 17 alphanumeric characters (96 bits of entropy)
 		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{17}$/);
 	});
 
-	it("should generate a valid nonce with default chainId", async () => {
+	it("should allow an empty body when generating a nonce", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -90,16 +93,47 @@ describe("siwe", async () => {
 				},
 			},
 		);
-		// Test without chainId (should default to 1)
-		const { data } = await client.siwe.nonce({ walletAddress });
+		const { data } = await client.siwe.nonce();
 		expect(typeof data?.nonce).toBe("string");
 		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{17}$/);
+	});
+
+	it("should reject obsolete wallet-bound nonce inputs", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+
+		const { error } = await client.$fetch("/siwe/nonce", {
+			method: "POST",
+			body: { walletAddress, chainId },
+		});
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(400);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8631
 	 */
-	it("should support getNonce alias with address input", async () => {
+	it("should support getNonce alias", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -122,13 +156,40 @@ describe("siwe", async () => {
 			},
 		);
 
-		const { data, error } = await client.siwe.getNonce({
-			address: walletAddress,
-			chainId,
-		});
+		const { data, error } = await client.siwe.getNonce();
 
 		expect(error).toBeNull();
 		expect(data?.nonce).toBe("A1b2C3d4E5f6G7h8J");
+	});
+
+	it("should reject server nonce generation that does not follow ERC-4361", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "your-secure-random-nonce";
+						},
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+
+		const { error } = await client.siwe.nonce();
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(500);
+		expect(error?.code).toBe("SIWE_INVALID_NONCE");
 	});
 
 	it("should reject verification if nonce is missing", async () => {
@@ -156,8 +217,6 @@ describe("siwe", async () => {
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 		});
 
 		expect(error).toBeDefined();
@@ -166,7 +225,60 @@ describe("siwe", async () => {
 		expect(error?.message).toMatch(/nonce/i);
 	});
 
-	it("should reject invalid public key", async () => {
+	it.each([
+		{ name: "short", nonce: "abc1234" },
+		{ name: "non-alphanumeric", nonce: "some-other-nonce" },
+		{ name: "oversized", nonce: "A".repeat(251) },
+	])("should reject a signed SIWE message with a $name nonce before lookup", async ({
+		nonce,
+	}) => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+		const context = await auth.$context;
+		const consumeVerificationValue =
+			context.internalAdapter.consumeVerificationValue;
+		let consumedVerificationValue = false;
+		context.internalAdapter.consumeVerificationValue = async (identifier) => {
+			consumedVerificationValue = true;
+			return consumeVerificationValue(identifier);
+		};
+
+		try {
+			const { error } = await client.siwe.verify({
+				message: siweMessage({ nonce }),
+				signature: "valid_signature",
+			});
+
+			expect(error).toBeDefined();
+			expect(error?.status).toBe(401);
+			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+			expect(consumedVerificationValue).toBe(false);
+		} finally {
+			context.internalAdapter.consumeVerificationValue =
+				consumeVerificationValue;
+		}
+	});
+
+	it("should reject a signed SIWE message without a valid address", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -188,12 +300,14 @@ describe("siwe", async () => {
 				},
 			},
 		);
-		const { error } = await client.siwe.nonce({ walletAddress: "invalid" });
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage({ address: "invalid" }),
+			signature: "valid_signature",
+		});
 		expect(error).toBeDefined();
-		expect(error?.status).toBe(400);
-		expect(error?.message).toBe(
-			"[body.walletAddress] Invalid string: must match pattern /^0[xX][a-fA-F0-9]{40}$/i; [body.walletAddress] Too small: expected string to have >=42 characters",
-		);
+		expect(error?.status).toBe(401);
+		expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
 	});
 
 	it("should reject verification with invalid signature", async () => {
@@ -218,16 +332,16 @@ describe("siwe", async () => {
 				},
 			},
 		);
+		await client.siwe.nonce();
 		const { error } = await client.siwe.verify({
-			message: "Sign in with Ethereum.",
+			message: siweMessage(),
 			signature: "invalid_signature",
-			walletAddress,
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(401);
 	});
 
-	it("should reject invalid walletAddress format", async () => {
+	it("should reject a signed SIWE message without a positive chain ID", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -249,9 +363,50 @@ describe("siwe", async () => {
 				},
 			},
 		);
-		const { error } = await client.siwe.nonce({
-			walletAddress: "not_a_valid_key",
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage().replace("Chain ID: 1", "Chain ID: 0"),
+			signature: "valid_signature",
 		});
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(401);
+		expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+	});
+
+	it("should reject obsolete wallet-bound verification inputs", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							// Mirrors the documented viem pattern: signature recovery only.
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+		await client.siwe.nonce();
+
+		const { error } = await client.$fetch("/siwe/verify", {
+			method: "POST",
+			body: {
+				message: siweMessage(),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+			},
+		});
+
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
 	});
@@ -281,7 +436,6 @@ describe("siwe", async () => {
 		const { error } = await client.siwe.verify({
 			message: "invalid_message",
 			signature: "valid_signature",
-			walletAddress,
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(401);
@@ -314,7 +468,6 @@ describe("siwe", async () => {
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
 			email: undefined,
 		});
 		expect(error).toBeDefined();
@@ -348,13 +501,11 @@ describe("siwe", async () => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 
 		const { data, error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "user@example.com",
 		});
 		expect(error).toBeNull();
@@ -397,12 +548,10 @@ describe("siwe", async () => {
 		const headers = new Headers();
 
 		try {
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { data, error } = await client.siwe.verify({
 				message: siweMessage(),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 				email: "user@example.com",
 				fetchOptions: { onSuccess: sessionSetter(headers) },
 			});
@@ -454,12 +603,10 @@ describe("siwe", async () => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "siwe@example.com",
 		});
 
@@ -491,13 +638,11 @@ describe("siwe", async () => {
 		);
 
 		const headers = new Headers();
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 
 		const { data, error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: testUser.email,
 			fetchOptions: { onSuccess: sessionSetter(headers) },
 		});
@@ -544,12 +689,10 @@ describe("siwe", async () => {
 
 		// First wallet claims a mixed-case email; it is stored normalized.
 		const firstHeaders = new Headers();
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const first = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "Mixed@Case.com",
 			fetchOptions: { onSuccess: sessionSetter(firstHeaders) },
 		});
@@ -561,12 +704,10 @@ describe("siwe", async () => {
 
 		// A different wallet presenting the lowercase variant must not claim it.
 		const secondHeaders = new Headers();
-		await client.siwe.nonce({ walletAddress: otherWallet, chainId });
+		await client.siwe.nonce();
 		const second = await client.siwe.verify({
 			message: siweMessage({ address: otherWallet }),
 			signature: "valid_signature",
-			walletAddress: otherWallet,
-			chainId,
 			email: "mixed@case.com",
 			fetchOptions: { onSuccess: sessionSetter(secondHeaders) },
 		});
@@ -604,7 +745,6 @@ describe("siwe", async () => {
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
 			email: "not-an-email",
 		});
 		expect(error).toBeDefined();
@@ -636,12 +776,10 @@ describe("siwe", async () => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const { data, error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 		});
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
@@ -676,7 +814,7 @@ describe("siwe", async () => {
 			{ clientOptions: { plugins: [siweClient()] } },
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 
 		const ctx = await auth.$context;
 		const sessionsBefore = await ctx.adapter.findMany({ model: "session" });
@@ -685,8 +823,6 @@ describe("siwe", async () => {
 			client.siwe.verify({
 				message: siweMessage(),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 
 		const [first, second] = await Promise.all([verifyOnce(), verifyOnce()]);
@@ -728,7 +864,7 @@ describe("siwe", async () => {
 		);
 
 		const ctx = await auth.$context;
-		const identifier = `siwe:${walletAddress}:${chainId}`;
+		const identifier = `siwe:${NONCE}`;
 		await ctx.internalAdapter.createVerificationValue({
 			identifier,
 			value: NONCE,
@@ -738,8 +874,6 @@ describe("siwe", async () => {
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 		});
 		expect(error?.status).toBe(401);
 		expect(error?.code).toBe("UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE");
@@ -771,12 +905,10 @@ describe("siwe", async () => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const first = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 		});
 		expect(first.error).toBeNull();
 		expect(first.data?.success).toBe(true);
@@ -785,8 +917,6 @@ describe("siwe", async () => {
 		const second = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 		});
 		expect(second.error).toBeDefined();
 		expect(second.error?.status).toBe(401);
@@ -815,12 +945,10 @@ describe("siwe", async () => {
 			},
 		);
 
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "",
 		});
 		expect(error).toBeDefined();
@@ -852,15 +980,10 @@ describe("siwe", async () => {
 		);
 
 		// Use lowercase address
-		await client.siwe.nonce({
-			walletAddress: walletAddress.toLowerCase(),
-			chainId,
-		});
+		await client.siwe.nonce();
 		const { data } = await client.siwe.verify({
-			message: siweMessage(),
+			message: siweMessage({ address: walletAddress.toLowerCase() }),
 			signature: "valid_signature",
-			walletAddress: walletAddress.toLowerCase(),
-			chainId,
 		});
 		expect(data?.success).toBe(true);
 
@@ -875,15 +998,11 @@ describe("siwe", async () => {
 		expect(walletAddresses[0]?.address).toBe(walletAddress); // checksummed
 
 		// Try with uppercase address, should not create a new wallet address entry
-		await client.siwe.nonce({
-			walletAddress: walletAddress.toUpperCase(),
-			chainId,
-		});
+		const uppercaseWalletAddress = `0x${walletAddress.slice(2).toUpperCase()}`;
+		await client.siwe.nonce();
 		const { data: data2 } = await client.siwe.verify({
-			message: siweMessage(),
+			message: siweMessage({ address: uppercaseWalletAddress }),
 			signature: "valid_signature",
-			walletAddress: walletAddress.toUpperCase(),
-			chainId,
 		});
 		expect(data2?.success).toBe(true); // Should succeed with existing address
 
@@ -917,15 +1036,10 @@ describe("siwe", async () => {
 		const testChainId = 1;
 
 		// First user successfully creates account with wallet address
-		await client.siwe.nonce({
-			walletAddress: testAddress,
-			chainId: testChainId,
-		});
+		await client.siwe.nonce();
 		const firstUser = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress: testAddress,
-			chainId: testChainId,
 		});
 		expect(firstUser.error).toBeNull();
 		expect(firstUser.data?.success).toBe(true);
@@ -946,15 +1060,10 @@ describe("siwe", async () => {
 		expect(walletAddresses[0]?.isPrimary).toBe(true);
 
 		// Second attempt with same address + chainId should use existing user
-		await client.siwe.nonce({
-			walletAddress: testAddress,
-			chainId: testChainId,
-		});
+		await client.siwe.nonce();
 		const secondUser = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress: testAddress,
-			chainId: testChainId,
 		});
 		expect(secondUser.error).toBeNull();
 		expect(secondUser.data?.success).toBe(true);
@@ -1020,15 +1129,10 @@ describe("siwe", async () => {
 		const testChainId = 1;
 
 		// Create account with custom schema
-		await client.siwe.nonce({
-			walletAddress: testAddress,
-			chainId: testChainId,
-		});
+		await client.siwe.nonce();
 		const result = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress: testAddress,
-			chainId: testChainId,
 		});
 		expect(result.error).toBeNull();
 		expect(result.data?.success).toBe(true);
@@ -1073,23 +1177,19 @@ describe("siwe", async () => {
 		const chainId2 = 137; // Polygon
 
 		// First authentication on Ethereum
-		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId1 });
+		await client.siwe.nonce();
 		const ethereumAuth = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress: testAddress,
-			chainId: chainId1,
 		});
 		expect(ethereumAuth.error).toBeNull();
 		expect(ethereumAuth.data?.success).toBe(true);
 
 		// Second authentication on Polygon with same address
-		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId2 });
+		await client.siwe.nonce();
 		const polygonAuth = await client.siwe.verify({
 			message: siweMessage({ chainId: chainId2 }),
 			signature: "valid_signature",
-			walletAddress: testAddress,
-			chainId: chainId2,
 		});
 		expect(polygonAuth.error).toBeNull();
 		expect(polygonAuth.data?.success).toBe(true);
@@ -1149,40 +1249,34 @@ describe("siwe", async () => {
 			return { client, auth };
 		};
 
-		it("rejects a valid signature over a message with a non-matching nonce", async () => {
+		it("rejects a valid signature over a message with an unknown nonce", async () => {
 			const { client } = await setup();
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { error } = await client.siwe.verify({
-				message: siweMessage({ nonce: "some-other-nonce" }),
+				message: siweMessage({ nonce: "SomeOtherNonce123" }),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(error?.status).toBe(401);
-			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+			expect(error?.code).toBe("UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE");
 		});
 
 		it("rejects a message bound to a different domain", async () => {
 			const { client } = await setup();
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { error } = await client.siwe.verify({
 				message: siweMessage({ domain: "other.example.com" }),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(error?.status).toBe(401);
 			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
 		});
 
-		it("rejects a message whose chain id does not match", async () => {
+		it("rejects a message with an invalid chain id", async () => {
 			const { client } = await setup();
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { error } = await client.siwe.verify({
-				message: siweMessage({ chainId: 137 }),
+				message: siweMessage().replace("Chain ID: 1", "Chain ID: 0"),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(error?.status).toBe(401);
 			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
@@ -1190,12 +1284,10 @@ describe("siwe", async () => {
 
 		it("rejects an arbitrary (non-SIWE) message even with a valid signature", async () => {
 			const { client } = await setup();
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { error } = await client.siwe.verify({
 				message: "gm, please sign this to continue",
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(error?.status).toBe(401);
 			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
@@ -1203,14 +1295,12 @@ describe("siwe", async () => {
 
 		it("rejects an expired SIWE message", async () => {
 			const { client } = await setup();
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const { error } = await client.siwe.verify({
 				message: siweMessage({
 					expirationTime: "2020-01-01T00:00:00.000Z",
 				}),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(error?.status).toBe(401);
 			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_EXPIRED");
@@ -1220,12 +1310,10 @@ describe("siwe", async () => {
 			const { client, auth } = await setup();
 
 			// The wallet user signs in normally, creating the wallet user.
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const legit = await client.siwe.verify({
 				message: siweMessage(),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(legit.data?.success).toBe(true);
 
@@ -1236,12 +1324,10 @@ describe("siwe", async () => {
 
 			// A second request mints a fresh nonce and reuses a previously
 			// produced signature over an unrelated message for the same wallet.
-			await client.siwe.nonce({ walletAddress, chainId });
+			await client.siwe.nonce();
 			const secondAttempt = await client.siwe.verify({
 				message: "Approve transfer of 1 ETH",
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 			});
 			expect(secondAttempt.error?.status).toBe(401);
 			expect(secondAttempt.data).toBeNull();
