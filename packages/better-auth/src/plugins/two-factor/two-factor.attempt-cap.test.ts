@@ -32,7 +32,7 @@ async function setupTwoFactorChallenge() {
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({

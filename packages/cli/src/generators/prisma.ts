@@ -29,7 +29,18 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		usePlural: false,
 	});
 	const isMigrationDisabled = (model: string) =>
-		tables[model]?.disableMigrations === true;
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {

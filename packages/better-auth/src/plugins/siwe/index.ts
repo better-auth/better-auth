@@ -301,12 +301,17 @@ export const siwe = (options: SIWEPluginOptions) => {
 							let emailClaimIdentifier: string | undefined;
 							if (!isAnon && normalizedEmail) {
 								const identifier = `siwe-email-claim-${normalizedEmail}`;
-								const reserved =
-									await ctx.context.internalAdapter.reserveVerificationValue({
-										identifier,
-										value: walletAddress,
-										expiresAt: new Date(Date.now() + 60_000),
-									});
+								let reserved = false;
+								try {
+									reserved =
+										await ctx.context.internalAdapter.reserveVerificationValue({
+											identifier,
+											value: walletAddress,
+											expiresAt: new Date(Date.now() + 60_000),
+										});
+								} catch {
+									reserved = false;
+								}
 								if (reserved) {
 									emailClaimIdentifier = identifier;
 									const existingUser =

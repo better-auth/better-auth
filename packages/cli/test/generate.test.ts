@@ -1818,6 +1818,51 @@ describe("--dialect flag support", () => {
 		expect(schema.code).not.toContain("skippedTable: one(skippedTable");
 	});
 
+	it("should not emit drizzle relations when a rendered model name references disabled migrations", async () => {
+		const plugin: BetterAuthPlugin = {
+			id: "disabled-rendered-reference-test",
+			schema: {
+				emittedTable: {
+					fields: {
+						skippedTableId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "skippedTables",
+								field: "id",
+							},
+						},
+					},
+				},
+				skippedTable: {
+					fields: {
+						name: { type: "string", required: true },
+					},
+					disableMigration: true,
+				},
+			},
+		};
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					adapterConfig: { usePlural: true },
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [plugin],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("references(() => skippedTables");
+		expect(schema.code).not.toContain("skippedTables: one(skippedTables");
+	});
+
 	it("should not emit prisma models with disableMigration", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
