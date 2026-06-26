@@ -1077,6 +1077,15 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 		user: {
 			additionalFields: {
 				googleSub: { type: "string", required: false },
+				profileCode: {
+					type: "string",
+					required: false,
+					transform: {
+						input(value) {
+							return typeof value === "string" ? value.toLowerCase() : value;
+						},
+					},
+				},
 				serverManagedField: {
 					type: "string",
 					required: false,
@@ -1090,7 +1099,11 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 				clientSecret: "test",
 				enabled: true,
 				mapProfileToUser(profile: GoogleProfile) {
-					return { googleSub: profile.sub, serverManagedField: "elevated" };
+					return {
+						googleSub: profile.sub,
+						profileCode: profile.sub,
+						serverManagedField: "elevated",
+					};
 				},
 			},
 		},
@@ -1171,13 +1184,29 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 			data: { email: testEmail, name: "Original Name", emailVerified: true },
 		});
 
-		await signInAndLink(testEmail, "google_implicit_mapped");
+		const updateUserSpy = vi.spyOn(ctx.internalAdapter, "updateUser");
+		try {
+			await signInAndLink(testEmail, "GOOGLE_IMPLICIT_MAPPED");
 
-		const user = await ctx.adapter.findOne<User & { googleSub?: string }>({
-			model: "user",
-			where: [{ field: "email", value: testEmail }],
-		});
-		expect(user?.googleSub).toBe("google_implicit_mapped");
+			expect(updateUserSpy).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					googleSub: "GOOGLE_IMPLICIT_MAPPED",
+					profileCode: "google_implicit_mapped",
+				}),
+			);
+
+			const user = await ctx.adapter.findOne<
+				User & { googleSub?: string; profileCode?: string }
+			>({
+				model: "user",
+				where: [{ field: "email", value: testEmail }],
+			});
+			expect(user?.googleSub).toBe("GOOGLE_IMPLICIT_MAPPED");
+			expect(user?.profileCode).toBe("google_implicit_mapped");
+		} finally {
+			updateUserSpy.mockRestore();
+		}
 	});
 
 	it("does not copy fields marked input: false from the provider on link", async () => {
@@ -1200,14 +1229,29 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 	});
 });
 
-describe("oauth2 - first sign-in provisioning ignores input: false fields", async () => {
+describe("oauth2 - first sign-in provisioning applies user input rules", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		user: {
 			additionalFields: {
 				googleSub: { type: "string", required: false },
+				profileCode: {
+					type: "string",
+					required: false,
+					transform: {
+						input(value) {
+							return typeof value === "string" ? value.toLowerCase() : value;
+						},
+					},
+				},
 				serverManagedField: {
 					type: "string",
 					required: false,
+					input: false,
+				},
+				serverManagedDefault: {
+					type: "string",
+					required: false,
+					defaultValue: "member",
 					input: false,
 				},
 			},
@@ -1218,7 +1262,12 @@ describe("oauth2 - first sign-in provisioning ignores input: false fields", asyn
 				clientSecret: "test",
 				enabled: true,
 				mapProfileToUser(profile: GoogleProfile) {
-					return { googleSub: profile.sub, serverManagedField: "elevated" };
+					return {
+						googleSub: profile.sub,
+						profileCode: "PROVIDER-CODE",
+						serverManagedField: "elevated",
+						serverManagedDefault: "admin",
+					};
 				},
 			},
 		},
@@ -1228,50 +1277,73 @@ describe("oauth2 - first sign-in provisioning ignores input: false fields", asyn
 
 	it("does not copy fields marked input: false from the provider on first sign-in", async () => {
 		const testEmail = "implicit-create-input-false@example.com";
+		const createOAuthUserSpy = vi.spyOn(ctx.internalAdapter, "createOAuthUser");
 
-		server.use(
-			http.post("https://oauth2.googleapis.com/token", async () => {
-				const profile = {
-					sub: "google_create_input_false",
-					email: testEmail,
-					email_verified: true,
-					name: "Created From Google",
-				} as GoogleProfile;
-				const idToken = await signJWT(profile, DEFAULT_SECRET);
-				return HttpResponse.json({
-					access_token: "test_token",
-					id_token: idToken,
-				});
-			}),
-		);
+		try {
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const profile = {
+						sub: "google_create_input_false",
+						email: testEmail,
+						email_verified: true,
+						name: "Created From Google",
+					} as GoogleProfile;
+					const idToken = await signJWT(profile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "test_token",
+						id_token: idToken,
+					});
+				}),
+			);
 
-		const oAuthHeaders = new Headers();
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/",
-			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
-		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state, code: "test_code" },
-			method: "GET",
-			headers: oAuthHeaders,
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				cookieSetter(oAuthHeaders)(context as any);
-			},
-		});
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/",
+				fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					cookieSetter(oAuthHeaders)(context as any);
+				},
+			});
 
-		const user = await ctx.adapter.findOne<
-			User & { googleSub?: string; serverManagedField?: string | null }
-		>({
-			model: "user",
-			where: [{ field: "email", value: testEmail }],
-		});
-		// The mapped, input-enabled field is still written...
-		expect(user?.googleSub).toBe("google_create_input_false");
-		// ...while the input: false field is ignored.
-		expect(user?.serverManagedField ?? null).toBeNull();
+			expect(createOAuthUserSpy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					googleSub: "google_create_input_false",
+					profileCode: "provider-code",
+					serverManagedDefault: "member",
+				}),
+				expect.any(Object),
+			);
+
+			const user = await ctx.adapter.findOne<
+				User & {
+					googleSub?: string;
+					profileCode?: string;
+					serverManagedField?: string | null;
+					serverManagedDefault?: string | null;
+				}
+			>({
+				model: "user",
+				where: [{ field: "email", value: testEmail }],
+			});
+			// The mapped, input-enabled field is still written...
+			expect(user?.googleSub).toBe("google_create_input_false");
+			expect(user?.profileCode).toBe("provider-code");
+			// ...while the input: false provider value is ignored.
+			expect(user?.serverManagedField ?? null).toBeNull();
+			// The schema-owned default still applies on create.
+			expect(user?.serverManagedDefault).toBe("member");
+		} finally {
+			createOAuthUserSpy.mockRestore();
+		}
 	});
 });
 

@@ -222,22 +222,20 @@ export function parseUserInput(
 	return parseInputData(user, { fields: schema, action });
 }
 
-/**
- * Returns a shallow copy of `user` with any field the model marks as
- * non-input (`input: false`) removed.
- *
- */
-export function stripNonInputUserFields<T extends Record<string, unknown>>(
+export function parseAdditionalUserInputFromProviderProfile(
 	options: BetterAuthOptions,
-	user: T,
-): T {
-	const fields = getFields(options, "user", "input");
-	const result: Record<string, unknown> = Object.create(null);
-	for (const key of Object.keys(user)) {
-		if (fields[key]?.input === false) continue;
-		result[key] = user[key];
+	profile: Record<string, unknown> = {},
+	action: "create" | "update",
+) {
+	const schema = getFields(options, "user", "input");
+	const allowedProfileFields: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(profile)) {
+		if (schema[key]?.input === false) {
+			continue;
+		}
+		allowedProfileFields[key] = profile[key];
 	}
-	return result as T;
+	return parseInputData(allowedProfileFields, { fields: schema, action });
 }
 
 export function parseAdditionalUserInput(

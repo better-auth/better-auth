@@ -508,7 +508,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  By default, linking an account leaves the existing user profile untouched. Enable `updateUserInfoOnLink` to copy the provider's profile onto the user each time an account is linked. The synced fields are the same ones persisted on sign-up (`name`, `image`, and any fields your `mapProfileToUser` adds). The user's `email` and `emailVerified` are never changed on a link, so linking a provider can't rebind the account's identity.
+  By default, linking an account leaves the existing user profile untouched. Enable `updateUserInfoOnLink` to copy the provider's profile onto the user each time an account is linked. The synced fields are the same ones persisted on sign-up (`name`, `image`, and any input-allowed fields your `mapProfileToUser` adds). The user's `email` and `emailVerified` are never changed on a link, so linking a provider can't rebind the account's identity.
 
   ```ts title="auth.ts"
   import { betterAuth } from "better-auth";
