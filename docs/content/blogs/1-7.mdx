@@ -31,8 +31,9 @@ This post uses the same labels throughout the sections below.
 | New         | A new feature, provider, or setup is available.                   |
 | Breaking    | You may need to change code, config, data, or database schema.    |
 | Behavior    | The result may change, but most projects do not need a migration. |
-| Security    | A safer default may reject input that used to work.               |
 | Deprecation | An old API or package path is removed or replaced.                |
+
+Security is the reason for some changes, not a separate label. If a safer check changes what happens at runtime, it is marked **Behavior**. If it needs code, config, data, or schema changes, it is marked **Breaking**.
 
 ## Upgrade impact at a glance
 
@@ -78,7 +79,7 @@ This post uses the same labels throughout the sections below.
 | Captcha rules match full paths                   | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                 |
 | Electron requires S256 PKCE                      | Upgrade the Electron client and server together.                                                          |
 
-### Behavior and security changes
+### Behavior changes
 
 | Change                                                          | What changes                                                                                   |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -208,7 +209,7 @@ Custom ID-token claims can no longer overwrite protocol claims reserved for the 
 
 ID tokens now report `acr: "0"` instead of a vendor-specific value, and discovery no longer advertises authentication-strength classes the provider does not yet support. If a callback set one of the reserved claims, that value is now ignored.
 
-<HeaderLabel variant="default">Security</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Conformance polish
 
@@ -272,7 +273,7 @@ The generic OAuth plugin now uses the same path as built-in social providers. PK
 
 This changes the API you call and the callback URL you configure. The upgrade guide has the exact replacement steps.
 
-<HeaderLabel variant="default">Security</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Identity tokens are verified consistently
 
@@ -344,7 +345,7 @@ SAML setup is simpler: the callback URL is derived automatically, service-provid
 
 A few fields and one endpoint path change. See the upgrade guide before deploying SAML changes.
 
-<HeaderLabel variant="default">Security</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### SSO domain verification checks every domain
 
@@ -404,7 +405,7 @@ This is the largest single change for existing MCP users. The upgrade guide has 
 
 ## Secure by default
 
-<HeaderLabel variant="default">Security</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Atomic state, no more races
 
@@ -445,7 +446,7 @@ Captcha rules now match full request paths or explicit wildcards. Replace a part
 
 The new `user.validateUserInfo` hook lets your app reject an identity before a user is created or an account is linked, across every sign-up method. It also runs when an existing user signs in again through a provider, so a policy can catch an identity that has moved out of bounds.
 
-<HeaderLabel variant="default">Security</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Two-factor and passwordless hardening
 
