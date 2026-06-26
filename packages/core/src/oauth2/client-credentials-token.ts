@@ -1,6 +1,6 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
@@ -109,7 +109,7 @@ export async function clientCredentialsToken({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<{
+	const { data, error } = await fetchRefusingRedirects<{
 		access_token: string;
 		expires_in?: number | undefined;
 		token_type?: string | undefined;

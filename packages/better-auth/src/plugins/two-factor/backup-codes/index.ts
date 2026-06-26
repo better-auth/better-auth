@@ -16,7 +16,12 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -337,6 +342,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
+					if (isSignIn) {
+						await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+					}
 					// Enforce the per-challenge attempt budget on the sign-in path.
 					// The re-verify branch (already authenticated) is not gated.
 					const attempt = isSignIn
@@ -359,6 +367,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 					if (!validate.status || !validate.updated) {
 						await attempt?.recordFailure();
+						if (isSignIn) {
+							await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+						}
 						throw APIError.from(
 							"UNAUTHORIZED",
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
@@ -393,6 +404,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						});
 					}
 
+					if (isSignIn) {
+						await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+					}
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
 					}
