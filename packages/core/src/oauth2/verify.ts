@@ -15,6 +15,7 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import { assertNoRedirect, NO_FOLLOW_REDIRECT } from "./reject-redirects";
 
 const joseInfrastructureErrorCodes = new Set([
 	joseErrors.JWKSTimeout.code,
@@ -111,7 +112,9 @@ async function fetchJwks(
 					headers: {
 						Accept: "application/json",
 					},
+					...NO_FOLLOW_REDIRECT,
 				}).then(async (res) => {
+					assertNoRedirect(jwksFetch, res.error?.status);
 					if (res.error)
 						throw new Error(
 							`Jwks failed: ${res.error.message ?? res.error.statusText}`,
@@ -348,7 +351,9 @@ export async function verifyAccessToken(
 				token,
 				token_type_hint: "access_token",
 			}).toString(),
+			...NO_FOLLOW_REDIRECT,
 		});
+		assertNoRedirect(opts.remoteVerify.introspectUrl, introspectError?.status);
 		if (introspectError)
 			logger.error(
 				`Introspection failed: ${introspectError.message ?? introspectError.statusText}`,
