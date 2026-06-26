@@ -210,8 +210,9 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 
   The One Tap callback applies the hosted-domain restriction from
   `socialProviders.google.hd`, matching the standard Google sign-in flow:
-  when `hd` is set, a token whose `hd` claim is missing or does not match is
-  rejected.
+  when `hd` is set to a domain, a token whose `hd` claim is missing or does
+  not match is rejected. Set `hd: "*"` to allow any Google Workspace hosted
+  domain while still rejecting tokens with no `hd` claim.
 
   This value is read from `socialProviders.google`, so the restriction only
   applies when you configure the Google provider. If you set up One Tap with

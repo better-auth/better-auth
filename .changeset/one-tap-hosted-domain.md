@@ -1,5 +1,8 @@
 ---
+"@better-auth/core": patch
 "better-auth": patch
 ---
 
-Apply the configured Google hosted domain (`hd`) on the One Tap server callback, matching the redirect sign-in flow.
+Google sign-in now accepts `hd: "*"` to allow any Google Workspace hosted domain while still rejecting tokens with no hosted-domain claim.
+
+Google One Tap now applies the configured Google hosted-domain restriction before creating a session.
