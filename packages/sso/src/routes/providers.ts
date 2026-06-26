@@ -1,3 +1,7 @@
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -29,6 +33,63 @@ interface SSOProviderRecord {
 }
 
 const ADMIN_ROLES = ["owner", "admin"];
+const OIDC_IDENTITY_BOUNDARY_FIELDS = [
+	"authorizationEndpoint",
+	"clientId",
+	"discoveryEndpoint",
+	"jwksEndpoint",
+	"tokenEndpoint",
+	"userInfoEndpoint",
+] as const;
+const SAML_IDENTITY_BOUNDARY_FIELDS = [
+	"audience",
+	"callbackUrl",
+	"entryPoint",
+	"identifierFormat",
+] as const;
+const SAML_IDP_BOUNDARY_FIELDS = [
+	"metadata",
+	"entityID",
+	"singleSignOnService",
+] as const;
+const SAML_SP_BOUNDARY_FIELDS = ["metadata", "entityID"] as const;
+
+function hasDefinedField<T extends Record<string, unknown>>(
+	value: T | null | undefined,
+	fields: readonly (keyof T)[],
+): boolean {
+	return fields.some((field) => value?.[field] !== undefined);
+}
+
+function changesProviderIdentityBoundary(
+	body: Pick<
+		z.infer<typeof updateSSOProviderBodySchema>,
+		"issuer" | "oidcConfig" | "samlConfig"
+	>,
+): boolean {
+	if (body.issuer !== undefined) {
+		return true;
+	}
+
+	if (
+		body.oidcConfig &&
+		(hasDefinedField(body.oidcConfig, OIDC_IDENTITY_BOUNDARY_FIELDS) ||
+			body.oidcConfig.mapping?.id !== undefined)
+	) {
+		return true;
+	}
+
+	if (!body.samlConfig) {
+		return false;
+	}
+
+	return (
+		hasDefinedField(body.samlConfig, SAML_IDENTITY_BOUNDARY_FIELDS) ||
+		body.samlConfig.mapping?.id !== undefined ||
+		hasDefinedField(body.samlConfig.idpMetadata, SAML_IDP_BOUNDARY_FIELDS) ||
+		hasDefinedField(body.samlConfig.spMetadata, SAML_SP_BOUNDARY_FIELDS)
+	);
+}
 
 export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
 	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
@@ -431,6 +492,22 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			}
 
 			const existingProvider = await checkProviderAccess(ctx, providerId);
+			if (changesProviderIdentityBoundary({ issuer, samlConfig, oidcConfig })) {
+				const linkedAccount = await ctx.context.adapter.findOne<{ id: string }>(
+					{
+						model: "account",
+						where: [{ field: "providerId", value: providerId }],
+					},
+				);
+				if (linkedAccount) {
+					// TODO(next): move SSO account links to immutable provider instance
+					// ids, then expose explicit relinking for identity-boundary changes.
+					throw new APIError("CONFLICT", {
+						message:
+							"Cannot change SSO provider identity fields while linked accounts exist",
+					});
+				}
+			}
 
 			const updateData: Partial<SSOProviderRecord> = {};
 
@@ -573,14 +650,16 @@ export const deleteSSOProvider = () => {
 
 			await checkProviderAccess(ctx, providerId);
 
-			await ctx.context.adapter.delete({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-			});
-
-			await ctx.context.adapter.deleteMany({
-				model: "account",
-				where: [{ field: "providerId", value: providerId }],
+			await runWithTransaction(ctx.context.adapter, async () => {
+				const trx = await getCurrentAdapter(ctx.context.adapter);
+				await trx.deleteMany({
+					model: "account",
+					where: [{ field: "providerId", value: providerId }],
+				});
+				await trx.delete({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				});
 			});
 
 			return ctx.json({ success: true });
