@@ -451,11 +451,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}),
 				);
 
-				const clause: SQL<unknown>[] = [];
-
-				if (andGroup.length) clause.push(andClause!);
-				if (orGroup.length) clause.push(orClause!);
-				return clause;
+				// `.where()` takes one condition, so combine both groups with `and()`
+				// instead of passing two (Drizzle keeps only the first).
+				const combined = and(andClause, orClause);
+				return combined ? [combined] : [];
 			}
 
 			function convertNewWhereClause(where: Where[], model: string) {
