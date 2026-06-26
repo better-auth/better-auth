@@ -976,6 +976,39 @@ describe("SSO provider read endpoints", () => {
 			expect(response.status).toBe(409);
 		});
 
+		it("allows same-value issuer updates when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-saml-account",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				accountId: "saml-account-id",
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://idp.example.com",
+				},
+				headers,
+			});
+
+			expect(updated.issuer).toBe("https://idp.example.com");
+		});
+
 		it("rejects OIDC client id updates when linked account rows exist", async () => {
 			const { auth, getAuthHeaders, createOIDCProviderData, data } =
 				createTestAuth(false);
@@ -1007,6 +1040,42 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			expect(response.status).toBe(409);
+		});
+
+		it("allows OIDC secret rotation with same identity fields when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+			data.account.push({
+				id: "linked-oidc-account",
+				userId: user!.id,
+				providerId: "my-oidc-provider",
+				accountId: "oidc-account-id",
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: {
+						clientId: "client123",
+						clientSecret: "rotated-secret-value",
+						discoveryEndpoint: "https://idp.example.com/.well-known",
+					},
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.clientIdLastFour).toBe("****t123");
 		});
 
 		it("allows OIDC client secret updates when linked account rows exist", async () => {

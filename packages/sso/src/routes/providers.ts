@@ -54,40 +54,66 @@ const SAML_IDP_BOUNDARY_FIELDS = [
 ] as const;
 const SAML_SP_BOUNDARY_FIELDS = ["metadata", "entityID"] as const;
 
-function hasDefinedField<T extends Record<string, unknown>>(
-	value: T | null | undefined,
-	fields: readonly (keyof T)[],
-): boolean {
-	return fields.some((field) => value?.[field] !== undefined);
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function changesProviderIdentityBoundary(
-	body: Pick<
-		z.infer<typeof updateSSOProviderBodySchema>,
-		"issuer" | "oidcConfig" | "samlConfig"
-	>,
+function stableStringify(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableStringify).join(",")}]`;
+	}
+
+	if (isRecord(value)) {
+		return `{${Object.keys(value)
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+			.join(",")}}`;
+	}
+
+	return JSON.stringify(value) ?? String(value);
+}
+
+function identityValueChanged(current: unknown, updated: unknown): boolean {
+	return stableStringify(current) !== stableStringify(updated);
+}
+
+function hasChangedField<T extends object>(
+	current: T | null | undefined,
+	updated: T | null | undefined,
+	fields: readonly (keyof T)[],
 ): boolean {
-	if (body.issuer !== undefined) {
-		return true;
-	}
+	return fields.some((field) =>
+		identityValueChanged(current?.[field], updated?.[field]),
+	);
+}
 
-	if (
-		body.oidcConfig &&
-		(hasDefinedField(body.oidcConfig, OIDC_IDENTITY_BOUNDARY_FIELDS) ||
-			body.oidcConfig.mapping?.id !== undefined)
-	) {
-		return true;
-	}
-
-	if (!body.samlConfig) {
-		return false;
-	}
-
+function oidcIdentityBoundaryChanged(
+	current: OIDCConfig,
+	updated: OIDCConfig,
+): boolean {
 	return (
-		hasDefinedField(body.samlConfig, SAML_IDENTITY_BOUNDARY_FIELDS) ||
-		body.samlConfig.mapping?.id !== undefined ||
-		hasDefinedField(body.samlConfig.idpMetadata, SAML_IDP_BOUNDARY_FIELDS) ||
-		hasDefinedField(body.samlConfig.spMetadata, SAML_SP_BOUNDARY_FIELDS)
+		hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS) ||
+		identityValueChanged(current.mapping?.id, updated.mapping?.id)
+	);
+}
+
+function samlIdentityBoundaryChanged(
+	current: SAMLConfig,
+	updated: SAMLConfig,
+): boolean {
+	return (
+		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
+		identityValueChanged(current.mapping?.id, updated.mapping?.id) ||
+		hasChangedField(
+			current.idpMetadata,
+			updated.idpMetadata,
+			SAML_IDP_BOUNDARY_FIELDS,
+		) ||
+		hasChangedField(
+			current.spMetadata,
+			updated.spMetadata,
+			SAML_SP_BOUNDARY_FIELDS,
+		)
 	);
 }
 
@@ -492,24 +518,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			}
 
 			const existingProvider = await checkProviderAccess(ctx, providerId);
-			if (changesProviderIdentityBoundary({ issuer, samlConfig, oidcConfig })) {
-				const linkedAccount = await ctx.context.adapter.findOne<{ id: string }>(
-					{
-						model: "account",
-						where: [{ field: "providerId", value: providerId }],
-					},
-				);
-				if (linkedAccount) {
-					// TODO(next): move SSO account links to immutable provider instance
-					// ids, then expose explicit relinking for identity-boundary changes.
-					throw new APIError("CONFLICT", {
-						message:
-							"Cannot change SSO provider identity fields while linked accounts exist",
-					});
-				}
-			}
 
 			const updateData: Partial<SSOProviderRecord> = {};
+			let providerIdentityBoundaryChanged =
+				body.issuer !== undefined && body.issuer !== existingProvider.issuer;
 
 			if (body.issuer !== undefined) {
 				updateData.issuer = body.issuer;
@@ -562,6 +574,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
+				if (samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)) {
+					providerIdentityBoundaryChanged = true;
+				}
+
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}
 
@@ -590,7 +606,29 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						existingProvider.issuer,
 				);
 
+				if (oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)) {
+					providerIdentityBoundaryChanged = true;
+				}
+
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+			}
+
+			if (providerIdentityBoundaryChanged) {
+				const linkedAccount = await ctx.context.adapter.findOne<{ id: string }>(
+					{
+						model: "account",
+						where: [{ field: "providerId", value: providerId }],
+					},
+				);
+				if (linkedAccount) {
+					// TODO(next): move SSO account links to immutable provider instance
+					// ids, then expose explicit relinking for race-proof
+					// identity-boundary changes.
+					throw new APIError("CONFLICT", {
+						message:
+							"Cannot change SSO provider identity fields while linked accounts exist",
+					});
+				}
 			}
 
 			await ctx.context.adapter.update({
