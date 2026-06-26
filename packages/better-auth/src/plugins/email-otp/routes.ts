@@ -685,9 +685,10 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					ctx,
 					verifiedUser.id,
 				);
-				if (promotedUser) {
-					verifiedUser = promotedUser;
+				if (!promotedUser) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 				}
+				verifiedUser = promotedUser;
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(

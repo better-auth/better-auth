@@ -115,6 +115,11 @@ describe("email-otp", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			accountId: "attacker-google",
+			providerId: "google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -132,11 +137,10 @@ describe("email-otp", async () => {
 		const verifiedRow = await internalAdapter.findUserByEmail(email);
 		expect(verifiedRow?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			scopedAuth.api.signInEmail({
 				body: { email, password: existingPassword },

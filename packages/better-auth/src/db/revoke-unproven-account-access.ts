@@ -4,7 +4,7 @@ import type { User } from "../types";
 
 const cleanupLockExpiresInMs = 5000;
 const cleanupLockWaitMs = 2000;
-const cleanupLockPollMs = 25;
+const cleanupLockPollMs = 250;
 
 const cleanupLockIdentifier = (userId: string) =>
 	`revoke-unproven-account-access:${userId}`;
@@ -29,15 +29,16 @@ async function waitForCleanupLock(
 }
 
 /**
- * Strip every credential and session a pre-existing account accrued before
+ * Strip every account link and session a pre-existing account accrued before
  * control of its email was proven.
  *
- * An `emailVerified: false` row carries no proof that the password on it belongs
+ * An `emailVerified: false` row carries no proof that linked access belongs
  * to the mailbox owner. When an email-primary proof (magic link, email OTP)
- * resolves to such a row, deleting the `credential` account and revoking standing
- * sessions makes the verified owner inherit no password or session that predates
- * the proof. This helper also flips `emailVerified` after cleanup and returns
- * the current user for the caller to use when minting the owner's session.
+ * resolves to such a row, deleting accounts and revoking standing sessions
+ * makes the verified owner inherit no password, OAuth link, or session that
+ * predates the proof. This helper also flips `emailVerified` after cleanup and
+ * returns the current user for the caller to use when minting the owner's
+ * session.
  *
  * @param userId - The pre-existing, not-yet-verified user being promoted.
  */
@@ -74,9 +75,7 @@ export async function revokeUnprovenAccountAccess(
 		}
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		for (const account of accounts) {
-			if (account.providerId === "credential") {
-				await ctx.context.internalAdapter.deleteAccount(account.id);
-			}
+			await ctx.context.internalAdapter.deleteAccount(account.id);
 		}
 		await ctx.context.internalAdapter.deleteUserSessions(userId);
 		return ctx.context.internalAdapter.updateUser(userId, {
