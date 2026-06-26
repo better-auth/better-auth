@@ -44,11 +44,14 @@ export interface DB {
 /**
  * Derive the number of affected rows from a Drizzle write result.
  *
- * Drizzle's drivers report affected rows under different shapes: postgres-js
- * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
- * the first element of a result-header array), and better-sqlite3 uses
- * `changes`. This normalizes those so write methods that depend on affected
- * rows honor the adapter contract instead of leaking the raw driver result.
+ * Drizzle returns the raw per-driver result for a non-returning write, so the
+ * count lives under a different field per driver: node-postgres / neon expose
+ * `rowCount`, postgres-js / bun-sql carry `count` on an Array subclass, mysql2
+ * reports `affectedRows` (in a result-header array), planetscale and other
+ * serverless drivers use `rowsAffected`, better-sqlite3 uses `changes`, and
+ * Cloudflare D1 nests the count under `meta.changes`. This normalizes them so
+ * write methods that depend on affected rows honor the adapter contract instead
+ * of leaking the raw driver result.
  */
 function getAffectedRowCount(
 	result: unknown,
@@ -57,8 +60,19 @@ function getAffectedRowCount(
 ): number {
 	let count: unknown = 0;
 	if (result && typeof result === "object" && "rowCount" in result) {
+		// node-postgres / neon expose `rowCount`.
 		count = (result as { rowCount: unknown }).rowCount;
+	} else if (
+		result &&
+		typeof result === "object" &&
+		typeof (result as { count?: unknown }).count === "number"
+	) {
+		// postgres-js / bun-sql return an Array subclass carrying `count`.
+		// A non-returning write has length 0, so read this before the Array
+		// branch falls back to `result.length`.
+		count = (result as { count: number }).count;
 	} else if (Array.isArray(result)) {
+		// mysql2 returns a `[ResultSetHeader]` tuple.
 		count =
 			result.length > 0 && hasDriverRowCount(result[0])
 				? readDriverRowCount(result[0])
@@ -76,23 +90,26 @@ function getAffectedRowCount(
 	return count;
 }
 
-function hasDriverRowCount(result: unknown): boolean {
-	return (
-		!!result &&
-		typeof result === "object" &&
-		("affectedRows" in result ||
-			"rowsAffected" in result ||
-			"changes" in result)
-	);
+function readDriverRowCount(result: unknown): unknown {
+	if (!result || typeof result !== "object") return undefined;
+	if ("affectedRows" in result) return result.affectedRows;
+	if ("rowsAffected" in result) return result.rowsAffected;
+	if ("changes" in result) return result.changes;
+
+	// Cloudflare D1 nests the affected-row count under `meta.changes`.
+	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
+	if ("meta" in result) {
+		const meta = result.meta;
+		if (meta && typeof meta === "object" && "changes" in meta) {
+			return meta.changes;
+		}
+	}
+
+	return undefined;
 }
 
-function readDriverRowCount(result: unknown): unknown {
-	const r = result as {
-		affectedRows?: unknown;
-		rowsAffected?: unknown;
-		changes?: unknown;
-	};
-	return r.affectedRows ?? r.rowsAffected ?? r.changes;
+function hasDriverRowCount(result: unknown): boolean {
+	return readDriverRowCount(result) !== undefined;
 }
 
 export interface DrizzleAdapterConfig {
