@@ -1,9 +1,13 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
+import {
+	assertResponseNotRedirect,
+	fetchRefusingRedirects,
+	NO_FOLLOW_REDIRECT,
+} from "./reject-redirects";
 
 export async function authorizationCodeRequest({
 	code,
@@ -151,7 +155,7 @@ export async function validateAuthorizationCode({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<object>(tokenEndpoint, {
+	const { data, error } = await fetchRefusingRedirects<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
@@ -171,7 +175,13 @@ export async function validateToken(
 		issuer?: string | string[];
 	},
 ) {
-	const jwks = createRemoteJWKSet(new URL(jwksEndpoint));
+	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
+		[customFetch]: async (url, init) => {
+			const response = await fetch(url, { ...init, ...NO_FOLLOW_REDIRECT });
+			assertResponseNotRedirect(String(url), response);
+			return response;
+		},
+	});
 	const verified = await jwtVerify(token, jwks, {
 		audience: options?.audience,
 		issuer: options?.issuer,
