@@ -347,7 +347,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				await builder.execute();
+				const insertResult = await builder.execute();
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
@@ -392,26 +392,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return res[0] ?? null;
 					}
 
-					// 3. Serial auto-increment: LAST_INSERT_ID() is connection-scoped
+					// 3. Serial auto-increment: read the id from the write result. mysql2
+					// reports it on the ResultSetHeader, which is correct even when a
+					// pool runs this follow-up read on a different connection than the
+					// insert. A connection-scoped LAST_INSERT_ID() would not be.
+					const insertId = insertResult?.[0]?.insertId;
 					if (
 						options.advanced?.database?.generateId === "serial" &&
-						schemaModel.id
+						schemaModel.id &&
+						insertId
 					) {
-						const lastInsertId = await tx
-							.select({ id: sql`LAST_INSERT_ID()` })
+						const res = await tx
+							.select()
 							.from(schemaModel)
+							.where(eq(schemaModel.id, insertId))
 							.limit(1)
 							.execute();
-						const lastId = lastInsertId[0]?.id;
-						if (lastId) {
-							const res = await tx
-								.select()
-								.from(schemaModel)
-								.where(eq(schemaModel.id, lastId))
-								.limit(1)
-								.execute();
-							return res[0] ?? null;
-						}
+						return res[0] ?? null;
 					}
 
 					// 4. Unique column lookup via Better Auth schema
