@@ -188,6 +188,7 @@ const samlConfigSchema = z.object({
 		})
 		.optional(),
 	audience: z.string().optional(),
+	callbackUrl: z.string().optional(),
 	idpMetadata: z
 		.object({
 			metadata: z.string().optional(),

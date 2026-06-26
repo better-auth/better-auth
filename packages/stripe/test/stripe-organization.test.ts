@@ -453,6 +453,110 @@ describe("stripe - organization customer", () => {
 		);
 	});
 
+	// A query referenceId is resolved by the middleware, so the handler must act on
+	// it and not fall back to the active org.
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-h3rm-78g3-j7cp
+	 */
+	test("should act on the resolved reference id, not the active organization", async ({
+		stripeMock,
+	}) => {
+		const orgStripeOptions = buildOrgStripeOptions(stripeMock);
+		// Lets the cancel succeed against the active org's sub if it is wrongly resolved.
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_other_org",
+			status: "active",
+			cancel_at_period_end: false,
+		});
+		let authorizedOrgId = "";
+		const scopedOptions: StripeOptions = {
+			...orgStripeOptions,
+			subscription: {
+				...orgStripeOptions.subscription,
+				// Only the org the caller owns is authorized.
+				authorizeReference: async ({ referenceId }) =>
+					referenceId === authorizedOrgId,
+			},
+		};
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				plugins: [organization(), stripe(scopedOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		await client.signUp.email(
+			{ ...testUser, email: "cross-tenant-test@email.com" },
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "cross-tenant-test@email.com" },
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// Authorized org, passed via the query string.
+		const ownedOrg = await client.organization.create({
+			name: "Owned Org",
+			slug: "owned-org",
+			fetchOptions: { headers },
+		});
+		authorizedOrgId = ownedOrg.data?.id as string;
+
+		// Unauthorized org, but the active one with a live subscription.
+		const otherOrg = await client.organization.create({
+			name: "Other Org",
+			slug: "other-org",
+			fetchOptions: { headers },
+		});
+		const otherOrgId = otherOrg.data?.id as string;
+		await client.organization.setActive({
+			organizationId: otherOrgId,
+			fetchOptions: { headers },
+		});
+		await ctx.adapter.update({
+			model: "organization",
+			update: { stripeCustomerId: "cus_other_org" },
+			where: [{ field: "id", value: otherOrgId }],
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: otherOrgId,
+				stripeCustomerId: "cus_other_org",
+				stripeSubscriptionId: "sub_other_org",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		const res = await client.subscription.cancel({
+			customerType: "organization",
+			returnUrl: "/dashboard",
+			fetchOptions: { headers, query: { referenceId: authorizedOrgId } },
+		});
+
+		// Targets the authorized owned org (no subscription), never the active org.
+		expect(res.error?.code).toBe("SUBSCRIPTION_NOT_FOUND");
+		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				flow_data: expect.objectContaining({
+					subscription_cancel: { subscription: "sub_other_org" },
+				}),
+			}),
+		);
+	});
+
 	test("should restore subscription for organization", async ({
 		stripeMock,
 	}) => {

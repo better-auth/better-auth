@@ -308,7 +308,8 @@ const { error } = await authClient.subscription.upgrade({
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
 });
-if(error) {
+
+if (error) {
     alert(error.message);
 }
 ```
