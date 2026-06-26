@@ -9,7 +9,7 @@ Most Better Auth 1.7 changes are additive. Most projects start with one command:
 npx auth upgrade
 ```
 
-The changes that need more care are mostly in OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
+Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
 
 | If your project                                                        | Read                                                                            |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -23,13 +23,13 @@ The changes that need more care are mostly in OAuth, OpenID Connect, SAML, SCIM,
 
 Each section starts with a change type and an attention level.
 
-| Type            | Meaning                                                                |
-| --------------- | ---------------------------------------------------------------------- |
-| **Breaking**    | You may need to change code, config, data, or schema before upgrading. |
-| **Behavior**    | Existing flows may act differently, but most projects do not migrate.  |
-| **Security**    | A stricter check or safer default may reject unsafe input it allowed.  |
-| **New**         | A new feature or integration path is available.                        |
-| **Deprecation** | An old surface is removed, replaced, or no longer recommended.         |
+| Type            | Meaning                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| **Breaking**    | You may need to change code, config, data, or database schema.    |
+| **Behavior**    | The result may change, but most projects do not need a migration. |
+| **Security**    | A safer default may reject input that used to work.               |
+| **New**         | A new feature, provider, or setup is available.                   |
+| **Deprecation** | An old API or package path is removed or replaced.                |
 
 | Attention  | Meaning                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------- |
@@ -133,7 +133,7 @@ A signed-assertion login setup, also called private-key JWT, is now checked when
 
 ### Electron requires modern PKCE - Breaking, High
 
-The Electron login flow now requires S256 PKCE, no longer trusts a custom origin header, and matches custom URL schemes more strictly.
+The Electron login flow now requires S256 PKCE, no longer trusts a custom origin header, and matches custom URL schemes more safely.
 
 **What to do:** upgrade the `@better-auth/electron` client and server together. Make sure your app URL scheme is in `trustedOrigins`. Remove the old `disableOriginOverride` option. Review trusted entries with a host, such as `myapp://callback`, because they no longer match lookalike hosts.
 
@@ -284,7 +284,7 @@ A personal SCIM connection is now always owned by the user who created it, and o
 
 **What to do:** run a migration to make the owner column permanent. Connections created before the upgrade have no owner and become unreachable. Reclaim them in the database: delete connection rows that have neither an organization nor an owner, or set the owner, then regenerate their tokens. Organization connections are not affected.
 
-### SCIM write paths are stricter - Behavior, Medium
+### SCIM writes are safer - Behavior, Medium
 
 SCIM user writes now honor the `active` attribute, and non-organization SCIM deletes only remove the global user when the SCIM account is their only identity. `PUT` and `PATCH` reject changing a user's email to one already used by another user.
 
@@ -387,7 +387,7 @@ These do not need action for most setups, but they change what you see.
 
 * **Two-factor `enableTwoFactor` response:** it now accepts a `method` of `"otp"` or `"totp"` (default `"totp"`) and returns that method in the response. `totpURI` and backup codes are present only for `"totp"`. The `skipVerificationOnEnable` option still works.
 * **Breached-password checks:** more password-setting routes check breached-password lists by default, including email and phone reset and the admin create-and-set routes.
-* **Stricter OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
+* **Safer OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
 * **Adapter peer versions:** `drizzle-orm` and `kysely` are narrowed to patched ranges. They stay optional, so installs do not fail; upgrade them alongside the adapter.
 
 ***
