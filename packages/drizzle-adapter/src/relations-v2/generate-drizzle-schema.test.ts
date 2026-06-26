@@ -116,4 +116,30 @@ describe("relations-v2 schema generator", () => {
 			/import\s*\{[^}]*\bjson\b[^}]*\}\s*from\s*["']drizzle-orm\/mysql-core["']/,
 		);
 	});
+
+	/**
+	 * An array or object `defaultValue` must be serialized to a JS literal.
+	 * Interpolating it directly emits `.default(customer)` (an undefined
+	 * identifier) or `.default([object Object])` (a syntax error).
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10048
+	 */
+	it("serializes array and object additionalField defaultValue to a literal", async () => {
+		const { code = "" } = await generate({
+			user: {
+				additionalFields: {
+					roles: { type: "string[]", defaultValue: ["customer"] },
+					scores: { type: "number[]", defaultValue: [1, 2, 3] },
+					settings: { type: "json", defaultValue: { theme: "dark" } },
+				},
+			},
+		});
+
+		expect(code).toContain('.default(["customer"])');
+		expect(code).toContain(".default([1, 2, 3])");
+		expect(code).toContain('.default({"theme":"dark"})');
+		expect(code).not.toMatch(/\.default\(customer\)/);
+		expect(code).not.toContain("[object Object]");
+		expect(typeErrors(code)).toEqual([]);
+	});
 });
