@@ -12,7 +12,24 @@ export async function generatePrismaSchema(
 	iteration: number,
 	dialect: Dialect,
 ) {
-	const i = async (x: string) => await import(x);
+	const i = async (x: string) => {
+		// Clear the Node.js module cache for the generated schema file to ensure fresh import
+		try {
+			const resolvedPath =
+				typeof require !== "undefined"
+					? require.resolve(x)
+					: new URL(x, import.meta.url).pathname;
+			if (
+				resolvedPath &&
+				typeof resolvedPath === "string" &&
+				typeof require !== "undefined" &&
+				require.cache
+			) {
+				delete require.cache[resolvedPath];
+			}
+		} catch {}
+		return await import(x);
+	};
 	const { generateSchema } = (await i(
 		join(
 			import.meta.dirname,

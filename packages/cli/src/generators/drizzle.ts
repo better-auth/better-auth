@@ -39,6 +39,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
@@ -100,9 +105,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -355,7 +360,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (isMigrationDisabled(referencedModel)) {
 				continue;
 			}
-			const relationKey = getModelName(referencedModel);
+			// Use singular form for many-to-one relation keys
+			const relationKey = getSingularModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
