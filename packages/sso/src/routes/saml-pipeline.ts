@@ -8,10 +8,18 @@ import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
-import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
+import {
+	getSAMLPostAssertionConsumerServiceUrls,
+	hasSAMLEncryptedAssertion,
+	SAML_HTTP_POST_BINDING,
+	validateSAMLAlgorithms,
+	validateSAMLResponseBinding,
+	validateSingleAssertion,
+} from "../saml";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
 	SAMLAssertionExtract,
@@ -81,6 +89,55 @@ export function getSafeRedirectUrl(
 	}
 
 	return url;
+}
+
+function buildSAMLRedirectUrl(
+	url: string,
+	params: Record<string, string>,
+): string {
+	const searchParams = new URLSearchParams(params);
+	const separator = url.includes("?") ? "&" : "?";
+	return `${url}${separator}${searchParams.toString()}`;
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+	if (Array.isArray(value)) {
+		return value;
+	}
+	return value ? [value] : [];
+}
+
+function getExpectedSAMLRecipients(
+	config: SAMLConfig,
+	baseURL: string,
+	providerId: string,
+	currentCallbackPath: string,
+	assertionConsumerServiceUrl: string | string[] | undefined,
+): string[] {
+	const configuredPostAssertionConsumerServiceUrls =
+		getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata);
+
+	return [
+		currentCallbackPath,
+		`${baseURL}/sso/saml2/sp/acs/${providerId}`,
+		...configuredPostAssertionConsumerServiceUrls,
+		...toArray(assertionConsumerServiceUrl),
+	];
+}
+
+async function getSAMLResponseBindingContent(
+	sp: ReturnType<typeof createSP>,
+	samlContent: string,
+): Promise<string> {
+	if (!hasSAMLEncryptedAssertion(samlContent)) {
+		return samlContent;
+	}
+
+	const [decryptedContent] = await saml.SamlLib.decryptAssertion(
+		sp,
+		samlContent,
+	);
+	return decryptedContent;
 }
 
 /**
@@ -235,6 +292,7 @@ export async function processSAMLResponse(
 	}
 
 	const { extract } = parsedResponse!;
+	const samlContent = parsedResponse.samlContent;
 
 	// 10. Algorithm validation
 	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
@@ -245,6 +303,58 @@ export async function processSAMLResponse(
 		requireTimestamps: options?.saml?.requireTimestamps,
 		logger: ctx.context.logger,
 	});
+
+	// 11b. Response binding validation
+	const expectedAudiences = [
+		sp.entityMeta.getEntityID(),
+		parsedSamlConfig.audience,
+	];
+	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
+		SAML_HTTP_POST_BINDING,
+	);
+	const expectedRecipients = getExpectedSAMLRecipients(
+		parsedSamlConfig,
+		ctx.context.baseURL,
+		providerId,
+		currentCallbackPath,
+		assertionConsumerServiceUrl,
+	);
+	let samlBindingContent: string;
+	try {
+		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		validateSAMLResponseBinding(samlBindingContent, {
+			expectedAudiences,
+			expectedRecipients,
+		});
+	} catch (error) {
+		if (isAPIError(error)) {
+			ctx.context.logger.error("SAML response binding validation failed", {
+				providerId,
+				code: error.body?.code,
+				expectedAudiences: expectedAudiences.filter(Boolean),
+				expectedRecipients: expectedRecipients.filter(Boolean),
+			});
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlRedirectUrl, {
+					error: "invalid_saml_response",
+					error_description:
+						error.body?.message || error.message || "Invalid SAML response",
+				}),
+			);
+		}
+		ctx.context.logger.error("SAML response binding validation failed", {
+			providerId,
+			error,
+			expectedAudiences: expectedAudiences.filter(Boolean),
+			expectedRecipients: expectedRecipients.filter(Boolean),
+		});
+		throw ctx.redirect(
+			buildSAMLRedirectUrl(samlRedirectUrl, {
+				error: "invalid_saml_response",
+				error_description: "SAML response binding could not be validated",
+			}),
+		);
+	}
 
 	// 12. InResponseTo validation
 	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
@@ -281,7 +391,10 @@ export async function processSAMLResponse(
 					{ inResponseTo, providerId },
 				);
 				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+					buildSAMLRedirectUrl(samlRedirectUrl, {
+						error: "invalid_saml_response",
+						error_description: "Unknown or expired request ID",
+					}),
 				);
 			}
 
@@ -295,7 +408,10 @@ export async function processSAMLResponse(
 					},
 				);
 				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+					buildSAMLRedirectUrl(samlRedirectUrl, {
+						error: "invalid_saml_response",
+						error_description: "Provider mismatch",
+					}),
 				);
 			}
 		} else if (!allowIdpInitiated) {
@@ -304,7 +420,10 @@ export async function processSAMLResponse(
 				{ providerId },
 			);
 			throw ctx.redirect(
-				`${samlRedirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+				buildSAMLRedirectUrl(samlRedirectUrl, {
+					error: "unsolicited_response",
+					error_description: "IdP-initiated SSO not allowed",
+				}),
 			);
 		}
 	}
@@ -314,8 +433,7 @@ export async function processSAMLResponse(
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
-	const samlContent = (parsedResponse as any).samlContent as string | undefined;
-	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
+	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
 		const issuer = idp.entityMeta.getEntityID();
@@ -348,7 +466,10 @@ export async function processSAMLResponse(
 				{ assertionId, issuer, providerId },
 			);
 			throw ctx.redirect(
-				`${samlRedirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+				buildSAMLRedirectUrl(samlRedirectUrl, {
+					error: "replay_detected",
+					error_description: "SAML assertion has already been used",
+				}),
 			);
 		}
 	} else {
@@ -450,17 +571,21 @@ export async function processSAMLResponse(
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
-			const params = new URLSearchParams({ error: e.body.code });
-			if (e.body.message) params.set("error_description", e.body.message);
-			const sep = errorUrl.includes("?") ? "&" : "?";
-			throw ctx.redirect(`${errorUrl}${sep}${params.toString()}`);
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(errorUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
 		}
 		throw e;
 	}
 
 	if (result.error) {
 		throw ctx.redirect(
-			`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+			buildSAMLRedirectUrl(callbackUrl, {
+				error: result.error.split(" ").join("_"),
+			}),
 		);
 	}
 
