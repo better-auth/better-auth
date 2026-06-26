@@ -310,6 +310,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 											expiresAt: new Date(Date.now() + 60_000),
 										});
 								} catch {
+									// Email claims are opportunistic. If exclusivity cannot be
+									// reserved, keep the wallet-derived email and let the normal
+									// user creation path surface any primary adapter failure.
 									reserved = false;
 								}
 								if (reserved) {
