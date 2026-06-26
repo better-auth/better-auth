@@ -2,8 +2,10 @@
 "@better-auth/scim": minor
 ---
 
-SCIM runtime tokens now require `organizationId`; use `staticProviders` for app-level SCIM.
+Runtime SCIM tokens now require `organizationId`; use `staticProviders` for app-level SCIM.
 
-SCIM account rows now store provider keys as `scim:{organizationId}:{providerId}` or `scim:{providerId}`. Migrate existing SCIM account rows before upgrading.
+SCIM-managed accounts now use namespaced provider IDs (`scim:{organizationId}:{providerId}` or `scim:{providerId}` for app-level static providers). Migrate only known SCIM-managed account rows before upgrading; leave non-SCIM accounts unchanged even when they share the same provider ID.
 
-Organization-scoped deprovisioning now removes the user from that organization and keeps the global user record. App-level static providers keep the previous global-user behavior.
+Organization-scoped `active: false` now makes a user inactive in that organization while keeping SCIM group and team associations available for reactivation. Use `DELETE` to fully deprovision organization-scoped SCIM state.
+
+`defaultSCIM` has been replaced by `staticProviders`. `linkExistingUsers.trustedDomains` has been removed; use `requireExistingOrgMembership`, `shouldLinkUser`, or explicit `true` instead.

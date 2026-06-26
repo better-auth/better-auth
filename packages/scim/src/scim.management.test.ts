@@ -161,6 +161,7 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.generateSCIMToken({
+					// @ts-expect-error Testing request validation for a missing required field.
 					body: { providerId: "no-org-provider" },
 					headers,
 				}),
@@ -218,7 +219,7 @@ describe("SCIM provider management", () => {
 			const response = await authClient.scim.generateToken(
 				{
 					providerId: "the id",
-					organizationId: await ensureDefaultOrg(headers),
+					organizationId: (await ensureDefaultOrg(headers))!,
 				},
 				{ headers },
 			);
@@ -705,7 +706,7 @@ describe("SCIM provider management", () => {
 			const { auth, getAuthCookieHeaders, ensureDefaultOrg } =
 				createTestInstance();
 			const headers = await getAuthCookieHeaders();
-			const organizationId = await ensureDefaultOrg(headers);
+			const organizationId = (await ensureDefaultOrg(headers))!;
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
@@ -789,7 +790,7 @@ describe("SCIM provider management", () => {
 			const { auth, getAuthCookieHeaders, ensureDefaultOrg } =
 				createTestInstance();
 			const headers = await getAuthCookieHeaders();
-			const organizationId = await ensureDefaultOrg(headers);
+			const organizationId = (await ensureDefaultOrg(headers))!;
 
 			await expect(
 				auth.api.deleteSCIMProviderConnection({

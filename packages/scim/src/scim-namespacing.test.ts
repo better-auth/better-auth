@@ -50,6 +50,9 @@ const instance = () => {
 	return { auth, signIn };
 };
 
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-rjg6
+ */
 describe("SCIM account namespacing", () => {
 	it("stores the SCIM account under a namespaced providerId, not the logical id", async () => {
 		const { auth, signIn } = instance();
@@ -62,13 +65,18 @@ describe("SCIM account namespacing", () => {
 			body: { providerId: "okta", organizationId: org!.id },
 			headers,
 		});
+		const ctx = await auth.$context;
+		const provider = await ctx.adapter.findOne<{ providerKey: string }>({
+			model: "scimProvider",
+			where: [{ field: "providerId", value: "okta" }],
+		});
+		expect(provider?.providerKey).toBe(`${org!.id}:okta`);
 
 		const provisioned = await auth.api.createSCIMUser({
 			body: { userName: "u@acme.test", emails: [{ value: "u@acme.test" }] },
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
 
-		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(provisioned.id);
 		const scimAccount = accounts.find((a) => a.accountId === "u@acme.test");
 		expect(scimAccount?.providerId).toBe(`scim:${org!.id}:okta`);
@@ -84,10 +92,13 @@ describe("SCIM account namespacing", () => {
 		});
 
 		const ctx = await auth.$context;
-		const victim = await ctx.internalAdapter.createUser({
-			email: "victim@acme.test",
-			name: "victim",
-		});
+		const victim = await ctx.internalAdapter.createUser(
+			{
+				email: "victim@acme.test",
+				name: "victim",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: victim.id,
 			providerId: "okta",
@@ -178,6 +189,59 @@ describe("SCIM account namespacing", () => {
 			expect.objectContaining({ message: "Invalid SCIM token" }),
 		);
 	});
+
+	it("rejects legacy database provider rows without an organization scope", async () => {
+		const { auth } = instance();
+		const ctx = await auth.$context;
+		type LegacySCIMProviderRow = {
+			providerId: string;
+			scimToken: string;
+			organizationId: null;
+		};
+		await ctx.adapter.create<LegacySCIMProviderRow>({
+			model: "scimProvider",
+			data: {
+				providerId: "legacy",
+				scimToken: "legacy-token",
+				organizationId: null,
+			},
+		});
+		const legacyToken = Buffer.from("legacy-token:legacy").toString("base64");
+
+		await expect(
+			auth.api.createSCIMUser({
+				body: { userName: "legacy@acme.test" },
+				headers: { authorization: `Bearer ${legacyToken}` },
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({ message: "Invalid SCIM token" }),
+		);
+	});
+
+	it("rotates runtime provider connections by organization-scoped provider key", async () => {
+		const { auth, signIn } = instance();
+		const headers = await signIn("owner@rotation.test");
+		const org = await auth.api.createOrganization({
+			body: { slug: "rotation", name: "Rotation" },
+			headers,
+		});
+
+		await auth.api.generateSCIMToken({
+			body: { providerId: "okta", organizationId: org!.id },
+			headers,
+		});
+		await auth.api.generateSCIMToken({
+			body: { providerId: "okta", organizationId: org!.id },
+			headers,
+		});
+
+		const ctx = await auth.$context;
+		const providers = await ctx.adapter.findMany<{ providerKey: string }>({
+			model: "scimProvider",
+			where: [{ field: "providerKey", value: `${org!.id}:okta` }],
+		});
+		expect(providers).toHaveLength(1);
+	});
 });
 
 describe("SCIM plugin requirements", () => {
@@ -203,5 +267,44 @@ describe("SCIM plugin requirements", () => {
 			],
 		});
 		await expect(auth.$context).resolves.toBeTruthy();
+	});
+
+	it("rejects org-scoped staticProviders without the organization plugin", async () => {
+		const auth = betterAuth({
+			database: memoryAdapter(emptyData()),
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			plugins: [
+				scim({
+					staticProviders: [
+						{
+							providerId: "app",
+							scimToken: "secret",
+							organizationId: "org",
+						},
+					],
+				}),
+			],
+		});
+		await expect(auth.$context).rejects.toThrow(/organization plugin/);
+	});
+
+	it("rejects staticProviders that can forge SCIM account namespace segments", async () => {
+		const auth = betterAuth({
+			database: memoryAdapter(emptyData()),
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			plugins: [
+				scim({
+					staticProviders: [
+						{
+							providerId: "org:okta",
+							scimToken: "secret",
+						},
+					],
+				}),
+			],
+		});
+		await expect(auth.$context).rejects.toThrow(/cannot contain `:`/);
 	});
 });

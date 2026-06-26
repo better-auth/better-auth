@@ -4,9 +4,16 @@ import type { Member } from "better-auth/plugins";
 export interface SCIMProvider {
 	id: string;
 	providerId: string;
+	providerKey: string;
+	scimToken: string;
+	organizationId: string;
+}
+
+export type StaticSCIMProvider = {
+	providerId: string;
 	scimToken: string;
 	organizationId?: string;
-}
+};
 
 export type SCIMRequiredRoleResolver = (payload: {
 	user: User;
@@ -109,7 +116,7 @@ export type SCIMOptions = {
 	/**
 	 * Code-defined providers. Omit `organizationId` only for app-level SCIM.
 	 */
-	staticProviders?: Omit<SCIMProvider, "id">[];
+	staticProviders?: StaticSCIMProvider[];
 	/**
 	 * Maps an incoming SCIM Group resource to Better Auth organization role(s).
 	 *

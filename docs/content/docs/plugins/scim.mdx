@@ -470,7 +470,7 @@ The logical `providerId` remains in the SCIM token and the `scimProvider` table.
 
 Better Auth's email field is globally unique. If another user already has the incoming SCIM email, `createSCIMUser` returns a `409` conflict unless you explicitly enable `linkExistingUsers` and every configured linking constraint passes.
 
-The SCIM `active` attribute maps to organization membership for organization-scoped tokens. `active: false` removes membership and reports the user as inactive to that token; `active: true` restores membership. App-level static providers map `active: false` to the [admin](/docs/plugins/admin) plugin's `banned` state and revoke sessions, so honoring app-level deactivation requires the admin plugin. Changing a user's email through SCIM also resets their verified status.
+The SCIM `active` attribute maps to organization membership for organization-scoped tokens. `active: false` removes the organization membership and reports the user as inactive to that token, while preserving the SCIM account, SCIM group membership, SCIM role grants, and team association rows for reactivation. `active: true` recreates membership and reapplies SCIM-projected roles; manual roles stored only on the removed member row are not restored. `DELETE` is the full deprovisioning operation and removes SCIM group and team state for that organization. App-level static providers map `active: false` to the [admin](/docs/plugins/admin) plugin's `banned` state and revoke sessions, so honoring app-level deactivation requires the admin plugin. Changing a user's email through SCIM also resets their verified status.
 
 ## Schema
 
@@ -487,7 +487,14 @@ export const scimProviderTableFields = [
 		name: "providerId",
 		type: "string",
 		description:
-			"The logical SCIM provider ID. Unique together with organizationId.",
+			"The logical SCIM provider ID.",
+	},
+	{
+		name: "providerKey",
+		type: "string",
+		description:
+			"Internal unique key for the organization-scoped provider connection.",
+		isUnique: true,
 	},
 	{
 		name: "scimToken",
@@ -501,7 +508,6 @@ export const scimProviderTableFields = [
 		type: "string",
 		description:
 			"The organization ID this provider is scoped to.",
-		isOptional: true,
 	},
 ];
 
@@ -511,21 +517,34 @@ export const scimProviderTableFields = [
 
 Generated SCIM provider rows must now be organization-scoped. If you previously used personal SCIM provider rows, replace them with organization-scoped tokens or configure app-level providers through `staticProviders`.
 
-SCIM-managed account rows also need the namespaced provider key. The examples below update accounts whose `providerId` matches a SCIM provider row, delete database-managed providers without an `organizationId`, and remove the legacy `scimProvider.userId` column.
+`defaultSCIM` has been replaced by `staticProviders`. `linkExistingUsers.trustedDomains` has been removed; use `requireExistingOrgMembership`, `shouldLinkUser`, or the explicit `true` escape hatch instead.
+
+SCIM-managed account rows also need the namespaced provider key. Do not bulk update accounts by matching only `account.providerId = scimProvider.providerId`: if a SCIM provider ID was also used by SSO, OAuth, OIDC, SAML, One Tap, or another account provider, that update would convert non-SCIM account rows into SCIM-managed accounts. Build a reviewed staging list of known SCIM-managed account row IDs first, then update only those rows.
 
 <Callout type="warning">
-  Review the candidate `account` rows before running a bulk update if a SCIM provider ID was also used by SSO, OAuth, or another account provider. In that case, constrain the update to known SCIM-managed account IDs.
+  If you cannot prove which existing `account` rows were created by SCIM, leave those rows unchanged and let your identity provider reprovision users under the new SCIM namespace.
 </Callout>
 
 <Tabs items={["PostgreSQL", "MySQL", "SQLite"]}>
   <Tab value="PostgreSQL">
     ```sql
+    CREATE TEMP TABLE scim_account_migration (
+      "accountId" text PRIMARY KEY,
+      "organizationId" text NOT NULL,
+      "providerId" text NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
     UPDATE "account" AS a
-    SET "providerId" = 'scim:' || sp."organizationId" || ':' || sp."providerId"
-    FROM "scimProvider" AS sp
-    WHERE sp."organizationId" IS NOT NULL
-      AND a."providerId" = sp."providerId"
+    SET "providerId" = 'scim:' || m."organizationId" || ':' || m."providerId"
+    FROM scim_account_migration AS m
+    WHERE a."id" = m."accountId"
       AND a."providerId" NOT LIKE 'scim:%';
+
+    UPDATE "scimProvider"
+    SET "providerKey" = "organizationId" || ':' || "providerId"
+    WHERE "organizationId" IS NOT NULL;
 
     DELETE FROM "scimProvider"
     WHERE "organizationId" IS NULL;
@@ -536,12 +555,23 @@ SCIM-managed account rows also need the namespaced provider key. The examples be
 
   <Tab value="MySQL">
     ```sql
+    CREATE TEMPORARY TABLE scim_account_migration (
+      accountId varchar(255) PRIMARY KEY,
+      organizationId varchar(255) NOT NULL,
+      providerId varchar(255) NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
     UPDATE account AS a
-    JOIN scimProvider AS sp
-      ON sp.organizationId IS NOT NULL
-     AND a.providerId = sp.providerId
-    SET a.providerId = CONCAT('scim:', sp.organizationId, ':', sp.providerId)
+    JOIN scim_account_migration AS m
+      ON a.id = m.accountId
+    SET a.providerId = CONCAT('scim:', m.organizationId, ':', m.providerId)
     WHERE a.providerId NOT LIKE 'scim:%';
+
+    UPDATE scimProvider
+    SET providerKey = CONCAT(organizationId, ':', providerId)
+    WHERE organizationId IS NOT NULL;
 
     DELETE FROM scimProvider
     WHERE organizationId IS NULL;
@@ -552,21 +582,31 @@ SCIM-managed account rows also need the namespaced provider key. The examples be
 
   <Tab value="SQLite">
     ```sql
+    CREATE TEMP TABLE scim_account_migration (
+      accountId text PRIMARY KEY,
+      organizationId text NOT NULL,
+      providerId text NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
     UPDATE account
     SET providerId = (
-      SELECT 'scim:' || sp.organizationId || ':' || sp.providerId
-      FROM scimProvider AS sp
-      WHERE sp.organizationId IS NOT NULL
-        AND sp.providerId = account.providerId
+      SELECT 'scim:' || m.organizationId || ':' || m.providerId
+      FROM scim_account_migration AS m
+      WHERE m.accountId = account.id
       LIMIT 1
     )
     WHERE providerId NOT LIKE 'scim:%'
       AND EXISTS (
         SELECT 1
-        FROM scimProvider AS sp
-        WHERE sp.organizationId IS NOT NULL
-          AND sp.providerId = account.providerId
+        FROM scim_account_migration AS m
+        WHERE m.accountId = account.id
       );
+
+    UPDATE scimProvider
+    SET providerKey = organizationId || ':' || providerId
+    WHERE organizationId IS NOT NULL;
 
     DELETE FROM scimProvider
     WHERE organizationId IS NULL;
@@ -591,12 +631,12 @@ scim({
 ```ts title="Use a custom organization policy"
 scim({
     requiredRole: async ({ member }) => {
-        return member?.role.split(",").includes("directory-admin") ?? false;
+        return member.role.split(",").includes("directory-admin");
     },
 })
 ```
 
-* `staticProviders`: Code-configured SCIM providers. Use an entry with `organizationId` to bind a static token to an organization, or omit `organizationId` for app-level SCIM.
+* `staticProviders`: Code-configured SCIM providers. Use an entry with `organizationId` to bind a static token to an organization, or omit `organizationId` for app-level SCIM. Provider IDs must be unique within their organization scope and cannot contain `:`. Organization-scoped static providers require the organization plugin.
 * `linkExistingUsers`: Disabled by default. Set to `true` to allow SCIM provisioning to link to any existing user with the same email, or pass constraints such as `requireExistingOrgMembership` and `shouldLinkUser` to control when linking is allowed.
 * `canGenerateToken`: Additional authorization hook for runtime token generation. It runs after membership and `requiredRole` checks and can only deny access.
 * `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.

@@ -1,9 +1,10 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createAuthMiddleware } from "better-auth/api";
 import { constantTimeEqual } from "better-auth/crypto";
+import { scimProviderKey } from "./mappings";
 import { SCIMAPIError } from "./scim-error";
 import { verifySCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+import type { SCIMOptions, SCIMProvider, StaticSCIMProvider } from "./types";
 
 export type AuthMiddleware = ReturnType<typeof authMiddlewareFactory>;
 
@@ -34,7 +35,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		let scimProvider: Omit<SCIMProvider, "id"> | null =
+		let scimProvider: SCIMProvider | StaticSCIMProvider | null =
 			opts.staticProviders?.find((p) => {
 				if (p.providerId !== providerId) return false;
 				if (!organizationId) return !p.organizationId;
@@ -51,11 +52,19 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			}
 		}
 
+		if (!organizationId) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "Invalid SCIM token",
+			});
+		}
+
 		scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 			model: "scimProvider",
 			where: [
-				{ field: "providerId", value: providerId },
-				{ field: "organizationId", value: organizationId || null },
+				{
+					field: "providerKey",
+					value: scimProviderKey({ providerId, organizationId }),
+				},
 			],
 		});
 

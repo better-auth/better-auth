@@ -16,6 +16,16 @@ export const scimAccountProviderId = (provider: {
 		: `scim:${provider.providerId}`;
 };
 
+/**
+ * Unique storage key for runtime-managed SCIM provider connections.
+ */
+export const scimProviderKey = (provider: {
+	providerId: string;
+	organizationId: string;
+}): string => {
+	return `${provider.organizationId}:${provider.providerId}`;
+};
+
 const getFormattedName = (name: SCIMName) => {
 	if (name.givenName && name.familyName) {
 		return `${name.givenName} ${name.familyName}`;

@@ -1124,7 +1124,12 @@ describe("SCIM write-path access and validation", () => {
 		expect(user).not.toBeNull();
 
 		const accounts = await ctx.internalAdapter.findAccounts(provisioned.id);
-		expect(accounts.some((a) => a.providerId === "scim-a")).toBe(false);
+		const [, , organizationId] = Buffer.from(scimToken, "base64")
+			.toString("utf8")
+			.split(":");
+		expect(
+			accounts.some((a) => a.providerId === `scim:${organizationId}:scim-a`),
+		).toBe(false);
 		expect(accounts.some((a) => a.providerId === "credential")).toBe(true);
 	});
 
@@ -1211,7 +1216,10 @@ describe("SCIM write-path access and validation", () => {
 		);
 	});
 
-	it("deactivates by removing organization membership and reactivates by restoring it", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-rjg6
+	 */
+	it("deactivates by removing organization membership and reactivates with preserved SCIM group roles", async () => {
 		const { auth, getSCIMToken } = createTestInstance();
 		const scimToken = await getSCIMToken("scim-a");
 
@@ -1220,6 +1228,23 @@ describe("SCIM write-path access and validation", () => {
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
 		expect(provisioned.active).toBe(true);
+
+		await auth.api.createSCIMGroup({
+			body: {
+				displayName: "admin",
+				members: [{ value: provisioned.id }],
+			},
+			headers: { authorization: `Bearer ${scimToken}` },
+		});
+		const ctx = await auth.$context;
+		const memberBeforeDeactivate = await ctx.adapter.findOne<{ role: string }>({
+			model: "member",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(memberBeforeDeactivate?.role.split(",").sort()).toEqual([
+			"admin",
+			"member",
+		]);
 
 		const deactivated = await auth.api.updateSCIMUser({
 			params: { userId: provisioned.id },
@@ -1232,7 +1257,6 @@ describe("SCIM write-path access and validation", () => {
 		});
 		expect(deactivated.active).toBe(false);
 
-		const ctx = await auth.$context;
 		const user = await ctx.adapter.findOne({
 			model: "user",
 			where: [{ field: "id", value: provisioned.id }],
@@ -1243,6 +1267,11 @@ describe("SCIM write-path access and validation", () => {
 			where: [{ field: "userId", value: provisioned.id }],
 		});
 		expect(membersAfterDeactivate).toHaveLength(0);
+		const groupMembersAfterDeactivate = await ctx.adapter.findMany({
+			model: "scimGroupMember",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(groupMembersAfterDeactivate).toHaveLength(1);
 
 		const fetched = await auth.api.getSCIMUser({
 			params: { userId: provisioned.id },
@@ -1259,11 +1288,17 @@ describe("SCIM write-path access and validation", () => {
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
 
-		const membersAfterReactivate = await ctx.adapter.findMany({
-			model: "member",
-			where: [{ field: "userId", value: provisioned.id }],
-		});
+		const membersAfterReactivate = await ctx.adapter.findMany<{ role: string }>(
+			{
+				model: "member",
+				where: [{ field: "userId", value: provisioned.id }],
+			},
+		);
 		expect(membersAfterReactivate).toHaveLength(1);
+		expect(membersAfterReactivate[0]?.role.split(",").sort()).toEqual([
+			"admin",
+			"member",
+		]);
 		const refetched = await auth.api.getSCIMUser({
 			params: { userId: provisioned.id },
 			headers: { authorization: `Bearer ${scimToken}` },
