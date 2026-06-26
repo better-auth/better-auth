@@ -105,7 +105,7 @@ export function normalizePem(key: string | undefined): string | undefined {
 		.trim()}\n`;
 }
 
-export function getHostnameFromDomain(domain: string): string | null {
+function getHostnameFromDomain(domain: string): string | null {
 	return getHostname(domain) || null;
 }
 

@@ -442,6 +442,34 @@ describe("Domain verification", async () => {
 			});
 		});
 
+		it("should return bad gateway when the TXT record only contains the verification token as a substring", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				[`prefix-${provider.domainVerificationToken}-suffix`],
+				[
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}-suffix`,
+				],
+			]);
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(502);
+			expect(await response.json()).toEqual({
+				message:
+					"Unable to verify domain ownership for hello.com. Try again later",
+				code: "DOMAIN_VERIFICATION_FAILED",
+			});
+		});
+
 		it("should return forbidden if user does not own the provider", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
@@ -512,7 +540,8 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					"_better-auth-token-saml-provider-1=",
+					provider.domainVerificationToken,
 				],
 			]);
 

@@ -186,7 +186,7 @@ export const verifyDomain = (options: SSOOptions) => {
 				let records: string[] = [];
 				try {
 					const dnsRecords = await dns.resolveTxt(`${identifier}.${domain}`);
-					records = dnsRecords.flat();
+					records = dnsRecords.map((record) => record.join(""));
 				} catch (error) {
 					ctx.context.logger.warn(
 						`DNS resolution failure while validating domain ownership for ${domain}`,
@@ -196,11 +196,13 @@ export const verifyDomain = (options: SSOOptions) => {
 
 				const verificationValue = activeVerification.value;
 				const verificationRecord = `${activeVerification.identifier}=${verificationValue}`;
-				const record = records.find(
-					(record) =>
-						record.includes(verificationRecord) ||
-						record.includes(verificationValue),
-				);
+				const record = records.find((record) => {
+					const normalizedRecord = record.trim();
+					return (
+						normalizedRecord === verificationRecord ||
+						normalizedRecord === verificationValue
+					);
+				});
 				if (!record) {
 					throw new APIError("BAD_GATEWAY", {
 						message: `Unable to verify domain ownership for ${domain}. Try again later`,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	domainMatches,
-	getHostnameFromDomain,
 	parseProviderDomains,
 	parseProviderEmailVerified,
 	validateEmailDomain,
@@ -174,30 +173,34 @@ describe("validateEmailDomain", () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8361
  */
-describe("getHostnameFromDomain", () => {
+describe("parseProviderDomains hostname normalization", () => {
 	it("should extract hostname from a bare domain", () => {
-		expect(getHostnameFromDomain("github.com")).toBe("github.com");
+		expect(parseProviderDomains("github.com")).toEqual(["github.com"]);
 	});
 
 	it("should extract hostname from a full URL", () => {
-		expect(getHostnameFromDomain("https://github.com")).toBe("github.com");
+		expect(parseProviderDomains("https://github.com")).toEqual(["github.com"]);
 	});
 
 	it("should extract hostname from a URL with port", () => {
-		expect(getHostnameFromDomain("https://github.com:8081")).toBe("github.com");
+		expect(parseProviderDomains("https://github.com:8081")).toEqual([
+			"github.com",
+		]);
 	});
 
 	it("should extract hostname from a subdomain", () => {
-		expect(getHostnameFromDomain("auth.github.com")).toBe("auth.github.com");
+		expect(parseProviderDomains("auth.github.com")).toEqual([
+			"auth.github.com",
+		]);
 	});
 
 	it("should extract hostname from a URL with path", () => {
-		expect(getHostnameFromDomain("https://github.com/path/to/resource")).toBe(
-			"github.com",
+		expect(parseProviderDomains("https://github.com/path/to/resource")).toEqual(
+			["github.com"],
 		);
 	});
 
 	it("should return null for an empty string", () => {
-		expect(getHostnameFromDomain("")).toBeNull();
+		expect(parseProviderDomains("")).toBeNull();
 	});
 });
