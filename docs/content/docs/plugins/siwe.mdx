@@ -127,7 +127,7 @@ if (data) {
 </Callout>
 
 <Callout type="warning">
-  A SIWE signature proves control of the wallet, not ownership of the `email` you pass. The plugin stores that email unverified and never treats it as proof of ownership. When `anonymous` is `false` and the supplied email already belongs to another account, verification is rejected with a 422 (`User already exists. Use another email.`) so a wallet sign-in cannot bind or collide with an email another account owns.
+  A SIWE signature proves control of the wallet, not ownership of the `email` you pass. The plugin stores that email unverified and only binds it to the new account when it is not already in use. When `anonymous` is `false` and the supplied email already belongs to another account, the new wallet account is created with a wallet-derived address instead, so a sign-in cannot attach an email another account owns.
 </Callout>
 
 ### Chain-Specific Examples

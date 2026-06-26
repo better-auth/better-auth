@@ -361,8 +361,8 @@ describe("siwe", async () => {
 		expect(data?.success).toBe(true);
 	});
 
-	it("should reject a caller-supplied email that already belongs to an account", async () => {
-		const { client, testUser } = await getTestInstance(
+	it("should not bind a caller-supplied email that already belongs to another account", async () => {
+		const { client, testUser, db, sessionSetter } = await getTestInstance(
 			{
 				plugins: [
 					siwe({
@@ -384,6 +384,7 @@ describe("siwe", async () => {
 			},
 		);
 
+		const headers = new Headers();
 		await client.siwe.nonce({ walletAddress, chainId });
 
 		const { data, error } = await client.siwe.verify({
@@ -392,16 +393,28 @@ describe("siwe", async () => {
 			walletAddress,
 			chainId,
 			email: testUser.email,
+			fetchOptions: { onSuccess: sessionSetter(headers) },
 		});
 
-		expect(data).toBeNull();
-		expect(error?.status).toBe(422);
-		expect(error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+		// Sign-in succeeds with no distinct error, so the response does not reveal
+		// whether the email is already registered.
+		expect(error).toBeNull();
+		expect(data?.success).toBe(true);
+
+		// The wallet account does not adopt the existing email; it keeps the
+		// wallet-derived address, and the email stays on one account.
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.email).not.toBe(testUser.email);
+		const usersWithEmail = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		expect(usersWithEmail).toHaveLength(1);
 	});
 
-	it("should reject a case-variant of an email already stored by a prior sign-in", async () => {
+	it("should treat a case-variant of an existing email as the same email", async () => {
 		const otherWallet = "0x000000000000000000000000000000000000bEEF";
-		const { client } = await getTestInstance(
+		const { client, sessionSetter } = await getTestInstance(
 			{
 				plugins: [
 					siwe({
@@ -423,6 +436,8 @@ describe("siwe", async () => {
 			},
 		);
 
+		// First wallet claims a mixed-case email; it is stored normalized.
+		const firstHeaders = new Headers();
 		await client.siwe.nonce({ walletAddress, chainId });
 		const first = await client.siwe.verify({
 			message: siweMessage(),
@@ -430,9 +445,16 @@ describe("siwe", async () => {
 			walletAddress,
 			chainId,
 			email: "Mixed@Case.com",
+			fetchOptions: { onSuccess: sessionSetter(firstHeaders) },
 		});
 		expect(first.error).toBeNull();
+		const firstSession = await client.getSession({
+			fetchOptions: { headers: firstHeaders },
+		});
+		expect(firstSession.data?.user.email).toBe("mixed@case.com");
 
+		// A different wallet presenting the lowercase variant must not claim it.
+		const secondHeaders = new Headers();
 		await client.siwe.nonce({ walletAddress: otherWallet, chainId });
 		const second = await client.siwe.verify({
 			message: siweMessage({ address: otherWallet }),
@@ -440,10 +462,13 @@ describe("siwe", async () => {
 			walletAddress: otherWallet,
 			chainId,
 			email: "mixed@case.com",
+			fetchOptions: { onSuccess: sessionSetter(secondHeaders) },
 		});
-		expect(second.data).toBeNull();
-		expect(second.error?.status).toBe(422);
-		expect(second.error?.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+		expect(second.error).toBeNull();
+		const secondSession = await client.getSession({
+			fetchOptions: { headers: secondHeaders },
+		});
+		expect(secondSession.data?.user.email).not.toBe("mixed@case.com");
 	});
 
 	it("should reject invalid email format when anonymous is false", async () => {
