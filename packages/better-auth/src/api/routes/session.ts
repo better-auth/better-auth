@@ -601,6 +601,27 @@ export const getSessionFromCtx = async <
 };
 
 /**
+ * Reads the session from the source that can authorize sensitive work.
+ *
+ * Stateful deployments must re-read the server-side session store because an
+ * earlier hook may have populated `ctx.context.session` from cookie cache.
+ * Stateless deployments keep the signed cookie as the session record.
+ */
+export const getAuthoritativeSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: GenericEndpointContext,
+) => {
+	if (!isStateful(ctx)) {
+		return getSessionFromCtx<U, S>(ctx);
+	}
+
+	ctx.context.session = null;
+	return getSessionFromCtx<U, S>(ctx, { disableCookieCache: true });
+};
+
+/**
  * The middleware forces the endpoint to require a valid session.
  */
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
@@ -617,12 +638,11 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
- * This middleware forces the endpoint to require a valid session and ignores cookie cache.
+ * This middleware forces the endpoint to require a valid authoritative session.
  * This should be used for sensitive operations like password changes, account deletion, etc.
- * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
  */
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session?.session) {
 		throw APIError.from("UNAUTHORIZED", {
 			message: "Unauthorized",

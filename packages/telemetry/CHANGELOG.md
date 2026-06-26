@@ -1,5 +1,12 @@
 # @better-auth/telemetry
 
+## 1.6.21
+
+### Patch Changes
+
+- Updated dependencies [[`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055)]:
+  - @better-auth/core@1.6.21
+
 ## 1.6.20
 
 ### Patch Changes
