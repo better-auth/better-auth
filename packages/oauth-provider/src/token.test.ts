@@ -37,6 +37,18 @@ import { storeToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
+type OAuthTokenResponse = {
+	access_token?: string;
+	id_token?: string;
+	refresh_token?: string;
+	expires_in?: number;
+	expires_at?: number;
+	token_type?: string;
+	scope?: string;
+	refresh_call?: string;
+	[key: string]: unknown;
+};
+
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -1608,6 +1620,353 @@ describe("oauth token - refresh_token", async () => {
 		const replay = await refresh();
 		const replayErr = replay.error as { error?: string } | null;
 		expect(replayErr?.error).toBe("invalid_grant");
+	});
+});
+
+describe("oauth token - refresh_token reuse interval", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://reuse-api.example.com";
+	const otherAudience = "https://other-reuse-api.example.com";
+	let refreshTokenResponseCalls = 0;
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validAudience, otherAudience],
+				enforcePerClientResources: false,
+				refreshTokenReuseInterval: 30,
+				customTokenResponseFields({ grantType }) {
+					if (grantType !== "refresh_token") {
+						return {};
+					}
+					refreshTokenResponseCalls += 1;
+					return {
+						refresh_call: `${refreshTokenResponseCalls}`,
+					};
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	async function createOAuthClient() {
+		const response = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		return response;
+	}
+
+	async function authorizeForRefreshToken(scopes: string[]) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const { body, headers } = await authorizationCodeRequest({
+			code: callbackUrl.searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+		expect(tokens.data?.refresh_token).toBeDefined();
+		return tokens.data!;
+	}
+
+	async function refresh(
+		refreshToken: string,
+		params?: { resource?: string | string[]; scope?: string },
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: params?.scope ? { scope: params.scope } : undefined,
+			resource: params?.resource,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("replays the same response inside the refresh token reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		expect(firstRefresh.data?.refresh_call).toBe("1");
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: firstRefresh.data?.token_type,
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+			refresh_call: "1",
+		});
+		expect(replay.data?.expires_in).toBeLessThanOrEqual(
+			firstRefresh.data!.expires_in!,
+		);
+		expect(refreshTokenResponseCalls).toBe(1);
+
+		const next = await refresh(firstRefresh.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(
+			firstRefresh.data?.refresh_token,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("replays equivalent requests when scope and resource order differ", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!, {
+			scope: "profile openid offline_access",
+			resource: [validAudience, otherAudience],
+		});
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		expect(firstRefresh.data?.refresh_call).toBe("1");
+
+		const replay = await refresh(tokens.refresh_token!, {
+			scope: "offline_access profile openid",
+			resource: [otherAudience, validAudience],
+		});
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: firstRefresh.data?.token_type,
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+			refresh_call: "1",
+		});
+		expect(refreshTokenResponseCalls).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10145
+	 */
+	it("returns the rotated token response when storing the replay cache fails", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const update = vi.spyOn(context.adapter, "update");
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				throw new Error("replay cache unavailable");
+			}
+			return originalUpdate(...args);
+		});
+
+		try {
+			const firstRefresh = await refresh(tokens.refresh_token!);
+			expect(firstRefresh.error).toBeNull();
+			expect(firstRefresh.data?.refresh_token).toBeDefined();
+			expect(firstRefresh.data?.refresh_call).toBe("1");
+			expect(loggerError).toHaveBeenCalledWith(
+				"failed to store refresh token rotation replay",
+				expect.any(Error),
+			);
+
+			const next = await refresh(firstRefresh.data!.refresh_token!);
+			expect(next.error).toBeNull();
+			expect(next.data?.refresh_token).toBeDefined();
+			expect(next.data?.refresh_call).toBe("2");
+		} finally {
+			update.mockRestore();
+			loggerError.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("does not replay a cached response for a different resource", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!, {
+			resource: validAudience,
+		});
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const mismatchedReplay = await refresh(tokens.refresh_token!, {
+			resource: otherAudience,
+		});
+		expect((mismatchedReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const next = await refresh(firstRefresh.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("invalidates the family after the reuse interval expires", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const context = await authorizationServer.$context;
+		const rotatedRows = await context.adapter.findMany<{
+			id: string;
+			rotationReplayResponse?: string | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		const rotatedRow = rotatedRows.find((row) => row.rotationReplayResponse);
+		expect(rotatedRow?.id).toBeDefined();
+		await context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: rotatedRow!.id }],
+			update: {
+				rotationReplayExpiresAt: new Date(0),
+			},
+		});
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const childReplay = await refresh(firstRefresh.data!.refresh_token!);
+		expect((childReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
 	});
 });
 
@@ -3830,6 +4189,7 @@ describe("oauth token - DPoP", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				refreshTokenReuseInterval: 30,
 				resources: [
 					jwtResource,
 					{
@@ -3936,6 +4296,8 @@ describe("oauth token - DPoP", async () => {
 		if (dpopProof) tokenHeaders.set("DPoP", dpopProof);
 		return client.$fetch<{
 			access_token?: string;
+			expires_in?: number;
+			expires_at?: number;
 			refresh_token?: string;
 			token_type?: string;
 			error?: string;
@@ -4063,6 +4425,84 @@ describe("oauth token - DPoP", async () => {
 		expect(rotated.data?.token_type).toBe("DPoP");
 		const rotatedPayload = decodeJwt(rotated.data!.access_token!);
 		expect(rotatedPayload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("replays a DPoP-bound refresh response only after validating the proof key", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof?: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			if (dpopProof) refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const firstProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-refresh-proof-1",
+		});
+		const firstRefresh = await refresh(firstProof);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.token_type).toBe("DPoP");
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const prooflessReplay = await refresh();
+		expect((prooflessReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const replayProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-refresh-proof-2",
+		});
+		const replay = await refresh(replayProof);
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: "DPoP",
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+		});
+		expect(replay.data?.expires_in).toBeLessThanOrEqual(
+			firstRefresh.data!.expires_in!,
+		);
 	});
 
 	it("rejects a replayed DPoP proof at the token endpoint", async () => {

@@ -597,6 +597,18 @@ export interface OAuthOptions<
 	 */
 	refreshTokenExpiresIn?: number;
 	/**
+	 * Seconds that a rotated refresh token can be reused to receive the same
+	 * token response for the same effective scopes, requested resources, and
+	 * sender constraint.
+	 *
+	 * Matching reuse inside this interval is treated as refresh-response replay,
+	 * not refresh-token replay. Set to `0` to treat any rotated refresh token
+	 * reuse as replay.
+	 *
+	 * @default 0
+	 */
+	refreshTokenReuseInterval?: number;
+	/**
 	 * The amount of time in seconds that the authorization code is valid for.
 	 *
 	 * @default 600 (10 minutes) - Recommended by the OIDC spec
@@ -1828,9 +1840,25 @@ export interface OAuthRefreshToken<
 	expiresAt: Date;
 	createdAt: Date;
 	/**
-	 * When token was revoked. If set, token is considered a replay attack.
+	 * When this token stopped being active.
+	 *
+	 * A token can be revoked by /oauth2/revoke or consumed by rotation. Use
+	 * `rotatedAt` to distinguish rotation from explicit revocation.
 	 */
 	revoked?: Date;
+	/**
+	 * When this refresh token was consumed by rotation.
+	 */
+	rotatedAt?: Date;
+	/**
+	 * Encrypted token endpoint response and request fingerprint to replay during
+	 * the configured refresh-token reuse interval.
+	 */
+	rotationReplayResponse?: string;
+	/**
+	 * When the cached rotation response stops being replayable.
+	 */
+	rotationReplayExpiresAt?: Date;
 	/**
 	 * The time the user originally authenticated.
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.

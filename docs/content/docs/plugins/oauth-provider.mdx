@@ -604,6 +604,18 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This helps native and public clients recover from duplicate refresh requests, lost responses, or retrying requests without minting another token pair.
+
+```ts title="auth.ts"
+oauthProvider({
+  refreshTokenReuseInterval: 30, // seconds
+})
+```
+
+The default is `0`, which keeps strict replay detection. During the interval, Better Auth replays the cached response only when the reused refresh token is from the same client and the request resolves to the same effective scopes, requested resources, and sender constraint (for example the same DPoP key). A mismatch during the interval returns `invalid_grant` without invalidating the whole family; once the interval expires, using the old refresh token is treated as replay and invalidates the refresh-token family.
+
+The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
+
 ### Consent Endpoint
 
 Accept or deny user consent for a set of scopes. Note that when denying scopes, the consent cancels and pre-existing consent remains. To remove consent, delete that user's "oauthConsent" for that client.
@@ -1257,6 +1269,7 @@ Each token type and grant type can independently can set a default expiration.
 * `m2mAccessTokenExpiresIn` defaults 1 hour
 * `idTokenExpiresIn` defaults 10 hours
 * `refreshTokenExpiresIn` defaults 30 days
+* `refreshTokenReuseInterval` defaults 0 seconds
 * `codeExpiresIn` defaults 10 minutes
 * `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
@@ -2216,7 +2229,26 @@ export const oauthRefreshTokenTableFields = [
   {
     name: "revoked",
     type: "Date",
-    description: "Timestamp when the token was revoked",
+    description: "Timestamp when the token stopped being active",
+    isOptional: true,
+  },
+  {
+    name: "rotatedAt",
+    type: "Date",
+    description: "Timestamp when the token was consumed by rotation",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayResponse",
+    type: "string",
+    description:
+      "Encrypted token response and request fingerprint replayed during the configured refresh-token reuse interval",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayExpiresAt",
+    type: "Date",
+    description: "Timestamp when the cached rotation response stops being replayable",
     isOptional: true,
   },
   {

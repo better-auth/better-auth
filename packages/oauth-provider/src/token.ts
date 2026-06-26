@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "better-auth/crypto";
 import {
 	createDpopReplayStore,
 	generateCodeChallenge,
@@ -647,9 +651,8 @@ async function createRefreshToken(
 	// rotations against the same parent both observe `revoked === null` on
 	// the read in `handleRefreshTokenGrant`, but only one wins this update.
 	// The loser fails closed with `invalid_grant`; the parent row is now
-	// revoked, so any subsequent replay of the original refresh token
-	// triggers the existing family-invalidation guard in
-	// `handleRefreshTokenGrant`.
+	// revoked, so any subsequent reuse of the original refresh token is handled
+	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
 	//
 	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
 	// immediate family invalidation on detected concurrent redemption.
@@ -659,6 +662,17 @@ async function createRefreshToken(
 	// with the winner's still-in-flight inserts. Tracked for a follow-up
 	// minor once the adapter contract exposes opt-in transactional
 	// rotation.
+	const rotatedAt = new Date(iat * 1000);
+	const rotationUpdate: Record<string, unknown> = {
+		revoked: rotatedAt,
+		rotatedAt,
+	};
+	const reuseInterval = opts.refreshTokenReuseInterval ?? 0;
+	if (reuseInterval > 0) {
+		rotationUpdate.rotationReplayExpiresAt = new Date(
+			(iat + reuseInterval) * 1000,
+		);
+	}
 	const won = await ctx.context.adapter.incrementOne<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
@@ -666,9 +680,7 @@ async function createRefreshToken(
 			{ field: "revoked", operator: "eq", value: null },
 		],
 		increment: {},
-		set: {
-			revoked: new Date(iat * 1000),
-		},
+		set: rotationUpdate,
 	});
 
 	if (!won) {
@@ -817,6 +829,265 @@ async function resolveDpopTokenBinding(
 		}
 		throw error;
 	}
+}
+
+type RefreshTokenRotationReplayRequest = {
+	effectiveScopes: string[];
+	requestedResources?: string[];
+	confirmation?: Confirmation;
+};
+
+type RefreshTokenRotationReplay = {
+	request: RefreshTokenRotationReplayRequest;
+	response: OAuthTokenResponse;
+};
+
+function normalizeReplayValues(values: string[] | undefined) {
+	return values ? [...new Set(values)].sort() : undefined;
+}
+
+function sameReplayValues(
+	left: string[] | undefined,
+	right: string[] | undefined,
+) {
+	const normalizedLeft = normalizeReplayValues(left);
+	const normalizedRight = normalizeReplayValues(right);
+	if (normalizedLeft === undefined || normalizedRight === undefined) {
+		return normalizedLeft === normalizedRight;
+	}
+	if (normalizedLeft.length !== normalizedRight.length) {
+		return false;
+	}
+	return normalizedLeft.every(
+		(value, index) => value === normalizedRight[index],
+	);
+}
+
+function confirmationReplayKey(confirmation: Confirmation | undefined) {
+	if (!confirmation) {
+		return undefined;
+	}
+	if ("jkt" in confirmation) {
+		return `jkt:${confirmation.jkt}`;
+	}
+	return `x5t#S256:${confirmation["x5t#S256"]}`;
+}
+
+function sameConfirmation(
+	left: Confirmation | undefined,
+	right: Confirmation | undefined,
+) {
+	return confirmationReplayKey(left) === confirmationReplayKey(right);
+}
+
+function isConfirmation(value: unknown): value is Confirmation {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const confirmation = value as Record<string, unknown>;
+	return (
+		(typeof confirmation.jkt === "string" &&
+			confirmation["x5t#S256"] === undefined) ||
+		(typeof confirmation["x5t#S256"] === "string" &&
+			confirmation.jkt === undefined)
+	);
+}
+
+function isTokenType(value: unknown): value is TokenType {
+	return value === "Bearer" || value === "DPoP";
+}
+
+function isOAuthTokenResponse(value: unknown): value is OAuthTokenResponse {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const response = value as Record<string, unknown>;
+	return (
+		typeof response.access_token === "string" &&
+		typeof response.expires_in === "number" &&
+		typeof response.expires_at === "number" &&
+		isTokenType(response.token_type) &&
+		typeof response.scope === "string" &&
+		(response.refresh_token === undefined ||
+			typeof response.refresh_token === "string") &&
+		(response.id_token === undefined || typeof response.id_token === "string")
+	);
+}
+
+function isRefreshTokenRotationReplay(
+	value: unknown,
+): value is RefreshTokenRotationReplay {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const replay = value as Record<string, unknown>;
+	const request = replay.request as Record<string, unknown> | undefined;
+	return (
+		!!request &&
+		Array.isArray(request.effectiveScopes) &&
+		request.effectiveScopes.every((scope) => typeof scope === "string") &&
+		(request.requestedResources === undefined ||
+			(Array.isArray(request.requestedResources) &&
+				request.requestedResources.every(
+					(resource) => typeof resource === "string",
+				))) &&
+		(request.confirmation === undefined ||
+			isConfirmation(request.confirmation)) &&
+		isOAuthTokenResponse(replay.response)
+	);
+}
+
+function buildRefreshTokenRotationReplayRequest(params: {
+	effectiveScopes: string[];
+	requestedResources?: string[];
+	confirmation?: Confirmation;
+}): RefreshTokenRotationReplayRequest {
+	const requestedResources = normalizeReplayValues(params.requestedResources);
+	return {
+		effectiveScopes: normalizeReplayValues(params.effectiveScopes) ?? [],
+		...(requestedResources ? { requestedResources } : {}),
+		...(params.confirmation ? { confirmation: params.confirmation } : {}),
+	};
+}
+
+function sameRefreshTokenRotationReplayRequest(
+	left: RefreshTokenRotationReplayRequest,
+	right: RefreshTokenRotationReplayRequest,
+) {
+	return (
+		sameReplayValues(left.effectiveScopes, right.effectiveScopes) &&
+		sameReplayValues(left.requestedResources, right.requestedResources) &&
+		sameConfirmation(left.confirmation, right.confirmation)
+	);
+}
+
+async function encryptRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	replay: RefreshTokenRotationReplay,
+) {
+	return symmetricEncrypt({
+		key: ctx.context.secretConfig,
+		data: JSON.stringify(replay),
+	});
+}
+
+async function decryptRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	value: string,
+) {
+	const decrypted = await symmetricDecrypt({
+		key: ctx.context.secretConfig,
+		data: value,
+	});
+	const parsed: unknown = JSON.parse(decrypted);
+	if (!isRefreshTokenRotationReplay(parsed)) {
+		return undefined;
+	}
+	return parsed;
+}
+
+function isWithinRefreshTokenReuseInterval(
+	refreshToken: OAuthRefreshToken<Scope[]>,
+) {
+	return (
+		!!refreshToken.rotatedAt &&
+		!!refreshToken.rotationReplayExpiresAt &&
+		refreshToken.rotationReplayExpiresAt >= new Date()
+	);
+}
+
+async function storeRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+	request: RefreshTokenRotationReplayRequest,
+	response: OAuthTokenResponse,
+) {
+	if ((opts.refreshTokenReuseInterval ?? 0) <= 0) {
+		return;
+	}
+	await ctx.context.adapter.update({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: refreshToken.id }],
+		update: {
+			rotationReplayResponse: await encryptRefreshTokenRotationReplay(ctx, {
+				request,
+				response,
+			}),
+		},
+	});
+}
+
+async function getRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]>,
+	request: RefreshTokenRotationReplayRequest,
+) {
+	if (!isWithinRefreshTokenReuseInterval(refreshToken)) {
+		return undefined;
+	}
+	if (!refreshToken.rotationReplayResponse) {
+		return undefined;
+	}
+
+	try {
+		const replay = await decryptRefreshTokenRotationReplay(
+			ctx,
+			refreshToken.rotationReplayResponse,
+		);
+		if (
+			!replay ||
+			!sameRefreshTokenRotationReplayRequest(replay.request, request)
+		) {
+			return undefined;
+		}
+		return replay.response;
+	} catch (error) {
+		ctx.context.logger.error("refresh token rotation replay failed", error);
+		return undefined;
+	}
+}
+
+async function resolveRefreshTokenRotationReplayRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
+		scopes: string[];
+		resources?: string[];
+	},
+) {
+	const iat = Math.floor(Date.now() / 1000);
+	const grantIssuance = await resolveResourceGrantIssuance(ctx, opts, {
+		clientId: params.client.clientId,
+		requestedScopes: params.scopes,
+		resources: params.resources,
+		refreshToken: params.refreshToken,
+		iat,
+		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
+	});
+	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance,
+		refreshToken: params.refreshToken,
+	});
+	return buildRefreshTokenRotationReplayRequest({
+		effectiveScopes: grantIssuance.effectiveScopes,
+		requestedResources: params.resources,
+		confirmation,
+	});
+}
+
+function replayRefreshTokenRotationResponse(
+	ctx: GenericEndpointContext,
+	response: OAuthTokenResponse,
+) {
+	const now = Math.floor(Date.now() / 1000);
+	return ctx.json({
+		...response,
+		expires_in: Math.max(0, response.expires_at - now),
+	});
 }
 
 async function createUserTokens(
@@ -1051,7 +1322,7 @@ async function createUserTokens(
 			)
 		: undefined;
 
-	return ctx.json({
+	const responseBody: OAuthTokenResponse = {
 		...customFields,
 		...(params.tokenResponse ?? {}),
 		access_token: accessToken,
@@ -1061,7 +1332,28 @@ async function createUserTokens(
 		refresh_token: refreshToken?.token,
 		scope: effectiveScopes.join(" "),
 		id_token: idToken,
-	});
+	};
+	if (existingRefreshToken?.id && refreshToken?.id) {
+		try {
+			await storeRefreshTokenRotationReplay(
+				ctx,
+				opts,
+				existingRefreshToken,
+				buildRefreshTokenRotationReplayRequest({
+					effectiveScopes,
+					requestedResources: params.resources,
+					confirmation,
+				}),
+				responseBody,
+			);
+		} catch (error) {
+			ctx.context.logger.error(
+				"failed to store refresh token rotation replay",
+				error,
+			);
+		}
+	}
+	return ctx.json(responseBody);
 }
 
 /** Checks verification value */
@@ -1565,15 +1857,6 @@ async function handleRefreshTokenGrant(
 			error: "invalid_grant",
 		});
 	}
-	// Replay revoke (RFC 9700 §4.14: tear down the family)
-	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid refresh token",
-			error: "invalid_grant",
-		});
-	}
-
 	// Check body resources against refresh token resources
 	if (
 		resources &&
@@ -1611,6 +1894,38 @@ async function handleRefreshTokenGrant(
 		"refresh_token",
 		authMethod,
 	);
+
+	if (refreshToken.revoked) {
+		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
+			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
+				ctx,
+				opts,
+				{
+					client,
+					refreshToken,
+					scopes: requestedScopes ?? scopes,
+					resources: resources ?? refreshToken.resources,
+				},
+			);
+			const replay = await getRefreshTokenRotationReplay(
+				ctx,
+				refreshToken,
+				replayRequest,
+			);
+			if (replay) {
+				return replayRefreshTokenRotationResponse(ctx, replay);
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid refresh token",
+				error: "invalid_grant",
+			});
+		}
+		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 
 	const user = await ctx.context.internalAdapter.findUserById(
 		refreshToken.userId,

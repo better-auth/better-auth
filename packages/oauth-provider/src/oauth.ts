@@ -171,6 +171,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
+		refreshTokenReuseInterval: 0,
 		allowUnauthenticatedClientRegistration: false,
 		allowDynamicClientRegistration: false,
 		disableJwtPlugin: false,

@@ -156,7 +156,9 @@ requireMcpAuth(auth, handler, {
 
 ## Configuration
 
-`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider#configuration) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The MCP-specific option is `resource`.
+`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider#configuration) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
+
+For native/public MCP clients, `mcp()` defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another local session already consumed that refresh token. Set `refreshTokenReuseInterval: 0` to keep strict OAuth Provider replay handling.
 
 export const mcpPluginOptionsType = {
   loginPage: {
@@ -204,6 +206,11 @@ export const mcpOauthOptionsType = {
     description: "Lifetime of refresh tokens in seconds.",
     type: "number",
     default: 2592000,
+  },
+  refreshTokenReuseInterval: {
+    description: "Seconds that a rotated refresh token can be reused to receive the same token response. MCP defaults this to 30 for native/public clients; set 0 for strict replay handling.",
+    type: "number",
+    default: 30,
   },
   codeExpiresIn: {
     description: "Lifetime of authorization codes in seconds.",

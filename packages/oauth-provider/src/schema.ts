@@ -374,6 +374,18 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			rotatedAt: {
+				type: "date",
+				required: false,
+			},
+			rotationReplayResponse: {
+				type: "string",
+				required: false,
+			},
+			rotationReplayExpiresAt: {
+				type: "date",
+				required: false,
+			},
 			authTime: {
 				type: "date",
 				required: false,
