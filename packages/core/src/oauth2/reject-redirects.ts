@@ -58,11 +58,13 @@ export async function fetchRefusingRedirects<T>(
 	options?: BetterFetchOption,
 ) {
 	let redirected = false;
+	const onError = options?.onError;
 	const result = await betterFetch<T>(url, {
 		...options,
 		...NO_FOLLOW_REDIRECT,
-		onError(context) {
+		async onError(context) {
 			if (isRedirectResponse(context.response)) redirected = true;
+			await onError?.(context);
 		},
 	});
 	if (redirected) throw redirectRefused(url);
