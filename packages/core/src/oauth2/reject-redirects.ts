@@ -3,7 +3,7 @@ import type { BetterFetchOption } from "@better-fetch/fetch";
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 
-const HTTP_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const httpRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 /**
  * Whether a response from a `redirect: "manual"` fetch is a redirect.
@@ -15,7 +15,7 @@ const HTTP_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 function isRedirectResponse(response: Response): boolean {
 	return (
 		response.type === "opaqueredirect" ||
-		HTTP_REDIRECT_STATUSES.has(response.status)
+		httpRedirectStatuses.has(response.status)
 	);
 }
 
@@ -32,7 +32,7 @@ function redirectRefused(endpoint: string): BetterAuthError {
  * used and the resolved response is checked with {@link assertResponseNotRedirect}
  * (or, for betterFetch, with {@link fetchRefusingRedirects}).
  */
-export const NO_FOLLOW_REDIRECT = { redirect: "manual" } as const;
+export const noFollowRedirect = { redirect: "manual" } as const;
 
 /**
  * Throw when a native-`fetch` response (e.g. jose's JWKS loader) resolved to a
@@ -61,11 +61,14 @@ export async function fetchRefusingRedirects<T>(
 	const onError = options?.onError;
 	const result = await betterFetch<T>(url, {
 		...options,
-		...NO_FOLLOW_REDIRECT,
+		...noFollowRedirect,
 		async onError(context) {
 			if (isRedirectResponse(context.response)) redirected = true;
 			await onError?.(context);
 		},
+	}).catch((error) => {
+		if (redirected) throw redirectRefused(url);
+		throw error;
 	});
 	if (redirected) throw redirectRefused(url);
 	return result;

@@ -433,10 +433,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					if (!user.emailVerified) {
-						await revokeUnprovenAccountAccess(ctx, user.id);
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							emailVerified: true,
-						});
+						const promotedUser = await revokeUnprovenAccountAccess(
+							ctx,
+							user.id,
+						);
+						if (!promotedUser) {
+							redirectWithError("user_not_found");
+						}
+						user = promotedUser;
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
