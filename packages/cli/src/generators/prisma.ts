@@ -117,6 +117,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
+			if (tables[table]?.disableMigrations) {
+				continue;
+			}
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
