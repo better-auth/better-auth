@@ -85,6 +85,14 @@
 - [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
 
 ## 1.7.0-beta.4
+## 1.6.22
+
+### Patch Changes
+
+- [#10241](https://github.com/better-auth/better-auth/pull/10241) [`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refuse HTTP redirects on server-side OAuth requests
+
+  Better Auth refuses HTTP redirects on the server-side OAuth requests it makes: the token exchange, token refresh, client-credentials, token introspection, and JWKS requests. A provider endpoint cannot redirect one of these requests to an unintended internal address. Conformant OAuth providers answer these endpoints with a direct response and never redirect, so standard integrations are unaffected.
+
 ## 1.6.21
 
 ### Patch Changes

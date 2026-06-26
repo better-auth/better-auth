@@ -35,7 +35,9 @@ export const createUserResource = (
 			formatted: user.name,
 		},
 		displayName: user.name,
-		active: true,
+		// `active` reflects the enforced disabled-user state. Without the admin
+		// plugin there is no `banned` column, so the user reads as active.
+		active: !(user as User & { banned?: boolean | null }).banned,
 		emails: [{ primary: true, value: user.email }],
 		...(groups && groups.length > 0 ? { groups } : {}),
 		schemas: [SCIMUserResourceSchema.id],

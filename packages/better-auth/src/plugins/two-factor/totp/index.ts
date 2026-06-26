@@ -15,7 +15,12 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
@@ -283,6 +288,9 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
+			if (isSignIn) {
+				await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+			}
 			// Enforce the per-challenge attempt budget on the sign-in path. The
 			// re-verify branch (already authenticated) is not gated.
 			const attempt = isSignIn
@@ -305,7 +313,13 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 			if (!status) {
 				await attempt?.recordFailure();
+				if (isSignIn) {
+					await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+				}
 				return invalid("INVALID_CODE");
+			}
+			if (isSignIn) {
+				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 			}
 
 			// Enrollment mode: TOTP row exists but hasn't been verified yet.

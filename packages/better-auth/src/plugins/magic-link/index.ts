@@ -8,7 +8,11 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseSessionOutput, parseUserOutput } from "../../db";
+import {
+	parseSessionOutput,
+	parseUserOutput,
+	revokeUnprovenAccountAccess,
+} from "../../db";
 import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
@@ -429,9 +433,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					if (!user.emailVerified) {
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							emailVerified: true,
-						});
+						const promotedUser = await revokeUnprovenAccountAccess(
+							ctx,
+							user.id,
+						);
+						if (!promotedUser) {
+							redirectWithError("user_not_found");
+						}
+						user = promotedUser;
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
