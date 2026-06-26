@@ -275,11 +275,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							const referencesDisabledModel =
+								attr.references &&
+								(tables[getModelName(attr.references.model)]
+									?.disableMigrations ||
+									tables[attr.references.model]?.disableMigrations);
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -337,6 +342,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
+			if (
+				tables[getModelName(referencedModel)]?.disableMigrations ||
+				tables[referencedModel]?.disableMigrations
+			) {
+				continue;
+			}
 			const relationKey = getModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
@@ -356,7 +367,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
 
 		// Map to track relations by model name to determine if unique or many

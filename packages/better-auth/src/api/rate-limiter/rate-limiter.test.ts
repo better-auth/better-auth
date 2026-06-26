@@ -636,17 +636,7 @@ describe("forwarded IP chains", () => {
 				window: 10,
 				max: 20,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -690,17 +680,7 @@ describe("forwarded IP chains", () => {
 					trustedProxies: ["10.0.0.0/8"],
 				},
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		// `<rotating spoofed>, <real client>, <trusted proxy>`: spoofed rotation

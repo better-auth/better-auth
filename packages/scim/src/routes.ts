@@ -78,16 +78,19 @@ const deleteSCIMProviderConnectionBodySchema = z.object({
 });
 
 function getDefaultSSOProviderIds(pluginOptions: unknown): string[] {
+	const options =
+		pluginOptions && typeof pluginOptions === "object"
+			? (pluginOptions as Record<string, unknown>)
+			: null;
 	if (
-		!pluginOptions ||
-		typeof pluginOptions !== "object" ||
-		!("defaultSSO" in pluginOptions) ||
-		!Array.isArray(pluginOptions.defaultSSO)
+		!options ||
+		!("defaultSSO" in options) ||
+		!Array.isArray(options.defaultSSO)
 	) {
 		return [];
 	}
 
-	return pluginOptions.defaultSSO
+	return options.defaultSSO
 		.map((provider) => {
 			if (
 				provider &&
@@ -128,10 +131,6 @@ function resolveRequiredRoles(
 		ctx.context.getPlugin("organization")?.options?.creatorRole;
 
 	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
-}
-
-function isProviderOwnershipEnabled(opts: SCIMOptions): boolean {
-	return opts.providerOwnership?.enabled ?? true;
 }
 
 async function getSCIMUserOrgMemberships(
@@ -467,7 +466,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					providerId,
 					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
-					...(isProviderOwnershipEnabled(opts) ? { userId: user.id } : {}),
+					userId: user.id,
 				},
 			});
 

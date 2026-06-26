@@ -967,8 +967,7 @@ describe("stripe - organization customer", () => {
 			},
 		);
 
-		// Try to upgrade with organization customerType when organization is not enabled
-		// Without authorizeReference, middleware rejects organization subscriptions
+		// Try to upgrade with organization customerType when organization is not enabled.
 		const res = await client.subscription.upgrade({
 			plan: "starter",
 			customerType: "organization",
@@ -976,7 +975,7 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
+		expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
 	});
 
 	test("should keep user and organization subscriptions separate", async ({

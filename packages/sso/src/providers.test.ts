@@ -1250,6 +1250,34 @@ kBGIJYs=
 			expect(response.status).toBe(400);
 		});
 
+		it("should return 400 when SAML callbackUrl contains a fragment", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "fragment-callback-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/dashboard#saml",
+						spMetadata: {},
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
 		it("should return 400 when no fields provided", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);

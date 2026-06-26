@@ -289,33 +289,54 @@ export const siwe = (options: SIWEPluginOptions) => {
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							const normalizedEmail = email?.toLowerCase();
+							const walletEmail = `${walletAddress}@${domain}`;
 							// SIWE proves wallet control, not email ownership: bind the caller
-							// email only when unclaimed, else keep the wallet-derived address.
+							// email only when unclaimed and atomically reserved, else keep
+							// the wallet-derived address.
 							// Silent fallback (no distinct error) avoids an enumeration oracle.
 							// FIXME(siwe-contact-ownership): non-breaking floor; the durable fix
 							// drops the `email` body field and attaches a verified email via a
 							// separate authenticated link flow. Land on `next` after main->next sync.
-							let userEmail = `${walletAddress}@${domain}`;
+							let userEmail = walletEmail;
+							let emailClaimIdentifier: string | undefined;
 							if (!isAnon && normalizedEmail) {
 								const existingUser =
 									await ctx.context.internalAdapter.findUserByEmail(
 										normalizedEmail,
 									);
 								if (!existingUser) {
-									userEmail = normalizedEmail;
+									const identifier = `siwe-email-claim-${normalizedEmail}`;
+									const reserved =
+										await ctx.context.internalAdapter.reserveVerificationValue({
+											identifier,
+											value: walletAddress,
+											expiresAt: new Date(Date.now() + 60_000),
+										});
+									if (reserved) {
+										userEmail = normalizedEmail;
+										emailClaimIdentifier = identifier;
+									}
 								}
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
 
-							user = await ctx.context.internalAdapter.createUser(
-								{
-									name: name ?? walletAddress,
-									email: userEmail,
-									image: avatar ?? "",
-								},
-								{ method: "siwe" },
-							);
+							try {
+								user = await ctx.context.internalAdapter.createUser(
+									{
+										name: name ?? walletAddress,
+										email: userEmail,
+										image: avatar ?? "",
+									},
+									{ method: "siwe" },
+								);
+							} finally {
+								if (emailClaimIdentifier) {
+									await ctx.context.internalAdapter
+										.consumeVerificationValue(emailClaimIdentifier)
+										.catch(() => {});
+								}
+							}
 
 							// Create wallet address record
 							await ctx.context.adapter.create({

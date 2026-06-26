@@ -72,11 +72,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
+		if (tables[table]?.disableMigrations) {
+			continue;
+		}
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
+				if (tables[referencedOriginalModel]?.disableMigrations) {
+					continue;
+				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
@@ -374,6 +380,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
+					if (
+						tables[referencedOriginalModelName]?.disableMigrations ||
+						tables[attr.references.model]?.disableMigrations
+					) {
+						continue;
+					}
 					if (
 						useUUIDs &&
 						provider === "postgresql" &&
@@ -382,9 +397,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = getModelName(
-						attr.references.model,
-					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;

@@ -71,6 +71,16 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 }
 
 const GOOGLE_ID_TOKEN_MAX_AGE = "1h";
+const GOOGLE_ID_TOKEN_ALGORITHMS = ["RS256"] as const;
+type GoogleIdTokenAlgorithm = (typeof GOOGLE_ID_TOKEN_ALGORITHMS)[number];
+
+function isGoogleIdTokenAlgorithm(
+	algorithm: unknown,
+): algorithm is GoogleIdTokenAlgorithm {
+	return GOOGLE_ID_TOKEN_ALGORITHMS.includes(
+		algorithm as GoogleIdTokenAlgorithm,
+	);
+}
 
 export interface VerifyGoogleIdTokenOptions {
 	token: string;
@@ -88,22 +98,30 @@ export const verifyGoogleIdToken = async ({
 	nonce,
 }: VerifyGoogleIdTokenOptions): Promise<JWTPayload | null> => {
 	try {
-		const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-		if (!kid || !jwtAlg) return null;
+		const { kid, alg } = decodeProtectedHeader(token);
+		if (!isGoogleIdTokenAlgorithm(alg)) return null;
 
-		const publicKey = await getGooglePublicKey(kid);
-		const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-			algorithms: [jwtAlg],
-			issuer: ["https://accounts.google.com", "accounts.google.com"],
-			audience,
-			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
-		});
+		const publicKeys = await getGooglePublicKeys(kid);
+		for (const publicKey of publicKeys) {
+			try {
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience,
+					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+				});
 
-		if (nonce && jwtClaims.nonce !== nonce) {
-			return null;
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return null;
+				}
+
+				return jwtClaims;
+			} catch {
+				continue;
+			}
 		}
 
-		return jwtClaims;
+		return null;
 	} catch {
 		return null;
 	}
@@ -248,10 +266,18 @@ export const google = (options: GoogleOptions) => {
 };
 
 export const getGooglePublicKey = async (kid: string) => {
+	const [publicKey] = await getGooglePublicKeys(kid);
+	if (!publicKey) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+	return publicKey;
+};
+
+const getGooglePublicKeys = async (kid?: string) => {
 	const { data } = await betterFetch<{
 		keys: Array<{
 			kid: string;
-			alg: string;
+			alg?: string;
 			kty: string;
 			use: string;
 			n: string;
@@ -265,10 +291,12 @@ export const getGooglePublicKey = async (kid: string) => {
 		});
 	}
 
-	const jwk = data.keys.find((key) => key.kid === kid);
-	if (!jwk) {
+	const jwks = kid ? data.keys.filter((key) => key.kid === kid) : data.keys;
+	if (!jwks.length) {
 		throw new Error(`JWK with kid ${kid} not found`);
 	}
 
-	return await importJWK(jwk, jwk.alg);
+	return Promise.all(
+		jwks.map((jwk) => importJWK(jwk, GOOGLE_ID_TOKEN_ALGORITHMS[0])),
+	);
 };

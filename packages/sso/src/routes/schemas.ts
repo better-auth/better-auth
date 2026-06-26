@@ -188,7 +188,12 @@ const samlConfigSchema = z.object({
 		})
 		.optional(),
 	audience: z.string().optional(),
-	callbackUrl: z.string().optional(),
+	callbackUrl: z
+		.string()
+		.refine((url) => !url.includes("#"), {
+			message: "callbackUrl must not contain a fragment",
+		})
+		.optional(),
 	idpMetadata: z
 		.object({
 			metadata: z.string().optional(),

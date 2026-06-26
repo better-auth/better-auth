@@ -1776,6 +1776,14 @@ describe("--dialect flag support", () => {
 			emittedTable: {
 				fields: {
 					name: { type: "string", required: true },
+					skippedTableId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "skippedTable",
+							field: "id",
+						},
+					},
 				},
 			},
 			skippedTable: {
@@ -1804,7 +1812,10 @@ describe("--dialect flag support", () => {
 		});
 
 		expect(schema.code).toContain("emittedTable");
-		expect(schema.code).not.toContain("skippedTable");
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("export const skippedTable");
+		expect(schema.code).not.toContain("references(() => skippedTable");
+		expect(schema.code).not.toContain("skippedTable: one(skippedTable");
 	});
 
 	it("should not emit prisma models with disableMigration", async () => {
@@ -1821,6 +1832,8 @@ describe("--dialect flag support", () => {
 		});
 
 		expect(schema.code).toContain("EmittedTable");
+		expect(schema.code).toContain("skippedTableId");
 		expect(schema.code).not.toContain("SkippedTable");
+		expect(schema.code).not.toContain("skippedtable");
 	});
 });
