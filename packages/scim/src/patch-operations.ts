@@ -50,9 +50,8 @@ const familyName = (user: User, op: Operation, resources: Resources) => {
 };
 
 const active = (user: User, op: Operation, resources: Resources) => {
-	// SCIM `active:false` deactivates the user; map it to the admin plugin's
-	// enforced `banned` state (`banned = !active`). The handler requires the
-	// admin plugin and revokes sessions on deactivation.
+	// Build the generic inactive signal. The route maps it to organization
+	// membership for org-scoped tokens and to the admin ban for app-level tokens.
 	return op.value === false || op.value === "false";
 };
 

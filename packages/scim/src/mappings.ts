@@ -4,6 +4,28 @@ export const getAccountId = (userName: string, externalId?: string) => {
 	return externalId ?? userName;
 };
 
+/**
+ * Account provider key for SCIM-managed users, isolated from other providers.
+ */
+export const scimAccountProviderId = (provider: {
+	providerId: string;
+	organizationId?: string | null;
+}): string => {
+	return provider.organizationId
+		? `scim:${provider.organizationId}:${provider.providerId}`
+		: `scim:${provider.providerId}`;
+};
+
+/**
+ * Unique storage key for runtime-managed SCIM provider connections.
+ */
+export const scimProviderKey = (provider: {
+	providerId: string;
+	organizationId: string;
+}): string => {
+	return `${provider.organizationId}:${provider.providerId}`;
+};
+
 const getFormattedName = (name: SCIMName) => {
 	if (name.givenName && name.familyName) {
 		return `${name.givenName} ${name.familyName}`;

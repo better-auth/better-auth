@@ -70,15 +70,30 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		return headers;
 	}
 
+	let defaultOrgPromise: Promise<string | undefined> | undefined;
+	function ensureDefaultOrg(headers: Headers) {
+		if (!defaultOrgPromise) {
+			defaultOrgPromise = auth.api
+				.createOrganization({
+					body: { slug: "default-org", name: "Default Org" },
+					headers,
+				})
+				.then((org) => org?.id);
+		}
+		return defaultOrgPromise;
+	}
+
 	async function getSCIMToken(
 		providerId: string = "the-saml-provider-1",
 		organizationId?: string,
 	) {
 		const headers = await getAuthCookieHeaders();
+		const orgId = organizationId ?? (await ensureDefaultOrg(headers));
+		if (!orgId) throw new Error("Default organization not found");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
-				organizationId,
+				organizationId: orgId,
 			},
 			headers,
 		});
