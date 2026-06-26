@@ -20,10 +20,12 @@ export function insensitiveIlike(
 }
 
 /**
- * LIKE/ILIKE with an explicit backslash escape character.
+ * LIKE/ILIKE with an explicit backslash escape character so callers can match a
+ * literal `%` or `_`. SQLite has no default LIKE escape, so the ESCAPE clause is
+ * always supplied. The escape character is passed as a bound parameter.
  *
- * SQLite has no default LIKE escape and MySQL drops it under
- * `NO_BACKSLASH_ESCAPES`, so the escape character is bound per query.
+ * This does not support MySQL's `NO_BACKSLASH_ESCAPES` sql_mode, under which the
+ * bound backslash is rejected as a two-character ESCAPE argument.
  *
  * @see https://www.sqlite.org/lang_expr.html
  */
