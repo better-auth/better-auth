@@ -193,10 +193,11 @@ export const verifyDomain = (options: SSOOptions) => {
 				);
 			}
 
-			const record = records.find((record) =>
-				record.includes(
-					`${activeVerification.identifier}=${activeVerification.value}`,
-				),
+			const record = records.find(
+				(record) =>
+					record.includes(
+						`${activeVerification.identifier}=${activeVerification.value}`,
+					) || record.includes(activeVerification.value),
 			);
 			if (!record) {
 				throw new APIError("BAD_GATEWAY", {
