@@ -1,5 +1,13 @@
 # @better-auth/core
 
+## 1.6.22
+
+### Patch Changes
+
+- [#10241](https://github.com/better-auth/better-auth/pull/10241) [`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refuse HTTP redirects on server-side OAuth requests
+
+  Better Auth refuses HTTP redirects on the server-side OAuth requests it makes: the token exchange, token refresh, client-credentials, token introspection, and JWKS requests. A provider endpoint cannot redirect one of these requests to an unintended internal address. Conformant OAuth providers answer these endpoints with a direct response and never redirect, so standard integrations are unaffected.
+
 ## 1.6.21
 
 ### Patch Changes
