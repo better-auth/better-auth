@@ -139,18 +139,10 @@ export const kyselyAdapter = (
 				where: Where[],
 			) => {
 				if (config?.type === "mysql") {
-					// MySQL has no `UPDATE ... RETURNING`. Gate the re-SELECT
-					// on `numUpdatedRows` so a zero-row UPDATE returns
-					// `undefined` like other DBs. Otherwise the re-SELECT
-					// below matches by a single field (dropping every
-					// predicate past `where[0]`) and silently returns a row
-					// even when the UPDATE matched nothing. That makes any
-					// caller reading the result as a CAS winner/loser signal
-					// (e.g. `WHERE id = ? AND revoked IS NULL`) fail open on
-					// MySQL only. `incrementOne` remains the portable CAS
-					// primitive (serializes writers via `SELECT ... FOR
-					// UPDATE`), but `update` must not lie about whether the
-					// UPDATE matched.
+					// MySQL has no `UPDATE ... RETURNING`. Execute the update
+					// first, then re-select only after the row count confirms
+					// that the predicate matched. This keeps guarded updates
+					// from reporting success after zero rows matched.
 					//
 					// The gate assumes "rows matched" semantics in
 					// `numUpdatedRows` (mysql2 default via `CLIENT_FOUND_ROWS`).
@@ -164,26 +156,16 @@ export const kyselyAdapter = (
 							!updateResult ||
 							Number(updateResult.numUpdatedRows ?? 0) === 0
 						) {
-							return undefined;
+							return null;
 						}
 
-						// The gate above only confirms *some* row was mutated;
-						// the re-SELECT identifies which row by a single
-						// field. Prefer the unique row id (from `values` or
-						// anywhere in `where`) so non-`id`-first guard
-						// orderings like `[{ field: "revoked", value: null },
-						// { field: "id" }]` still resolve to the written row.
-						// Fall back to `where[0]` only when no id is in
-						// scope; the caller must then ensure `where[0]`
-						// uniquely identifies the row, or use `incrementOne`
-						// (transaction-locked CAS) if that guarantee matters.
+						// The row count proves a match, not which row to return.
+						// Prefer a safe id equality from the update or guard
+						// before falling back to the first predicate.
 						//
-						// Only an `AND`-joined equality on `id` is safe to
-						// key off: a non-`eq` operator (e.g. `ne`) means the
-						// UPDATE *excluded* that id, and `connector: "OR"`
-						// makes the predicate non-mandatory (the matched row
-						// may have satisfied a different branch).
-						const idWhere = where.find(
+						// `incrementOne` remains the portable primitive for
+						// race-safe guarded state transitions.
+						const idEqualityWhere = where.find(
 							(w) =>
 								w.field === "id" &&
 								(w.operator === undefined || w.operator === "eq") &&
@@ -191,29 +173,31 @@ export const kyselyAdapter = (
 								w.value !== undefined &&
 								w.value !== null,
 						);
-						let field: string;
-						let value: any;
+						let reselectField: string;
+						let reselectValue: Where["value"];
 						if (values.id !== undefined && values.id !== null) {
-							field = "id";
-							value = values.id;
-						} else if (idWhere) {
-							field = "id";
-							value = idWhere.value;
+							reselectField = "id";
+							reselectValue = values.id;
+						} else if (idEqualityWhere) {
+							reselectField = "id";
+							reselectValue = idEqualityWhere.value;
 						} else if (where[0]?.field) {
-							field = where[0].field;
-							value =
-								values[field] !== undefined ? values[field] : where[0].value;
+							reselectField = where[0].field;
+							reselectValue =
+								values[reselectField] !== undefined
+									? values[reselectField]
+									: where[0].value;
 						} else {
-							return undefined;
+							return null;
 						}
 
 						return await db
 							.selectFrom(model)
 							.selectAll()
 							.where(
-								getFieldName({ model, field }),
-								value === null ? "is" : "=",
-								value,
+								getFieldName({ model, field: reselectField }),
+								reselectValue === null ? "is" : "=",
+								reselectValue,
 							)
 							.limit(1)
 							.executeTakeFirst();

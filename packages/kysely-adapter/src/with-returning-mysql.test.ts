@@ -69,9 +69,9 @@ describe("kysely withReturning mysql update", () => {
 	 * on top of `update` (e.g. `WHERE id = ? AND revoked IS NULL`) would
 	 * silently fail open on MySQL only. The contract here matches what
 	 * SQLite/Postgres/MSSQL's RETURNING paths produce: an unmatched UPDATE
-	 * returns no row.
+	 * returns `null`.
 	 */
-	it("returns no row when a multi-predicate UPDATE matches no row", async () => {
+	it("returns null when a multi-predicate UPDATE matches no row", async () => {
 		await db
 			.insertInto("tokens")
 			.values({ id: "a", revoked: null, clientId: "c1" })
@@ -93,8 +93,7 @@ describe("kysely withReturning mysql update", () => {
 
 		// Second attempt with the same CAS guard: the row's `revoked` is no
 		// longer null, so the UPDATE must match zero rows and the adapter
-		// must surface that as a null/undefined return — not the post-first-
-		// rotation row.
+		// must surface that as `null`, not the post-first-rotation row.
 		const loser = await adapter.update<TokensTable>({
 			model: "tokens",
 			where: [
@@ -103,7 +102,7 @@ describe("kysely withReturning mysql update", () => {
 			],
 			update: { revoked: "2099-01-01T00:00:00.000Z" },
 		});
-		expect(loser ?? null).toBeNull();
+		expect(loser).toBeNull();
 
 		const after = await db
 			.selectFrom("tokens")
