@@ -62,11 +62,12 @@ function hasInsensitiveWhere(where?: Where[]): boolean {
 /**
  * Derive the number of affected rows from a Drizzle write result.
  *
- * Drizzle's drivers report affected rows under different shapes: postgres-js
- * exposes `rowCount`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as
- * the first element of a result-header array), and better-sqlite3 uses
- * `changes`. The adapter contract requires `updateMany`/`deleteMany` to return a
- * finite number; the factory throws otherwise.
+ * Drizzle's drivers report affected rows under different shapes: node-postgres
+ * exposes `rowCount`, postgres-js returns an Array subclass with the count on
+ * `.count`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as the first
+ * element of a result-header array), and better-sqlite3 uses `changes`. The
+ * adapter contract requires `updateMany`/`deleteMany` to return a finite number;
+ * the factory throws otherwise.
  */
 function getAffectedRowCount(
 	result: unknown,
@@ -76,6 +77,15 @@ function getAffectedRowCount(
 	let count: unknown = 0;
 	if (result && typeof result === "object" && "rowCount" in result) {
 		count = (result as { rowCount: unknown }).rowCount;
+	} else if (
+		result &&
+		typeof result === "object" &&
+		typeof (result as { count?: unknown }).count === "number"
+	) {
+		// postgres-js returns an Array subclass whose affected-row count lives on
+		// `.count`. A non-returning UPDATE/DELETE has length 0, so this must be
+		// read before the Array branch short-circuits to `result.length`.
+		count = (result as { count: number }).count;
 	} else if (Array.isArray(result)) {
 		count =
 			result.length > 0 && hasDriverRowCount(result[0])
