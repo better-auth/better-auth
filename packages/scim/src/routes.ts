@@ -77,6 +77,34 @@ const deleteSCIMProviderConnectionBodySchema = z.object({
 	providerId: z.string(),
 });
 
+function getDefaultSSOProviderIds(pluginOptions: unknown): string[] {
+	const options =
+		pluginOptions && typeof pluginOptions === "object"
+			? (pluginOptions as Record<string, unknown>)
+			: null;
+	if (
+		!options ||
+		!("defaultSSO" in options) ||
+		!Array.isArray(options.defaultSSO)
+	) {
+		return [];
+	}
+
+	return options.defaultSSO
+		.map((provider) => {
+			if (
+				provider &&
+				typeof provider === "object" &&
+				"providerId" in provider &&
+				typeof provider.providerId === "string"
+			) {
+				return provider.providerId;
+			}
+			return null;
+		})
+		.filter((providerId): providerId is string => providerId !== null);
+}
+
 function parseMemberRoles(role: string): string[] {
 	return role
 		.split(",")
@@ -310,19 +338,18 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			}
 
 			// A SCIM token authenticates as the row whose providerId matches the
-			// claim in the bearer token. If a caller mints a token whose
-			// providerId collides with a built-in account.providerId
-			// (`credential`, `email-otp`, `magic-link`, `phone-number`,
-			// `anonymous`, `siwe`, or any configured social provider key), the
-			// resulting token can be used to act against accounts that were
-			// never SCIM-provisioned, which would be a privilege escalation.
-			// Reject the collision at issuance.
+			// claim in the bearer token. Reject ids that collide with other
+			// account-producing providers so a token cannot act against accounts
+			// that were never SCIM-provisioned.
 			//
 			// We read social provider keys from `options.socialProviders` (raw
 			// config) rather than `context.socialProviders` (resolved list) so
 			// that providers configured with `enabled: false` are still
 			// rejected: their account rows can persist in the DB from a prior
 			// enabled state.
+			const defaultSSOProviderIds = getDefaultSSOProviderIds(
+				ctx.context.getPlugin("sso")?.options,
+			);
 			const reservedProviderIds = new Set<string>([
 				"credential",
 				"email-otp",
@@ -331,12 +358,29 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				"anonymous",
 				"siwe",
 				...Object.keys(ctx.context.options.socialProviders ?? {}),
+				...ctx.context.socialProviders.map((p) => p.id),
+				...defaultSSOProviderIds,
 			]);
 			if (reservedProviderIds.has(providerId)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
-						"Provider id collides with a built-in account provider and cannot be used for SCIM",
+						"Provider id collides with another account provider and cannot be used for SCIM",
 				});
+			}
+
+			if (ctx.context.hasPlugin("sso")) {
+				const existingSSOProvider = await ctx.context.adapter.findOne<{
+					id: string;
+				}>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				});
+				if (existingSSOProvider) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"Provider id collides with another account provider and cannot be used for SCIM",
+					});
+				}
 			}
 
 			if (organizationId && !ctx.context.hasPlugin("organization")) {

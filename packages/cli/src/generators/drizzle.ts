@@ -43,9 +43,25 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -272,11 +288,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							const referencesDisabledModel =
+								attr.references && isMigrationDisabled(attr.references.model);
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -293,6 +311,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 
 		type Relation = {
@@ -331,6 +352,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
+			if (isMigrationDisabled(referencedModel)) {
+				continue;
+			}
 			const relationKey = getModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
@@ -350,7 +374,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
 
 		// Map to track relations by model name to determine if unique or many

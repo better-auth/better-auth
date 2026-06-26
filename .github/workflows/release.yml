@@ -46,6 +46,9 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+    env:
+      # The release bot's auto-commit must not be gated by the local pre-commit hooks.
+      LEFTHOOK: "0"
     steps:
       - name: Generate App Token
         id: app-token
