@@ -3,12 +3,12 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { clientCredentialsToken } from "./client-credentials-token";
-import { refreshAccessToken } from "./refresh-access-token";
+import { clientCredentialsToken } from "../oauth2/client-credentials-token";
+import { refreshAccessToken } from "../oauth2/refresh-access-token";
 import {
 	validateAuthorizationCode,
 	validateToken,
-} from "./validate-authorization-code";
+} from "../oauth2/validate-authorization-code";
 
 /**
  * Drives the real network stack (undici / betterFetch / jose) against a real
@@ -16,12 +16,16 @@ import {
  * control behaviorally: the request is rejected AND the redirect target is never
  * connected to. A mocked fetch cannot prove the second part, because there is no
  * real second request to observe.
+ *
+ * The loopback origin is exempted via `trustedOrigins` so the request reaches the
+ * server; the redirect refusal, not the host gate, is what must catch the 302.
  */
 describe("server-side OAuth fetches never follow a redirect to an internal host", () => {
 	let server: Server;
 	let baseUrl: string;
 	let internalHit = false;
 	let signedToken: string;
+	const allowLoopback = () => true;
 
 	beforeAll(async () => {
 		const { publicKey, privateKey } = await generateKeyPair("RS256", {
@@ -96,6 +100,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				redirectURI: `${baseUrl}/callback`,
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
+				trustedOrigins: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -107,6 +112,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				refreshToken: "refresh-token",
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
+				trustedOrigins: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -118,6 +124,7 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 				options: { clientId: "client", clientSecret: "secret" },
 				tokenEndpoint: `${baseUrl}/redirecting-token`,
 				scope: "openid",
+				trustedOrigins: allowLoopback,
 			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
@@ -125,7 +132,9 @@ describe("server-side OAuth fetches never follow a redirect to an internal host"
 
 	it("validateToken (JWKS) rejects the redirect and never connects to the internal host", async () => {
 		await expect(
-			validateToken(signedToken, `${baseUrl}/redirecting-jwks`),
+			validateToken(signedToken, `${baseUrl}/redirecting-jwks`, {
+				trustedOrigins: allowLoopback,
+			}),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 		expect(internalHit).toBe(false);
 	});

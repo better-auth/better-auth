@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface GitlabProfile extends Record<string, any> {
 	id: number;
@@ -130,7 +130,7 @@ export const gitlab = (options: GitlabOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<GitlabProfile>(
+			const { data: profile, error } = await fetchPublicResource<GitlabProfile>(
 				userinfoEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);

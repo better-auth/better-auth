@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface NaverProfile {
 	/** API response result code */
@@ -83,7 +83,7 @@ export const naver = (options: NaverOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<NaverProfile>(
+			const { data: profile, error } = await fetchPublicResource<NaverProfile>(
 				"https://openapi.naver.com/v1/nid/me",
 				{
 					headers: {

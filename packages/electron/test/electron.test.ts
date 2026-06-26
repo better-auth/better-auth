@@ -7,7 +7,7 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { beforeEach, describe, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
 import { getCookie } from "../src/cookies";
@@ -77,6 +77,20 @@ const mockElectron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => mockElectron);
+
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
+const envState = vi.hoisted(() => ({ development: false }));
+
+vi.mock("@better-auth/core/env", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@better-auth/core/env")>();
+	return {
+		...actual,
+		isDevelopment: () => envState.development,
+	};
+});
 
 describe("Electron", () => {
 	const { auth, client, proxyClient, options, customFetchImpl } = testUtils();
@@ -2324,6 +2338,7 @@ describe("Electron", () => {
 				expect.objectContaining({
 					method: "GET",
 					headers: { accept: "image/*" },
+					redirect: "manual",
 				}),
 			);
 			expect(result).not.toBeNull();
@@ -2462,6 +2477,103 @@ describe("Electron", () => {
 
 				expect(mockElectron.net.fetch).toHaveBeenCalled();
 				expect(result).not.toBeNull();
+			});
+		});
+
+		describe("redirect re-validation (SSRF mitigation)", () => {
+			const pngResponse = () =>
+				new Response(
+					makeImageBytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+						.buffer,
+					{ headers: new Headers({ "content-type": "image/png" }) },
+				);
+			const redirectTo = (location: string) =>
+				new Response(null, {
+					status: 302,
+					headers: new Headers({ location }),
+				});
+
+			it("should follow a redirect to another public host", async () => {
+				mockElectron.net.fetch
+					.mockResolvedValueOnce(
+						redirectTo("https://cdn.example.com/avatar.png"),
+					)
+					.mockResolvedValueOnce(pngResponse());
+
+				const result = await fetchUserImage(
+					undefined,
+					"https://gravatar.com/avatar/abc.png",
+				);
+
+				expect(result).not.toBeNull();
+				expect(result!.mimeType).toBe("image/png");
+				expect(mockElectron.net.fetch).toHaveBeenCalledTimes(2);
+			});
+
+			it("should refuse a redirect to a private IP rather than follow it", async () => {
+				mockElectron.net.fetch.mockResolvedValueOnce(
+					redirectTo("http://169.254.169.254/latest/meta-data/"),
+				);
+
+				const result = await fetchUserImage(
+					undefined,
+					"https://gravatar.com/avatar/abc.png",
+				);
+
+				expect(result).toBeNull();
+				expect(mockElectron.net.fetch).toHaveBeenCalledTimes(1);
+				expect(mockElectron.net.fetch).not.toHaveBeenCalledWith(
+					"http://169.254.169.254/latest/meta-data/",
+					expect.anything(),
+				);
+			});
+
+			it("should return null when redirects exceed the max-hops cap", async () => {
+				mockElectron.net.fetch.mockImplementation(async (input) => {
+					const current = new URL(input.toString());
+					const hop = Number(current.searchParams.get("hop") ?? "0");
+					const target = new URL("https://example.com/avatar.png");
+					target.searchParams.set("hop", String(hop + 1));
+					return redirectTo(target.href);
+				});
+
+				const result = await fetchUserImage(
+					undefined,
+					"https://example.com/avatar.png?hop=0",
+				);
+
+				expect(result).toBeNull();
+				expect(mockElectron.net.fetch).toHaveBeenCalledTimes(5);
+			});
+		});
+
+		describe("isDevelopment bypass", () => {
+			beforeEach(() => {
+				envState.development = true;
+			});
+			afterEach(() => {
+				envState.development = false;
+			});
+
+			it("should allow a local host when running in development", async () => {
+				mockElectron.net.fetch.mockResolvedValueOnce(
+					new Response(
+						makeImageBytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+							.buffer,
+						{ headers: new Headers({ "content-type": "image/png" }) },
+					),
+				);
+
+				const result = await fetchUserImage(
+					undefined,
+					"http://localhost:3000/avatar.png",
+				);
+
+				expect(result).not.toBeNull();
+				expect(mockElectron.net.fetch).toHaveBeenCalledWith(
+					"http://localhost:3000/avatar.png",
+					expect.objectContaining({ redirect: "manual" }),
+				);
 			});
 		});
 	});

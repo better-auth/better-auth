@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface HuggingFaceProfile {
 	sub: string;
@@ -96,15 +96,16 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<HuggingFaceProfile>(
-				"https://huggingface.co/oauth/userinfo",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error } =
+				await fetchPublicResource<HuggingFaceProfile>(
+					"https://huggingface.co/oauth/userinfo",
+					{
+						method: "GET",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 			if (error) {
 				return null;
 			}

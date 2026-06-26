@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -7,6 +6,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface AtlassianProfile {
 	account_type?: string | undefined;
@@ -105,7 +105,7 @@ export const atlassian = (options: AtlassianOptions) => {
 			}
 
 			try {
-				const { data: profile } = await betterFetch<{
+				const { data: profile } = await fetchPublicResource<{
 					account_id: string;
 					name: string;
 					email?: string | undefined;

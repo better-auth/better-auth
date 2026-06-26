@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface KickProfile {
 	/**
@@ -81,7 +81,7 @@ export const kick = (options: KickOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			const { data, error } = await betterFetch<{
+			const { data, error } = await fetchPublicResource<{
 				data: KickProfile[];
 			}>("https://api.kick.com/public/v1/users", {
 				method: "GET",

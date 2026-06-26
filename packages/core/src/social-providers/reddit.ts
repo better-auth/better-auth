@@ -1,11 +1,11 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface RedditProfile {
 	id: string;
@@ -55,7 +55,7 @@ export const reddit = (options: RedditOptions) => {
 				)}`,
 			};
 
-			const { data, error } = await betterFetch<object>(
+			const { data, error } = await fetchPublicResource<object>(
 				"https://www.reddit.com/api/v1/access_token",
 				{
 					method: "POST",
@@ -90,7 +90,7 @@ export const reddit = (options: RedditOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			const { data: profile, error } = await betterFetch<RedditProfile>(
+			const { data: profile, error } = await fetchPublicResource<RedditProfile>(
 				"https://oauth.reddit.com/api/v1/me",
 				{
 					headers: {

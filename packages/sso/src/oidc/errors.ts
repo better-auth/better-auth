@@ -5,8 +5,35 @@
  * Used at the boundary between the discovery pipeline and HTTP handlers.
  */
 
+import { SsrfRefusedError } from "@better-auth/core/utils/public-fetch";
 import { APIError } from "better-auth/api";
-import type { DiscoveryError } from "./types";
+import { DiscoveryError } from "./types";
+
+/**
+ * Rethrow an {@link SsrfRefusedError} from the shared fetch boundary as the
+ * matching {@link DiscoveryError} so SSO callers keep their existing error
+ * contract. Non-SSRF errors pass through unchanged.
+ */
+export function remapSsrfError(error: unknown): never {
+	if (error instanceof SsrfRefusedError) {
+		switch (error.code) {
+			case "ssrf_private_host":
+				throw new DiscoveryError("discovery_private_host", error.message, {
+					url: error.url,
+					resolved: error.resolvedAddress,
+				});
+			case "ssrf_redirect_refused":
+				throw new DiscoveryError("oidc_endpoint_redirect", error.message, {
+					url: error.url,
+				});
+			case "ssrf_invalid_url":
+				throw new DiscoveryError("discovery_invalid_url", error.message, {
+					url: error.url,
+				});
+		}
+	}
+	throw error;
+}
 
 /**
  * Maps a DiscoveryError to an appropriate APIError for HTTP responses.

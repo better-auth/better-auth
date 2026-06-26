@@ -1,12 +1,11 @@
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
+import {
+	fetchPublicResource,
+	fetchPublicResponse,
+} from "../utils/public-fetch";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
-import {
-	assertResponseNotRedirect,
-	fetchRefusingRedirects,
-	noFollowRedirect,
-} from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
@@ -40,6 +39,11 @@ interface AuthorizationCodeRequestBaseInput {
 
 interface ValidateAuthorizationCodeInput extends AuthorizationCodeRequestInput {
 	tokenEndpoint: string;
+	/**
+	 * Origins exempt from the public-routable gate, for an operator whose token
+	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
+	 */
+	trustedOrigins?: (url: string) => boolean;
 }
 
 export async function authorizationCodeRequest({
@@ -134,6 +138,7 @@ export async function validateAuthorizationCode({
 	headers,
 	additionalParams = {},
 	resource,
+	trustedOrigins,
 }: ValidateAuthorizationCodeInput) {
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
@@ -149,10 +154,11 @@ export async function validateAuthorizationCode({
 		resource,
 	});
 
-	const { data, error } = await fetchRefusingRedirects<object>(tokenEndpoint, {
+	const { data, error } = await fetchPublicResource<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
+		trustedOrigins,
 	});
 	if (error) {
 		throw error;
@@ -167,14 +173,14 @@ export async function validateToken(
 	options?: {
 		audience?: string | string[];
 		issuer?: string | string[];
+		trustedOrigins?: (url: string) => boolean;
 	},
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
-		[customFetch]: async (url, init) => {
-			const response = await fetch(url, { ...init, ...noFollowRedirect });
-			assertResponseNotRedirect(String(url), response);
-			return response;
-		},
+		[customFetch]: (url, init) =>
+			fetchPublicResponse(url, init, {
+				trustedOrigins: options?.trustedOrigins,
+			}),
 	});
 	const verified = await jwtVerify(token, jwks, {
 		audience: options?.audience,

@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export type LoginType =
 	| 0 /** Facebook OAuth */
@@ -193,7 +193,7 @@ export const zoom = (userOptions: ZoomOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<ZoomProfile>(
+			const { data: profile, error } = await fetchPublicResource<ZoomProfile>(
 				"https://api.zoom.us/v2/users/me",
 				{
 					headers: {

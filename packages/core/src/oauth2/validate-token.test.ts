@@ -1,6 +1,7 @@
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
 import { validateToken } from "./validate-authorization-code";
 
 describe("validateToken", () => {

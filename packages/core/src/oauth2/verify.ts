@@ -14,6 +14,7 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import { fetchPublicResource } from "../utils/public-fetch";
 import type { DpopReplayStore } from "./dpop";
 import {
 	createInMemoryDpopReplayStore,
@@ -22,7 +23,6 @@ import {
 	isDpopBindingError,
 	parseAccessTokenAuthorization,
 } from "./dpop";
-import { fetchRefusingRedirects } from "./reject-redirects";
 
 const joseInfrastructureErrorCodes = new Set([
 	joseErrors.JWKSTimeout.code,
@@ -49,6 +49,11 @@ type JwksFetchOptions = {
 	 * Without it, a function source is fetched on every verification.
 	 */
 	jwksCacheKey?: object;
+	/**
+	 * Origins exempt from the public-routable gate, for an operator whose JWKS
+	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
+	 */
+	trustedOrigins?: (url: string) => boolean;
 };
 
 type ResolvedJwks = {
@@ -112,13 +117,15 @@ function shouldRefetchCachedJwksWithoutKid(
 
 async function fetchJwks(
 	jwksFetch: JwksFetchOptions["jwksFetch"],
+	trustedOrigins?: (url: string) => boolean,
 ): Promise<JSONWebKeySet> {
 	const jwks =
 		typeof jwksFetch === "string"
-			? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
+			? await fetchPublicResource<JSONWebKeySet>(jwksFetch, {
 					headers: {
 						Accept: "application/json",
 					},
+					trustedOrigins,
 				}).then(async (res) => {
 					if (res.error)
 						throw new Error(
@@ -170,6 +177,12 @@ export interface VerifyAccessTokenOptions {
 	jwksUrl?: string;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
+	/**
+	 * Origins exempt from the public-routable gate, for an operator whose JWKS or
+	 * introspection endpoint runs on a private network. Forwarded to the SSRF
+	 * fetch boundary.
+	 */
+	trustedOrigins?: (url: string) => boolean;
 }
 
 export interface VerifyAccessTokenRequestOptions
@@ -328,7 +341,7 @@ async function getJwksForVerification(
 		? undefined
 		: getFreshJwksWithKid(cached, kid);
 	if (!cachedJwks) {
-		const jwks = await fetchJwks(opts.jwksFetch);
+		const jwks = await fetchJwks(opts.jwksFetch, opts.trustedOrigins);
 		const fetchedAt = Date.now();
 		jwksCache.set(cacheKey, {
 			jwks,
@@ -357,6 +370,7 @@ async function verifyAccessTokenPayload(
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch: opts.jwksUrl,
 				verifyOptions: opts.verifyOptions,
+				trustedOrigins: opts.trustedOrigins,
 			});
 		} catch (error) {
 			if (error instanceof Error) {
@@ -385,7 +399,7 @@ async function verifyAccessTokenPayload(
 	// Remote verify
 	if (opts?.remoteVerify) {
 		const { data: introspect, error: introspectError } =
-			await fetchRefusingRedirects<
+			await fetchPublicResource<
 				JWTPayload & {
 					active: boolean;
 				}
@@ -401,6 +415,7 @@ async function verifyAccessTokenPayload(
 					token,
 					token_type_hint: "access_token",
 				}).toString(),
+				trustedOrigins: opts.trustedOrigins,
 			});
 		if (introspectError)
 			logger.error(

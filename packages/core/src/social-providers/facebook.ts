@@ -1,5 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
-import { createRemoteJWKSet, decodeJwt } from "jose";
+import { createRemoteJWKSet, customFetch, decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -9,6 +8,10 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import {
+	fetchPublicResource,
+	fetchPublicResponse,
+} from "../utils/public-fetch";
 export interface FacebookProfile {
 	id: string;
 	name: string;
@@ -57,15 +60,14 @@ async function verifyFacebookAccessToken(
 		? options.clientId
 		: [options.clientId];
 	const appAccessToken = `${primaryClientId}|${options.clientSecret}`;
-	const { data, error } = await betterFetch<{ data?: FacebookDebugTokenData }>(
-		"https://graph.facebook.com/debug_token",
-		{
-			query: {
-				input_token: accessToken,
-				access_token: appAccessToken,
-			},
+	const { data, error } = await fetchPublicResource<{
+		data?: FacebookDebugTokenData;
+	}>("https://graph.facebook.com/debug_token", {
+		query: {
+			input_token: accessToken,
+			access_token: appAccessToken,
 		},
-	);
+	});
 	if (error || !data?.data) {
 		return null;
 	}
@@ -139,6 +141,9 @@ export const facebook = (options: FacebookOptions) => {
 			// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
 			jwks: createRemoteJWKSet(
 				new URL("https://limited.facebook.com/.well-known/oauth/openid/jwks/"),
+				{
+					[customFetch]: (url, init) => fetchPublicResponse(url, init),
+				},
 			),
 			issuer: "https://www.facebook.com",
 			audience: options.clientId,
@@ -228,15 +233,16 @@ export const facebook = (options: FacebookOptions) => {
 				"picture",
 				...(options?.fields || []),
 			];
-			const { data: profile, error } = await betterFetch<FacebookProfile>(
-				"https://graph.facebook.com/me?fields=" + fields.join(","),
-				{
-					auth: {
-						type: "Bearer",
-						token: accessToken,
+			const { data: profile, error } =
+				await fetchPublicResource<FacebookProfile>(
+					"https://graph.facebook.com/me?fields=" + fields.join(","),
+					{
+						auth: {
+							type: "Bearer",
+							token: accessToken,
+						},
 					},
-				},
-			);
+				);
 			if (error) {
 				return null;
 			}

@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 const authorizationEndpoint = "https://backboard.railway.com/oauth/auth";
 const tokenEndpoint = "https://backboard.railway.com/oauth/token";
@@ -80,10 +80,10 @@ export const railway = (options: RailwayOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<RailwayProfile>(
-				userinfoEndpoint,
-				{ headers: { authorization: `Bearer ${token.accessToken}` } },
-			);
+			const { data: profile, error } =
+				await fetchPublicResource<RailwayProfile>(userinfoEndpoint, {
+					headers: { authorization: `Bearer ${token.accessToken}` },
+				});
 			if (error || !profile) {
 				return null;
 			}
