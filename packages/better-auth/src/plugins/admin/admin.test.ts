@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -12,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2426,5 +2428,170 @@ describe("Admin plugin id-token sign-in", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("BANNED_USER");
 		expect(res.error?.message).toBe("Custom banned user message");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/10187
+ */
+describe("admin authorization is revocation-aware with cookie cache", async () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path?.startsWith("/admin/") === true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance(
+			{
+				plugins: [preloadCachedSessionPlugin, admin()],
+				session: {
+					cookieCache: {
+						enabled: true,
+						maxAge: 300,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: {
+									...user,
+									emailVerified: true,
+									...(user.name === "Admin" ? { role: "admin" } : {}),
+								},
+							}),
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Admin",
+				},
+			},
+		);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: rootHeaders } = await signInWithTestUser();
+
+	// Captures the full cookie set, including the `session_data` cookie cache
+	// snapshot, unlike `signInWithUser` which only keeps `session_token`.
+	async function signInCapturingCache(email: string, password: string) {
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email, password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		return headers;
+	}
+
+	it("should reject privileged calls from a demoted admin holding a cached admin snapshot", async () => {
+		const attacker = {
+			name: "Admin",
+			email: "attacker-demote@test.com",
+			password: "password",
+		};
+		const victim = {
+			name: "Victim",
+			email: "victim-demote@test.com",
+			password: "password",
+		};
+		const { data: attackerData } = await client.signUp.email(attacker);
+		const { data: victimData } = await client.signUp.email(victim);
+		const attackerId = attackerData?.user.id!;
+		const victimId = victimData?.user.id!;
+
+		const attackerHeaders = await signInCapturingCache(
+			attacker.email,
+			attacker.password,
+		);
+
+		// Root demotes the attacker to a regular user in the DB.
+		const demote = await client.admin.setRole(
+			{ userId: attackerId, role: "user" },
+			{ headers: rootHeaders },
+		);
+		expect(demote.data?.user.role).toBe("user");
+
+		// Control proof: the default (cached) session still reports admin,
+		// confirming the cookie cache snapshot is stale and exercised here.
+		const cachedSession = await client.getSession({
+			fetchOptions: { headers: attackerHeaders },
+		});
+		expect((cachedSession.data?.user as UserWithRole)?.role).toBe("admin");
+
+		// Self re-escalation must be rejected: authorization reads live role.
+		const reEscalate = await client.admin.setRole(
+			{ userId: attackerId, role: "admin" },
+			{ headers: attackerHeaders },
+		);
+		expect(reEscalate.error?.status).toBe(403);
+
+		const permissionCheck = await client.admin.hasPermission(
+			{ permissions: { user: ["set-role"] } },
+			{ headers: attackerHeaders },
+		);
+		expect(permissionCheck.data?.success).toBe(false);
+
+		// Impersonation must be rejected too.
+		const impersonate = await client.admin.impersonateUser(
+			{ userId: victimId },
+			{ headers: attackerHeaders },
+		);
+		expect(impersonate.error?.status).toBe(403);
+
+		// And the DB role must remain `user` (re-escalation did not persist).
+		const liveSession = await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: { headers: attackerHeaders },
+		});
+		expect((liveSession.data?.user as UserWithRole)?.role).toBe("user");
+	});
+
+	it("should reject a banned admin within the cookie-cache window", async () => {
+		const attacker = {
+			name: "Admin",
+			email: "attacker-ban@test.com",
+			password: "password",
+		};
+		const { data: attackerData } = await client.signUp.email(attacker);
+		const attackerId = attackerData?.user.id!;
+
+		const attackerHeaders = await signInCapturingCache(
+			attacker.email,
+			attacker.password,
+		);
+
+		// Root bans the attacker, which deletes their DB session rows.
+		const ban = await client.admin.banUser(
+			{ userId: attackerId },
+			{ headers: rootHeaders },
+		);
+		expect(ban.data?.user.banned).toBe(true);
+
+		// The cached `session_data` cookie is still present, but the live DB
+		// lookup finds no session, so admin routes reject immediately.
+		const listUsers = await client.admin.listUsers({
+			query: { limit: 10 },
+			fetchOptions: { headers: attackerHeaders },
+		});
+		expect(listUsers.error?.status).toBe(401);
 	});
 });
