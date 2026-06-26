@@ -695,14 +695,24 @@ export const listSCIMProviderConnections = (opts: SCIMOptions) =>
 			const membershipsByOrg = ctx.context.hasPlugin("organization")
 				? await getUserMembershipsByOrg(ctx, user.id)
 				: new Map<string, Member>();
+			const organizationIds = Array.from(membershipsByOrg.keys());
+			if (!organizationIds.length) {
+				return ctx.json({ providers: [] });
+			}
 
-			const allProviders = await ctx.context.adapter.findMany<SCIMProvider>({
+			const orgProviders = await ctx.context.adapter.findMany<SCIMProvider>({
 				model: "scimProvider",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationIds,
+						operator: "in",
+					},
+				],
 			});
 
 			const accessibleProviders: SCIMProvider[] = [];
-			for (const provider of allProviders) {
-				if (!provider.organizationId) continue;
+			for (const provider of orgProviders) {
 				const member = membershipsByOrg.get(provider.organizationId) ?? null;
 				const allowed = await isOrgActionAllowed(ctx, opts, {
 					user,

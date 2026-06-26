@@ -5,7 +5,7 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { OrganizationOptions } from "better-auth/plugins";
 import { bearer, organization } from "better-auth/plugins";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
 import type { SCIMOptions } from "./types";
@@ -588,6 +588,56 @@ describe("SCIM provider management", () => {
 				providerId: "provider-2",
 				organizationId: orgA!.id,
 			});
+		});
+
+		it("should query providers only from the user's organizations", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization, getSCIMToken } =
+				createTestInstance();
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+			const [orgA, orgB] = await Promise.all([
+				registerOrganization("filtered-org-a", headersUserA),
+				registerOrganization("filtered-org-b", headersUserB),
+			]);
+
+			await Promise.all([
+				getSCIMToken("filtered-provider-a", orgA!.id, headersUserA),
+				getSCIMToken("filtered-provider-b", orgB!.id, headersUserB),
+			]);
+
+			const ctx = await auth.$context;
+			const findManySpy = vi.spyOn(ctx.adapter, "findMany");
+
+			try {
+				const res = await auth.api.listSCIMProviderConnections({
+					headers: headersUserA,
+				});
+
+				expect(res.providers?.map((p) => p.providerId)).toEqual([
+					"filtered-provider-a",
+				]);
+
+				const scimProviderCall = findManySpy.mock.calls.find(
+					([query]) => query.model === "scimProvider",
+				)?.[0];
+				expect(scimProviderCall).toEqual(
+					expect.objectContaining({
+						model: "scimProvider",
+						where: [
+							{
+								field: "organizationId",
+								value: [orgA!.id],
+								operator: "in",
+							},
+						],
+					}),
+				);
+			} finally {
+				findManySpy.mockRestore();
+			}
 		});
 	});
 
