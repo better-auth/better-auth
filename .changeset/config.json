@@ -17,6 +17,7 @@
       "@better-auth/expo",
       "@better-auth/i18n",
       "@better-auth/kysely-adapter",
+      "@better-auth/mcp",
       "@better-auth/memory-adapter",
       "@better-auth/mongo-adapter",
       "@better-auth/oauth-provider",

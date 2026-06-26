@@ -1,6 +1,6 @@
 {
   "mode": "pre",
-  "tag": "beta",
+  "tag": "rc",
   "initialVersions": {
     "docs": "0.1.0",
     "@better-auth/api-key": "1.6.0",
