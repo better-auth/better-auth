@@ -1,5 +1,7 @@
 # @better-auth/passkey
 
+## 1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -41,6 +43,7 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
 ## 1.6.22
 
 ### Patch Changes

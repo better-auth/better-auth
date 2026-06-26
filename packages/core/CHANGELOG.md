@@ -1,5 +1,7 @@
 # @better-auth/core
 
+## 1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ## 1.7.0-beta.8
@@ -85,6 +87,7 @@
 - [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
 
 ## 1.7.0-beta.4
+
 ## 1.6.22
 
 ### Patch Changes

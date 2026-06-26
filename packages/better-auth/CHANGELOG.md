@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.7.0-beta.10
+
+### Patch Changes
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Bundled dependencies were refreshed to their latest compatible releases, including jose, nanostores, the noble crypto packages, and SimpleWebAuthn. These updates are backward compatible and require no changes to existing projects.
+
+- Updated dependencies [[`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd)]:
+  - @better-auth/drizzle-adapter@1.7.0-beta.10
+  - @better-auth/core@1.7.0-beta.10
+  - @better-auth/kysely-adapter@1.7.0-beta.10
+  - @better-auth/memory-adapter@1.7.0-beta.10
+  - @better-auth/mongo-adapter@1.7.0-beta.10
+  - @better-auth/prisma-adapter@1.7.0-beta.10
+  - @better-auth/telemetry@1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -224,6 +239,7 @@
   - @better-auth/telemetry@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
 ## 1.6.22
 
 ### Patch Changes

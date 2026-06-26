@@ -1,5 +1,7 @@
 # @better-auth/sso
 
+## 1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -117,6 +119,7 @@
   Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
 ## 1.6.22
 
 ### Patch Changes

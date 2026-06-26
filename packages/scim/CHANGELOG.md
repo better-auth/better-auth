@@ -1,5 +1,7 @@
 # @better-auth/scim
 
+## 1.7.0-beta.10
+
 ## 1.7.0-beta.9
 
 ### Patch Changes
@@ -61,6 +63,7 @@
   This release is breaking. It removes the `providerOwnership` option, and owner binding can no longer be disabled. The `scimProvider.userId` column is now a permanent part of the schema, so run a migration after upgrading with `npx auth migrate` or `npx auth generate`.
 
   Connections created before this release carry no owner. Access now fails closed, so those connections are no longer reachable through the management endpoints, including token regeneration. Reclaim them at the database level: delete `scimProvider` rows that have neither `organizationId` nor `userId`, or set `userId` to the intended owner, then regenerate tokens as needed. Organization-scoped connections are not affected.
+
 ## 1.6.22
 
 ### Patch Changes
