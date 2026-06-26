@@ -328,6 +328,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				return null;
 			}
+			/**
+			 * Mirror the schema generator's relation-key naming. One-to-one keeps
+			 * the singular model name. One-to-many is pluralized unless the model
+			 * already ends in "s" or `usePlural` keeps the schema keys as-is.
+			 */
+			function getJoinRelationKey(model: string, isUnique: boolean) {
+				if (isUnique || config.usePlural || model.endsWith("s")) return model;
+				return `${model}s`;
+			}
 			const withReturning = async (
 				model: string,
 				builder: any,
@@ -687,7 +696,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const pluralJoinResults: { key: string; target: string }[] = [];
 							if (join) {
 								includes = {};
 								const joinEntries = Object.entries(join);
@@ -697,12 +706,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
 									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
+									const relationKey = getJoinRelationKey(model, isUnique);
+									includes[relationKey] = isUnique ? true : { limit };
 									if (!isUnique) {
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
+										pluralJoinResults.push({ key: relationKey, target: model });
 									}
 								}
 							}
@@ -724,14 +731,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularKey = !config.usePlural
-										? pluralJoinResult.slice(0, -1)
-										: pluralJoinResult;
-									res[singularKey] = res[pluralJoinResult];
-									if (pluralJoinResult !== singularKey) {
-										delete res[pluralJoinResult];
-									}
+								for (const { key, target } of pluralJoinResults) {
+									if (key === target) continue;
+									res[target] = res[key];
+									delete res[key];
 								}
 							}
 							return res;
@@ -775,7 +778,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number; offset?: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const pluralJoinResults: { key: string; target: string }[] = [];
 							if (join) {
 								includes = {};
 								const joinEntries = Object.entries(join);
@@ -785,12 +788,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										joinAttr.limit ??
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
+									const relationKey = getJoinRelationKey(model, isUnique);
+									includes[relationKey] = isUnique ? true : { limit };
 									if (!isUnique)
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
+										pluralJoinResults.push({ key: relationKey, target: model });
 								}
 							}
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
@@ -822,13 +823,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
-											? pluralJoinResult.slice(0, -1)
-											: pluralJoinResult;
-										if (singularKey === pluralJoinResult) continue;
-										item[singularKey] = item[pluralJoinResult];
-										delete item[pluralJoinResult];
+									for (const { key, target } of pluralJoinResults) {
+										if (key === target) continue;
+										item[target] = item[key];
+										delete item[key];
 									}
 								}
 							}
