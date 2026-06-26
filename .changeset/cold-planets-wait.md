@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Currently if the auth server has cookie cache then grabbing the session could return a stale cache value, while this is fine in most cases, in critical areas like the admin endpoints where we check for their role or ban status we must grab their session data straight from DB rather than relying on the client cache.
+Admin permission changes and bans now take effect immediately for admin APIs, even when session cookie cache is enabled. Sensitive session checks also continue to work in stateless apps where signed cookies are the session record.

@@ -7,7 +7,7 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -31,8 +31,7 @@ import type {
  * Will also provide additional types on the user to include role types.
  */
 const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	// Force a DB-backed session read so authorization always reflects live role/ban state.
-	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		throw APIError.fromStatus("UNAUTHORIZED");
 	}
@@ -334,11 +333,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			},
 		},
 		async (ctx) => {
-			// `disableCookieCache` so the privilege check below authorizes off
-			// live role state rather than a stale cookie-cache snapshot.
-			const session = await getSessionFromCtx<{ role: string }>(ctx, {
-				disableCookieCache: true,
-			});
+			const session = await getAuthoritativeSessionFromCtx<{ role: string }>(
+				ctx,
+			);
 			if (!session && (ctx.request || ctx.headers)) {
 				throw ctx.error("UNAUTHORIZED");
 			}
@@ -1861,7 +1858,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 					message: "invalid permission check. no permission(s) were passed.",
 				});
 			}
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");

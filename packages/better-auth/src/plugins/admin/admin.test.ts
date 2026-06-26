@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -12,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2430,18 +2432,29 @@ describe("Admin plugin id-token sign-in", async () => {
 });
 
 /**
- * Regression: admin authorization must reflect live DB role/ban state rather
- * than a (possibly stale) cookie-cache snapshot. With `session.cookieCache`
- * enabled, `adminMiddleware` previously authorized off the cached
- * `user.role` / `user.banned`, so a demoted or banned admin retained admin
- * privileges until the cache `maxAge` expired (default 5 min) - enough to
- * re-escalate their own role or impersonate users.
+ * @see https://github.com/better-auth/better-auth/pull/10187
  */
 describe("admin authorization is revocation-aware with cookie cache", async () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path?.startsWith("/admin/") === true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
 	const { signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance(
 			{
-				plugins: [admin()],
+				plugins: [preloadCachedSessionPlugin, admin()],
 				session: {
 					cookieCache: {
 						enabled: true,
@@ -2530,6 +2543,12 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 			{ headers: attackerHeaders },
 		);
 		expect(reEscalate.error?.status).toBe(403);
+
+		const permissionCheck = await client.admin.hasPermission(
+			{ permissions: { user: ["set-role"] } },
+			{ headers: attackerHeaders },
+		);
+		expect(permissionCheck.data?.success).toBe(false);
 
 		// Impersonation must be rejected too.
 		const impersonate = await client.admin.impersonateUser(
