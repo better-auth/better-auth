@@ -80,6 +80,70 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.token).toBeDefined();
 	});
 
+	it("should clear an unverified account's password when sign-in adopts it", async () => {
+		// An account created with a password but never email-verified must not keep
+		// that password once a sign-in OTP proves control of the mailbox.
+		const email = "otp-unverified-pw-user@email.com";
+		const existingPassword = "existing-password-123";
+		let signInOtp = "";
+
+		const { client: scopedClient, auth: scopedAuth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							signInOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const internalAdapter = (await scopedAuth.$context).internalAdapter;
+
+		const created = await scopedAuth.api.signUpEmail({
+			body: { email, name: "Test User", password: existingPassword },
+		});
+		const userId = created.user!.id;
+		expect(created.user?.emailVerified).toBe(false);
+
+		// Precondition: the password is blocked behind the verification gate.
+		await expect(
+			scopedAuth.api.signInEmail({
+				body: { email, password: existingPassword },
+			}),
+		).rejects.toThrow();
+
+		await scopedClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const signedIn = await scopedClient.signIn.emailOtp({
+			email,
+			otp: signInOtp,
+		});
+		expect(signedIn.data?.token).toBeDefined();
+		const verifiedRow = await internalAdapter.findUserByEmail(email);
+		expect(verifiedRow?.user.emailVerified).toBe(true);
+
+		// The credential is gone, so the password no longer works.
+		const accounts = await internalAdapter.findAccounts(userId);
+		expect(
+			accounts.find((account) => account.providerId === "credential"),
+		).toBeUndefined();
+		await expect(
+			scopedAuth.api.signInEmail({
+				body: { email, password: existingPassword },
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should sign-up with otp", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",

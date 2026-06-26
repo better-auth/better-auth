@@ -265,6 +265,75 @@ describe("magic link", async () => {
 		expect(updatedUser?.user.emailVerified).toBe(true);
 	});
 
+	it("should clear an unverified account's password when verify adopts it", async () => {
+		// An account created with a password but never email-verified must not keep
+		// that password once magic-link verification proves control of the mailbox.
+		const email = "unverified-pw-user@email.com";
+		const existingPassword = "existing-password-123";
+		let magicLinkEmail: VerificationEmail = { email: "", token: "", url: "" };
+
+		const {
+			auth,
+			customFetchImpl: testFetchImpl,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						magicLinkEmail = data;
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl: testFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+
+		const created = await auth.api.signUpEmail({
+			body: { email, name: "Test User", password: existingPassword },
+		});
+		const userId = created.user!.id;
+		expect(created.user?.emailVerified).toBe(false);
+
+		// Precondition: the password is blocked behind the verification gate.
+		await expect(
+			auth.api.signInEmail({ body: { email, password: existingPassword } }),
+		).rejects.toThrow();
+
+		await testClient.signIn.magicLink({ email });
+		const headers = new Headers();
+		const response = await testClient.magicLink.verify({
+			query: {
+				token: new URL(magicLinkEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: { onSuccess: testSessionSetter(headers) },
+		});
+
+		// The owner is signed in and the account is verified.
+		expect(response.data?.user.emailVerified).toBe(true);
+		const session = await testClient.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// The credential is gone, so the password no longer works.
+		const accounts = await internalAdapter.findAccounts(userId);
+		expect(
+			accounts.find((account) => account.providerId === "credential"),
+		).toBeUndefined();
+		await expect(
+			auth.api.signInEmail({ body: { email, password: existingPassword } }),
+		).rejects.toThrow();
+	});
+
 	it("should use custom generateToken function", async () => {
 		const customGenerateToken = vi.fn(() => "custom_token");
 

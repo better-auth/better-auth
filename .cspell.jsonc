@@ -92,7 +92,10 @@
 		"toBe\\([^\\)]*\\)",
 
 		// ignore GitHub security advisory IDs (GHSA-xxxx-xxxx-xxxx)
-		"GHSA(?:-[a-z0-9]+)+"
+		"GHSA(?:-[a-z0-9]+)+",
+
+		// ignore git commit short-hashes in changelog/changeset links (e.g. [`fcabaaf`])
+		"\\[`[0-9a-f]{7,40}`\\]"
 	],
 	"ignorePaths": [
 		"patches",
