@@ -246,7 +246,7 @@ describe("SCIM", () => {
 				        {
 				          "description": "A Boolean value indicating the User's administrative status.",
 				          "multiValued": false,
-				          "mutability": "readOnly",
+				          "mutability": "readWrite",
 				          "name": "active",
 				          "required": false,
 				          "returned": "default",
@@ -396,7 +396,7 @@ describe("SCIM", () => {
 				    {
 				      "description": "A Boolean value indicating the User's administrative status.",
 				      "multiValued": false,
-				      "mutability": "readOnly",
+				      "mutability": "readWrite",
 				      "name": "active",
 				      "required": false,
 				      "returned": "default",
