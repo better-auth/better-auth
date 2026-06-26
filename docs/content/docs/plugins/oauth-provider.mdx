@@ -560,7 +560,7 @@ const response = await auth.api.adminCreateOAuthClient({
 ```
 
 <Callout type="info">
-  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must contain only public asymmetric keys. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host.
+  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must contain only public asymmetric keys. `jwks_uri` must be an HTTPS URL on a public host or an origin listed in `trustedOrigins`.
 </Callout>
 
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
@@ -749,7 +749,7 @@ await auth.api.adminCreateOAuthClient({
 
 When `backchannel_logout_session_required` is `true`, the RP requires a `sid` claim in every Logout Token. Every Logout Token the OP sends already includes `sid`, so such clients are always served.
 
-The `backchannel_logout_uri` is validated at registration. It must be an absolute URL with no fragment, and must use `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development). Private, reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or cloud-metadata hosts are rejected unless their origin is in `trustedOrigins`. A URI that fails validation is rejected with `invalid_client_metadata`.
+The `backchannel_logout_uri` is validated at registration. It must be an absolute URL with no fragment, and must use `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development). Private, reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or cloud-metadata hosts are rejected unless their origin is in `trustedOrigins`; the same host gate applies to `jwks_uri`, which still requires `https`. A URI that fails validation is rejected with `invalid_client_metadata`. DNS is checked again before delivery, but the socket is not pinned to that resolved address.
 
 The OP enumerates clients with active tokens bound to the ending session and POSTs one `logout_token` to each in parallel (5s per-RP timeout, no retry per spec §2.5). It then revokes the session's tokens:
 
