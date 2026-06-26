@@ -53,12 +53,6 @@ function escapeLikePattern(
 		.replace(/_/g, "\\_");
 }
 
-// Object filters can't express case-insensitive matching portably, so those
-// clauses fall back to the SQL builder.
-function hasInsensitiveWhere(where?: Where[]): boolean {
-	return !!where?.some((w) => w.mode === "insensitive");
-}
-
 /**
  * Derive the number of affected rows from a Drizzle write result.
  *
@@ -513,11 +507,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return {};
 				}
 
-				// The relational filter has no ESCAPE clause, so LIKE goes through
-				// `RAW`. The callback form lets Drizzle supply the aliased column.
-				const likeRaw = (field: string, pattern: string) => ({
+				// The object filter cannot express an ESCAPE clause (LIKE) or portable
+				// case-insensitive matching, so those conditions go through `RAW`.
+				// applyWhereOperator builds the same SQL as the non-relational path,
+				// and the callback form lets Drizzle supply the aliased column.
+				const rawCondition = (w: Where, field: string) => ({
 					RAW: (table: Record<string, any>) =>
-						escapedLike(table[field], pattern, config.provider),
+						applyWhereOperator(table[field], w, w.field, config.provider),
 				});
 
 				const convertWhereToColumn = (w: Where) => {
@@ -529,9 +525,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const columnObj: Record<string, any> = {};
-					let raw: ReturnType<typeof likeRaw> | undefined;
+					let raw: ReturnType<typeof rawCondition> | undefined;
 
-					if (w.operator === "in") {
+					const isInsensitive =
+						w.mode === "insensitive" &&
+						(typeof w.value === "string" ||
+							(Array.isArray(w.value) &&
+								w.value.every((v) => typeof v === "string")));
+					const isLikeOperator =
+						w.operator === "contains" ||
+						w.operator === "starts_with" ||
+						w.operator === "ends_with";
+
+					if (isLikeOperator || isInsensitive) {
+						raw = rawCondition(w, field);
+					} else if (w.operator === "in") {
 						if (!Array.isArray(w.value)) {
 							throw new BetterAuthError(
 								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
@@ -545,12 +553,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							);
 						}
 						columnObj.notIn = w.value;
-					} else if (w.operator === "contains") {
-						raw = likeRaw(field, `%${escapeLikePattern(w.value)}%`);
-					} else if (w.operator === "starts_with") {
-						raw = likeRaw(field, `${escapeLikePattern(w.value)}%`);
-					} else if (w.operator === "ends_with") {
-						raw = likeRaw(field, `%${escapeLikePattern(w.value)}`);
 					} else if (w.operator === "lt") {
 						columnObj.lt = w.value;
 					} else if (w.operator === "lte") {
@@ -671,7 +673,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins && !hasInsensitiveWhere(where)) {
+					if (options.experimental?.joins) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -759,7 +761,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins && !hasInsensitiveWhere(where)) {
+					if (options.experimental?.joins) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
