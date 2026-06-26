@@ -53,18 +53,28 @@ function escapeLikePattern(
 		.replace(/_/g, "\\_");
 }
 
-/**
- * Derive the number of affected rows from a Drizzle write result.
- *
- * Drizzle's drivers report affected rows under different shapes: node-postgres
- * exposes `rowCount`, postgres-js returns an Array subclass with the count on
- * `.count`, mysql2 reports `affectedRows`/`rowsAffected` (sometimes as the first
- * element of a result-header array), and better-sqlite3 uses `changes`. The
- * adapter contract requires `updateMany`/`deleteMany` to return a finite number.
- * The factory throws otherwise.
- *
- * @see https://github.com/porsager/postgres#result-array
- */
+function readDriverRowCount(result: unknown): unknown {
+	if (!result || typeof result !== "object") return undefined;
+	if ("affectedRows" in result) return result.affectedRows;
+	if ("rowsAffected" in result) return result.rowsAffected;
+	if ("changes" in result) return result.changes;
+
+	// Cloudflare D1 nests the affected-row count under `meta.changes`.
+	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
+	if ("meta" in result) {
+		const meta = result.meta;
+		if (meta && typeof meta === "object" && "changes" in meta) {
+			return meta.changes;
+		}
+	}
+
+	return undefined;
+}
+
+function hasDriverRowCount(result: unknown): boolean {
+	return readDriverRowCount(result) !== undefined;
+}
+
 function getAffectedRowCount(
 	result: unknown,
 	operation: "updateMany" | "deleteMany" | "consumeOne",
@@ -72,17 +82,17 @@ function getAffectedRowCount(
 ): number {
 	let count: unknown = 0;
 	if (result && typeof result === "object" && "rowCount" in result) {
+		// node-postgres / neon expose `rowCount`.
 		count = (result as { rowCount: unknown }).rowCount;
 	} else if (
 		result &&
 		typeof result === "object" &&
 		typeof (result as { count?: unknown }).count === "number"
 	) {
-		// postgres-js returns an Array subclass whose affected-row count lives on
-		// `.count`. A non-returning UPDATE/DELETE has length 0, so this must be
-		// read before the Array branch short-circuits to `result.length`.
+		// postgres-js / bun-sql return an Array subclass carrying `count`.
 		count = (result as { count: number }).count;
 	} else if (Array.isArray(result)) {
+		// mysql2 returns a `[ResultSetHeader]` tuple.
 		count =
 			result.length > 0 && hasDriverRowCount(result[0])
 				? readDriverRowCount(result[0])
@@ -100,25 +110,6 @@ function getAffectedRowCount(
 		);
 	}
 	return count;
-}
-
-function hasDriverRowCount(result: unknown): boolean {
-	return (
-		!!result &&
-		typeof result === "object" &&
-		("affectedRows" in result ||
-			"rowsAffected" in result ||
-			"changes" in result)
-	);
-}
-
-function readDriverRowCount(result: unknown): unknown {
-	const r = result as {
-		affectedRows?: unknown;
-		rowsAffected?: unknown;
-		changes?: unknown;
-	};
-	return r.affectedRows ?? r.rowsAffected ?? r.changes;
 }
 
 /**
@@ -937,10 +928,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							// mysql2's `.execute()` resolves with `[OkPacket, FieldPacket[]]`,
-							// while postgres-js exposes `rowCount` and better-sqlite3 uses
-							// `changes`. Read the driver-specific affected-row count through
-							// the shared helper so all three providers behave the same.
+							// This branch only runs for mysql, but route through the shared
+							// helper so the affected-row read stays in one place.
 							const delCount = getAffectedRowCount(delRes, "consumeOne", {
 								model,
 								where,
