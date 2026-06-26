@@ -59,4 +59,17 @@ describe("server-side OAuth fetch refuses redirects via real betterFetch", () =>
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(onError.mock.calls[0]?.[0].response.status).toBe(401);
 	});
+
+	it("throws the redirect-specific error when betterFetch throw mode is enabled", async () => {
+		mockedFetch.mockResolvedValueOnce(
+			new Response("", {
+				status: 302,
+				headers: { location: "http://169.254.169.254/" },
+			}),
+		);
+
+		await expect(
+			fetchRefusingRedirects("https://idp.example/token", { throw: true }),
+		).rejects.toThrow(/refuse redirects to prevent SSRF/);
+	});
 });

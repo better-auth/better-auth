@@ -5,7 +5,7 @@ import { getOAuth2Tokens } from "./index";
 import {
 	assertResponseNotRedirect,
 	fetchRefusingRedirects,
-	NO_FOLLOW_REDIRECT,
+	noFollowRedirect,
 } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
@@ -171,7 +171,7 @@ export async function validateToken(
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
 		[customFetch]: async (url, init) => {
-			const response = await fetch(url, { ...init, ...NO_FOLLOW_REDIRECT });
+			const response = await fetch(url, { ...init, ...noFollowRedirect });
 			assertResponseNotRedirect(String(url), response);
 			return response;
 		},

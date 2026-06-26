@@ -679,23 +679,27 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			if (!user.user.emailVerified) {
-				await revokeUnprovenAccountAccess(ctx, user.user.id);
-				await ctx.context.internalAdapter.updateUser(user.user.id, {
-					emailVerified: true,
-				});
+			let verifiedUser = user.user;
+			if (!verifiedUser.emailVerified) {
+				const promotedUser = await revokeUnprovenAccountAccess(
+					ctx,
+					verifiedUser.id,
+				);
+				if (promotedUser) {
+					verifiedUser = promotedUser;
+				}
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
+				verifiedUser.id,
 			);
 			await setSessionCookie(ctx, {
 				session,
-				user: user.user,
+				user: verifiedUser,
 			});
 			return ctx.json({
 				token: session.token,
-				user: parseUserOutput(ctx.context.options, user.user),
+				user: parseUserOutput(ctx.context.options, verifiedUser),
 			});
 		},
 	);
