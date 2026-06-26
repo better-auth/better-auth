@@ -15,7 +15,7 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
-import { getIp } from "@better-auth/core/utils/ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -415,7 +415,7 @@ export const createInternalAdapter = (
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				...(sessionId ? { id: sessionId } : {}),
-				ipAddress: headers ? getIp(headers, options) || "" : "",
+				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**

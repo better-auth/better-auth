@@ -1,3 +1,4 @@
+import { runWithTransaction } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -35,6 +36,7 @@ import {
 	validateEmailDomain,
 } from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
+import { lockSSOProviderForAccountLink } from "./providers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -111,8 +113,23 @@ function buildSAMLRedirectUrl(
 	params: Record<string, string>,
 ): string {
 	const searchParams = new URLSearchParams(params);
-	const separator = url.includes("?") ? "&" : "?";
-	return `${url}${separator}${searchParams.toString()}`;
+	try {
+		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
+		const parsedUrl = new URL(url, "http://better-auth.local");
+		for (const [key, value] of searchParams) {
+			parsedUrl.searchParams.set(key, value);
+		}
+		if (isRelativePath) {
+			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+		}
+		return parsedUrl.toString();
+	} catch {
+		const hashIndex = url.indexOf("#");
+		const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
+		const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
+		const separator = urlWithoutFragment.includes("?") ? "&" : "?";
+		return `${urlWithoutFragment}${separator}${searchParams.toString()}${fragment}`;
+	}
 }
 
 function toArray<T>(value: T | T[] | undefined): T[] {
@@ -517,27 +534,30 @@ export async function processSAMLResponse(
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		result = await handleOAuthUserInfo(ctx, {
-			userInfo: {
-				email: userInfo.email as string,
-				name: (userInfo.name || userInfo.email) as string,
-				id: userInfo.id as string,
-				emailVerified: userInfo.emailVerified,
-			},
-			account: {
-				providerId,
-				accountId: userInfo.id as string,
-				accessToken: "",
-				refreshToken: "",
-			},
-			callbackURL: callbackUrl,
-			disableSignUp: options?.disableImplicitSignUp,
-			source: {
-				method: "sso-saml",
-				sso: { providerId, profile: attributes },
-			},
-			isTrustedProvider,
-			trustProviderByName: false,
+		result = await runWithTransaction(ctx.context.adapter, async () => {
+			await lockSSOProviderForAccountLink(ctx, provider);
+			return handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfo.email as string,
+					name: (userInfo.name || userInfo.email) as string,
+					id: userInfo.id as string,
+					emailVerified: userInfo.emailVerified,
+				},
+				account: {
+					providerId,
+					accountId: userInfo.id as string,
+					accessToken: "",
+					refreshToken: "",
+				},
+				callbackURL: callbackUrl,
+				disableSignUp: options?.disableImplicitSignUp,
+				source: {
+					method: "sso-saml",
+					sso: { providerId, profile: attributes },
+				},
+				isTrustedProvider,
+				trustProviderByName: false,
+			});
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

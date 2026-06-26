@@ -3,7 +3,7 @@ import type {
 	BetterAuthRateLimitStorage,
 } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { createRateLimitKey, getIp } from "@better-auth/core/utils/ip";
+import { createRateLimitKey, getIP } from "@better-auth/core/utils/ip";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
 import { wildcardMatch } from "../../utils/wildcard";
@@ -338,7 +338,7 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
-	const ip = getIp(req, ctx.options);
+	const ip = getIP(req, ctx.options);
 	if (!ip && ctx.options.advanced?.ipAddress?.disableIpTracking) {
 		// IP tracking is explicitly disabled; per-IP rate limiting does not apply.
 		return null;

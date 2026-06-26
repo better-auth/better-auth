@@ -1,3 +1,4 @@
+import { runWithTransaction } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -72,6 +73,7 @@ import {
 import {
 	filterSSOProviderAdditionalFields,
 	hasOrgAdminRole,
+	lockSSOProviderForAccountLink,
 } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 import {
@@ -1633,39 +1635,42 @@ async function handleOIDCCallback(
 
 	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		linked = await handleOAuthUserInfo(ctx, {
-			userInfo: {
-				email: userInfo.email,
-				name: userInfo.name || "",
-				id: userInfo.id,
-				image: userInfo.image,
-				emailVerified: options?.trustEmailVerified
-					? userInfo.emailVerified || false
-					: false,
-			},
-			account: {
-				idToken: tokenResponse.idToken,
-				accessToken: tokenResponse.accessToken,
-				refreshToken: tokenResponse.refreshToken,
-				accountId: userInfo.id,
-				providerId: provider.providerId,
-				accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-				refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-				scope: tokenResponse.scopes?.join(","),
-			},
-			callbackURL,
-			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-			overrideUserInfo: config.overrideUserInfo,
-			source: {
-				method: "sso-oidc",
-				sso: { providerId: provider.providerId, profile: rawProfile },
-			},
-			isTrustedProvider,
-			// SSO provider ids are user-controlled and live in the same namespace
-			// as social providers. Never inherit trust from the global
-			// `trustedProviders` list by name — rely solely on the SSO-specific
-			// `isTrustedProvider` (verified domain ownership) computed above.
-			trustProviderByName: false,
+		linked = await runWithTransaction(ctx.context.adapter, async () => {
+			await lockSSOProviderForAccountLink(ctx, provider);
+			return handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfo.email,
+					name: userInfo.name || "",
+					id: userInfo.id,
+					image: userInfo.image,
+					emailVerified: options?.trustEmailVerified
+						? userInfo.emailVerified || false
+						: false,
+				},
+				account: {
+					idToken: tokenResponse.idToken,
+					accessToken: tokenResponse.accessToken,
+					refreshToken: tokenResponse.refreshToken,
+					accountId: userInfo.id,
+					providerId: provider.providerId,
+					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+					scope: tokenResponse.scopes?.join(","),
+				},
+				callbackURL,
+				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+				overrideUserInfo: config.overrideUserInfo,
+				source: {
+					method: "sso-oidc",
+					sso: { providerId: provider.providerId, profile: rawProfile },
+				},
+				isTrustedProvider,
+				// SSO provider ids are user-controlled and live in the same namespace
+				// as social providers. Never inherit trust from the global
+				// `trustedProviders` list by name — rely solely on the SSO-specific
+				// `isTrustedProvider` (verified domain ownership) computed above.
+				trustProviderByName: false,
+			});
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

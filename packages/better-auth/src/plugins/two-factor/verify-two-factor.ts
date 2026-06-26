@@ -155,9 +155,17 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				if (attempts >= allowedAttempts) {
 					// Budget spent: cancel the whole challenge so every factor must
 					// start a new sign-in, and clear the now-dead cookie.
-					await ctx.context.internalAdapter
-						.consumeVerificationValue(signedTwoFactorCookie)
-						.catch(() => {});
+					try {
+						await ctx.context.internalAdapter.consumeVerificationValue(
+							signedTwoFactorCookie,
+						);
+					} catch {
+						expireCookie(ctx, twoFactorCookie);
+						throw APIError.from("INTERNAL_SERVER_ERROR", {
+							message: "Failed to invalidate two-factor challenge",
+							code: "FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE",
+						});
+					}
 					expireCookie(ctx, twoFactorCookie);
 					throw APIError.from(
 						"BAD_REQUEST",
