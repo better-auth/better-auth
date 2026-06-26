@@ -28,6 +28,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const isMigrationDisabled = (model: string) =>
+		tables[model]?.disableMigrations === true;
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -72,7 +74,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
-		if (tables[table]?.disableMigrations) {
+		if (isMigrationDisabled(table)) {
 			continue;
 		}
 		const fields = tables[table]?.fields;
@@ -80,7 +82,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const attr = fields[field]!;
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
-				if (tables[referencedOriginalModel]?.disableMigrations) {
+				if (isMigrationDisabled(referencedOriginalModel)) {
 					continue;
 				}
 				const referencedCustomModel =
@@ -123,7 +125,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
-			if (tables[table]?.disableMigrations) {
+			if (isMigrationDisabled(table)) {
 				continue;
 			}
 			const originalTableName = table;
@@ -384,8 +386,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						attr.references.model,
 					);
 					if (
-						tables[referencedOriginalModelName]?.disableMigrations ||
-						tables[attr.references.model]?.disableMigrations
+						isMigrationDisabled(referencedOriginalModelName) ||
+						isMigrationDisabled(attr.references.model)
 					) {
 						continue;
 					}

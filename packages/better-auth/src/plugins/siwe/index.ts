@@ -300,36 +300,51 @@ export const siwe = (options: SIWEPluginOptions) => {
 							let userEmail = walletEmail;
 							let emailClaimIdentifier: string | undefined;
 							if (!isAnon && normalizedEmail) {
-								const existingUser =
-									await ctx.context.internalAdapter.findUserByEmail(
-										normalizedEmail,
-									);
-								if (!existingUser) {
-									const identifier = `siwe-email-claim-${normalizedEmail}`;
-									const reserved =
-										await ctx.context.internalAdapter.reserveVerificationValue({
-											identifier,
-											value: walletAddress,
-											expiresAt: new Date(Date.now() + 60_000),
-										});
-									if (reserved) {
+								const identifier = `siwe-email-claim-${normalizedEmail}`;
+								const reserved =
+									await ctx.context.internalAdapter.reserveVerificationValue({
+										identifier,
+										value: walletAddress,
+										expiresAt: new Date(Date.now() + 60_000),
+									});
+								if (reserved) {
+									emailClaimIdentifier = identifier;
+									const existingUser =
+										await ctx.context.internalAdapter.findUserByEmail(
+											normalizedEmail,
+										);
+									if (!existingUser) {
 										userEmail = normalizedEmail;
-										emailClaimIdentifier = identifier;
 									}
 								}
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
-
-							try {
-								user = await ctx.context.internalAdapter.createUser(
+							const createSIWEUser = (email: string) =>
+								ctx.context.internalAdapter.createUser(
 									{
 										name: name ?? walletAddress,
-										email: userEmail,
+										email,
 										image: avatar ?? "",
 									},
 									{ method: "siwe" },
 								);
+
+							try {
+								user = await createSIWEUser(userEmail);
+							} catch (error) {
+								if (userEmail !== normalizedEmail || !normalizedEmail) {
+									throw error;
+								}
+								const claimedUser =
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
+								if (!claimedUser) {
+									throw error;
+								}
+								userEmail = walletEmail;
+								user = await createSIWEUser(userEmail);
 							} finally {
 								if (emailClaimIdentifier) {
 									await ctx.context.internalAdapter
