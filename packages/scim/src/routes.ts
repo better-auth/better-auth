@@ -293,6 +293,59 @@ async function checkSCIMProviderAccess(
 	return provider;
 }
 
+/**
+ * Rejects a SCIM email change that would collide with another user. Mirrors the
+ * uniqueness guard `createSCIMUser` already performs, so PUT/PATCH cannot
+ * reassign one user's email onto another existing user.
+ */
+async function assertSCIMEmailAvailable(
+	ctx: GenericEndpointContext,
+	email: string,
+	userId: string,
+): Promise<void> {
+	const existing = await ctx.context.adapter.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: email.toLowerCase() }],
+	});
+	if (existing && existing.id !== userId) {
+		throw new SCIMAPIError("CONFLICT", {
+			detail: "Email already in use",
+			scimType: "uniqueness",
+		});
+	}
+}
+
+/**
+ * Applies SCIM `active` semantics to a pending user update. `active` maps to the
+ * admin plugin's `banned` field, the only enforced disabled-user state in Better
+ * Auth, so honoring deactivation requires the admin plugin.
+ */
+function resolveSCIMActiveDeactivation(
+	ctx: GenericEndpointContext,
+	userUpdate: Record<string, unknown>,
+): boolean {
+	if (!("banned" in userUpdate)) return false;
+	const deactivating = userUpdate.banned === true;
+	if (!ctx.context.hasPlugin("admin")) {
+		if (deactivating) {
+			throw new SCIMAPIError("BAD_REQUEST", {
+				detail:
+					"Setting `active: false` requires the admin plugin, which provides the enforced disabled-user state",
+			});
+		}
+		// biome-ignore lint/performance/noDelete: the field must not reach updateUser without an admin `banned` column.
+		delete userUpdate.banned;
+		return false;
+	}
+	if (deactivating) {
+		userUpdate.banReason = "Deactivated via SCIM";
+		return true;
+	}
+	userUpdate.banReason = null;
+	userUpdate.banExpires = null;
+	return false;
+}
+
 export const generateSCIMToken = (opts: SCIMOptions) =>
 	createAuthEndpoint(
 		"/scim/generate-token",
@@ -722,7 +775,16 @@ export const createSCIMUser = (
 				});
 			}
 
-			const email = getUserPrimaryEmail(body.userName, body.emails);
+			// Reject `active:false` before provisioning so create never persists a
+			// user it cannot then deactivate.
+			if (body.active === false) {
+				resolveSCIMActiveDeactivation(ctx, { banned: true });
+			}
+
+			const email = getUserPrimaryEmail(
+				body.userName,
+				body.emails,
+			).toLowerCase();
 			const name = getUserFullName(email, body.name);
 
 			const existingUser = await ctx.context.adapter.findOne<User>({
@@ -810,6 +872,19 @@ export const createSCIMUser = (
 				});
 			}
 
+			if (body.active === false) {
+				const deactivation: Record<string, unknown> = { banned: true };
+				resolveSCIMActiveDeactivation(ctx, deactivation);
+				const banned = await ctx.context.internalAdapter.updateUser(
+					user.id,
+					deactivation,
+				);
+				if (banned) {
+					user = banned;
+				}
+				await ctx.context.internalAdapter.deleteUserSessions(user.id);
+			}
+
 			const userResource = createUserResource(
 				ctx.context.baseURL,
 				user,
@@ -868,19 +943,36 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			const email = getUserPrimaryEmail(
+				body.userName,
+				body.emails,
+			).toLowerCase();
+			const name = getUserFullName(email, body.name);
+			const emailChanged = email !== user.email;
+
+			if (emailChanged) {
+				await assertSCIMEmailAvailable(ctx, email, userId);
+			}
+
+			const userUpdate: Record<string, unknown> = {
+				email,
+				name,
+				updatedAt: new Date(),
+			};
+			if (emailChanged) {
+				userUpdate.emailVerified = false;
+			}
+			if (body.active !== undefined) {
+				userUpdate.banned = body.active === false;
+			}
+			const deactivating = resolveSCIMActiveDeactivation(ctx, userUpdate);
+
 			const [updatedUser, updatedAccount] =
 				await ctx.context.adapter.transaction<[User | null, Account | null]>(
 					async () => {
-						const email = getUserPrimaryEmail(body.userName, body.emails);
-						const name = getUserFullName(email, body.name);
-
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							userId,
-							{
-								email,
-								name,
-								updatedAt: new Date(),
-							},
+							userUpdate,
 						);
 
 						const updatedAccount =
@@ -892,6 +984,10 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 						return [updatedUser, updatedAccount];
 					},
 				);
+
+			if (deactivating) {
+				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
 
 			const groups = organizationId
 				? await listUserSCIMGroupReferences(ctx, userId)
@@ -1166,6 +1262,16 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			if (
+				typeof userPatch.email === "string" &&
+				userPatch.email !== user.email
+			) {
+				await assertSCIMEmailAvailable(ctx, userPatch.email, userId);
+				userPatch.emailVerified = false;
+			}
+
+			const deactivating = resolveSCIMActiveDeactivation(ctx, userPatch);
+
 			await Promise.all([
 				Object.keys(userPatch).length > 0
 					? ctx.context.internalAdapter.updateUser(userId, {
@@ -1180,6 +1286,10 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 						})
 					: Promise.resolve(),
 			]);
+
+			if (deactivating) {
+				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
 
 			ctx.setStatus(204);
 			return;
@@ -1593,6 +1703,15 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 					});
 				}
 
+				ctx.setStatus(204);
+				return;
+			}
+
+			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+			const hasOtherAccounts = accounts.some((a) => a.id !== account.id);
+
+			if (hasOtherAccounts) {
+				await ctx.context.internalAdapter.deleteAccount(account.id);
 				ctx.setStatus(204);
 				return;
 			}

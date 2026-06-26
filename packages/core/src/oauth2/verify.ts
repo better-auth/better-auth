@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import type {
 	JSONWebKeySet,
@@ -23,6 +22,7 @@ import {
 	isDpopBindingError,
 	parseAccessTokenAuthorization,
 } from "./dpop";
+import { fetchRefusingRedirects } from "./reject-redirects";
 
 const joseInfrastructureErrorCodes = new Set([
 	joseErrors.JWKSTimeout.code,
@@ -115,7 +115,7 @@ async function fetchJwks(
 ): Promise<JSONWebKeySet> {
 	const jwks =
 		typeof jwksFetch === "string"
-			? await betterFetch<JSONWebKeySet>(jwksFetch, {
+			? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
 					headers: {
 						Accept: "application/json",
 					},
@@ -384,23 +384,24 @@ async function verifyAccessTokenPayload(
 
 	// Remote verify
 	if (opts?.remoteVerify) {
-		const { data: introspect, error: introspectError } = await betterFetch<
-			JWTPayload & {
-				active: boolean;
-			}
-		>(opts.remoteVerify.introspectUrl, {
-			method: "POST",
-			headers: {
-				Accept: "application/json",
-				"Content-Type": "application/x-www-form-urlencoded",
-			},
-			body: new URLSearchParams({
-				client_id: opts.remoteVerify.clientId,
-				client_secret: opts.remoteVerify.clientSecret,
-				token,
-				token_type_hint: "access_token",
-			}).toString(),
-		});
+		const { data: introspect, error: introspectError } =
+			await fetchRefusingRedirects<
+				JWTPayload & {
+					active: boolean;
+				}
+			>(opts.remoteVerify.introspectUrl, {
+				method: "POST",
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					client_id: opts.remoteVerify.clientId,
+					client_secret: opts.remoteVerify.clientSecret,
+					token,
+					token_type_hint: "access_token",
+				}).toString(),
+			});
 		if (introspectError)
 			logger.error(
 				`Introspection failed: ${introspectError.message ?? introspectError.statusText}`,
