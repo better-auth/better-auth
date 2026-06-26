@@ -2468,7 +2468,7 @@ describe("account resolution in stateless mode", async () => {
 		betterAuth({
 			secret: STATELESS_SECRET,
 			baseURL: "http://localhost:3000",
-			trustedOrigins: ["http://localhost:3000"],
+			trustedOrigins: ["http://localhost:3000", IDP],
 			session: {
 				cookieCache: {
 					enabled: true,
