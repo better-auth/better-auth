@@ -490,10 +490,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
+						const expiresAt = new Date(Date.now() + maxAge * 1000);
 						await ctx.context.internalAdapter.createVerificationValue({
 							value: data.user.id,
 							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
+							expiresAt,
+						});
+						// Per-challenge attempt counter, consumed atomically by
+						// verify-totp and verify-backup-code as the race gate so a
+						// concurrent burst cannot exceed the budget.
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: "0",
+							identifier: `2fa-attempts-${identifier}`,
+							expiresAt,
 						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
