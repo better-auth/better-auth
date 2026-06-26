@@ -330,8 +330,21 @@ const spEncryptionKey = dedentPem`
 const generateRequestID = () => {
 	return "_" + randomUUID();
 };
+
+interface MockSAMLTemplateOverrides {
+	audience?: string;
+	destination?: string;
+	subjectRecipient?: string;
+}
+
 const createTemplateCallback =
-	(idp: any, sp: any, email: string) => (template: any) => {
+	(
+		idp: any,
+		sp: any,
+		email: string,
+		overrides: MockSAMLTemplateOverrides = {},
+	) =>
+	(template: any) => {
 		const assertionConsumerServiceUrl =
 			sp.entityMeta.getAssertionConsumerService(
 				saml.Constants.wording.binding.post,
@@ -348,10 +361,11 @@ const createTemplateCallback =
 		const tagValues = {
 			ID: id,
 			AssertionID: generateRequestID(),
-			Destination: assertionConsumerServiceUrl,
-			Audience: sp.entityMeta.getEntityID(),
+			Destination: overrides.destination ?? assertionConsumerServiceUrl,
+			Audience: overrides.audience ?? sp.entityMeta.getEntityID(),
 			EntityID: sp.entityMeta.getEntityID(),
-			SubjectRecipient: assertionConsumerServiceUrl,
+			SubjectRecipient:
+				overrides.subjectRecipient ?? assertionConsumerServiceUrl,
 			Issuer: idp.entityMeta.getEntityID(),
 			IssueInstant: now.toISOString(),
 			AssertionConsumerServiceURL: assertionConsumerServiceUrl,
@@ -417,6 +431,11 @@ interface MockIdPOptions {
 	wantAuthnRequestsSigned?: boolean;
 	spSigningKey?: string;
 	spSigningKeyPass?: string;
+}
+
+interface MockSAMLResponse {
+	samlResponse: string;
+	entityEndpoint?: string;
 }
 
 const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
@@ -506,12 +525,19 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 				emailAddress: emailValue,
 				famName: "hello world",
 			};
+			const queryValue = (value: unknown) =>
+				typeof value === "string" ? value : undefined;
+			const templateOverrides: MockSAMLTemplateOverrides = {
+				audience: queryValue(req.query.audience),
+				destination: queryValue(req.query.destination),
+				subjectRecipient: queryValue(req.query.recipient),
+			};
 			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
 				{} as any,
 				saml.Constants.wording.binding.post,
 				user,
-				createTemplateCallback(idp, sp, user.emailAddress),
+				createTemplateCallback(idp, sp, user.emailAddress, templateOverrides),
 			)) as { context: string; entityEndpoint?: string };
 			res.status(200).json({ samlResponse: context, entityEndpoint });
 		} catch (error) {
@@ -1899,6 +1925,8 @@ describe("SAML SSO", async () => {
 		});
 
 		const { headers } = await signInWithTestUser();
+		const acsUrl =
+			"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-audience-provider";
 
 		await authAudience.api.registerSSOProvider({
 			body: {
@@ -1908,17 +1936,16 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
+					callbackUrl: "http://localhost:3000/dashboard?source=saml",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
 					idpMetadata: {
 						metadata: idpMetadata,
 					},
-					// Empty spMetadata: this SP's entity id falls back to its issuer
-					// (http://localhost:8081), which differs from the assertion's
-					// <Audience> (the IdP's spMetadata entity id).
-					spMetadata: {},
+					spMetadata: {
+						metadata: spMetadata,
+					},
 					identifierFormat:
 						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 				},
@@ -1926,32 +1953,45 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+		const idpResponseUrl = new URL(
+			"http://localhost:8081/api/sso/saml2/idp/post",
+		);
+		idpResponseUrl.searchParams.set(
+			"audience",
+			"http://other.example.com/saml/metadata",
+		);
+		idpResponseUrl.searchParams.set("destination", acsUrl);
+		idpResponseUrl.searchParams.set("recipient", acsUrl);
+
+		let samlResponse: MockSAMLResponse | undefined;
+		await betterFetch(idpResponseUrl.toString(), {
 			onSuccess: async (context) => {
-				samlResponse = await context.data;
+				samlResponse = (await context.data) as MockSAMLResponse;
 			},
 		});
+		expect(samlResponse).toBeDefined();
 
 		const response = await authAudience.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-audience-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-					}),
+			new Request(acsUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
 				},
-			),
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse!.samlResponse,
+				}),
+			}),
 		);
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
+		const redirectUrl = new URL(redirectLocation);
 		expect(redirectLocation).toContain("error=invalid_saml_response");
-		expect(redirectLocation).toContain("Audience");
+		expect(redirectLocation).toContain("source=saml");
+		expect(redirectLocation).toContain("error_description=");
+		expect(redirectUrl.searchParams.get("error_description")).toContain(
+			"audience does not match",
+		);
 	});
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
