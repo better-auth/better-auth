@@ -21,7 +21,6 @@ import {
 	inArray,
 	isNotNull,
 	isNull,
-	like,
 	lt,
 	lte,
 	ne,
@@ -30,8 +29,8 @@ import {
 	sql,
 } from "drizzle-orm";
 import {
+	escapedLike,
 	insensitiveEq,
-	insensitiveIlike,
 	insensitiveInArray,
 	insensitiveNe,
 	insensitiveNotInArray,
@@ -148,35 +147,31 @@ function applyWhereOperator(
 		}
 		return notInArray(column, w.value);
 	}
+	const likeMode =
+		isInsensitive && typeof w.value === "string" ? "insensitive" : "sensitive";
 	if (w.operator === "contains") {
-		if (isInsensitive && typeof w.value === "string") {
-			return insensitiveIlike(
-				column,
-				`%${escapeLikePattern(w.value)}%`,
-				provider,
-			);
-		}
-		return like(column, `%${escapeLikePattern(w.value)}%`);
+		return escapedLike(
+			column,
+			`%${escapeLikePattern(w.value)}%`,
+			provider,
+			likeMode,
+		);
 	}
 	if (w.operator === "starts_with") {
-		if (isInsensitive && typeof w.value === "string") {
-			return insensitiveIlike(
-				column,
-				`${escapeLikePattern(w.value)}%`,
-				provider,
-			);
-		}
-		return like(column, `${escapeLikePattern(w.value)}%`);
+		return escapedLike(
+			column,
+			`${escapeLikePattern(w.value)}%`,
+			provider,
+			likeMode,
+		);
 	}
 	if (w.operator === "ends_with") {
-		if (isInsensitive && typeof w.value === "string") {
-			return insensitiveIlike(
-				column,
-				`%${escapeLikePattern(w.value)}`,
-				provider,
-			);
-		}
-		return like(column, `%${escapeLikePattern(w.value)}`);
+		return escapedLike(
+			column,
+			`%${escapeLikePattern(w.value)}`,
+			provider,
+			likeMode,
+		);
 	}
 	if (w.operator === "lt") {
 		return lt(column, w.value);
@@ -463,6 +458,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return {};
 				}
 
+				// The relational filter has no ESCAPE clause, so LIKE goes through
+				// `RAW`. The callback form lets Drizzle supply the aliased column.
+				const likeRaw = (field: string, pattern: string) => ({
+					RAW: (table: Record<string, any>) =>
+						escapedLike(table[field], pattern, config.provider),
+				});
+
 				const convertWhereToColumn = (w: Where) => {
 					const field = getFieldName({ model, field: w.field });
 					if (!schemaModel[field]) {
@@ -472,6 +474,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const columnObj: Record<string, any> = {};
+					let raw: ReturnType<typeof likeRaw> | undefined;
 
 					if (w.operator === "in") {
 						if (!Array.isArray(w.value)) {
@@ -488,11 +491,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						columnObj.notIn = w.value;
 					} else if (w.operator === "contains") {
-						columnObj.like = `%${escapeLikePattern(w.value)}%`;
+						raw = likeRaw(field, `%${escapeLikePattern(w.value)}%`);
 					} else if (w.operator === "starts_with") {
-						columnObj.like = `${escapeLikePattern(w.value)}%`;
+						raw = likeRaw(field, `${escapeLikePattern(w.value)}%`);
 					} else if (w.operator === "ends_with") {
-						columnObj.like = `%${escapeLikePattern(w.value)}`;
+						raw = likeRaw(field, `%${escapeLikePattern(w.value)}`);
 					} else if (w.operator === "lt") {
 						columnObj.lt = w.value;
 					} else if (w.operator === "lte") {
@@ -513,7 +516,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						columnObj.eq = w.value;
 					}
 
-					return { field, columnObj };
+					return { field, columnObj, raw };
 				};
 
 				if (where.length === 1) {
@@ -521,10 +524,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!w) {
 						return {};
 					}
-					const { field, columnObj } = convertWhereToColumn(w);
-					return {
-						[field]: columnObj,
-					};
+					const { field, columnObj, raw } = convertWhereToColumn(w);
+					return raw ?? { [field]: columnObj };
 				}
 
 				const andGroup = where.filter(
@@ -536,9 +537,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				if (andGroup.length > 0) {
 					const fieldMap: Record<string, any[]> = {};
+					// RAW LIKE conditions are ANDed as siblings.
+					const rawConditions: any[] = [];
 
 					for (const w of andGroup) {
-						const { field, columnObj } = convertWhereToColumn(w);
+						const { field, columnObj, raw } = convertWhereToColumn(w);
+						if (raw) {
+							rawConditions.push(raw);
+							continue;
+						}
 						if (!fieldMap[field]) {
 							fieldMap[field] = [];
 						}
@@ -556,16 +563,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							};
 						}
 					}
+
+					if (rawConditions.length > 0) {
+						result.AND = rawConditions;
+					}
 				}
 
 				if (orGroup.length > 0) {
 					const orConditions: any[] = [];
 
 					for (const w of orGroup) {
-						const { field, columnObj } = convertWhereToColumn(w);
-						orConditions.push({
-							[field]: columnObj,
-						});
+						const { field, columnObj, raw } = convertWhereToColumn(w);
+						orConditions.push(raw ?? { [field]: columnObj });
 					}
 
 					if (orConditions.length > 0) {

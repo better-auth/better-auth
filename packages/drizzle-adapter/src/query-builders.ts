@@ -20,6 +20,29 @@ export function insensitiveIlike(
 }
 
 /**
+ * LIKE/ILIKE with an explicit backslash escape character.
+ *
+ * SQLite has no default LIKE escape and MySQL drops it under
+ * `NO_BACKSLASH_ESCAPES`, so the escape character is bound per query.
+ *
+ * @see https://www.sqlite.org/lang_expr.html
+ */
+export function escapedLike(
+	column: DrizzleColumn,
+	pattern: string,
+	provider: DrizzleProvider,
+	mode: "sensitive" | "insensitive" = "sensitive",
+): SQL {
+	const escape = "\\";
+	if (mode === "insensitive") {
+		return provider === "pg"
+			? sql`${column} ILIKE ${pattern} ESCAPE ${escape}`
+			: sql`LOWER(${column}) LIKE LOWER(${pattern}) ESCAPE ${escape}`;
+	}
+	return sql`${column} LIKE ${pattern} ESCAPE ${escape}`;
+}
+
+/**
  * Case-insensitive IN for string arrays.
  */
 export function insensitiveInArray(
