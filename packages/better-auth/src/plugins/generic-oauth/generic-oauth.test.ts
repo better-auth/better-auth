@@ -1429,6 +1429,187 @@ describe("oauth2", async () => {
 		});
 	});
 
+	it("rejects sign-in when the provider returns no email and allowSignUpWithoutEmail is not set", async () => {
+		// Default behavior must be unchanged: a profile without an email is
+		// rejected at the callback.
+		// @see https://github.com/better-auth/better-auth/issues/9124
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-email-rejected-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							getUserInfo: async () => ({
+								id: "no-email-rejected",
+								name: "No Email User",
+								emailVerified: false,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.oauth2({
+			providerId: "no-email-rejected-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(flow.callbackURL).toContain("error=email_is_missing");
+
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "no-email-rejected-test" }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
+
+	it("completes sign-in when the provider returns no email and allowSignUpWithoutEmail is set", async () => {
+		// A provider that omits an email (e.g. a Discord phone-only account) must
+		// be able to sign in/up when the developer opts in, instead of throwing.
+		// @see https://github.com/better-auth/better-auth/issues/9124
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-email-allowed-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							allowSignUpWithoutEmail: true,
+							getUserInfo: async () => ({
+								id: "no-email-user",
+								name: "No Email User",
+								emailVerified: false,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.oauth2({
+			providerId: "no-email-allowed-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		// Sign-in succeeds: the user is created and redirected, not bounced to an
+		// error page.
+		expect(flow.callbackURL).not.toContain("error=");
+		expect(flow.callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).not.toBeNull();
+		// The user is created with a synthetic, per-account placeholder email on the
+		// reserved `.invalid` TLD (the column is unique+required until v2) rather than
+		// failing — and not a literal "" that would collide for a second such user.
+		expect(session.data?.user.email).toMatch(
+			/^no-email\+.*@better-auth\.invalid$/,
+		);
+
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "no-email-allowed-test",
+			accountId: "no-email-user",
+		});
+	});
+
+	it("creates distinct users for multiple providers that return no email", async () => {
+		// Regression for the unique+required email column: two email-less sign-ups
+		// must not collide on a shared "" placeholder. @see #9124
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: ["a", "b"].map((suffix) => ({
+						providerId: `no-email-multi-${suffix}`,
+						authorizationUrl: `http://localhost:${port}/authorize`,
+						tokenUrl: `http://localhost:${port}/token`,
+						clientId: clientId,
+						clientSecret: clientSecret,
+						pkce: true,
+						allowSignUpWithoutEmail: true,
+						getUserInfo: async () => ({
+							id: `no-email-multi-${suffix}`,
+							name: `No Email ${suffix}`,
+							emailVerified: false,
+						}),
+					})),
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const emails: (string | undefined)[] = [];
+		for (const suffix of ["a", "b"]) {
+			const headers = new Headers();
+			const signIn = await authClient.signIn.oauth2({
+				providerId: `no-email-multi-${suffix}`,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const flow = await simulateOAuthFlow(
+				signIn.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			// Both sign-ups succeed — the second is not bounced by a unique violation.
+			expect(flow.callbackURL).not.toContain("error=");
+			const session = await authClient.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			emails.push(session.data?.user.email);
+		}
+		// Each placeholder is synthetic and unique, so the unique index is satisfied.
+		expect(emails[0]).toMatch(/^no-email\+.*@better-auth\.invalid$/);
+		expect(emails[1]).toMatch(/^no-email\+.*@better-auth\.invalid$/);
+		expect(emails[0]).not.toBe(emails[1]);
+		expect(await ctx.internalAdapter.listUsers(10, 0)).toHaveLength(2);
+	});
+
 	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {

@@ -7,12 +7,16 @@ import { isAPIError } from "../utils/is-api-error";
 import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
-// TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
-// call below needs null-safety, and `findOAuthUser` must accept a nullable email.
+// A provider may return a profile without an email (see #9124). The local user
+// row still keys on a (non-null) email column until v2 widens it, so a missing
+// email is normalized to an empty string on write while never being used as a
+// match key. Every `userInfo.email` access below is therefore null-safe.
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
-		userInfo: Omit<User, "createdAt" | "updatedAt">;
+		userInfo: Omit<User, "createdAt" | "updatedAt" | "email"> & {
+			email?: string | null | undefined;
+		};
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
@@ -35,9 +39,11 @@ export async function handleOAuthUserInfo(
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
 		opts;
+	// A missing email is passed through as-is; `findOAuthUser` skips the
+	// match-by-email lookup so an emailless profile can't be linked by email.
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
-			userInfo.email.toLowerCase(),
+			userInfo.email?.toLowerCase(),
 			account.accountId,
 			account.providerId,
 		)
@@ -114,7 +120,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email?.toLowerCase() === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -158,7 +164,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email?.toLowerCase() === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -166,15 +172,22 @@ export async function handleOAuthUserInfo(
 			}
 		}
 		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
-			// update user info from the provider if overrideUserInfo is true
+			const { id: _, email: providerEmail, ...restUserInfo } = userInfo;
+			const normalizedEmail = providerEmail?.toLowerCase();
+			// A provider that omits an email must not blank out the existing
+			// local email on override; only write it through when present.
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
+				...(normalizedEmail !== undefined && { email: normalizedEmail }),
 				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
-						? dbUser.user.emailVerified || userInfo.emailVerified
-						: userInfo.emailVerified,
+					normalizedEmail === undefined
+						? // Provider returned no email: nothing about the email changed, so
+						  // preserve the existing verification state instead of letting a
+						  // provider default of `false` silently downgrade a verified user.
+						  dbUser.user.emailVerified
+						: normalizedEmail === dbUser.user.email
+							? dbUser.user.emailVerified || userInfo.emailVerified
+							: userInfo.emailVerified,
 			});
 		}
 	} else {
@@ -201,7 +214,14 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
+						// The user table still requires a unique, non-null string email
+						// until v2 (see the TODO in core get-tables.ts). When a provider
+						// returns none, store a per-account synthetic placeholder on the
+						// reserved `.invalid` TLD: a literal "" would collide on the unique
+						// index, limiting the feature to a single email-less user. See #9124.
+						email:
+							userInfo.email?.toLowerCase() ??
+							`no-email+${account.providerId}-${userInfo.id}@better-auth.invalid`.toLowerCase(),
 					},
 					accountData,
 				);
@@ -212,6 +232,10 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
+				// Skip verification mail when the provider returned no email: the stored
+				// address is a synthetic `.invalid` placeholder, so gate on the real
+				// provider email rather than the stored one (see #9124).
+				userInfo.email &&
 				c.context.options.emailVerification?.sendOnSignUp &&
 				c.context.options.emailVerification?.sendVerificationEmail
 			) {

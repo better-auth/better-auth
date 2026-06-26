@@ -219,4 +219,20 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * @default false
 	 */
 	overrideUserInfoOnSignIn?: boolean | undefined;
+	/**
+	 * Allow sign-up/sign-in when the provider returns no email.
+	 *
+	 * By default Better Auth rejects an OAuth sign-in whose profile carries no
+	 * email, since the local user model treats email as the identity anchor.
+	 * Some providers legitimately return no email (e.g. a Discord account
+	 * registered with a phone number only). Set this to `true` to let such a
+	 * user be created/linked with an empty email instead of failing the flow.
+	 *
+	 * When enabled, a missing email is never matched against existing users, so
+	 * an account with no email can't be linked to the wrong user.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9124
+	 * @default false
+	 */
+	allowSignUpWithoutEmail?: boolean | undefined;
 };

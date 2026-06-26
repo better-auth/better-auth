@@ -432,8 +432,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 				);
 			}
-			const userInfo: Omit<User, "createdAt" | "updatedAt"> =
-				await (async function handleUserInfo() {
+			const userInfo: Omit<User, "createdAt" | "updatedAt" | "email"> & {
+				email?: string | null | undefined;
+			} = await (async function handleUserInfo() {
 					const userInfo = (
 						providerConfig.getUserInfo
 							? await providerConfig.getUserInfo(tokens)
@@ -448,7 +449,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					const email = mapUser.email
 						? mapUser.email.toLowerCase()
 						: userInfo.email?.toLowerCase();
-					if (!email) {
+					if (!email && !providerConfig.allowSignUpWithoutEmail) {
 						ctx.context.logger.error(
 							missingEmailLogMessage(providerConfig.providerId, {
 								source: "generic",
@@ -492,7 +493,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (
 					ctx.context.options.account?.accountLinking?.allowDifferentEmails !==
 						true &&
-					link.email.toLowerCase() !== userInfo.email.toLowerCase()
+					link.email.toLowerCase() !== userInfo.email?.toLowerCase()
 				) {
 					redirectOnError(ctx, resolvedErrorURL, "email_doesn't_match");
 				}

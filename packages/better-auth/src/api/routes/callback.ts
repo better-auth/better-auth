@@ -239,7 +239,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(toRedirectTo);
 		}
 
-		if (!userInfo.email) {
+		if (!userInfo.email && !provider.options?.allowSignUpWithoutEmail) {
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			redirectOnError(c, resolvedErrorURL, "email_not_found");
 		}
