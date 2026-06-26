@@ -347,7 +347,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				const insertResult = await builder.execute();
+				// MySQL has no RETURNING. For serial ids, Drizzle's `$returningId`
+				// performs the insert and hands back the generated id, normalizing the
+				// per-driver result shape for us.
+				const isSerialInsert =
+					!where?.length && options.advanced?.database?.generateId === "serial";
+				const insertResult = isSerialInsert
+					? await builder.$returningId().execute()
+					: await builder.execute();
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
@@ -392,16 +399,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return res[0] ?? null;
 					}
 
-					// 3. Serial auto-increment: read the id from the write result. mysql2
-					// reports it on the ResultSetHeader, which is correct even when a
-					// pool runs this follow-up read on a different connection than the
-					// insert. A connection-scoped LAST_INSERT_ID() would not be.
-					const insertId = insertResult?.[0]?.insertId;
-					if (
-						options.advanced?.database?.generateId === "serial" &&
-						schemaModel.id &&
-						insertId
-					) {
+					// 3. Serial auto-increment: `$returningId` above gave us the generated
+					// id, so resolve the full row by it. This is connection-correct even
+					// on a pool or serverless driver, unlike a scoped LAST_INSERT_ID().
+					const insertId = isSerialInsert ? insertResult?.[0]?.id : undefined;
+					if (insertId && schemaModel.id) {
 						const res = await tx
 							.select()
 							.from(schemaModel)
