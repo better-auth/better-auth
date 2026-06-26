@@ -50,7 +50,8 @@ export interface DB {
  * reports `affectedRows` (in a result-header array), planetscale and other
  * serverless drivers use `rowsAffected`, better-sqlite3 uses `changes`, and
  * Cloudflare D1 nests the count under `meta.changes`. This normalizes them so
- * adapter contract instead of leaking the raw driver result.
+ * write methods that depend on affected rows honor the adapter contract instead
+ * of leaking the raw driver result.
  */
 function getAffectedRowCount(
 	result: unknown,
