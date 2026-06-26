@@ -118,19 +118,21 @@ describe("relations-v2 schema generator", () => {
 	});
 
 	/**
-	 * An array or object `defaultValue` must be serialized to a JS literal.
-	 * Interpolating it directly emits `.default(customer)` (an undefined
-	 * identifier) or `.default([object Object])` (a syntax error).
+	 * A non-primitive or quote-bearing `defaultValue` must be serialized to a
+	 * valid JS literal. Interpolating it directly emits `.default(customer)`
+	 * (an undefined identifier), `.default([object Object])` (a syntax error),
+	 * or `.default("hello "admin"")` (a broken string literal).
 	 *
 	 * @see https://github.com/better-auth/better-auth/pull/10048
 	 */
-	it("serializes array and object additionalField defaultValue to a literal", async () => {
+	it("serializes array, object, and quoted-string additionalField defaultValue to a literal", async () => {
 		const { code = "" } = await generate({
 			user: {
 				additionalFields: {
 					roles: { type: "string[]", defaultValue: ["customer"] },
 					scores: { type: "number[]", defaultValue: [1, 2, 3] },
 					settings: { type: "json", defaultValue: { theme: "dark" } },
+					label: { type: "string", defaultValue: 'hello "admin"' },
 				},
 			},
 		});
@@ -138,6 +140,7 @@ describe("relations-v2 schema generator", () => {
 		expect(code).toContain('.default(["customer"])');
 		expect(code).toContain(".default([1, 2, 3])");
 		expect(code).toContain('.default({"theme":"dark"})');
+		expect(code).toContain('.default("hello \\"admin\\"")');
 		expect(code).not.toMatch(/\.default\(customer\)/);
 		expect(code).not.toContain("[object Object]");
 		expect(typeErrors(code)).toEqual([]);

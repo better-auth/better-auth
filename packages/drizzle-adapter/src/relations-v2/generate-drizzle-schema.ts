@@ -278,7 +278,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
-									type += `.default("${attr.defaultValue}")`;
+									// JSON.stringify so a value containing a quote or
+									// backslash (e.g. `hello "admin"`) is escaped instead
+									// of emitting `.default("hello "admin"")`, which is a
+									// syntax error in the generated schema.
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else if (Array.isArray(attr.defaultValue)) {
 									// Stringify each element so a `["customer"]` default emits
 									// `.default(["customer"])` rather than `.default(customer)`
