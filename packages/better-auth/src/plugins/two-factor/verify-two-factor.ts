@@ -282,10 +282,18 @@ export async function recordTwoFactorFailure(
 		increment: { failedVerificationCount: 1 },
 	});
 	if ((updated?.failedVerificationCount ?? 0) >= maxFailedAttempts) {
-		await ctx.context.adapter.update({
+		await ctx.context.adapter.incrementOne({
 			model: twoFactorTable,
-			where: [{ field: "id", value: twoFactor.id }],
-			update: { lockedUntil: new Date(Date.now() + durationMs) },
+			where: [
+				{ field: "id", value: twoFactor.id },
+				{
+					field: "failedVerificationCount",
+					operator: "gte",
+					value: maxFailedAttempts,
+				},
+			],
+			increment: {},
+			set: { lockedUntil: new Date(Date.now() + durationMs) },
 		});
 	}
 }
