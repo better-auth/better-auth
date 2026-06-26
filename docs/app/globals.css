@@ -443,9 +443,9 @@
 	--fd-nav-height: 56px;
 	--fd-banner-height: 0px;
 	--fd-tocnav-height: 0px;
-	--font-sans: Geist, sans-serif;
+	--font-sans: var(--font-geist-sans, Geist, sans-serif);
 	--font-serif: Georgia, serif;
-	--font-mono: Geist Mono, monospace;
+	--font-mono: var(--font-geist-mono, Geist Mono, monospace);
 	--shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
 	--shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
 	--shadow-sm:
@@ -522,6 +522,8 @@
 
 @theme inline {
 	--breakpoint-navbar: 64rem;
+	--font-sans: var(--font-geist-sans, Geist, sans-serif);
+	--font-mono: var(--font-geist-mono, Geist Mono, monospace);
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -602,7 +604,7 @@
 	}
 
 	body {
-		@apply overscroll-none bg-background text-foreground selection:bg-foreground selection:text-background;
+		@apply overscroll-none bg-background font-sans text-foreground selection:bg-foreground selection:text-background;
 	}
 }
 
