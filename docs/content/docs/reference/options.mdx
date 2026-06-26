@@ -533,9 +533,11 @@ const hook = createAuthMiddleware(async (ctx) => {
 Configuration for account linking.
 
 * `enabled`: Enable account linking (default: `true`)
+* `disableImplicitLinking`: Disable automatic account linking on OAuth sign-in. When `true`, a same-email OAuth sign-in for an existing user is rejected with `account_not_linked` instead of being implicitly linked (even for verified emails or `trustedProviders`). New users can still sign up via OAuth, and authenticated users can still link providers explicitly via `linkSocial()`. (default: `false`)
 * `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 * `allowDifferentEmails`: Allow users to link accounts with different email addresses
 * `allowUnlinkingAll`: Allow users to unlink all accounts
+* `updateUserInfoOnLink`: When linking, copy the provider's profile (`name`, `image`, and any `mapProfileToUser` fields) onto the local user. The local `email` and `emailVerified` are never changed. (default: `false`)
 
 ## `verification`
 
@@ -602,7 +604,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -651,6 +653,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
+  * `disableIpTracking`: Disable IP address tracking.
+  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
+  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
