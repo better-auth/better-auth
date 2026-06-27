@@ -138,6 +138,11 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     });
     ```
 
+    When `rewriteCallbackToDeepLink` is `false`, pass an absolute callback URL
+    such as an HTTPS App Link / Universal Link. Relative callback paths like
+    `/dashboard` are only supported when the default deep-link rewriting stays
+    enabled.
+
     <Callout>
       Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
     </Callout>

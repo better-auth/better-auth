@@ -461,6 +461,14 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
+							if (
+								opts?.rewriteCallbackToDeepLink === false &&
+								callbackURL?.startsWith("/")
+							) {
+								throw new Error(
+									'Relative callbackURL values are not supported when "rewriteCallbackToDeepLink" is false. Pass an absolute callback URL or omit "rewriteCallbackToDeepLink" to preserve deep-link rewriting.',
+								);
+							}
 							const to = callbackURL;
 							const signInURL = context.data?.url;
 							let Browser: typeof import("expo-web-browser") | undefined =

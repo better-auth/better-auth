@@ -105,6 +105,10 @@ expoClient({
 });
 ```
 
+When `rewriteCallbackToDeepLink` is `false`, pass an absolute callback URL
+(for example an HTTPS App Link / Universal Link). Relative callback paths like
+`/dashboard` are only supported when the default deep-link rewriting is enabled.
+
 ## Documentation
 
 For more detailed information and advanced configurations, please refer to the

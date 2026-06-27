@@ -178,7 +178,7 @@ describe("expo", async () => {
 		);
 	});
 
-	it("should not rewrite callback URLs when rewriteCallbackToDeepLink is false", async () => {
+	it("should not rewrite absolute callback URLs when rewriteCallbackToDeepLink is false", async () => {
 		const storage = new Map<string, string>();
 		const { auth, client } = await getTestInstance(
 			{
@@ -208,7 +208,7 @@ describe("expo", async () => {
 		fn.mockClear();
 		const { data: res } = await client.signIn.social({
 			provider: "google",
-			callbackURL: "/dashboard",
+			callbackURL: "https://myapp.example.com/dashboard",
 		});
 		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
@@ -217,12 +217,51 @@ describe("expo", async () => {
 		}
 		const state = await ctx.internalAdapter.findVerificationValue(stateId);
 		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
-		expect(callbackURL).toBe("/dashboard");
+		expect(callbackURL).toBe("https://myapp.example.com/dashboard");
 		expect(fn).toHaveBeenCalledWith(
 			expect.stringContaining("accounts.google"),
-			"/dashboard",
+			"https://myapp.example.com/dashboard",
 			undefined,
 		);
+	});
+
+	it("should reject relative callback URLs when rewriteCallbackToDeepLink is false", async () => {
+		const storage = new Map<string, string>();
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo(), oAuthProxy()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							rewriteCallbackToDeepLink: false,
+						}),
+					],
+				},
+			},
+		);
+		fn.mockClear();
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+			}),
+		).rejects.toThrow(
+			'Relative callbackURL values are not supported when "rewriteCallbackToDeepLink" is false.',
+		);
+		expect(fn).not.toHaveBeenCalled();
 	});
 
 	it("should pass webBrowserOptions to openAuthSessionAsync", async () => {
