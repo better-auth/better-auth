@@ -209,8 +209,6 @@ export interface InternalAdapter<
 		providerId: string,
 	): Promise<Account | null>;
 
-	findAccountByUserId(userId: string): Promise<Account[]>;
-
 	updateAccount(id: string, data: Partial<Account>): Promise<Account>;
 
 	createVerificationValue(
