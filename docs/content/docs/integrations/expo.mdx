@@ -125,6 +125,10 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     default. `rewriteCallbackToDeepLink` defaults to `true`, which preserves the
     current scheme-based deep-link callback behavior.
 
+    When you set `origin`, add that HTTPS origin to your server's
+    `trustedOrigins` list as well, or Better Auth will reject the request
+    during origin validation.
+
     If you want to keep callback URLs as HTTPS App Links / Universal Links
     instead of rewriting relative callback paths into deep links, configure the
     options explicitly:
@@ -163,11 +167,13 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     }
     ```
 
-    Then, update your Better Auth config to include the scheme in the `trustedOrigins` list.
+    Then, update your Better Auth config to include the scheme in the
+    `trustedOrigins` list. If you use `expoClient({ origin: "https://..." })`,
+    include that HTTPS origin too.
 
     ```ts title="auth.ts"
     export const auth = betterAuth({
-        trustedOrigins: ["myapp://"]
+        trustedOrigins: ["myapp://", "https://myapp.example.com"]
     })
     ```
 

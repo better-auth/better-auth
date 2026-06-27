@@ -92,6 +92,9 @@ Use `origin` for HTTPS App Links / Universal Links and email-based flows. If you
 omit it, the client keeps using the scheme-based origin derived from
 `Linking.createURL`, and `rewriteCallbackToDeepLink` defaults to `true` to
 preserve the existing deep-link callback behavior.
+When you set `origin`, add that HTTPS origin to your server's
+`trustedOrigins` list too, or Better Auth will reject the request during
+origin validation.
 
 If you want to use HTTPS callback URLs instead of rewriting relative callbacks
 into deep links, configure the options explicitly:
