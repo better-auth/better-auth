@@ -79,6 +79,8 @@ export const authClient = createAuthClient({
       scheme: 'myapp', // Your app's scheme (defined in app.json)
       storagePrefix: 'myapp', // A prefix for storage keys
       storage: SecureStore, // Pass SecureStore for token storage
+      origin: 'https://myapp.example.com',
+      rewriteCallbackToDeepLink: false,
     }),
   ],
 });
@@ -88,6 +90,10 @@ export const authClient = createAuthClient({
 ```
 
 Make sure your app’s scheme (e.g., “myapp”) is defined in your `app.json`.
+Use `origin` for HTTPS App Links / Universal Links and email-based flows. If you
+omit it, the client keeps using the scheme-based origin derived from
+`Linking.createURL`, and `rewriteCallbackToDeepLink` defaults to `true` to
+preserve the existing deep-link callback behavior.
 
 ## Documentation
 

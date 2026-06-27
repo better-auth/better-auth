@@ -114,10 +114,18 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                 scheme: "myapp",
                 storagePrefix: "myapp",
                 storage: SecureStore,
+                origin: "https://myapp.example.com",
+                rewriteCallbackToDeepLink: false,
             })
         ]
     });
     ```
+
+    Use `origin` when you want Expo requests to identify as an HTTPS App Link or
+    Universal Link origin, such as email verification or magic link flows. If
+    you omit it, Expo continues to derive the origin from your app scheme by
+    default. `rewriteCallbackToDeepLink` defaults to `true`, which preserves the
+    current scheme-based deep-link callback behavior.
 
     <Callout>
       Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
