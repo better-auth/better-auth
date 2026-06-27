@@ -114,8 +114,6 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                 scheme: "myapp",
                 storagePrefix: "myapp",
                 storage: SecureStore,
-                origin: "https://myapp.example.com",
-                rewriteCallbackToDeepLink: false,
             })
         ]
     });
@@ -126,6 +124,19 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     you omit it, Expo continues to derive the origin from your app scheme by
     default. `rewriteCallbackToDeepLink` defaults to `true`, which preserves the
     current scheme-based deep-link callback behavior.
+
+    If you want to keep callback URLs as HTTPS App Links / Universal Links
+    instead of rewriting relative callback paths into deep links, configure the
+    options explicitly:
+
+    ```ts
+    expoClient({
+        storage: SecureStore,
+        storagePrefix: "myapp",
+        origin: "https://myapp.example.com",
+        rewriteCallbackToDeepLink: false,
+    });
+    ```
 
     <Callout>
       Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
