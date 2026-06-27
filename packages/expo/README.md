@@ -58,7 +58,7 @@ export const auth = betterAuth({
     enabled: true,
   },
   // Add other configurations like trustedOrigins
-  trustedOrigins: ['myapp://'], // Replace "myapp" with your app's scheme
+  trustedOrigins: ['myapp://'], // Replace "myapp" with your app's scheme. Also add your HTTPS origin here if you configure expoClient({ origin: "https://..." }).
 });
 ```
 
@@ -106,6 +106,12 @@ expoClient({
   origin: 'https://myapp.example.com',
   rewriteCallbackToDeepLink: false,
 });
+```
+
+On the backend, include that HTTPS origin in `trustedOrigins` as well:
+
+```typescript
+trustedOrigins: ['myapp://', 'https://myapp.example.com']
 ```
 
 When `rewriteCallbackToDeepLink` is `false`, pass an absolute callback URL
