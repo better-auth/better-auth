@@ -1,5 +1,5 @@
 ---
-"better-auth": minor
+"better-auth": patch
 ---
 
-feat(oauth): add Yandex social provider
+Add a pre-configured Yandex provider helper for the generic OAuth plugin.

@@ -71,8 +71,8 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 				profile.real_name ??
 				profile.first_name ??
 				profile.login,
-			email: profile.default_email,
-			emailVerified: !!profile.default_email,
+			email: profile.default_email ?? profile.emails?.[0],
+			emailVerified: false,
 			image:
 				!profile.is_avatar_empty && profile.default_avatar_id
 					? `https://avatars.yandex.net/get-yapic/${profile.default_avatar_id}/islands-200`
