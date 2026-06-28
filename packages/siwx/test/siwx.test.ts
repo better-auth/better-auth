@@ -1,9 +1,8 @@
 import { getTestInstance } from "better-auth/test";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
-import { describe, expect } from "vitest";
+import { it as baseIt, describe, expect } from "vitest";
 import { siwxClient } from "../src/client";
 import { siwx } from "../src/index";
+import { getOrigin } from "../src/utils";
 
 describe("siwx", async (it) => {
 	const evmAddress = "0x000000000000000000000000000000000000dEaD";
@@ -197,7 +196,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -239,7 +238,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_solana_signature",
 			address: solanaAddress,
 			chainType: "solana",
@@ -274,7 +273,7 @@ describe("siwx", async (it) => {
 		);
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -313,7 +312,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "invalid_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -322,6 +321,47 @@ describe("siwx", async (it) => {
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(401);
 		expect(error?.code).toBe("UNAUTHORIZED_INVALID_SIGNATURE");
+	});
+
+	it("should reject a message that does not contain the nonce", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						// A naive verifier that only checks signature validity, not the
+						// nonce. The server must reject the replay before reaching here.
+						async verifyMessage({ signature }) {
+							return signature === "valid_evm_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		await client.siwx.nonce({
+			address: evmAddress,
+			chainType: "evm",
+		});
+
+		const { error } = await client.siwx.verify({
+			message: "Replayed message without the issued nonce",
+			signature: "valid_evm_signature",
+			address: evmAddress,
+			chainType: "evm",
+		});
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(401);
+		expect(error?.code).toBe("INVALID_NONCE_BINDING");
 	});
 
 	it("should not allow nonce reuse", async () => {
@@ -353,7 +393,7 @@ describe("siwx", async (it) => {
 		});
 
 		const first = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -363,7 +403,7 @@ describe("siwx", async (it) => {
 		expect(first.data?.success).toBe(true);
 
 		const second = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -402,7 +442,7 @@ describe("siwx", async (it) => {
 			chainId: "1",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -415,7 +455,7 @@ describe("siwx", async (it) => {
 			chainId: "1",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -453,7 +493,7 @@ describe("siwx", async (it) => {
 			chainId: "1",
 		});
 		const evmAuth = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -466,7 +506,7 @@ describe("siwx", async (it) => {
 			chainId: "137",
 		});
 		const polygonAuth = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -504,7 +544,7 @@ describe("siwx", async (it) => {
 			chainType: "evm",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -515,7 +555,7 @@ describe("siwx", async (it) => {
 			chainType: "evm",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: anotherAddress,
 			chainType: "evm",
@@ -553,7 +593,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -592,7 +632,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -631,7 +671,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -671,7 +711,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -711,7 +751,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: lowercaseAddress,
 			chainType: "evm",
@@ -747,7 +787,7 @@ describe("siwx", async (it) => {
 			chainType: "evm",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress.toLowerCase(),
 			chainType: "evm",
@@ -758,7 +798,7 @@ describe("siwx", async (it) => {
 			chainType: "evm",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress.toUpperCase(),
 			chainType: "evm",
@@ -795,7 +835,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_solana_signature",
 			address: solanaAddress,
 			chainType: "solana",
@@ -841,7 +881,7 @@ describe("siwx", async (it) => {
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -890,7 +930,7 @@ describe("siwx", async (it) => {
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -931,7 +971,7 @@ describe("siwx", async (it) => {
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -972,7 +1012,7 @@ describe("siwx", async (it) => {
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message",
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -986,416 +1026,23 @@ describe("siwx", async (it) => {
 		expect(receivedCacao.s.t).toBe("evm:eip191");
 		expect(receivedCacao.s.s).toBe("valid_evm_signature");
 	});
+});
 
-	it("should reject callback when not configured", async () => {
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
+describe("siwx utils", () => {
+	// getOrigin must return null (not the string "null") for custom URL schemes so
+	// callers can fall back to a real domain instead of building `address@null`
+	// synthetic emails.
+	baseIt("getOrigin returns the origin for http(s) URLs", () => {
+		expect(getOrigin("https://example.com/api/auth")).toBe(
+			"https://example.com",
 		);
-
-		const response = await auth.handler(
-			new Request("http://localhost/api/auth/siwx/callback/phantom"),
-		);
-
-		expect(response.status).toBe(500);
 	});
 
-	it("should reject callback for unsupported provider", async () => {
-		const appKeyPair = nacl.box.keyPair();
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-							providers: ["phantom"],
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const response = await auth.handler(
-			new Request("http://localhost/api/auth/siwx/callback/solflare"),
-		);
-
-		expect(response.status).toBe(400);
+	baseIt("getOrigin returns null for custom URL schemes", () => {
+		expect(getOrigin("exp://localhost:8081")).toBeNull();
 	});
 
-	it("should handle callback error response with redirect", async () => {
-		const appKeyPair = nacl.box.keyPair();
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const response = await auth.handler(
-			new Request(
-				"http://localhost/api/auth/siwx/callback/phantom?errorCode=USER_REJECTED&errorMessage=User%20rejected",
-			),
-		);
-
-		expect(response.status).toBe(302);
-		const location = response.headers.get("location");
-		expect(location).toContain("/login?success=false");
-		expect(location).toContain("errorCode=USER_REJECTED");
-	});
-
-	it("should decrypt phantom callback and create session", async () => {
-		const appKeyPair = nacl.box.keyPair();
-		const walletKeyPair = nacl.box.keyPair();
-		const walletSigningKeyPair = nacl.sign.keyPair();
-		const walletPublicKey = bs58.encode(walletSigningKeyPair.publicKey);
-
-		const payload = JSON.stringify({ public_key: walletPublicKey });
-		const nonce = nacl.randomBytes(24);
-		const encrypted = nacl.box(
-			new TextEncoder().encode(payload),
-			nonce,
-			appKeyPair.publicKey,
-			walletKeyPair.secretKey,
-		);
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const params = new URLSearchParams({
-			phantom_encryption_public_key: bs58.encode(walletKeyPair.publicKey),
-			nonce: bs58.encode(nonce),
-			data: bs58.encode(encrypted),
-		});
-
-		const response = await auth.handler(
-			new Request(`http://localhost/api/auth/siwx/callback/phantom?${params}`),
-		);
-
-		expect(response.status).toBe(302);
-		const location = response.headers.get("location");
-		expect(location).toContain("/?success=true");
-		expect(location).toContain("provider=phantom");
-		expect(response.headers.get("set-cookie")).toContain("better-auth.session");
-	});
-
-	it("should decrypt solflare callback and create session", async () => {
-		const appKeyPair = nacl.box.keyPair();
-		const walletKeyPair = nacl.box.keyPair();
-		const walletSigningKeyPair = nacl.sign.keyPair();
-		const walletPublicKey = bs58.encode(walletSigningKeyPair.publicKey);
-
-		const payload = JSON.stringify({ public_key: walletPublicKey });
-		const nonce = nacl.randomBytes(24);
-		const encrypted = nacl.box(
-			new TextEncoder().encode(payload),
-			nonce,
-			appKeyPair.publicKey,
-			walletKeyPair.secretKey,
-		);
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const params = new URLSearchParams({
-			solflare_encryption_public_key: bs58.encode(walletKeyPair.publicKey),
-			nonce: bs58.encode(nonce),
-			data: bs58.encode(encrypted),
-		});
-
-		const response = await auth.handler(
-			new Request(`http://localhost/api/auth/siwx/callback/solflare?${params}`),
-		);
-
-		expect(response.status).toBe(302);
-		const location = response.headers.get("location");
-		expect(location).toContain("/?success=true");
-		expect(location).toContain("provider=solflare");
-	});
-
-	it("should decrypt backpack callback and create session", async () => {
-		const appKeyPair = nacl.box.keyPair();
-		const walletKeyPair = nacl.box.keyPair();
-		const walletSigningKeyPair = nacl.sign.keyPair();
-		const walletPublicKey = bs58.encode(walletSigningKeyPair.publicKey);
-
-		const payload = JSON.stringify({ public_key: walletPublicKey });
-		const nonce = nacl.randomBytes(24);
-		const encrypted = nacl.box(
-			new TextEncoder().encode(payload),
-			nonce,
-			appKeyPair.publicKey,
-			walletKeyPair.secretKey,
-		);
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const params = new URLSearchParams({
-			wallet_encryption_public_key: bs58.encode(walletKeyPair.publicKey),
-			nonce: bs58.encode(nonce),
-			data: bs58.encode(encrypted),
-		});
-
-		const response = await auth.handler(
-			new Request(`http://localhost/api/auth/siwx/callback/backpack?${params}`),
-		);
-
-		expect(response.status).toBe(302);
-		const location = response.headers.get("location");
-		expect(location).toContain("/?success=true");
-		expect(location).toContain("provider=backpack");
-	});
-
-	it("should use custom success redirect URL", async () => {
-		const appKeyPair = nacl.box.keyPair();
-		const walletKeyPair = nacl.box.keyPair();
-		const walletSigningKeyPair = nacl.sign.keyPair();
-		const walletPublicKey = bs58.encode(walletSigningKeyPair.publicKey);
-
-		const payload = JSON.stringify({ public_key: walletPublicKey });
-		const nonce = nacl.randomBytes(24);
-		const encrypted = nacl.box(
-			new TextEncoder().encode(payload),
-			nonce,
-			appKeyPair.publicKey,
-			walletKeyPair.secretKey,
-		);
-
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-							successRedirect: "/dashboard?auth=complete",
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		const params = new URLSearchParams({
-			phantom_encryption_public_key: bs58.encode(walletKeyPair.publicKey),
-			nonce: bs58.encode(nonce),
-			data: bs58.encode(encrypted),
-		});
-
-		const response = await auth.handler(
-			new Request(`http://localhost/api/auth/siwx/callback/phantom?${params}`),
-		);
-
-		expect(response.status).toBe(302);
-		const location = response.headers.get("location");
-		expect(location).toContain("/dashboard?auth=complete");
-	});
-
-	it("should return same user for callback as regular verify", async () => {
-		const appKeyPair = nacl.box.keyPair();
-		const walletKeyPair = nacl.box.keyPair();
-		const walletSigningKeyPair = nacl.sign.keyPair();
-		const walletPublicKey = bs58.encode(walletSigningKeyPair.publicKey);
-
-		const { client, auth } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage() {
-							return true;
-						},
-						callback: {
-							appPublicKeyBase58: bs58.encode(appKeyPair.publicKey),
-							appPrivateKeyBase58: bs58.encode(appKeyPair.secretKey),
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		await client.siwx.nonce({
-			address: walletPublicKey,
-			chainType: "solana",
-		});
-
-		const verifyResult = await client.siwx.verify({
-			message: "Sign in message",
-			signature: "valid_solana_signature",
-			address: walletPublicKey,
-			chainType: "solana",
-		});
-
-		const userId = verifyResult.data?.user.id;
-
-		const payload = JSON.stringify({ public_key: walletPublicKey });
-		const nonce = nacl.randomBytes(24);
-		const encrypted = nacl.box(
-			new TextEncoder().encode(payload),
-			nonce,
-			appKeyPair.publicKey,
-			walletKeyPair.secretKey,
-		);
-
-		const params = new URLSearchParams({
-			phantom_encryption_public_key: bs58.encode(walletKeyPair.publicKey),
-			nonce: bs58.encode(nonce),
-			data: bs58.encode(encrypted),
-		});
-
-		const callbackResponse = await auth.handler(
-			new Request(`http://localhost/api/auth/siwx/callback/phantom?${params}`),
-		);
-
-		expect(callbackResponse.status).toBe(302);
-
-		const allAccounts = await (await auth.$context).adapter.findMany<{
-			userId: string;
-			accountId: string;
-		}>({
-			model: "account",
-			where: [{ field: "providerId", operator: "eq", value: "siwx" }],
-		});
-
-		const accountsForWallet = allAccounts.filter((acc) =>
-			acc.accountId.includes(walletPublicKey),
-		);
-
-		expect(accountsForWallet.length).toBeGreaterThan(0);
-		expect(accountsForWallet[0]?.userId).toBe(userId);
+	baseIt("getOrigin returns null for invalid URLs", () => {
+		expect(getOrigin("not a url")).toBeNull();
 	});
 });

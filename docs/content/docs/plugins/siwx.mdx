@@ -8,77 +8,78 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
 ## Installation
 
 <Steps>
-    <Step>
-        ### Add the Server Plugin
+  <Step>
+    ### Add the Server Plugin
 
-        Add the SIWX plugin to your auth configuration:
+    Add the SIWX plugin to your auth configuration:
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
-        import { siwx } from "better-auth/plugins";
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { siwx } from "better-auth/plugins";
 
-        export const auth = betterAuth({
-            plugins: [
-                siwx({
-                    domain: "example.com",
-                    emailDomainName: "example.com", // optional
-                    anonymous: true, // optional, default is true
-                    supportedChains: ["evm", "solana"], // optional, defaults to both
-                    getNonce: async () => {
-                        // Implement your nonce generation logic here
-                        return "your-secure-random-nonce";
-                    },
-                    verifyMessage: async (args) => {
-                        // Implement chain-specific message verification
-                        // args includes: message, signature, address, chainType, chainId, signatureType, cacao
-                        return true; // return true if signature is valid
-                    },
-                    nameLookup: async (args) => {
-                        // Optional: Implement name service lookup (ENS, SNS, etc.)
-                        return {
-                            name: "user.eth",
-                            avatar: "https://example.com/avatar.png"
-                        };
-                    },
-                }),
-            ],
-        });
+    export const auth = betterAuth({
+        plugins: [
+            siwx({
+                domain: "example.com",
+                emailDomainName: "example.com", // optional
+                anonymous: true, // optional, default is true
+                supportedChains: ["evm", "solana"], // optional, defaults to both
+                getNonce: async () => {
+                    // Implement your nonce generation logic here
+                    return "your-secure-random-nonce";
+                },
+                verifyMessage: async (args) => {
+                    // Implement chain-specific message verification
+                    // args includes: message, signature, address, chainType, chainId, signatureType, cacao
+                    return true; // return true if signature is valid
+                },
+                nameLookup: async (args) => {
+                    // Optional: Implement name service lookup (ENS, SNS, etc.)
+                    return {
+                        name: "user.eth",
+                        avatar: "https://example.com/avatar.png"
+                    };
+                },
+            }),
+        ],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx @better-auth/cli migrate
         ```
-    </Step>
+      </Tab>
 
-    <Step>
-        ### Migrate the database
-
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx @better-auth/cli migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx @better-auth/cli generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
-
-    <Step>
-        ### Add the Client Plugin
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client";
-        import { siwxClient } from "better-auth/client/plugins";
-
-        export const authClient = createAuthClient({
-            plugins: [siwxClient()],
-        });
+      <Tab value="generate">
+        ```package-install
+        npx @better-auth/cli generate
         ```
-    </Step>
+      </Tab>
+    </Tabs>
 
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the Client Plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { siwxClient } from "better-auth/client/plugins";
+
+    export const authClient = createAuthClient({
+        plugins: [siwxClient()],
+    });
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -258,59 +259,24 @@ siwx({
   The `chainId` and `chainType` must match the values used when generating the nonce. Verification will fail if there's a mismatch between the nonce request parameters and the verify request parameters.
 </Callout>
 
-## Native Wallet Callbacks
-
-For mobile apps using native wallet integrations (Phantom, Solflare, Backpack), SIWX supports encrypted callback flows:
-
-```ts title="auth.ts"
-siwx({
-  domain: "myapp.com",
-  supportedChains: ["solana"],
-  getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
-  verifyMessage: async ({ message, signature, address }) => {
-    // Verification logic
-    return true;
-  },
-  callback: {
-    appPublicKeyBase58: process.env.SIWX_APP_PUBLIC_KEY,
-    appPrivateKeyBase58: process.env.SIWX_APP_PRIVATE_KEY,
-    providers: ["phantom", "solflare", "backpack"], // optional, defaults to all
-    successRedirect: "/?success=true", // optional
-    errorRedirect: "/login?success=false", // optional
-  },
-});
-```
-
-The callback endpoint is available at `/api/auth/siwx/callback/:provider` where `:provider` is one of `phantom`, `solflare`, or `backpack`.
-
-### Generating Keypairs
-
-To use native callbacks, generate a keypair for encrypting wallet responses:
-
-```ts title="generate-keypair.ts"
-import nacl from "tweetnacl";
-import bs58 from "bs58";
-
-const keypair = nacl.box.keyPair();
-console.log("Public Key:", bs58.encode(keypair.publicKey));
-console.log("Private Key:", bs58.encode(keypair.secretKey));
-```
+<Callout type="warning">
+  The signed `message` must contain the `nonce` returned by `siwx.nonce`. The server rejects any verify request whose message does not include the issued nonce, which prevents replaying a previously signed message. Sign the `nonce` directly (as in the examples above) or embed it in a structured message (for example a SIWE/CAIP-122 message).
+</Callout>
 
 ## Configuration Options
 
 ### Server Options
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `domain` | `string` | Required | The domain name of your application |
-| `emailDomainName` | `string` | Base URL domain | Email domain for user accounts |
-| `anonymous` | `boolean` | `true` | Allow sign-ins without email |
-| `statement` | `string` | `"Sign in with your wallet"` | Message statement shown to users |
-| `supportedChains` | `ChainType[]` | `["evm", "solana"]` | Supported blockchain types |
-| `getNonce` | `() => Promise<string>` | Required | Nonce generation function |
-| `verifyMessage` | `(args) => Promise<boolean>` | Required | Signature verification function |
-| `nameLookup` | `(args) => Promise<NameLookupResult>` | - | Optional name service lookup |
-| `callback` | `NativeCallbackOptions` | - | Native wallet callback configuration |
+| Option            | Type                                  | Default                      | Description                         |
+| ----------------- | ------------------------------------- | ---------------------------- | ----------------------------------- |
+| `domain`          | `string`                              | Required                     | The domain name of your application |
+| `emailDomainName` | `string`                              | Base URL domain              | Email domain for user accounts      |
+| `anonymous`       | `boolean`                             | `true`                       | Allow sign-ins without email        |
+| `statement`       | `string`                              | `"Sign in with your wallet"` | Message statement shown to users    |
+| `supportedChains` | `ChainType[]`                         | `["evm", "solana"]`          | Supported blockchain types          |
+| `getNonce`        | `() => Promise<string>`               | Required                     | Nonce generation function           |
+| `verifyMessage`   | `(args) => Promise<boolean>`          | Required                     | Signature verification function     |
+| `nameLookup`      | `(args) => Promise<NameLookupResult>` | -                            | Optional name service lookup        |
 
 ### Client Options
 
@@ -371,8 +337,9 @@ The SIWX plugin uses the standard `account` table with the following format for 
 ```
 
 Examples:
-- EVM: `evm:1:0x1234567890AbCdEf1234567890aBcDeF12345678`
-- Solana: `solana:mainnet-beta:DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK`
+
+* EVM: `evm:1:0x1234567890AbCdEf1234567890aBcDeF12345678`
+* Solana: `solana:mainnet-beta:DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK`
 
 The `providerId` is always `"siwx"`.
 

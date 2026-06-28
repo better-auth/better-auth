@@ -59,8 +59,6 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@noble/hashes": "^2.0.0",
-    "bs58": "^6.0.0",
-    "tweetnacl": "^1.0.3",
     "zod": "^4.1.12"
   },
   "peerDependencies": {

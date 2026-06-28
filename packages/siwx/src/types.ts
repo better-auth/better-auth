@@ -6,8 +6,6 @@ export type SignatureType =
 	| "solana:ed25519"
 	| string;
 
-export type NativeWalletProvider = "phantom" | "solflare" | "backpack";
-
 export interface CacaoHeader {
 	t: "caip122";
 }
@@ -57,32 +55,4 @@ export interface NameLookupArgs {
 export interface NameLookupResult {
 	name?: string | undefined;
 	avatar?: string | undefined;
-}
-
-export interface NativeCallbackOptions {
-	/**
-	 * Base58-encoded public key for the app
-	 * Used by wallet apps to encrypt their response
-	 */
-	appPublicKeyBase58: string;
-	/**
-	 * Base58-encoded private key for the app
-	 * Used to decrypt wallet responses
-	 */
-	appPrivateKeyBase58: string;
-	/**
-	 * Allowed native wallet providers
-	 * @default ["phantom", "solflare", "backpack"]
-	 */
-	providers?: NativeWalletProvider[] | undefined;
-	/**
-	 * URL to redirect to on successful authentication
-	 * @default "/?success=true"
-	 */
-	successRedirect?: string | undefined;
-	/**
-	 * URL to redirect to on authentication error
-	 * @default "/login?success=false"
-	 */
-	errorRedirect?: string | undefined;
 }
