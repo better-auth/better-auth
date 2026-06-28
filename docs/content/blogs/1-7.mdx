@@ -43,8 +43,8 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | Social login, generic OAuth, One Tap, or SSO   | New login-client behavior, especially generic OAuth, identity-token verification, and Google One Tap |
 | `@better-auth/oauth-provider`                  | The largest set of changes: resources, DPoP, back-channel logout, `max_age`, and safer OAuth checks  |
 | MCP                                            | A package move to `@better-auth/mcp`, new imports, new endpoint paths, and a schema migration        |
-| SAML or SCIM                                   | Node 20 or newer for SAML, safer SAML and SSO checks, and a manual SCIM ownership cleanup            |
-| Two-factor auth, magic links, or email OTP     | More limits for wrong codes and safer handling for unverified credentials                            |
+| SAML or SCIM                                   | Safer SAML and SSO checks, and a manual SCIM ownership cleanup                                       |
+| Magic links or email OTP                       | Safer handling for accounts whose email was never confirmed                                          |
 | Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                      |
 | Custom proxy or TLS termination                | Check how your app computes its public origin before relying on DPoP or identity-provider redirects  |
 
@@ -68,13 +68,11 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | DPoP changes token verification                  | Rename the bearer-token helper, use the DPoP request verifier where needed, and run the schema migration. |
 | Back-channel logout revokes session-bound tokens | Run the schema migration and expect tokens tied to a signed-out session to become inactive.               |
 | Generic OAuth uses the social-provider path      | Update sign-in calls, link calls, callback URLs, and client plugins.                                      |
-| One Tap needs a Google client ID                 | Set `oneTap({ clientId })` or `socialProviders.google.clientId`.                                          |
 | The old `oidcProvider` plugin is removed         | Move provider setups to `@better-auth/oauth-provider`.                                                    |
 | MCP moves to `@better-auth/mcp`                  | Update imports, endpoint paths, helper names, config shape, and schema.                                   |
-| SAML defaults and config change                  | Confirm Node 20 or newer, update removed fields, update callback URLs, and review IdP-initiated flows.    |
+| SAML defaults and config change                  | Update removed fields, update callback URLs, and review IdP-initiated flows.                              |
 | SCIM ownership becomes permanent                 | Reclaim old personal SCIM connections before regenerating their tokens.                                   |
 | Proxy headers are not trusted by default         | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                        |
-| Two-factor account lockout adds columns          | Run the schema migration if you use two-factor authentication.                                            |
 | Custom adapters and storage need atomic methods  | Implement `incrementOne`, `increment`, or `consume`, depending on what you provide.                       |
 | Captcha rules match full paths                   | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                 |
 | Electron requires S256 PKCE                      | Upgrade the Electron client and server together.                                                          |
@@ -85,15 +83,9 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `max_age` is enforced                                           | Clients that ask for fresh login now get it instead of being ignored.                          |
 | Granted scopes are preserved                                    | Later logins no longer erase scopes granted earlier.                                           |
-| Provider profile sync respects `input: false`                   | OAuth profile values no longer fill user fields that are marked server-only.                   |
-| Google hosted-domain checks are applied to One Tap              | One Tap now follows the configured `hd` policy before creating a session.                      |
-| SSO verifies every listed domain                                | Every comma-separated domain on a provider must prove ownership.                               |
-| SAML validates audience, destination, and bearer recipient      | Responses that do not match the Service Provider are rejected before session creation.         |
-| SAML Single Logout accepts only http(s) URLs                    | IdP logout form actions using schemes like `javascript:` or `data:` are rejected.              |
 | SCIM writes are safer                                           | SCIM honors `active`, scopes deletes to the SCIM account, and rejects duplicate-email updates. |
 | Server-side OAuth requests refuse redirects                     | Token, introspection, and JWKS requests no longer follow provider redirects.                   |
 | Magic-link and email-OTP sign-in can clear unproven credentials | Proven mailbox control wins over an unconfirmed password on the same account.                  |
-| Two-factor challenges cap wrong codes                           | Wrong TOTP and backup-code guesses are limited per sign-in challenge and per account.          |
 
 ### New additions
 
@@ -255,13 +247,11 @@ The generic OAuth plugin now uses the same path as built-in social providers. PK
 
 This changes the API you call and the callback URL you configure. The upgrade guide has the exact replacement steps.
 
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Google One Tap signs in the right person
 
-Google One Tap now verifies that the token is meant for your app and signs in the user who owns the Google account. Before, it matched on email, so a Google account could sign in a different user who happened to share that email.
-
-A Google client ID is now required for One Tap. Hosted-domain restrictions also apply before One Tap creates a session, including the `hd: "*"` case for any Google Workspace hosted domain.
+Google One Tap now signs in the user who owns the Google account by validating the identity token's subject. Before, it matched on email, so a Google account could sign in a different user who happened to share that email.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -278,14 +268,6 @@ Better Auth now keeps the scopes already on the account across re-login and toke
 Point a generic OAuth provider at a discovery URL and Better Auth now verifies the provider identity token against that provider's published keys. Mobile and single-page apps can also use identity-token login through the same verifier.
 
 PayPal now binds userinfo to the verified ID token subject during social sign-in. Custom providers should move from a `verifyIdToken` method to an `idToken` config.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### Provider profile fields respect server-only fields
-
-OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user.
-
-If you used `mapProfileToUser` to fill `input: false` fields, move that assignment into server-side provisioning code.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 
@@ -343,11 +325,11 @@ The management endpoints now always return the certificate as a list, so code re
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-### SAML responses must match your app
+### SAML rejects unsolicited and replayed responses
 
-Several SAML checks that were not working before now work. Better Auth rejects responses whose audience, bearer recipient, or destination does not match the configured Service Provider. Unsolicited IdP-initiated logins are also off by default.
+Unsolicited IdP-initiated SAML logins are now off by default, and responses are validated for `InResponseTo` and `SessionIndex` so a response cannot be replayed against a session it was not issued for.
 
-The underlying SAML library is upgraded to fix a high-severity vulnerability and now requires Node 20 or newer. Set `allowIdpInitiated: true` only if you depend on provider-started SAML login.
+Set `allowIdpInitiated: true` only if you depend on provider-started SAML login.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -366,12 +348,6 @@ SCIM gains durable group resources with membership, roles, and lifecycle endpoin
 A security fix ships with it: a personal SCIM connection is now always owned by the user who created it. Before, ownership was optional, and an unowned connection could be read or deleted by any signed-in user.
 
 This needs a migration and one manual cleanup. Connections created before the upgrade need to be deleted or re-owned before you regenerate their tokens.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### SSO domain verification checks every domain
-
-When an SSO provider lists multiple comma-separated domains, every listed domain must now publish the verification TXT record before the provider is marked verified. This prevents one verified domain from covering another unverified domain in the same provider config.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -454,17 +430,14 @@ Normal Better Auth users get the fix automatically:
 * **One-time tokens** for password reset, email and phone codes, device codes, magic links, and more can no longer be used twice, even by simultaneous requests.
 * **Team limits** are enforced correctly under load.
 * **Rate limits** are checked and counted in a single step.
-* **Breached-password checks** cover more password-setting routes by default.
 
 If you wrote a custom database adapter or storage backend, this introduces required methods. See the upgrade guide.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
-### Two-factor and passwordless hardening
+### Passwordless sign-in clears unproven credentials
 
-Two-factor verification now has both challenge-level and account-level limits. TOTP and backup-code challenges stop after five wrong codes, and the account-level lockout applies across TOTP, email OTP, and backup codes. By default, an account locks for 15 minutes after 10 consecutive failed verifications.
-
-Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth when an account email had never been confirmed. If that account had an unproven password, Better Auth removes the password and revokes existing sessions before signing the user in.
+Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth when an account email had never been confirmed. If that account had an unproven password or other linked credentials, Better Auth removes them and revokes existing sessions before signing the user in.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 
