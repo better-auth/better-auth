@@ -18,6 +18,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML, SSO domain verification, or SCIM                            | [Enterprise SSO](#enterprise-sso)                                               |
+| Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
 | Uses magic links or email OTP                                          | [Passwordless security](#passwordless-security)                                 |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
@@ -49,6 +50,8 @@ npx auth@latest migrate
 
 If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
 
+The `auth` CLI now requires Node.js 22.12 or newer to run.
+
 These features change the schema:
 
 | Feature                    | What it adds                                              | Converts data for you?   |
@@ -60,6 +63,7 @@ These features change the schema:
 | Back-channel logout        | Logout-URL and revoked columns                            | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables | Not needed               |
 | SCIM ownership             | A permanent owner column                                  | **No, reclaim old rows** |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns | Not needed               |
 
 The SCIM reclaim is the one manual data step. Plan for it before you cut over.
 
@@ -139,6 +143,22 @@ A signed-assertion login setup, also called private-key JWT, is now checked when
 
 **What to do:** fix any signing setup whose declared algorithm disagrees with the key. Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest`.
 
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `generateState()` signature changed
+
+The public `generateState()` helper now takes an options object instead of positional arguments.
+
+**What to do:** if you call `generateState()` directly, replace `generateState(c, link, additionalData)` with the options form `generateState(c, options)`.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### OAuth callback error code renamed
+
+The OAuth callback redirect error value `email_doesn't_match` is renamed `email_does_not_match`.
+
+**What to do:** if you read this error code from the callback redirect, update the string to `email_does_not_match`.
+
 ***
 
 ## As an identity provider
@@ -193,6 +213,30 @@ When a session ends, the access tokens tied to it are now revoked. They read as 
 Your custom ID-token claims can no longer set protocol claims that the standard reserves for the server: issuer, subject, audience, expiry, nonce, session binding, `auth_time`, `acr`, `amr`, and `azp`. Your own namespaced claims still appear. ID tokens also report `acr: "0"` rather than a vendor-specific value.
 
 **What to do:** if a `customIdTokenClaims` callback, an extension claim contributor, or a per-issuance `idTokenClaims` set one of those reserved claims, that value is now ignored. Move the data into a namespaced claim of your own, or rely on the server's value.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### ID tokens drop profile and email scope claims
+
+ID tokens issued through the authorization-code flow no longer carry the profile and email scope claims. Those claims are available from the UserInfo endpoint.
+
+**What to do:** read profile and email claims from UserInfo instead of the ID token.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `jwt.sign` callbacks must match the configured alg
+
+A custom `jwt.sign` callback is rejected when its algorithm differs from `keyPairConfig.alg` during ID-token issuance.
+
+**What to do:** align your custom signing algorithm with `keyPairConfig.alg`.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `/oauth2/revoke` rejects valid JWT access tokens
+
+Revoking a still-valid JWT access token now returns `400 unsupported_token_type`.
+
+**What to do:** revoke refresh tokens or opaque access tokens; do not call revoke on JWT access tokens.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -314,6 +358,42 @@ SCIM user writes now honor the `active` attribute, and non-organization SCIM del
 
 **What to do:** if your SCIM client sends `active: false`, Better Auth now deactivates the user through the admin plugin and revokes their sessions. If your SCIM client changes emails, handle `409` conflicts. Honoring `active` requires the admin plugin.
 
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### SCIM connections are scoped to an organization
+
+Organization SCIM connections now require `organizationId`, add a `providerKey` column, and drop the old `userId` column. The `defaultSCIM` option becomes `staticProviders`, `trustedDomains` is removed, and provider IDs are namespaced per organization. This is separate from the personal-connection ownership change above.
+
+**What to do:** run the migration, set `organizationId` on organization connections, rename the `defaultSCIM` config to `staticProviders`, and remove `trustedDomains`.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `/sso/update-provider` rejects partial mappings
+
+Updating an SSO provider now rejects a partial OIDC or SAML mapping object.
+
+**What to do:** send a complete mapping object when you call `/sso/update-provider`.
+
+***
+
+## Stripe
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Organization subscriptions require the organization plugin
+
+`referenceMiddleware` now rejects organization-scoped subscriptions when the organization plugin is absent.
+
+**What to do:** add the organization plugin if you use organization-scoped Stripe subscriptions.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `onSubscriptionCancel` event is required
+
+The `event` parameter on the `onSubscriptionCancel` callback is now required.
+
+**What to do:** update your `onSubscriptionCancel` callback to expect a non-optional `event`.
+
 ***
 
 ## Behind a proxy
@@ -375,6 +455,22 @@ Rate-limit storage now needs a single `consume(key, rule)` method that checks an
 
 **What to do:** replace `get` and `set` in custom rate-limit storage with `consume`.
 
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Default Drizzle schema uses singular relation keys
+
+The default Drizzle schema generator now emits singular relation keys.
+
+**What to do:** regenerate your Drizzle schema and review the relation keys.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `getIp` is renamed `getIP`
+
+The public `getIp` export is renamed `getIP`.
+
+**What to do:** update imports of the IP helper to `getIP`.
+
 ***
 
 ## Captcha
@@ -407,6 +503,14 @@ These do not need action for most setups, but they change what you see.
 
 * **Two-factor `enableTwoFactor` response:** it now accepts a `method` of `"otp"` or `"totp"` (default `"totp"`) and returns that method in the response. `totpURI` and backup codes are present only for `"totp"`. The `skipVerificationOnEnable` option still works.
 * **Safer OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
+* **userinfo rejects bad tokens:** an invalid access token at the userinfo endpoint returns `401 invalid_token` with a `WWW-Authenticate` header.
+* **OAuth authorize error redirect:** a missing `response_type` now redirects the error to the verified client `redirect_uri` instead of a generic error.
+* **Drizzle affected-row validation:** the Drizzle adapter throws on an invalid affected-row count instead of returning `0`.
+* **`organization.updateTeam` immutable fields:** `id`, `createdAt`, and `updatedAt` are no longer accepted in the request body.
+* **`updateMemberRole` ordering:** role-existence validation now runs after authorization checks.
+* **CLI `generate --output` to a directory:** picks an adapter-specific default filename.
+* **Generated schema and disabled migrations:** references to migration-disabled models are omitted.
+* **Cookie-cache session binding:** the cached session is now tied to the `session_token` cookie.
 
 ***
 
