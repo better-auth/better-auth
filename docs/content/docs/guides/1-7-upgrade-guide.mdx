@@ -18,7 +18,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML, SSO domain verification, or SCIM                            | [Enterprise SSO](#enterprise-sso)                                               |
-| Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
+| Uses magic links or email OTP                                          | [Passwordless security](#passwordless-security)                                 |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
 Each change uses one label.
@@ -37,7 +37,7 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 The upgrade command handles package updates. The database needs more care. A few 1.7 features add or change tables, and some also need a manual data step.
 
 <Callout type="warn">
-  Run the schema migration before deploying 1.7 if any changed feature applies to your project. If you use SAML, confirm your runtime is Node 20 or newer before you cut over.
+  Run the schema migration before deploying 1.7 if any changed feature applies to your project.
 </Callout>
 
 Use the CLI migration commands:
@@ -59,7 +59,6 @@ These features change the schema:
 | Refresh-token reuse window | A cached replay-response column on refresh tokens         | Not needed               |
 | Back-channel logout        | Logout-URL and revoked columns                            | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables | Not needed               |
-| Two-factor account lockout | Failed-attempt and lockout columns on `twoFactor`         | Not needed               |
 | SCIM ownership             | A permanent owner column                                  | **No, reclaim old rows** |
 
 The SCIM reclaim is the one manual data step. Plan for it before you cut over.
@@ -98,13 +97,13 @@ Each provider used to verify its own identity tokens. Now there is one verifier,
 
 **What to do:** a custom provider should replace its `verifyIdToken` method with an `idToken` config. PayPal no longer accepts identity-token login; it uses its access token instead. Switch PayPal identity-token login to the redirect flow. The built-in provider options are unchanged.
 
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
+<HeaderLabel variant="default">Behavior</HeaderLabel>
 
-### Google One Tap needs a client ID
+### Google One Tap signs in the right person
 
-One Tap now checks that the token is meant for your app and signs in the user who actually owns the Google account. It also applies the configured Google hosted-domain restriction before creating a session.
+One Tap now signs in the user who actually owns the Google account by validating the identity token's subject, rather than matching on email.
 
-**What to do:** set a Google client ID on `oneTap({ clientId })` or `socialProviders.google.clientId`. Without one, One Tap server callbacks now fail. If you use hosted-domain restrictions, check that One Tap and normal Google sign-in both use the same `hd` policy. Use `hd: "*"` only when you want to allow any Google Workspace hosted domain while still rejecting accounts with no hosted-domain claim.
+**What to do:** nothing to configure. If you relied on email-based matching, expect One Tap to bind to the Google account subject instead.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -131,14 +130,6 @@ If you tracked the 1.7 prereleases, note that an early beta moved scopes into a 
 A generic OAuth provider configured with a discovery URL now verifies the provider identity token. A token that fails verification is rejected.
 
 **What to do:** if a discovery provider returned a token that could not be verified and your app trusted it anyway, the login is now rejected. Confirm the provider's published keys, issuer, and audience.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### Provider profile fields respect `input: false`
-
-OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user.
-
-**What to do:** if you used `mapProfileToUser` to fill fields marked `input: false`, move that assignment into server-side provisioning code that you control.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -283,15 +274,13 @@ The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clien
 
 ## Enterprise SSO
 
-The SAML changes upgrade the underlying library, which requires **Node 20 or newer**.
-
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
 ### IdP-initiated SAML is off by default
 
-Unsolicited logins started by the identity provider are now disabled by default, and several SAML validation checks now work. Better Auth rejects SAML responses whose audience, bearer recipient, or response destination does not match the configured Service Provider.
+Unsolicited logins started by the identity provider are now disabled by default. SAML responses are also validated for `InResponseTo` and `SessionIndex`, so a response cannot be replayed against a session it was not issued for.
 
-**What to do:** set `saml.allowIdpInitiated: true` to restore the old behavior if you depend on it. Make sure your configured audience, ACS URL, and destination match what the identity provider sends, or previously accepted logins may now be rejected.
+**What to do:** set `saml.allowIdpInitiated: true` to restore the old behavior if you depend on it.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -316,22 +305,6 @@ The callback URL is derived automatically, service-provider metadata is generate
 A personal SCIM connection is now always owned by the user who created it, and ownership can no longer be turned off.
 
 **What to do:** run a migration to make the owner column permanent. Connections created before the upgrade have no owner and become unreachable. Reclaim them in the database: delete connection rows that have neither an organization nor an owner, or set the owner, then regenerate their tokens. Organization connections are not affected.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### SSO domain verification checks every listed domain
-
-When a provider lists multiple comma-separated domains, every listed domain must now publish the verification TXT record before the provider is marked verified.
-
-**What to do:** add the verification TXT record to every domain listed on each SSO provider. The verifier accepts either the raw verification token or the existing `identifier=value` format.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### SAML Single Logout accepts only http(s) URLs
-
-SAML Single Logout now rejects IdP POST URLs that use non-http(s) schemes, such as `javascript:` or `data:`.
-
-**What to do:** use an `http` or `https` Single Logout URL.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -402,14 +375,6 @@ Rate-limit storage now needs a single `consume(key, rule)` method that checks an
 
 **What to do:** replace `get` and `set` in custom rate-limit storage with `consume`.
 
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
-
-### Two internal helpers changed
-
-`findAccount(accountId)` is removed because an account ID is not unique on its own. `deleteSessions` is split into `deleteUserSessions(userId)` and `deleteSessions(tokens)`.
-
-**What to do:** replace `findAccount` with a user- or provider-scoped lookup. Replace `deleteSessions(userId)` with `deleteUserSessions(userId)`, and pass session tokens to `deleteSessions`.
-
 ***
 
 ## Captcha
@@ -424,29 +389,13 @@ Captcha rules now match full request paths or explicit wildcards, which closes a
 
 ***
 
-## Two-factor and passwordless security
-
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
-
-### Two-factor account lockout adds schema fields
-
-Two-factor verification now has an account-level lockout. TOTP, email OTP, and backup codes share one failed-attempt counter, and a successful verification resets it. By default, an account locks for 15 minutes after 10 consecutive failed verifications.
-
-**What to do:** run `generate` and `migrate` if you use two-factor authentication. This adds `failedVerificationCount` and `lockedUntil` to the `twoFactor` table. Configure the behavior with `twoFactor({ accountLockout: { enabled, maxFailedAttempts, durationSeconds } })`.
-
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### Two-factor challenges cap wrong codes
-
-TOTP and backup-code verification now stop after five wrong codes per sign-in challenge. Once the limit is reached, Better Auth returns `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE`, and the user must start a new sign-in challenge.
-
-**What to do:** make sure your UI can show that error and send the user back to sign in. During a rolling deploy, two-factor challenges issued by the previous version may ask the user to sign in again; this clears once the deploy completes.
+## Passwordless security
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Magic-link and email-OTP sign-in can clear unproven credentials
 
-Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth for an account whose email had never been confirmed. If that account had an unproven password, Better Auth removes the password and revokes existing sessions before signing the user in.
+Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth for an account whose email had never been confirmed. If that account had an unproven password or other linked credentials, Better Auth removes them and revokes existing sessions before signing the user in.
 
 **What to do:** if a user signed up with email and password but first signs in through a magic link or email OTP instead of confirming the verification email, ask them to set a new password through password reset.
 
@@ -457,9 +406,7 @@ Magic-link and email-OTP sign-in now treat proven mailbox control as the source 
 These do not need action for most setups, but they change what you see.
 
 * **Two-factor `enableTwoFactor` response:** it now accepts a `method` of `"otp"` or `"totp"` (default `"totp"`) and returns that method in the response. `totpURI` and backup codes are present only for `"totp"`. The `skipVerificationOnEnable` option still works.
-* **Breached-password checks:** more password-setting routes check breached-password lists by default, including email and phone reset and the admin create-and-set routes.
 * **Safer OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
-* **Adapter peer versions:** `drizzle-orm` and `kysely` are narrowed to patched ranges. They stay optional, so installs do not fail; upgrade them alongside the adapter.
 
 ***
 
@@ -475,8 +422,6 @@ npx auth@latest migrate
 Then complete the manual data step if it applies:
 
 * **Reclaim SCIM connections:** delete or re-own connection rows that have neither an organization nor an owner.
-
-Confirm you are on **Node 20 or newer** if you use SAML.
 
 ***
 
