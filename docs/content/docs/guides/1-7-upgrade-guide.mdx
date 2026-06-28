@@ -19,7 +19,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML, SSO domain verification, or SCIM                            | [Enterprise SSO](#enterprise-sso)                                               |
 | Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
-| Uses magic links or email OTP                                          | [Passwordless security](#passwordless-security)                                 |
+| Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
 Each change uses one label.
@@ -485,7 +485,15 @@ Captcha rules now match full request paths or explicit wildcards, which closes a
 
 ***
 
-## Passwordless security
+## Two-factor and passwordless security
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Two-factor `enableTwoFactor` returns a discriminated response
+
+`enableTwoFactor` now accepts a `method` of `"otp"` or `"totp"` (default `"totp"`) and returns that method in the response. `totpURI` and backup codes are present only for `"totp"`. The `skipVerificationOnEnable` option still works.
+
+**What to do:** update callers that read `totpURI` or backup codes to branch on the returned `method`.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -501,7 +509,6 @@ Magic-link and email-OTP sign-in now treat proven mailbox control as the source 
 
 These do not need action for most setups, but they change what you see.
 
-* **Two-factor `enableTwoFactor` response:** it now accepts a `method` of `"otp"` or `"totp"` (default `"totp"`) and returns that method in the response. `totpURI` and backup codes are present only for `"totp"`. The `skipVerificationOnEnable` option still works.
 * **Safer OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
 * **userinfo rejects bad tokens:** an invalid access token at the userinfo endpoint returns `401 invalid_token` with a `WWW-Authenticate` header.
 * **OAuth authorize error redirect:** a missing `response_type` now redirects the error to the verified client `redirect_uri` instead of a generic error.
