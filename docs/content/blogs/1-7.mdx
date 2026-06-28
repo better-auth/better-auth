@@ -62,37 +62,38 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 
 ### Breaking changes
 
-| Change                                                | What to do                                                                                                                                         |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protected resources replace `validAudiences`          | Move each audience into `resources`, link clients to resources, and run the schema migration.                                                      |
-| DPoP changes token verification                       | Rename the bearer-token helper, use the DPoP request verifier where needed, and run the schema migration.                                          |
-| Back-channel logout revokes session-bound tokens      | Run the schema migration and expect tokens tied to a signed-out session to become inactive.                                                        |
-| Generic OAuth uses the social-provider path           | Update sign-in calls, link calls, callback URLs, and client plugins.                                                                               |
-| The old `oidcProvider` plugin is removed              | Move provider setups to `@better-auth/oauth-provider`.                                                                                             |
-| MCP moves to `@better-auth/mcp`                       | Update imports, endpoint paths, helper names, config shape, and schema.                                                                            |
-| SAML defaults and config change                       | Update removed fields, update callback URLs, and review IdP-initiated flows.                                                                       |
-| SCIM ownership becomes permanent                      | Reclaim old personal SCIM connections before regenerating their tokens.                                                                            |
-| Proxy headers are not trusted by default              | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
-| Custom adapters and storage need atomic methods       | Implement `incrementOne`, `increment`, or `consume`, depending on what you provide.                                                                |
-| Captcha rules match full paths                        | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
-| Electron requires S256 PKCE                           | Upgrade the Electron client and server together.                                                                                                   |
-| OIDC ID tokens drop profile/email scope claims        | Read profile and email claims from the UserInfo endpoint, not the ID token.                                                                        |
-| Synchronous OAuth2 request builders removed           | Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async equivalents. |
-| `jwt.sign` callbacks must match `keyPairConfig.alg`   | Align your custom ID-token signing alg with the configured key pair, or issuance is rejected.                                                      |
-| Stricter Dynamic Client Registration validation       | Send reciprocal `response_types`/`grant_types` (a `code` response type requires the `authorization_code` grant).                                   |
-| `/oauth2/revoke` rejects valid JWT access tokens      | Expect `400 unsupported_token_type`; revoke refresh or opaque tokens instead.                                                                      |
-| OAuth callback error code renamed                     | Update handling of `email_doesn't_match` to `email_does_not_match`.                                                                                |
-| `generateState()` signature changed                   | Call it with the new options object instead of positional `(c, link, additionalData)`.                                                             |
-| SCIM connections are scoped to an organization        | `organizationId` is required, `userId` is removed, `defaultSCIM` becomes `staticProviders`, `trustedDomains` is removed; run the migration.        |
-| SSO SAML config registration changes                  | Provide a signing-cert source and expect the full lowercased ACS error-redirect code, not the short alias.                                         |
-| `/sso/update-provider` rejects partial mappings       | Send a complete OIDC/SAML mapping object, not a partial one.                                                                                       |
-| auth CLI requires Node.js 22.12+                      | Upgrade the Node.js used to run the CLI.                                                                                                           |
-| New organization columns                              | Run the migration for `team.memberCount` and `teamMember.membershipKey`.                                                                           |
-| Stripe org subscriptions need the organization plugin | `referenceMiddleware` rejects org-scoped subscriptions when the organization plugin is absent.                                                     |
-| Default Drizzle schema uses singular relation keys    | Regenerate and review your Drizzle schema relations.                                                                                               |
-| Stripe `onSubscriptionCancel` event is required       | Update the callback to expect a non-optional `event`.                                                                                              |
-| Two-factor OTP-only enablement                        | `enableTwoFactor` takes a new `method` param and returns a discriminated response; update callers.                                                 |
-| Public export `getIp` renamed to `getIP`              | Update imports of the IP helper.                                                                                                                   |
+| Change                                                  | What to do                                                                                                                                         |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protected resources replace `validAudiences`            | Move each audience into `resources`, link clients to resources, and run the schema migration.                                                      |
+| DPoP changes token verification                         | Rename the bearer-token helper, use the DPoP request verifier where needed, and run the schema migration.                                          |
+| Back-channel logout revokes session-bound tokens        | Run the schema migration and expect tokens tied to a signed-out session to become inactive.                                                        |
+| Generic OAuth uses the social-provider path             | Update sign-in calls, link calls, callback URLs, and client plugins.                                                                               |
+| Custom social providers use one identity-token verifier | Replace a provider's `verifyIdToken` method with an `idToken` config.                                                                              |
+| The old `oidcProvider` plugin is removed                | Move provider setups to `@better-auth/oauth-provider`.                                                                                             |
+| MCP moves to `@better-auth/mcp`                         | Update imports, endpoint paths, helper names, config shape, and schema.                                                                            |
+| SAML defaults and config change                         | Update removed fields, update callback URLs, and review IdP-initiated flows.                                                                       |
+| SCIM ownership becomes permanent                        | Reclaim old personal SCIM connections before regenerating their tokens.                                                                            |
+| Proxy headers are not trusted by default                | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
+| Custom adapters and storage need atomic methods         | Implement `incrementOne`, `increment`, or `consume`, depending on what you provide.                                                                |
+| Captcha rules match full paths                          | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
+| Electron requires S256 PKCE                             | Upgrade the Electron client and server together.                                                                                                   |
+| OIDC ID tokens drop profile/email scope claims          | Read profile and email claims from the UserInfo endpoint, not the ID token.                                                                        |
+| Synchronous OAuth2 request builders removed             | Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async equivalents. |
+| `jwt.sign` callbacks must match `keyPairConfig.alg`     | Align your custom ID-token signing alg with the configured key pair, or issuance is rejected.                                                      |
+| Stricter Dynamic Client Registration validation         | Send reciprocal `response_types`/`grant_types` (a `code` response type requires the `authorization_code` grant).                                   |
+| `/oauth2/revoke` rejects valid JWT access tokens        | Expect `400 unsupported_token_type`; revoke refresh or opaque tokens instead.                                                                      |
+| OAuth callback error code renamed                       | Update handling of `email_doesn't_match` to `email_does_not_match`.                                                                                |
+| `generateState()` signature changed                     | Call it with the new options object instead of positional `(c, link, additionalData)`.                                                             |
+| SCIM connections are scoped to an organization          | `organizationId` is required, `userId` is removed, `defaultSCIM` becomes `staticProviders`, `trustedDomains` is removed; run the migration.        |
+| SSO SAML config registration changes                    | Provide a signing-cert source and expect the full lowercased ACS error-redirect code, not the short alias.                                         |
+| `/sso/update-provider` rejects partial mappings         | Send a complete OIDC/SAML mapping object, not a partial one.                                                                                       |
+| auth CLI requires Node.js 22.12+                        | Upgrade the Node.js used to run the CLI.                                                                                                           |
+| New organization columns                                | Run the migration for `team.memberCount` and `teamMember.membershipKey`.                                                                           |
+| Stripe org subscriptions need the organization plugin   | `referenceMiddleware` rejects org-scoped subscriptions when the organization plugin is absent.                                                     |
+| Default Drizzle schema uses singular relation keys      | Regenerate and review your Drizzle schema relations.                                                                                               |
+| Stripe `onSubscriptionCancel` event is required         | Update the callback to expect a non-optional `event`.                                                                                              |
+| Two-factor OTP-only enablement                          | `enableTwoFactor` takes a new `method` param and returns a discriminated response; update callers.                                                 |
+| Public export `getIp` renamed to `getIP`                | Update imports of the IP helper.                                                                                                                   |
 
 ### Behavior changes
 
@@ -286,7 +287,7 @@ When you ask a provider for permission to do something, that permission is a sco
 
 Better Auth now keeps the scopes already on the account across re-login and token refresh. Google also gets `includeGrantedScopes`, on by default, so each login carries forward the scopes already granted. Set it to `false` to request only the current login's scopes.
 
-<HeaderLabel variant="default">Behavior</HeaderLabel>
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
 
 ### Identity tokens are verified consistently
 
