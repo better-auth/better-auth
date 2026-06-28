@@ -351,7 +351,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						typeof attr.defaultValue === "string" &&
 						provider !== "mysql"
 					) {
-						fieldBuilder.attribute(`default("${attr.defaultValue}")`);
+						// Escape quotes and backslashes so the emitted Prisma default stays a
+						// valid string literal instead of a broken `@default("say "hi"")`.
+						fieldBuilder.attribute(
+							`default("${attr.defaultValue.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`,
+						);
 					} else if (
 						typeof attr.defaultValue === "boolean" ||
 						typeof attr.defaultValue === "number"
