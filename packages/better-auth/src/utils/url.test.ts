@@ -12,9 +12,6 @@ import {
 } from "./url";
 
 describe("validateProxyHeader (ReDoS guard)", () => {
-	// Access the internal function through getHostFromSource since validateProxyHeader
-	// is not exported directly.  A valid host header goes through the same path.
-
 	it("accepts valid hostnames", () => {
 		const valid = [
 			"example.com",
@@ -33,8 +30,6 @@ describe("validateProxyHeader (ReDoS guard)", () => {
 			const request = new Request("http://fallback.invalid/test", {
 				headers: { host },
 			});
-			// If the host validates, getHostFromSource returns it; otherwise falls
-			// back to the URL host "fallback.invalid".
 			expect(getHostFromSource(request)).toBe(host);
 		}
 	});
@@ -58,16 +53,6 @@ describe("validateProxyHeader (ReDoS guard)", () => {
 	});
 
 	it("rejects and completes quickly on a crafted ReDoS payload", () => {
-		// The old single combined regex
-		//   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]...)*$/
-		// has a nested quantifier structure that is vulnerable to catastrophic
-		// backtracking (ReDoS) in regex engines without backtracking optimizations.
-		// The replacement splits on '.' and validates each label independently,
-		// eliminating the cross-label ambiguity entirely.
-		//
-		// This test exercises a payload with many dot-separated labels where the
-		// final label is invalid (ends with '-'), which forces the engine to
-		// exhaustively try all partitions in the old code.
 		const malicious =
 			"a".repeat(60) + "-." + "b".repeat(60) + "-." + "c".repeat(60) + "-";
 
@@ -78,9 +63,7 @@ describe("validateProxyHeader (ReDoS guard)", () => {
 		const result = getHostFromSource(request);
 		const elapsed = Date.now() - start;
 
-		// Must reject the malicious host
 		expect(result).toBe("fallback.invalid");
-		// Must finish quickly — the new per-label validation is O(n)
 		expect(elapsed).toBeLessThan(500);
 	});
 });

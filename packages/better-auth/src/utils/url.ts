@@ -134,7 +134,6 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 		// Allow localhost variations
 		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
 
-		// Strip optional port before hostname validation
 		const portMatch = header.match(/^(.*):(\d{1,5})$/);
 		const hostPart = portMatch ? portMatch[1]! : header;
 		const portPart = portMatch ? portMatch[2]! : undefined;
