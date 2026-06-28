@@ -137,8 +137,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Decryption failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
@@ -161,8 +163,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Verification failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else {
 						// Decode compact format (or legacy base64-hmac)
@@ -192,8 +196,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (isValid) {
 								sessionDataPayload = parsed;
 							} else {
+								// HMAC verification failed, expire the invalid cookie and fall through
+								// to session_token DB validation. This handles scenarios like
+								// cross-subdomain cookie migrations where stale cookies may be present.
 								expireCookie(ctx, ctx.context.authCookies.sessionData);
-								return ctx.json(null);
 							}
 						}
 					}
@@ -464,8 +470,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 						);
 					}
-					const maxAge =
-						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+					const maxAge = ctx.context.sessionConfig.expiresIn;
 					await setSessionCookie(
 						ctx,
 						{
@@ -596,6 +601,27 @@ export const getSessionFromCtx = async <
 };
 
 /**
+ * Reads the session from the source that can authorize sensitive work.
+ *
+ * Stateful deployments must re-read the server-side session store because an
+ * earlier hook may have populated `ctx.context.session` from cookie cache.
+ * Stateless deployments keep the signed cookie as the session record.
+ */
+export const getAuthoritativeSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: GenericEndpointContext,
+) => {
+	if (!isStateful(ctx)) {
+		return getSessionFromCtx<U, S>(ctx);
+	}
+
+	ctx.context.session = null;
+	return getSessionFromCtx<U, S>(ctx, { disableCookieCache: true });
+};
+
+/**
  * The middleware forces the endpoint to require a valid session.
  */
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
@@ -612,12 +638,11 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
- * This middleware forces the endpoint to require a valid session and ignores cookie cache.
+ * This middleware forces the endpoint to require a valid authoritative session.
  * This should be used for sensitive operations like password changes, account deletion, etc.
- * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
  */
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session?.session) {
 		throw APIError.from("UNAUTHORIZED", {
 			message: "Unauthorized",

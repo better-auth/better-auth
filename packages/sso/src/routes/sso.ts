@@ -63,6 +63,15 @@ import {
 import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
+const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
+	"credential",
+	"email-otp",
+	"magic-link",
+	"phone-number",
+	"anonymous",
+	"siwe",
+] as const;
+
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
  * when set, otherwise falls back to `/sso/callback/:providerId`.
@@ -659,16 +668,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			// SSO provider ids share the account-linking provider namespace with
-			// social/OAuth providers. Reject ids that collide with a configured
-			// social provider, a trusted provider, or a reserved built-in id so a
-			// user-registered SSO provider can't be confused with one of them.
+			// SSO provider ids currently share the account-linking provider namespace.
+			// Reject collisions so a user-registered SSO provider cannot be confused
+			// with another account-producing provider.
+			// TODO(next): replace providerId account-link ownership with immutable
+			// SSO provider instance ids, then remove this cross-plugin slug coupling.
 			// Trust for SSO providers is established separately via
 			// verified domain ownership, never by this shared namespace.
 			const reservedProviderIds = new Set<string>([
-				"credential",
+				...BUILT_IN_ACCOUNT_PROVIDER_IDS,
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
 				...ctx.context.socialProviders.map((p) => p.id),
 				...ctx.context.trustedProviders,
+				...(options?.defaultSSO?.map((p) => p.providerId) ?? []),
 			]);
 			if (reservedProviderIds.has(body.providerId)) {
 				ctx.context.logger.warn(
@@ -678,6 +690,24 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message:
 						"This providerId is reserved and cannot be used for an SSO provider",
 				});
+			}
+
+			if (ctx.context.hasPlugin("scim")) {
+				const existingSCIMProvider = await ctx.context.adapter.findOne<{
+					id: string;
+				}>({
+					model: "scimProvider",
+					where: [{ field: "providerId", value: body.providerId }],
+				});
+				if (existingSCIMProvider) {
+					ctx.context.logger.warn(
+						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
+					);
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message:
+							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
+					});
+				}
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -1099,7 +1129,8 @@ export const signInSSO = (options?: SSOOptions) => {
 							(defaultProvider) => defaultProvider.providerId === providerId,
 						)
 					: options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.domain === domain,
+							(defaultProvider) =>
+								domain && domainMatches(domain, defaultProvider.domain),
 						);
 
 				if (matchingDefault) {

@@ -34,7 +34,9 @@ See the [session management](/docs/concepts/session-management) for more details
 Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (CSRF) attacks:
 
 1. **Avoid simple requests**
-   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
+   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. By default, Better Auth prefers non-simple requests for state-changing operations, typically by requiring a non-simple header or a `Content-Type` header of `application/json`.
+
+   Some routes intentionally accept `application/x-www-form-urlencoded` requests for progressive enhancement or protocol interoperability, including sign-in/sign-up email flows and some callback/token-style endpoints. Those routes rely on additional protections such as origin validation, Fetch Metadata checks where applicable, and protocol-specific state or nonce validation.
 
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
@@ -122,7 +124,9 @@ Disables **URL validation** against `trustedOrigins`, including:
 
 ## OAuth State and PKCE
 
-To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) in the database. The state helps prevent CSRF attacks, while PKCE protects against code injection threats. Once the OAuth process completes, these values are removed from the database.
+To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key for Code Exchange) using the configured state storage strategy. By default, the state payload is stored in verification storage and the state value is also persisted in a signed cookie for validation. When `storeStateStrategy` is set to `cookie`, the full state payload is encrypted into a short-lived cookie instead of creating a verification record.
+
+The state helps prevent CSRF attacks, while PKCE protects against code injection threats. After the OAuth callback is processed, Better Auth expires the relevant cookie and, when verification storage is used, deletes the stored verification record.
 
 ## Cookies
 
@@ -157,6 +161,21 @@ You can configure the IP address header in your Better Auth configuration:
 ```
 
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
+
+Behind a proxy chain, list your proxies in `trustedProxies` so Better Auth
+resolves the real client instead of the spoofable leftmost `X-Forwarded-For`
+token:
+
+```typescript
+{
+  advanced: {
+    ipAddress: {
+      // your proxies' addresses, not a broad private range that also covers clients
+      trustedProxies: ['192.0.2.10', '10.0.0.0/24']
+    }
+  }
+}
+```
 
 <Callout type="info">
   **Important**
@@ -278,6 +297,10 @@ You can also dynamically set the list of trusted origins by providing a function
 <Callout>
   **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
+
+## Outbound OAuth Requests
+
+During sign-in, Better Auth makes server-side requests to OAuth and OIDC provider endpoints: the token exchange, token refresh, token introspection, and key-set (JWKS) requests. These requests do not follow HTTP redirects. A conformant provider answers these endpoints with a direct response and never redirects, so standard integrations are unaffected. Refusing redirects keeps a provider endpoint from steering a server-side request to an unintended internal address.
 
 ## Email Enumeration Protection
 

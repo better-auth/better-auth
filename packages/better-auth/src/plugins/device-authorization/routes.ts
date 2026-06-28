@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -146,7 +152,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
-					userId: null,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -576,14 +582,15 @@ export const deviceVerify = createAuthEndpoint(
 			deviceCodeRecord.status === "pending"
 		) {
 			const claimedDeviceCodeRecord =
-				await ctx.context.adapter.update<DeviceCode>({
+				await ctx.context.adapter.incrementOne<DeviceCode>({
 					model: "deviceCode",
 					where: [
 						{ field: "id", value: deviceCodeRecord.id },
 						{ field: "status", value: "pending" },
 						{ field: "userId", operator: "eq", value: null },
 					],
-					update: { userId: session.user.id },
+					increment: {},
+					set: { userId: session.user.id },
 				});
 			if (claimedDeviceCodeRecord) {
 				deviceCodeRecord.userId = session.user.id;

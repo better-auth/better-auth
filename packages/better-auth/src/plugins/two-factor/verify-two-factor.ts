@@ -6,12 +6,18 @@ import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
 import {
+	DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS,
+	DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import type { UserWithTwoFactor } from "./types";
+import type {
+	TwoFactorOptions,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
@@ -135,6 +141,50 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				user,
 			},
 			key: signedTwoFactorCookie,
+			beginAttempt: async (allowedAttempts: number) => {
+				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
+				// Consume the precreated counter as the atomic race gate; a missing
+				// row means a lost race or an expired challenge.
+				const consumed = await ctx.context.internalAdapter
+					.consumeVerificationValue(identifier)
+					.catch(() => null);
+				if (!consumed) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+					);
+				}
+				const parsed = Number(consumed.value);
+				// A corrupt counter fails closed (treated as spent).
+				const attempts =
+					Number.isInteger(parsed) && parsed >= 0 ? parsed : allowedAttempts;
+				if (attempts >= allowedAttempts) {
+					// Budget spent: cancel the whole challenge so every factor must
+					// start a new sign-in, and clear the now-dead cookie.
+					await ctx.context.internalAdapter
+						.consumeVerificationValue(signedTwoFactorCookie)
+						.catch(() => {});
+					expireCookie(ctx, twoFactorCookie);
+					throw APIError.from(
+						"BAD_REQUEST",
+						TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+					);
+				}
+				const rearm = (count: number) =>
+					ctx.context.internalAdapter
+						.createVerificationValue({
+							value: `${count}`,
+							identifier,
+							expiresAt: verificationToken.expiresAt,
+						})
+						.catch(() => {});
+				return {
+					// recordFailure spends a slot; restore returns it on a server
+					// error. Both swallow write errors (fail closed).
+					recordFailure: () => rearm(attempts + 1),
+					restore: () => rearm(attempts),
+				};
+			},
 		};
 	}
 	return {
@@ -147,5 +197,107 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		invalid,
 		session,
 		key: `${session.user.id}!${session.session.id}`,
+		// Re-verification is already authenticated, so it carries no attempt cap.
+		beginAttempt: async (_allowedAttempts: number) => ({
+			recordFailure: async () => {},
+			restore: async () => {},
+		}),
 	};
+}
+
+function resolveAccountLockoutConfig(ctx: GenericEndpointContext) {
+	const options = ctx.context.getPlugin("two-factor")?.options as
+		| TwoFactorOptions
+		| undefined;
+	const lockout = options?.accountLockout;
+	return {
+		enabled: lockout?.enabled ?? true,
+		maxFailedAttempts:
+			lockout?.maxFailedAttempts ?? DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
+		durationMs:
+			(lockout?.durationSeconds ?? DEFAULT_ACCOUNT_LOCKOUT_DURATION_SECONDS) *
+			1000,
+	};
+}
+
+/**
+ * Reject the verification when the account is locked, and lazily clear an
+ * expired lock. The lock caps consecutive failed verifications per account,
+ * across challenges and factors (NIST SP 800-63B §5.2.2).
+ */
+export async function assertTwoFactorNotLocked(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled } = resolveAccountLockoutConfig(ctx);
+	if (!enabled || !twoFactor.lockedUntil) return;
+	const lockedUntil = new Date(twoFactor.lockedUntil);
+	if (lockedUntil.getTime() > Date.now()) {
+		throw APIError.from(
+			"TOO_MANY_REQUESTS",
+			TWO_FACTOR_ERROR_CODES.ACCOUNT_TEMPORARILY_LOCKED,
+		);
+	}
+	// Clear the expired lock, guarded on it still being expired, so a lock set
+	// by a concurrent request after this read is not wiped.
+	await ctx.context.adapter.incrementOne({
+		model: twoFactorTable,
+		where: [
+			{ field: "id", value: twoFactor.id },
+			{ field: "lockedUntil", operator: "lte", value: new Date() },
+		],
+		increment: {},
+		set: { failedVerificationCount: 0, lockedUntil: null },
+	});
+}
+
+/**
+ * Count one failed verification toward the account-level budget, and lock the
+ * account once the budget is spent. The increment is atomic, so concurrent
+ * failures cannot lose updates. It is unguarded so it still applies to a row
+ * whose counter is null or absent (a row created before the migration, or a
+ * document-store record predating the column), where a guarded comparison
+ * would never match.
+ */
+export async function recordTwoFactorFailure(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled, maxFailedAttempts, durationMs } =
+		resolveAccountLockoutConfig(ctx);
+	if (!enabled) return;
+	const updated = await ctx.context.adapter.incrementOne<TwoFactorTable>({
+		model: twoFactorTable,
+		where: [{ field: "id", value: twoFactor.id }],
+		increment: { failedVerificationCount: 1 },
+	});
+	if ((updated?.failedVerificationCount ?? 0) >= maxFailedAttempts) {
+		await ctx.context.adapter.update({
+			model: twoFactorTable,
+			where: [{ field: "id", value: twoFactor.id }],
+			update: { lockedUntil: new Date(Date.now() + durationMs) },
+		});
+	}
+}
+
+/**
+ * Clear the account-level failure budget after a successful verification, so the
+ * count tracks only consecutive failures. The write is unconditional: a snapshot
+ * read at the start of the request can miss a concurrent failure, so skipping it
+ * could leave the counter non-zero after a success.
+ */
+export async function resetTwoFactorFailures(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+): Promise<void> {
+	const { enabled } = resolveAccountLockoutConfig(ctx);
+	if (!enabled) return;
+	await ctx.context.adapter.update({
+		model: twoFactorTable,
+		where: [{ field: "id", value: twoFactor.id }],
+		update: { failedVerificationCount: 0, lockedUntil: null },
+	});
 }
