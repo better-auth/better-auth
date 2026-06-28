@@ -980,6 +980,107 @@ describe("siwx", async (it) => {
 		expect(receivedSignatureType).toBe("evm:eip191");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/7238#pullrequestreview-4588052958
+	 */
+	it("should return 400 (not 500) for a malformed EVM address", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_evm_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		const { error } = await client.siwx.nonce({
+			address: "0x1",
+			chainType: "evm",
+		});
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(400);
+		expect(error?.code).toBe("INVALID_EVM_ADDRESS");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/7238#pullrequestreview-4588052958
+	 */
+	it("should consume the nonce before running signature verification", async () => {
+		// The single-use nonce must be atomically consumed before the (slow,
+		// user-provided) signature verification runs. If it is only deleted
+		// afterwards, two concurrent requests can both read the same nonce and
+		// authenticate twice. Assert the nonce is already gone by the time
+		// verifyMessage is invoked.
+		let noncePresentDuringVerification: boolean | undefined;
+
+		let getContext: () => Promise<{
+			internalAdapter: {
+				findVerificationValue: (
+					identifier: string,
+				) => Promise<{ value: string } | null>;
+			};
+		}>;
+
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature, address, chainId }) {
+							const context = await getContext();
+							const existing =
+								await context.internalAdapter.findVerificationValue(
+									`siwx:evm:${chainId}:${address}`,
+								);
+							noncePresentDuringVerification = existing !== null;
+							return signature === "valid_evm_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		getContext = () => auth.$context as never;
+
+		await client.siwx.nonce({
+			address: evmAddress,
+			chainType: "evm",
+			chainId: "1",
+		});
+
+		const { error } = await client.siwx.verify({
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			signature: "valid_evm_signature",
+			address: evmAddress,
+			chainType: "evm",
+			chainId: "1",
+		});
+
+		expect(error).toBeNull();
+		expect(noncePresentDuringVerification).toBe(false);
+	});
+
 	it("should pass correct CACAO object to verifyMessage", async () => {
 		let receivedCacao: any;
 

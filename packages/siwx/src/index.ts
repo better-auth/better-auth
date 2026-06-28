@@ -37,8 +37,20 @@ const DEFAULT_SIGNATURE_TYPES: Record<ChainType, SignatureType> = {
 	solana: "solana:ed25519",
 };
 
+const EVM_ADDRESS_REGEX = /^0[xX][a-fA-F0-9]{40}$/;
+
 function normalizeAddress(chainType: ChainType, address: string): string {
 	if (chainType === "evm") {
+		// Validate before checksumming. toChecksumAddress assumes a 40 hex char
+		// body; a malformed address would otherwise throw a TypeError and surface
+		// as a 500 instead of a 400.
+		if (!EVM_ADDRESS_REGEX.test(address)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Invalid EVM address format",
+				status: 400,
+				code: "INVALID_EVM_ADDRESS",
+			});
+		}
 		return toChecksumAddress(address);
 	}
 	return address;
@@ -163,15 +175,18 @@ export const siwx = (options: SIWXPluginOptions) => {
 					const normalizedAddress = normalizeAddress(chainType, address);
 
 					try {
-						// Find stored nonce with chain type, chain ID, and address context
+						// Atomically consume the single-use nonce before any signature
+						// work or state mutation. The first concurrent request wins; every
+						// racer receives null, so the same nonce can never replay a login.
+						// Consuming up front (not after verification) also burns the record
+						// on a failed attempt and applies the built-in expiry gate.
 						const identifier = `siwx:${chainType}:${chainId}:${normalizedAddress}`;
 						const verification =
-							await ctx.context.internalAdapter.findVerificationValue(
+							await ctx.context.internalAdapter.consumeVerificationValue(
 								identifier,
 							);
 
-						// Ensure nonce is valid and not expired
-						if (!verification || new Date() > verification.expiresAt) {
+						if (!verification) {
 							throw new APIError("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid or expired nonce",
 								status: 401,
@@ -229,11 +244,6 @@ export const siwx = (options: SIWXPluginOptions) => {
 								code: "UNAUTHORIZED_INVALID_SIGNATURE",
 							});
 						}
-
-						// Clean up used nonce to prevent replay attacks
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							identifier,
-						);
 
 						const accountId = formatAccountId(
 							chainType,

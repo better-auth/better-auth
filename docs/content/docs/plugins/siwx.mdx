@@ -9,13 +9,27 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
 
 <Steps>
   <Step>
+    ### Install the plugin
+
+    First, install the plugin:
+
+    ```package-install
+    @better-auth/siwx
+    ```
+
+    <Callout>
+      If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+    </Callout>
+  </Step>
+
+  <Step>
     ### Add the Server Plugin
 
     Add the SIWX plugin to your auth configuration:
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { siwx } from "better-auth/plugins";
+    import { siwx } from "@better-auth/siwx";
 
     export const auth = betterAuth({
         plugins: [
@@ -73,7 +87,7 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
-    import { siwxClient } from "better-auth/client/plugins";
+    import { siwxClient } from "@better-auth/siwx/client";
 
     export const authClient = createAuthClient({
         plugins: [siwxClient()],
