@@ -1,5 +1,71 @@
 # better-auth
 
+## 1.6.22
+
+### Patch Changes
+
+- [#10239](https://github.com/better-auth/better-auth/pull/10239) [`c06a56d`](https://github.com/better-auth/better-auth/commit/c06a56d83a40bbaeac12d3a8b8b67e59f92a9110) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic-link and email-OTP sign-in now reset the credentials on an account whose email had never been confirmed. When verification resolves to such an account, any existing password on it is removed and its sessions are revoked before the user is signed in, so proven control of the mailbox is the source of truth for the account.
+
+  If you signed up with email and password but first signed in through a magic link or email OTP rather than confirming the verification email, your password is cleared and you will need to set a new one through password reset.
+
+- [#10240](https://github.com/better-auth/better-auth/pull/10240) [`3a035e9`](https://github.com/better-auth/better-auth/commit/3a035e968e27bfdee1e53ad857e5569090d9f2d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add account-level lockout for two-factor verification. The attempt limit applies per account across sign-in challenges and across factors: TOTP, email-OTP, and backup codes share one counter, and a successful verification resets it.
+
+  Enabled by default: an account locks for 15 minutes after 10 consecutive failed verifications, and locked attempts return `429` with the `ACCOUNT_TEMPORARILY_LOCKED` error code. Configure it with `twoFactor({ accountLockout: { enabled, maxFailedAttempts, durationSeconds } })`.
+
+  Run a database migration after upgrading: this adds `failedVerificationCount` and `lockedUntil` columns to the `twoFactor` table.
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+  - @better-auth/drizzle-adapter@1.6.22
+  - @better-auth/kysely-adapter@1.6.22
+  - @better-auth/memory-adapter@1.6.22
+  - @better-auth/mongo-adapter@1.6.22
+  - @better-auth/prisma-adapter@1.6.22
+  - @better-auth/telemetry@1.6.22
+
+## 1.6.21
+
+### Patch Changes
+
+- [#10212](https://github.com/better-auth/better-auth/pull/10212) [`e0762a1`](https://github.com/better-auth/better-auth/commit/e0762a127ce351a96614e60866b3455e6eddffa1) Thanks [@bytaesu](https://github.com/bytaesu)! - In root-mounted deployments, requests whose path does not start with the configured `basePath` now return 404 instead of resolving to an endpoint.
+
+- [#10187](https://github.com/better-auth/better-auth/pull/10187) [`882cf9e`](https://github.com/better-auth/better-auth/commit/882cf9e592d1d305b5b78cadbb10aaeee7acd6dc) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Admin permission changes and bans now take effect immediately for admin APIs, even when session cookie cache is enabled. Sensitive session checks also continue to work in stateless apps where signed cookies are the session record.
+
+- [#9939](https://github.com/better-auth/better-auth/pull/9939) [`f52e1ab`](https://github.com/better-auth/better-auth/commit/f52e1ab50b60d289b64d6b06f1bff5a4358cdfd0) Thanks [@benpsnyder](https://github.com/benpsnyder)! - fixes a bug causing deviceAuthorization() throwing a ZodError at construction when called without a schema option
+
+- [#10196](https://github.com/better-auth/better-auth/pull/10196) [`b5bec19`](https://github.com/better-auth/better-auth/commit/b5bec193a56cec2f7b71c84d71dacb632f0b96a0) Thanks [@Paola3stefania](https://github.com/Paola3stefania)! - OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user. Apps that used `mapProfileToUser` to fill `input: false` fields should set those fields in server-side provisioning code instead.
+
+- [#10197](https://github.com/better-auth/better-auth/pull/10197) [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86) Thanks [@Paola3stefania](https://github.com/Paola3stefania)! - Google sign-in now accepts `hd: "*"` to allow any Google Workspace hosted domain while still rejecting tokens with no hosted-domain claim.
+
+  Google One Tap now applies the configured Google hosted-domain restriction before creating a session.
+
+- [#10192](https://github.com/better-auth/better-auth/pull/10192) [`239bcc8`](https://github.com/better-auth/better-auth/commit/239bcc836cf39c4fb409a15333be45134f9e9e65) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate PayPal user info against the verified ID token subject during social sign-in.
+
+- [#10228](https://github.com/better-auth/better-auth/pull/10228) [`1bc370a`](https://github.com/better-auth/better-auth/commit/1bc370aef5c249e82127cb9d35972101087ecde6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The SIWE plugin no longer binds a provided email that already belongs to another account. With `anonymous` set to `false`, `/siwe/verify` previously created the new account using that email even when it was already in use; it now keeps the wallet-derived address in that case, so one email cannot be attached to two accounts.
+
+- [#10198](https://github.com/better-auth/better-auth/pull/10198) [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de) Thanks [@rachit367](https://github.com/rachit367)! - Honor `disableMigration` on plugin schema tables. Tables flagged with `disableMigration: true` are now skipped by `better-auth generate` (Drizzle and Prisma output) and by the runtime migrator, instead of being emitted and created anyway. The flag was previously dropped while assembling the table list, so it had no effect.
+
+- [#10182](https://github.com/better-auth/better-auth/pull/10182) [`461ca6f`](https://github.com/better-auth/better-auth/commit/461ca6fd2453a2e145fa18a1df543e435e884701) Thanks [@bytaesu](https://github.com/bytaesu)! - Only store display username fallbacks as usernames when they pass username validation during email sign-up.
+
+- [#10183](https://github.com/better-auth/better-auth/pull/10183) [`88409b0`](https://github.com/better-auth/better-auth/commit/88409b0078c2bfddcc6503031fff333bfa045cd2) Thanks [@bytaesu](https://github.com/bytaesu)! - Require OAuth proxy profile callbacks to match an issued OAuth state before creating sessions.
+
+- [#10203](https://github.com/better-auth/better-auth/pull/10203) [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055) Thanks [@bytaesu](https://github.com/bytaesu)! - Rate limiting no longer trusts multi-hop `X-Forwarded-For` chains, preventing a client behind an appending proxy from spoofing the leftmost hop to bypass the per-IP rate limit. Single-value IP headers continue to work. To key the real client behind a proxy chain, set `advanced.ipAddress.trustedProxies` to your reverse-proxy IPs or CIDR ranges (the chain is walked right to left, skipping trusted hops), or point `advanced.ipAddress.ipAddressHeaders` at a single trusted client-IP header.
+
+- [#10191](https://github.com/better-auth/better-auth/pull/10191) [`b046f9e`](https://github.com/better-auth/better-auth/commit/b046f9ec112b2cf547efea8dc870a4895602c53b) Thanks [@bytaesu](https://github.com/bytaesu)! - Rate limit client requests before plugin request handlers run.
+
+- [#10210](https://github.com/better-auth/better-auth/pull/10210) [`ae647b4`](https://github.com/better-auth/better-auth/commit/ae647b4abe5a4d606c326f1ce0ffa2500b5424d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Two-factor verification now locks out after five wrong codes per sign-in challenge for TOTP and backup codes. Once the limit is reached the challenge is rejected with `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE`, and a new sign-in is required to try again.
+
+  During a rolling deploy, two-factor challenges issued by the previous version may prompt the user to sign in again; this clears once the deploy completes.
+
+- Updated dependencies [[`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055)]:
+  - @better-auth/core@1.6.21
+  - @better-auth/kysely-adapter@1.6.21
+  - @better-auth/prisma-adapter@1.6.21
+  - @better-auth/drizzle-adapter@1.6.21
+  - @better-auth/memory-adapter@1.6.21
+  - @better-auth/mongo-adapter@1.6.21
+  - @better-auth/telemetry@1.6.21
+
 ## 1.6.20
 
 ### Patch Changes

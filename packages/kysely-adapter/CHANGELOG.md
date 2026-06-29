@@ -1,5 +1,25 @@
 # @better-auth/kysely-adapter
 
+## 1.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+
+## 1.6.21
+
+### Patch Changes
+
+- [#10180](https://github.com/better-auth/better-auth/pull/10180) [`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - `adapter.update` now returns `null` when no row matches or when it is called without a predicate. Use `updateMany` for intentional bulk updates.
+
+  The Kysely MySQL adapter no longer returns a row after a guarded update misses. Updates with an `id` guard also return the targeted row when `id` is not the first predicate. Keep MySQL rows-matched semantics enabled, which mysql2 does by default through `FOUND_ROWS`; disabling it can make idempotent updates look like misses.
+
+  The Prisma adapter now returns `null` when an update guard excludes the targeted row instead of surfacing Prisma's not-found exception. The shared adapter test suite now asserts the same fail-closed update behavior for adapter implementations.
+
+- Updated dependencies [[`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055)]:
+  - @better-auth/core@1.6.21
+
 ## 1.6.20
 
 ### Patch Changes

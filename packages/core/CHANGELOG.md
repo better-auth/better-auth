@@ -1,5 +1,31 @@
 # @better-auth/core
 
+## 1.6.22
+
+### Patch Changes
+
+- [#10241](https://github.com/better-auth/better-auth/pull/10241) [`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refuse HTTP redirects on server-side OAuth requests
+
+  Better Auth refuses HTTP redirects on the server-side OAuth requests it makes: the token exchange, token refresh, client-credentials, token introspection, and JWKS requests. A provider endpoint cannot redirect one of these requests to an unintended internal address. Conformant OAuth providers answer these endpoints with a direct response and never redirect, so standard integrations are unaffected.
+
+## 1.6.21
+
+### Patch Changes
+
+- [#10180](https://github.com/better-auth/better-auth/pull/10180) [`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - `adapter.update` now returns `null` when no row matches or when it is called without a predicate. Use `updateMany` for intentional bulk updates.
+
+  The Kysely MySQL adapter no longer returns a row after a guarded update misses. Updates with an `id` guard also return the targeted row when `id` is not the first predicate. Keep MySQL rows-matched semantics enabled, which mysql2 does by default through `FOUND_ROWS`; disabling it can make idempotent updates look like misses.
+
+  The Prisma adapter now returns `null` when an update guard excludes the targeted row instead of surfacing Prisma's not-found exception. The shared adapter test suite now asserts the same fail-closed update behavior for adapter implementations.
+
+- [#10197](https://github.com/better-auth/better-auth/pull/10197) [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86) Thanks [@Paola3stefania](https://github.com/Paola3stefania)! - Google sign-in now accepts `hd: "*"` to allow any Google Workspace hosted domain while still rejecting tokens with no hosted-domain claim.
+
+  Google One Tap now applies the configured Google hosted-domain restriction before creating a session.
+
+- [#10198](https://github.com/better-auth/better-auth/pull/10198) [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de) Thanks [@rachit367](https://github.com/rachit367)! - Honor `disableMigration` on plugin schema tables. Tables flagged with `disableMigration: true` are now skipped by `better-auth generate` (Drizzle and Prisma output) and by the runtime migrator, instead of being emitted and created anyway. The flag was previously dropped while assembling the table list, so it had no effect.
+
+- [#10203](https://github.com/better-auth/better-auth/pull/10203) [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055) Thanks [@bytaesu](https://github.com/bytaesu)! - Rate limiting no longer trusts multi-hop `X-Forwarded-For` chains, preventing a client behind an appending proxy from spoofing the leftmost hop to bypass the per-IP rate limit. Single-value IP headers continue to work. To key the real client behind a proxy chain, set `advanced.ipAddress.trustedProxies` to your reverse-proxy IPs or CIDR ranges (the chain is walked right to left, skipping trusted hops), or point `advanced.ipAddress.ipAddressHeaders` at a single trusted client-IP header.
+
 ## 1.6.20
 
 ## 1.6.19

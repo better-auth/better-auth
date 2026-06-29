@@ -10,6 +10,7 @@ import {
 } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
+import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
@@ -676,6 +677,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 
 			if (!user.user.emailVerified) {
+				await revokeUnprovenAccountAccess(ctx, user.user.id);
 				await ctx.context.internalAdapter.updateUser(user.user.id, {
 					emailVerified: true,
 				});

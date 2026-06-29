@@ -119,7 +119,7 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response. If not provided, defaults to /device.",
 		),
-	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
+	schema: z.custom<InferOptionSchema<typeof schema>>(() => true).optional(),
 });
 
 export type DeviceAuthorizationOptions = z.infer<

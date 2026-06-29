@@ -21,7 +21,11 @@ import { admin } from "../../plugins/admin";
 import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
-import { freshSessionMiddleware, getSessionFromCtx } from "./session";
+import {
+	freshSessionMiddleware,
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "./session";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -2389,5 +2393,43 @@ describe("forced strict session validation", async () => {
 			headers,
 		});
 		expect(res.error?.status).toBe(401);
+	});
+
+	it("uses the signed cookie as the authoritative session record without a server store", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			database: undefined,
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const cachedSession = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		expect(cachedSession.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		ctx.session = null;
+		await ctx.internalAdapter.deleteSession(cachedSession.data!.session.token);
+		const endpointCtx = {
+			context: ctx,
+			headers,
+			query: {},
+		} as unknown as GenericEndpointContext;
+
+		await runWithRequestState(new WeakMap(), async () => {
+			await runWithEndpointContext(endpointCtx, async () => {
+				const session = await getAuthoritativeSessionFromCtx(endpointCtx);
+				expect(session?.user.email).toBe(testUser.email);
+			});
+		});
 	});
 });

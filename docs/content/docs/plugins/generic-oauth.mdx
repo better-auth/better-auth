@@ -137,6 +137,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 * **Okta** - `okta(options)`
 * **Slack** - `slack(options)`
 * **Patreon** - `patreon(options)`
+* **Yandex** - `yandex(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -155,6 +156,7 @@ import {
 	okta,
 	slack,
 	patreon,
+	yandex,
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -209,6 +211,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
+				yandex({
+					clientId: process.env.YANDEX_CLIENT_ID,
+					clientSecret: process.env.YANDEX_CLIENT_SECRET,
+				}),
 			],
 		}),
 	],
@@ -225,6 +231,7 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
+* **Yandex**: No additional required fields
 
 All providers support the same optional fields:
 
