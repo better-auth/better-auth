@@ -546,7 +546,9 @@ export const auth = betterAuth({
 		// literal. The raw interpolation would emit `.default("say "hi"\done")`
 		// and break the generated schema file. The generated schema is formatted
 		// afterward, so the JSON-stringified value normalizes to single quotes.
-		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
+		const escapedDefault = String.raw`.default('say "hi"\\done')`;
+		expect(schema.code).toContain(escapedDefault);
+		expect(schema.code).not.toContain(String.raw`.default("say "hi"\done")`);
 	});
 
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
