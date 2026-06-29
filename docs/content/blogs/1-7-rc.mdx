@@ -77,7 +77,8 @@ These setups were impossible, broken, or unsafe before, and work now.
 | **Zitadel, Auth0, and other multi-tenant OIDC providers** | No way to send extra parameters when refreshing a token.              | Use `refreshTokenParams` on refresh, without a full redirect.            |
 | **Providers needing signed-assertion login**              | Only secret-based login was supported.                                | Use `tokenEndpointAuth` with a signed JWT.                               |
 | **Clever and similar education providers**                | A login started by the provider failed.                               | Use `allowIdpInitiated: true` to restart the flow safely.                |
-| **Other apps logging in through you**                     |                                                                       |                                                                          |
+
+**Other apps logging in through you**
 
 | Setup                                          | What was blocked                        | How it works now                                                             |
 | ---------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
