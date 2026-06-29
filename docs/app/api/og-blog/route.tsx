@@ -1,4 +1,4 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 import * as z from "zod";
 
 export const runtime = "edge";
@@ -37,6 +37,10 @@ const specks: Array<{ top: string; left: string; size: number }> = [
 	{ top: "31%", left: "88%", size: 3 },
 ];
 
+const geistFontData = fetch(
+	new URL("../../../assets/Geist.ttf", import.meta.url),
+).then((res) => res.arrayBuffer());
+
 function titleFontSize(title: string) {
 	if (title.length <= 40) return 72;
 	if (title.length <= 80) return 62;
@@ -51,9 +55,7 @@ export async function GET(req: Request) {
 			Object.fromEntries(url.searchParams),
 		);
 
-		const geist = await fetch(
-			new URL("../../../assets/Geist.ttf", import.meta.url),
-		).then((res) => res.arrayBuffer());
+		const geist = await geistFontData;
 
 		const colors = themes[theme];
 		const trimmedTitle =
@@ -141,7 +143,8 @@ export async function GET(req: Request) {
 				],
 				headers: {
 					"Cache-Control":
-						"public, max-age=86400, s-maxage=31536000, immutable",
+						"public, max-age=2592000, s-maxage=2592000, immutable",
+					"CDN-Cache-Control": "max-age=2592000",
 				},
 			},
 		);

@@ -60,26 +60,23 @@ function BlogCover({
 			/>
 		);
 	}
+	const lightCover = generatedCoverUrl(title, date, "light");
+	const darkCover = generatedCoverUrl(title, date, "dark");
 	return (
-		<>
-			{/* Generated cover, one per theme */}
-			<img
-				src={generatedCoverUrl(title, date, "light")}
-				alt={title}
-				width={320}
-				height={168}
-				className="w-full h-full object-cover dark:hidden"
-				loading="lazy"
-			/>
-			<img
-				src={generatedCoverUrl(title, date, "dark")}
-				alt={title}
-				width={320}
-				height={168}
-				className="w-full h-full object-cover hidden dark:block"
-				loading="lazy"
-			/>
-		</>
+		<div
+			role="img"
+			aria-label={title}
+			className="h-full w-full bg-cover bg-center bg-[image:var(--blog-cover-light)] dark:bg-[image:var(--blog-cover-dark)]"
+			style={
+				{
+					"--blog-cover-light": `url("${lightCover}")`,
+					"--blog-cover-dark": `url("${darkCover}")`,
+				} as React.CSSProperties & {
+					"--blog-cover-light": string;
+					"--blog-cover-dark": string;
+				}
+			}
+		/>
 	);
 }
 

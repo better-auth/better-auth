@@ -1,4 +1,4 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 import * as z from "zod";
 export const runtime = "edge";
 
@@ -7,14 +7,20 @@ const ogSchema = z.object({
 	mode: z.string().default("dark"),
 	type: z.string().default("documentation"),
 });
+
+const geistFontData = fetch(
+	new URL("../../../assets/Geist.ttf", import.meta.url),
+).then((res) => res.arrayBuffer());
+const geistMonoFontData = fetch(
+	new URL("../../../assets/GeistMono.ttf", import.meta.url),
+).then((res) => res.arrayBuffer());
+
 export async function GET(req: Request) {
 	try {
-		const geist = await fetch(
-			new URL("../../../assets/Geist.ttf", import.meta.url),
-		).then((res) => res.arrayBuffer());
-		const geistMono = await fetch(
-			new URL("../../../assets/GeistMono.ttf", import.meta.url),
-		).then((res) => res.arrayBuffer());
+		const [geist, geistMono] = await Promise.all([
+			geistFontData,
+			geistMonoFontData,
+		]);
 		const url = new URL(req.url);
 		const urlParamsValues = Object.fromEntries(url.searchParams);
 		const validParams = ogSchema.parse(urlParamsValues);
@@ -199,6 +205,11 @@ export async function GET(req: Request) {
 						style: "normal",
 					},
 				],
+				headers: {
+					"Cache-Control":
+						"public, max-age=2592000, s-maxage=2592000, immutable",
+					"CDN-Cache-Control": "max-age=2592000",
+				},
 			},
 		);
 	} catch (err) {

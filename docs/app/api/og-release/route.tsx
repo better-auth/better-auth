@@ -1,4 +1,4 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 import * as z from "zod";
 export const runtime = "edge";
 
@@ -8,11 +8,13 @@ const ogSchema = z.object({
 	date: z.string().optional(),
 });
 
+const geistFontData = fetch(
+	new URL("../../../assets/Geist.ttf", import.meta.url),
+).then((res) => res.arrayBuffer());
+
 export async function GET(req: Request) {
 	try {
-		const geist = await fetch(
-			new URL("../../../assets/Geist.ttf", import.meta.url),
-		).then((res) => res.arrayBuffer());
+		const geist = await geistFontData;
 
 		const url = new URL(req.url);
 		const urlParamsValues = Object.fromEntries(url.searchParams);
@@ -162,6 +164,11 @@ export async function GET(req: Request) {
 						style: "normal",
 					},
 				],
+				headers: {
+					"Cache-Control":
+						"public, max-age=2592000, s-maxage=2592000, immutable",
+					"CDN-Cache-Control": "max-age=2592000",
+				},
 			},
 		);
 	} catch (err) {
