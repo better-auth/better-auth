@@ -74,7 +74,7 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | SAML defaults and config change                         | Update removed fields, update callback URLs, and review IdP-initiated flows.                                                                       |
 | SCIM connections need a manual reclaim                  | Assign an `organizationId` to pre-1.7 connections, or delete unowned rows, before regenerating their tokens.                                       |
 | Proxy headers are not trusted by default                | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
-| Custom adapters and storage need atomic methods         | Implement `incrementOne`, `increment`, or `consume`, depending on what you provide.                                                                |
+| Custom adapters and storage need atomic methods         | Implement `incrementOne` and `consumeOne` (adapters), `increment` and `getAndDelete` (secondary storage), or `consume` (rate-limit storage).       |
 | Captcha rules match full paths                          | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
 | Electron requires S256 PKCE                             | Upgrade the Electron client and server together.                                                                                                   |
 | OIDC ID tokens drop profile/email scope claims          | Read profile and email claims from the UserInfo endpoint, not the ID token.                                                                        |
@@ -351,13 +351,13 @@ Linking an anonymous account after a social login now works in Expo and other in
 
 SAML signing certificates can now be a list, not just one value. An administrator can publish a new certificate next to the old one and finish the rotation without forcing everyone to sign in again.
 
-The management endpoints now always return the certificate as a list, so code reading those endpoints must expect a list.
+The management endpoints now return the certificate as a list, or omit it when the certificates live inside an `idpMetadata` document, so code reading those endpoints must handle both.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
 ### SAML rejects unsolicited and replayed responses
 
-Unsolicited IdP-initiated SAML logins are now off by default, and responses are validated for `InResponseTo` and `SessionIndex` so a response cannot be replayed against a session it was not issued for.
+Unsolicited IdP-initiated SAML logins are now off by default, and a login response is validated for `InResponseTo` so it cannot be replayed against a request it was not issued for. Single Logout requests are matched to their session by `SessionIndex`.
 
 Set `allowIdpInitiated: true` only if you depend on provider-started SAML login.
 
@@ -467,7 +467,7 @@ If you wrote a custom database adapter or storage backend, this introduces requi
 
 ### Passwordless sign-in clears unproven credentials
 
-Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth when an account email had never been confirmed. If that account had an unproven password or other linked credentials, Better Auth removes them and revokes existing sessions before signing the user in.
+Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth when an account email had never been confirmed. If that account had an unproven password or other linked accounts, Better Auth removes all of them and revokes existing sessions before signing the user in.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 

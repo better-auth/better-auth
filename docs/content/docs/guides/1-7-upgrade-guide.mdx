@@ -388,7 +388,7 @@ The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clien
 
 ### IdP-initiated SAML is off by default
 
-Unsolicited logins started by the identity provider are now disabled by default. SAML responses are also validated for `InResponseTo` and `SessionIndex`, so a response cannot be replayed against a session it was not issued for.
+Unsolicited logins started by the identity provider are now disabled by default. A login response is validated for `InResponseTo`, so it cannot be replayed against a request it was not issued for, and Single Logout requests are matched to their session by `SessionIndex`.
 
 **What to do:** set `saml.allowIdpInitiated: true` to restore the old behavior if you depend on it.
 
@@ -396,9 +396,9 @@ Unsolicited logins started by the identity provider are now disabled by default.
 
 ### SAML certificates can be a list
 
-Signing certificates now accept a single value or a list, which lets you rotate certificates without downtime. The management endpoints always return the certificate as a list.
+Signing certificates now accept a single value or a list, which lets you rotate certificates without downtime. The management endpoints return the certificate as a list, or omit it when the certificates live inside an `idpMetadata` document.
 
-**What to do:** update any code that reads the certificate from those endpoints to expect a list. Make sure every SAML config supplies a certificate, or registration fails.
+**What to do:** update any code that reads the certificate from those endpoints to expect a list or its absence. Make sure every SAML config supplies a signing-cert source, an explicit certificate or an `idpMetadata` document, or registration fails.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -573,7 +573,7 @@ Captcha rules now match full request paths or explicit wildcards, which closes a
 
 ### Magic-link and email-OTP sign-in can clear unproven credentials
 
-Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth for an account whose email had never been confirmed. If that account had an unproven password or other linked credentials, Better Auth removes them and revokes existing sessions before signing the user in.
+Magic-link and email-OTP sign-in now treat proven mailbox control as the source of truth for an account whose email had never been confirmed. If that account had an unproven password or other linked accounts, Better Auth removes all of them and revokes existing sessions before signing the user in.
 
 **What to do:** if a user signed up with email and password but first signs in through a magic link or email OTP instead of confirming the verification email, ask them to set a new password through password reset.
 
