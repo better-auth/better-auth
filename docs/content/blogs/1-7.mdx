@@ -72,7 +72,7 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | The old `oidcProvider` plugin is removed                | Move provider setups to `@better-auth/oauth-provider`.                                                                                             |
 | MCP moves to `@better-auth/mcp`                         | Update imports, endpoint paths, helper names, config shape, and schema.                                                                            |
 | SAML defaults and config change                         | Update removed fields, update callback URLs, and review IdP-initiated flows.                                                                       |
-| SCIM ownership becomes permanent                        | Reclaim old personal SCIM connections before regenerating their tokens.                                                                            |
+| SCIM connections need a manual reclaim                  | Assign an `organizationId` to pre-1.7 connections, or delete unowned rows, before regenerating their tokens.                                       |
 | Proxy headers are not trusted by default                | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
 | Custom adapters and storage need atomic methods         | Implement `incrementOne`, `increment`, or `consume`, depending on what you provide.                                                                |
 | Captcha rules match full paths                          | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
@@ -89,7 +89,7 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 | `/sso/update-provider` rejects partial mappings         | Send a complete OIDC/SAML mapping object, not a partial one.                                                                                       |
 | auth CLI requires Node.js 22.12+                        | Upgrade the Node.js used to run the CLI.                                                                                                           |
 | New organization columns                                | Run the migration for `team.memberCount` and `teamMember.membershipKey`.                                                                           |
-| Stripe org subscriptions need the organization plugin   | `referenceMiddleware` rejects org-scoped subscriptions when the organization plugin is absent.                                                     |
+| Stripe org subscriptions need `organization.enabled`    | `referenceMiddleware` rejects org-scoped subscriptions unless `organization: { enabled: true }` is set in the Stripe plugin config.                |
 | Default Drizzle schema uses singular relation keys      | Regenerate and review your Drizzle schema relations.                                                                                               |
 | Stripe `onSubscriptionCancel` event is required         | Update the callback to expect a non-optional `event`.                                                                                              |
 | Two-factor OTP-only enablement                          | `enableTwoFactor` takes a new `method` param and returns a discriminated response; update callers.                                                 |
@@ -371,13 +371,13 @@ A few fields and one endpoint path change. See the upgrade guide before deployin
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-### SCIM groups and ownership
+### SCIM groups and organization scoping
 
 SCIM gains durable group resources with membership, roles, and lifecycle endpoints.
 
-A security fix ships with it: a personal SCIM connection is now always owned by the user who created it. Before, ownership was optional, and an unowned connection could be read or deleted by any signed-in user.
+A security fix ships with it: every SCIM connection is now bound to an organization through a required `organizationId`, and the old per-user ownership option is removed. A connection can no longer be left unowned and read or deleted across tenants.
 
-This needs a migration and one manual cleanup. Connections created before the upgrade need to be deleted or re-owned before you regenerate their tokens.
+This needs a migration and one manual cleanup. Connections created before the upgrade that have no organization need to be deleted or assigned an `organizationId` before you regenerate their tokens.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
