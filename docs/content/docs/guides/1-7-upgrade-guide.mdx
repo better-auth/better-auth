@@ -60,16 +60,17 @@ These features change the schema:
 | Resource-bound tokens      | Resource columns on the token tables                                                 | Yes                      |
 | DPoP                       | A token-binding column                                                               | Not needed               |
 | Refresh-token reuse window | A cached replay-response column on refresh tokens                                    | Not needed               |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                         | Not needed               |
 | Back-channel logout        | Logout-URL and revoked columns                                                       | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables                            | Not needed               |
-| SCIM ownership             | A permanent owner column                                                             | **No, reclaim old rows** |
+| SCIM org scoping           | `organizationId` required, `userId` removed, `providerKey` added                     | **No, reclaim old rows** |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | Not needed               |
 | SCIM groups                | New `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables | Not needed               |
 
 The SCIM reclaim is the one manual data step. Plan for it before you cut over.
 
 <Callout type="warn">
-  The SCIM reclaim is not automatic. Connections created before 1.7 have no owner, so you must delete or re-own rows with neither an organization nor an owner before regenerating their tokens.
+  The SCIM reclaim is not automatic. Connections created before 1.7 may have no organization, so you must delete or assign an `organizationId` to rows without one before regenerating their tokens.
 </Callout>
 
 ***
@@ -407,14 +408,6 @@ The callback URL is derived automatically, service-provider metadata is generate
 
 **What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
-
-### SCIM connections are owned by their creator
-
-A personal SCIM connection is now always owned by the user who created it, and ownership can no longer be turned off.
-
-**What to do:** run a migration to make the owner column permanent. Connections created before the upgrade have no owner and become unreachable. Reclaim them in the database: delete connection rows that have neither an organization nor an owner, or set the owner, then regenerate their tokens. Organization connections are not affected.
-
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### SCIM writes are safer
@@ -427,9 +420,9 @@ SCIM user writes now honor the `active` attribute, and non-organization SCIM del
 
 ### SCIM connections are scoped to an organization
 
-Organization SCIM connections now require `organizationId`, add a `providerKey` column, and drop the old `userId` column. The `defaultSCIM` option becomes `staticProviders`, `trustedDomains` is removed, and provider IDs are namespaced per organization. This is separate from the personal-connection ownership change above.
+SCIM connections now require `organizationId`, add a `providerKey` column, and drop the old `userId` column. The `defaultSCIM` option becomes `staticProviders`, `trustedDomains` is removed, and provider IDs are namespaced per organization. The old per-user ownership option (`providerOwnership`) is removed, so every connection is bound to an organization.
 
-**What to do:** run the migration, set `organizationId` on organization connections, rename the `defaultSCIM` config to `staticProviders`, and remove `trustedDomains`.
+**What to do:** run the migration, set `organizationId` on connections, rename the `defaultSCIM` config to `staticProviders`, and remove `trustedDomains`. Reclaim pre-1.7 connections that have no organization by assigning an `organizationId` or deleting them, then regenerate their tokens.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -461,11 +454,11 @@ OIDC SSO with discovery now works on Cloudflare Workers. A discovery or token en
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-### Organization subscriptions require the organization plugin
+### Organization subscriptions require `organization.enabled`
 
-`referenceMiddleware` now rejects organization-scoped subscriptions when the organization plugin is absent.
+`referenceMiddleware` now rejects organization-scoped subscriptions unless `organization: { enabled: true }` is set in the Stripe plugin config.
 
-**What to do:** add the organization plugin if you use organization-scoped Stripe subscriptions.
+**What to do:** set `organization: { enabled: true }` in your `stripe()` plugin options for organization-scoped subscriptions. The organization plugin is still needed separately to resolve the active organization.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -618,7 +611,7 @@ npx auth@latest migrate
 
 Then complete the manual data step if it applies:
 
-* **Reclaim SCIM connections:** delete or re-own connection rows that have neither an organization nor an owner.
+* **Reclaim SCIM connections:** delete or assign an `organizationId` to connection rows that have no organization.
 
 ***
 
