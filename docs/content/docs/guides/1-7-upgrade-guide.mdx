@@ -103,14 +103,6 @@ Each provider used to verify its own identity tokens. Now there is one verifier,
 
 **What to do:** a custom provider should replace its `verifyIdToken` method with an `idToken` config. PayPal no longer accepts identity-token login; it uses its access token instead. Switch PayPal identity-token login to the redirect flow. The built-in provider options are unchanged.
 
-<HeaderLabel variant="default">Behavior</HeaderLabel>
-
-### Google One Tap signs in the right person
-
-One Tap now signs in the user who actually owns the Google account by validating the identity token's subject, rather than matching on email.
-
-**What to do:** nothing to configure. If you relied on email-based matching, expect One Tap to bind to the Google account subject instead.
-
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
 ### Electron requires modern PKCE
@@ -118,6 +110,30 @@ One Tap now signs in the user who actually owns the Google account by validating
 The Electron login flow now requires S256 PKCE, no longer trusts a custom origin header, and matches custom URL schemes more safely.
 
 **What to do:** upgrade the `@better-auth/electron` client and server together. Make sure your app URL scheme is in `trustedOrigins`. Remove the old `disableOriginOverride` option. Review trusted entries with a host, such as `myapp://callback`, because they no longer match lookalike hosts.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### `generateState()` signature changed
+
+The public `generateState()` helper now takes an options object instead of positional arguments.
+
+**What to do:** if you call `generateState()` directly, replace `generateState(c, link, additionalData)` with the options form `generateState(c, options)`.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### OAuth callback error code renamed
+
+The OAuth callback redirect error value `email_doesn't_match` is renamed `email_does_not_match`.
+
+**What to do:** if you read this error code from the callback redirect, update the string to `email_does_not_match`.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Google One Tap signs in the right person
+
+One Tap now signs in the user who actually owns the Google account by validating the identity token's subject, rather than matching on email.
+
+**What to do:** nothing to configure. If you relied on email-based matching, expect One Tap to bind to the Google account subject instead.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
@@ -144,22 +160,6 @@ A generic OAuth provider configured with a discovery URL now verifies the provid
 A signed-assertion login setup, also called private-key JWT, is now checked when it is created. An unsupported algorithm, a key with no material, or a mismatch between the declared algorithm and the key now fails immediately instead of silently doing the wrong thing.
 
 **What to do:** fix any signing setup whose declared algorithm disagrees with the key. Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest`.
-
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
-
-### `generateState()` signature changed
-
-The public `generateState()` helper now takes an options object instead of positional arguments.
-
-**What to do:** if you call `generateState()` directly, replace `generateState(c, link, additionalData)` with the options form `generateState(c, options)`.
-
-<HeaderLabel variant="warning">Breaking</HeaderLabel>
-
-### OAuth callback error code renamed
-
-The OAuth callback redirect error value `email_doesn't_match` is renamed `email_does_not_match`.
-
-**What to do:** if you read this error code from the callback redirect, update the string to `email_does_not_match`.
 
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
