@@ -560,6 +560,10 @@ These do not need action for most setups, but they change what you see.
 * **CLI `generate --output` to a directory:** picks an adapter-specific default filename.
 * **Generated schema and disabled migrations:** references to migration-disabled models are omitted.
 * **Cookie-cache session binding:** the cached session is now tied to the `session_token` cookie.
+* **SSRF host checks:** outbound-host classification now blocks more non-public addresses (carrier-grade NAT, 6to4, and other reserved ranges).
+* **Standard token-redemption errors:** authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`.
+* **Sign-out hooks with external session stores:** `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.
+* **Two-factor invalidation error code:** a failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.
 
 ***
 
