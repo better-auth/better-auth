@@ -265,6 +265,46 @@ Creating a client now returns `201 Created` instead of `200 OK`, and the registr
 
 **What to do:** update any client that expects a `200` from client creation to accept `201`. To allow machine clients to register, configure `validateInitialAccessToken`.
 
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Unauthenticated registration keeps the client's auth method
+
+Dynamic Client Registration without a logged-in user no longer forces the client to be public. A client that omits `token_endpoint_auth_method` is now confidential with the RFC 7591 default `client_secret_basic` and a generated secret; it becomes public only when it registers `token_endpoint_auth_method: "none"`.
+
+**What to do:** if you relied on unauthenticated registrations being downgraded to public, register `token_endpoint_auth_method: "none"` explicitly for clients that must stay public.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Registration requires reciprocal response and grant types
+
+A registered client's `response_types` and `grant_types` must now be reciprocal: a `code` response type requires the `authorization_code` grant, and a token grant requires its matching response type. Mismatched registrations are rejected.
+
+**What to do:** register matching `response_types` and `grant_types` for each client.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### OAuth endpoints return standard error envelopes
+
+Validation and malformed-request failures on the OAuth endpoints (token, authorize, revoke, introspect, register, end-session) now return RFC 6749 `{ error, error_description }` envelopes instead of the previous generic validation-error shape.
+
+**What to do:** if a client or tool parsed the old error shape, update it to read `error` and `error_description`.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Introspection returns consistent claims
+
+`/oauth2/introspect` now returns the same claims for an opaque token as it does for a JWT, and a resource server can introspect a token issued to a different client.
+
+**What to do:** nothing. Expect richer, consistent introspection responses for opaque tokens.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### UserInfo accepts a bearer token in the form body
+
+The userinfo endpoint now accepts the access token in a form-encoded body and rejects a request that sends the token in both the header and the body.
+
+**What to do:** send the access token in one place, the `Authorization` header or the form body, not both.
+
 <HeaderLabel variant="default">Behavior</HeaderLabel>
 
 ### Client authentication is tied to the grant
@@ -363,9 +403,9 @@ Signing certificates now accept a single value or a list, which lets you rotate 
 
 ### SAML configuration is simplified
 
-The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect are now uppercase.
+The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect change from short aliases to the full lowercased internal code (for example `saml_multiple_assertions`).
 
-**What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the uppercase versions.
+**What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -474,19 +514,19 @@ The atomic-state work introduces required methods. If you use only the built-in 
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-### Database adapters must implement `incrementOne`
+### Database adapters must implement `incrementOne` and `consumeOne`
 
-`incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. The old fallback is gone.
+`incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. `consumeOne` reads and deletes a row in one step for single-use credentials. Both are now required, and the old fallback is gone.
 
-**What to do:** implement `incrementOne` in any custom adapter. All built-in adapters already do.
+**What to do:** implement both `incrementOne` and `consumeOne` in any custom adapter. A missing `consumeOne` throws at runtime. All built-in adapters already do.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
-### Secondary storage must implement `increment`
+### Secondary storage must implement `increment` and `getAndDelete`
 
-`increment(key, ttl)` bumps a counter by one and sets the expiry only when the key is first created.
+`increment(key, ttl)` bumps a counter by one and sets the expiry only when the key is first created. `getAndDelete(key)` reads and removes a key in one step. Both were optional before and are now required.
 
-**What to do:** implement `increment` in custom secondary storage. Redis storage already does.
+**What to do:** implement both `increment` and `getAndDelete` in custom secondary storage. Redis storage already does.
 
 <HeaderLabel variant="warning">Breaking</HeaderLabel>
 
@@ -560,7 +600,7 @@ These do not need action for most setups, but they change what you see.
 * **CLI `generate --output` to a directory:** picks an adapter-specific default filename.
 * **Generated schema and disabled migrations:** references to migration-disabled models are omitted.
 * **Cookie-cache session binding:** the cached session is now tied to the `session_token` cookie.
-* **SSRF host checks:** outbound-host classification now blocks more non-public addresses (carrier-grade NAT, 6to4, and other reserved ranges).
+* **SSRF host checks:** outbound-host classification now blocks additional reserved ranges (6to4 relay anycast, site-local IPv6, and IPv4-compatible IPv6).
 * **Standard token-redemption errors:** authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`.
 * **Sign-out hooks with external session stores:** `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.
 * **Two-factor invalidation error code:** a failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.
