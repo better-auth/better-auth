@@ -22,17 +22,6 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
-Each change uses one label.
-
-| Label           | Meaning                                                           |
-| --------------- | ----------------------------------------------------------------- |
-| **Breaking**    | You may need to change code, config, data, or database schema.    |
-| **Behavior**    | The result may change, but most projects do not need a migration. |
-| **New**         | A new feature, provider, or setup is available.                   |
-| **Deprecation** | An old API or package path is removed or replaced.                |
-
-Inside each section, breaking changes come first, then behavior changes, then new features, then deprecations.
-
 ## Before you upgrade
 
 The upgrade command handles package updates. The database needs more care. A few 1.7 features add or change tables, and some also need a manual data step.
