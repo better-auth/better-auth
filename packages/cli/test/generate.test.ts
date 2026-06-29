@@ -544,7 +544,8 @@ export const auth = betterAuth({
 
 		// Quotes and backslashes must be escaped so the default is a valid
 		// literal. The raw interpolation would emit `.default("say "hi"\done")`
-		// and break the generated schema file.
+		// and break the generated schema file. The generated schema is formatted
+		// afterward, so the JSON-stringified value normalizes to single quotes.
 		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
 	});
 
