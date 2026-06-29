@@ -207,7 +207,7 @@ A broad set of fixes brings the OAuth and OpenID endpoints closer to the specs:
 * **Safer token handling:** refresh-token misuse, authorization-code replay, and `redirect_uri` mismatches are rejected with standard errors.
 * **No server-side OAuth redirects:** token, introspection, and JWKS requests refuse provider redirects.
 * **Flexible request handling:** authorization and user-info endpoints accept form-encoded requests, and userinfo accepts a bearer token in the request body.
-* **PKCE flexibility:** confidential clients registered through Dynamic Client Registration can opt out of PKCE with `clientRegistrationRequirePKCE: false`; public clients and offline access still require it.
+* **PKCE flexibility:** confidential clients registered through Dynamic Client Registration can opt out of PKCE with `clientRegistrationRequirePKCE: false`. Public clients still require PKCE, and so does an `offline_access` request unless it is an OIDC request carrying a `nonce`.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 
@@ -293,7 +293,7 @@ Better Auth now keeps the scopes already on the account across re-login and toke
 
 Point a generic OAuth provider at a discovery URL and Better Auth now verifies the provider identity token against that provider's published keys. Mobile and single-page apps can also use identity-token login through the same verifier.
 
-PayPal now binds userinfo to the verified ID token subject during social sign-in. Custom providers should move from a `verifyIdToken` method to an `idToken` config.
+PayPal no longer accepts identity-token sign-in; it now fetches userinfo with its access token and binds it to the verified ID token subject. Custom providers should move from a `verifyIdToken` method to an `idToken` config.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 
