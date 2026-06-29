@@ -23,6 +23,7 @@ import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
 import { slack } from "./providers/slack";
+import { yandex } from "./providers/yandex";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -2756,6 +2757,68 @@ describe("oauth2", async () => {
 
 			expect(slackConfig.pkce).toBe(true);
 			expect(slackConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Yandex Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const yandexConfig = yandex({
+				clientId: "yandex-client-id",
+				clientSecret: "yandex-client-secret",
+			});
+
+			expect(yandexConfig.providerId).toBe("yandex");
+			expect(yandexConfig.authorizationUrl).toBe(
+				"https://oauth.yandex.com/authorize",
+			);
+			expect(yandexConfig.tokenUrl).toBe("https://oauth.yandex.com/token");
+			expect(yandexConfig.scopes).toEqual([
+				"login:info",
+				"login:email",
+				"login:avatar",
+			]);
+			expect(yandexConfig.clientId).toBe("yandex-client-id");
+			expect(yandexConfig.clientSecret).toBe("yandex-client-secret");
+			expect(yandexConfig.getUserInfo).toBeDefined();
+			expect(typeof yandexConfig.getUserInfo).toBe("function");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10278#discussion_r3495058505
+		 */
+		it("returns null when Yandex does not return an email", async () => {
+			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						id: "yandex-user-id",
+						login: "yandex-user",
+						client_id: "yandex-client-id",
+						/* cspell:disable-next-line */
+						psuid: "yandex-psuid",
+						emails: [],
+					}),
+					{
+						headers: {
+							"content-type": "application/json",
+						},
+					},
+				),
+			);
+
+			try {
+				const yandexConfig = yandex({
+					clientId: "yandex-client-id",
+					clientSecret: "yandex-client-secret",
+				});
+
+				const userInfo = await yandexConfig.getUserInfo?.({
+					accessToken: "yandex-access-token",
+				});
+
+				expect(userInfo).toBeNull();
+			} finally {
+				fetchSpy.mockRestore();
+			}
 		});
 	});
 
