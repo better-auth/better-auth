@@ -88,6 +88,7 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 		clientSecret: options.clientSecret,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
