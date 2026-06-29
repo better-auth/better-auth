@@ -54,16 +54,17 @@ The `auth` CLI now requires Node.js 22.12 or newer to run.
 
 These features change the schema:
 
-| Feature                    | What it adds                                              | Converts data for you?   |
-| -------------------------- | --------------------------------------------------------- | ------------------------ |
-| Protected resources        | New resource tables and key columns                       | Not needed (config move) |
-| Resource-bound tokens      | Resource columns on the token tables                      | Yes                      |
-| DPoP                       | A token-binding column                                    | Not needed               |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens         | Not needed               |
-| Back-channel logout        | Logout-URL and revoked columns                            | Not needed               |
-| Requested user-info claims | A requested-claims column on the token and consent tables | Not needed               |
-| SCIM ownership             | A permanent owner column                                  | **No, reclaim old rows** |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns | Not needed               |
+| Feature                    | What it adds                                                                         | Converts data for you?   |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| Protected resources        | New resource tables and key columns                                                  | Not needed (config move) |
+| Resource-bound tokens      | Resource columns on the token tables                                                 | Yes                      |
+| DPoP                       | A token-binding column                                                               | Not needed               |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                    | Not needed               |
+| Back-channel logout        | Logout-URL and revoked columns                                                       | Not needed               |
+| Requested user-info claims | A requested-claims column on the token and consent tables                            | Not needed               |
+| SCIM ownership             | A permanent owner column                                                             | **No, reclaim old rows** |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | Not needed               |
+| SCIM groups                | New `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables | Not needed               |
 
 The SCIM reclaim is the one manual data step. Plan for it before you cut over.
 
@@ -158,6 +159,14 @@ The public `generateState()` helper now takes an options object instead of posit
 The OAuth callback redirect error value `email_doesn't_match` is renamed `email_does_not_match`.
 
 **What to do:** if you read this error code from the callback redirect, update the string to `email_does_not_match`.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Anonymous account linking works in mobile and in-app browsers
+
+Linking an anonymous account after a social login now works in Expo and other in-app browsers, where the callback returns without the usual cookie. A new `addOAuthServerContext` API carries trusted data across the login that a client cannot forge.
+
+**What to do:** nothing for most apps. If you carried anonymous-link state across the OAuth redirect yourself, move it onto `addOAuthServerContext`.
 
 ***
 
@@ -272,6 +281,22 @@ Better Auth now refuses HTTP redirects on the server-side OAuth requests it make
 
 **What to do:** nothing for standard providers. If a custom provider endpoint redirects, make it return the final response directly.
 
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### PKCE requirements for confidential and OIDC clients
+
+PKCE is always required for public clients. A confidential client registered through Dynamic Client Registration can opt out with `clientRegistrationRequirePKCE: false`. A request that carries the `offline_access` scope still requires PKCE unless it is an OIDC request with a `nonce`, which a confidential client can use instead.
+
+**What to do:** set `clientRegistrationRequirePKCE: false` only for confidential clients that cannot use PKCE. Send a `nonce` if a confidential OIDC client needs `offline_access` without PKCE.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### Authorize accepts form-encoded requests and rejects request objects
+
+The authorization and userinfo endpoints now accept form-encoded (POST) requests, and the authorization endpoint explicitly rejects the OIDC `request` and `request_uri` parameters it does not support.
+
+**What to do:** nothing for standard clients.
+
 <HeaderLabel variant="info">New</HeaderLabel>
 
 ### Refresh-token retries can be tolerated
@@ -373,6 +398,22 @@ Organization SCIM connections now require `organizationId`, add a `providerKey` 
 Updating an SSO provider now rejects a partial OIDC or SAML mapping object.
 
 **What to do:** send a complete mapping object when you call `/sso/update-provider`.
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### SCIM gains durable group resources
+
+SCIM now manages groups with membership, roles, and lifecycle endpoints, backed by new `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables.
+
+**What to do:** run `generate` and `migrate` to add the SCIM group tables before using group provisioning.
+
+<HeaderLabel variant="default">Behavior</HeaderLabel>
+
+### OIDC SSO works on Cloudflare Workers
+
+OIDC SSO with discovery now works on Cloudflare Workers. A discovery or token endpoint that redirects is rejected with a clear configuration error instead of failing in a runtime-specific way.
+
+**What to do:** nothing. If a provider endpoint redirects, point your config at the final URL.
 
 ***
 
@@ -510,6 +551,7 @@ Magic-link and email-OTP sign-in now treat proven mailbox control as the source 
 These do not need action for most setups, but they change what you see.
 
 * **Safer OAuth token handling:** a refresh token used by a different client, a replayed authorization code, and a `redirect_uri` that does not match the one used at login are now rejected with the correct standard error. A replayed code also revokes the tokens it already issued. Well-behaved clients are unaffected.
+* **No caching of credentials:** token, introspection, userinfo, registration, and device-authorization responses now send `Cache-Control: no-store` so proxies and browsers do not cache them.
 * **userinfo rejects bad tokens:** an invalid access token at the userinfo endpoint returns `401 invalid_token` with a `WWW-Authenticate` header.
 * **OAuth authorize error redirect:** a missing `response_type` now redirects the error to the verified client `redirect_uri` instead of a generic error.
 * **Drizzle affected-row validation:** the Drizzle adapter throws on an invalid affected-row count instead of returning `0`.
