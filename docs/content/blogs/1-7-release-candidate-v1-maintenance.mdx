@@ -1,46 +1,27 @@
 ---
-title: "Better Auth 1.7 RC and the v1 maintenance plan"
-description: "Better Auth 1.7.0 RC is ready for testing, and v1 will move into maintenance mode after the stable 1.7 release."
-date: 2026-06-26
+title: "Road to Better Auth v2"
+description: "Better Auth 1.7 is the last feature release on v1, which moves into maintenance as we turn to v2."
+date: 2026-06-29
 draft: false
 author:
   name: "Better Auth Maintainers"
   avatar: ""
-tags: ["1.7", "release candidate", "v1", "v2", "maintenance"]
+tags: ["1.7", "v1", "maintenance", "v2"]
 ---
 
-# Better Auth 1.7 RC and the v1 maintenance plan
+# Road to Better Auth v2
 
-Better Auth 1.7.0 release candidate (RC) is now available for testing. This release candidate is the last step before we publish 1.7.0 as stable, and we want feedback from real projects before we make that call.
+Better Auth 1.7 is available as a release candidate, the final feature release on v1 before it moves into maintenance and we focus on v2.
 
-If you can, please try the release candidate in a development or staging environment and tell us what breaks, what feels unclear, and what still needs to land before 1.7.0 becomes stable.
+## v1 enters maintenance mode
 
-| Resource                | Link                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 1.7.0 release candidate | [TODO: add the 1.7.0 RC release link](https://github.com/better-auth/better-auth/releases/tag/TODO_1_7_0_RC)       |
-| Feedback discussion     | [TODO: add the 1.7.0 RC announcement discussion link](https://github.com/better-auth/better-auth/discussions/TODO) |
-| 1.7 upgrade guide       | [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide)                                                                |
+After 1.7 becomes stable, Better Auth v1 will enter maintenance mode.
 
-The feedback discussion is the main place to report release-candidate issues. GitHub issues still work for isolated bugs, but the discussion helps us keep release feedback in one place while we decide what must change before stable.
+In maintenance, v1 keeps receiving security fixes, bug fixes, and compatibility fixes. We will avoid adding new features to v1 unless a change is part of maintaining the current major version, such as an integration fix, a missing compatibility case that 1.7 should have covered, or a small API addition needed to unblock a correctness or security fix.
 
-## What we need from testers
+We do not expect another feature-focused v1 minor release after 1.7. If a maintenance fix needs a breaking change, or a v1 compatibility problem cannot be handled safely in a patch, we may still publish a v1 minor for that purpose. That release would be scoped to maintaining v1, not to opening a new feature track.
 
-1. Move a non-production project to the 1.7 release candidate.
-2. Read the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) for the parts of Better Auth you use.
-3. Test the flows your users rely on, especially sign-in, account linking, session handling, SSO, OAuth provider flows, MCP integrations, custom adapters, and deployment behind a proxy.
-4. Post your feedback in the discussion, including your Better Auth version, runtime, framework, database adapter, and the area you tested.
-
-The most useful feedback is specific. If an integration no longer works, tell us which provider, framework, runtime, and adapter are involved. If an upgrade step is confusing, tell us where you got stuck. If a breaking change blocks a real production setup, tell us what the old setup depended on and what path you expected to have.
-
-## 1.7 is the last feature-focused v1 release
-
-After 1.7.0 becomes stable, Better Auth v1 will enter maintenance mode.
-
-That means v1 will mainly receive security fixes, bug fixes, and compatibility fixes. We will avoid adding new features to v1 unless the change is part of maintaining the existing major version. Examples include an integration fix, a missing compatibility case that 1.7 should have covered, or a small API addition needed to unblock a correctness or security fix.
-
-We do not expect to publish another feature-focused v1 minor release after 1.7.0. If a maintenance fix needs a breaking change, or if a specific v1 compatibility problem cannot be handled safely in a patch release, we may still publish another v1 minor for that purpose. In that case, the minor would be scoped to maintaining v1, not to opening a new feature track.
-
-| After 1.7.0 stable                           | What to expect                                           |
+| After the stable 1.7 release                 | What to expect                                           |
 | -------------------------------------------- | -------------------------------------------------------- |
 | Security fixes                               | Yes                                                      |
 | Bug fixes                                    | Yes                                                      |
@@ -49,30 +30,36 @@ We do not expect to publish another feature-focused v1 minor release after 1.7.0
 | More v1 minor releases                       | Not expected, except for maintenance cases that need one |
 | v2 work                                      | Main product focus                                       |
 
-This is not because v1 is being abandoned. It is because v1 has grown into a very broad framework, and continuing to add new surfaces there would make the next architecture harder to build and harder to explain.
+This does not mean v1 is being abandoned or that it is flawed. It is still a solid choice to build on.
 
-## Why we are moving focus to v2
+Better Auth has grown, together with its community, into a very broad framework. Continuing to add features and patches on top of that would make it much harder to design a more solid next architecture, and much harder to explain how it is structured and used.
 
-Better Auth now serves several different kinds of projects. Some teams only need sign-in and session handling. Some need a full user-management surface. Some need enterprise SSO. Some need Better Auth to act as an OAuth or OpenID Connect provider for other apps. Some need MCP and machine-client flows.
+## Why we're preparing for v2
 
-Those use cases should not all have to carry the same shape.
+Better Auth now covers many different use cases. Some teams only need sign-in and session handling. Some need a full user-management surface. Some need enterprise SSO. Some need Better Auth to act as an OAuth or OpenID Connect provider for other apps. Some need MCP and machine-client flows.
 
-In Better Auth v2, we want the framework to stay familiar while becoming more modular. A small app should be able to install the parts it needs for sign-in and sessions without taking on the full user-management or provider-side model. A product that needs user management should be able to add that surface explicitly. A project that needs Better Auth as an identity provider should be able to install the provider-side pieces, storage, and adapters required for that job.
+These use cases should not all have to carry the same shape. As v1 grew to cover them, every project ended up taking on the whole framework, whether it needed it or not. v2 is our chance to improve the foundation.
 
-That direction requires deeper changes than a normal minor release can carry. The package boundaries, schema, and adapter model need to change, and some names and contracts need to become more honest about what they represent.
+## What v2 will look like
 
-We are not ready to publish the full v2 design yet, and we do not want this post to become a promise about final APIs. The important part is the direction: Better Auth v2 will be more modular, more explicit about storage and identity boundaries, and better suited to the different ways people use auth today.
+In v2, we want Better Auth to stay familiar while becoming more modular. A small app should be able to install only the parts it needs for sign-in and sessions, without taking on the full user-management or provider-side model. A product that needs user management should be able to add that surface explicitly. A project that needs Better Auth as an identity provider should be able to install the provider-side pieces, storage, and adapters for that job.
 
-## What this means for your project
+That direction needs deeper changes than a normal minor release can carry. The package boundaries, schema, and adapter model need to change, and some names and contracts need to become more honest about what they represent.
 
-If you are using v1 today, the best next step is to test 1.7.0 RC. That gives you the latest v1 behavior, and it gives us the best chance to fix release-blocking issues before 1.7.0 becomes stable.
+We are not ready to publish the full v2 design yet, and we do not want this post to read as a promise about final APIs. What matters for now is the direction. v2 will be more modular, more explicit about storage and identity boundaries, and better suited to the different and evolving ways people use auth.
 
-If your project depends on a v1 feature that still feels incomplete, bring that feedback to the discussion now. We especially want to hear about missing compatibility, integrations that should work but do not, migration blockers, and breaking changes that need a clearer path before the stable release.
+<Callout type="info">
+  Share your ideas and feedback in the [Better Auth v2 discussion](https://github.com/better-auth/better-auth/discussions/10271).
+</Callout>
 
-After 1.7.0, we expect v1 to become quieter and more predictable. That stability is part of the plan: v1 remains maintained while v2 gets the deeper rewrite it needs.
+## What this means if you're on v1
 
-## Send us feedback
+If you are building on v1 today, you can keep going. v1 will stay maintained, and after the stable 1.7 release it should become even more stable and predictable. That stability is part of the plan, not a sign that v1 is going away.
 
-Please use the [1.7.0 RC feedback discussion](https://github.com/better-auth/better-auth/discussions/TODO) for anything that should affect the stable 1.7.0 release.
+When you are ready, the [1.7 RC](/blog/1-7-rc) is the best way to get the latest v1 behavior ahead of the stable release. The [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) covers the changes for the parts of Better Auth you use. We will actively monitor feedback during the release-candidate period and resolve any blocking issues before the stable release.
 
-The earlier we hear about a blocker, the more likely we can fix it before stable. Thank you to everyone testing release candidates, reporting edge cases, reviewing docs, and helping us make the final v1 feature release a strong foundation for the next major version.
+## Feedback is welcome
+
+If something in the 1.7 RC does not work the way you expect, or an upgrade step is unclear, let us know in our [community](/community). You are also welcome to share your ideas on v2 in the [Better Auth v2 discussion](https://github.com/better-auth/better-auth/discussions/10271).
+
+Thank you for being part of Better Auth as it grows together with its community.
