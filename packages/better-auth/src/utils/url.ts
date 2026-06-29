@@ -116,8 +116,14 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 
 		// Basic hostname validation (allows localhost, IPs, and domains with ports)
 		// This is a simple check, not exhaustive RFC validation
-		const hostnameRegex =
-			/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
+		const labelRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+		const validateHostname = (hostname: string): boolean => {
+			if (!hostname) return false;
+			const labels = hostname.split(".");
+			return labels.every(
+				(label) => label.length > 0 && labelRegex.test(label),
+			);
+		};
 
 		// Also allow IPv4 addresses
 		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
@@ -128,8 +134,15 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 		// Allow localhost variations
 		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
 
+		const portMatch = header.match(/^(.*):(\d{1,5})$/);
+		const hostPart = portMatch ? portMatch[1]! : header;
+		const portPart = portMatch ? portMatch[2]! : undefined;
+		if (portPart !== undefined && parseInt(portPart, 10) > 65535) {
+			return false;
+		}
+
 		return (
-			hostnameRegex.test(header) ||
+			validateHostname(hostPart) ||
 			ipv4Regex.test(header) ||
 			ipv6Regex.test(header) ||
 			localhostRegex.test(header)
