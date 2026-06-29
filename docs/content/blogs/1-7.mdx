@@ -97,25 +97,25 @@ Inside each section, breaking changes come first, then behavior changes, then ne
 
 ### Behavior changes
 
-| Change                                                          | What changes                                                                                                            |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `max_age` is enforced                                           | Clients that ask for fresh login now get it instead of being ignored.                                                   |
-| Granted scopes are preserved                                    | Later logins no longer erase scopes granted earlier.                                                                    |
-| SCIM writes are safer                                           | SCIM honors `active`, scopes deletes to the SCIM account, and rejects duplicate-email updates.                          |
-| Server-side OAuth requests refuse redirects                     | Token, introspection, and JWKS requests no longer follow provider redirects.                                            |
-| Magic-link and email-OTP sign-in can clear unproven credentials | Proven mailbox control wins over an unconfirmed password on the same account.                                           |
-| userinfo rejects bad access tokens with 401                     | Invalid tokens get `401 invalid_token` with a `WWW-Authenticate` header.                                                |
-| OAuth authorize redirects missing-`response_type` errors        | The error goes to the verified client `redirect_uri` instead of a generic error.                                        |
-| Drizzle adapter validates affected-row counts                   | An invalid affected-row count throws instead of returning `0`.                                                          |
-| `organization.updateTeam` ignores immutable fields              | `id`, `createdAt`, and `updatedAt` are no longer accepted in the request body.                                          |
-| `updateMemberRole` checks authorization first                   | Role-existence validation runs after authorization checks.                                                              |
-| CLI `generate --output` to a directory                          | Picks an adapter-specific default filename.                                                                             |
-| Generated schema skips migration-disabled models                | References to models with migrations disabled are omitted.                                                              |
-| Cookie-cache session is bound to its cookie                     | The cached session is tied to the `session_token` cookie.                                                               |
-| SSRF host checks cover more reserved ranges                     | Outbound-host classification now blocks more non-public addresses (carrier-grade NAT, 6to4, and other reserved ranges). |
-| OAuth token-redemption errors use standard codes                | Authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`. |
-| Sign-out runs session-delete hooks with external session stores | `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.                |
-| Two-factor invalidation failure has its own error code          | A failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.                          |
+| Change                                                          | What changes                                                                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `max_age` is enforced                                           | Clients that ask for fresh login now get it instead of being ignored.                                                               |
+| Granted scopes are preserved                                    | Later logins no longer erase scopes granted earlier.                                                                                |
+| SCIM writes are safer                                           | SCIM honors `active`, scopes deletes to the SCIM account, and rejects duplicate-email updates.                                      |
+| Server-side OAuth requests refuse redirects                     | Token, introspection, and JWKS requests no longer follow provider redirects.                                                        |
+| Magic-link and email-OTP sign-in can clear unproven credentials | Proven mailbox control wins over an unconfirmed password on the same account.                                                       |
+| userinfo rejects bad access tokens with 401                     | Invalid tokens get `401 invalid_token` with a `WWW-Authenticate` header.                                                            |
+| OAuth authorize redirects missing-`response_type` errors        | The error goes to the verified client `redirect_uri` instead of a generic error.                                                    |
+| Drizzle adapter validates affected-row counts                   | An invalid affected-row count throws instead of returning `0`.                                                                      |
+| `organization.updateTeam` ignores immutable fields              | `id`, `createdAt`, and `updatedAt` are no longer accepted in the request body.                                                      |
+| `updateMemberRole` checks authorization first                   | Role-existence validation runs after authorization checks.                                                                          |
+| CLI `generate --output` to a directory                          | Picks an adapter-specific default filename.                                                                                         |
+| Generated schema skips migration-disabled models                | References to models with migrations disabled are omitted.                                                                          |
+| Cookie-cache session is bound to its cookie                     | The cached session is tied to the `session_token` cookie.                                                                           |
+| SSRF host checks cover more reserved ranges                     | Outbound-host classification now blocks additional reserved ranges (6to4 relay anycast, site-local IPv6, and IPv4-compatible IPv6). |
+| OAuth token-redemption errors use standard codes                | Authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`.             |
+| Sign-out runs session-delete hooks with external session stores | `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.                            |
+| Two-factor invalidation failure has its own error code          | A failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.                                      |
 
 ### New additions
 
@@ -249,7 +249,7 @@ The registration endpoint also enforces the same permission checks as manual cli
 
 ### Working with real MCP clients
 
-MCP clients like Claude, Codex, and Factory Droid register themselves in a way earlier versions rejected. Better Auth now accepts those registrations as public clients, which the standard allows, and tells the client which method it ended up with.
+MCP clients like Claude, Codex, and Factory Droid register themselves without a logged-in user. Better Auth now preserves the authentication method each client asks for instead of forcing every unauthenticated registration to a public client: a client is confidential by default, with a generated secret, and public only when it registers `token_endpoint_auth_method: "none"`. The registration response reports the method it ended up with.
 
 <HeaderLabel variant="info">New</HeaderLabel>
 
