@@ -37,9 +37,15 @@ const specks: Array<{ top: string; left: string; size: number }> = [
 	{ top: "31%", left: "88%", size: 3 },
 ];
 
-const geistFontData = fetch(
-	new URL("../../../assets/Geist.ttf", import.meta.url),
-).then((res) => res.arrayBuffer());
+const geistFontUrl = new URL("../../../assets/Geist.ttf", import.meta.url);
+
+async function loadFontData(url: URL) {
+	const res = await fetch(url, { cache: "force-cache" });
+	if (!res.ok) {
+		throw new Error(`Failed to load font: ${url.pathname}`);
+	}
+	return res.arrayBuffer();
+}
 
 function titleFontSize(title: string) {
 	if (title.length <= 40) return 72;
@@ -55,7 +61,7 @@ export async function GET(req: Request) {
 			Object.fromEntries(url.searchParams),
 		);
 
-		const geist = await geistFontData;
+		const geist = await loadFontData(geistFontUrl);
 
 		const colors = themes[theme];
 		const trimmedTitle =

@@ -8,13 +8,19 @@ const ogSchema = z.object({
 	date: z.string().optional(),
 });
 
-const geistFontData = fetch(
-	new URL("../../../assets/Geist.ttf", import.meta.url),
-).then((res) => res.arrayBuffer());
+const geistFontUrl = new URL("../../../assets/Geist.ttf", import.meta.url);
+
+async function loadFontData(url: URL) {
+	const res = await fetch(url, { cache: "force-cache" });
+	if (!res.ok) {
+		throw new Error(`Failed to load font: ${url.pathname}`);
+	}
+	return res.arrayBuffer();
+}
 
 export async function GET(req: Request) {
 	try {
-		const geist = await geistFontData;
+		const geist = await loadFontData(geistFontUrl);
 
 		const url = new URL(req.url);
 		const urlParamsValues = Object.fromEntries(url.searchParams);
