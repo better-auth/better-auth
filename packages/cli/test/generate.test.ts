@@ -427,6 +427,42 @@ describe("generate", async () => {
 		expect(schema.code).not.toMatch(/explicitOptional:.*\.notNull\(\)/);
 	});
 
+	it("should escape string default values so the generated schema stays valid TypeScript", async () => {
+		const pluginWithQuotedDefault = (): BetterAuthPlugin => ({
+			id: "quoted-default-test",
+			schema: {
+				testTable: {
+					fields: {
+						greeting: {
+							type: "string",
+							defaultValue: 'say "hi"\\done',
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithQuotedDefault()],
+			} as BetterAuthOptions,
+		});
+
+		// Quotes and backslashes must be escaped so the default is a valid
+		// literal. The raw interpolation would emit `.default("say "hi"\done")`
+		// and break the generated schema file.
+		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
+	});
+
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
 		const originalCwd = process.cwd();
 		const tmpDir = fs.mkdtempSync(
@@ -1683,5 +1719,59 @@ describe("--dialect flag support", () => {
 		expect(schema.code).toBeDefined();
 		expect(schema.code).toContain('provider = "mysql"');
 		expect(schema.fileName).toBe("test.prisma");
+	});
+
+	const pluginWithDisabledMigration = (): BetterAuthPlugin => ({
+		id: "disabled-migration-test",
+		schema: {
+			emittedTable: {
+				fields: {
+					name: { type: "string", required: true },
+				},
+			},
+			skippedTable: {
+				fields: {
+					name: { type: "string", required: true },
+				},
+				disableMigration: true,
+			},
+		},
+	});
+
+	it("should not emit drizzle tables with disableMigration", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithDisabledMigration()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("emittedTable");
+		expect(schema.code).not.toContain("skippedTable");
+	});
+
+	it("should not emit prisma models with disableMigration", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter({}, { provider: "postgresql" }),
+				plugins: [pluginWithDisabledMigration()],
+			},
+		});
+
+		expect(schema.code).toContain("EmittedTable");
+		expect(schema.code).not.toContain("SkippedTable");
 	});
 });
