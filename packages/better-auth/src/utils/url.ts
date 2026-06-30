@@ -99,6 +99,11 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	}
 
 	if (type === "host") {
+		// Prevent ReDoS by limiting length of host header. Hostnames can't be > 253 characters anyway.
+		if (header.length > 255) {
+			return false;
+		}
+
 		const suspiciousPatterns = [
 			/\.\./, // Path traversal
 			/\0/, // Null bytes

@@ -290,6 +290,27 @@ describe("getBaseURL", () => {
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
+
+		/**
+		 * Hostnames cannot exceed 253 characters per RFC 1035.
+		 * Overly long host headers are rejected before the regex runs,
+		 * preventing potential ReDoS on adversarial inputs.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/8898
+		 */
+		it("should reject overly long host headers to prevent ReDoS", () => {
+			const longHost = `${"a".repeat(250)}.com`;
+			const request = new Request("http://localhost:3000/test", {
+				headers: {
+					"x-forwarded-host": longHost,
+					"x-forwarded-proto": "https",
+				},
+			});
+
+			const result = getBaseURL(undefined, "/auth", request, false, true);
+
+			expect(result).toBe("http://localhost:3000/auth");
+		});
 	});
 });
 
