@@ -1009,4 +1009,98 @@ describe("dynamic access control", async () => {
 			},
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10252
+	 *
+	 * getAdditionalFields() must not mutate the shared options object.
+	 * When shouldBePartial=true (used by updateOrgRole's initialization path),
+	 * the old code wrote `additionalFields[key].required = false` directly onto
+	 * the object that lives inside the caller-supplied options. Because JS objects
+	 * are passed by reference, that mutation is visible to any code that later
+	 * reads the same object — including a second `organization()` plugin instance
+	 * that was created with the identical `additionalFields` reference.
+	 *
+	 * Reproduction: create two auth instances that share the same `additionalFields`
+	 * object. Initializing the first instance runs `updateOrgRole(opts)` which calls
+	 * `getAdditionalFields(opts, true)` and permanently sets `required = false` on
+	 * every field. Initializing the second instance then runs `createOrgRole(opts)`
+	 * which calls `getAdditionalFields(opts, false)` but now reads the already-
+	 * mutated fields (required = false), so it builds a Zod schema where every
+	 * additionalField is `.nullish()`. As a result, the second instance silently
+	 * accepts a createOrgRole body that omits required fields.
+	 */
+	it("should not allow a second auth instance to bypass required additionalFields after sharing the same options object", async () => {
+		// Shared additionalFields object — both instances get the exact same reference.
+		const sharedAdditionalFields: Record<string, DBFieldAttribute> = {
+			color: {
+				type: "string",
+				defaultValue: "#ffffff",
+				required: true,
+			},
+		};
+
+		// First instance: initializing organization() calls updateOrgRole(opts)
+		// → getAdditionalFields(opts, true) → THE BUG mutates sharedAdditionalFields.
+		await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: { admin, member, owner },
+					dynamicAccessControl: { enabled: true },
+					schema: {
+						organizationRole: {
+							additionalFields: sharedAdditionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		// After the first instance is created, sharedAdditionalFields.color.required
+		// is false (due to the bug). A second instance that now builds createOrgRole
+		// with the same reference sees color as .nullish().
+		const second = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: { admin, member, owner },
+					dynamicAccessControl: { enabled: true },
+					schema: {
+						organizationRole: {
+							additionalFields: sharedAdditionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: h2 } = await second.signInWithTestUser();
+		// Set an active org so createOrgRole has an organizationId to work with.
+		const org2 = await second.auth.api.createOrganization({
+			body: { name: "org2", slug: `org2-${crypto.randomUUID()}` },
+			headers: h2,
+		});
+		await second.auth.api.setActiveOrganization({
+			body: { organizationId: org2.id },
+			headers: h2,
+		});
+		const h2Active = new Headers(h2);
+		h2Active.set("cookie", h2.get("cookie") ?? "");
+
+		// With the bug: color is .nullish() in the second instance's createOrgRole
+		// schema → passing additionalFields without color succeeds → no throw.
+		// With the fix: color is still z.string() (required) → Zod rejects the body.
+		await expect(
+			second.auth.api.createOrgRole({
+				body: {
+					role: `no-color-role-${crypto.randomUUID()}`,
+					permission: { project: ["read"] },
+					organizationId: org2.id,
+					additionalFields: {} as any, // omit required color
+				},
+				headers: h2Active,
+			}),
+		).rejects.toThrow();
+	});
 });
