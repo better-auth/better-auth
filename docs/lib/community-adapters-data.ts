@@ -187,4 +187,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/octet-stream.png",
 		},
 	},
+	{
+		name: "@ilbertt/better-auth-bun-sql",
+		url: "https://github.com/ilbertt/better-auth-bun-sql",
+		database: "Postgres and SQLite (Bun)",
+		databaseUrl: "https://bun.com/docs/api/sql",
+		author: {
+			name: "ilbertt",
+			url: "https://github.com/ilbertt",
+			avatar: "https://github.com/ilbertt.png",
+		},
+	},
 ];
