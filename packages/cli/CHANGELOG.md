@@ -73,6 +73,17 @@
 
 - [#9547](https://github.com/better-auth/better-auth/pull/9547) [`15bb169`](https://github.com/better-auth/better-auth/commit/15bb1690b274b9f1e2a58c5db039bd240dc5e99b) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `create-admin` CLI command for creating an initial admin user through the configured Better Auth instance.
 
+## 1.6.23
+
+### Patch Changes
+
+- [#10259](https://github.com/better-auth/better-auth/pull/10259) [`3fedfcb`](https://github.com/better-auth/better-auth/commit/3fedfcb01d0f2a3e653a98a0f7f7891949361b7a) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `better-auth generate` emitting an invalid Drizzle schema when a field's string default value contains a quote or backslash.
+
+- Updated dependencies [[`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95)]:
+  - better-auth@1.6.23
+  - @better-auth/core@1.6.23
+  - @better-auth/telemetry@1.6.23
+
 ## 1.6.22
 
 ### Patch Changes
