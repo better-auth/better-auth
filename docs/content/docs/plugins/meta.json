@@ -27,6 +27,7 @@
     "oauth-provider",
     "cimd",
     "mcp",
+    "ciba",
     "device-authorization",
     "stripe",
     "polar",
