@@ -86,8 +86,5 @@
     "tsx": "^4.21.0",
     "type-fest": "^5.4.4",
     "typescript": "catalog:"
-  },
-  "engines": {
-    "node": ">=20.12.0"
   }
 }
