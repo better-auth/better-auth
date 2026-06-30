@@ -99,8 +99,9 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	}
 
 	if (type === "host") {
-		// Prevent ReDoS by limiting length of host header. Hostnames can't be > 253 characters anyway.
-		if (header.length > 255) {
+		// RFC 1035 §2.3.4: max FQDN is 253 chars; add 7 for port (e.g. ":65535")
+		// This O(1) guard prevents ReDoS on the regex below regardless of engine
+		if (header.length > 260) {
 			return false;
 		}
 
