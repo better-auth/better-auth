@@ -489,7 +489,7 @@ describe("SCIM", () => {
 			expect(updatedUser.name.formatted).toBe("user-case");
 		});
 
-		it("should skip add operation when value already exists", async () => {
+		it("should return 204 when add operation value already exists", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
@@ -503,36 +503,26 @@ describe("SCIM", () => {
 				},
 			});
 
-			const patchUser = () =>
-				auth.api.patchSCIMUser({
-					params: { userId: user.id },
-					body: {
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-						Operations: [
-							{ op: "add", path: "/name/formatted", value: "Existing Name" },
-						],
-					},
-					headers: {
-						authorization: `Bearer ${scimToken}`,
-					},
-				});
+			const result = await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "add", path: "/name/formatted", value: "Existing Name" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
 
-			await expect(patchUser()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "No valid fields to update",
-					body: {
-						detail: "No valid fields to update",
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: "400",
-					},
-				}),
-			);
+			expect(result).toBeUndefined();
 		});
 
 		it.for([
 			"replace",
 			"add",
-		])("should ignore %s on non-existing path", async (op) => {
+		])("should return 204 for %s on non-existing path", async (op) => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
@@ -546,30 +536,20 @@ describe("SCIM", () => {
 				},
 			});
 
-			const patchUser = () =>
-				auth.api.patchSCIMUser({
-					params: { userId: user.id },
-					body: {
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-						Operations: [
-							{ op: op, path: "/nonExistentField", value: "Some Value" },
-						],
-					},
-					headers: {
-						authorization: `Bearer ${scimToken}`,
-					},
-				});
+			const result = await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: op, path: "/nonExistentField", value: "Some Value" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
 
-			await expect(patchUser()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "No valid fields to update",
-					body: {
-						detail: "No valid fields to update",
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: "400",
-					},
-				}),
-			);
+			expect(result).toBeUndefined();
 		});
 
 		it("should ignore non-existing operation", async () => {
@@ -646,7 +626,7 @@ describe("SCIM", () => {
 			);
 		});
 
-		it("should fail on invalid updates", async () => {
+		it("should return 204 on empty operations", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
@@ -659,30 +639,20 @@ describe("SCIM", () => {
 				},
 			});
 
-			const patchUser = () =>
-				auth.api.patchSCIMUser({
-					params: {
-						userId: user.id,
-					},
-					body: {
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-						Operations: [],
-					},
-					headers: {
-						authorization: `Bearer ${scimToken}`,
-					},
-				});
+			const result = await auth.api.patchSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
 
-			await expect(patchUser()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "No valid fields to update",
-					body: {
-						detail: "No valid fields to update",
-						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: "400",
-					},
-				}),
-			);
+			expect(result).toBeUndefined();
 		});
 
 		it("should not allow anonymous access", async () => {
