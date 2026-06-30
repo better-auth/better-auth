@@ -341,6 +341,29 @@ Before requesting the email change, use the `sendVerificationOtp()` method with 
 
 Then, the user can provide the OTP when calling `requestEmailChange()`. The system will first verify the OTP sent to the current email before sending an OTP to the new email.
 
+#### Informing on Taken Email
+
+The `changeEmail.informEmailTaken` option controls what happens when the requested new email is already registered to another account. It accepts three values:
+
+* `"never"` **(default)** — The OTP is discarded and `requestEmailChange()` silently returns `{ success: true }`. This does not inform that the email is already in use, preventing email enumeration.
+* `"immediate"` — The OTP is discarded and `requestEmailChange()` immediately returns a `400` error with message `"Email is already taken"`. This may pose an email enumeration risk if exposed to the client.
+* `"deferred"` — The OTP is still sent to the new email address and `requestEmailChange()` returns `{ success: true }`. The conflict is surfaced after the user successfully submits the OTP via `changeEmail()`, returning a `400` error with message `"Email is already taken"`. This prevents email enumeration at the cost of an additional email being sent to the new address.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            changeEmail: {
+                enabled: true,
+                informEmailTaken: "deferred", // [!code highlight]
+            }
+        })
+    ]
+})
+```
+
 ### Override Default Email Verification
 
 To override the default email verification, pass `overrideDefaultEmailVerification: true` in the options. This will make the system use an email OTP instead of the default verification link whenever email verification is triggered. In other words, the user will verify their email using an OTP rather than clicking a link.

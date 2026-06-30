@@ -607,6 +607,117 @@ describe("change email", async () => {
 			);
 		});
 
+		describe('when informEmailTaken is "immediate"', async () => {
+			const {
+				client: immediateClient,
+				testUser: immediateTestUser,
+				runWithUser: immediateRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP() {},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true, informEmailTaken: "immediate" },
+						}),
+					],
+				},
+				{
+					clientOptions: { plugins: [emailOTPClient()] },
+				},
+			);
+
+			it("should return an error immediately without sending otp", async () => {
+				const takenEmail = "taken-immediate@test.com";
+				await immediateClient.signUp.email({
+					email: takenEmail,
+					password: "password123",
+					name: "Other User",
+				});
+
+				let res: Awaited<
+					ReturnType<typeof immediateClient.emailOtp.requestEmailChange>
+				>;
+				await immediateRunWithUser(
+					immediateTestUser.email,
+					immediateTestUser.password,
+					async () => {
+						res = await immediateClient.emailOtp.requestEmailChange({
+							newEmail: takenEmail,
+						});
+					},
+				);
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.message).toContain("Email is already taken");
+			});
+		});
+
+		describe('when informEmailTaken is "deferred"', async () => {
+			const deferredOtpFn = vi.fn();
+			let deferredOtp = "";
+			const {
+				client: deferredClient,
+				testUser: deferredTestUser,
+				runWithUser: deferredRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								deferredOtp = _otp;
+								deferredOtpFn(email, _otp, type);
+							},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true, informEmailTaken: "deferred" },
+						}),
+					],
+				},
+				{
+					clientOptions: { plugins: [emailOTPClient()] },
+				},
+			);
+
+			it("should send otp to taken email and error on changeEmail", async () => {
+				const takenEmail = "taken-deferred@test.com";
+				await deferredClient.signUp.email({
+					email: takenEmail,
+					password: "password123",
+					name: "Other User",
+				});
+
+				deferredOtpFn.mockClear();
+				await deferredRunWithUser(
+					deferredTestUser.email,
+					deferredTestUser.password,
+					async () => {
+						const requestRes = await deferredClient.emailOtp.requestEmailChange(
+							{
+								newEmail: takenEmail,
+							},
+						);
+						expect(requestRes.data?.success).toBe(true);
+						expect(requestRes.error).toBeFalsy();
+						expect(deferredOtpFn).toHaveBeenCalledWith(
+							takenEmail,
+							expect.any(String),
+							"change-email",
+						);
+
+						const changeRes = await deferredClient.emailOtp.changeEmail({
+							newEmail: takenEmail,
+							otp: deferredOtp,
+						});
+						expect(changeRes.error?.status).toBe(400);
+						expect(changeRes.error?.message).toContain(
+							"Email is already taken",
+						);
+					},
+				);
+			});
+		});
+
 		describe("when verifyCurrentEmail is enabled", async () => {
 			const verifyCurrentOtpFn = vi.fn();
 			let currentEmailOtp = "";
