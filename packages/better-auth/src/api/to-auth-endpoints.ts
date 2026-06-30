@@ -72,7 +72,10 @@ async function resolveDynamicContext(
  */
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
+	ctx:
+		| AuthContext
+		| Promise<AuthContext>
+		| (() => AuthContext | Promise<AuthContext>),
 ): E {
 	const api: Record<
 		string,
@@ -89,7 +92,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			const operationId = getOperationId(endpoint, key);
 
 			const run = async () => {
-				const rawContext = await ctx;
+				const rawContext = await (typeof ctx === "function" ? ctx() : ctx);
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;

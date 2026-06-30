@@ -4,6 +4,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
+import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
 import {
@@ -171,9 +172,10 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Awaitable<AuthContext>,
+	ctx: Awaitable<AuthContext> | (() => Awaitable<AuthContext>),
 	options: Option,
 ) {
+	const resolveContext = () => (typeof ctx === "function" ? ctx() : ctx);
 	const pluginEndpoints =
 		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
@@ -199,7 +201,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			?.map((plugin) =>
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
-						const authContext = await ctx;
+						const authContext = await resolveContext();
 						return withSpan(
 							`middleware ${m.path} ${plugin.id}`,
 							{
@@ -264,21 +266,24 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		ok,
 		error,
 	} as const;
-	const api = toAuthEndpoints(endpoints, ctx);
+	const api = toAuthEndpoints(endpoints, resolveContext);
 	return {
 		api: api as unknown as OverrideMerge<typeof endpoints, PluginEndpoint>,
 		middlewares,
 	};
 }
 export const router = <Option extends BetterAuthOptions>(
-	ctx: AuthContext,
+	routerCtx: AuthContext | (() => Awaitable<AuthContext>),
 	options: Option,
 ) => {
-	const { api, middlewares } = getEndpoints(ctx, options);
-	const basePath = new URL(ctx.baseURL).pathname;
+	const { api, middlewares } = getEndpoints(routerCtx, options);
+	const basePath =
+		typeof routerCtx === "function"
+			? options.basePath || "/api/auth"
+			: new URL(routerCtx.baseURL).pathname;
 
 	return createRouter(api, {
-		routerContext: ctx,
+		routerContext: typeof routerCtx === "function" ? {} : routerCtx,
 		openapi: {
 			disabled: true,
 		},
@@ -293,6 +298,8 @@ export const router = <Option extends BetterAuthOptions>(
 		allowedMediaTypes: ["application/json"],
 		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
+			const ctx =
+				typeof routerCtx === "function" ? await routerCtx() : routerCtx;
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const normalizedPath = normalizePathname(req.url, basePath);
@@ -329,6 +336,8 @@ export const router = <Option extends BetterAuthOptions>(
 			return currentRequest;
 		},
 		async onResponse(res, req) {
+			const ctx =
+				typeof routerCtx === "function" ? await routerCtx() : routerCtx;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
@@ -347,7 +356,9 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 			return res;
 		},
-		onError(e) {
+		async onError(e) {
+			const ctx =
+				typeof routerCtx === "function" ? await routerCtx() : routerCtx;
 			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
@@ -400,6 +411,25 @@ export const router = <Option extends BetterAuthOptions>(
 		},
 	});
 };
+
+export async function createRouterHandler<Option extends BetterAuthOptions>(
+	ctx: AuthContext,
+	options: Option,
+) {
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	const requestContext = new AsyncLocalStorage<AuthContext>();
+	const getContext = () => requestContext.getStore() || ctx;
+	const { handler } = router(getContext, {
+		...options,
+		basePath: ctx.baseURL
+			? new URL(ctx.baseURL).pathname
+			: ctx.options.basePath || "/api/auth",
+	});
+
+	return (handlerCtx: AuthContext, request: Request) => {
+		return requestContext.run(handlerCtx, () => handler(request));
+	};
+}
 
 export {
 	type AuthEndpoint,

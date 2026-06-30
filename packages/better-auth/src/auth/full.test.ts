@@ -129,6 +129,80 @@ describe("auth with trusted proxy headers", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/10188
+ */
+describe("auth handler router caching", () => {
+	test("should not rebuild plugin middleware wrappers for every handler request", async () => {
+		let endpointReads = 0;
+		let middlewareReads = 0;
+		const endpoints = {
+			cacheProbe: createAuthEndpoint(
+				"/cache-probe",
+				{ method: "GET" },
+				async () => ({ ok: true }),
+			),
+		};
+		const plugin = {
+			id: "middleware-read-counter",
+			get endpoints() {
+				endpointReads++;
+				return endpoints;
+			},
+			get middlewares() {
+				middlewareReads++;
+				return [];
+			},
+		};
+		const { auth } = await getTestInstance({
+			plugins: [plugin],
+		});
+
+		await auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+		const initialEndpointReads = endpointReads;
+		const initialReads = middlewareReads;
+		await auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+		await auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+		await auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+
+		expect(endpointReads).toBe(initialEndpointReads);
+		expect(middlewareReads).toBe(initialReads);
+	});
+
+	test("should keep request-derived context isolated across parallel handler requests", async () => {
+		const seenBaseURLs: string[] = [];
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					await new Promise((resolve) => setTimeout(resolve, 0));
+					seenBaseURLs.push(ctx.context.baseURL);
+				}),
+			},
+		});
+
+		await Promise.all([
+			auth.handler(
+				new Request("https://tenant-a.example.com/api/auth/ok", {
+					headers: { host: "tenant-a.example.com" },
+				}),
+			),
+			auth.handler(
+				new Request("https://tenant-b.example.com/api/auth/ok", {
+					headers: { host: "tenant-b.example.com" },
+				}),
+			),
+		]);
+
+		expect(seenBaseURLs).toEqual(
+			expect.arrayContaining([
+				"https://tenant-a.example.com/api/auth",
+				"https://tenant-b.example.com/api/auth",
+			]),
+		);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/4151
  */
 describe("auth with dynamic baseURL (allowedHosts)", () => {

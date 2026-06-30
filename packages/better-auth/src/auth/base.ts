@@ -1,7 +1,7 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
-import { getEndpoints, router } from "../api";
+import { createRouterHandler, getEndpoints } from "../api";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
@@ -17,6 +17,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 ): Auth<Options> => {
 	const authContext = initFn(options);
 	const { api } = getEndpoints(authContext, options);
+	let routerHandler:
+		| ReturnType<typeof createRouterHandler<Options>>
+		| undefined;
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
@@ -85,8 +88,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				);
 			}
 
-			const { handler } = router(handlerCtx, options);
-			return runWithAdapter(handlerCtx.adapter, () => handler(request));
+			const handler = await (routerHandler ||= createRouterHandler(
+				ctx,
+				options,
+			));
+			return runWithAdapter(handlerCtx.adapter, () =>
+				handler(handlerCtx, request),
+			);
 		},
 		api,
 		options: options,
