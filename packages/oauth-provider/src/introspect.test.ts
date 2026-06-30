@@ -453,7 +453,10 @@ describe("oauth introspect", async () => {
 		expect(introspection.data?.sid).toBeUndefined();
 	});
 
-	it("should pass jwt access_token introspection with logged out user", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10267
+	 */
+	it("should reject jwt access_token introspection with logged out user", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(
 			undefined,
@@ -481,16 +484,50 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
+		expect(introspection.data?.active).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10267
+	 */
+	it("should reject jwt access_token introspection with expired session", async () => {
+		const { headers: testHeaders, session } = await signInWithTestUser();
+		const tokens = await getTokens(
+			undefined,
+			{
+				resource: validAudience,
+			},
+			testHeaders,
+		);
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: session.id,
+				},
+			],
+			update: {
+				expiresAt: new Date(Date.now() - 1000),
+			},
 		});
-		expect(introspection.data?.sid).toBeUndefined();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data?.active).toBe(false);
 	});
 
 	it("should pass refresh_token introspection with logged out user", async () => {
