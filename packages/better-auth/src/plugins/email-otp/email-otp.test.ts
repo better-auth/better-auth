@@ -607,7 +607,8 @@ describe("change email", async () => {
 			);
 		});
 
-		describe('when informEmailTaken is "immediate"', async () => {
+		describe("when informEmailTaken is immediate", async () => {
+			const immediateOtpFn = vi.fn(async () => {});
 			const {
 				client: immediateClient,
 				testUser: immediateTestUser,
@@ -617,7 +618,7 @@ describe("change email", async () => {
 					plugins: [
 						bearer(),
 						emailOTP({
-							async sendVerificationOTP() {},
+							sendVerificationOTP: immediateOtpFn,
 							sendVerificationOnSignUp: true,
 							changeEmail: { enabled: true, informEmailTaken: "immediate" },
 						}),
@@ -648,12 +649,17 @@ describe("change email", async () => {
 						});
 					},
 				);
+				expect(immediateOtpFn).not.toHaveBeenCalledWith(
+					takenEmail,
+					expect.any(String),
+					"change-email",
+				);
 				expect(res!.error?.status).toBe(400);
 				expect(res!.error?.message).toContain("Email is already taken");
 			});
 		});
 
-		describe('when informEmailTaken is "deferred"', async () => {
+		describe("when informEmailTaken is deferred", async () => {
 			const deferredOtpFn = vi.fn();
 			let deferredOtp = "";
 			const {
