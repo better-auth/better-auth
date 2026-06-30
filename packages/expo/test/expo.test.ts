@@ -581,7 +581,7 @@ describe("expo", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9900
 	 */
-	it("should send cookie for link-social ID token requests", async () => {
+	it("should send cookie and expo-origin for link-social ID token requests", async () => {
 		let cookieHeader: string | null | undefined = null;
 		let expoOriginHeader: string | null | undefined = null;
 		const storage = new Map<string, string>();
@@ -634,7 +634,7 @@ describe("expo", async () => {
 		});
 
 		expect(cookieHeader).toContain("better-auth.session_token=existing-token");
-		expect(expoOriginHeader).toBeNull();
+		expect(expoOriginHeader).toBe("better-auth://");
 	});
 
 	it("should preserve existing cookies on link-social", async () => {
