@@ -435,15 +435,18 @@ export async function getMigrations(config: BetterAuthOptions) {
 				const type = getType(field, fieldName);
 				const builder = db.schema.alterTable(table.table);
 
-				if (field.index) {
+				// SQLite cannot add a column with an inline UNIQUE constraint, so a
+				// unique field is enforced with a separate index in the ALTER path.
+				if (field.index || field.unique) {
 					const indexName = `${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`;
-					const indexBuilder = db.schema
+					let indexBuilder = db.schema
 						.createIndex(indexName)
 						.on(table.table)
 						.columns([fieldName]);
-					deferredIndexes.push(
-						field.unique ? indexBuilder.unique() : indexBuilder,
-					);
+					if (field.unique) {
+						indexBuilder = indexBuilder.unique();
+					}
+					deferredIndexes.push(indexBuilder);
 				}
 
 				const built = builder.addColumn(fieldName, type, (col) => {
@@ -458,9 +461,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
-					if (field.unique) {
-						col = col.unique();
-					}
 					if (
 						field.type === "date" &&
 						typeof field.defaultValue === "function" &&
@@ -471,6 +471,25 @@ export async function getMigrations(config: BetterAuthOptions) {
 						} else {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
+					} else if (
+						(field.type === "string" ||
+							field.type === "number" ||
+							field.type === "boolean") &&
+						field.defaultValue !== undefined &&
+						field.defaultValue !== null &&
+						typeof field.defaultValue !== "function"
+					) {
+						// A required column added to a populated table needs a SQL
+						// default, or the NOT NULL add fails. Booleans map to 1/0 on
+						// engines without a native boolean type.
+						col = col.defaultTo(
+							typeof field.defaultValue === "boolean" &&
+								(dbType === "sqlite" || dbType === "mssql")
+								? field.defaultValue
+									? 1
+									: 0
+								: field.defaultValue,
+						);
 					}
 					return col;
 				});
