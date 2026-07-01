@@ -92,7 +92,11 @@ function makeWWWAuthenticate(authURL: string, resource?: string): string {
 	return `Bearer resource_metadata="${resourceMetadataURL}"`;
 }
 
-function make401Response(authURL: string, resource?: string): Response {
+function make401Response(
+	authURL: string,
+	resource: string | undefined,
+	corsHeaders: Record<string, string>,
+): Response {
 	const wwwAuth = makeWWWAuthenticate(authURL, resource);
 	return Response.json(
 		{
@@ -107,7 +111,9 @@ function make401Response(authURL: string, resource?: string): Response {
 		{
 			status: 401,
 			headers: {
+				...corsHeaders,
 				"WWW-Authenticate": wwwAuth,
+				"Access-Control-Expose-Headers": "WWW-Authenticate",
 			},
 		},
 	);
@@ -186,13 +192,13 @@ export function createMcpAuthClient(
 
 			const authHeader = req.headers.get("Authorization");
 			if (!authHeader || !authHeader.startsWith("Bearer ")) {
-				return make401Response(authURL, options.resource);
+				return make401Response(authURL, options.resource, corsHeaders);
 			}
 
 			const token = authHeader.slice(7);
 			const session = await verifyToken(token);
 			if (!session) {
-				return make401Response(authURL, options.resource);
+				return make401Response(authURL, options.resource, corsHeaders);
 			}
 
 			return fn(req, session);

@@ -160,6 +160,38 @@ describe("mcp-client", async () => {
 				"https://myapp.com",
 			);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10272
+		 */
+		it("exposes the WWW-Authenticate challenge on CORS 401 responses", async () => {
+			const client = createMcpAuthClient({
+				authURL: "https://auth.example.com",
+				resource: "https://mcp.example.com",
+			});
+
+			const protectedHandler = client.handler(async () => {
+				return new Response("ok");
+			});
+
+			const response = await protectedHandler(
+				new Request("https://mcp.example.com/mcp", {
+					method: "POST",
+					headers: { Origin: "https://auth.example.com" },
+				}),
+			);
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				'Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"',
+			);
+			expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+				"https://auth.example.com",
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"WWW-Authenticate",
+			);
+		});
 	});
 
 	describe("happy path - verifyToken + handler with valid session", () => {
