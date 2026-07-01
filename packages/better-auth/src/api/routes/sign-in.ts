@@ -19,6 +19,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
+import { rehashPasswordIfNeeded } from "../../utils/password";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -557,7 +558,6 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 				);
 			}
-
 			if (
 				ctx.context.options?.emailAndPassword?.requireEmailVerification &&
 				!user.user.emailVerified
@@ -591,6 +591,14 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
 			}
+
+			// Only re-hash once the sign-in will actually produce a session, so we
+			// avoid a credential write on requests rejected by the checks above.
+			await rehashPasswordIfNeeded(ctx, {
+				accountId: credentialAccount.id,
+				password,
+				verifyResult: validPassword,
+			});
 
 			const session = await ctx.context.internalAdapter.createSession(
 				user.user.id,

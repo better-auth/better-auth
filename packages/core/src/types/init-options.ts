@@ -27,7 +27,11 @@ import type { BaseUser } from "../db/schema/user";
 import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AuthContext, GenericEndpointContext } from "./context";
+import type {
+	AuthContext,
+	GenericEndpointContext,
+	PasswordVerifyResult,
+} from "./context";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
@@ -814,10 +818,21 @@ export type BetterAuthOptions = {
 				 */
 				password?: {
 					hash?: (password: string) => Promise<string>;
+					/**
+					 * Verify a password against a stored hash.
+					 *
+					 * Return `true` if the password is valid, `false` if it is
+					 * invalid, or `"success-rehash-needed"` if the password is valid
+					 * but the stored hash is outdated and should be re-hashed. When
+					 * `"success-rehash-needed"` is returned, Better Auth re-hashes the
+					 * password with the `hash` function and persists it automatically. This is
+					 * useful when migrating from another hashing algorithm or changing
+					 * cost parameters.
+					 */
 					verify?: (data: {
 						hash: string;
 						password: string;
-					}) => Promise<boolean>;
+					}) => Promise<PasswordVerifyResult>;
 				};
 				/**
 				 * Automatically sign in the user after sign up
