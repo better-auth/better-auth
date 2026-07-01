@@ -92,6 +92,30 @@ function makeWWWAuthenticate(authURL: string, resource?: string): string {
 	return `Bearer resource_metadata="${resourceMetadataURL}"`;
 }
 
+function addExposeHeader(
+	headers: Record<string, string>,
+	headerName: string,
+): Record<string, string> {
+	const exposedHeaders = headers["Access-Control-Expose-Headers"];
+	if (!exposedHeaders) {
+		return {
+			...headers,
+			"Access-Control-Expose-Headers": headerName,
+		};
+	}
+
+	const alreadyExposed = exposedHeaders
+		.split(",")
+		.some((header) => header.trim().toLowerCase() === headerName.toLowerCase());
+
+	return {
+		...headers,
+		"Access-Control-Expose-Headers": alreadyExposed
+			? exposedHeaders
+			: `${exposedHeaders}, ${headerName}`,
+	};
+}
+
 function make401Response(
 	authURL: string,
 	resource: string | undefined,
@@ -111,9 +135,8 @@ function make401Response(
 		{
 			status: 401,
 			headers: {
-				...corsHeaders,
+				...addExposeHeader(corsHeaders, "WWW-Authenticate"),
 				"WWW-Authenticate": wwwAuth,
-				"Access-Control-Expose-Headers": "WWW-Authenticate",
 			},
 		},
 	);
