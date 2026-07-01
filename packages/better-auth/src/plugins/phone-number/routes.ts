@@ -175,6 +175,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await rehashPasswordIfNeeded(ctx, {
 				accountId: credentialAccount.id,
 				password,
+				currentHash: currentPassword,
 				verifyResult: validPassword,
 			});
 			const session = await ctx.context.internalAdapter.createSession(
