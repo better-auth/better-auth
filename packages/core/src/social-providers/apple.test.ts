@@ -13,6 +13,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import { apple } from "./apple";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
+const CLIENT_ID = "service.example.app";
+const CLIENT_SECRET = "test-secret";
 
 async function createSignedAppleToken(payloadNonce: string) {
 	const { publicKey, privateKey } = await generateKeyPair("ES256", {
@@ -46,6 +48,32 @@ function mockAppleJwks(publicJWK: JWK) {
 	} as Awaited<ReturnType<typeof betterFetch>>);
 }
 
+function codeChallenge(codeVerifier: string) {
+	return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
+describe("apple.createAuthorizationURL", () => {
+	it("sends a PKCE code challenge when a code verifier is provided", async () => {
+		const verifier = "apple-code-verifier";
+		const provider = apple({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: verifier,
+		});
+
+		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+		expect(url.searchParams.get("code_challenge")).toBe(
+			codeChallenge(verifier),
+		);
+		expect(url.searchParams.has("code_verifier")).toBe(false);
+	});
+});
+
 describe("apple.verifyIdToken", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
@@ -57,8 +85,8 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: "service.example.app",
-			clientSecret: "test-secret",
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
 			appBundleIdentifier: "com.example.app",
 		});
 
@@ -72,8 +100,8 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: "service.example.app",
-			clientSecret: "test-secret",
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
 			appBundleIdentifier: "com.example.app",
 		});
 
@@ -87,8 +115,8 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: "service.example.app",
-			clientSecret: "test-secret",
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
 			appBundleIdentifier: "com.example.app",
 		});
 
