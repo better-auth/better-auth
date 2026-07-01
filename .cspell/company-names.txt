@@ -31,4 +31,6 @@ contoso
 Contoso
 Mikro
 anthropics
+thunderid
+THUNDERID
 Zitadel

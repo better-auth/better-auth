@@ -33,6 +33,7 @@ import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
 import { slack } from "./providers/slack";
+import { thunderid } from "./providers/thunderid";
 import { yandex } from "./providers/yandex";
 
 describe("oauth2", async () => {
@@ -3571,6 +3572,108 @@ describe("oauth2", async () => {
 							clientId: "keycloak-client-id",
 							clientSecret: "keycloak-client-secret",
 							issuer: "https://my-domain.com/realms/MyRealm",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
+	});
+
+	describe("ThunderID Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const thunderidConfig = thunderid({
+				clientId: "thunderid-client-id",
+				clientSecret: "thunderid-client-secret",
+				issuer: "https://thunderid.example.com",
+			});
+
+			expect(thunderidConfig.providerId).toBe("thunderid");
+			expect(thunderidConfig.accountIssuer).toBe(
+				"https://thunderid.example.com",
+			);
+			expect(thunderidConfig.discoveryUrl).toBe(
+				"https://thunderid.example.com/.well-known/openid-configuration",
+			);
+			expect(thunderidConfig.scopes).toEqual(["openid", "profile", "email"]);
+			expect(thunderidConfig.clientId).toBe("thunderid-client-id");
+			expect(thunderidConfig.clientSecret).toBe("thunderid-client-secret");
+			expect(thunderidConfig.getUserInfo).toBeUndefined();
+		});
+
+		it("should handle issuer with trailing slash", () => {
+			const thunderidConfig = thunderid({
+				clientId: "thunderid-client-id",
+				clientSecret: "thunderid-client-secret",
+				issuer: "https://thunderid.example.com/",
+			});
+
+			expect(thunderidConfig.accountIssuer).toBe(
+				"https://thunderid.example.com",
+			);
+			expect(thunderidConfig.discoveryUrl).toBe(
+				"https://thunderid.example.com/.well-known/openid-configuration",
+			);
+		});
+
+		it("should allow overriding scopes", () => {
+			const thunderidConfig = thunderid({
+				clientId: "thunderid-client-id",
+				clientSecret: "thunderid-client-secret",
+				issuer: "https://thunderid.example.com",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(thunderidConfig.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const thunderidConfig = thunderid({
+				clientId: "thunderid-client-id",
+				clientSecret: "thunderid-client-secret",
+				issuer: "https://thunderid.example.com",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(thunderidConfig.pkce).toBe(true);
+			expect(thunderidConfig.disableImplicitSignUp).toBe(true);
+		});
+
+		it("should forward token endpoint auth and logout options", () => {
+			const thunderidConfig = thunderid({
+				clientId: "thunderid-client-id",
+				clientSecret: "thunderid-client-secret",
+				issuer: "https://thunderid.example.com",
+				tokenEndpointAuth: { method: "client_secret_post" },
+				endSessionEndpoint: "https://thunderid.example.com/logout",
+				postLogoutRedirectURI: "https://app.example.com/logged-out",
+				disableProviderLogout: true,
+			});
+
+			expect(thunderidConfig.tokenEndpointAuth).toEqual({
+				method: "client_secret_post",
+			});
+			expect(thunderidConfig.endSessionEndpoint).toBe(
+				"https://thunderid.example.com/logout",
+			);
+			expect(thunderidConfig.postLogoutRedirectURI).toBe(
+				"https://app.example.com/logged-out",
+			);
+			expect(thunderidConfig.disableProviderLogout).toBe(true);
+		});
+	});
+
+	it("should integrate thunderid provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						thunderid({
+							clientId: "thunderid-client-id",
+							clientSecret: "thunderid-client-secret",
+							issuer: "https://thunderid.example.com",
 						}),
 					],
 				}),

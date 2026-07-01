@@ -95,6 +95,7 @@ Better Auth includes helpers for these providers:
 * **Okta** - `okta(options)`
 * **Patreon** - `patreon(options)`
 * **Slack** - `slack(options)`
+* **ThunderID** - `thunderid(options)`
 * **Yandex** - `yandex(options)`
 
 Here's an example using Slack:
@@ -132,6 +133,7 @@ Each helper accepts common OAuth options through `BaseOAuthProviderOptions`, plu
 * **LINE**: Accepts an optional `providerId`. Call `line()` with different provider IDs and credentials to support multiple country-specific channels
 * **Microsoft Entra ID**: Requires a concrete tenant GUID. Use the built-in [Microsoft social provider](/docs/authentication/microsoft) for the multi-tenant `"common"`, `"organizations"`, or `"consumers"` authorities
 * **Okta**: Requires `issuer` (for example, `https://dev-xxxxx.okta.com/oauth2/default`)
+* **ThunderID**: Requires `issuer` (for example, `https://thunderid.example.com`)
 
 All helpers accept these common options:
 
