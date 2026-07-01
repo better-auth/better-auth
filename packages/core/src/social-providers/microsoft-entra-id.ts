@@ -281,27 +281,9 @@ export const microsoft = (options: MicrosoftOptions) => {
 				typeof user.oid === "string" && user.oid.length > 0
 					? user.oid
 					: undefined;
-			const resolveMappedUser = async () => {
-				const { id: mappedAccountId, ...userMap } =
-					(await options.mapProfileToUser?.(user)) ?? {};
-				return { mappedAccountId, userMap };
-			};
 			if (!oidAccountId && !options.mapProfileToUser) {
 				logger.error(
 					"Microsoft Entra ID token did not include a valid oid claim; unable to resolve a stable account identifier.",
-				);
-				return null;
-			}
-			let mappedUser = !oidAccountId ? await resolveMappedUser() : undefined;
-			let mappedAccountId = mappedUser?.mappedAccountId;
-			let userMap = mappedUser?.userMap ?? {};
-			let accountId =
-				typeof mappedAccountId === "string" && mappedAccountId.length > 0
-					? mappedAccountId
-					: oidAccountId;
-			if (!accountId) {
-				logger.error(
-					"Microsoft Entra ID mapProfileToUser was invoked for a token without a valid oid claim, but did not return a non-empty string id.",
 				);
 				return null;
 			}
@@ -334,14 +316,17 @@ export const microsoft = (options: MicrosoftOptions) => {
 					},
 				);
 			}
-			if (oidAccountId) {
-				mappedUser = await resolveMappedUser();
-				mappedAccountId = mappedUser.mappedAccountId;
-				userMap = mappedUser.userMap;
-				accountId =
-					typeof mappedAccountId === "string" && mappedAccountId.length > 0
-						? mappedAccountId
-						: oidAccountId;
+			const { id: mappedAccountId, ...userMap } =
+				(await options.mapProfileToUser?.(user)) ?? {};
+			const accountId =
+				typeof mappedAccountId === "string" && mappedAccountId.length > 0
+					? mappedAccountId
+					: oidAccountId;
+			if (!accountId) {
+				logger.error(
+					"Microsoft Entra ID mapProfileToUser was invoked for a token without a valid oid claim, but did not return a non-empty string id.",
+				);
+				return null;
 			}
 			// Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
