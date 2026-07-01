@@ -597,6 +597,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			await rehashPasswordIfNeeded(ctx, {
 				accountId: credentialAccount.id,
 				password,
+				currentHash: currentPassword,
 				verifyResult: validPassword,
 			});
 

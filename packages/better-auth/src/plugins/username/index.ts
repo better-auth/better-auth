@@ -540,6 +540,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					await rehashPasswordIfNeeded(ctx, {
 						accountId: account.id,
 						password: ctx.body.password,
+						currentHash: currentPassword,
 						verifyResult: validPassword,
 					});
 

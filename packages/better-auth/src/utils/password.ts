@@ -14,12 +14,17 @@ const PASSWORD_REHASH_NEEDED = "success-rehash-needed" as const;
  * Re-hash and persist a password when `verify` reported the stored hash is
  * outdated. This is opportunistic: a failure to write the new hash must never
  * block an otherwise-valid authentication, so errors are logged and swallowed.
+ *
+ * `currentHash` is the hash that was just verified; the upgrade is only
+ * persisted if the stored hash still matches it, so a re-hash of the old
+ * password can never clobber a concurrent password change or reset.
  */
 export async function rehashPasswordIfNeeded(
 	ctx: GenericEndpointContext,
 	data: {
 		accountId: string;
 		password: string;
+		currentHash: string;
 		verifyResult: PasswordVerifyResult;
 	},
 ) {
@@ -28,6 +33,17 @@ export async function rehashPasswordIfNeeded(
 	}
 	try {
 		const newHash = await ctx.context.password.hash(data.password);
+		const account = await ctx.context.adapter.findOne<{
+			password?: string | null;
+		}>({
+			model: "account",
+			where: [{ field: "id", value: data.accountId }],
+		});
+		// The stored hash changed while we were re-hashing (e.g. a concurrent
+		// password change) — leave it alone rather than reverting it.
+		if (account?.password !== data.currentHash) {
+			return;
+		}
 		await ctx.context.internalAdapter.updateAccount(data.accountId, {
 			password: newHash,
 		});
@@ -61,6 +77,7 @@ export async function validatePassword(
 	await rehashPasswordIfNeeded(ctx, {
 		accountId: credentialAccount.id,
 		password: data.password,
+		currentHash: currentPassword,
 		verifyResult: compare,
 	});
 	return Boolean(compare);
@@ -90,6 +107,7 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	await rehashPasswordIfNeeded(c, {
 		accountId: credentialAccount.id,
 		password,
+		currentHash: currentPassword,
 		verifyResult: compare,
 	});
 	return true;
