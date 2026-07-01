@@ -44,12 +44,23 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			plugins: [organization({ teams: { enabled: true } })],
 		};
 
-		const { toBeAdded, runMigrations } = await getMigrations(config);
+		const { toBeAdded, runMigrations, compileMigrations } =
+			await getMigrations(config);
 
 		const teamAdditions = toBeAdded.find((t) => t.table === "team");
 		expect(teamAdditions?.fields).toHaveProperty("memberCount");
 		const teamMemberAdditions = toBeAdded.find((t) => t.table === "teamMember");
 		expect(teamMemberAdditions?.fields).toHaveProperty("membershipKey");
+
+		// The generated SQL (also what `auth generate` emits) carries a literal
+		// default for the required column and a separate unique index for the
+		// unique column, never an inline `ADD COLUMN ... UNIQUE`.
+		const sql = (await compileMigrations()).toLowerCase();
+		expect(sql).toContain(
+			'add column "membercount" integer default 0 not null',
+		);
+		expect(sql).toContain("create unique index");
+		expect(sql).not.toMatch(/add column "membershipkey"[^;]*unique/);
 
 		// SQLite rejects both `ADD COLUMN ... NOT NULL` without a default and
 		// `ADD COLUMN ... UNIQUE`, so an unhardened generator throws here.

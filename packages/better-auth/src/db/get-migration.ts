@@ -472,6 +472,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
 					} else if (
+						!field.unique &&
 						(field.type === "string" ||
 							field.type === "number" ||
 							field.type === "boolean") &&
@@ -480,8 +481,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 						typeof field.defaultValue !== "function"
 					) {
 						// A required column added to a populated table needs a SQL
-						// default, or the NOT NULL add fails. Booleans map to 1/0 on
-						// engines without a native boolean type.
+						// default, or the NOT NULL add fails. Unique columns are
+						// excluded: a shared default would collide on the unique index.
+						// Booleans map to 1/0 on engines without a native boolean type.
 						col = col.defaultTo(
 							typeof field.defaultValue === "boolean" &&
 								(dbType === "sqlite" || dbType === "mssql")
