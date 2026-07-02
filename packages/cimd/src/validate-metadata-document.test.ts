@@ -398,7 +398,7 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toContain("redirect_uris");
 	});
 
-	it("rejects disallowed grant_types", () => {
+	it("rejects grant_types without authorization_code", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
 			validMetadata(fetchUrl, {
@@ -429,7 +429,24 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it("rejects disallowed response_types", () => {
+	// Regression: clients (e.g. VS Code's published CIMD document) may declare
+	// grant types the server does not support. Per RFC 7591 §2.1 the server
+	// ignores them rather than rejecting the whole client.
+	it("accepts grant_types with unsupported entries alongside authorization_code", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				grant_types: [
+					"authorization_code",
+					"refresh_token",
+					"urn:ietf:params:oauth:grant-type:device_code",
+				],
+			}),
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	it("rejects response_types without code", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
 			validMetadata(fetchUrl, {
@@ -445,6 +462,18 @@ describe("validateCimdMetadata", () => {
 			fetchUrl,
 			validMetadata(fetchUrl, {
 				response_types: ["code"],
+			}),
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	// Regression: unsupported response types are ignored as long as "code" is
+	// present (mirrors the grant_types liberal-acceptance policy).
+	it("accepts response_types with unsupported entries alongside code", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				response_types: ["code", "token"],
 			}),
 		);
 		expect(result.valid).toBe(true);
