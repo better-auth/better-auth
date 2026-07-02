@@ -729,6 +729,8 @@ await auth.api.adminCreateOAuthClient({
   If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
 </Callout>
 
+A `post_logout_redirect_uri` must exactly match one of the client's registered `postLogoutRedirectUris`. To authorize unregistered post-logout targets dynamically, see [Dynamic Redirect URIs](#dynamic-redirect-uris).
+
 ### Back-Channel Logout
 
 [Back-Channel Logout](https://openid.net/specs/openid-connect-backchannel-1_0.html) is the server-to-server counterpart to RP-Initiated Logout: when a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, etc.), the OP POSTs a signed Logout Token to each registered Relying Party so they can terminate their own session state and revoke bound API access.
@@ -1151,6 +1153,34 @@ await client.oauth2.oauth2Continue({
   postLogin: true,
 });
 ```
+
+### Dynamic Redirect URIs
+
+By default, redirect URIs are validated by exact string match against the client's registered URIs: `redirectUris` at the [Authorize Endpoint](#authorize-endpoint) and `postLogoutRedirectUris` at the [End Session Endpoint](#end-session-endpoint), plus [RFC 8252](https://datatracker.ietf.org/doc/html/rfc8252) loopback-IP equivalence for native clients. Anything else is rejected.
+
+For dynamic or ephemeral targets that cannot be pre-registered, such as per-branch preview deployments whose hostnames carry a per-session hash, provide the `validateRedirectURI` function. It is consulted only as a last resort, after the built-in exact-match checks fail. Returning `true` accepts the requested URI as if it were registered.
+
+The function receives the endpoint `ctx`, the resolved `client`, the requested `redirectURI`, and a `type` that identifies which flow is asking:
+
+* `"authorize"`: validates the `redirect_uri` at `/oauth2/authorize`. Returning `true` delivers the authorization code to the requested URI.
+* `"logout"`: validates the `post_logout_redirect_uri` at RP-Initiated Logout. Returning `true` redirects the user agent there (with `state` echoed) after the session ends.
+
+```ts title="auth.ts"
+oauthProvider({
+  validateRedirectURI: ({ client, redirectURI, type }) => { // [!code highlight]
+    const url = new URL(redirectURI);
+    if (url.protocol !== "https:") return false;
+    // Bind to the specific client and an exact host allow-list.
+    return url.hostname.endsWith(`.${client.clientId}.preview.example.com`);
+  },
+})
+```
+
+When the function declines (or is not set), the request fails with `invalid_redirect`. The error is shown on the authorization server's error page and is never sent to the untrusted target, so a declined URI never receives an authorization code or a logout redirect.
+
+<Callout type="warn">
+  A permissive matcher is an open redirector. For `type: "authorize"` it also leaks the authorization code, which is an account-takeover vector, so validate most strictly there. For both types, bind validation to the specific `client`, require an exact scheme and host allow-list, and never accept apex wildcards or user-controlled hosts. Branch on `type` only to make `"logout"` more permissive than `"authorize"`, never the reverse.
+</Callout>
 
 ### Cached Trusted Clients
 

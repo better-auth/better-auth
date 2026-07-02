@@ -800,6 +800,45 @@ export interface OAuthOptions<
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<boolean | undefined>;
 	/**
+	 * Authorize a redirect URI that is NOT among the client's registered URIs.
+	 *
+	 * Consulted in two flows, distinguished by `type`:
+	 *
+	 * - `"authorize"` — validates the `redirect_uri` at `/oauth2/authorize`.
+	 *   Called ONLY after the built-in checks fail, i.e. the requested URI did
+	 *   not exactly match any registered `redirectUris` entry and was not an
+	 *   RFC 8252 loopback-IP equivalent of one. Returning `true` delivers the
+	 *   authorization code to the requested URI as though it were registered.
+	 *
+	 * - `"logout"` — validates the `post_logout_redirect_uri` at RP-Initiated
+	 *   Logout. Called ONLY after the requested URI failed to exactly match any
+	 *   registered `postLogoutRedirectUris` entry. Returning `true` redirects the
+	 *   user agent there (with `state` echoed) after the session ends.
+	 *
+	 * Use this for dynamic or ephemeral redirect targets that cannot be
+	 * pre-registered — for example per-branch preview deployments whose
+	 * hostnames are not known ahead of time.
+	 *
+	 * @example
+	 * validateRedirectURI: ({ client, redirectURI, type }) => {
+	 * 	const url = new URL(redirectURI);
+	 * 	if (url.protocol !== "https:") return false;
+	 * 	return url.hostname.endsWith(`.${client.clientId}.preview.example.com`);
+	 * }
+	 */
+	validateRedirectURI?: (context: {
+		ctx: GenericEndpointContext;
+		client: SchemaClient<Scopes>;
+		redirectURI: string;
+		/**
+		 * Which flow is requesting validation:
+		 * - `"authorize"` — the `redirect_uri` at `/oauth2/authorize`. Delivers
+		 *   the authorization code, so validate most strictly.
+		 * - `"logout"` — the `post_logout_redirect_uri` at RP-Initiated Logout.
+		 */
+		type: "authorize" | "logout";
+	}) => Awaitable<boolean>;
+	/**
 	 * List default scopes when using the token endpoint's
 	 * grant type "client_credentials". This is used
 	 * only when oauthClients are stored in the database
