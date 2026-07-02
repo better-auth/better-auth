@@ -14,10 +14,14 @@ import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
 import {
 	getBaseURL,
+	getHostFromSource,
 	getOrigin,
+	getProtocolFromSource,
 	isDynamicBaseURLConfig,
+	isFunctionBaseURLConfig,
 	isRequestLike,
 	resolveBaseURL,
+	resolveFunctionBaseURL,
 } from "../utils/url";
 
 export async function runPluginInit(context: AuthContext) {
@@ -201,6 +205,32 @@ export function resolveDynamicTrustedProxyHeaders(
 	return options.advanced?.trustedProxyHeaders ?? false;
 }
 
+function createBaseURLResolverRequest(
+	source: Request | Headers | undefined,
+	trustedProxyHeaders?: boolean,
+): Request {
+	if (isRequestLike(source)) {
+		return source;
+	}
+	if (!source) {
+		throw new BetterAuthError(
+			"Could not resolve baseURL from function config. Pass a Request or headers to the auth call.",
+		);
+	}
+	const host = getHostFromSource(source, trustedProxyHeaders);
+	if (!host) {
+		throw new BetterAuthError(
+			"Could not determine host from request headers. Pass a Request or headers with a host header.",
+		);
+	}
+	const protocol = getProtocolFromSource(
+		source,
+		undefined,
+		trustedProxyHeaders,
+	);
+	return new Request(`${protocol}://${host}`, { headers: source });
+}
+
 /**
  * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
  * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
@@ -214,16 +244,22 @@ export async function resolveRequestContext(
 ): Promise<AuthContext> {
 	const dynamicBaseURLConfig = ctx.options.baseURL;
 	const basePath = ctx.options.basePath || "/api/auth";
-	const baseURL = resolveBaseURL(
-		dynamicBaseURLConfig,
-		basePath,
-		source,
-		undefined,
-		trustedProxyHeaders,
-	);
+	const baseURL = isFunctionBaseURLConfig(dynamicBaseURLConfig)
+		? await resolveFunctionBaseURL(
+				dynamicBaseURLConfig,
+				createBaseURLResolverRequest(source, trustedProxyHeaders),
+				basePath,
+			)
+		: resolveBaseURL(
+				dynamicBaseURLConfig,
+				basePath,
+				source,
+				undefined,
+				trustedProxyHeaders,
+			);
 	if (!baseURL) {
 		throw new BetterAuthError(
-			"Could not resolve base URL from request. Check your allowedHosts config.",
+			"Could not resolve base URL from request. Check your baseURL config.",
 		);
 	}
 
@@ -237,11 +273,14 @@ export async function resolveRequestContext(
 		baseURL: getOrigin(baseURL) || undefined,
 	};
 
-	// Pass the dynamic config so getTrustedOrigins can expand `allowedHosts`.
-	const trustedOriginOptions: BetterAuthOptions = {
-		...resolved.options,
-		baseURL: dynamicBaseURLConfig,
-	};
+	const trustedOriginOptions: BetterAuthOptions = isDynamicBaseURLConfig(
+		dynamicBaseURLConfig,
+	)
+		? {
+				...resolved.options,
+				baseURL: dynamicBaseURLConfig,
+			}
+		: resolved.options;
 	// Only synthesize a Request for the user-facing callbacks that need one.
 	const needsRequest =
 		typeof ctx.options.trustedOrigins === "function" ||
@@ -267,10 +306,8 @@ export async function resolveRequestContext(
 		callbackRequest,
 	);
 
-	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {
-		resolved.authCookies = getCookies(resolved.options);
-		resolved.createAuthCookie = createCookieGetter(resolved.options);
-	}
+	resolved.authCookies = getCookies(resolved.options);
+	resolved.createAuthCookie = createCookieGetter(resolved.options);
 
 	return resolved;
 }
