@@ -3,7 +3,12 @@ import type {
 	Resolver,
 	ResolverHandlerContext,
 } from "../types";
-import { filterForeignKeys, getTypeFactory } from "../utils";
+import {
+	filterForeignKeys,
+	filterIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 type CustomResolverContext = ResolverHandlerContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -39,6 +44,25 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
+const escapeSqlString = (value: string) => value.replace(/'/g, "''");
+
+const formatIndex = (field: DBFieldAttribute, tableName: string) => {
+	const indexName = getIndexName(tableName, field);
+	const tableObject = escapeSqlString(tableName);
+	return [
+		`IF OBJECT_ID(N'${tableObject}') IS NOT NULL`,
+		"\tAND NOT EXISTS (",
+		"\t\tSELECT 1",
+		"\t\tFROM sys.indexes",
+		`\t\tWHERE name = N'${escapeSqlString(indexName)}'`,
+		`\t\t\tAND object_id = OBJECT_ID(N'${tableObject}')`,
+		"\t)",
+		"BEGIN",
+		`\tCREATE ${field.unique ? "UNIQUE " : ""}INDEX [${indexName}] ON [${tableName}] ([${field.fieldName}]);`,
+		"END;",
+	].join("\n");
+};
+
 export const mssqlResolver = {
 	handler: (ctx) => {
 		const getType = getTypeFactory((field) => ({
@@ -47,7 +71,9 @@ export const mssqlResolver = {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "varchar(8000)",
+						: field.index
+							? "varchar(255)"
+							: "varchar(8000)",
 			boolean: "smallint",
 			number: field.bigint ? "bigint" : "integer",
 			date: "datetime2(3)",
@@ -86,6 +112,9 @@ export const mssqlResolver = {
 			lines.push(`\t);`);
 		}
 		lines.push("END;");
+		for (const field of filterIndexes(ctx.schema)) {
+			lines.push(formatIndex(field, ctx.schema.modelName));
+		}
 		return lines.join("\n");
 	},
 } satisfies Resolver;

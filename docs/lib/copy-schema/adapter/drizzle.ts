@@ -1,5 +1,5 @@
 import type { Resolver } from "../types";
-import { getTypeFactory } from "../utils";
+import { filterIndexes, getIndexName, getTypeFactory } from "../utils";
 
 export type DrizzleResolverOptions = {
 	/**
@@ -53,7 +53,9 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 								? `t.varchar("${fieldName}", { length: 255 })`
 								: field.references
 									? `t.varchar("${fieldName}", { length: 36 })`
-									: `t.text("${fieldName}")`,
+									: provider === "mysql" && field.index
+										? `t.varchar("${fieldName}", { length: 255 })`
+										: `t.text("${fieldName}")`,
 					boolean:
 						provider === "sqlite"
 							? `t.integer("${fieldName}")`
@@ -108,7 +110,18 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 				table.push(`\t${field.fieldName}: ${value},`);
 			}
 
-			table.push("});");
+			const indexes = filterIndexes(ctx.schema);
+			if (indexes.length > 0) {
+				table.push("}, (table) => [");
+				for (const field of indexes) {
+					table.push(
+						`\tt.${field.unique ? "uniqueIndex" : "index"}("${getIndexName(ctx.schema.modelName, field)}").on(table.${field.fieldName}),`,
+					);
+				}
+				table.push("]);");
+			} else {
+				table.push("});");
+			}
 
 			return [...imports, "", ...table].join("\n");
 		},

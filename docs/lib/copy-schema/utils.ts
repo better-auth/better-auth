@@ -42,6 +42,14 @@ export function filterForeignKeys({ fields }: { fields: DBFieldAttribute[] }) {
 	return fields.filter(({ references }) => !!references);
 }
 
+export function filterIndexes({ fields }: { fields: DBFieldAttribute[] }) {
+	return fields.filter(({ index }) => !!index);
+}
+
+export function getIndexName(tableName: string, field: DBFieldAttribute) {
+	return `${tableName}_${field.fieldName}_${field.unique ? "uidx" : "idx"}`;
+}
+
 export function capitalize(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }

@@ -622,6 +622,8 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
+`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields.
+
 export const deviceCodeTableFields = [
 	{
 		name: "id",
@@ -633,11 +635,13 @@ export const deviceCodeTableFields = [
 		name: "deviceCode",
 		type: "string",
 		description: "The device verification code",
+		isIndexed: true,
 	},
 	{
 		name: "userCode",
 		type: "string",
 		description: "The user-friendly code for verification",
+		isIndexed: true,
 	},
 	{
 		name: "userId",

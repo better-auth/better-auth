@@ -96,6 +96,7 @@ interface Field {
 	isForeignKey?: boolean;
 	isOptional?: boolean;
 	isUnique?: boolean;
+	isIndexed?: boolean;
 	references?: {
 		model: string;
 		field: string;
@@ -255,6 +256,7 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 		required: field.isPrimaryKey ? true : !field.isOptional,
 		references,
 		unique: field.isUnique ?? false,
+		index: field.isIndexed ?? false,
 		bigint,
 	};
 }
@@ -460,7 +462,7 @@ export function DatabaseTable({
 									{field.type}
 								</span>
 							</div>
-							<div className="px-4 py-2">
+							<div className="px-4 py-2 flex flex-wrap items-center gap-1.5">
 								{field.isPrimaryKey && (
 									<span className="inline-flex items-center gap-1 font-mono text-[13px] text-amber-600 dark:text-amber-500 uppercase">
 										<Key className="size-2.5" />
@@ -473,9 +475,16 @@ export function DatabaseTable({
 										FK
 									</span>
 								)}
-								{!field.isPrimaryKey && !field.isForeignKey && (
-									<span className="text-foreground/20 uppercase">-</span>
+								{field.isIndexed && (
+									<span className="inline-flex items-center gap-1 font-mono text-[13px] text-emerald-600 dark:text-emerald-500 uppercase">
+										IDX
+									</span>
 								)}
+								{!field.isPrimaryKey &&
+									!field.isForeignKey &&
+									!field.isIndexed && (
+										<span className="text-foreground/20 uppercase">-</span>
+									)}
 							</div>
 							<div className="px-4 py-2 text-[13px] text-foreground/70 leading-relaxed">
 								{field.description}
