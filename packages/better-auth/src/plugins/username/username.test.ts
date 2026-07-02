@@ -992,13 +992,13 @@ describe("username send-verification-email (POST /username/send-verification-ema
 	});
 
 	it("returns INVALID_USERNAME_OR_PASSWORD for a wrong password (no info leak)", async () => {
-		let emailSent = false;
+		let emailSent = 0;
 		const { client } = await getTestInstance(
 			{
 				emailAndPassword: { enabled: true, requireEmailVerification: true },
 				emailVerification: {
 					async sendVerificationEmail() {
-						emailSent = true;
+						emailSent++;
 					},
 				},
 				plugins: [username()],

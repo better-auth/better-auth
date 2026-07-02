@@ -616,10 +616,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					}
 
-					const username =
-						options?.validationOrder?.username === "pre-normalization"
-							? normalizer(ctx.body.username)
-							: ctx.body.username;
+					const username = getUsernameToValidate(ctx.body.username);
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
@@ -658,7 +655,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						where: [
 							{
 								field: "username",
-								value: normalizer(username),
+								value: normalizer(ctx.body.username),
 							},
 						],
 					});
@@ -686,6 +683,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 						],
 					});
 					if (!account) {
+						// Hash password to keep timing constant with the !user
+						// branch — otherwise "exists but no credential account"
+						// becomes a distinguishable side channel.
+						await ctx.context.password.hash(ctx.body.password);
 						throw APIError.from(
 							"UNAUTHORIZED",
 							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
@@ -693,6 +694,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 					}
 					const currentPassword = account.password;
 					if (!currentPassword) {
+						// Same dummy-hash pattern as above — the "exists but no
+						// stored hash" path must not be faster than the
+						// "user not found" path.
+						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.warn("Password not found");
 						throw APIError.from(
 							"UNAUTHORIZED",
