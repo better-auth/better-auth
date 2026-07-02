@@ -357,6 +357,8 @@ export const auth = betterAuth({
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
 
+Clients can discover which providers are enabled at runtime via `GET {baseURL}/.well-known/oauth-providers`. See [Discover enabled login methods](/docs/concepts/oauth#discover-enabled-login-methods).
+
 ## `plugins`
 
 List of Better Auth plugins.

@@ -27,6 +27,61 @@ export const auth = betterAuth({
 });
 ```
 
+## Discover enabled login methods
+
+Better Auth exposes a public discovery endpoint for building login UIs dynamically — for example, to render only the email and social sign-in buttons that are enabled on your server.
+
+The endpoint lives at `{baseURL}/.well-known/oauth-providers`. If your auth handler is mounted at `/api/auth`, the full URL is `https://example.com/api/auth/.well-known/oauth-providers`.
+
+<APIMethod path="/.well-known/oauth-providers" method="GET" isExternalOnly note="Lists enabled email/password and social login methods for client UI discovery.">
+  ```ts
+  type getOAuthProviders = {
+  }
+  ```
+</APIMethod>
+
+Example response:
+
+```json
+{
+  "issuer": "https://example.com/api/auth",
+  "providers": [
+    { "id": "email", "enabled": true },
+    {
+      "id": "google",
+      "enabled": true,
+      "redirectUri": "https://example.com/api/auth/callback/google"
+    }
+  ]
+}
+```
+
+**Response fields**
+
+* **`issuer`**: Auth server identifier. Defaults to your Better Auth `baseURL`. If the [JWT plugin](/docs/plugins/jwt) sets `jwt.issuer`, that value is used instead.
+* **`providers`**: Enabled login methods on this server.
+  * `{ id: "email", enabled: true }` when `emailAndPassword.enabled` is `true`
+  * `{ id: "<providerId>", enabled: true, redirectUri: "..." }` for each configured social provider
+
+For social providers, `redirectUri` is the IdP-registered callback URL: your `socialProviders[providerId].redirectURI` override when set, otherwise `{baseURL}/callback/{providerId}`.
+
+Server-side:
+
+```ts
+const { issuer, providers } = await auth.api.getOAuthProviders();
+```
+
+From a separate frontend or mobile app:
+
+```ts
+const response = await fetch("https://example.com/api/auth/.well-known/oauth-providers");
+const { issuer, providers } = await response.json();
+```
+
+<Callout>
+  This endpoint reflects email/password and `socialProviders` configuration. Other plugin sign-in methods (magic link, passkey, username, and similar) are not listed.
+</Callout>
+
 ## Usage
 
 ### Sign In
