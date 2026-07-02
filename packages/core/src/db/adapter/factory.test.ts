@@ -231,3 +231,94 @@ describe("createAdapterFactory consumeOne fallback", () => {
 		).rejects.toThrowError(/non-numeric value from deleteMany/);
 	});
 });
+
+describe("createAdapterFactory date field output coercion", () => {
+	function createDateTestAdapter({
+		findOne,
+		supportsDates,
+	}: {
+		findOne: CustomAdapter["findOne"];
+		supportsDates?: boolean;
+	}) {
+		return createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "date-test-adapter",
+				adapterName: "Date Test Adapter",
+				supportsDates,
+			},
+			adapter: () => createCustomAdapter({ findOne }),
+		})({});
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9963
+	 */
+	it("coerces a numeric-millisecond-string date value into a valid Date when supportsDates is false", async () => {
+		const adapter = createDateTestAdapter({
+			supportsDates: false,
+			findOne: async <T>() =>
+				({
+					id: "verification-id",
+					identifier: "token",
+					value: "value",
+					expiresAt: "1774295570569",
+				}) as T,
+		});
+
+		const result = await adapter.findOne<{ expiresAt: unknown }>({
+			model: "verification",
+			where: [{ field: "id", value: "verification-id" }],
+		});
+
+		expect(result?.expiresAt).toBeInstanceOf(Date);
+		expect(Number.isNaN((result?.expiresAt as Date).getTime())).toBe(false);
+		expect((result?.expiresAt as Date).getTime()).toBe(1774295570569);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9963
+	 */
+	it("coerces a numeric date value into a valid Date when supportsDates is false", async () => {
+		const adapter = createDateTestAdapter({
+			supportsDates: false,
+			findOne: async <T>() =>
+				({
+					id: "verification-id",
+					identifier: "token",
+					value: "value",
+					expiresAt: 1774295570569,
+				}) as T,
+		});
+
+		const result = await adapter.findOne<{ expiresAt: unknown }>({
+			model: "verification",
+			where: [{ field: "id", value: "verification-id" }],
+		});
+
+		expect(result?.expiresAt).toBeInstanceOf(Date);
+		expect(Number.isNaN((result?.expiresAt as Date).getTime())).toBe(false);
+		expect((result?.expiresAt as Date).getTime()).toBe(1774295570569);
+	});
+
+	it("still coerces a plain ISO date string into a valid Date when supportsDates is false", async () => {
+		const iso = "2026-01-01T00:00:00.000Z";
+		const adapter = createDateTestAdapter({
+			supportsDates: false,
+			findOne: async <T>() =>
+				({
+					id: "verification-id",
+					identifier: "token",
+					value: "value",
+					expiresAt: iso,
+				}) as T,
+		});
+
+		const result = await adapter.findOne<{ expiresAt: unknown }>({
+			model: "verification",
+			where: [{ field: "id", value: "verification-id" }],
+		});
+
+		expect(result?.expiresAt).toBeInstanceOf(Date);
+		expect((result?.expiresAt as Date).toISOString()).toBe(iso);
+	});
+});
