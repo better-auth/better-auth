@@ -1,4 +1,4 @@
-import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
+import type { AsyncLocalStorage } from "#async_hooks";
 
 interface BetterAuthGlobal {
 	/**
