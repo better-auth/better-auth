@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
@@ -1251,6 +1252,116 @@ describe("getConfig", async () => {
 		expect(config).toMatchObject({
 			emailAndPassword: { enabled: true },
 		});
+	});
+
+	/**
+	 * The Convex integration guide's `auth.ts` template imports the schema
+	 * file that `auth generate --output <path>` is responsible for creating
+	 * (`import schema from "./schema"`). On a first run that file doesn't
+	 * exist yet, so loading the config throws `Cannot find module './schema'`
+	 * before generation ever gets a chance to run.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10136
+	 */
+	it("should recover when the config imports its own not-yet-generated --output file", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 // referenced so the import isn't optimized away before evaluation
+			 export const __schema = schema;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+		expect(existsSync(outputPath)).toBe(false);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "convex/betterAuth/auth.ts",
+			outputPath,
+			shouldThrowOnError: true,
+		});
+
+		expect(config).toMatchObject({
+			appName: "ok",
+			emailAndPassword: { enabled: true },
+		});
+
+		// getConfig only needs to make the file resolvable; generateAction's
+		// existing overwrite-confirmation flow takes over from here once the
+		// real schema is generated.
+		expect(existsSync(outputPath)).toBe(true);
+		expect(await fs.readFile(outputPath, "utf-8")).toBe("");
+	});
+
+	it("should not silently stub an unrelated missing relative import", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import unrelated from "./does-not-exist";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __unrelated = unrelated;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find module/);
+
+		// Only the exact --output target may ever be auto-stubbed.
+		expect(existsSync(outputPath)).toBe(false);
+		expect(existsSync(path.join(authDir, "does-not-exist.ts"))).toBe(false);
+	});
+
+	it("should not stub a missing bare package import even if its specifier matches the output basename", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __schema = schema;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find (package|module)/);
+
+		expect(existsSync(outputPath)).toBe(false);
 	});
 });
 
