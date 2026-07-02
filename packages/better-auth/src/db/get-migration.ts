@@ -445,6 +445,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 						.columns([fieldName]);
 					if (field.unique) {
 						indexBuilder = indexBuilder.unique();
+						if (field.required === false && dbType === "mssql") {
+							// MSSQL unique indexes treat NULLs as duplicates, so the
+							// NULL backfill on existing rows would abort the index
+							// build. Filtering NULLs matches the other dialects.
+							indexBuilder = indexBuilder.where(fieldName, "is not", null);
+						}
 					}
 					deferredIndexes.push(indexBuilder);
 				}
@@ -472,7 +478,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
 					} else if (
-						!field.unique &&
+						!(field.unique && field.required === false) &&
 						(field.type === "string" ||
 							field.type === "number" ||
 							field.type === "boolean") &&
@@ -481,8 +487,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 						typeof field.defaultValue !== "function"
 					) {
 						// A required column added to a populated table needs a SQL
-						// default, or the NOT NULL add fails. Unique columns are
-						// excluded: a shared default would collide on the unique index.
+						// default, or the NOT NULL add fails. Nullable unique columns
+						// are excluded: NULL is their only unique-safe backfill. A
+						// required unique column keeps its default; on a table with
+						// more than one row the unique index then rejects the shared
+						// backfill, which no generated migration can avoid.
 						// Booleans map to 1/0 on engines without a native boolean type.
 						col = col.defaultTo(
 							typeof field.defaultValue === "boolean" &&

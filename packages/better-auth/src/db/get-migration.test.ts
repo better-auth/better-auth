@@ -61,6 +61,8 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 		);
 		expect(sql).toContain("create unique index");
 		expect(sql).not.toMatch(/add column "membershipkey"[^;]*unique/);
+		// The NULL-filtered unique index is MSSQL-only.
+		expect(sql).not.toMatch(/create unique index[^;]*where/);
 
 		// SQLite rejects both `ADD COLUMN ... NOT NULL` without a default and
 		// `ADD COLUMN ... UNIQUE`, so an unhardened generator throws here.
@@ -83,5 +85,54 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 				 VALUES ('tm3', 't1', 'u3', '2020-01-01', 'org1:t1:u2')`,
 			),
 		).toThrow();
+	});
+
+	it("adds a required unique column with a static default when the table has one row", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "user" (
+				"id" text primary key not null,
+				"name" text not null,
+				"email" text not null unique,
+				"emailVerified" integer not null,
+				"image" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			user: {
+				additionalFields: {
+					referralCode: {
+						type: "string",
+						required: true,
+						unique: true,
+						defaultValue: "unset",
+					},
+				},
+			},
+		};
+
+		const { runMigrations, compileMigrations } = await getMigrations(config);
+
+		// A required unique column keeps its static default so the NOT NULL add
+		// succeeds; uniqueness is enforced through a separate index.
+		const sql = (await compileMigrations()).toLowerCase();
+		expect(sql).toContain(
+			`add column "referralcode" text default 'unset' not null`,
+		);
+		expect(sql).toContain('create unique index "user_referralcode_uidx"');
+
+		await runMigrations();
+
+		const user = db
+			.prepare(`SELECT "referralCode" FROM "user" WHERE "id" = 'u1'`)
+			.get() as { referralCode: string };
+		expect(user.referralCode).toBe("unset");
 	});
 });
