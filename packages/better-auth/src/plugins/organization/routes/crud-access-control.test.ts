@@ -1075,18 +1075,22 @@ describe("dynamic access control", async () => {
 			],
 		});
 
-		const { headers: h2 } = await second.signInWithTestUser();
+		const { headers: secondInstanceHeaders } =
+			await second.signInWithTestUser();
 		// Set an active org so createOrgRole has an organizationId to work with.
 		const org2 = await second.auth.api.createOrganization({
 			body: { name: "org2", slug: `org2-${crypto.randomUUID()}` },
-			headers: h2,
+			headers: secondInstanceHeaders,
 		});
 		await second.auth.api.setActiveOrganization({
 			body: { organizationId: org2.id },
-			headers: h2,
+			headers: secondInstanceHeaders,
 		});
-		const h2Active = new Headers(h2);
-		h2Active.set("cookie", h2.get("cookie") ?? "");
+		const secondInstanceActiveHeaders = new Headers(secondInstanceHeaders);
+		secondInstanceActiveHeaders.set(
+			"cookie",
+			secondInstanceHeaders.get("cookie") ?? "",
+		);
 
 		// With the bug: color is .nullish() in the second instance's createOrgRole
 		// schema → passing additionalFields without color succeeds → no throw.
@@ -1099,7 +1103,7 @@ describe("dynamic access control", async () => {
 					organizationId: org2.id,
 					additionalFields: {} as any, // omit required color
 				},
-				headers: h2Active,
+				headers: secondInstanceActiveHeaders,
 			}),
 		).rejects.toThrow();
 	});
