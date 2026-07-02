@@ -160,8 +160,14 @@ export interface InternalAdapter<
 
 	/**
 	 * Delete every session belonging to a user.
+	 *
+	 * @param userId - The user whose sessions are deleted.
+	 * @param exceptSessionToken - When provided, the session with this token is kept and all others are deleted.
 	 */
-	deleteUserSessions(userId: string): Promise<void>;
+	deleteUserSessions(
+		userId: string,
+		exceptSessionToken?: string,
+	): Promise<void>;
 
 	/**
 	 * Delete sessions by their session tokens.

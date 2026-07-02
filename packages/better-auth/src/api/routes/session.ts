@@ -933,19 +933,15 @@ export const revokeOtherSessions = createAuthEndpoint(
 				code: "UNAUTHORIZED",
 			});
 		}
-		const sessions = await ctx.context.internalAdapter.listSessions(
+		// Delete every other session for the user in a single query, keeping only the current one.
+		// Listing first would be capped at the adapter's `defaultFindManyLimit` (100); since expired
+		// sessions are never pruned, that window could be entirely expired rows, leaving active
+		// sessions un-revoked while still reporting success (and even with active-only filtering a
+		// user with more than the limit of active sessions would be under-revoked). Deleting by query
+		// is unbounded and also clears the user's stale/expired session rows as a side effect.
+		await ctx.context.internalAdapter.deleteUserSessions(
 			session.user.id,
-		);
-		const activeSessions = sessions.filter((session) => {
-			return session.expiresAt > new Date();
-		});
-		const otherSessions = activeSessions.filter(
-			(session) => session.token !== ctx.context.session.session.token,
-		);
-		await Promise.all(
-			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.token),
-			),
+			ctx.context.session.session.token,
 		);
 		return ctx.json({
 			status: true,

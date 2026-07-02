@@ -441,6 +441,74 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 
+	it("should revoke all other sessions (active and expired) beyond the find-many limit", async () => {
+		// Regression test: revoke-other-sessions must delete every other session in one unbounded
+		// query. It previously listed sessions (capped at the adapter's `defaultFindManyLimit`) and
+		// deleted those, so a user with more sessions than that limit kept some un-revoked - and
+		// since expired sessions are never pruned, the capped window could even be all-expired,
+		// silently revoking nothing while still returning `{ status: true }`.
+		const findManyLimit = 3;
+		const {
+			client: limitedClient,
+			signInWithTestUser: signIn,
+			db,
+		} = await getTestInstance({
+			advanced: { database: { defaultFindManyLimit: findManyLimit } },
+		});
+
+		const { user, headers } = await signIn();
+
+		// More *active* other sessions than the find-many limit ...
+		const otherActiveCount = findManyLimit * 2 + 1;
+		for (let i = 0; i < otherActiveCount; i++) {
+			await db.create({
+				model: "session",
+				data: {
+					token: `other-active-${i}`,
+					userId: user.id,
+					expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					ipAddress: "",
+					userAgent: "",
+				},
+			});
+		}
+		// ... plus some already-expired rows that should also be cleaned up.
+		for (let i = 0; i < findManyLimit; i++) {
+			await db.create({
+				model: "session",
+				data: {
+					token: `expired-${i}`,
+					userId: user.id,
+					expiresAt: new Date(Date.now() - 1000 * 60 * 60),
+					createdAt: new Date(Date.now() - 1000 * 60 * 60),
+					updatedAt: new Date(Date.now() - 1000 * 60 * 60),
+					ipAddress: "",
+					userAgent: "",
+				},
+			});
+		}
+
+		const res = await limitedClient.revokeOtherSessions({
+			fetchOptions: { headers },
+		});
+		expect(res.data?.status).toBe(true);
+
+		// Only the current session remains - every other session (active and expired) is gone.
+		const remaining = await db.count({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(remaining).toBe(1);
+
+		// And the current session is still valid.
+		const stillValid = await limitedClient.getSession({
+			fetchOptions: { headers },
+		});
+		expect(stillValid.data).not.toBeNull();
+	});
+
 	it("should return session headers", async () => {
 		const context = await auth.$context;
 		await runWithEndpointContext(
