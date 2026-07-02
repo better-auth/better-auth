@@ -326,7 +326,8 @@ function withoutSourceExtension(filePath: string): string {
 function resolvesMissingOutputModule(
 	error: unknown,
 	configFilePath: string,
-	outputPath: string,
+	/** Already resolved against the effective `cwd` — see `resolvedOutputPath` in `getConfig`. */
+	resolvedOutputPath: string,
 ): boolean {
 	if (
 		!error ||
@@ -351,10 +352,9 @@ function resolvesMissingOutputModule(
 		typeof requireStack[0] === "string" ? requireStack[0] : configFilePath;
 
 	const resolvedImport = path.resolve(path.dirname(importedFrom), specifier);
-	const resolvedOutput = path.resolve(outputPath);
 	return (
 		withoutSourceExtension(resolvedImport) ===
-		withoutSourceExtension(resolvedOutput)
+		withoutSourceExtension(resolvedOutputPath)
 	);
 }
 
@@ -380,6 +380,15 @@ export async function getConfig({
 		if (configPath) {
 			let resolvedPath: string = path.join(cwd, configPath);
 			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
+			// Resolved against the same `cwd` generate.ts resolves `--output`
+			// against (`path.resolve(cwd, options.output)`), not process.cwd() —
+			// otherwise the placeholder existence-check and write below silently
+			// target the wrong directory whenever `cwd` differs from the
+			// process's actual working directory.
+			// @see https://github.com/better-auth/better-auth/pull/10302
+			const resolvedOutputPath = outputPath
+				? path.resolve(cwd, outputPath)
+				: undefined;
 			const loadOnce = () =>
 				loadConfig<
 					| {
@@ -403,15 +412,26 @@ export async function getConfig({
 				loaded = await loadOnce();
 			} catch (e) {
 				if (
-					outputPath &&
-					!existsSync(outputPath) &&
-					resolvesMissingOutputModule(e, resolvedPath, outputPath)
+					resolvedOutputPath &&
+					!existsSync(resolvedOutputPath) &&
+					resolvesMissingOutputModule(e, resolvedPath, resolvedOutputPath)
 				) {
-					await fs.promises.mkdir(path.dirname(outputPath), {
+					await fs.promises.mkdir(path.dirname(resolvedOutputPath), {
 						recursive: true,
 					});
-					await fs.promises.writeFile(outputPath, "");
-					loaded = await loadOnce();
+					await fs.promises.writeFile(resolvedOutputPath, "");
+					try {
+						loaded = await loadOnce();
+					} catch (retryError) {
+						// The retry failed for an unrelated reason — clean up the
+						// placeholder we just created so it isn't left behind. Safe to
+						// remove unconditionally: the `!existsSync` check above already
+						// proved this file didn't exist before we created it.
+						await fs.promises
+							.rm(resolvedOutputPath, { force: true })
+							.catch(() => {});
+						throw retryError;
+					}
 				} else {
 					throw e;
 				}
