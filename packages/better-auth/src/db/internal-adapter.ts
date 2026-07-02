@@ -938,9 +938,7 @@ export const createInternalAdapter = (
 			options?: { includeAccounts: boolean } | undefined,
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
-			const users = await currentAdapter.findMany<
-				User & { account: Account[] | undefined }
-			>({
+			const users = await currentAdapter.findMany<User>({
 				model: "user",
 				where: [
 					{
@@ -949,18 +947,28 @@ export const createInternalAdapter = (
 						mode: "insensitive",
 					},
 				],
-				join: {
-					...(options?.includeAccounts ? { account: true } : {}),
-				},
 				limit: 2,
 			});
 			if (users.length > 1) return null;
-			const result = users[0] || null;
-			if (!result) return null;
-			const { account: accounts, ...user } = result;
+			const user = users[0] || null;
+			if (!user) return null;
+
+			let accounts: Account[] = [];
+			if (options?.includeAccounts) {
+				accounts = await currentAdapter.findMany<Account>({
+					model: "account",
+					where: [
+						{
+							field: "userId",
+							value: user.id,
+						},
+					],
+				});
+			}
+
 			return {
 				user,
-				accounts: accounts ?? [],
+				accounts,
 			};
 		},
 		findUserById: async (userId: string) => {
