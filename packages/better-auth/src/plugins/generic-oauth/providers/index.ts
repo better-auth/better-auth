@@ -17,6 +17,7 @@
  *  okta,
  *  slack,
  *  patreon,
+ *  thunderid,
  *  yandex,
  * } from 'better-auth/plugins';
  *
@@ -49,4 +50,5 @@ export {
 export { type OktaOptions, okta } from "./okta";
 export { type PatreonOptions, patreon } from "./patreon";
 export { type SlackOptions, slack } from "./slack";
+export { type ThunderIDOptions, thunderid } from "./thunderid";
 export { type YandexOptions, yandex } from "./yandex";

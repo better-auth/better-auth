@@ -29,4 +29,6 @@ payu
 PayU
 Mikro
 anthropics
+thunderid
+THUNDERID
 Zitadel
