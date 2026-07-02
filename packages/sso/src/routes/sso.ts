@@ -27,7 +27,9 @@ import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
+	decryptOIDCConfig,
 	discoverOIDCConfig,
+	encryptOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
 	validateSkipDiscoveryEndpoints,
@@ -38,6 +40,7 @@ import { generateRelayState } from "../saml-state";
 import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
+	EncryptedOIDCConfig,
 	Member,
 	OIDCConfig,
 	SAMLAssertionExtract,
@@ -766,55 +769,71 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			const buildOIDCConfig = () => {
+			const buildOIDCConfig = async () => {
 				if (!body.oidcConfig) return null;
 
 				if (body.oidcConfig.skipDiscovery) {
-					return JSON.stringify({
-						issuer: body.issuer,
-						clientId: body.oidcConfig.clientId,
-						clientSecret: body.oidcConfig.clientSecret,
-						authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-						tokenEndpoint: body.oidcConfig.tokenEndpoint,
-						tokenEndpointAuthentication:
-							body.oidcConfig.tokenEndpointAuthentication ||
-							"client_secret_basic",
-						jwksEndpoint: body.oidcConfig.jwksEndpoint,
-						pkce: body.oidcConfig.pkce,
-						discoveryEndpoint:
-							body.oidcConfig.discoveryEndpoint ||
-							`${body.issuer}/.well-known/openid-configuration`,
-						mapping: body.oidcConfig.mapping,
-						scopes: body.oidcConfig.scopes,
-						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-						overrideUserInfo:
-							ctx.body.overrideUserInfo ||
-							options?.defaultOverrideUserInfo ||
-							false,
-					});
+					return JSON.stringify(
+						await encryptOIDCConfig(
+							{
+								issuer: body.issuer,
+								clientId: body.oidcConfig.clientId,
+								clientSecret: body.oidcConfig.clientSecret,
+								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+								tokenEndpoint: body.oidcConfig.tokenEndpoint,
+								tokenEndpointAuthentication:
+									body.oidcConfig.tokenEndpointAuthentication ||
+									"client_secret_basic",
+								jwksEndpoint: body.oidcConfig.jwksEndpoint,
+								pkce: body.oidcConfig.pkce ?? true,
+								discoveryEndpoint:
+									body.oidcConfig.discoveryEndpoint ||
+									`${body.issuer}/.well-known/openid-configuration`,
+								mapping: body.oidcConfig.mapping,
+								scopes: body.oidcConfig.scopes,
+								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+								overrideUserInfo:
+									ctx.body.overrideUserInfo ||
+									options?.defaultOverrideUserInfo ||
+									false,
+							},
+							{
+								authSecret: ctx.context.secret,
+								ssoOptions: options,
+							},
+						),
+					);
 				}
 
 				if (!hydratedOIDCConfig) return null;
 
-				return JSON.stringify({
-					issuer: hydratedOIDCConfig.issuer,
-					clientId: body.oidcConfig.clientId,
-					clientSecret: body.oidcConfig.clientSecret,
-					authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
-					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
-					tokenEndpointAuthentication:
-						hydratedOIDCConfig.tokenEndpointAuthentication,
-					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
-					pkce: body.oidcConfig.pkce,
-					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
-					mapping: body.oidcConfig.mapping,
-					scopes: body.oidcConfig.scopes,
-					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
-					overrideUserInfo:
-						ctx.body.overrideUserInfo ||
-						options?.defaultOverrideUserInfo ||
-						false,
-				});
+				return JSON.stringify(
+					await encryptOIDCConfig(
+						{
+							issuer: hydratedOIDCConfig.issuer,
+							clientId: body.oidcConfig.clientId,
+							clientSecret: body.oidcConfig.clientSecret,
+							authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
+							tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+							tokenEndpointAuthentication:
+								hydratedOIDCConfig.tokenEndpointAuthentication,
+							jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+							pkce: body.oidcConfig.pkce ?? true,
+							discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+							mapping: body.oidcConfig.mapping,
+							scopes: body.oidcConfig.scopes,
+							userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+							overrideUserInfo:
+								ctx.body.overrideUserInfo ||
+								options?.defaultOverrideUserInfo ||
+								false,
+						},
+						{
+							authSecret: ctx.context.secret,
+							ssoOptions: options,
+						},
+					),
+				);
 			};
 
 			if (body.samlConfig) {
@@ -856,7 +875,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: buildOIDCConfig(),
+					oidcConfig: await buildOIDCConfig(),
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -910,11 +929,18 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					}
 				: SSOProviderResponse;
 
+			const storedOidcConfig = safeJsonParse<OIDCConfig>(
+				provider.oidcConfig as unknown as string,
+			);
+
 			const result = {
 				...provider,
-				oidcConfig: safeJsonParse<OIDCConfig>(
-					provider.oidcConfig as unknown as string,
-				),
+				oidcConfig: storedOidcConfig
+					? await decryptOIDCConfig(storedOidcConfig, {
+							authSecret: ctx.context.secret,
+							ssoOptions: options,
+						})
+					: null,
 				samlConfig: safeJsonParse<SAMLConfig>(
 					provider.samlConfig as unknown as string,
 				),
@@ -999,7 +1025,7 @@ const signInSSOBodySchema = z.object({
 	providerType: z.enum(["oidc", "saml"]).optional(),
 });
 
-export const signInSSO = (options?: SSOOptions) => {
+export const signInSSO = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sign-in/sso",
 		{
@@ -1091,7 +1117,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			const body = ctx.body;
 			let { email, organizationSlug, providerId, domain } = body;
 			if (
-				!options?.defaultSSO?.length &&
+				!options.defaultSSO?.length &&
 				!email &&
 				!organizationSlug &&
 				!domain &&
@@ -1122,7 +1148,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 			}
 			let provider: SSOProvider<SSOOptions> | null = null;
-			if (options?.defaultSSO?.length) {
+			if (options.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId
 				const matchingDefault = providerId
 					? options.defaultSSO.find(
@@ -1157,15 +1183,20 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 			// Try to find provider in database
 			if (!provider) {
-				const parseProvider = (res: SSOProvider<SSOOptions> | null) => {
+				const parseProvider = async (res: SSOProvider<SSOOptions> | null) => {
 					if (!res) return null;
+					const parsedEncryptedOIDCConfig = safeJsonParse<EncryptedOIDCConfig>(
+						res.oidcConfig as unknown as string,
+					);
+					const decryptedOIDCConfig = parsedEncryptedOIDCConfig
+						? await decryptOIDCConfig(parsedEncryptedOIDCConfig, {
+								authSecret: ctx.context.secret,
+								ssoOptions: options,
+							})
+						: undefined;
 					return {
 						...res,
-						oidcConfig: res.oidcConfig
-							? safeJsonParse<OIDCConfig>(
-									res.oidcConfig as unknown as string,
-								) || undefined
-							: undefined,
+						oidcConfig: decryptedOIDCConfig,
 						samlConfig: res.samlConfig
 							? safeJsonParse<SAMLConfig>(
 									res.samlConfig as unknown as string,
@@ -1176,7 +1207,7 @@ export const signInSSO = (options?: SSOOptions) => {
 
 				if (providerId || orgId) {
 					// Exact match for providerId or orgId
-					provider = parseProvider(
+					provider = await parseProvider(
 						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
 							model: "ssoProvider",
 							where: [
@@ -1190,7 +1221,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				} else if (domain) {
 					// For domain lookup, support comma-separated domains
 					// First try exact match (fast path)
-					provider = parseProvider(
+					provider = await parseProvider(
 						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
 							model: "ssoProvider",
 							where: [{ field: "domain", value: domain }],
@@ -1206,7 +1237,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						const matchingProvider = allProviders.find((p) =>
 							domainMatches(domain, p.domain),
 						);
-						provider = parseProvider(matchingProvider ?? null);
+						provider = await parseProvider(matchingProvider ?? null);
 					}
 				}
 			}
@@ -1240,10 +1271,13 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
+				// `provider.oidcConfig` is already decrypted at this point: DB-sourced
+				// providers pass through `parseProvider` (which decrypts) and
+				// `defaultSSO` providers are in-memory plaintext configs.
 				let config = provider.oidcConfig;
 				try {
 					config = await ensureRuntimeDiscovery(
-						provider.oidcConfig,
+						config,
 						provider.issuer,
 						(url) => ctx.context.isTrustedOrigin(url),
 					);
@@ -1448,7 +1482,7 @@ const callbackSSOQuerySchema = z.object({
  */
 async function handleOIDCCallback(
 	ctx: any,
-	options: SSOOptions | undefined,
+	options: SSOOptions,
 	providerId: string,
 	stateData?: Awaited<ReturnType<typeof parseState>>,
 ) {
@@ -1471,7 +1505,7 @@ async function handleOIDCCallback(
 		);
 	}
 	let provider: SSOProvider<SSOOptions> | null = null;
-	if (options?.defaultSSO?.length) {
+	if (options.defaultSSO?.length) {
 		const matchingDefault = options.defaultSSO.find(
 			(defaultProvider) => defaultProvider.providerId === providerId,
 		);
@@ -1516,7 +1550,7 @@ async function handleOIDCCallback(
 	}
 
 	if (
-		options?.domainVerification?.enabled &&
+		options.domainVerification?.enabled &&
 		!("domainVerified" in provider && provider.domainVerified)
 	) {
 		throw new APIError("UNAUTHORIZED", {
@@ -1533,6 +1567,11 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=provider not found`,
 		);
 	}
+
+	config = await decryptOIDCConfig(config, {
+		authSecret: ctx.context.secret,
+		ssoOptions: options,
+	});
 
 	try {
 		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
@@ -1832,7 +1871,7 @@ const callbackSSOEndpointConfig = {
 	},
 };
 
-export const callbackSSO = (options?: SSOOptions) => {
+export const callbackSSO = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		callbackSSOEndpointConfig,
@@ -1847,7 +1886,7 @@ export const callbackSSO = (options?: SSOOptions) => {
  * Used when `options.redirectURI` is set — the `providerId` is read from
  * the OAuth state instead of the URL path.
  */
-export const callbackSSOShared = (options?: SSOOptions) => {
+export const callbackSSOShared = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback",
 		{
