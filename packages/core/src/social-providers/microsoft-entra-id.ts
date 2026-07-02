@@ -277,34 +277,57 @@ export const microsoft = (options: MicrosoftOptions) => {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
+			const oidAccountId =
+				typeof user.oid === "string" && user.oid.length > 0
+					? user.oid
+					: undefined;
+			if (!oidAccountId && !options.mapProfileToUser) {
+				logger.error(
+					"Microsoft Entra ID token did not include a valid oid claim; unable to resolve a stable account identifier.",
+				);
+				return null;
+			}
 			const profilePhotoSize = options.profilePhotoSize || 48;
-			await betterFetch<ArrayBuffer>(
-				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
-				{
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			if (oidAccountId && !options.disableProfilePhoto && token.accessToken) {
+				await betterFetch<ArrayBuffer>(
+					`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
+					{
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
+						async onResponse(context) {
+							if (!context.response.ok) {
+								return;
+							}
+							try {
+								const response = context.response.clone();
+								const pictureBuffer = await response.arrayBuffer();
+								const pictureBase64 = base64.encode(pictureBuffer);
+								user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
+							} catch (e) {
+								logger.error(
+									e && typeof e === "object" && "name" in e
+										? (e.name as string)
+										: "",
+									e,
+								);
+							}
+						},
 					},
-					async onResponse(context) {
-						if (options.disableProfilePhoto || !context.response.ok) {
-							return;
-						}
-						try {
-							const response = context.response.clone();
-							const pictureBuffer = await response.arrayBuffer();
-							const pictureBase64 = base64.encode(pictureBuffer);
-							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
-						} catch (e) {
-							logger.error(
-								e && typeof e === "object" && "name" in e
-									? (e.name as string)
-									: "",
-								e,
-							);
-						}
-					},
-				},
-			);
-			const userMap = await options.mapProfileToUser?.(user);
+				);
+			}
+			const { id: mappedAccountId, ...userMap } =
+				(await options.mapProfileToUser?.(user)) ?? {};
+			const accountId =
+				typeof mappedAccountId === "string" && mappedAccountId.length > 0
+					? mappedAccountId
+					: oidAccountId;
+			if (!accountId) {
+				logger.error(
+					"Microsoft Entra ID mapProfileToUser was invoked for a token without a valid oid claim, but did not return a non-empty string id.",
+				);
+				return null;
+			}
 			// Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
 			// We default to false when not provided for security consistency.
@@ -319,7 +342,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 						: false;
 			return {
 				user: {
-					id: user.sub,
+					id: accountId,
 					name: user.name,
 					email: user.email,
 					image: user.picture,

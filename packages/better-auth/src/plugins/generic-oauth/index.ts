@@ -403,7 +403,7 @@ export const genericOAuth = <const ID extends string>(
 							? mapped.id
 							: isNonEmptyOAuthId(raw.id)
 								? raw.id
-								: isNonEmptyOAuthId(raw.sub)
+								: !c.disableImplicitSubAccountId && isNonEmptyOAuthId(raw.sub)
 									? raw.sub
 									: undefined;
 						if (rawId === undefined) {

@@ -54,6 +54,14 @@ async function signMicrosoftToken(opts: {
 		.sign(privateKey);
 }
 
+async function encodeMicrosoftProfile(profile: Record<string, unknown>) {
+	return new SignJWT(profile)
+		.setProtectedHeader({ alg: "RS256", kid: KID })
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(privateKey);
+}
+
 describe("microsoft id_token tenant enforcement", () => {
 	it("rejects a consumer-tenant token when restricted to organizations", async () => {
 		const provider = microsoft({
@@ -154,5 +162,186 @@ describe("microsoft id_token tenant enforcement", () => {
 		await expect(
 			verifyProviderIdToken(provider, token, undefined),
 		).resolves.toBe(false);
+	});
+});
+
+describe("microsoft.getUserInfo account identifier", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10194
+	 */
+	it("uses the stable oid claim as user.id, not the pairwise sub claim", async () => {
+		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(result?.user.id).toBe("ms-stable-oid");
+		expect(result?.user.id).not.toBe("ms-pairwise-sub");
+		expect(result?.data.oid).toBe("ms-stable-oid");
+		expect(result?.data.sub).toBe("ms-pairwise-sub");
+	});
+
+	it("lets mapProfileToUser override the oid-derived id", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			mapProfileToUser: (profile) => ({ id: `${profile.tid}:${profile.oid}` }),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(result?.user.id).toBe(`${WORK_TENANT_ID}:ms-stable-oid`);
+	});
+
+	it("does not fetch a photo when profile photos are disabled and still maps the profile", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			disableProfilePhoto: true,
+			mapProfileToUser: (profile) => ({
+				id: `${profile.tid}:${profile.oid}`,
+				name: "Mapped User",
+			}),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(result?.user.id).toBe(`${WORK_TENANT_ID}:ms-stable-oid`);
+		expect(result?.user.name).toBe("Mapped User");
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("does not fetch a photo when accessToken is missing and still maps the profile", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			mapProfileToUser: (profile) => ({
+				id: `${profile.tid}:${profile.oid}`,
+				name: "Mapped User",
+			}),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({ idToken });
+
+		expect(result?.user.id).toBe(`${WORK_TENANT_ID}:ms-stable-oid`);
+		expect(result?.user.name).toBe("Mapped User");
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("lets mapProfileToUser provide an id when oid is missing", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			mapProfileToUser: (profile) => ({ id: `${profile.tid}:${profile.sub}` }),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(result?.user.id).toBe(`${WORK_TENANT_ID}:ms-pairwise-sub`);
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("returns null without fetching a photo when oid is missing and mapProfileToUser omits id", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			mapProfileToUser: () => ({ name: "Mapped User" }),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		await expect(
+			provider.getUserInfo({
+				idToken,
+				accessToken: "ms-access-token",
+			}),
+		).resolves.toBeNull();
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("returns null when the oid claim is missing and no mapped id is provided", async () => {
+		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		await expect(
+			provider.getUserInfo({
+				idToken,
+				accessToken: "ms-access-token",
+			}),
+		).resolves.toBeNull();
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("returns null when the oid claim is not a string", async () => {
+		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: 123,
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		await expect(
+			provider.getUserInfo({
+				idToken,
+				accessToken: "ms-access-token",
+			}),
+		).resolves.toBeNull();
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
 	});
 });
