@@ -48,22 +48,11 @@ async function resolveOTP(
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
-	await ctx.context.internalAdapter
-		.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
-		});
+	await ctx.context.internalAdapter.createOrReplaceVerificationValue({
+		value: `${storedOTP}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	});
 
 	return otp;
 }
@@ -203,7 +192,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
 			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: toOTPIdentifier(ctx.body.type, email),
 				expiresAt: getDate(opts.expiresIn, "sec"),
@@ -1101,9 +1090,13 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
 				defaultOTPGenerator(opts);
 			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
+			const changeEmailIdentifier = toOTPIdentifier(
+				"change-email",
+				`${email}-${newEmail}`,
+			);
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier("change-email", `${email}-${newEmail}`),
+				identifier: changeEmailIdentifier,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 

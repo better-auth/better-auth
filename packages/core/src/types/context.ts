@@ -223,6 +223,17 @@ export interface InternalAdapter<
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
 	/**
+	 * Create a verification value, replacing any existing row with the same
+	 * identifier. Use this instead of `createVerificationValue` when the
+	 * identifier is deterministic (e.g. derived from an email or phone number)
+	 * and may already exist from a previous unconsumed request.
+	 */
+	createOrReplaceVerificationValue(
+		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
+			Partial<Verification>,
+	): Promise<Verification>;
+
+	/**
 	 * Atomically consume a single-use verification row by `identifier` and
 	 * return it. Only the first concurrent caller receives the latest row;
 	 * subsequent callers receive `null`. Consuming one row invalidates the
