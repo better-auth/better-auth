@@ -86,7 +86,7 @@ The minimum length of the name.
 
 Whether to enable metadata for an API key.
 
-`keyExpiration` <span className="opacity-70">`{ defaultExpiresIn?: number | null; disableCustomExpiresTime?: boolean; minExpiresIn?: number; maxExpiresIn?: number; }`</span>
+`keyExpiration` <span className="opacity-70">`{ defaultExpiresIn?: number | null; disableCustomExpiresTime?: boolean; minExpiresIn?: number; maxExpiresIn?: number; autoCleanup?: boolean; }`</span>
 
 Customize the key expiration.
 
@@ -113,6 +113,13 @@ Customize the key expiration.
 
     The maximum expiresIn value allowed to be set from the client. in days.
     Default is `365`.
+
+    `autoCleanup` <span className="opacity-70">`boolean`</span>
+
+    Whether to automatically clean up expired API keys inline during API key requests.
+    If `false`, inline cleanup is disabled and you can call `auth.api.deleteAllExpiredApiKeys()`
+    from a cron job or another external maintenance task instead.
+    Default is `true`.
   </Accordion>
 </Accordions>
 

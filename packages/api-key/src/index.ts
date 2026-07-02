@@ -9,7 +9,11 @@ import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import { API_KEY_ERROR_CODES } from "./error-codes";
 import type { PredefinedApiKeyOptions } from "./routes";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import {
+	createApiKeyRoutes,
+	deleteAllExpiredApiKeys,
+	resolveConfiguration,
+} from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
@@ -95,6 +99,7 @@ export function apiKey(
 					config?.keyExpiration?.disableCustomExpiresTime ?? false,
 				maxExpiresIn: config?.keyExpiration?.maxExpiresIn ?? 365,
 				minExpiresIn: config?.keyExpiration?.minExpiresIn ?? 1,
+				autoCleanup: config?.keyExpiration?.autoCleanup ?? true,
 			},
 			startingCharactersConfig: {
 				shouldStore: config?.startingCharactersConfig?.shouldStore ?? true,
@@ -210,21 +215,29 @@ export function apiKey(
 							expectedConfigId: config.configId,
 						});
 
-						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
-							(err) => {
-								ctx.context.logger.error(
-									"Failed to delete expired API keys:",
-									err,
-								);
-							},
+						const resolvedConfig = resolveConfiguration(
+							ctx.context,
+							configurations,
+							apiKey.configId,
 						);
-						if (config.deferUpdates) {
-							ctx.context.runInBackground(cleanupTask);
+
+						if (resolvedConfig.keyExpiration.autoCleanup) {
+							const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+								(err) => {
+									ctx.context.logger.error(
+										"Failed to delete expired API keys:",
+										err,
+									);
+								},
+							);
+							if (resolvedConfig.deferUpdates) {
+								ctx.context.runInBackground(cleanupTask);
+							}
 						}
 
 						// Session mocking only works for user-owned API keys
 						// Determine the reference type from the configuration
-						const referencesType = config.references ?? "user";
+						const referencesType = resolvedConfig.references ?? "user";
 						if (referencesType !== "user") {
 							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
 							throw APIError.from("UNAUTHORIZED", msg);
