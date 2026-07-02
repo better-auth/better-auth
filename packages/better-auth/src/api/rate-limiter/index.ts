@@ -409,13 +409,15 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 }
 
 /**
- * Decides the rate limit for the request in a single atomic step. The whole
- * check-and-increment happens here in the request phase; there is no separate
- * response-phase write-back, so concurrent requests cannot all pass a stale
- * read before any increment lands.
+ * Decides the rate limit for the request in a single atomic step when all
+ * requests count. Failed-only mode is accounted after the response status is
+ * known.
  */
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	if (ctx.rateLimit.includeSuccessfulRequests === false) {
 		return;
 	}
 	const config = await resolveRateLimitConfig(req, ctx);
@@ -429,6 +431,36 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	});
 	const rule = { window: currentWindow, max: currentMax };
 
+	const { allowed, retryAfter } = await storage.consume(key, rule);
+	if (!allowed) {
+		return rateLimitResponse(retryAfter ?? currentWindow);
+	}
+}
+
+export async function onResponseRateLimit(
+	req: Request,
+	ctx: AuthContext,
+	response: Response,
+) {
+	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	if (ctx.rateLimit.includeSuccessfulRequests !== false) {
+		return;
+	}
+	if (response.status < 400) {
+		return;
+	}
+	const config = await resolveRateLimitConfig(req, ctx);
+	if (!config) {
+		return;
+	}
+	const { key, currentWindow, currentMax } = config;
+
+	const storage = getRateLimitStorage(ctx, {
+		window: currentWindow,
+	});
+	const rule = { window: currentWindow, max: currentMax };
 	const { allowed, retryAfter } = await storage.consume(key, rule);
 	if (!allowed) {
 		return rateLimitResponse(retryAfter ?? currentWindow);

@@ -19,7 +19,7 @@ import { createRouter } from "better-call";
 import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit } from "./rate-limiter";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -329,23 +329,46 @@ export const router = <Option extends BetterAuthOptions>(
 			return currentRequest;
 		},
 		async onResponse(res, req) {
-			for (const plugin of ctx.options.plugins || []) {
-				if (plugin.onResponse) {
-					const response = await withSpan(
-						`onResponse ${plugin.id}`,
-						{
-							[ATTR_HOOK_TYPE]: "onResponse",
-							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
-							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
-						},
-						() => plugin.onResponse!(res, ctx),
-					);
-					if (response) {
-						return response.response;
+			let currentResponse = res;
+			let caughtError: unknown;
+			try {
+				for (const plugin of ctx.options.plugins || []) {
+					if (plugin.onResponse) {
+						const response = await withSpan(
+							`onResponse ${plugin.id}`,
+							{
+								[ATTR_HOOK_TYPE]: "onResponse",
+								[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+								[ATTR_HTTP_RESPONSE_STATUS_CODE]: currentResponse.status,
+							},
+							() => plugin.onResponse!(currentResponse, ctx),
+						);
+						if (response) {
+							currentResponse = response.response;
+							break;
+						}
 					}
 				}
+			} catch (error) {
+				currentResponse = new Response(null, {
+					status: 500,
+					statusText: "Internal Server Error",
+				});
+				caughtError = error;
+			} finally {
+				const rateLimitResponse = await onResponseRateLimit(
+					req,
+					ctx,
+					currentResponse,
+				);
+				if (rateLimitResponse) {
+					return rateLimitResponse;
+				}
 			}
-			return res;
+			if (caughtError) {
+				throw caughtError;
+			}
+			return currentResponse;
 		},
 		onError(e) {
 			if (isAPIError(e) && e.status === "FOUND") {
