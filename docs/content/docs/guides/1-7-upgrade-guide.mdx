@@ -56,24 +56,12 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                         | No                                  |
 | Back-channel logout        | Logout-URL and revoked columns                                                       | No                                  |
 | Requested user-info claims | A requested-claims column on the token and consent tables                            | No                                  |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | **Yes, on the `auth migrate` path** |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | No                                  |
 | SCIM org scoping           | `organizationId` required, `userId` removed, `providerKey` added                     | **Yes, reclaim and remap rows**     |
 | SCIM groups                | New `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables | No                                  |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                      | **Yes, from `oidcProvider` or MCP** |
 
-Most rows are automatic. Three cases need a manual step, described below. Read the ones that apply before you cut over.
-
-#### Organization team counters and `npx auth migrate`
-
-This applies only to the built-in `auth migrate` (Kysely) path. Drizzle and Prisma users generate their own migrations and can skip it. `team.memberCount` is added `NOT NULL` and `teamMember.membershipKey` is added `UNIQUE`, but the generator emits a plain `ALTER TABLE ... ADD COLUMN`. SQLite rejects both forms, and the `NOT NULL` add also fails on a populated Postgres or MySQL `team` table. Add the columns by hand before `migrate`:
-
-```sql title="Run before npx auth migrate"
-ALTER TABLE "team" ADD COLUMN "memberCount" integer NOT NULL DEFAULT 0;
-ALTER TABLE "teamMember" ADD COLUMN "membershipKey" text;
-CREATE UNIQUE INDEX "teamMember_membershipKey_idx" ON "teamMember" ("membershipKey");
-```
-
-`memberCount` self-heals to the correct count on the next membership change. This form works on SQLite, Postgres, and MySQL; adjust the identifier quoting for your database.
+Most rows are automatic. Two cases need a manual step, described below. Read the ones that apply before you cut over.
 
 <Callout type="warn">
   **SCIM: reclaim, remap, then migrate.** SCIM connections now require an `organizationId` and a new unique `providerKey`, the old `userId` column is gone, and SCIM-managed accounts move to a namespaced provider id. The new columns are `NOT NULL`/`UNIQUE`, so on the `auth migrate` path they abort on a populated `scimProvider` table. Before you run `migrate`:
@@ -521,7 +509,7 @@ These do not need action for most setups, but they change what you see.
 
 Some manual steps must run before `migrate`, not after. Do them in this order:
 
-1. **Apply the data and pre-migration steps that affect you** from [Before you upgrade](#before-you-upgrade): the `auth migrate` team-counter columns, the SCIM reclaim and `account.providerId` remap, and the `oidcProvider` or MCP client-data move. These run before `migrate`.
+1. **Apply the data steps that affect you** from [Before you upgrade](#before-you-upgrade): the SCIM reclaim and `account.providerId` remap, and the `oidcProvider` or MCP client-data move. These run before `migrate`.
 2. **Generate and run the migration:**
 
    ```bash title="Terminal"
