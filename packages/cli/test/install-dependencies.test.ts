@@ -182,8 +182,17 @@ describe("installDependencies", () => {
 		},
 	);
 
+	/*
+	 * @see https://github.com/better-auth/better-auth/issues/10252
+	 *
+	 * `bun install` and `yarn install` do not accept package-name arguments;
+	 * they only install from the lock file. The commands that accept package
+	 * names are `bun add` and `yarn add`. Using the wrong sub-command means
+	 * the dependency names passed to installDependencies() are silently
+	 * ignored.
+	 */
 	testWithTmpDir(
-		"should run bun install with single dependency",
+		"should run bun add with single dependency",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "better-auth",
@@ -192,7 +201,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"bun install better-auth",
+				"bun add better-auth",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -200,7 +209,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run bun install with --dev for dev dependencies",
+		"should run bun add with --dev for dev dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "vitest",
@@ -210,7 +219,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"bun install --dev vitest",
+				"bun add --dev vitest",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -218,7 +227,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run bun install with --peer for peer dependencies",
+		"should run bun add with --peer for peer dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "react",
@@ -228,7 +237,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"bun install --peer react",
+				"bun add --peer react",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -236,7 +245,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run bun install with --optional for optional dependencies",
+		"should run bun add with --optional for optional dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "fsevents",
@@ -246,7 +255,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"bun install --optional fsevents",
+				"bun add --optional fsevents",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -254,7 +263,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run yarn install with single dependency",
+		"should run yarn add with single dependency",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "better-auth",
@@ -263,7 +272,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"yarn install better-auth",
+				"yarn add better-auth",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
