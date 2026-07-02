@@ -131,15 +131,11 @@ describe("lastLoginMethod", async () => {
 
 	it("should set the last login method cookie for siwe", async () => {
 		const headers = new Headers();
-		const walletAddress = SIWE_WALLET;
-		const chainId = SIWE_CHAIN_ID;
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		await client.siwe.verify(
 			{
 				message: siweMessage(),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 				email: "user@example.com",
 			},
 			{
@@ -274,8 +270,6 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("should set the last login method for siwe in the database", async () => {
-		const walletAddress = SIWE_WALLET;
-		const chainId = SIWE_CHAIN_ID;
 		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
@@ -297,12 +291,10 @@ describe("lastLoginMethod", async () => {
 				},
 			},
 		);
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const { data } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "user@example.com",
 		});
 		const session = await auth.api.getSession({

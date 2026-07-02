@@ -37,21 +37,26 @@ export interface SIWEPluginOptions {
 	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
-const walletAddressInputSchema = z
+const signedWalletAddressSchema = z
 	.string()
-	.regex(/^0[xX][a-fA-F0-9]{40}$/i)
+	.regex(/^0x[a-fA-F0-9]{40}$/)
 	.length(42);
 
-const getSiweNonceBodySchema = z
-	.object({
-		walletAddress: walletAddressInputSchema.optional(),
-		address: walletAddressInputSchema.optional(),
-		chainId: z.number().int().positive().optional().default(1),
-	})
-	.refine((body) => body.walletAddress || body.address, {
-		message: "walletAddress or address is required",
-		path: ["walletAddress"],
-	});
+const SIWE_VERIFICATION_IDENTIFIER_PREFIX = "siwe:";
+// MySQL adapter schemas cap verification.identifier at 255 characters.
+const VERIFICATION_IDENTIFIER_MAX_LENGTH = 255;
+const SIWE_NONCE_MAX_LENGTH =
+	VERIFICATION_IDENTIFIER_MAX_LENGTH -
+	SIWE_VERIFICATION_IDENTIFIER_PREFIX.length;
+const SIWE_NONCE_ALPHANUMERIC_REGEX = /^[a-zA-Z0-9]+$/;
+
+const isValidSiweNonce = (nonce: string | undefined): nonce is string =>
+	typeof nonce === "string" &&
+	nonce.length >= 8 &&
+	nonce.length <= SIWE_NONCE_MAX_LENGTH &&
+	SIWE_NONCE_ALPHANUMERIC_REGEX.test(nonce);
+
+const getSiweNonceBodySchema = z.object({}).strict().optional();
 
 export const siwe = (options: SIWEPluginOptions) => {
 	const createSiweNonceEndpoint = (path: "/siwe/nonce" | "/siwe/get-nonce") =>
@@ -62,20 +67,17 @@ export const siwe = (options: SIWEPluginOptions) => {
 				body: getSiweNonceBodySchema,
 			},
 			async (ctx) => {
-				const rawWalletAddress = ctx.body.walletAddress ?? ctx.body.address;
-				if (!rawWalletAddress) {
-					throw APIError.fromStatus("BAD_REQUEST", {
-						message: "walletAddress or address is required",
-						status: 400,
+				const nonce = await options.getNonce();
+				if (!isValidSiweNonce(nonce)) {
+					throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+						message: `SIWE getNonce must return an ERC-4361 nonce: 8-${SIWE_NONCE_MAX_LENGTH} alphanumeric characters.`,
+						status: 500,
+						code: "SIWE_INVALID_NONCE",
 					});
 				}
-				const { chainId } = ctx.body;
-				const walletAddress = toChecksumAddress(rawWalletAddress);
-				const nonce = await options.getNonce();
 
-				// Store nonce with wallet address and chain ID context
 				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `siwe:${walletAddress}:${chainId}`,
+					identifier: `${SIWE_VERIFICATION_IDENTIFIER_PREFIX}${nonce}`,
 					value: nonce,
 					expiresAt: new Date(Date.now() + 15 * 60 * 1000),
 				});
@@ -99,13 +101,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 						.object({
 							message: z.string().min(1),
 							signature: z.string().min(1),
-							walletAddress: z
-								.string()
-								.regex(/^0[xX][a-fA-F0-9]{40}$/i)
-								.length(42),
-							chainId: z.number().int().positive().optional().default(1),
 							email: z.email().optional(),
 						})
+						.strict()
 						.refine((data) => options.anonymous !== false || !!data.email, {
 							message:
 								"Email is required when the anonymous plugin option is disabled.",
@@ -114,14 +112,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 					requireRequest: true,
 				},
 				async (ctx) => {
-					const {
-						message,
-						signature,
-						walletAddress: rawWalletAddress,
-						chainId,
-						email,
-					} = ctx.body;
-					const walletAddress = toChecksumAddress(rawWalletAddress);
+					const { message, signature, email } = ctx.body;
 					const isAnon = options.anonymous ?? true;
 
 					if (!isAnon && !email) {
@@ -132,6 +123,20 @@ export const siwe = (options: SIWEPluginOptions) => {
 					}
 
 					try {
+						// The signed ERC-4361 message is the source of truth for wallet
+						// identity. Nonce issuance happens before the wallet connection is
+						// known, so address and chain ID are verified from the signed
+						// message instead of being pre-bound at the nonce endpoint.
+						const parsedMessage = parseSiweMessage(message);
+						if (!isValidSiweNonce(parsedMessage.nonce)) {
+							throw APIError.fromStatus("UNAUTHORIZED", {
+								message:
+									"Unauthorized: SIWE message does not match the expected nonce, domain, address, or chain ID",
+								status: 401,
+								code: "UNAUTHORIZED_SIWE_MESSAGE_MISMATCH",
+							});
+						}
+
 						// Atomically consume the single-use nonce before any signature
 						// work or state mutation. The first concurrent request wins; every
 						// racer gets null, so the same nonce can never replay a login.
@@ -139,7 +144,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 						// a failed attempt and applies the built-in expiry gate.
 						const verification =
 							await ctx.context.internalAdapter.consumeVerificationValue(
-								`siwe:${walletAddress}:${chainId}`,
+								`${SIWE_VERIFICATION_IDENTIFIER_PREFIX}${parsedMessage.nonce}`,
 							);
 
 						if (!verification) {
@@ -151,7 +156,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 						}
 
 						// Verify SIWE message with enhanced parameters
-						const { value: nonce } = verification;
+						const nonce = parsedMessage.nonce;
 
 						// Bind the *signed* message to server state before accepting the
 						// signature. Signature recovery alone (the documented `verifyMessage`
@@ -159,24 +164,24 @@ export const siwe = (options: SIWEPluginOptions) => {
 						// produced signature (stale, for another domain, or over an
 						// arbitrary string) could otherwise be presented alongside a freshly
 						// minted nonce. Parse the ERC-4361 message ourselves and require the
-						// nonce, address, chain id, and domain to match the server-issued
-						// values, plus honor the signed time bounds.
-						const parsedMessage = parseSiweMessage(message);
-						const nonceMatches = parsedMessage.nonce === nonce;
-						const addressMatches =
-							!!parsedMessage.address &&
-							parsedMessage.address.toLowerCase() ===
-								walletAddress.toLowerCase();
-						const chainMatches = parsedMessage.chainId === chainId;
+						// signed nonce, address, chain ID, and domain to satisfy the plugin
+						// contract, plus honor the signed time bounds.
+						const parsedWalletAddress = signedWalletAddressSchema.safeParse(
+							parsedMessage.address,
+						);
+						const walletAddress = parsedWalletAddress.success
+							? toChecksumAddress(parsedWalletAddress.data)
+							: null;
+						const chainId = parsedMessage.chainId;
 						const domainMatches =
 							!!parsedMessage.domain &&
 							normalizeSiweDomain(parsedMessage.domain) ===
 								normalizeSiweDomain(options.domain);
 
 						if (
-							!nonceMatches ||
-							!addressMatches ||
-							!chainMatches ||
+							!walletAddress ||
+							typeof chainId !== "number" ||
+							chainId <= 0 ||
 							!domainMatches
 						) {
 							throw APIError.fromStatus("UNAUTHORIZED", {
