@@ -451,6 +451,16 @@ export async function getMigrations(config: BetterAuthOptions) {
 							// build. Filtering NULLs matches the other dialects.
 							indexBuilder = indexBuilder.where(fieldName, "is not", null);
 						}
+						if (
+							field.required !== false &&
+							field.defaultValue !== undefined &&
+							field.defaultValue !== null &&
+							typeof field.defaultValue !== "function"
+						) {
+							logger.warn(
+								`Adding unique column "${fieldName}" to existing table "${table.table}" backfills every existing row with its default value. If the table has more than one row, creating the unique index "${indexName}" will fail; backfill distinct values manually, then re-run the migration or create the index yourself.`,
+							);
+						}
 					}
 					deferredIndexes.push(indexBuilder);
 				}

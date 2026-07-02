@@ -104,8 +104,15 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
 			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
 		);
+		const warnings: string[] = [];
 		const config: BetterAuthOptions = {
 			database: db,
+			logger: {
+				level: "warn",
+				log: (level, message) => {
+					if (level === "warn") warnings.push(message);
+				},
+			},
 			user: {
 				additionalFields: {
 					referralCode: {
@@ -119,6 +126,10 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 		};
 
 		const { runMigrations, compileMigrations } = await getMigrations(config);
+
+		// The shared backfill cannot be unique on a multi-row table, so the
+		// generator warns that a manual backfill may be needed.
+		expect(warnings.some((w) => w.includes('"referralCode"'))).toBe(true);
 
 		// A required unique column keeps its static default so the NOT NULL add
 		// succeeds; uniqueness is enforced through a separate index.
