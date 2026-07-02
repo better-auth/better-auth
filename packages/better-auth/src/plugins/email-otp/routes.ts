@@ -1109,12 +1109,18 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					toOTPIdentifier("change-email", `${email}-${newEmail}`),
-				);
-				return ctx.json({
-					success: true,
-				});
+				const strategy = opts.changeEmail?.informEmailTaken ?? "never";
+				if (strategy !== "deferred") {
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						toOTPIdentifier("change-email", `${email}-${newEmail}`),
+					);
+					if (strategy === "immediate") {
+						throw APIError.fromStatus("BAD_REQUEST", {
+							message: "Email is already taken",
+						});
+					}
+					return ctx.json({ success: true });
+				}
 			}
 
 			await ctx.context.runInBackgroundOrAwait(
@@ -1235,7 +1241,7 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				 * safe to leak the existence of a user as a valid OTP has been provided
 				 */
 				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Email already in use",
+					message: "Email is already taken",
 				});
 			}
 
