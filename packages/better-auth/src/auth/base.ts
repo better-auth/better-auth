@@ -16,6 +16,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);
+	// Auth context initialization is awaited lazily by handlers and $context.
+	// Mark the promise as handled immediately so startup config errors don't
+	// emit unhandled rejections before consumers await the original promise.
+	void authContext.catch(() => undefined);
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
