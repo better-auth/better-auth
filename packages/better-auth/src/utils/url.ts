@@ -99,6 +99,12 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	}
 
 	if (type === "host") {
+		// RFC 1035 §2.3.4: max FQDN is 253 chars (+1 optional trailing dot); add 6 for port (e.g. ":65535")
+		// This O(1) guard prevents ReDoS on the regex below by bounding untrusted input size
+		if (header.length > 260) {
+			return false;
+		}
+
 		const suspiciousPatterns = [
 			/\.\./, // Path traversal
 			/\0/, // Null bytes
