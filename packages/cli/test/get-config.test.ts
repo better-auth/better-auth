@@ -1363,6 +1363,115 @@ describe("getConfig", async () => {
 
 		expect(existsSync(outputPath)).toBe(false);
 	});
+
+	/**
+	 * `generate.ts` resolves `--output` via `path.resolve(cwd, options.output)`
+	 * and passes the (possibly still-relative) result straight through as
+	 * `outputPath`. `getConfig` must resolve a relative `outputPath` against
+	 * that same `cwd` for its placeholder existence-check and write — not
+	 * against `process.cwd()`, which can differ (e.g. `--cwd` points elsewhere
+	 * than the directory the CLI process was launched from).
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10302
+	 */
+	it("should resolve a relative outputPath against the getConfig cwd, not process.cwd()", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 // referenced so the import isn't optimized away before evaluation
+			 export const __schema = schema;`,
+		);
+
+		const relativeOutputPath = path.join("convex", "betterAuth", "schema.ts");
+		const expectedOutputPath = path.join(tmpDir, relativeOutputPath);
+
+		// Simulates the process actually being launched from a directory other
+		// than the `cwd` given to getConfig/generate — a real decoy directory
+		// (not just a mocked `process.cwd()` getter) so a buggy implementation
+		// that hands relative paths straight to `fs`/`path.resolve` is caught
+		// exactly the way it would be in production.
+		const realProcessCwd = process.cwd();
+		const decoyCwd = await fs.mkdtemp(
+			path.join(realProcessCwd, "getConfig_test-decoy-"),
+		);
+		const decoyOutputPath = path.join(decoyCwd, relativeOutputPath);
+
+		process.chdir(decoyCwd);
+		try {
+			await expect(
+				getConfig({
+					cwd: tmpDir,
+					configPath: "convex/betterAuth/auth.ts",
+					outputPath: relativeOutputPath,
+					shouldThrowOnError: true,
+				}),
+			).resolves.toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+
+			// The placeholder — and therefore the resolvable schema import — must
+			// land under the `cwd` getConfig/generate.ts actually use.
+			expect(existsSync(expectedOutputPath)).toBe(true);
+			// It must never land relative to process.cwd() instead.
+			expect(existsSync(decoyOutputPath)).toBe(false);
+		} finally {
+			process.chdir(realProcessCwd);
+			await fs.rm(decoyCwd, { recursive: true, force: true });
+		}
+	});
+
+	/**
+	 * If the retry after stubbing the placeholder fails for a genuinely
+	 * unrelated reason (a different missing module), the empty placeholder
+	 * `getConfig` created must not be left behind on disk.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10302
+	 */
+	it("should remove the placeholder file it created if the retry fails for an unrelated reason", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+			 import other from "./does-not-exist-either";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __schema = schema;
+			 export const __other = other;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+		expect(existsSync(outputPath)).toBe(false);
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find module ['"]\.\/does-not-exist-either['"]/);
+
+		// getConfig stubbed the placeholder to recover the "./schema" self
+		// import, but the retry still failed for an unrelated missing module —
+		// the placeholder it created must not be left behind.
+		expect(existsSync(outputPath)).toBe(false);
+	});
 });
 
 /**
