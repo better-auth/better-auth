@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.7.0-rc.1
+
+### Patch Changes
+
+- [#10293](https://github.com/better-auth/better-auth/pull/10293) [`fe4c820`](https://github.com/better-auth/better-auth/commit/fe4c8209479cc90a4c2e8692b2d84fde26926af2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `npx auth migrate` no longer aborts when adding a column to an existing table. A required column with a default value, or a unique column, now migrates on SQLite and on populated Postgres and MySQL databases. Upgrading a database that already has organization teams previously failed on the new `team.memberCount` and `teamMember.membershipKey` columns.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.1
+  - @better-auth/drizzle-adapter@1.7.0-rc.1
+  - @better-auth/kysely-adapter@1.7.0-rc.1
+  - @better-auth/memory-adapter@1.7.0-rc.1
+  - @better-auth/mongo-adapter@1.7.0-rc.1
+  - @better-auth/prisma-adapter@1.7.0-rc.1
+  - @better-auth/telemetry@1.7.0-rc.1
+
 ## 1.7.0-rc.0
 
 ### Patch Changes
