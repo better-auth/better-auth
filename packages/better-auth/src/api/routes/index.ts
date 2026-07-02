@@ -2,6 +2,7 @@ export * from "./account";
 export * from "./callback";
 export * from "./email-verification";
 export * from "./error";
+export * from "./oauth-providers";
 export * from "./ok";
 export * from "./password";
 export * from "./session";

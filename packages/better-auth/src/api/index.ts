@@ -29,6 +29,7 @@ import {
 	deleteUserCallback,
 	error,
 	getAccessToken,
+	getOAuthProviders,
 	getSession,
 	linkSocialAccount,
 	listSessions,
@@ -263,6 +264,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		...pluginEndpoints,
 		ok,
 		error,
+		getOAuthProviders,
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
