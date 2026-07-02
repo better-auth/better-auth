@@ -1,5 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+} from "@better-auth/core/db/adapter";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -11,6 +15,7 @@ import type {
 	Session,
 	User,
 } from "../types";
+import { getAdapter } from "./adapter-kysely";
 import { getMigrations } from "./get-migration";
 
 describe("internal adapter test", async () => {
@@ -1511,6 +1516,44 @@ describe("internal adapter test", async () => {
 			return ctx.internalAdapter;
 		}
 
+		function stringifyVerificationExpiresAt<T extends DBTransactionAdapter>(
+			adapter: T,
+		): T {
+			const stringifyRow = <T,>(row: T | null): T | null => {
+				if (
+					row &&
+					typeof row === "object" &&
+					"identifier" in row &&
+					"expiresAt" in row &&
+					(row as { expiresAt: unknown }).expiresAt instanceof Date
+				) {
+					return {
+						...row,
+						expiresAt: (row as { expiresAt: Date }).expiresAt.toISOString(),
+					};
+				}
+				return row;
+			};
+
+			return {
+				...adapter,
+				consumeOne: async (data) =>
+					stringifyRow(await adapter.consumeOne(data)),
+			};
+		}
+
+		function stringifyVerificationExpiresAtInTransactions(
+			adapter: DBAdapter<BetterAuthOptions>,
+		): DBAdapter<BetterAuthOptions> {
+			return {
+				...stringifyVerificationExpiresAt(adapter),
+				transaction: async (callback) =>
+					adapter.transaction((trx) =>
+						callback(stringifyVerificationExpiresAt(trx)),
+					),
+			};
+		}
+
 		it("returns the row to the first caller and null to subsequent reads", async () => {
 			const adapter = await makeAdapter();
 			await adapter.createVerificationValue({
@@ -1525,6 +1568,31 @@ describe("internal adapter test", async () => {
 
 			const second = await adapter.consumeVerificationValue("consume:single");
 			expect(second).toBeNull();
+		});
+
+		it("accepts database verification rows with string expiresAt values", async () => {
+			const database = new DatabaseSync(":memory:");
+			const migrationOptions = { database } satisfies BetterAuthOptions;
+			(await getMigrations(migrationOptions)).runMigrations();
+			const baseAdapter = await getAdapter(migrationOptions);
+			const opts = {
+				database: () =>
+					stringifyVerificationExpiresAtInTransactions(baseAdapter),
+			} satisfies BetterAuthOptions;
+			const ctx = await init(opts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "consume:string-date",
+				value: "user-string-date",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const consumed = await ctx.internalAdapter.consumeVerificationValue(
+				"consume:string-date",
+			);
+			expect(consumed).not.toBeNull();
+			expect(consumed!.value).toBe("user-string-date");
+			expect(consumed!.expiresAt).toBeInstanceOf(Date);
 		});
 
 		it("yields exactly one winner under concurrent consume", async () => {
