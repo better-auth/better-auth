@@ -193,7 +193,7 @@ await auth.api.updateSession({
 
 ### Revoking Sessions on Password Change
 
-You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` as true on `changePassword` function.
+You can revoke all sessions other than the current one when the user changes their password by passing `revokeOtherSessions` as true on `changePassword` function. The current session is preserved so the caller stays signed in after the change.
 
 ```ts title="auth.ts"
 import { authClient } from "@/lib/auth-client"
