@@ -199,6 +199,55 @@ describe("oauth signed query signatures", () => {
 			"custom_authorization_context",
 		);
 	});
+
+	it("should set accept: application/json when injecting the oauth query", async () => {
+		const signedParams = await createSignedParams("test-secret");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: `?${signedParams.toString()}`,
+			},
+		});
+
+		const plugin = oauthProviderClient();
+		const onRequest = plugin.fetchPlugins[0]?.hooks?.onRequest;
+		// Mirrors the passkey verify request that resumes the oauth flow.
+		const ctx = {
+			method: "POST",
+			headers: new Headers({
+				"content-type": "application/json",
+			}),
+			body: JSON.stringify({ response: {} }),
+		};
+
+		await onRequest?.(ctx as Parameters<NonNullable<typeof onRequest>>[0]);
+
+		const body = JSON.parse(String(ctx.body));
+		expect(body.oauth_query).toBeDefined();
+		expect(ctx.headers.get("accept")).toBe("application/json");
+	});
+
+	it("should not touch the accept header when there is no oauth query to inject", async () => {
+		vi.stubGlobal("window", {
+			location: {
+				search: "",
+			},
+		});
+
+		const plugin = oauthProviderClient();
+		const onRequest = plugin.fetchPlugins[0]?.hooks?.onRequest;
+		const ctx = {
+			method: "POST",
+			headers: new Headers({
+				"content-type": "application/json",
+			}),
+			body: "{}",
+		};
+
+		await onRequest?.(ctx as Parameters<NonNullable<typeof onRequest>>[0]);
+
+		expect(ctx.headers.get("accept")).toBeNull();
+	});
 });
 
 describe("oauth authorize - unauthenticated", async () => {
