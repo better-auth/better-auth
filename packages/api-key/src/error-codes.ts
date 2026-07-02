@@ -44,4 +44,5 @@ export const API_KEY_ERROR_CODES = defineErrorCodes({
 		"No default api-key configuration found.",
 	ORGANIZATION_PLUGIN_REQUIRED:
 		"Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin.",
+	ORGANIZATION_NOT_FOUND: "Organization not found.",
 });
