@@ -72,6 +72,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: Session<Option["session"], Option["plugins"]>;
 			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
+			ctx.setHeader("cache-control", "no-store");
+			ctx.setHeader("pragma", "no-cache");
+
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
 			const isPostRequest = ctx.method === "POST";
