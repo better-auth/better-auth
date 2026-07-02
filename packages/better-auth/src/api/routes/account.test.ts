@@ -680,6 +680,98 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10214
+	 */
+	it("should reject idToken linkSocial when the provider account belongs to another user", async () => {
+		const {
+			auth: scopedAuth,
+			client: scopedClient,
+			cookieSetter: scopedCookieSetter,
+			signInWithTestUser: scopedSignInWithTestUser,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+			},
+		});
+		const scopedCtx = await scopedAuth.$context;
+		const googleProvider = scopedCtx.socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+		const providerAccountId = "shared-google-provider-account";
+		const providerUser = {
+			id: providerAccountId,
+			name: "Shared Google User",
+			email: "shared-google-user@example.com",
+			emailVerified: true,
+		};
+		vi.spyOn(googleProvider, "verifyIdToken").mockResolvedValue(true);
+		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+			user: providerUser,
+			data: providerUser,
+		});
+
+		const firstSession = await scopedSignInWithTestUser();
+		await firstSession.runWithUser(async () => {
+			const firstLink = await scopedClient.linkSocial({
+				provider: "google",
+				idToken: { token: "first-id-token" },
+			});
+
+			expect(firstLink.error).toBeNull();
+		});
+
+		const secondHeaders = new Headers();
+		const secondSignUp = await scopedClient.signUp.email(
+			{
+				email: "second-link-target@example.com",
+				password: "password123",
+				name: "Second Link Target",
+			},
+			{
+				onSuccess: scopedCookieSetter(secondHeaders),
+			},
+		);
+		expect(secondSignUp.error).toBeNull();
+
+		const secondLink = await scopedClient.linkSocial(
+			{
+				provider: "google",
+				idToken: { token: "second-id-token" },
+			},
+			{
+				headers: secondHeaders,
+			},
+		);
+
+		expect(secondLink.error?.status).toBe(409);
+		expect(secondLink.error?.code).toBe(
+			BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED.code,
+		);
+
+		const linkedAccounts = await scopedCtx.adapter.findMany<Account>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "google" },
+				{ field: "accountId", value: providerAccountId },
+			],
+		});
+		expect(linkedAccounts).toHaveLength(1);
+		expect(linkedAccounts[0]?.userId).toBe(firstSession.user.id);
+	});
+
 	it("should unlink account", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
