@@ -463,6 +463,42 @@ describe("generate", async () => {
 		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10259
+	 */
+	it("should escape string default values so the generated prisma schema stays valid", async () => {
+		const pluginWithQuotedDefault = (): BetterAuthPlugin => ({
+			id: "prisma-quoted-default-test",
+			schema: {
+				testTable: {
+					fields: {
+						greeting: {
+							type: "string",
+							defaultValue: 'say "hi"\\done',
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter({}, { provider: "postgresql" }),
+				plugins: [pluginWithQuotedDefault()],
+			},
+		});
+
+		// Quotes and backslashes must be escaped so the default is a valid Prisma
+		// string literal. The raw interpolation would emit @default("say "hi"\done")
+		// and break the generated schema file.
+		expect(schema.code).toContain(String.raw`@default("say \"hi\"\\done")`);
+	});
+
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
 		const originalCwd = process.cwd();
 		const tmpDir = fs.mkdtempSync(
