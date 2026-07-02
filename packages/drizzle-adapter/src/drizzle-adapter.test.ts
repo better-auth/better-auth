@@ -16,6 +16,97 @@ describe("drizzle-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	describe("customTransformOutput date coercion", () => {
+		function getCustomTransformOutput(provider: "sqlite" | "pg" | "mysql") {
+			const db = { _: { fullSchema: {} } } as any;
+			const adapter = drizzleAdapter(db, { provider })({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+			});
+			const customTransformOutput = (adapter.options as any).adapterConfig
+				.customTransformOutput;
+			expect(customTransformOutput).toBeTypeOf("function");
+			return customTransformOutput as (props: {
+				data: any;
+				fieldAttributes: { type: string };
+			}) => any;
+		}
+
+		/**
+		 * A libSQL/sqlite `text` column storing a `Date` as epoch milliseconds
+		 * (e.g. from a hand-written schema, per the CLI-emitted
+		 * `integer({ mode: "timestamp_ms" })` guidance) returns a
+		 * numeric-millisecond string, not an ISO date string.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/9963
+		 */
+		it("coerces a numeric-millisecond-string date value into a valid Date", () => {
+			const customTransformOutput = getCustomTransformOutput("sqlite");
+
+			const result = customTransformOutput({
+				data: "1774295570569",
+				fieldAttributes: { type: "date" },
+			});
+
+			expect(result).toBeInstanceOf(Date);
+			expect(Number.isNaN((result as Date).getTime())).toBe(false);
+			expect((result as Date).getTime()).toBe(1774295570569);
+		});
+
+		it("coerces a numeric date value into a valid Date", () => {
+			const customTransformOutput = getCustomTransformOutput("sqlite");
+
+			const result = customTransformOutput({
+				data: 1774295570569,
+				fieldAttributes: { type: "date" },
+			});
+
+			expect(result).toBeInstanceOf(Date);
+			expect((result as Date).getTime()).toBe(1774295570569);
+		});
+
+		it("still coerces a plain ISO date string into a valid Date", () => {
+			const customTransformOutput = getCustomTransformOutput("sqlite");
+			const iso = "2026-01-01T00:00:00.000Z";
+
+			const result = customTransformOutput({
+				data: iso,
+				fieldAttributes: { type: "date" },
+			});
+
+			expect(result).toBeInstanceOf(Date);
+			expect((result as Date).toISOString()).toBe(iso);
+		});
+
+		it("returns null/undefined unchanged", () => {
+			const customTransformOutput = getCustomTransformOutput("sqlite");
+
+			expect(
+				customTransformOutput({
+					data: null,
+					fieldAttributes: { type: "date" },
+				}),
+			).toBeNull();
+			expect(
+				customTransformOutput({
+					data: undefined,
+					fieldAttributes: { type: "date" },
+				}),
+			).toBeUndefined();
+		});
+
+		it("leaves a real Date instance unchanged", () => {
+			const customTransformOutput = getCustomTransformOutput("pg");
+			const date = new Date("2026-01-01T00:00:00.000Z");
+
+			const result = customTransformOutput({
+				data: date,
+				fieldAttributes: { type: "date" },
+			});
+
+			expect(result).toBe(date);
+		});
+	});
+
 	it("should use unique column fallback for MySQL creates without an id", async () => {
 		const userRow = {
 			id: 42,

@@ -6,7 +6,10 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	parseDateValue,
+} from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
@@ -1135,7 +1138,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (data === null || data === undefined) {
 						return data;
 					}
-					return new Date(data);
+					// A raw `new Date(data)` mis-parses a numeric-millisecond string
+					// (e.g. a sqlite/libSQL `text` column storing a `Date` as
+					// "1774295570569") into `Invalid Date`, since the `Date`
+					// constructor only recognizes ISO 8601 date strings for string
+					// input. `parseDateValue` also handles a raw `number` driver
+					// return (e.g. an `integer` column).
+					// @see https://github.com/better-auth/better-auth/issues/9963
+					return parseDateValue(data);
 				}
 				return data;
 			},
