@@ -593,7 +593,7 @@ importers:
         version: link:../../../../packages/test-utils
       '@prisma/client':
         specifier: ^5.22.0
-        version: 5.22.0(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 5.22.0
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
@@ -807,6 +807,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../../packages/oauth-provider
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
@@ -16845,9 +16848,7 @@ snapshots:
 
   '@prisma/client-runtime-utils@7.4.1': {}
 
-  '@prisma/client@5.22.0(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))':
-    optionalDependencies:
-      prisma: 7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+  '@prisma/client@5.22.0': {}
 
   '@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
