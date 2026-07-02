@@ -128,7 +128,9 @@ async function validateJwtAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			jwtPayload.sid = undefined;
+			return {
+				active: false,
+			};
 		}
 	}
 
