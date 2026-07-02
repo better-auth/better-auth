@@ -1,0 +1,16 @@
+{
+  "name": "@better-auth-test/prisma-next-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/prisma-next-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "better-auth": "workspace:*",
+    "@types/pg": "^8.16.0",
+    "pg": "^8.19.0"
+  }
+}
