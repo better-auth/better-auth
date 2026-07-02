@@ -4,7 +4,7 @@
   "description": "Redis storage for Better Auth secondary storage",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/storage",
+  "homepage": "https://www.better-auth.com/docs/concepts/database#redis-storage",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
