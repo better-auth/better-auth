@@ -460,3 +460,37 @@ describe("memory adapter transaction isolation", () => {
 		expect(db.widget?.map((r) => r.id)).toEqual(["committed"]);
 	});
 });
+
+describe("memory adapter starts_with/ends_with with a null or absent field", () => {
+	it("starts_with excludes a row whose field is absent instead of throwing", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "1", "alice"); // no tag field
+		await adapter.create({
+			model: "widget",
+			data: { id: "2", name: "bob", tag: "hello" },
+			forceAllowId: true,
+		});
+
+		const rows = await adapter.findMany<{ id: string }>({
+			model: "widget",
+			where: [{ field: "tag", value: "hel", operator: "starts_with" }],
+		});
+		expect(rows.map((r) => r.id)).toEqual(["2"]);
+	});
+
+	it("ends_with excludes a row whose field is absent instead of throwing", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "1", "alice"); // no tag field
+		await adapter.create({
+			model: "widget",
+			data: { id: "2", name: "bob", tag: "hello" },
+			forceAllowId: true,
+		});
+
+		const rows = await adapter.findMany<{ id: string }>({
+			model: "widget",
+			where: [{ field: "tag", value: "llo", operator: "ends_with" }],
+		});
+		expect(rows.map((r) => r.id)).toEqual(["2"]);
+	});
+});

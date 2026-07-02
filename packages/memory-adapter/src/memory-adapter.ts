@@ -279,12 +279,12 @@ export const memoryAdapter = (
 									if (isInsensitive) {
 										return insensitiveStartsWith(record[field], value);
 									}
-									return record[field].startsWith(value);
+									return record[field]?.startsWith(value);
 								case "ends_with":
 									if (isInsensitive) {
 										return insensitiveEndsWith(record[field], value);
 									}
-									return record[field].endsWith(value);
+									return record[field]?.endsWith(value);
 								case "ne":
 									return isInsensitive
 										? !insensitiveCompare(record[field], value)
