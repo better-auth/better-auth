@@ -873,15 +873,21 @@ export const createInternalAdapter = (
 						accounts: [account],
 					};
 				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [
-							{
-								value: email.toLowerCase(),
-								field: "email",
-							},
-						],
-					});
+					const users = await (await getCurrentAdapter(adapter)).findMany<User>(
+						{
+							model: "user",
+							where: [
+								{
+									value: email.toLowerCase(),
+									field: "email",
+									mode: "insensitive",
+								},
+							],
+							limit: 2,
+						},
+					);
+					if (users.length > 1) return null;
+					const user = users[0] || null;
 					if (user) {
 						return {
 							user,
@@ -892,15 +898,19 @@ export const createInternalAdapter = (
 					return null;
 				}
 			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+				const users = await (await getCurrentAdapter(adapter)).findMany<User>({
 					model: "user",
 					where: [
 						{
 							value: email.toLowerCase(),
 							field: "email",
+							mode: "insensitive",
 						},
 					],
+					limit: 2,
 				});
+				if (users.length > 1) return null;
+				const user = users[0] || null;
 				if (user) {
 					const accounts = await (
 						await getCurrentAdapter(adapter)
@@ -928,25 +938,37 @@ export const createInternalAdapter = (
 			options?: { includeAccounts: boolean } | undefined,
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
-			const result = await currentAdapter.findOne<
-				User & { account: Account[] | undefined }
-			>({
+			const users = await currentAdapter.findMany<User>({
 				model: "user",
 				where: [
 					{
 						value: email.toLowerCase(),
 						field: "email",
+						mode: "insensitive",
 					},
 				],
-				join: {
-					...(options?.includeAccounts ? { account: true } : {}),
-				},
+				limit: 2,
 			});
-			if (!result) return null;
-			const { account: accounts, ...user } = result;
+			if (users.length > 1) return null;
+			const user = users[0] || null;
+			if (!user) return null;
+
+			let accounts: Account[] = [];
+			if (options?.includeAccounts) {
+				accounts = await currentAdapter.findMany<Account>({
+					model: "account",
+					where: [
+						{
+							field: "userId",
+							value: user.id,
+						},
+					],
+				});
+			}
+
 			return {
 				user,
-				accounts: accounts ?? [],
+				accounts,
 			};
 		},
 		findUserById: async (userId: string) => {
@@ -1003,6 +1025,23 @@ export const createInternalAdapter = (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 		) => {
+			const existingUsers = await (
+				await getCurrentAdapter(adapter)
+			).findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: email.toLowerCase(),
+						mode: "insensitive",
+					},
+				],
+				limit: 2,
+			});
+			if (existingUsers.length > 1) return null;
+			const existingUser = existingUsers[0] || null;
+			if (!existingUser) return null;
+
 			const user = await updateWithHooks<User>(
 				{
 					...data,
@@ -1010,8 +1049,8 @@ export const createInternalAdapter = (
 				},
 				[
 					{
-						field: "email",
-						value: email.toLowerCase(),
+						field: "id",
+						value: existingUser.id,
 					},
 				],
 				"user",

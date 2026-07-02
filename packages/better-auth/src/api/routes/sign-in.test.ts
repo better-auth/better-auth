@@ -543,4 +543,54 @@ describe("email case insensitivity", async () => {
 			}),
 		).rejects.toThrow();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10276
+	 */
+	it("should sign in when the stored email has mixed case from manual DB insertion", async () => {
+		const { auth, db } = await getTestInstance(undefined, {
+			disableTestUser: true,
+		});
+
+		const mixedCaseEmail = "Test@Example.COM";
+		const password = "password123";
+		const hash = await auth.$context.then((ctx) => ctx.password.hash(password));
+
+		// Directly insert user and account into the DB with mixed-case email,
+		// bypassing createUser which would normalize to lowercase.
+		const userId = "manual-user-id";
+		await db.create({
+			model: "user",
+			data: {
+				id: userId,
+				email: mixedCaseEmail, // Intentionally NOT lowercased
+				name: "Manual User",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+		await db.create({
+			model: "account",
+			data: {
+				userId,
+				providerId: "credential",
+				accountId: userId,
+				password: hash,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Sign in with lowercase email should find the mixed-case stored email
+		const result = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail.toLowerCase(),
+				password,
+			},
+		});
+		expect(result.user).toBeDefined();
+		expect(result.token).toBeDefined();
+	});
 });
