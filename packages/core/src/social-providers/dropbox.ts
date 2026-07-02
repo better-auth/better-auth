@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface DropboxProfile {
 	account_id: string;
@@ -83,15 +83,16 @@ export const dropbox = (options: DropboxOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<DropboxProfile>(
-				"https://api.dropboxapi.com/2/users/get_current_account",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error } =
+				await fetchPublicResource<DropboxProfile>(
+					"https://api.dropboxapi.com/2/users/get_current_account",
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 
 			if (error) {
 				return null;

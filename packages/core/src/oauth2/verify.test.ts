@@ -10,6 +10,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+
 import { verifyBearerToken } from "./verify";
 
 const issuer = "https://auth.example.com";

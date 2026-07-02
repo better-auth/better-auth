@@ -1,6 +1,6 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
 import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 /**
  * WeChat user profile information
@@ -96,7 +96,7 @@ export const wechat = (options: WeChatOptions) => {
 				grant_type: "authorization_code",
 			});
 
-			const { data: tokenData, error } = await betterFetch<{
+			const { data: tokenData, error } = await fetchPublicResource<{
 				access_token: string;
 				expires_in: number;
 				refresh_token: string;
@@ -143,7 +143,7 @@ export const wechat = (options: WeChatOptions) => {
 						refresh_token: refreshToken,
 					});
 
-					const { data: tokenData, error } = await betterFetch<{
+					const { data: tokenData, error } = await fetchPublicResource<{
 						access_token: string;
 						expires_in: number;
 						refresh_token: string;
@@ -193,7 +193,7 @@ export const wechat = (options: WeChatOptions) => {
 				lang: "zh_CN",
 			});
 
-			const { data: profile, error } = await betterFetch<
+			const { data: profile, error } = await fetchPublicResource<
 				WeChatProfile & { errcode?: number; errmsg?: string }
 			>("https://api.weixin.qq.com/sns/userinfo?" + params.toString(), {
 				method: "GET",

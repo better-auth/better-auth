@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 interface Partner {
 	/** Partner-specific ID (consent required: kakaotalk_message) */
@@ -147,7 +147,7 @@ export const kakao = (options: KakaoOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<KakaoProfile>(
+			const { data: profile, error } = await fetchPublicResource<KakaoProfile>(
 				"https://kapi.kakao.com/v2/user/me",
 				{
 					headers: {

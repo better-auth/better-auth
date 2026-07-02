@@ -4,6 +4,7 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import { fetchPublicResponse } from "@better-auth/core/utils/public-fetch";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
@@ -34,17 +35,8 @@ function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 
 /**
- * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
- * `backchannel_logout_uri`): returns true when the host is NOT publicly
- * routable. That covers loopback, RFC 1918 private, link-local (including AWS
- * IMDS `169.254.169.254`), shared-address-space (carrier-grade NAT),
- * IPv4-mapped IPv6, 6to4/NAT64/Teredo tunnels, every other RFC 6890
- * special-purpose range, and cloud-metadata FQDNs.
- *
- * Delegates to the audited single source of truth so this check cannot drift
- * into the kind of encoding bypass that bespoke regexes invite. This is a
- * syntactic check only: it does not resolve DNS, so a public name that
- * resolves to a private address at fetch time is not caught here.
+ * Registration-time host gate for client-owned fetch targets. Runtime fetches
+ * still re-check DNS through `fetchPublicResponse`.
  */
 export function isPrivateHostname(hostname: string): boolean {
 	return !isPublicRoutableHost(hostname);
@@ -69,9 +61,7 @@ function validateJwksUri(
 			error: "invalid_client",
 		});
 	}
-	// Trust a jwks_uri that shares origin with a URL-format client_id: the
-	// discovery that installed the client has already verified the
-	// client_id URL, and same-origin jwks_uri is part of that verification.
+	// URL-format client IDs prove same-origin jwks_uri during discovery.
 	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
 		return;
 	}
@@ -81,6 +71,18 @@ function validateJwksUri(
 			error: "invalid_client",
 		});
 	}
+}
+
+function isTrustedJwksOrigin(
+	ctx: GenericEndpointContext,
+	target: string,
+	clientIdUrlOrigin?: string,
+): boolean {
+	const parsed = new URL(target);
+	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
+		return true;
+	}
+	return ctx.context.isTrustedOrigin(target);
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
@@ -94,16 +96,23 @@ function urlClientIdOrigin(clientId: string): string | undefined {
 	}
 }
 
-async function fetchJwksFromUri(jwksUri: string): Promise<JSONWebKeySet> {
+async function fetchJwksFromUri(
+	jwksUri: string,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<JSONWebKeySet> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
-		const response = await fetch(jwksUri, {
-			signal: controller.signal,
-			headers: { accept: "application/json" },
-			redirect: "error",
-		});
+		const response = await fetchPublicResponse(
+			jwksUri,
+			{
+				signal: controller.signal,
+				headers: { accept: "application/json" },
+			},
+			{ isTrustedOrigin },
+		);
 		if (!response.ok) {
+			await response.body?.cancel().catch(() => {});
 			throw new Error(`JWKS fetch returned ${response.status}`);
 		}
 		const jwks = (await response.json()) as JSONWebKeySet;
@@ -131,7 +140,8 @@ async function fetchClientJwks(
 		});
 	}
 
-	validateJwksUri(ctx, client.jwksUri, urlClientIdOrigin(client.clientId));
+	const clientIdUrlOrigin = urlClientIdOrigin(client.clientId);
+	validateJwksUri(ctx, client.jwksUri, clientIdUrlOrigin);
 
 	const now = Date.now();
 	const cached = jwksCache.get(client.jwksUri);
@@ -140,7 +150,9 @@ async function fetchClientJwks(
 	}
 
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
+		const jwks = await fetchJwksFromUri(client.jwksUri, (target) =>
+			isTrustedJwksOrigin(ctx, target, clientIdUrlOrigin),
+		);
 		setJwksCache(client.jwksUri, jwks, now);
 		return jwks;
 	} catch {
@@ -163,11 +175,15 @@ async function fetchClientJwks(
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
  */
 async function refetchClientJwks(
+	ctx: GenericEndpointContext,
 	client: SchemaClient<Scope[]>,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
+		const clientIdUrlOrigin = urlClientIdOrigin(client.clientId);
+		const jwks = await fetchJwksFromUri(client.jwksUri, (target) =>
+			isTrustedJwksOrigin(ctx, target, clientIdUrlOrigin),
+		);
 		setJwksCache(client.jwksUri, jwks, Date.now());
 		return jwks;
 	} catch {
@@ -414,7 +430,7 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(client);
+			const refreshed = await refetchClientJwks(ctx, client);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(

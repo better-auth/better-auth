@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface PolarProfile {
 	id: string;
@@ -87,7 +87,7 @@ export const polar = (options: PolarOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<PolarProfile>(
+			const { data: profile, error } = await fetchPublicResource<PolarProfile>(
 				"https://api.polar.sh/v1/oauth2/userinfo",
 				{
 					headers: {

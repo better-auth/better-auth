@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface SlackProfile extends Record<string, any> {
 	ok: boolean;
@@ -87,7 +87,7 @@ export const slack = (options: SlackOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<SlackProfile>(
+			const { data: profile, error } = await fetchPublicResource<SlackProfile>(
 				"https://slack.com/api/openid.connect.userInfo",
 				{
 					headers: {

@@ -10,6 +10,14 @@ import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
 import { isPrivateHostname } from "./utils/client-assertion";
 
+const lookup = vi.hoisted(() =>
+	vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+);
+
+vi.mock("node:dns/promises", () => ({
+	lookup,
+}));
+
 describe("private_key_jwt authentication", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -51,6 +59,8 @@ describe("private_key_jwt authentication", async () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
+		lookup.mockReset();
+		lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 	});
 
 	beforeAll(async () => {
@@ -185,6 +195,22 @@ describe("private_key_jwt authentication", async () => {
 		});
 	}
 
+	function stubJwksFetch(kid = "trusted-jwks-key") {
+		const fetchSpy = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					keys: [{ ...rsaPublicJwk, kid, alg: "RS256", use: "sig" }],
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		vi.stubGlobal("fetch", fetchSpy);
+		return fetchSpy;
+	}
+
 	it("should exchange code with valid private_key_jwt assertion", async () => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -201,27 +227,7 @@ describe("private_key_jwt authentication", async () => {
 	});
 
 	it("should exchange code using a trusted jwks_uri", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				new Response(
-					JSON.stringify({
-						keys: [
-							{
-								...rsaPublicJwk,
-								kid: "trusted-jwks-key",
-								alg: "RS256",
-								use: "sig",
-							},
-						],
-					}),
-					{
-						status: 200,
-						headers: { "content-type": "application/json" },
-					},
-				),
-			),
-		);
+		const fetchSpy = stubJwksFetch();
 
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(jwksUriClient.client_id, codeVerifier);
@@ -238,13 +244,55 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(tokens.data?.access_token).toBeDefined();
-		expect(globalThis.fetch).toHaveBeenCalledWith(
+		expect(fetchSpy).toHaveBeenCalledWith(
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
+	});
+
+	it("should exchange code using a trusted private-DNS jwks_uri", async () => {
+		const trustedPrivateDnsClient = (await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks_uri: "https://trusted.example.com/private-dns-jwks.json",
+			},
+		}))!;
+		const fetchSpy = stubJwksFetch("trusted-private-dns-key");
+		lookup.mockClear();
+		lookup.mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
+
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(
+			trustedPrivateDnsClient.client_id,
+			codeVerifier,
+		);
+		const assertion = await signAssertion({
+			clientId: trustedPrivateDnsClient.client_id,
+			kid: "trusted-private-dns-key",
+		});
+
+		const tokens = await exchangeCodeForTokens({
+			clientId: trustedPrivateDnsClient.client_id,
+			code,
+			codeVerifier,
+			assertion,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(fetchSpy).toHaveBeenCalledWith(
+			"https://trusted.example.com/private-dns-jwks.json",
+			expect.objectContaining({
+				headers: { accept: "application/json" },
+				redirect: "manual",
+			}),
+		);
+		expect(lookup).not.toHaveBeenCalled();
 	});
 
 	it("should reject assertion signed with wrong key", async () => {

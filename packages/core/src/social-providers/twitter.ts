@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface TwitterProfile {
 	data: {
@@ -155,7 +155,7 @@ export const twitter = (options: TwitterOption) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error: profileError } =
-				await betterFetch<TwitterProfile>(
+				await fetchPublicResource<TwitterProfile>(
 					"https://api.x.com/2/users/me?user.fields=profile_image_url",
 					{
 						method: "GET",
@@ -169,7 +169,7 @@ export const twitter = (options: TwitterOption) => {
 				return null;
 			}
 
-			const { data: emailData, error: emailError } = await betterFetch<{
+			const { data: emailData, error: emailError } = await fetchPublicResource<{
 				data: { confirmed_email: string };
 			}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
 				method: "GET",

@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
@@ -10,6 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface GoogleProfile {
 	aud: string;
@@ -277,7 +277,7 @@ export const getGooglePublicKey = async (kid: string) => {
 };
 
 const getGooglePublicKeys = async (kid?: string) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchPublicResource<{
 		keys: Array<{
 			kid: string;
 			alg?: string;

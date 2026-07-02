@@ -1,5 +1,4 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
@@ -15,6 +14,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -278,7 +278,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 			}
 			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
 			const profilePhotoSize = options.profilePhotoSize || 48;
-			await betterFetch<ArrayBuffer>(
+			await fetchPublicResource<ArrayBuffer>(
 				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
 				{
 					headers: {
@@ -359,7 +359,7 @@ export const getMicrosoftPublicKey = async (
 	tenant: string,
 	authority: string,
 ) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchPublicResource<{
 		keys: Array<{
 			kid: string;
 			alg: string;

@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
@@ -9,6 +8,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface CognitoProfile {
 	sub: string;
@@ -200,7 +200,7 @@ export const cognito = (options: CognitoOptions) => {
 
 			if (token.accessToken) {
 				try {
-					const { data: userInfo } = await betterFetch<CognitoProfile>(
+					const { data: userInfo } = await fetchPublicResource<CognitoProfile>(
 						userInfoEndpoint,
 						{
 							headers: {
@@ -247,7 +247,7 @@ export const getCognitoPublicKey = async (
 	const COGNITO_JWKS_URI = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
 
 	try {
-		const { data } = await betterFetch<{
+		const { data } = await fetchPublicResource<{
 			keys: Array<{
 				kid: string;
 				alg: string;

@@ -328,6 +328,7 @@ describe("oauth", async () => {
 		}
 		return await getTestInstance(
 			{
+				trustedOrigins: [authServerBaseUrl],
 				// Used to trust callbackUrl in test
 				account: {
 					accountLinking: {
@@ -756,6 +757,7 @@ describe("oauth", async () => {
 		expect(tempClient?.client_id).toBeDefined();
 
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+			trustedOrigins: [authServerBaseUrl],
 			account: {
 				accountLinking: { trustedProviders: [providerId] },
 			},
@@ -851,6 +853,7 @@ describe("oauth", async () => {
 		expect(tempClient?.client_id).toBeDefined();
 
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
+			trustedOrigins: [authServerBaseUrl],
 			account: {
 				accountLinking: { trustedProviders: [providerId] },
 			},
@@ -1193,6 +1196,7 @@ describe("oauth - prompt", async () => {
 		}
 		return await getTestInstance(
 			{
+				trustedOrigins: [authServerBaseUrl],
 				// Used to trust callbackUrl in test
 				account: {
 					accountLinking: {
@@ -1402,6 +1406,7 @@ describe("oauth - prompt", async () => {
 
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await getTestInstance({
+				trustedOrigins: [authServerBaseUrl],
 				account: {
 					accountLinking: { trustedProviders: [providerId] },
 				},
@@ -2884,6 +2889,7 @@ describe("oauth - config", () => {
 		}
 		return await getTestInstance(
 			{
+				trustedOrigins: [authServerBaseUrl],
 				// Used to trust callbackUrl in test
 				account: {
 					accountLinking: {

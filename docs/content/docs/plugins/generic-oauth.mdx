@@ -308,6 +308,10 @@ interface GenericOAuthConfig {
 
 **userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
 
+<Callout type="warn">
+  Better Auth verifies that the discovery, token, userinfo, and JWKS hosts are publicly routable before fetching them, and rejects a host that resolves to a private, link-local, or cloud-metadata address. If your identity provider runs on a private network, add its origin to [`trustedOrigins`](/docs/reference/security#trusted-origins).
+</Callout>
+
 **clientId**: The OAuth client ID issued by your provider.
 
 **clientSecret**: The OAuth client secret issued by your provider.

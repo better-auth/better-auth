@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -194,7 +194,7 @@ export const tiktok = (options: TiktokOptions) => {
 				"display_name",
 				"username",
 			];
-			const { data: profile, error } = await betterFetch<TiktokProfile>(
+			const { data: profile, error } = await fetchPublicResource<TiktokProfile>(
 				`https://open.tiktokapis.com/v2/user/info/?fields=${fields.join(",")}`,
 				{
 					headers: {

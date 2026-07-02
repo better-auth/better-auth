@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface LinkedInProfile {
 	sub: string;
@@ -80,15 +80,16 @@ export const linkedin = (options: LinkedInOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<LinkedInProfile>(
-				"https://api.linkedin.com/v2/userinfo",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error } =
+				await fetchPublicResource<LinkedInProfile>(
+					"https://api.linkedin.com/v2/userinfo",
+					{
+						method: "GET",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 
 			if (error) {
 				return null;

@@ -20,6 +20,7 @@ import {
 	describe,
 	expect,
 	it,
+	vi,
 } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -76,11 +77,13 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth back-channel logout", async () => {
 	const port = 3010;
 	const baseUrl = `http://localhost:${port}`;
+	const trustedPrivateRpOrigin = "https://10.0.0.1";
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
+		trustedOrigins: [trustedPrivateRpOrigin],
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
@@ -356,6 +359,38 @@ describe("oauth back-channel logout", async () => {
 		await new Promise((r) => setTimeout(r, 200));
 
 		expect(rp.received).toHaveLength(0);
+	});
+
+	it("dispatches to a trusted private backchannel_logout_uri", async () => {
+		const privateLogoutUri = `${trustedPrivateRpOrigin}/logout/backchannel`;
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		try {
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: privateLogoutUri,
+			});
+			await issueTokens({ client: oauthClient });
+
+			const result = await client.signOut({ fetchOptions: { headers } });
+			expect(result.error).toBeNull();
+
+			const start = Date.now();
+			while (fetchSpy.mock.calls.length === 0) {
+				if (Date.now() - start > 2_000) {
+					throw new Error("Timed out waiting for back-channel dispatch");
+				}
+				await new Promise((r) => setTimeout(r, 25));
+			}
+
+			const [target, init] = fetchSpy.mock.calls[0]!;
+			expect(target).toBe(privateLogoutUri);
+			expect(init).toMatchObject({ method: "POST" });
+			const body = init?.body as URLSearchParams;
+			expect(body.get("logout_token")).toEqual(expect.any(String));
+		} finally {
+			fetchSpy.mockRestore();
+		}
 	});
 
 	it("treats RP failures as non-fatal for the user-facing sign-out", async () => {

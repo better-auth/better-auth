@@ -13,8 +13,11 @@ import {
 	validateAuthorizationCode,
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
-import { betterFetch } from "@better-fetch/fetch";
-import { createRemoteJWKSet, decodeJwt } from "jose";
+import {
+	fetchPublicResource,
+	fetchPublicResponse,
+} from "@better-auth/core/utils/public-fetch";
+import { createRemoteJWKSet, customFetch, decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type {
@@ -90,11 +93,13 @@ function isClientSecretTokenEndpointAuth(
 
 async function fetchDiscovery(
 	url: string,
+	isTrustedOrigin: (url: string) => boolean,
 	headers?: Record<string, string>,
 ): Promise<DiscoveryDocument | null> {
-	const result = await betterFetch<DiscoveryDocument>(url, {
+	const result = await fetchPublicResource<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
+		isTrustedOrigin,
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -113,6 +118,7 @@ async function fetchDiscovery(
 async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
+	isTrustedOrigin: (url: string) => boolean,
 ): Promise<GenericOAuthUserInfo | null> {
 	// When the provider declares an `idToken` config (OIDC discovery published
 	// a jwks_uri), the caller has already verified this token through
@@ -145,7 +151,7 @@ async function fetchUserInfo(
 		return null;
 	}
 
-	const userInfo = await betterFetch<{
+	const userInfo = await fetchPublicResource<{
 		id?: string | number | null | undefined;
 		email: string;
 		sub?: string | number | null | undefined;
@@ -157,6 +163,7 @@ async function fetchUserInfo(
 		headers: {
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
+		isTrustedOrigin,
 	});
 	if (userInfo.error || !userInfo.data) {
 		return null;
@@ -212,6 +219,7 @@ export const genericOAuth = <const ID extends string>(
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
 			const genericProviders: OAuthProvider[] = [];
+			const isTrustedOrigin = (url: string) => ctx.isTrustedOrigin(url);
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -225,6 +233,7 @@ export const genericOAuth = <const ID extends string>(
 				if (c.discoveryUrl) {
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
+						isTrustedOrigin,
 						c.discoveryHeaders,
 					).catch((err) => {
 						ctx.logger.error(
@@ -245,6 +254,10 @@ export const genericOAuth = <const ID extends string>(
 								idTokenConfig = {
 									jwks: createRemoteJWKSet(
 										new URL(discovered.jwks_uri, c.discoveryUrl),
+										{
+											[customFetch]: (url, init) =>
+												fetchPublicResponse(url, init, { isTrustedOrigin }),
+										},
 									),
 									issuer: discovered.issuer,
 									audience: c.clientId,
@@ -367,6 +380,7 @@ export const genericOAuth = <const ID extends string>(
 							authentication: c.authentication,
 							tokenEndpointAuth,
 							additionalParams: c.tokenUrlParams,
+							isTrustedOrigin,
 						});
 						return applyDefaultAccessTokenExpiry(
 							tokens,
@@ -392,7 +406,7 @@ export const genericOAuth = <const ID extends string>(
 						}
 						const raw = c.getUserInfo
 							? await c.getUserInfo(oauthTokens)
-							: await fetchUserInfo(oauthTokens, userInfoUrl);
+							: await fetchUserInfo(oauthTokens, userInfoUrl, isTrustedOrigin);
 						if (!raw) {
 							return null;
 						}
@@ -449,6 +463,7 @@ export const genericOAuth = <const ID extends string>(
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
 							extraParams: resolvedRefreshParams,
+							isTrustedOrigin,
 						});
 						return applyDefaultAccessTokenExpiry(
 							tokens,
