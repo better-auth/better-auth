@@ -92,7 +92,35 @@ function makeWWWAuthenticate(authURL: string, resource?: string): string {
 	return `Bearer resource_metadata="${resourceMetadataURL}"`;
 }
 
-function make401Response(authURL: string, resource?: string): Response {
+function addExposeHeader(
+	headers: Record<string, string>,
+	headerName: string,
+): Record<string, string> {
+	const exposedHeaders = headers["Access-Control-Expose-Headers"];
+	if (!exposedHeaders) {
+		return {
+			...headers,
+			"Access-Control-Expose-Headers": headerName,
+		};
+	}
+
+	const alreadyExposed = exposedHeaders
+		.split(",")
+		.some((header) => header.trim().toLowerCase() === headerName.toLowerCase());
+
+	return {
+		...headers,
+		"Access-Control-Expose-Headers": alreadyExposed
+			? exposedHeaders
+			: `${exposedHeaders}, ${headerName}`,
+	};
+}
+
+function make401Response(
+	authURL: string,
+	resource: string | undefined,
+	corsHeaders: Record<string, string>,
+): Response {
 	const wwwAuth = makeWWWAuthenticate(authURL, resource);
 	return Response.json(
 		{
@@ -107,6 +135,7 @@ function make401Response(authURL: string, resource?: string): Response {
 		{
 			status: 401,
 			headers: {
+				...addExposeHeader(corsHeaders, "WWW-Authenticate"),
 				"WWW-Authenticate": wwwAuth,
 			},
 		},
@@ -186,13 +215,13 @@ export function createMcpAuthClient(
 
 			const authHeader = req.headers.get("Authorization");
 			if (!authHeader || !authHeader.startsWith("Bearer ")) {
-				return make401Response(authURL, options.resource);
+				return make401Response(authURL, options.resource, corsHeaders);
 			}
 
 			const token = authHeader.slice(7);
 			const session = await verifyToken(token);
 			if (!session) {
-				return make401Response(authURL, options.resource);
+				return make401Response(authURL, options.resource, corsHeaders);
 			}
 
 			return fn(req, session);
