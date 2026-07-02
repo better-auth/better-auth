@@ -20,7 +20,7 @@ const ERROR_CODES = defineErrorCodes({
 		"The password you entered has been compromised. Please choose a different password.",
 });
 
-async function checkPasswordCompromise(
+export async function checkPasswordCompromise(
 	password: string,
 	customMessage?: string | undefined,
 ) {
