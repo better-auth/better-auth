@@ -281,6 +281,11 @@
       "types": "./dist/plugins/organization/access/index.d.mts",
       "default": "./dist/plugins/organization/access/index.mjs"
     },
+    "./plugins/one-tap": {
+      "dev-source": "./src/plugins/one-tap/index.ts",
+      "types": "./dist/plugins/one-tap/index.d.mts",
+      "default": "./dist/plugins/one-tap/index.mjs"
+    },
     "./plugins/one-time-token": {
       "dev-source": "./src/plugins/one-time-token/index.ts",
       "types": "./dist/plugins/one-time-token/index.d.mts",
