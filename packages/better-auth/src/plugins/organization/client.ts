@@ -90,6 +90,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $activeMemberSignal = atom<boolean>(false);
 	const $activeMemberRoleSignal = atom<boolean>(false);
 
+	// Storage for explicit cleanup function
+	// Allows callback in atomListeners to access and call explicit cleanup
+	let clearOrgState: (() => void) | null = null;
+
 	type DefaultStatements = typeof defaultStatements;
 	type Statements =
 		CO["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
@@ -220,6 +224,32 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			);
 
+			// Create explicit cleanup function for logout
+			// This function closes over the query atoms and can be called from atomListeners callback
+			clearOrgState = () => {
+				activeOrganization.set({
+					data: null,
+					error: null,
+					isPending: false,
+					isRefetching: false,
+					refetch: activeOrganization.get().refetch,
+				});
+				activeMember.set({
+					data: null,
+					error: null,
+					isPending: false,
+					isRefetching: false,
+					refetch: activeMember.get().refetch,
+				});
+				activeMemberRole.set({
+					data: null,
+					error: null,
+					isPending: false,
+					isRefetching: false,
+					refetch: activeMemberRole.get().refetch,
+				});
+			};
+
 			return {
 				$listOrg,
 				$activeOrgSignal,
@@ -247,10 +277,22 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				signal: "$listOrg",
 			},
 			{
+				/**
+				 * Explicitly clear org state after successful sign-out.
+				 * Rather than relying on 401 refetches to clear stale data,
+				 * we directly set org queries to null upon logout.
+				 * This eliminates unnecessary protected org endpoint requests.
+				 */
 				matcher(path) {
 					return path === "/sign-out" || path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
+				callback(path) {
+					// Explicitly clear org-related state immediately after sign-out
+					if (path === "/sign-out" && clearOrgState) {
+						clearOrgState();
+					}
+				},
 			},
 			{
 				matcher(path) {
