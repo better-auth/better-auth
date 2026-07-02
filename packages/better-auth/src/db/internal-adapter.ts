@@ -1006,6 +1006,20 @@ export const createInternalAdapter = (
 			email: string,
 			data: Partial<User & Record<string, any>>,
 		) => {
+			const existingUser = await (
+				await getCurrentAdapter(adapter)
+			).findOne<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: email.toLowerCase(),
+						mode: "insensitive",
+					},
+				],
+			});
+			if (!existingUser) return null;
+
 			const user = await updateWithHooks<User>(
 				{
 					...data,
@@ -1013,9 +1027,8 @@ export const createInternalAdapter = (
 				},
 				[
 					{
-						field: "email",
-						value: email.toLowerCase(),
-						mode: "insensitive",
+						field: "id",
+						value: existingUser.id,
 					},
 				],
 				"user",
