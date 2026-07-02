@@ -879,6 +879,7 @@ export const createInternalAdapter = (
 							{
 								value: email.toLowerCase(),
 								field: "email",
+								mode: "insensitive",
 							},
 						],
 					});
@@ -898,6 +899,7 @@ export const createInternalAdapter = (
 						{
 							value: email.toLowerCase(),
 							field: "email",
+							mode: "insensitive",
 						},
 					],
 				});
@@ -936,6 +938,7 @@ export const createInternalAdapter = (
 					{
 						value: email.toLowerCase(),
 						field: "email",
+						mode: "insensitive",
 					},
 				],
 				join: {
