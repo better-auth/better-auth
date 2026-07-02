@@ -65,6 +65,7 @@
     "hungry-drinks-read",
     "i18n-built-in-translations",
     "id-token-claim-authority",
+    "kysely-migrate-add-column-defaults",
     "lovely-toes-swim",
     "mcp-oauth-provider-migration",
     "microsoft-client-assertion",
