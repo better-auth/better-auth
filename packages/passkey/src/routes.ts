@@ -535,6 +535,12 @@ const verifyPasskeyRegistrationBodySchema = z.object({
 			description: "Name of the passkey",
 		})
 		.optional(),
+	createSession: z
+		.boolean()
+		.meta({
+			description: "Create a session after registering the passkey",
+		})
+		.optional(),
 });
 
 export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
@@ -704,6 +710,38 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					model: "passkey",
 					data: newPasskey,
 				});
+				if (ctx.body.createSession) {
+					const user =
+						await ctx.context.internalAdapter.findUserById(targetUserId);
+					if (!user) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							PASSKEY_ERROR_CODES.USER_NOT_FOUND,
+						);
+					}
+					const session =
+						await ctx.context.internalAdapter.createSession(targetUserId);
+					if (!session) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
+						);
+					}
+					await setSessionCookie(ctx, {
+						session,
+						user,
+					});
+					return ctx.json(
+						{
+							...newPasskeyRes,
+							session,
+							user,
+						},
+						{
+							status: 200,
+						},
+					);
+				}
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
