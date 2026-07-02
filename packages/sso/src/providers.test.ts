@@ -10,6 +10,201 @@ import { ssoClient } from "./client";
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
 
+describe("SSO provider listing organization isolation", () => {
+	type TestUser = { email: string; password: string; name: string };
+
+	interface SSOProviderData {
+		id: string;
+		providerId: string;
+		issuer: string;
+		domain: string;
+		userId: string;
+		organizationId?: string;
+		domainVerified?: boolean;
+		samlConfig?: string;
+		oidcConfig?: string;
+	}
+
+	const createTestAuth = () => {
+		const data: {
+			user: { id: string; email: string }[];
+			session: {
+				id: string;
+				token: string;
+				userId: string;
+				activeOrganizationId?: string | null;
+			}[];
+			verification: object[];
+			account: object[];
+			ssoProvider: SSOProviderData[];
+			member: object[];
+			organization: object[];
+		} = {
+			user: [],
+			session: [],
+			verification: [],
+			account: [],
+			ssoProvider: [],
+			member: [],
+			organization: [],
+		};
+
+		const memory = memoryAdapter(data);
+
+		const auth = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [sso(), organization()],
+		});
+
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		async function getAuthHeaders(user: TestUser) {
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: user.email,
+				password: user.password,
+				name: user.name,
+			});
+
+			await authClient.signIn.email(user, {
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			});
+
+			return headers;
+		}
+
+		async function createOrganization(name: string, headers: Headers) {
+			return auth.api.createOrganization({
+				body: {
+					name,
+					slug: name,
+				},
+				headers,
+			});
+		}
+
+		async function setActiveOrganization(
+			organizationId: string | null,
+			headers: Headers,
+		) {
+			const result = await auth.api.setActiveOrganization({
+				body: { organizationId },
+				headers,
+			});
+			return result;
+		}
+
+		async function registerSAMLProvider(
+			headers: Headers,
+			providerId: string,
+			organizationId?: string,
+		) {
+			return auth.api.registerSSOProvider({
+				body: {
+					providerId,
+					issuer: "https://idp.example.com",
+					domain: `${providerId}.example.com`,
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					},
+					organizationId,
+				},
+				headers,
+			});
+		}
+
+		return {
+			auth,
+			authClient,
+			data,
+			getAuthHeaders,
+			createOrganization,
+			setActiveOrganization,
+			registerSAMLProvider,
+		};
+	};
+
+	it("should only return providers from the active organization when activeOrganizationId is set", async () => {
+		const {
+			auth,
+			getAuthHeaders,
+			createOrganization,
+			setActiveOrganization,
+			registerSAMLProvider,
+		} = createTestAuth();
+
+		const adminHeaders = await getAuthHeaders({
+			email: "admin@example.com",
+			password: "password123",
+			name: "Admin User",
+		});
+
+		const orgA = await createOrganization("org-a", adminHeaders);
+		const orgB = await createOrganization("org-b", adminHeaders);
+
+		await registerSAMLProvider(adminHeaders, "provider-org-a", orgA!.id);
+		await registerSAMLProvider(adminHeaders, "provider-org-b", orgB!.id);
+
+		await setActiveOrganization(orgA!.id, adminHeaders);
+
+		const response = await auth.api.listSSOProviders({
+			headers: adminHeaders,
+		});
+
+		expect(response.providers).toHaveLength(1);
+		expect(response.providers[0]!.providerId).toBe("provider-org-a");
+		expect(response.providers[0]!.organizationId).toBe(orgA!.id);
+	});
+
+	it("should return all providers when no active organization is set (admin in multiple orgs)", async () => {
+		const {
+			auth,
+			getAuthHeaders,
+			createOrganization,
+			setActiveOrganization,
+			registerSAMLProvider,
+		} = createTestAuth();
+
+		const adminHeaders = await getAuthHeaders({
+			email: "admin@example.com",
+			password: "password123",
+			name: "Admin User",
+		});
+
+		const orgA = await createOrganization("org-a", adminHeaders);
+		const orgB = await createOrganization("org-b", adminHeaders);
+
+		await registerSAMLProvider(adminHeaders, "provider-org-a", orgA!.id);
+		await registerSAMLProvider(adminHeaders, "provider-org-b", orgB!.id);
+
+		await setActiveOrganization(null, adminHeaders);
+
+		const response = await auth.api.listSSOProviders({
+			headers: adminHeaders,
+		});
+
+		expect(response.providers).toHaveLength(2);
+	});
+});
+
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
 
