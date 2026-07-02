@@ -118,6 +118,12 @@ export interface GenericOAuthConfig {
 				redirectURI: string;
 				codeVerifier?: string | undefined;
 				deviceId?: string | undefined;
+				/**
+				 * The full URL of the incoming OAuth callback request, including any
+				 * extra query parameters appended by the provider (e.g. tenant_id, session_state).
+				 * Distinct from the user-facing post-sign-in redirect destination.
+				 */
+				requestURL?: string | undefined;
 		  }) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**

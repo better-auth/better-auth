@@ -991,6 +991,95 @@ describe("oauth2", async () => {
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9752
+	 */
+	it("should pass requestURL to custom getToken including extra provider-appended params", async () => {
+		let capturedCallbackURL: string | undefined;
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-callback-url-param",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+							getToken: async ({
+								code,
+								redirectURI,
+								codeVerifier,
+								requestURL,
+							}) => {
+								capturedCallbackURL = requestURL;
+								return { accessToken: "test-access-token" };
+							},
+							getUserInfo: async () => ({
+								id: "oauth2-callback-test",
+								email: "oauth2-callback-test@test.com",
+								name: "OAuth2 Callback Test",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-callback-url-param",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		// Follow the authorization URL; the OAuth server redirects back to our callback
+		let oauthCallbackLocation: string | null = null;
+		await betterFetch(res.data?.url ?? "", {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				oauthCallbackLocation = context.response.headers.get("location");
+			},
+		});
+
+		expect(oauthCallbackLocation).toBeTruthy();
+
+		// Simulate a provider appending an extra search param to the callback URL
+		const callbackWithExtra = new URL(oauthCallbackLocation!);
+		callbackWithExtra.searchParams.set("custom_param", "extra_value");
+
+		await betterFetch(callbackWithExtra.toString(), {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError() {},
+		});
+
+		expect(capturedCallbackURL).toBeDefined();
+		expect(capturedCallbackURL).toContain("custom_param=extra_value");
+		expect(capturedCallbackURL).toContain("code=");
+	});
+
 	it("should delete oauth user with verification flow without password", async () => {
 		let token = "";
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
