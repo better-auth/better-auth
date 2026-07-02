@@ -27,6 +27,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	PROVIDER_NOT_FOUND: "Provider not found",
 	INVALID_TOKEN: "Invalid token",
 	TOKEN_EXPIRED: "Token expired",
+	TOKEN_ALREADY_USED: "Token has already been used",
 	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
 	FAILED_TO_GET_USER_INFO: "Failed to get user info",
 	USER_EMAIL_NOT_FOUND: "User email not found",

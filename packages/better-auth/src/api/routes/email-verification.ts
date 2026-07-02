@@ -9,6 +9,7 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
@@ -319,6 +320,33 @@ export const verifyEmail = createAuthEndpoint(
 			requestType: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
+		/**
+		 * Enforce single-use for change-email tokens BEFORE any DB lookups.
+		 * The token is stored in the verification table when it is issued
+		 * (in update-user.ts). Here we look it up and delete it atomically —
+		 * if it is not found the token has already been used or was never issued.
+		 *
+		 * This follows the same store-and-delete pattern used by password reset.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/9479
+		 */
+		if (
+			parsed.updateTo &&
+			(parsed.requestType === "change-email-confirmation" ||
+				parsed.requestType === "change-email-verification")
+		) {
+			const tokenIdentifier = `change-email:${token}`;
+			const storedToken =
+				await ctx.context.internalAdapter.findVerificationValue(
+					tokenIdentifier,
+				);
+			if (!storedToken || storedToken.expiresAt < new Date()) {
+				return redirectOnError(BASE_ERROR_CODES.TOKEN_ALREADY_USED);
+			}
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				tokenIdentifier,
+			);
+		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
@@ -342,6 +370,14 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `change-email:${newToken}`,
+						value: newToken,
+						expiresAt: getDate(
+							ctx.context.options.emailVerification?.expiresIn ?? 3600,
+							"sec",
+						),
+					});
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)
 						: encodeURIComponent("/");
