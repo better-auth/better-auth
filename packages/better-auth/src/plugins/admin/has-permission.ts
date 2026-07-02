@@ -19,6 +19,18 @@ export const hasPermission = (
 		return false;
 	}
 	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+
+	if (input.options?.adminRoles) {
+		const adminRoles = Array.isArray(input.options.adminRoles)
+			? input.options.adminRoles
+			: [input.options.adminRoles];
+		for (const role of roles) {
+			if (adminRoles.includes(role)) {
+				return true;
+			}
+		}
+	}
+
 	const acRoles = input.options?.roles || defaultRoles;
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
