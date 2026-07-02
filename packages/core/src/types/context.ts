@@ -279,6 +279,17 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
+/**
+ * The result of verifying a password.
+ *
+ * - `true`: the password is valid.
+ * - `false`: the password is invalid.
+ * - `"success-rehash-needed"`: the password is valid, but the stored hash is
+ *   outdated (e.g. produced by a different algorithm or cost factor) and should
+ *   be re-hashed and persisted. Better Auth will do this automatically.
+ */
+export type PasswordVerifyResult = boolean | "success-rehash-needed";
+
 export type PluginContext<Options extends BetterAuthOptions> = {
 	getPlugin: <
 		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
@@ -410,7 +421,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			secondaryStorage: SecondaryStorage | undefined;
 			password: {
 				hash: (password: string) => Promise<string>;
-				verify: (data: { password: string; hash: string }) => Promise<boolean>;
+				verify: (data: {
+					password: string;
+					hash: string;
+				}) => Promise<PasswordVerifyResult>;
 				config: {
 					minPasswordLength: number;
 					maxPasswordLength: number;

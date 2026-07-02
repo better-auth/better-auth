@@ -11,6 +11,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { rehashPasswordIfNeeded } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -498,7 +499,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
-
 					if (
 						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
 						!user.emailVerified
@@ -533,6 +533,16 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 					}
+
+					// Only re-hash once the sign-in will actually produce a session, so
+					// we avoid a credential write on requests rejected by the checks
+					// above.
+					await rehashPasswordIfNeeded(ctx, {
+						accountId: account.id,
+						password: ctx.body.password,
+						currentHash: currentPassword,
+						verifyResult: validPassword,
+					});
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,

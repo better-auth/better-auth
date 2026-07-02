@@ -284,6 +284,8 @@ export const changePassword = createAuthEndpoint(
 		if (!verify) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
+		// No rehash-on-verify here: the account's password is replaced with the
+		// new hash immediately below, which supersedes any outdated hash.
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
 		});
