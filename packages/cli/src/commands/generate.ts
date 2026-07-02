@@ -116,6 +116,10 @@ async function generateAction(opts: any) {
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
+		// Recovers from first-run templates (e.g. the Convex integration guide)
+		// whose config imports the schema file this command is about to
+		// generate. @see https://github.com/better-auth/better-auth/issues/10136
+		outputPath: options.output,
 	});
 	if (!config) {
 		console.error(
