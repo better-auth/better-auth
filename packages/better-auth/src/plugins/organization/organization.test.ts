@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
@@ -4122,5 +4124,88 @@ describe("delete cascade rollback", async () => {
 			],
 		});
 		expect(teamMemberCount).toBe(1);
+	});
+});
+
+/**
+ * After-hooks and subsequent middleware must observe the new active
+ * organization on the session context once `set-active` has run. Previously
+ * only the cookie (and `ctx.context.newSession`) reflected the change while
+ * `ctx.context.session` stayed stale, breaking downstream hook logic.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/4708
+ */
+describe("organization set-active updates session context", async () => {
+	const observed: {
+		session: string | null | undefined;
+		newSession: string | null | undefined;
+	} = { session: undefined, newSession: undefined };
+
+	const setActiveProbe = {
+		id: "set-active-probe",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) => ctx.path === "/organization/set-active",
+					handler: createAuthMiddleware(async (ctx) => {
+						observed.session =
+							ctx.context.session?.session.activeOrganizationId ?? null;
+						observed.newSession =
+							ctx.context.newSession?.session.activeOrganizationId ?? null;
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [organization(), setActiveProbe],
+	});
+
+	it("reflects the new active organization in session and newSession", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Probe Org", slug: "probe-org" },
+		});
+		const organizationId = org?.id as string;
+		expect(organizationId).toBeTruthy();
+
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId },
+		});
+
+		// `setSessionCookie` already keeps `ctx.context.newSession` in sync; the
+		// fix additionally keeps `ctx.context.session` in sync so after-hooks see
+		// the new active organization rather than the stale middleware value.
+		expect(observed.session).toBe(organizationId);
+		expect(observed.newSession).toBe(organizationId);
+	});
+
+	it("reflects a cleared active organization (organizationId: null)", async () => {
+		// The clear branch (organizationId === null) received the same fix, so the
+		// after-hook must observe the cleared value rather than the stale id.
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Clear Probe Org", slug: "clear-probe-org" },
+		});
+		const organizationId = org?.id as string;
+		expect(organizationId).toBeTruthy();
+
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId },
+		});
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId: null },
+		});
+
+		expect(observed.session).toBeNull();
+		expect(observed.newSession).toBeNull();
 	});
 });
