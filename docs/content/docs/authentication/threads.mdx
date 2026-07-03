@@ -1,0 +1,57 @@
+---
+title: Threads
+description: Threads provider setup and usage.
+---
+
+<Steps>
+  <Step>
+    ### Get your Threads credentials
+
+    Create a Meta app with the Threads use case in the [Meta developer dashboard](https://developers.facebook.com/apps/) and copy its app ID and app secret.
+
+    Add your Better Auth callback URL to the app's Threads redirect URLs. For local development, the default callback URL is:
+
+    ```txt
+    http://localhost:3000/api/auth/callback/threads
+    ```
+
+    The provider requests the `threads_basic` permission by default.
+
+    <Callout type="info">
+      Threads does not return an email address. Better Auth uses the Threads username as the email value and marks it as unverified. You can override this value with the `mapProfileToUser` provider option.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            threads: { // [!code highlight]
+                clientId: process.env.THREADS_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.THREADS_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+
+    Better Auth exchanges the initial short-lived token for a long-lived Threads token and refreshes it when required.
+  </Step>
+
+  <Step>
+    ### Sign in with Threads
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+
+    const authClient = createAuthClient()
+
+    await authClient.signIn.social({
+        provider: "threads",
+    })
+    ```
+  </Step>
+</Steps>
