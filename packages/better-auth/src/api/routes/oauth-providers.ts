@@ -28,15 +28,30 @@ function resolveSocialProviderRedirectUri(
 	ctx: AuthContext,
 	providerId: string,
 ): string {
-	const providerConfig = ctx.options.socialProviders?.[providerId];
-	if (
-		providerConfig &&
-		typeof providerConfig === "object" &&
-		"redirectURI" in providerConfig &&
-		typeof providerConfig.redirectURI === "string" &&
-		providerConfig.redirectURI.length > 0
-	) {
-		return providerConfig.redirectURI;
+	const configs = ctx.options.socialProviders;
+	if (!configs) {
+		return `${ctx.baseURL}/callback/${providerId}`;
+	}
+
+	for (const [key, originalConfig] of Object.entries(configs)) {
+		if (key !== providerId) {
+			continue;
+		}
+
+		const providerConfig =
+			typeof originalConfig === "function" ? undefined : originalConfig;
+
+		if (
+			providerConfig &&
+			typeof providerConfig === "object" &&
+			"redirectURI" in providerConfig &&
+			typeof providerConfig.redirectURI === "string" &&
+			providerConfig.redirectURI.length > 0
+		) {
+			return providerConfig.redirectURI;
+		}
+
+		break;
 	}
 
 	return `${ctx.baseURL}/callback/${providerId}`;
