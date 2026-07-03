@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
@@ -12,7 +11,7 @@ import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 export interface ThreadsProfile {
 	id: string;
 	username: string;
-	name: string;
+	name?: string | undefined;
 	threads_profile_picture_url?: string | undefined;
 	threads_biography?: string | undefined;
 }
@@ -134,18 +133,19 @@ export const threads = (options: ThreadsOptions) => {
 				return null;
 			}
 
-			const { data: profile, error } = await betterFetch<ThreadsProfile>(
-				"https://graph.threads.net/me",
-				{
-					query: {
-						fields:
-							"id,username,name,threads_profile_picture_url,threads_biography",
+			const { data: profile, error } =
+				await fetchRefusingRedirects<ThreadsProfile>(
+					"https://graph.threads.net/me",
+					{
+						query: {
+							fields:
+								"id,username,name,threads_profile_picture_url,threads_biography",
+						},
+						headers: {
+							authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
-					},
-				},
-			);
+				);
 			if (error || !profile) {
 				return null;
 			}
